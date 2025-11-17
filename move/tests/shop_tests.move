@@ -6,7 +6,9 @@ use std::vector as vec;
 use sui::event;
 use sui::object as obj;
 use sui::package as pkg;
+use sui::test_scenario as scenario;
 use sui::tx_context as tx;
+use sui::vec_map;
 use sui_oracle_market::shop;
 
 const TEST_OWNER: address = @0xBEEF;
@@ -122,6 +124,49 @@ fun create_shop_handles_existing_id_counts() {
     assert!(tx::get_ids_created(&ctx) == starting_ids + 2, E_ASSERT_FAILURE);
 
     shop::test_destroy_publisher(publisher);
+}
+
+#[test]
+fun create_shop_shares_shop_and_transfers_owner_cap() {
+    let mut scn = scenario::begin(TEST_OWNER);
+    let publisher = shop::test_claim_publisher(scenario::ctx(&mut scn));
+
+    shop::create_shop(&publisher, scenario::ctx(&mut scn));
+    let created_events = event::events_by_type<shop::ShopCreated>();
+    assert!(vec::length(&created_events) == 1, E_ASSERT_FAILURE);
+    let shop_created = vec::borrow(&created_events, 0);
+    let shop_id = obj::id_from_address(shop::test_shop_created_shop_address(shop_created));
+    let owner_cap_id = obj::id_from_address(shop::test_shop_created_owner_cap_id(shop_created));
+
+    shop::test_destroy_publisher(publisher);
+
+    let effects = scenario::next_tx(&mut scn, TEST_OWNER);
+    let created_ids = scenario::created(&effects);
+    assert!(vec::length(&created_ids) == 2, E_ASSERT_FAILURE);
+    assert!(*vec::borrow(&created_ids, 0) == shop_id, E_ASSERT_FAILURE);
+    assert!(*vec::borrow(&created_ids, 1) == owner_cap_id, E_ASSERT_FAILURE);
+
+    let shared_ids = scenario::shared(&effects);
+    assert!(vec::length(&shared_ids) == 1, E_ASSERT_FAILURE);
+    assert!(*vec::borrow(&shared_ids, 0) == shop_id, E_ASSERT_FAILURE);
+
+    let transferred = scenario::transferred_to_account(&effects);
+    assert!(vec_map::length(&transferred) == 1, E_ASSERT_FAILURE);
+    assert!(*vec_map::get(&transferred, &owner_cap_id) == TEST_OWNER, E_ASSERT_FAILURE);
+    assert!(scenario::num_user_events(&effects) == 1, E_ASSERT_FAILURE);
+
+    let shared_shop: shop::Shop = scenario::take_shared_by_id(&scn, shop_id);
+    let owner_cap: shop::ShopOwnerCap = scenario::take_from_sender_by_id(&scn, owner_cap_id);
+    assert!(shop::test_shop_owner(&shared_shop) == TEST_OWNER, E_ASSERT_FAILURE);
+    assert!(shop::test_shop_owner_cap_owner(&owner_cap) == TEST_OWNER, E_ASSERT_FAILURE);
+    assert!(
+        shop::test_shop_owner_cap_shop_address(&owner_cap) == shop::test_shop_id(&shared_shop),
+        E_ASSERT_FAILURE,
+    );
+
+    scenario::return_shared(shared_shop);
+    scenario::return_to_sender(&scn, owner_cap);
+    let _ = scenario::end(scn);
 }
 
 #[test]
@@ -363,7 +408,11 @@ fun update_item_listing_stock_updates_listing_and_emits_events() {
 
     shop::update_item_listing_stock(&mut shop, listing_id, 11, &owner_cap, &mut ctx);
 
-    let (_, _, stock, shop_id, _) = shop::test_listing_values(&shop, listing_id);
+    let (name, base_price, stock, shop_id, spotlight_template) =
+        shop::test_listing_values(&shop, listing_id);
+    assert!(name == b"Helmet", E_ASSERT_FAILURE);
+    assert!(base_price == 48_00, E_ASSERT_FAILURE);
+    assert!(opt::is_none(&spotlight_template), E_ASSERT_FAILURE);
     assert!(stock == 11, E_ASSERT_FAILURE);
 
     let stock_events = event::events_by_type<shop::ItemListingStockUpdated>();
@@ -375,6 +424,99 @@ fun update_item_listing_stock_updates_listing_and_emits_events() {
         E_ASSERT_FAILURE,
     );
     assert!(shop::test_item_listing_stock_updated_new_stock(stock_event) == 11, E_ASSERT_FAILURE);
+
+    shop::test_remove_listing(&mut shop, listing_id);
+    shop::test_destroy_owner_cap(owner_cap);
+    shop::test_destroy_shop(shop);
+}
+
+#[test, expected_failure(abort_code = ::sui_oracle_market::shop::EInvalidOwnerCap)]
+fun update_item_listing_stock_rejects_foreign_owner_cap() {
+    let mut ctx = tx::dummy();
+    let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
+    let (foreign_shop, foreign_cap) = shop::test_setup_shop(OTHER_OWNER, &mut ctx);
+
+    shop::add_item_listing<shop::GenericItem>(
+        &mut shop,
+        b"Borrowed Listing",
+        18_00,
+        9,
+        opt::none(),
+        &owner_cap,
+        &mut ctx,
+    );
+
+    let listing_id = shop::test_last_created_id(&ctx);
+
+    shop::update_item_listing_stock(&mut shop, listing_id, 7, &foreign_cap, &mut ctx);
+
+    shop::test_destroy_owner_cap(owner_cap);
+    shop::test_destroy_shop(shop);
+    shop::test_destroy_owner_cap(foreign_cap);
+    shop::test_destroy_shop(foreign_shop);
+    abort E_ASSERT_FAILURE
+}
+
+#[test, expected_failure(abort_code = 0x2::dynamic_field::EFieldDoesNotExist)]
+fun update_item_listing_stock_rejects_unknown_listing() {
+    let mut ctx = tx::dummy();
+    let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
+    let (mut other_shop, other_cap) = shop::test_setup_shop(OTHER_OWNER, &mut ctx);
+
+    shop::add_item_listing<shop::GenericItem>(
+        &mut other_shop,
+        b"Foreign Listing",
+        10_00,
+        2,
+        opt::none(),
+        &other_cap,
+        &mut ctx,
+    );
+
+    let foreign_listing_id = shop::test_last_created_id(&ctx);
+
+    shop::update_item_listing_stock(&mut shop, foreign_listing_id, 3, &owner_cap, &mut ctx);
+
+    shop::test_destroy_owner_cap(owner_cap);
+    shop::test_destroy_shop(shop);
+    shop::test_remove_listing(&mut other_shop, foreign_listing_id);
+    shop::test_destroy_owner_cap(other_cap);
+    shop::test_destroy_shop(other_shop);
+    abort E_ASSERT_FAILURE
+}
+
+#[test]
+fun update_item_listing_stock_handles_multiple_updates_and_events() {
+    let mut ctx = tx::dummy();
+    let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
+
+    shop::add_item_listing<shop::GenericItem>(
+        &mut shop,
+        b"Pads",
+        22_00,
+        5,
+        opt::none(),
+        &owner_cap,
+        &mut ctx,
+    );
+
+    let listing_id = shop::test_last_created_id(&ctx);
+    let listing_address = obj::id_to_address(&listing_id);
+
+    shop::update_item_listing_stock(&mut shop, listing_id, 8, &owner_cap, &mut ctx);
+    shop::update_item_listing_stock(&mut shop, listing_id, 3, &owner_cap, &mut ctx);
+
+    let (_, _, stock, _, _) = shop::test_listing_values(&shop, listing_id);
+    assert!(stock == 3, E_ASSERT_FAILURE);
+
+    let stock_events = event::events_by_type<shop::ItemListingStockUpdated>();
+    assert!(vec::length(&stock_events) == 2, E_ASSERT_FAILURE);
+    let first = vec::borrow(&stock_events, 0);
+    let second = vec::borrow(&stock_events, 1);
+    assert!(shop::test_item_listing_stock_updated_listing(first) == listing_address, E_ASSERT_FAILURE);
+    assert!(shop::test_item_listing_stock_updated_listing(second) == listing_address, E_ASSERT_FAILURE);
+    assert!(shop::test_item_listing_stock_updated_new_stock(first) == 8, E_ASSERT_FAILURE);
+    assert!(shop::test_item_listing_stock_updated_new_stock(second) == 3, E_ASSERT_FAILURE);
 
     shop::test_remove_listing(&mut shop, listing_id);
     shop::test_destroy_owner_cap(owner_cap);
@@ -396,18 +538,44 @@ fun remove_item_listing_removes_listing_and_emits_event() {
         &mut ctx,
     );
 
-    let listing_id = shop::test_last_created_id(&ctx);
-    let shop_address = shop::test_shop_id(&shop);
-    let listing_address = obj::id_to_address(&listing_id);
+    let removed_listing_id = shop::test_last_created_id(&ctx);
+    let removed_listing_address = obj::id_to_address(&removed_listing_id);
 
-    shop::remove_item_listing(&mut shop, listing_id, &owner_cap, &mut ctx);
+    shop::add_item_listing<shop::GenericItem>(
+        &mut shop,
+        b"Repair Kit",
+        42_00,
+        2,
+        opt::none(),
+        &owner_cap,
+        &mut ctx,
+    );
+
+    let remaining_listing_id = shop::test_last_created_id(&ctx);
+    let shop_address = shop::test_shop_id(&shop);
+
+    shop::remove_item_listing(&mut shop, removed_listing_id, &owner_cap, &mut ctx);
 
     let removed_events = event::events_by_type<shop::ItemListingRemoved>();
     assert!(vec::length(&removed_events) == 1, E_ASSERT_FAILURE);
     let removed = vec::borrow(&removed_events, 0);
     assert!(shop::test_item_listing_removed_shop(removed) == shop_address, E_ASSERT_FAILURE);
-    assert!(shop::test_item_listing_removed_listing(removed) == listing_address, E_ASSERT_FAILURE);
+    assert!(
+        shop::test_item_listing_removed_listing(removed) == removed_listing_address,
+        E_ASSERT_FAILURE,
+    );
+    assert!(!shop::test_listing_exists(&shop, removed_listing_id), E_ASSERT_FAILURE);
 
+    assert!(shop::test_listing_exists(&shop, remaining_listing_id), E_ASSERT_FAILURE);
+    let (name, price, stock, listing_shop_address, spotlight) =
+        shop::test_listing_values(&shop, remaining_listing_id);
+    assert!(name == b"Repair Kit", E_ASSERT_FAILURE);
+    assert!(price == 42_00, E_ASSERT_FAILURE);
+    assert!(stock == 2, E_ASSERT_FAILURE);
+    assert!(spotlight == opt::none(), E_ASSERT_FAILURE);
+    assert!(listing_shop_address == shop_address, E_ASSERT_FAILURE);
+
+    shop::test_remove_listing(&mut shop, remaining_listing_id);
     shop::test_destroy_owner_cap(owner_cap);
     shop::test_destroy_shop(shop);
 }
@@ -436,6 +604,34 @@ fun remove_item_listing_rejects_foreign_owner_cap() {
     shop::test_destroy_shop(shop);
     shop::test_destroy_owner_cap(foreign_cap);
     shop::test_destroy_shop(foreign_shop);
+    abort E_ASSERT_FAILURE
+}
+
+#[test, expected_failure(abort_code = 0x2::dynamic_field::EFieldDoesNotExist)]
+fun remove_item_listing_rejects_unknown_listing() {
+    let mut ctx = tx::dummy();
+    let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
+    let (mut other_shop, other_cap) = shop::test_setup_shop(OTHER_OWNER, &mut ctx);
+
+    shop::add_item_listing<shop::GenericItem>(
+        &mut other_shop,
+        b"Foreign Stock",
+        55_00,
+        4,
+        opt::none(),
+        &other_cap,
+        &mut ctx,
+    );
+
+    let foreign_listing_id = shop::test_last_created_id(&ctx);
+
+    shop::remove_item_listing(&mut shop, foreign_listing_id, &owner_cap, &mut ctx);
+
+    shop::test_destroy_owner_cap(owner_cap);
+    shop::test_destroy_shop(shop);
+    shop::test_remove_listing(&mut other_shop, foreign_listing_id);
+    shop::test_destroy_owner_cap(other_cap);
+    shop::test_destroy_shop(other_shop);
     abort E_ASSERT_FAILURE
 }
 

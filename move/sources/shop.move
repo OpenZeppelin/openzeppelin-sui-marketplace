@@ -402,27 +402,32 @@ public entry fun create_discount_template(
     validate_schedule(starts_at, &expires_at);
     validate_listing_reference(shop, &applies_to_listing);
 
-    let rule = build_discount_rule(parse_rule_kind(rule_kind), rule_value);
+    let discount_rule = build_discount_rule(parse_rule_kind(rule_kind), rule_value);
 
-    let template = DiscountTemplate {
+    let discount_template = DiscountTemplate {
         id: obj::new(ctx),
         shop_address: obj::uid_to_address(&shop.id),
         applies_to_listing,
-        rule,
+        rule: discount_rule,
         starts_at,
         expires_at,
         max_redemptions,
         minted_discounts: 0,
         active: true,
     };
-    let discount_template_addr = obj::uid_to_address(&template.id);
-    let discount_template_key = obj::id_from_address(discount_template_addr);
-    dynamic_field::add(&mut shop.id, discount_template_key, template);
+
+    let discount_template_address = obj::uid_to_address(&discount_template.id);
+
+    dynamic_field::add(
+        &mut shop.id,
+        obj::id_from_address(discount_template_address),
+        discount_template,
+    );
 
     event::emit(DiscountTemplateCreated {
         shop_address: obj::uid_to_address(&shop.id),
-        discount_template_id: discount_template_addr,
-        rule,
+        discount_template_id: discount_template_address,
+        rule: discount_rule,
     });
 }
 
@@ -440,18 +445,19 @@ public entry fun update_discount_template(
     assert_owner_cap(shop, owner_cap);
     validate_schedule(starts_at, &expires_at);
 
-    let rule: DiscountRule = build_discount_rule(parse_rule_kind(rule_kind), rule_value);
-    let template: &mut DiscountTemplate = dynamic_field::borrow_mut(
+    let discount_rule: DiscountRule = build_discount_rule(parse_rule_kind(rule_kind), rule_value);
+    let discount_template: &mut DiscountTemplate = dynamic_field::borrow_mut(
         &mut shop.id,
         discount_template_id,
     );
-    template.rule = rule;
-    template.starts_at = starts_at;
-    template.expires_at = expires_at;
-    template.max_redemptions = max_redemptions;
+
+    discount_template.rule = discount_rule;
+    discount_template.starts_at = starts_at;
+    discount_template.expires_at = expires_at;
+    discount_template.max_redemptions = max_redemptions;
 
     event::emit(DiscountTemplateUpdated {
-        shop_address: template.shop_address,
+        shop_address: discount_template.shop_address,
         discount_template_id: obj::id_to_address(&discount_template_id),
     });
 }
@@ -507,17 +513,9 @@ public entry fun clear_template_from_listing(
     listing.spotlight_discount_template_id = opt::none();
 }
 
-///=================///
-/// Helper Routines ///
-///=================///
-
-fun assert_owner_cap(shop: &Shop, owner_cap: &ShopOwnerCap) {
-    assert!(owner_cap.shop_address == obj::uid_to_address(&shop.id), EInvalidOwnerCap);
-}
-
-fun assert_non_zero_stock(stock: u64) {
-    assert!(stock > 0, EZeroStock)
-}
+// =============== //
+// Helper Routines //
+// =============== //
 
 fun destroy_listing(listing: ItemListing) {
     let ItemListing {
@@ -530,13 +528,6 @@ fun destroy_listing(listing: ItemListing) {
         spotlight_discount_template_id: _,
     } = listing;
     id.delete();
-}
-
-fun validate_schedule(starts_at: u64, expires_at: &opt::Option<u64>) {
-    if (opt::is_some(expires_at)) {
-        let expiry = *opt::borrow(expires_at);
-        assert!(expiry > starts_at, ETemplateWindow);
-    }
 }
 
 fun parse_rule_kind(raw_kind: u8): DiscountRuleKind {
@@ -558,30 +549,6 @@ fun build_discount_rule(rule_kind: DiscountRuleKind, rule_value: u64): DiscountR
     }
 }
 
-fun validate_template_option(shop: &Shop, maybe_id: &opt::Option<obj::ID>) {
-    if (opt::is_some(maybe_id)) {
-        assert_template_belongs(shop, *opt::borrow(maybe_id));
-    }
-}
-
-fun validate_listing_reference(shop: &Shop, maybe_id: &opt::Option<obj::ID>) {
-    if (opt::is_some(maybe_id)) {
-        assert_listing_belongs(shop, *opt::borrow(maybe_id));
-    }
-}
-
-fun assert_template_belongs(shop: &Shop, discount_template_id: obj::ID) {
-    assert!(dynamic_field::exists_<obj::ID>(&shop.id, discount_template_id), ETemplateShopMismatch);
-    let template: &DiscountTemplate = dynamic_field::borrow(&shop.id, discount_template_id);
-    assert!(template.shop_address == obj::uid_to_address(&shop.id), ETemplateShopMismatch);
-}
-
-fun assert_listing_belongs(shop: &Shop, listing_id: obj::ID) {
-    assert!(dynamic_field::exists_<obj::ID>(&shop.id, listing_id), EListingShopMismatch);
-    let listing: &ItemListing = dynamic_field::borrow(&shop.id, listing_id);
-    assert!(listing.shop_address == obj::uid_to_address(&shop.id), EListingShopMismatch);
-}
-
 fun map_id_option_to_address(source: &opt::Option<obj::ID>): opt::Option<address> {
     if (opt::is_some(source)) {
         opt::some(obj::id_to_address(opt::borrow(source)))
@@ -599,6 +566,48 @@ fun clone_bytes(data: &vector<u8>): vector<u8> {
         i = i + 1;
     };
     out
+}
+
+// ======================= //
+// Asserts and validations //
+// ======================= //
+
+fun assert_owner_cap(shop: &Shop, owner_cap: &ShopOwnerCap) {
+    assert!(owner_cap.shop_address == obj::uid_to_address(&shop.id), EInvalidOwnerCap);
+}
+
+fun assert_non_zero_stock(stock: u64) {
+    assert!(stock > 0, EZeroStock)
+}
+
+fun assert_template_belongs(shop: &Shop, discount_template_id: obj::ID) {
+    assert!(dynamic_field::exists_<obj::ID>(&shop.id, discount_template_id), ETemplateShopMismatch);
+    let template: &DiscountTemplate = dynamic_field::borrow(&shop.id, discount_template_id);
+    assert!(template.shop_address == obj::uid_to_address(&shop.id), ETemplateShopMismatch);
+}
+
+fun assert_listing_belongs(shop: &Shop, listing_id: obj::ID) {
+    assert!(dynamic_field::exists_<obj::ID>(&shop.id, listing_id), EListingShopMismatch);
+    let listing: &ItemListing = dynamic_field::borrow(&shop.id, listing_id);
+    assert!(listing.shop_address == obj::uid_to_address(&shop.id), EListingShopMismatch);
+}
+
+fun validate_schedule(starts_at: u64, expires_at: &opt::Option<u64>) {
+    if (opt::is_some(expires_at)) {
+        assert!(*opt::borrow(expires_at) > starts_at, ETemplateWindow);
+    }
+}
+
+fun validate_template_option(shop: &Shop, maybe_id: &opt::Option<obj::ID>) {
+    if (opt::is_some(maybe_id)) {
+        assert_template_belongs(shop, *opt::borrow(maybe_id));
+    }
+}
+
+fun validate_listing_reference(shop: &Shop, maybe_id: &opt::Option<obj::ID>) {
+    if (opt::is_some(maybe_id)) {
+        assert_listing_belongs(shop, *opt::borrow(maybe_id));
+    }
 }
 
 ///==================///
@@ -688,6 +697,21 @@ public fun test_destroy_owner_cap(owner_cap: ShopOwnerCap) {
 #[test_only]
 public fun test_shop_id(shop: &Shop): address {
     obj::uid_to_address(&shop.id)
+}
+
+#[test_only]
+public fun test_shop_owner(shop: &Shop): address {
+    shop.owner
+}
+
+#[test_only]
+public fun test_shop_owner_cap_owner(owner_cap: &ShopOwnerCap): address {
+    owner_cap.owner
+}
+
+#[test_only]
+public fun test_shop_owner_cap_shop_address(owner_cap: &ShopOwnerCap): address {
+    owner_cap.shop_address
 }
 
 #[test_only]
