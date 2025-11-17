@@ -33,7 +33,7 @@ const EInvalidRuleValue: u64 = 10;
 /// Holding and using this object is the Sui-native equivalent of matching `onlyOwner` criteria in Solidity.
 public struct ShopOwnerCap has key, store {
     id: obj::UID,
-    shop_id: address,
+    shop_address: address,
     owner: address,
 }
 
@@ -47,7 +47,7 @@ public struct Shop has key, store {
 /// Discounts can be attached to highlight promotions in the UI.
 public struct ItemListing has key, store {
     id: obj::UID,
-    shop_id: address,
+    shop_address: address,
     item_type: TypeInfo,
     name: vector<u8>,
     base_price_usd: u64,
@@ -55,18 +55,11 @@ public struct ItemListing has key, store {
     spotlight_discount_template_id: opt::Option<obj::ID>,
 }
 
-/// Auto discount configuration (to be consumed by future purchase flow).
-public struct AutoDiscount has store {
-    rule: DiscountRule,
-    starts_at: u64,
-    expires_at: opt::Option<u64>,
-}
-
 /// Generic item type for receipts.
 public struct GenericItem has key, store {
     id: obj::UID,
-    shop_id: address,
-    item_listing_id: address,
+    shop_address: address,
+    item_listing_address: address,
     name: vector<u8>,
     acquired_at: u64,
 }
@@ -74,8 +67,8 @@ public struct GenericItem has key, store {
 /// Example strongly-typed item.
 public struct Bike has key, store {
     id: obj::UID,
-    shop_id: address,
-    item_listing_id: address,
+    shop_address: address,
+    item_listing_address: address,
     name: vector<u8>,
     brand: vector<u8>,
     acquired_at: u64,
@@ -83,8 +76,8 @@ public struct Bike has key, store {
 
 public struct Tire has key, store {
     id: obj::UID,
-    shop_id: address,
-    item_listing_id: address,
+    shop_address: address,
+    item_listing_address: address,
     name: vector<u8>,
     brand: vector<u8>,
     acquired_at: u64,
@@ -93,7 +86,7 @@ public struct Tire has key, store {
 /// Defines which external coins the shop is able to price/accept.
 public struct AcceptedCurrency has key, store {
     id: obj::UID,
-    shop_id: address,
+    shop_address: address,
     coin_type: TypeInfo,
     feed_id: vector<u8>,
     pyth_object_id: obj::ID,
@@ -116,7 +109,7 @@ public enum DiscountRuleKind has copy, drop {
 /// Coupon template for creating discounts tracked under the shop.
 public struct DiscountTemplate has key, store {
     id: obj::UID,
-    shop_id: address,
+    shop_address: address,
     applies_to_listing: opt::Option<obj::ID>,
     rule: DiscountRule,
     starts_at: u64,
@@ -130,7 +123,7 @@ public struct DiscountTemplate has key, store {
 public struct DiscountTicket has key, store {
     id: obj::UID,
     discount_template_id: address,
-    shop_id: address,
+    shop_address: address,
     listing_id: opt::Option<obj::ID>,
     owner: address,
     redeemed: bool,
@@ -142,18 +135,25 @@ public struct DiscountClaim has key, store {
     claimer: address,
 }
 
+/// Auto discount configuration (to be consumed by future purchase flow).
+public struct AutoDiscount has store {
+    rule: DiscountRule,
+    starts_at: u64,
+    expires_at: opt::Option<u64>,
+}
+
 ///====================///
 /// Event Definitions ///
 ///====================///
 public struct ShopCreated has copy, drop {
-    shop_id: address,
+    shop_address: address,
     owner: address,
     shop_owner_cap_id: address,
 }
 
 public struct ItemListingAdded has copy, drop {
-    shop_id: address,
-    item_listing_id: address,
+    shop_address: address,
+    item_listing_address: address,
     name: vector<u8>,
     base_price_usd: u64,
     spotlight_discount_template_id: opt::Option<address>,
@@ -161,35 +161,35 @@ public struct ItemListingAdded has copy, drop {
 }
 
 public struct ItemListingStockUpdated has copy, drop {
-    shop_id: address,
-    item_listing_id: address,
+    shop_address: address,
+    item_listing_address: address,
     new_stock: u64,
 }
 
 public struct ItemListingRemoved has copy, drop {
-    shop_id: address,
-    item_listing_id: address,
+    shop_address: address,
+    item_listing_address: address,
 }
 
 public struct DiscountTemplateCreated has copy, drop {
-    shop_id: address,
+    shop_address: address,
     discount_template_id: address,
     rule: DiscountRule,
 }
 
 public struct DiscountTemplateUpdated has copy, drop {
-    shop_id: address,
+    shop_address: address,
     discount_template_id: address,
 }
 
 public struct DiscountTemplateToggled has copy, drop {
-    shop_id: address,
+    shop_address: address,
     discount_template_id: address,
     active: bool,
 }
 
 public struct AcceptedCoinAdded has copy, drop {
-    shop_id: address,
+    shop_address: address,
     coin_type: TypeInfo,
     feed_id: vector<u8>,
     pyth_object_id: obj::ID,
@@ -197,19 +197,19 @@ public struct AcceptedCoinAdded has copy, drop {
 }
 
 public struct AcceptedCoinRemoved has copy, drop {
-    shop_id: address,
+    shop_address: address,
     coin_type: TypeInfo,
 }
 
 public struct DiscountClaimed has copy, drop {
-    shop_id: address,
+    shop_address: address,
     discount_template_id: address,
     claimer: address,
     discount_id: address,
 }
 
 public struct DiscountRedeem has copy, drop {
-    shop_id: address,
+    shop_address: address,
     discount_template_id: address,
     discount_id: address,
     listing_id: address,
@@ -217,22 +217,16 @@ public struct DiscountRedeem has copy, drop {
 }
 
 public struct PurchaseCompleted has copy, drop {
-    shop_id: address,
-    item_listing_id: address,
+    shop_address: address,
+    item_listing_address: address,
     buyer: address,
     coin_type: TypeInfo,
     amount_paid: u64,
     discount_template_id: opt::Option<address>,
 }
 
-public struct InventoryChanged has copy, drop {
-    shop_id: address,
-    item_listing_id: address,
-    new_stock: u64,
-}
-
 public struct PriceUsed has copy, drop {
-    shop_id: address,
+    shop_address: address,
     accepted_currency_id: address,
     feed_id: vector<u8>,
     base_price_usd: u64,
@@ -269,12 +263,12 @@ public entry fun create_shop(publisher: &pkg::Publisher, ctx: &mut tx::TxContext
 
     let owner_cap: ShopOwnerCap = ShopOwnerCap {
         id: obj::new(ctx),
-        shop_id: obj::uid_to_address(&shop.id),
+        shop_address: obj::uid_to_address(&shop.id),
         owner,
     };
 
     event::emit(ShopCreated {
-        shop_id: obj::uid_to_address(&shop.id),
+        shop_address: obj::uid_to_address(&shop.id),
         owner,
         shop_owner_cap_id: obj::uid_to_address(&owner_cap.id),
     });
@@ -304,25 +298,26 @@ public entry fun add_item_listing<T: store>(
     ctx: &mut tx::TxContext,
 ) {
     assert_owner_cap(shop, owner_cap);
+    assert_non_zero_stock(stock);
     assert!(!name.is_empty(), EEmptyItemName);
     assert!(base_price_usd > 0, EInvalidPrice);
-    assert!(stock > 0, EZeroStock);
 
     validate_template_option(shop, &spotlight_discount_template_id);
 
     let listing: ItemListing = ItemListing {
         id: obj::new(ctx),
-        shop_id: obj::uid_to_address(&shop.id),
+        shop_address: obj::uid_to_address(&shop.id),
         item_type: type_name::with_defining_ids<T>(),
         name,
         base_price_usd,
         stock,
         spotlight_discount_template_id,
     };
+    let listing_address = obj::uid_to_address(&listing.id);
 
     event::emit(ItemListingAdded {
-        shop_id: obj::uid_to_address(&shop.id),
-        item_listing_id: obj::uid_to_address(&listing.id),
+        shop_address: obj::uid_to_address(&shop.id),
+        item_listing_address: listing_address,
         name: listing.name,
         base_price_usd,
         spotlight_discount_template_id: map_id_option_to_address(
@@ -331,34 +326,29 @@ public entry fun add_item_listing<T: store>(
         stock,
     });
 
-    dynamic_field::add(&mut shop.id, obj::uid_to_address(&listing.id), listing);
+    dynamic_field::add(&mut shop.id, obj::id_from_address(listing_address), listing);
 }
 
 /// Update the inventory count for a listing.
 ///
-/// We mutate the child object in-place which keeps PTBs deterministic: only
-/// the listing being changed is locked for consensus, not the full shop.
+/// We mutate the child object in-place which keeps PTBs or Programmable Transaction Blocks
+/// deterministic since only the listing being changed is locked for consensus, not the full shop.
 public entry fun update_item_listing_stock(
     shop: &mut Shop,
-    item_id: obj::ID,
+    item_listing_id: obj::ID,
     new_stock: u64,
     owner_cap: &ShopOwnerCap,
     _ctx: &mut tx::TxContext,
 ) {
     assert_owner_cap(shop, owner_cap);
-    assert!(new_stock > 0, EZeroStock);
+    assert_non_zero_stock(new_stock);
 
-    let listing: &mut ItemListing = dynamic_field::borrow_mut(&mut shop.id, item_id);
+    let listing: &mut ItemListing = dynamic_field::borrow_mut(&mut shop.id, item_listing_id);
     listing.stock = new_stock;
 
     event::emit(ItemListingStockUpdated {
-        shop_id: listing.shop_id,
-        item_listing_id: obj::id_to_address(&item_id),
-        new_stock,
-    });
-    event::emit(InventoryChanged {
-        shop_id: listing.shop_id,
-        item_listing_id: obj::id_to_address(&item_id),
+        shop_address: listing.shop_address,
+        item_listing_address: obj::id_to_address(&item_listing_id),
         new_stock,
     });
 }
@@ -367,27 +357,26 @@ public entry fun update_item_listing_stock(
 ///
 /// Removing a dynamic field detaches that child object, allowing us to delete
 /// it cleanly without iterating over any collection.
+/// Sui mindset:
+/// * State mutation happens on owned objects. There’s no global contract storage like Solidity’s mapping.
+/// In this example Inventory lives in child objects attached to the shared Shop,
+/// so removing one item only touches its own record, no global mapping or shared vector needed
 public entry fun remove_item_listing(
     shop: &mut Shop,
-    item_id: obj::ID,
+    item_listing_id: obj::ID,
     owner_cap: &ShopOwnerCap,
     _ctx: &mut tx::TxContext,
 ) {
     assert_owner_cap(shop, owner_cap);
 
-    let listing: ItemListing = dynamic_field::remove(&mut shop.id, item_id);
-    let shop_id = listing.shop_id;
-    let listing_id = obj::uid_to_address(&listing.id);
+    let listing: ItemListing = dynamic_field::remove(&mut shop.id, item_listing_id);
+    let shop_address = listing.shop_address;
+    let listing_address = obj::uid_to_address(&listing.id);
     destroy_listing(listing);
 
     event::emit(ItemListingRemoved {
-        shop_id,
-        item_listing_id: listing_id,
-    });
-    event::emit(InventoryChanged {
-        shop_id,
-        item_listing_id: listing_id,
-        new_stock: 0,
+        shop_address,
+        item_listing_address: listing_address,
     });
 }
 
@@ -411,12 +400,13 @@ public entry fun create_discount_template(
 ) {
     assert_owner_cap(shop, owner_cap);
     validate_schedule(starts_at, &expires_at);
-
     validate_listing_reference(shop, &applies_to_listing);
+
     let rule = build_discount_rule(parse_rule_kind(rule_kind), rule_value);
+
     let template = DiscountTemplate {
         id: obj::new(ctx),
-        shop_id: obj::uid_to_address(&shop.id),
+        shop_address: obj::uid_to_address(&shop.id),
         applies_to_listing,
         rule,
         starts_at,
@@ -430,7 +420,7 @@ public entry fun create_discount_template(
     dynamic_field::add(&mut shop.id, discount_template_key, template);
 
     event::emit(DiscountTemplateCreated {
-        shop_id: obj::uid_to_address(&shop.id),
+        shop_address: obj::uid_to_address(&shop.id),
         discount_template_id: discount_template_addr,
         rule,
     });
@@ -461,7 +451,7 @@ public entry fun update_discount_template(
     template.max_redemptions = max_redemptions;
 
     event::emit(DiscountTemplateUpdated {
-        shop_id: template.shop_id,
+        shop_address: template.shop_address,
         discount_template_id: obj::id_to_address(&discount_template_id),
     });
 }
@@ -483,7 +473,7 @@ public entry fun toggle_discount_template(
     template.active = active;
 
     event::emit(DiscountTemplateToggled {
-        shop_id: template.shop_id,
+        shop_address: template.shop_address,
         discount_template_id: obj::id_to_address(&discount_template_id),
         active,
     });
@@ -522,13 +512,17 @@ public entry fun clear_template_from_listing(
 ///=================///
 
 fun assert_owner_cap(shop: &Shop, owner_cap: &ShopOwnerCap) {
-    assert!(owner_cap.shop_id == obj::uid_to_address(&shop.id), EInvalidOwnerCap);
+    assert!(owner_cap.shop_address == obj::uid_to_address(&shop.id), EInvalidOwnerCap);
+}
+
+fun assert_non_zero_stock(stock: u64) {
+    assert!(stock > 0, EZeroStock)
 }
 
 fun destroy_listing(listing: ItemListing) {
     let ItemListing {
         id,
-        shop_id: _,
+        shop_address: _,
         item_type: _,
         name: _,
         base_price_usd: _,
@@ -579,13 +573,13 @@ fun validate_listing_reference(shop: &Shop, maybe_id: &opt::Option<obj::ID>) {
 fun assert_template_belongs(shop: &Shop, discount_template_id: obj::ID) {
     assert!(dynamic_field::exists_<obj::ID>(&shop.id, discount_template_id), ETemplateShopMismatch);
     let template: &DiscountTemplate = dynamic_field::borrow(&shop.id, discount_template_id);
-    assert!(template.shop_id == obj::uid_to_address(&shop.id), ETemplateShopMismatch);
+    assert!(template.shop_address == obj::uid_to_address(&shop.id), ETemplateShopMismatch);
 }
 
 fun assert_listing_belongs(shop: &Shop, listing_id: obj::ID) {
     assert!(dynamic_field::exists_<obj::ID>(&shop.id, listing_id), EListingShopMismatch);
     let listing: &ItemListing = dynamic_field::borrow(&shop.id, listing_id);
-    assert!(listing.shop_id == obj::uid_to_address(&shop.id), EListingShopMismatch);
+    assert!(listing.shop_address == obj::uid_to_address(&shop.id), EListingShopMismatch);
 }
 
 fun map_id_option_to_address(source: &opt::Option<obj::ID>): opt::Option<address> {
@@ -632,7 +626,7 @@ public fun test_setup_shop(owner: address, ctx: &mut tx::TxContext): (Shop, Shop
     };
     let owner_cap = ShopOwnerCap {
         id: obj::new(ctx),
-        shop_id: obj::uid_to_address(&shop.id),
+        shop_address: obj::uid_to_address(&shop.id),
         owner,
     };
     (shop, owner_cap)
@@ -648,9 +642,14 @@ public fun test_listing_values(
         clone_bytes(&listing.name),
         listing.base_price_usd,
         listing.stock,
-        listing.shop_id,
+        listing.shop_address,
         listing.spotlight_discount_template_id,
     )
+}
+
+#[test_only]
+public fun test_listing_exists(shop: &Shop, listing_id: obj::ID): bool {
+    dynamic_field::exists_<obj::ID>(&shop.id, listing_id)
 }
 
 #[test_only]
@@ -680,7 +679,7 @@ public fun test_destroy_shop(shop: Shop) {
 public fun test_destroy_owner_cap(owner_cap: ShopOwnerCap) {
     let ShopOwnerCap {
         id,
-        shop_id: _,
+        shop_address: _,
         owner: _,
     } = owner_cap;
     obj::delete(id);
@@ -702,10 +701,72 @@ public fun test_shop_created_owner_cap_id(event: &ShopCreated): address {
 }
 
 #[test_only]
+public fun test_shop_created_shop_address(event: &ShopCreated): address {
+    event.shop_address
+}
+
+#[test_only]
+public fun test_item_listing_stock_updated_shop(event: &ItemListingStockUpdated): address {
+    event.shop_address
+}
+
+#[test_only]
+public fun test_item_listing_stock_updated_listing(event: &ItemListingStockUpdated): address {
+    event.item_listing_address
+}
+
+#[test_only]
+public fun test_item_listing_stock_updated_new_stock(event: &ItemListingStockUpdated): u64 {
+    event.new_stock
+}
+
+#[test_only]
+public fun test_item_listing_added_shop(event: &ItemListingAdded): address {
+    event.shop_address
+}
+
+#[test_only]
+public fun test_item_listing_added_listing(event: &ItemListingAdded): address {
+    event.item_listing_address
+}
+
+#[test_only]
+public fun test_item_listing_added_name(event: &ItemListingAdded): vector<u8> {
+    clone_bytes(&event.name)
+}
+
+#[test_only]
+public fun test_item_listing_added_base_price(event: &ItemListingAdded): u64 {
+    event.base_price_usd
+}
+
+#[test_only]
+public fun test_item_listing_added_spotlight_template(
+    event: &ItemListingAdded,
+): opt::Option<address> {
+    event.spotlight_discount_template_id
+}
+
+#[test_only]
+public fun test_item_listing_added_stock(event: &ItemListingAdded): u64 {
+    event.stock
+}
+
+#[test_only]
+public fun test_item_listing_removed_shop(event: &ItemListingRemoved): address {
+    event.shop_address
+}
+
+#[test_only]
+public fun test_item_listing_removed_listing(event: &ItemListingRemoved): address {
+    event.item_listing_address
+}
+
+#[test_only]
 fun destroy_template(template: DiscountTemplate) {
     let DiscountTemplate {
         id,
-        shop_id: _,
+        shop_address: _,
         applies_to_listing: _,
         rule: _,
         starts_at: _,
