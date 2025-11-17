@@ -443,6 +443,7 @@ public entry fun update_discount_template(
     owner_cap: &ShopOwnerCap,
 ) {
     assert_owner_cap(shop, owner_cap);
+    assert_template_belongs(shop, discount_template_id);
     validate_schedule(starts_at, &expires_at);
 
     let discount_rule: DiscountRule = build_discount_rule(parse_rule_kind(rule_kind), rule_value);
@@ -471,6 +472,7 @@ public entry fun toggle_discount_template(
     _ctx: &mut tx::TxContext,
 ) {
     assert_owner_cap(shop, owner_cap);
+    assert_template_belongs(shop, discount_template_id);
 
     let discount_template: &mut DiscountTemplate = dynamic_field::borrow_mut(
         &mut shop.id,
@@ -581,6 +583,12 @@ fun assert_non_zero_stock(stock: u64) {
     assert!(stock > 0, EZeroStock)
 }
 
+fun validate_schedule(starts_at: u64, expires_at: &opt::Option<u64>) {
+    if (opt::is_some(expires_at)) {
+        assert!(*opt::borrow(expires_at) > starts_at, ETemplateWindow);
+    }
+}
+
 fun assert_template_belongs(shop: &Shop, discount_template_id: obj::ID) {
     assert!(dynamic_field::exists_<obj::ID>(&shop.id, discount_template_id), ETemplateShopMismatch);
     let template: &DiscountTemplate = dynamic_field::borrow(&shop.id, discount_template_id);
@@ -591,12 +599,6 @@ fun assert_listing_belongs(shop: &Shop, listing_id: obj::ID) {
     assert!(dynamic_field::exists_<obj::ID>(&shop.id, listing_id), EListingShopMismatch);
     let listing: &ItemListing = dynamic_field::borrow(&shop.id, listing_id);
     assert!(listing.shop_address == obj::uid_to_address(&shop.id), EListingShopMismatch);
-}
-
-fun validate_schedule(starts_at: u64, expires_at: &opt::Option<u64>) {
-    if (opt::is_some(expires_at)) {
-        assert!(*opt::borrow(expires_at) > starts_at, ETemplateWindow);
-    }
 }
 
 fun validate_template_option(shop: &Shop, maybe_id: &opt::Option<obj::ID>) {
@@ -660,6 +662,69 @@ public fun test_listing_values(
 #[test_only]
 public fun test_listing_exists(shop: &Shop, listing_id: obj::ID): bool {
     dynamic_field::exists_<obj::ID>(&shop.id, listing_id)
+}
+
+#[test_only]
+public fun test_discount_template_exists(shop: &Shop, template_id: obj::ID): bool {
+    dynamic_field::exists_<obj::ID>(&shop.id, template_id)
+}
+
+#[test_only]
+public fun test_discount_template_values(
+    shop: &Shop,
+    template_id: obj::ID,
+): (
+    address,
+    opt::Option<obj::ID>,
+    DiscountRule,
+    u64,
+    opt::Option<u64>,
+    opt::Option<u64>,
+    u64,
+    bool,
+) {
+    let template: &DiscountTemplate = dynamic_field::borrow(&shop.id, template_id);
+    (
+        template.shop_address,
+        template.applies_to_listing,
+        template.rule,
+        template.starts_at,
+        template.expires_at,
+        template.max_redemptions,
+        template.minted_discounts,
+        template.active,
+    )
+}
+
+#[test_only]
+public fun test_discount_rule_kind(rule: DiscountRule): u8 {
+    match (rule) {
+        DiscountRule::Fixed { amount_cents: _ } => 0,
+        DiscountRule::Percent { bps: _ } => 1,
+    }
+}
+
+#[test_only]
+public fun test_discount_rule_value(rule: DiscountRule): u64 {
+    match (rule) {
+        DiscountRule::Fixed { amount_cents } => amount_cents,
+        DiscountRule::Percent { bps } => bps as u64,
+    }
+}
+
+#[test_only]
+public fun test_discount_template_created_shop(event: &DiscountTemplateCreated): address {
+    event.shop_address
+}
+
+#[test_only]
+public fun test_discount_template_created_id(event: &DiscountTemplateCreated): address {
+    event.discount_template_id
+}
+
+#[test_only]
+public fun test_discount_template_created_rule(event: &DiscountTemplateCreated): DiscountRule {
+    event.rule
 }
 
 #[test_only]

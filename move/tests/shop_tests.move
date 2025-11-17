@@ -660,6 +660,260 @@ fun update_item_listing_stock_rejects_zero_stock() {
     abort E_ASSERT_FAILURE
 }
 
+#[test]
+fun create_discount_template_persists_fields_and_emits_event() {
+    let mut ctx = tx::dummy();
+    let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
+
+    shop::create_discount_template(
+        &mut shop,
+        opt::none(),
+        0,
+        1_250,
+        10,
+        opt::some(50),
+        opt::some(5),
+        &owner_cap,
+        &mut ctx,
+    );
+
+    let template_id = shop::test_last_created_id(&ctx);
+    let template_address = obj::id_to_address(&template_id);
+    assert!(shop::test_discount_template_exists(&shop, template_id), E_ASSERT_FAILURE);
+
+    let (
+        shop_address,
+        applies_to_listing,
+        rule,
+        starts_at,
+        expires_at,
+        max_redemptions,
+        minted,
+        active,
+    ) = shop::test_discount_template_values(&shop, template_id);
+
+    assert!(shop_address == shop::test_shop_id(&shop), E_ASSERT_FAILURE);
+    assert!(opt::is_none(&applies_to_listing), E_ASSERT_FAILURE);
+    assert!(shop::test_discount_rule_kind(rule) == 0, E_ASSERT_FAILURE);
+    assert!(shop::test_discount_rule_value(rule) == 1_250, E_ASSERT_FAILURE);
+    assert!(starts_at == 10, E_ASSERT_FAILURE);
+    assert!(opt::borrow(&expires_at) == 50, E_ASSERT_FAILURE);
+    assert!(opt::borrow(&max_redemptions) == 5, E_ASSERT_FAILURE);
+    assert!(minted == 0, E_ASSERT_FAILURE);
+    assert!(active, E_ASSERT_FAILURE);
+
+    let created_events = event::events_by_type<shop::DiscountTemplateCreated>();
+    assert!(vec::length(&created_events) == 1, E_ASSERT_FAILURE);
+    let created = vec::borrow(&created_events, 0);
+    assert!(
+        shop::test_discount_template_created_shop(created) == shop::test_shop_id(&shop),
+        E_ASSERT_FAILURE,
+    );
+    assert!(
+        shop::test_discount_template_created_id(created) == template_address,
+        E_ASSERT_FAILURE,
+    );
+    let created_rule = shop::test_discount_template_created_rule(created);
+    assert!(shop::test_discount_rule_kind(created_rule) == 0, E_ASSERT_FAILURE);
+    assert!(shop::test_discount_rule_value(created_rule) == 1_250, E_ASSERT_FAILURE);
+
+    shop::test_remove_template(&mut shop, template_id);
+    shop::test_destroy_owner_cap(owner_cap);
+    shop::test_destroy_shop(shop);
+}
+
+#[test]
+fun create_discount_template_links_listing_and_percent_rule() {
+    let mut ctx = tx::dummy();
+    let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
+
+    shop::add_item_listing<shop::GenericItem>(
+        &mut shop,
+        b"Wheelset",
+        600_00,
+        4,
+        opt::none(),
+        &owner_cap,
+        &mut ctx,
+    );
+    let listing_id = shop::test_last_created_id(&ctx);
+
+    shop::create_discount_template(
+        &mut shop,
+        opt::some(listing_id),
+        1,
+        2_500,
+        0,
+        opt::none(),
+        opt::none(),
+        &owner_cap,
+        &mut ctx,
+    );
+
+    let template_id = shop::test_last_created_id(&ctx);
+    assert!(shop::test_discount_template_exists(&shop, template_id), E_ASSERT_FAILURE);
+    let (
+        shop_address,
+        applies_to_listing,
+        rule,
+        starts_at,
+        expires_at,
+        max_redemptions,
+        minted,
+        active,
+    ) = shop::test_discount_template_values(&shop, template_id);
+
+    assert!(shop_address == shop::test_shop_id(&shop), E_ASSERT_FAILURE);
+    assert!(opt::borrow(&applies_to_listing) == listing_id, E_ASSERT_FAILURE);
+    assert!(shop::test_discount_rule_kind(rule) == 1, E_ASSERT_FAILURE);
+    assert!(shop::test_discount_rule_value(rule) == 2_500, E_ASSERT_FAILURE);
+    assert!(starts_at == 0, E_ASSERT_FAILURE);
+    assert!(opt::is_none(&expires_at), E_ASSERT_FAILURE);
+    assert!(opt::is_none(&max_redemptions), E_ASSERT_FAILURE);
+    assert!(minted == 0, E_ASSERT_FAILURE);
+    assert!(active, E_ASSERT_FAILURE);
+
+    let created_events = event::events_by_type<shop::DiscountTemplateCreated>();
+    assert!(vec::length(&created_events) == 1, E_ASSERT_FAILURE);
+    let created = vec::borrow(&created_events, 0);
+    let created_rule = shop::test_discount_template_created_rule(created);
+    assert!(shop::test_discount_rule_kind(created_rule) == 1, E_ASSERT_FAILURE);
+    assert!(shop::test_discount_rule_value(created_rule) == 2_500, E_ASSERT_FAILURE);
+
+    shop::test_remove_template(&mut shop, template_id);
+    shop::test_remove_listing(&mut shop, listing_id);
+    shop::test_destroy_owner_cap(owner_cap);
+    shop::test_destroy_shop(shop);
+}
+
+#[test, expected_failure(abort_code = ::sui_oracle_market::shop::EInvalidOwnerCap)]
+fun create_discount_template_rejects_foreign_owner_cap() {
+    let mut ctx = tx::dummy();
+    let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
+    let (other_shop, other_cap) = shop::test_setup_shop(OTHER_OWNER, &mut ctx);
+
+    shop::create_discount_template(
+        &mut shop,
+        opt::none(),
+        0,
+        100,
+        0,
+        opt::none(),
+        opt::none(),
+        &other_cap,
+        &mut ctx,
+    );
+
+    shop::test_destroy_owner_cap(owner_cap);
+    shop::test_destroy_shop(shop);
+    shop::test_destroy_owner_cap(other_cap);
+    shop::test_destroy_shop(other_shop);
+    abort E_ASSERT_FAILURE
+}
+
+#[test, expected_failure(abort_code = ::sui_oracle_market::shop::EInvalidRuleKind)]
+fun create_discount_template_rejects_invalid_rule_kind() {
+    let mut ctx = tx::dummy();
+    let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
+
+    shop::create_discount_template(
+        &mut shop,
+        opt::none(),
+        2,
+        100,
+        0,
+        opt::none(),
+        opt::none(),
+        &owner_cap,
+        &mut ctx,
+    );
+
+    shop::test_destroy_owner_cap(owner_cap);
+    shop::test_destroy_shop(shop);
+    abort E_ASSERT_FAILURE
+}
+
+#[test, expected_failure(abort_code = ::sui_oracle_market::shop::EInvalidRuleValue)]
+fun create_discount_template_rejects_percent_above_limit() {
+    let mut ctx = tx::dummy();
+    let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
+
+    shop::create_discount_template(
+        &mut shop,
+        opt::none(),
+        1,
+        10_001,
+        0,
+        opt::none(),
+        opt::none(),
+        &owner_cap,
+        &mut ctx,
+    );
+
+    shop::test_destroy_owner_cap(owner_cap);
+    shop::test_destroy_shop(shop);
+    abort E_ASSERT_FAILURE
+}
+
+#[test, expected_failure(abort_code = ::sui_oracle_market::shop::ETemplateWindow)]
+fun create_discount_template_rejects_invalid_schedule() {
+    let mut ctx = tx::dummy();
+    let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
+
+    shop::create_discount_template(
+        &mut shop,
+        opt::none(),
+        0,
+        1_000,
+        10,
+        opt::some(10),
+        opt::none(),
+        &owner_cap,
+        &mut ctx,
+    );
+
+    shop::test_destroy_owner_cap(owner_cap);
+    shop::test_destroy_shop(shop);
+    abort E_ASSERT_FAILURE
+}
+
+#[test, expected_failure(abort_code = ::sui_oracle_market::shop::EListingShopMismatch)]
+fun create_discount_template_rejects_foreign_listing_reference() {
+    let mut ctx = tx::dummy();
+    let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
+    let (mut other_shop, other_cap) = shop::test_setup_shop(OTHER_OWNER, &mut ctx);
+
+    shop::add_item_listing<shop::GenericItem>(
+        &mut other_shop,
+        b"Foreign Listing",
+        7_500,
+        2,
+        opt::none(),
+        &other_cap,
+        &mut ctx,
+    );
+    let foreign_listing_id = shop::test_last_created_id(&ctx);
+
+    shop::create_discount_template(
+        &mut shop,
+        opt::some(foreign_listing_id),
+        0,
+        500,
+        0,
+        opt::none(),
+        opt::none(),
+        &owner_cap,
+        &mut ctx,
+    );
+
+    shop::test_destroy_owner_cap(owner_cap);
+    shop::test_destroy_shop(shop);
+    shop::test_remove_listing(&mut other_shop, foreign_listing_id);
+    shop::test_destroy_owner_cap(other_cap);
+    shop::test_destroy_shop(other_shop);
+    abort E_ASSERT_FAILURE
+}
+
 fun create_discount_template(
     shop: &mut shop::Shop,
     owner_cap: &shop::ShopOwnerCap,
