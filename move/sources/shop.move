@@ -472,14 +472,15 @@ public entry fun toggle_discount_template(
 ) {
     assert_owner_cap(shop, owner_cap);
 
-    let template: &mut DiscountTemplate = dynamic_field::borrow_mut(
+    let discount_template: &mut DiscountTemplate = dynamic_field::borrow_mut(
         &mut shop.id,
         discount_template_id,
     );
-    template.active = active;
+
+    discount_template.active = active;
 
     event::emit(DiscountTemplateToggled {
-        shop_address: template.shop_address,
+        shop_address: discount_template.shop_address,
         discount_template_id: obj::id_to_address(&discount_template_id),
         active,
     });
