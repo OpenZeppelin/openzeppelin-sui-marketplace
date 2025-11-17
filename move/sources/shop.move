@@ -590,15 +590,33 @@ fun validate_schedule(starts_at: u64, expires_at: &opt::Option<u64>) {
 }
 
 fun assert_template_belongs(shop: &Shop, discount_template_id: obj::ID) {
-    assert!(dynamic_field::exists_<obj::ID>(&shop.id, discount_template_id), ETemplateShopMismatch);
     let template: &DiscountTemplate = dynamic_field::borrow(&shop.id, discount_template_id);
-    assert!(template.shop_address == obj::uid_to_address(&shop.id), ETemplateShopMismatch);
+    assert_entity_belongs_to_shop<DiscountTemplate>(
+        shop,
+        template,
+        template.shop_address,
+        ETemplateShopMismatch,
+    );
 }
 
 fun assert_listing_belongs(shop: &Shop, listing_id: obj::ID) {
-    assert!(dynamic_field::exists_<obj::ID>(&shop.id, listing_id), EListingShopMismatch);
     let listing: &ItemListing = dynamic_field::borrow(&shop.id, listing_id);
-    assert!(listing.shop_address == obj::uid_to_address(&shop.id), EListingShopMismatch);
+    assert_entity_belongs_to_shop<ItemListing>(
+        shop,
+        listing,
+        listing.shop_address,
+        EListingShopMismatch,
+    );
+}
+
+fun assert_entity_belongs_to_shop<Object>(
+    shop: &Shop,
+    entity: &Entity,
+    entity_shop_address: address,
+    mismatch_error: u64,
+) {
+    assert!(dynamic_field::exists_<obj::ID>(&shop.id, entity.id), mismatch_error);
+    assert!(entity_shop_address == obj::uid_to_address(&shop.id), mismatch_error);
 }
 
 fun validate_template_option(shop: &Shop, maybe_id: &opt::Option<obj::ID>) {
