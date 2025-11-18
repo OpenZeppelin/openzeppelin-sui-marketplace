@@ -500,11 +500,7 @@ public entry fun attach_template_to_listing(
     owner_cap: &ShopOwnerCap,
     _ctx: &mut tx::TxContext,
 ) {
-    assert_owner_cap(shop, owner_cap);
-    assert_template_belongs_to_shop(shop, discount_template_id);
-
-    let listing: &mut ItemListing = dynamic_field::borrow_mut(&mut shop.id, item_id);
-    listing.spotlight_discount_template_id = opt::some(discount_template_id);
+    toggle_template_on_listing(shop, item_id, opt::some(discount_template_id), owner_cap, _ctx)
 }
 
 /// Remove the promotion banner from a listing.
@@ -514,10 +510,23 @@ public entry fun clear_template_from_listing(
     owner_cap: &ShopOwnerCap,
     _ctx: &mut tx::TxContext,
 ) {
+    toggle_template_on_listing(shop, item_id, opt::none(), owner_cap, _ctx)
+}
+
+/// Attach or clear a template banner on a listing depending on whether the `Option` carries an id.
+entry fun toggle_template_on_listing(
+    shop: &mut Shop,
+    item_id: obj::ID,
+    discount_template_id: opt::Option<obj::ID>,
+    owner_cap: &ShopOwnerCap,
+    _ctx: &mut tx::TxContext,
+) {
     assert_owner_cap(shop, owner_cap);
+    assert_listing_belongs_to_shop(shop, item_id);
+    validate_belongs_to_shop_if_some(ReferenceKind::Template, shop, &discount_template_id);
 
     let listing: &mut ItemListing = dynamic_field::borrow_mut(&mut shop.id, item_id);
-    listing.spotlight_discount_template_id = opt::none();
+    listing.spotlight_discount_template_id = discount_template_id;
 }
 
 // =============== //
@@ -562,17 +571,6 @@ fun map_id_option_to_address(source: &opt::Option<obj::ID>): opt::Option<address
     } else {
         opt::none()
     }
-}
-
-fun clone_bytes(data: &vector<u8>): vector<u8> {
-    let mut out: vector<u8> = vec::empty();
-    let mut i: u64 = 0;
-    let len: u64 = vec::length(data);
-    while (i < len) {
-        vec::push_back(&mut out, *vec::borrow(data, i));
-        i = i + 1;
-    };
-    out
 }
 
 // ======================= //
@@ -628,6 +626,18 @@ fun validate_belongs_to_shop_if_some(
 ///==================///
 /// #[test_only] API ///
 ///==================///
+
+#[test_only]
+fun clone_bytes(data: &vector<u8>): vector<u8> {
+    let mut out: vector<u8> = vec::empty();
+    let mut i: u64 = 0;
+    let len: u64 = vec::length(data);
+    while (i < len) {
+        vec::push_back(&mut out, *vec::borrow(data, i));
+        i = i + 1;
+    };
+    out
+}
 
 #[test_only]
 public struct TestPublisherOTW has drop {}
