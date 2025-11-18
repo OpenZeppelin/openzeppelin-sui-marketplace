@@ -2,8 +2,10 @@
 module sui_oracle_market::shop;
 
 use std::option as opt;
+use std::string as string;
 use std::type_name::{Self as type_name, TypeName as TypeInfo};
 use std::vector as vec;
+use sui::coin_registry as registry;
 use sui::dynamic_field;
 use sui::event;
 use sui::object as obj;
@@ -24,6 +26,9 @@ const ETemplateShopMismatch: u64 = 7;
 const EListingShopMismatch: u64 = 8;
 const EInvalidRuleKind: u64 = 9;
 const EInvalidRuleValue: u64 = 10;
+const EAcceptedCurrencyExists: u64 = 11;
+const EAcceptedCurrencyMissing: u64 = 12;
+const EEmptyFeedId: u64 = 13;
 
 ///====================///
 /// Capability & Core ///
@@ -88,8 +93,8 @@ public struct AcceptedCurrency has key, store {
     id: obj::UID,
     shop_address: address,
     coin_type: TypeInfo,
-    feed_id: vector<u8>,
-    pyth_object_id: obj::ID,
+    feed_id: vector<u8>, // Pyth price feed identifier (e.g. SUI/USD)
+    pyth_object_id: obj::ID, // ID of Pyth PriceInfoObject
     decimals: u8,
     symbol: vector<u8>,
 }
@@ -317,7 +322,7 @@ public entry fun add_item_listing<T: store>(
         stock,
         spotlight_discount_template_id,
     };
-    let listing_address = obj::uid_to_address(&listing.id);
+    let listing_address: address = obj::uid_to_address(&listing.id);
 
     event::emit(ItemListingAdded {
         shop_address: obj::uid_to_address(&shop.id),
@@ -374,14 +379,96 @@ public entry fun remove_item_listing(
     assert_owner_cap(shop, owner_cap);
 
     let listing: ItemListing = dynamic_field::remove(&mut shop.id, item_listing_id);
-    let shop_address = listing.shop_address;
-    let listing_address = obj::uid_to_address(&listing.id);
+    let shop_address: address = listing.shop_address;
+    let listing_address: address = obj::uid_to_address(&listing.id);
     destroy_listing(listing);
 
     event::emit(ItemListingRemoved {
         shop_address,
         item_listing_address: listing_address,
     });
+}
+
+/// * Accepted currencies * ///
+
+/// Register a coin type that the shop will price through an oracle feed.
+///
+/// Sui mindset:
+/// * Payment assets are native Move resources (`Coin<T>`, Currency<T>) not ERC20 balances, so registration works
+///   by storing rich type info instead of interface addresses.
+/// * Coin metadata (symbol, decimals) is globally stored in coin_registry (or coin_metadata) rather than queried via contract calls
+/// * Capability-based access control keeps the logic honest; only the matching `ShopOwnerCap`
+///   can mutate the shop configuration.
+/// * Dynamic fields keep each accepted currency as its own child object, so updating one feed does
+///   not serialize writes to the entire shop.
+public entry fun add_accepted_currency<T: store>(
+    shop: &mut Shop,
+    currency: &registry::Currency<T>,
+    feed_id: vector<u8>,
+    pyth_object_id: obj::ID,
+    owner_cap: &ShopOwnerCap,
+    ctx: &mut tx::TxContext,
+) {
+    assert_owner_cap(shop, owner_cap);
+    assert_currency_not_registered(shop, &currency_type<T>());
+    assert_valid_feed_id(&feed_id);
+
+    let coin_type = currency_type<T>();
+    let decimals: u8 = registry::decimals(currency);
+    let symbol: vector<u8> = string::into_bytes(registry::symbol(currency));
+    let feed_for_event: vector<u8> = feed_id;
+
+    let accepted_currency: AcceptedCurrency = AcceptedCurrency {
+        id: obj::new(ctx),
+        shop_address: obj::uid_to_address(&shop.id),
+        coin_type,
+        feed_id,
+        pyth_object_id,
+        decimals,
+        symbol,
+    };
+    let accepted_currency_address: address = obj::uid_to_address(&accepted_currency.id);
+
+    dynamic_field::add(
+        &mut shop.id,
+        obj::id_from_address(accepted_currency_address),
+        accepted_currency,
+    );
+
+    dynamic_field::add(&mut shop.id, coin_type, obj::id_from_address(accepted_currency_address));
+
+    event::emit(AcceptedCoinAdded {
+        shop_address: obj::uid_to_address(&shop.id),
+        coin_type,
+        feed_id: feed_for_event,
+        pyth_object_id,
+        decimals,
+    });
+}
+
+/// Deregister an accepted coin type and clean up its lookup index.
+public entry fun remove_accepted_currency(
+    shop: &mut Shop,
+    accepted_currency_id: obj::ID,
+    owner_cap: &ShopOwnerCap,
+    _ctx: &mut tx::TxContext,
+) {
+    assert_owner_cap(shop, owner_cap);
+    assert_accepted_currency_exists(shop, accepted_currency_id);
+
+    let accepted_currency: AcceptedCurrency = dynamic_field::remove(
+        &mut shop.id,
+        accepted_currency_id,
+    );
+
+    remove_currency_field(shop, accepted_currency.coin_type);
+
+    event::emit(AcceptedCoinRemoved {
+        shop_address: accepted_currency.shop_address,
+        coin_type: accepted_currency.coin_type,
+    });
+
+    destroy_accepted_currency(accepted_currency);
 }
 
 /// Create a discount template anchored under the shop.
@@ -406,9 +493,9 @@ public entry fun create_discount_template(
     validate_schedule(starts_at, &expires_at);
     validate_belongs_to_shop_if_some(ReferenceKind::Listing, shop, &applies_to_listing);
 
-    let discount_rule = build_discount_rule(parse_rule_kind(rule_kind), rule_value);
+    let discount_rule: DiscountRule = build_discount_rule(parse_rule_kind(rule_kind), rule_value);
 
-    let discount_template = DiscountTemplate {
+    let discount_template: DiscountTemplate = DiscountTemplate {
         id: obj::new(ctx),
         shop_address: obj::uid_to_address(&shop.id),
         applies_to_listing,
@@ -420,7 +507,7 @@ public entry fun create_discount_template(
         active: true,
     };
 
-    let discount_template_address = obj::uid_to_address(&discount_template.id);
+    let discount_template_address: address = obj::uid_to_address(&discount_template.id);
 
     dynamic_field::add(
         &mut shop.id,
@@ -495,43 +582,49 @@ public entry fun toggle_discount_template(
 /// Surface a template alongside a listing so UIs can highlight the promotion.
 public entry fun attach_template_to_listing(
     shop: &mut Shop,
-    item_id: obj::ID,
+    item_listing_id: obj::ID,
     discount_template_id: obj::ID,
     owner_cap: &ShopOwnerCap,
     _ctx: &mut tx::TxContext,
 ) {
-    toggle_template_on_listing(shop, item_id, opt::some(discount_template_id), owner_cap, _ctx)
+    toggle_template_on_listing(
+        shop,
+        item_listing_id,
+        opt::some(discount_template_id),
+        owner_cap,
+        _ctx,
+    )
 }
 
 /// Remove the promotion banner from a listing.
 public entry fun clear_template_from_listing(
     shop: &mut Shop,
-    item_id: obj::ID,
+    item_listing_id: obj::ID,
     owner_cap: &ShopOwnerCap,
     _ctx: &mut tx::TxContext,
 ) {
-    toggle_template_on_listing(shop, item_id, opt::none(), owner_cap, _ctx)
+    toggle_template_on_listing(shop, item_listing_id, opt::none(), owner_cap, _ctx)
 }
 
 /// Attach or clear a template banner on a listing depending on whether the `Option` carries an id.
 entry fun toggle_template_on_listing(
     shop: &mut Shop,
-    item_id: obj::ID,
+    item_listing_id: obj::ID,
     discount_template_id: opt::Option<obj::ID>,
     owner_cap: &ShopOwnerCap,
     _ctx: &mut tx::TxContext,
 ) {
     assert_owner_cap(shop, owner_cap);
-    assert_listing_belongs_to_shop(shop, item_id);
+    assert_listing_belongs_to_shop(shop, item_listing_id);
     validate_belongs_to_shop_if_some(ReferenceKind::Template, shop, &discount_template_id);
 
-    let listing: &mut ItemListing = dynamic_field::borrow_mut(&mut shop.id, item_id);
+    let listing: &mut ItemListing = dynamic_field::borrow_mut(&mut shop.id, item_listing_id);
     listing.spotlight_discount_template_id = discount_template_id;
 }
 
-// =============== //
-// Helper Routines //
-// =============== //
+// ============= //
+// Data Mutation //
+// ============= //
 
 fun destroy_listing(listing: ItemListing) {
     let ItemListing {
@@ -545,6 +638,31 @@ fun destroy_listing(listing: ItemListing) {
     } = listing;
     id.delete();
 }
+
+fun destroy_accepted_currency(accepted_currency: AcceptedCurrency) {
+    let AcceptedCurrency {
+        id,
+        shop_address: _,
+        coin_type: _,
+        feed_id: _,
+        pyth_object_id: _,
+        decimals: _,
+        symbol: _,
+    } = accepted_currency;
+    id.delete();
+}
+
+fun remove_currency_field(shop: &mut Shop, coin_type: TypeInfo) {
+    dynamic_field::remove_if_exists<TypeInfo, obj::ID>(&mut shop.id, coin_type);
+}
+
+fun currency_type<T: store>(): TypeInfo {
+    type_name::with_defining_ids<T>()
+}
+
+// ======= //
+// Helpers //
+// ======= //
 
 fun parse_rule_kind(raw_kind: u8): DiscountRuleKind {
     if (raw_kind == 0) {
@@ -589,6 +707,22 @@ fun validate_schedule(starts_at: u64, expires_at: &opt::Option<u64>) {
     if (opt::is_some(expires_at)) {
         assert!(*opt::borrow(expires_at) > starts_at, ETemplateWindow);
     }
+}
+
+// TODO add asserts from pyth module
+fun assert_valid_feed_id(feed_id: &vector<u8>) {
+    assert!(!vec::is_empty(feed_id), EEmptyFeedId);
+}
+
+fun assert_accepted_currency_exists(shop: &Shop, accepted_currency_id: obj::ID) {
+    assert!(
+        dynamic_field::exists_with_type<obj::ID, AcceptedCurrency>(&shop.id, accepted_currency_id),
+        EAcceptedCurrencyMissing,
+    );
+}
+
+fun assert_currency_not_registered(shop: &Shop, coin_type: &TypeInfo) {
+    assert!(!dynamic_field::exists_<TypeInfo>(&shop.id, *coin_type), EAcceptedCurrencyExists);
 }
 
 fun assert_template_belongs_to_shop(shop: &Shop, discount_template_id: obj::ID) {
