@@ -821,6 +821,32 @@ public fun test_listing_exists(shop: &Shop, listing_id: obj::ID): bool {
 }
 
 #[test_only]
+public fun test_accepted_currency_exists(shop: &Shop, accepted_currency_id: obj::ID): bool {
+    dynamic_field::exists_with_type<obj::ID, AcceptedCurrency>(&shop.id, accepted_currency_id)
+}
+
+#[test_only]
+public fun test_accepted_currency_values(
+    shop: &Shop,
+    accepted_currency_id: obj::ID,
+): (address, TypeInfo, vector<u8>, obj::ID, u8, vector<u8>) {
+    let accepted_currency: &AcceptedCurrency = dynamic_field::borrow(&shop.id, accepted_currency_id);
+    (
+        accepted_currency.shop_address,
+        accepted_currency.coin_type,
+        clone_bytes(&accepted_currency.feed_id),
+        accepted_currency.pyth_object_id,
+        accepted_currency.decimals,
+        clone_bytes(&accepted_currency.symbol),
+    )
+}
+
+#[test_only]
+public fun test_accepted_currency_id_for_type(shop: &Shop, coin_type: TypeInfo): obj::ID {
+    *dynamic_field::borrow<TypeInfo, obj::ID>(&shop.id, coin_type)
+}
+
+#[test_only]
 public fun test_discount_template_exists(shop: &Shop, template_id: obj::ID): bool {
     dynamic_field::exists_<obj::ID>(&shop.id, template_id)
 }
@@ -1031,6 +1057,41 @@ public fun test_item_listing_removed_shop(event: &ItemListingRemoved): address {
 #[test_only]
 public fun test_item_listing_removed_listing(event: &ItemListingRemoved): address {
     event.item_listing_address
+}
+
+#[test_only]
+public fun test_accepted_coin_added_shop(event: &AcceptedCoinAdded): address {
+    event.shop_address
+}
+
+#[test_only]
+public fun test_accepted_coin_added_coin_type(event: &AcceptedCoinAdded): TypeInfo {
+    event.coin_type
+}
+
+#[test_only]
+public fun test_accepted_coin_added_feed_id(event: &AcceptedCoinAdded): vector<u8> {
+    clone_bytes(&event.feed_id)
+}
+
+#[test_only]
+public fun test_accepted_coin_added_pyth_object_id(event: &AcceptedCoinAdded): obj::ID {
+    event.pyth_object_id
+}
+
+#[test_only]
+public fun test_accepted_coin_added_decimals(event: &AcceptedCoinAdded): u8 {
+    event.decimals
+}
+
+#[test_only]
+public fun test_accepted_coin_removed_shop(event: &AcceptedCoinRemoved): address {
+    event.shop_address
+}
+
+#[test_only]
+public fun test_accepted_coin_removed_coin_type(event: &AcceptedCoinRemoved): TypeInfo {
+    event.coin_type
 }
 
 #[test_only]

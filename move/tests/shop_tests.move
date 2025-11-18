@@ -2,11 +2,16 @@
 module sui_oracle_market::shop_tests;
 
 use std::option as opt;
+use std::string;
+use std::type_name;
 use std::vector as vec;
+use sui::coin_registry as registry;
 use sui::event;
 use sui::object as obj;
 use sui::package as pkg;
 use sui::test_scenario as scenario;
+use sui::test_utils;
+use sui::transfer as txf;
 use sui::tx_context as tx;
 use sui::vec_map;
 use sui_oracle_market::shop;
@@ -16,6 +21,8 @@ const OTHER_OWNER: address = @0xCAFE;
 const E_ASSERT_FAILURE: u64 = 0;
 
 public struct ForeignPublisherOTW has drop {}
+public struct TestCoin has key, store { id: obj::UID }
+public struct AltTestCoin has key, store { id: obj::UID }
 
 #[test]
 fun create_shop_emits_event_and_records_ids() {
@@ -167,6 +174,253 @@ fun create_shop_shares_shop_and_transfers_owner_cap() {
     scenario::return_shared(shared_shop);
     scenario::return_to_sender(&scn, owner_cap);
     let _ = scenario::end(scn);
+}
+
+#[test]
+fun add_accepted_currency_records_currency_and_event() {
+    let mut ctx = tx::new_from_hint(@0x0, 7, 0, 0, 0);
+    let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
+    let currency = create_test_currency(&mut ctx);
+    let expected_feed_id = b"SUI/USD";
+    let pyth_object_id = obj::id_from_address(@0xF00D);
+    let created_before = tx::get_ids_created(&ctx);
+    let events_before = vec::length(&event::events_by_type<shop::AcceptedCoinAdded>());
+
+    shop::add_accepted_currency<TestCoin>(
+        &mut shop,
+        &currency,
+        b"SUI/USD",
+        pyth_object_id,
+        &owner_cap,
+        &mut ctx,
+    );
+
+    let accepted_currency_id = shop::test_last_created_id(&ctx);
+    assert!(tx::get_ids_created(&ctx) == created_before + 1, E_ASSERT_FAILURE);
+    assert!(shop::test_accepted_currency_exists(&shop, accepted_currency_id), E_ASSERT_FAILURE);
+    let (shop_address, coin_type, stored_feed_id, stored_pyth, decimals, symbol) =
+        shop::test_accepted_currency_values(&shop, accepted_currency_id);
+    assert!(shop_address == shop::test_shop_id(&shop), E_ASSERT_FAILURE);
+    assert!(coin_type == test_coin_type(), E_ASSERT_FAILURE);
+    assert!(stored_feed_id == expected_feed_id, E_ASSERT_FAILURE);
+    assert!(stored_pyth == pyth_object_id, E_ASSERT_FAILURE);
+    assert!(decimals == 9, E_ASSERT_FAILURE);
+    assert!(symbol == b"TCO", E_ASSERT_FAILURE);
+    let mapped_id = shop::test_accepted_currency_id_for_type(&shop, coin_type);
+    assert!(mapped_id == accepted_currency_id, E_ASSERT_FAILURE);
+
+    let added_events = event::events_by_type<shop::AcceptedCoinAdded>();
+    assert!(vec::length(&added_events) == events_before + 1, E_ASSERT_FAILURE);
+    let added_event = vec::borrow(&added_events, events_before);
+    assert!(
+        shop::test_accepted_coin_added_shop(added_event) == shop::test_shop_id(&shop),
+        E_ASSERT_FAILURE,
+    );
+    assert!(
+        shop::test_accepted_coin_added_coin_type(added_event) == coin_type,
+        E_ASSERT_FAILURE,
+    );
+    assert!(
+        shop::test_accepted_coin_added_feed_id(added_event) == expected_feed_id,
+        E_ASSERT_FAILURE,
+    );
+    assert!(
+        shop::test_accepted_coin_added_pyth_object_id(added_event) == pyth_object_id,
+        E_ASSERT_FAILURE,
+    );
+    assert!(shop::test_accepted_coin_added_decimals(added_event) == 9, E_ASSERT_FAILURE);
+
+    test_utils::destroy(currency);
+    shop::test_destroy_owner_cap(owner_cap);
+    shop::test_destroy_shop(shop);
+}
+
+#[test, expected_failure(abort_code = ::sui_oracle_market::shop::EInvalidOwnerCap)]
+fun add_accepted_currency_rejects_foreign_owner_cap() {
+    let mut ctx = tx::new_from_hint(@0x0, 8, 0, 0, 0);
+    let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
+    let (other_shop, other_cap) = shop::test_setup_shop(OTHER_OWNER, &mut ctx);
+    let currency = create_test_currency(&mut ctx);
+
+    shop::add_accepted_currency<TestCoin>(
+        &mut shop,
+        &currency,
+        b"BAD",
+        obj::id_from_address(@0x1),
+        &other_cap,
+        &mut ctx,
+    );
+
+    shop::test_destroy_owner_cap(owner_cap);
+    shop::test_destroy_shop(shop);
+    shop::test_destroy_owner_cap(other_cap);
+    shop::test_destroy_shop(other_shop);
+    abort E_ASSERT_FAILURE
+}
+
+#[test, expected_failure(abort_code = ::sui_oracle_market::shop::EAcceptedCurrencyExists)]
+fun add_accepted_currency_rejects_duplicate_coin_type() {
+    let mut ctx = tx::new_from_hint(@0x0, 9, 0, 0, 0);
+    let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
+    let currency = create_test_currency(&mut ctx);
+
+    shop::add_accepted_currency<TestCoin>(
+        &mut shop,
+        &currency,
+        b"FIRST",
+        obj::id_from_address(@0x2),
+        &owner_cap,
+        &mut ctx,
+    );
+
+    shop::add_accepted_currency<TestCoin>(
+        &mut shop,
+        &currency,
+        b"SECOND",
+        obj::id_from_address(@0x3),
+        &owner_cap,
+        &mut ctx,
+    );
+
+    shop::test_destroy_owner_cap(owner_cap);
+    shop::test_destroy_shop(shop);
+    abort E_ASSERT_FAILURE
+}
+
+#[test, expected_failure(abort_code = ::sui_oracle_market::shop::EEmptyFeedId)]
+fun add_accepted_currency_rejects_empty_feed_id() {
+    let mut ctx = tx::new_from_hint(@0x0, 10, 0, 0, 0);
+    let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
+    let currency = create_test_currency(&mut ctx);
+
+    shop::add_accepted_currency<TestCoin>(
+        &mut shop,
+        &currency,
+        b"",
+        obj::id_from_address(@0x4),
+        &owner_cap,
+        &mut ctx,
+    );
+
+    shop::test_destroy_owner_cap(owner_cap);
+    shop::test_destroy_shop(shop);
+    abort E_ASSERT_FAILURE
+}
+
+#[test]
+fun remove_accepted_currency_removes_state_and_emits_event() {
+    let mut ctx = tx::new_from_hint(@0x0, 11, 0, 0, 0);
+    let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
+    let primary_currency = create_test_currency(&mut ctx);
+    let secondary_currency = create_alt_test_currency(&mut ctx);
+    let removed_before = vec::length(&event::events_by_type<shop::AcceptedCoinRemoved>());
+
+    shop::add_accepted_currency<TestCoin>(
+        &mut shop,
+        &primary_currency,
+        b"REMOVEME",
+        obj::id_from_address(@0x5),
+        &owner_cap,
+        &mut ctx,
+    );
+    let first_currency_id = shop::test_last_created_id(&ctx);
+
+    shop::add_accepted_currency<AltTestCoin>(
+        &mut shop,
+        &secondary_currency,
+        b"KEEP",
+        obj::id_from_address(@0x6),
+        &owner_cap,
+        &mut ctx,
+    );
+    let second_currency_id = shop::test_last_created_id(&ctx);
+    let created_before_removal = tx::get_ids_created(&ctx);
+
+    shop::remove_accepted_currency(&mut shop, first_currency_id, &owner_cap, &mut ctx);
+
+    assert!(!shop::test_accepted_currency_exists(&shop, first_currency_id), E_ASSERT_FAILURE);
+    assert!(shop::test_accepted_currency_exists(&shop, second_currency_id), E_ASSERT_FAILURE);
+    assert!(
+        shop::test_accepted_currency_id_for_type(&shop, alt_coin_type()) == second_currency_id,
+        E_ASSERT_FAILURE,
+    );
+    assert!(tx::get_ids_created(&ctx) == created_before_removal, E_ASSERT_FAILURE);
+
+    let removed_events = event::events_by_type<shop::AcceptedCoinRemoved>();
+    assert!(vec::length(&removed_events) == removed_before + 1, E_ASSERT_FAILURE);
+    let removed_event = vec::borrow(&removed_events, removed_before);
+    assert!(
+        shop::test_accepted_coin_removed_shop(removed_event) == shop::test_shop_id(&shop),
+        E_ASSERT_FAILURE,
+    );
+    assert!(
+        shop::test_accepted_coin_removed_coin_type(removed_event) == test_coin_type(),
+        E_ASSERT_FAILURE,
+    );
+
+    shop::add_accepted_currency<TestCoin>(
+        &mut shop,
+        &primary_currency,
+        b"RE-ADD",
+        obj::id_from_address(@0x7),
+        &owner_cap,
+        &mut ctx,
+    );
+    let readded_currency_id = shop::test_last_created_id(&ctx);
+    assert!(
+        shop::test_accepted_currency_id_for_type(&shop, test_coin_type()) == readded_currency_id,
+        E_ASSERT_FAILURE,
+    );
+
+    shop::remove_accepted_currency(&mut shop, readded_currency_id, &owner_cap, &mut ctx);
+    shop::remove_accepted_currency(&mut shop, second_currency_id, &owner_cap, &mut ctx);
+    test_utils::destroy(primary_currency);
+    test_utils::destroy(secondary_currency);
+    shop::test_destroy_owner_cap(owner_cap);
+    shop::test_destroy_shop(shop);
+}
+
+#[test, expected_failure(abort_code = ::sui_oracle_market::shop::EInvalidOwnerCap)]
+fun remove_accepted_currency_rejects_foreign_owner_cap() {
+    let mut ctx = tx::new_from_hint(@0x0, 12, 0, 0, 0);
+    let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
+    let (other_shop, other_cap) = shop::test_setup_shop(OTHER_OWNER, &mut ctx);
+    let currency = create_test_currency(&mut ctx);
+
+    shop::add_accepted_currency<TestCoin>(
+        &mut shop,
+        &currency,
+        b"INVALID",
+        obj::id_from_address(@0x8),
+        &owner_cap,
+        &mut ctx,
+    );
+    let currency_id = shop::test_last_created_id(&ctx);
+
+    shop::remove_accepted_currency(&mut shop, currency_id, &other_cap, &mut ctx);
+
+    shop::test_destroy_owner_cap(owner_cap);
+    shop::test_destroy_shop(shop);
+    shop::test_destroy_owner_cap(other_cap);
+    shop::test_destroy_shop(other_shop);
+    abort E_ASSERT_FAILURE
+}
+
+#[test, expected_failure(abort_code = ::sui_oracle_market::shop::EAcceptedCurrencyMissing)]
+fun remove_accepted_currency_rejects_missing_id() {
+    let mut ctx = tx::new_from_hint(@0x0, 13, 0, 0, 0);
+    let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
+
+    shop::remove_accepted_currency(
+        &mut shop,
+        obj::id_from_address(@0xDEAD),
+        &owner_cap,
+        &mut ctx,
+    );
+
+    shop::test_destroy_owner_cap(owner_cap);
+    shop::test_destroy_shop(shop);
+    abort E_ASSERT_FAILURE
 }
 
 #[test]
@@ -1814,6 +2068,48 @@ fun clear_template_from_listing_rejects_foreign_listing() {
     shop::test_destroy_owner_cap(other_cap);
     shop::test_destroy_shop(other_shop);
     abort E_ASSERT_FAILURE
+}
+
+fun create_test_currency(ctx: &mut tx::TxContext): registry::Currency<TestCoin> {
+    let mut registry_obj = registry::create_coin_data_registry_for_testing(ctx);
+    let (init, treasury_cap) = registry::new_currency<TestCoin>(
+        &mut registry_obj,
+        9,
+        string::utf8(b"TCO"),
+        string::utf8(b"Test Coin"),
+        string::utf8(b"Test coin for shop"),
+        string::utf8(b""),
+        ctx,
+    );
+    let currency = registry::unwrap_for_testing(init);
+    test_utils::destroy(registry_obj);
+    txf::public_share_object(treasury_cap);
+    currency
+}
+
+fun create_alt_test_currency(ctx: &mut tx::TxContext): registry::Currency<AltTestCoin> {
+    let mut registry_obj = registry::create_coin_data_registry_for_testing(ctx);
+    let (init, treasury_cap) = registry::new_currency<AltTestCoin>(
+        &mut registry_obj,
+        6,
+        string::utf8(b"ATC"),
+        string::utf8(b"Alt Test Coin"),
+        string::utf8(b"Alternate test coin for shop"),
+        string::utf8(b""),
+        ctx,
+    );
+    let currency = registry::unwrap_for_testing(init);
+    test_utils::destroy(registry_obj);
+    txf::public_share_object(treasury_cap);
+    currency
+}
+
+fun test_coin_type(): type_name::TypeName {
+    type_name::with_defining_ids<TestCoin>()
+}
+
+fun alt_coin_type(): type_name::TypeName {
+    type_name::with_defining_ids<AltTestCoin>()
 }
 
 fun create_discount_template(
