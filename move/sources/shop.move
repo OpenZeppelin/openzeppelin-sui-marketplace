@@ -302,7 +302,11 @@ public entry fun add_item_listing<T: store>(
     assert!(!name.is_empty(), EEmptyItemName);
     assert!(base_price_usd > 0, EInvalidPrice);
 
-    validate_template_option(shop, &spotlight_discount_template_id);
+    validate_belongs_to_shop_if_some(
+        ReferenceKind::Template,
+        shop,
+        &spotlight_discount_template_id,
+    );
 
     let listing: ItemListing = ItemListing {
         id: obj::new(ctx),
@@ -400,7 +404,7 @@ public entry fun create_discount_template(
 ) {
     assert_owner_cap(shop, owner_cap);
     validate_schedule(starts_at, &expires_at);
-    validate_listing_reference(shop, &applies_to_listing);
+    validate_belongs_to_shop_if_some(ReferenceKind::Listing, shop, &applies_to_listing);
 
     let discount_rule = build_discount_rule(parse_rule_kind(rule_kind), rule_value);
 
@@ -443,7 +447,7 @@ public entry fun update_discount_template(
     owner_cap: &ShopOwnerCap,
 ) {
     assert_owner_cap(shop, owner_cap);
-    assert_template_belongs(shop, discount_template_id);
+    assert_template_belongs_to_shop(shop, discount_template_id);
     validate_schedule(starts_at, &expires_at);
 
     let discount_rule: DiscountRule = build_discount_rule(parse_rule_kind(rule_kind), rule_value);
@@ -472,7 +476,7 @@ public entry fun toggle_discount_template(
     _ctx: &mut tx::TxContext,
 ) {
     assert_owner_cap(shop, owner_cap);
-    assert_template_belongs(shop, discount_template_id);
+    assert_template_belongs_to_shop(shop, discount_template_id);
 
     let discount_template: &mut DiscountTemplate = dynamic_field::borrow_mut(
         &mut shop.id,
@@ -497,7 +501,7 @@ public entry fun attach_template_to_listing(
     _ctx: &mut tx::TxContext,
 ) {
     assert_owner_cap(shop, owner_cap);
-    assert_template_belongs(shop, discount_template_id);
+    assert_template_belongs_to_shop(shop, discount_template_id);
 
     let listing: &mut ItemListing = dynamic_field::borrow_mut(&mut shop.id, item_id);
     listing.spotlight_discount_template_id = opt::some(discount_template_id);
@@ -589,46 +593,36 @@ fun validate_schedule(starts_at: u64, expires_at: &opt::Option<u64>) {
     }
 }
 
-fun assert_template_belongs(shop: &Shop, discount_template_id: obj::ID) {
+fun assert_template_belongs_to_shop(shop: &Shop, discount_template_id: obj::ID) {
+    assert!(dynamic_field::exists_<obj::ID>(&shop.id, discount_template_id), ETemplateShopMismatch);
     let template: &DiscountTemplate = dynamic_field::borrow(&shop.id, discount_template_id);
-    assert_entity_belongs_to_shop<DiscountTemplate>(
-        shop,
-        template,
-        template.shop_address,
-        ETemplateShopMismatch,
-    );
+    assert!(template.shop_address == obj::uid_to_address(&shop.id), ETemplateShopMismatch);
 }
 
-fun assert_listing_belongs(shop: &Shop, listing_id: obj::ID) {
+fun assert_listing_belongs_to_shop(shop: &Shop, listing_id: obj::ID) {
+    assert!(dynamic_field::exists_<obj::ID>(&shop.id, listing_id), EListingShopMismatch);
     let listing: &ItemListing = dynamic_field::borrow(&shop.id, listing_id);
-    assert_entity_belongs_to_shop<ItemListing>(
-        shop,
-        listing,
-        listing.shop_address,
-        EListingShopMismatch,
-    );
+    assert!(listing.shop_address == obj::uid_to_address(&shop.id), EListingShopMismatch);
 }
 
-fun assert_entity_belongs_to_shop<Object>(
+/// Internal selector for which reference to validate.
+public enum ReferenceKind has copy, drop {
+    Template,
+    Listing,
+}
+
+fun validate_belongs_to_shop_if_some(
+    kind: ReferenceKind,
     shop: &Shop,
-    entity: &Entity,
-    entity_shop_address: address,
-    mismatch_error: u64,
+    maybe_id: &opt::Option<obj::ID>,
 ) {
-    assert!(dynamic_field::exists_<obj::ID>(&shop.id, entity.id), mismatch_error);
-    assert!(entity_shop_address == obj::uid_to_address(&shop.id), mismatch_error);
-}
-
-fun validate_template_option(shop: &Shop, maybe_id: &opt::Option<obj::ID>) {
     if (opt::is_some(maybe_id)) {
-        assert_template_belongs(shop, *opt::borrow(maybe_id));
-    }
-}
-
-fun validate_listing_reference(shop: &Shop, maybe_id: &opt::Option<obj::ID>) {
-    if (opt::is_some(maybe_id)) {
-        assert_listing_belongs(shop, *opt::borrow(maybe_id));
-    }
+        let id = *opt::borrow(maybe_id);
+        match (kind) {
+            ReferenceKind::Template => assert_template_belongs_to_shop(shop, id),
+            ReferenceKind::Listing => assert_listing_belongs_to_shop(shop, id),
+        };
+    };
 }
 
 ///==================///
@@ -743,6 +737,31 @@ public fun test_discount_template_created_id(event: &DiscountTemplateCreated): a
 #[test_only]
 public fun test_discount_template_created_rule(event: &DiscountTemplateCreated): DiscountRule {
     event.rule
+}
+
+#[test_only]
+public fun test_discount_template_updated_shop(event: &DiscountTemplateUpdated): address {
+    event.shop_address
+}
+
+#[test_only]
+public fun test_discount_template_updated_id(event: &DiscountTemplateUpdated): address {
+    event.discount_template_id
+}
+
+#[test_only]
+public fun test_discount_template_toggled_shop(event: &DiscountTemplateToggled): address {
+    event.shop_address
+}
+
+#[test_only]
+public fun test_discount_template_toggled_id(event: &DiscountTemplateToggled): address {
+    event.discount_template_id
+}
+
+#[test_only]
+public fun test_discount_template_toggled_active(event: &DiscountTemplateToggled): bool {
+    event.active
 }
 
 #[test_only]
