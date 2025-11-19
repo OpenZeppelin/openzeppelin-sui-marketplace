@@ -6,6 +6,7 @@ use std::string;
 use std::type_name;
 use std::vector as vec;
 use sui::coin_registry as registry;
+use sui::clock;
 use sui::event;
 use sui::object as obj;
 use sui::package as pkg;
@@ -2067,6 +2068,262 @@ fun clear_template_from_listing_rejects_foreign_listing() {
     shop::test_remove_listing(&mut other_shop, foreign_listing_id);
     shop::test_destroy_owner_cap(other_cap);
     shop::test_destroy_shop(other_shop);
+    abort E_ASSERT_FAILURE
+}
+
+#[test]
+fun claim_discount_ticket_mints_transfers_and_records_claim() {
+    let mut scn = scenario::begin(TEST_OWNER);
+    let publisher = shop::test_claim_publisher(scenario::ctx(&mut scn));
+
+    shop::create_shop(&publisher, scenario::ctx(&mut scn));
+    let created_events = event::events_by_type<shop::ShopCreated>();
+    assert!(vec::length(&created_events) == 1, E_ASSERT_FAILURE);
+    let created = vec::borrow(&created_events, 0);
+    let shop_id = obj::id_from_address(shop::test_shop_created_shop_address(created));
+    let owner_cap_id = obj::id_from_address(shop::test_shop_created_owner_cap_id(created));
+
+    shop::test_destroy_publisher(publisher);
+    let _ = scenario::next_tx(&mut scn, TEST_OWNER);
+
+    let mut shop_obj = scenario::take_shared_by_id(&scn, shop_id);
+    let owner_cap: shop::ShopOwnerCap = scenario::take_from_sender_by_id(&scn, owner_cap_id);
+
+    shop::add_item_listing<shop::GenericItem>(
+        &mut shop_obj,
+        b"Limited Helmet",
+        120_00,
+        3,
+        opt::none(),
+        &owner_cap,
+        scenario::ctx(&mut scn),
+    );
+    let listing_id = shop::test_last_created_id(scenario::ctx(&mut scn));
+
+    shop::create_discount_template(
+        &mut shop_obj,
+        opt::some(listing_id),
+        0,
+        1_500,
+        5,
+        opt::some(50),
+        opt::some(10),
+        &owner_cap,
+        scenario::ctx(&mut scn),
+    );
+    let template_id = shop::test_last_created_id(scenario::ctx(&mut scn));
+
+    scenario::return_to_sender(&scn, owner_cap);
+    scenario::return_shared(shop_obj);
+
+    let _ = scenario::next_tx(&mut scn, OTHER_OWNER);
+
+    let mut shared_shop = scenario::take_shared_by_id(&scn, shop_id);
+    let mut clock_obj = clock::create_for_testing(scenario::ctx(&mut scn));
+    clock::set_for_testing(&mut clock_obj, 10_000);
+    let (_, _, _, _, _, _, minted_before, _) =
+        shop::test_discount_template_values(&shared_shop, template_id);
+
+    shop::test_claim_discount_ticket(
+        &mut shared_shop,
+        template_id,
+        &clock_obj,
+        scenario::ctx(&mut scn),
+    );
+
+    let (_, _, _, _, _, _, minted_after, _) =
+        shop::test_discount_template_values(&shared_shop, template_id);
+    assert!(minted_after == minted_before + 1, E_ASSERT_FAILURE);
+    assert!(
+        shop::test_discount_claim_exists(&shared_shop, template_id, OTHER_OWNER),
+        E_ASSERT_FAILURE,
+    );
+
+    let claim_events = event::events_by_type<shop::DiscountClaimed>();
+    let claim_events_len = vec::length(&claim_events);
+    assert!(claim_events_len > 0, E_ASSERT_FAILURE);
+    let claimed = vec::borrow(&claim_events, claim_events_len - 1);
+    let shop_address = obj::id_to_address(&shop_id);
+    let template_address = obj::id_to_address(&template_id);
+    assert!(shop::test_discount_claimed_shop(claimed) == shop_address, E_ASSERT_FAILURE);
+    assert!(
+        shop::test_discount_claimed_template_id(claimed) == template_address,
+        E_ASSERT_FAILURE,
+    );
+    assert!(shop::test_discount_claimed_claimer(claimed) == OTHER_OWNER, E_ASSERT_FAILURE);
+    let ticket_id = obj::id_from_address(shop::test_discount_claimed_discount_id(claimed));
+
+    scenario::return_shared(shared_shop);
+    clock::destroy_for_testing(clock_obj);
+
+    let effects = scenario::next_tx(&mut scn, OTHER_OWNER);
+    assert!(scenario::num_user_events(&effects) == 1, E_ASSERT_FAILURE);
+    let ticket = scenario::take_from_sender_by_id<shop::DiscountTicket>(&scn, ticket_id);
+    let (ticket_template, ticket_shop, ticket_listing, ticket_owner, redeemed) =
+        shop::test_discount_ticket_values(&ticket);
+    assert!(ticket_template == template_address, E_ASSERT_FAILURE);
+    assert!(ticket_shop == shop_address, E_ASSERT_FAILURE);
+    assert!(opt::borrow(&ticket_listing) == listing_id, E_ASSERT_FAILURE);
+    assert!(ticket_owner == OTHER_OWNER, E_ASSERT_FAILURE);
+    assert!(!redeemed, E_ASSERT_FAILURE);
+    scenario::return_to_sender(&scn, ticket);
+
+    let _ = scenario::end(scn);
+}
+
+#[test, expected_failure(abort_code = ::sui_oracle_market::shop::ETemplateTooEarly)]
+fun claim_discount_ticket_rejects_before_start_time() {
+    let mut ctx = tx::new_from_hint(TEST_OWNER, 20, 0, 0, 0);
+    let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
+
+    shop::create_discount_template(
+        &mut shop,
+        opt::none(),
+        0,
+        500,
+        10,
+        opt::none(),
+        opt::none(),
+        &owner_cap,
+        &mut ctx,
+    );
+    let template_id = shop::test_last_created_id(&ctx);
+    let mut clock_obj = clock::create_for_testing(&mut ctx);
+    clock::set_for_testing(&mut clock_obj, 5_000);
+
+    shop::test_claim_discount_ticket(&mut shop, template_id, &clock_obj, &mut ctx);
+
+    clock::destroy_for_testing(clock_obj);
+    shop::test_destroy_owner_cap(owner_cap);
+    shop::test_destroy_shop(shop);
+    abort E_ASSERT_FAILURE
+}
+
+#[test, expected_failure(abort_code = ::sui_oracle_market::shop::ETemplateExpired)]
+fun claim_discount_ticket_rejects_after_expiry() {
+    let mut ctx = tx::new_from_hint(TEST_OWNER, 21, 0, 0, 0);
+    let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
+
+    shop::create_discount_template(
+        &mut shop,
+        opt::none(),
+        0,
+        700,
+        0,
+        opt::some(3),
+        opt::some(5),
+        &owner_cap,
+        &mut ctx,
+    );
+    let template_id = shop::test_last_created_id(&ctx);
+    let mut clock_obj = clock::create_for_testing(&mut ctx);
+    clock::set_for_testing(&mut clock_obj, 4_000);
+
+    shop::test_claim_discount_ticket(&mut shop, template_id, &clock_obj, &mut ctx);
+
+    clock::destroy_for_testing(clock_obj);
+    shop::test_destroy_owner_cap(owner_cap);
+    shop::test_destroy_shop(shop);
+    abort E_ASSERT_FAILURE
+}
+
+#[test, expected_failure(abort_code = ::sui_oracle_market::shop::ETemplateInactive)]
+fun claim_discount_ticket_rejects_inactive_template() {
+    let mut ctx = tx::new_from_hint(TEST_OWNER, 22, 0, 0, 0);
+    let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
+
+    shop::create_discount_template(
+        &mut shop,
+        opt::none(),
+        0,
+        1_000,
+        0,
+        opt::none(),
+        opt::none(),
+        &owner_cap,
+        &mut ctx,
+    );
+    let template_id = shop::test_last_created_id(&ctx);
+    shop::toggle_discount_template(&mut shop, template_id, false, &owner_cap, &mut ctx);
+    let clock_obj = clock::create_for_testing(&mut ctx);
+
+    shop::test_claim_discount_ticket(&mut shop, template_id, &clock_obj, &mut ctx);
+
+    clock::destroy_for_testing(clock_obj);
+    shop::test_destroy_owner_cap(owner_cap);
+    shop::test_destroy_shop(shop);
+    abort E_ASSERT_FAILURE
+}
+
+#[test, expected_failure(abort_code = ::sui_oracle_market::shop::ETemplateMaxedOut)]
+fun claim_discount_ticket_rejects_when_maxed() {
+    let mut ctx = tx::new_from_hint(TEST_OWNER, 23, 0, 0, 0);
+    let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
+
+    shop::create_discount_template(
+        &mut shop,
+        opt::none(),
+        0,
+        450,
+        0,
+        opt::none(),
+        opt::some(1),
+        &owner_cap,
+        &mut ctx,
+    );
+    let template_id = shop::test_last_created_id(&ctx);
+    let mut clock_obj = clock::create_for_testing(&mut ctx);
+    clock::set_for_testing(&mut clock_obj, 2_000);
+    let ticket = shop::test_claim_discount_ticket_inline(
+        &mut shop,
+        template_id,
+        TEST_OWNER,
+        2,
+        &mut ctx,
+    );
+    shop::test_destroy_discount_ticket(ticket);
+
+    shop::test_claim_discount_ticket(&mut shop, template_id, &clock_obj, &mut ctx);
+
+    clock::destroy_for_testing(clock_obj);
+    shop::test_destroy_owner_cap(owner_cap);
+    shop::test_destroy_shop(shop);
+    abort E_ASSERT_FAILURE
+}
+
+#[test, expected_failure(abort_code = ::sui_oracle_market::shop::EDiscountAlreadyClaimed)]
+fun claim_discount_ticket_rejects_duplicate_claim() {
+    let mut ctx = tx::new_from_hint(TEST_OWNER, 24, 0, 0, 0);
+    let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
+
+    shop::create_discount_template(
+        &mut shop,
+        opt::none(),
+        0,
+        1_250,
+        0,
+        opt::none(),
+        opt::none(),
+        &owner_cap,
+        &mut ctx,
+    );
+    let template_id = shop::test_last_created_id(&ctx);
+    let mut clock_obj = clock::create_for_testing(&mut ctx);
+    clock::set_for_testing(&mut clock_obj, 1_000);
+    let ticket = shop::test_claim_discount_ticket_inline(
+        &mut shop,
+        template_id,
+        TEST_OWNER,
+        1,
+        &mut ctx,
+    );
+    shop::test_destroy_discount_ticket(ticket);
+
+    shop::test_claim_discount_ticket(&mut shop, template_id, &clock_obj, &mut ctx);
+
+    clock::destroy_for_testing(clock_obj);
+    shop::test_destroy_owner_cap(owner_cap);
+    shop::test_destroy_shop(shop);
     abort E_ASSERT_FAILURE
 }
 

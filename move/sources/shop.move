@@ -5,6 +5,7 @@ use std::option as opt;
 use std::string as string;
 use std::type_name::{Self as type_name, TypeName as TypeInfo};
 use std::vector as vec;
+use sui::clock;
 use sui::coin_registry as registry;
 use sui::dynamic_field;
 use sui::event;
@@ -29,6 +30,11 @@ const EInvalidRuleValue: u64 = 10;
 const EAcceptedCurrencyExists: u64 = 11;
 const EAcceptedCurrencyMissing: u64 = 12;
 const EEmptyFeedId: u64 = 13;
+const ETemplateInactive: u64 = 14;
+const ETemplateTooEarly: u64 = 15;
+const ETemplateExpired: u64 = 16;
+const ETemplateMaxedOut: u64 = 17;
+const EDiscountAlreadyClaimed: u64 = 18;
 
 ///====================///
 /// Capability & Core ///
@@ -305,7 +311,7 @@ public entry fun add_item_listing<T: store>(
     assert_owner_cap(shop, owner_cap);
     validate_listing_inputs(shop, &name, base_price_usd, stock, &spotlight_discount_template_id);
 
-    let shop_address = shop_address(shop);
+    let shop_address: address = shop_address(shop);
     let (listing, listing_address) = new_item_listing<T>(
         shop_address,
         name,
@@ -406,9 +412,9 @@ public entry fun add_accepted_currency<T: store>(
 
     let decimals: u8 = registry::decimals(currency);
     let symbol: vector<u8> = string::into_bytes(registry::symbol(currency));
-    let shop_address = shop_address(shop);
+    let shop_address: address = shop_address(shop);
 
-    let (accepted_currency, accepted_currency_address, feed_for_event) = new_accepted_currency(
+    let (accepted_currency, accepted_currency_address, _feed_for_event) = new_accepted_currency(
         shop_address,
         coin_type,
         feed_id,
@@ -486,9 +492,9 @@ public entry fun create_discount_template(
         &expires_at,
     );
 
-    let discount_rule_kind = parse_rule_kind(rule_kind);
+    let discount_rule_kind: DiscountRuleKind = parse_rule_kind(rule_kind);
     let discount_rule: DiscountRule = build_discount_rule(discount_rule_kind, rule_value);
-    let shop_address = shop_address(shop);
+    let shop_address: address = shop_address(shop);
     let (discount_template, discount_template_address) = new_discount_template(
         shop_address,
         applies_to_listing,
@@ -527,7 +533,7 @@ public entry fun update_discount_template(
     assert_template_belongs_to_shop(shop, discount_template_id);
     validate_schedule(starts_at, &expires_at);
 
-    let discount_rule_kind = parse_rule_kind(rule_kind);
+    let discount_rule_kind: DiscountRuleKind = parse_rule_kind(rule_kind);
     let discount_rule: DiscountRule = build_discount_rule(discount_rule_kind, rule_value);
     let discount_template: &mut DiscountTemplate = dynamic_field::borrow_mut(
         &mut shop.id,
@@ -598,6 +604,58 @@ public entry fun clear_template_from_listing(
     _ctx: &mut tx::TxContext,
 ) {
     toggle_template_on_listing(shop, item_listing_id, opt::none(), owner_cap, _ctx)
+}
+
+/// Mint a single-use discount ticket to the caller using the template schedule and limits.
+///
+/// Sui mindset:
+/// * Discount tickets are owned objects rather than balances in contract storage, so callers can
+///   compose `claim_discount_ticket` and checkout in one PTB without extra approvals.
+/// * Per-wallet claim limits are enforced by writing a child object (keyed by the claimer’s
+///   address) under the template via dynamic fields. This keeps redemptions parallel—each wallet
+///   touches only its own claim marker.
+/// * Time windows are checked against the shared `Clock` (seconds) to avoid surprises when epochs
+///   are long-lived; passing the clock keeps the function pure from a caller perspective.
+public entry fun claim_discount_ticket(
+    discount_template: &mut DiscountTemplate,
+    clock: &clock::Clock,
+    ctx: &mut tx::TxContext,
+) {
+    let claimer: address = tx::sender(ctx);
+    let now_secs: u64 = now_secs(clock);
+
+    assert_template_claimable(discount_template, claimer, now_secs);
+
+    let discount_ticket: DiscountTicket = claim_discount_ticket_inline(
+        discount_template,
+        claimer,
+        now_secs,
+        ctx,
+    );
+
+    event::emit(DiscountClaimed {
+        shop_address: discount_template.shop_address,
+        discount_template_id: template_address(discount_template),
+        claimer,
+        discount_id: obj::uid_to_address(&discount_ticket.id),
+    });
+
+    txf::public_transfer(discount_ticket, claimer);
+}
+
+/// Non-entry helper that returns the owned ticket so callers can inline claim + buy in one PTB.
+/// Intended to be composed inside future `buy_item` logic or higher-level scripts.
+public fun claim_discount_ticket_inline(
+    discount_template: &mut DiscountTemplate,
+    claimer: address,
+    now_secs: u64,
+    ctx: &mut tx::TxContext,
+): DiscountTicket {
+    assert_template_claimable(discount_template, claimer, now_secs);
+
+    let discount_ticket: DiscountTicket = mew_discount_ticket(discount_template, claimer, ctx);
+    record_discount_claim(discount_template, claimer, ctx);
+    discount_ticket
 }
 
 /// Attach or clear a template banner on a listing depending on whether the `Option` carries an id.
@@ -717,6 +775,37 @@ fun new_discount_template(
     (discount_template, discount_template_address)
 }
 
+fun mew_discount_ticket(
+    template: &DiscountTemplate,
+    claimer: address,
+    ctx: &mut tx::TxContext,
+): DiscountTicket {
+    DiscountTicket {
+        id: obj::new(ctx),
+        discount_template_id: template_address(template),
+        shop_address: template.shop_address,
+        listing_id: template.applies_to_listing,
+        owner: claimer,
+        redeemed: false,
+    }
+}
+
+fun record_discount_claim(
+    template: &mut DiscountTemplate,
+    claimer: address,
+    ctx: &mut tx::TxContext,
+) {
+    dynamic_field::add(
+        &mut template.id,
+        claimer,
+        DiscountClaim {
+            id: obj::new(ctx),
+            claimer,
+        },
+    );
+    template.minted_discounts = template.minted_discounts + 1;
+}
+
 fun apply_discount_template_updates(
     discount_template: &mut DiscountTemplate,
     discount_rule: DiscountRule,
@@ -771,6 +860,15 @@ fun map_id_option_to_address(source: &opt::Option<obj::ID>): opt::Option<address
     } else {
         opt::none()
     }
+}
+
+fun template_address(template: &DiscountTemplate): address {
+    obj::uid_to_address(&template.id)
+}
+
+/// Pull current wall-clock seconds from the shared clock to enforce time windows predictably.
+fun now_secs(clock: &clock::Clock): u64 {
+    clock::timestamp_ms(clock) / 1000
 }
 
 // ======================= //
@@ -870,6 +968,28 @@ fun validate_belongs_to_shop_if_some(
             ReferenceKind::Listing => assert_listing_belongs_to_shop(shop, id),
         };
     };
+}
+
+/// Guardrails to keep claims inside schedule/limits and unique per address.
+fun assert_template_claimable(template: &DiscountTemplate, claimer: address, now_secs: u64) {
+    assert!(template.active, ETemplateInactive);
+    assert!(template.starts_at <= now_secs, ETemplateTooEarly);
+
+    if (opt::is_some(&template.expires_at)) {
+        assert!(now_secs < *opt::borrow(&template.expires_at), ETemplateExpired);
+    };
+
+    if (opt::is_some(&template.max_redemptions)) {
+        assert!(
+            template.minted_discounts < *opt::borrow(&template.max_redemptions),
+            ETemplateMaxedOut,
+        );
+    };
+
+    assert!(
+        !dynamic_field::exists_with_type<address, DiscountClaim>(&template.id, claimer),
+        EDiscountAlreadyClaimed,
+    );
 }
 
 ///==================///
@@ -997,6 +1117,39 @@ public fun test_discount_template_values(
 }
 
 #[test_only]
+public fun test_discount_claim_exists(
+    shop: &Shop,
+    template_id: obj::ID,
+    claimer: address,
+): bool {
+    let template: &DiscountTemplate = dynamic_field::borrow(&shop.id, template_id);
+    dynamic_field::exists_with_type<address, DiscountClaim>(&template.id, claimer)
+}
+
+#[test_only]
+public fun test_claim_discount_ticket(
+    shop: &mut Shop,
+    template_id: obj::ID,
+    clock: &clock::Clock,
+    ctx: &mut tx::TxContext,
+) {
+    let template: &mut DiscountTemplate = dynamic_field::borrow_mut(&mut shop.id, template_id);
+    claim_discount_ticket(template, clock, ctx);
+}
+
+#[test_only]
+public fun test_claim_discount_ticket_inline(
+    shop: &mut Shop,
+    template_id: obj::ID,
+    claimer: address,
+    now_secs: u64,
+    ctx: &mut tx::TxContext,
+): DiscountTicket {
+    let template: &mut DiscountTemplate = dynamic_field::borrow_mut(&mut shop.id, template_id);
+    claim_discount_ticket_inline(template, claimer, now_secs, ctx)
+}
+
+#[test_only]
 public fun test_discount_rule_kind(rule: DiscountRule): u8 {
     match (rule) {
         DiscountRule::Fixed { amount_cents: _ } => 0,
@@ -1050,6 +1203,52 @@ public fun test_discount_template_toggled_id(event: &DiscountTemplateToggled): a
 #[test_only]
 public fun test_discount_template_toggled_active(event: &DiscountTemplateToggled): bool {
     event.active
+}
+
+#[test_only]
+public fun test_discount_claimed_shop(event: &DiscountClaimed): address {
+    event.shop_address
+}
+
+#[test_only]
+public fun test_discount_claimed_template_id(event: &DiscountClaimed): address {
+    event.discount_template_id
+}
+
+#[test_only]
+public fun test_discount_claimed_claimer(event: &DiscountClaimed): address {
+    event.claimer
+}
+
+#[test_only]
+public fun test_discount_claimed_discount_id(event: &DiscountClaimed): address {
+    event.discount_id
+}
+
+#[test_only]
+public fun test_discount_ticket_values(
+    ticket: &DiscountTicket,
+): (address, address, opt::Option<obj::ID>, address, bool) {
+    (
+        ticket.discount_template_id,
+        ticket.shop_address,
+        ticket.listing_id,
+        ticket.owner,
+        ticket.redeemed,
+    )
+}
+
+#[test_only]
+public fun test_destroy_discount_ticket(ticket: DiscountTicket) {
+    let DiscountTicket {
+        id,
+        discount_template_id: _,
+        shop_address: _,
+        listing_id: _,
+        owner: _,
+        redeemed: _,
+    } = ticket;
+    id.delete();
 }
 
 #[test_only]
