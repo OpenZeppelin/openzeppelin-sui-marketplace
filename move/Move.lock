@@ -2,11 +2,12 @@
 
 [move]
 version = 3
-manifest_digest = "59232C5437F669747EF7B1C5BD7EB9FF8B96B19E9EA1D2EFDAEA6C81ACB96B03"
-deps_digest = "F9B494B64F0615AED0E98FC12A85B85ECD2BC5185C22D30E7F67786BB52E507C"
+manifest_digest = "942CA9DBF786F43231CECC5AD13C04BE9589FDB2F2C546493C2BDAFDA928A57F"
+deps_digest = "397E6A9F7A624706DBDFEE056CE88391A15876868FD18A88504DA74EB458D697"
 dependencies = [
   { id = "Bridge", name = "Bridge" },
   { id = "MoveStdlib", name = "MoveStdlib" },
+  { id = "Pyth", name = "Pyth" },
   { id = "Sui", name = "Sui" },
   { id = "SuiSystem", name = "SuiSystem" },
 ]
@@ -26,6 +27,15 @@ id = "MoveStdlib"
 source = { git = "https://github.com/MystenLabs/sui.git", rev = "4e8b6eda7d6411d80c62f39ac8a4f028e8d174c4", subdir = "crates/sui-framework/packages/move-stdlib" }
 
 [[move.package]]
+id = "Pyth"
+source = { git = "https://github.com/pyth-network/pyth-crosschain.git", rev = "9131a23c328292d4b0d878a4497358a4caa218e9", subdir = "target_chains/sui/contracts" }
+
+dependencies = [
+  { id = "Sui", name = "Sui" },
+  { id = "Wormhole", name = "Wormhole" },
+]
+
+[[move.package]]
 id = "Sui"
 source = { git = "https://github.com/MystenLabs/sui.git", rev = "4e8b6eda7d6411d80c62f39ac8a4f028e8d174c4", subdir = "crates/sui-framework/packages/sui-framework" }
 
@@ -39,6 +49,14 @@ source = { git = "https://github.com/MystenLabs/sui.git", rev = "4e8b6eda7d6411d
 
 dependencies = [
   { id = "MoveStdlib", name = "MoveStdlib" },
+  { id = "Sui", name = "Sui" },
+]
+
+[[move.package]]
+id = "Wormhole"
+source = { git = "https://github.com/wormhole-foundation/wormhole.git", rev = "82d82bffd5a8566e4b5d94be4e4678ad55ab1f4f", subdir = "sui/wormhole" }
+
+dependencies = [
   { id = "Sui", name = "Sui" },
 ]
 
