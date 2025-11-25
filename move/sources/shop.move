@@ -2084,33 +2084,6 @@ public fun test_discount_template_toggled_active(event: &DiscountTemplateToggled
 }
 
 #[test_only]
-public fun test_discount_redeem_template_id(event: &DiscountRedeem): address {
-    event.discount_template_id
-}
-
-#[test_only]
-public fun test_discount_redeem_listing_id(event: &DiscountRedeem): address {
-    event.listing_id
-}
-
-#[test_only]
-public fun test_discount_redeem_buyer(event: &DiscountRedeem): address {
-    event.buyer
-}
-
-#[test_only]
-public fun test_purchase_completed_discount_template_id(
-    event: &PurchaseCompleted,
-): opt::Option<address> {
-    event.discount_template_id
-}
-
-#[test_only]
-public fun test_purchase_completed_base_price(event: &PurchaseCompleted): u64 {
-    event.base_price_usd_cents
-}
-
-#[test_only]
 public fun test_purchase_completed_discounted_price(event: &PurchaseCompleted): u64 {
     event.discounted_price_usd_cents
 }
@@ -2133,11 +2106,6 @@ public fun test_discount_claimed_claimer(event: &DiscountClaimed): address {
 #[test_only]
 public fun test_discount_claimed_discount_id(event: &DiscountClaimed): address {
     event.discount_id
-}
-
-#[test_only]
-public fun test_discount_ticket_id(ticket: &DiscountTicket): address {
-    obj::uid_to_address(&ticket.id)
 }
 
 #[test_only]
