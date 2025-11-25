@@ -315,9 +315,13 @@ public struct MintingCompleted has copy, drop {
 /// The function consumes a `pkg::Publisher` so only the package author can spin up
 /// curated shops.
 /// Sui mindset:
-/// - Ownership does not comes from `msg.sender` instead they comes from explicit capability objects,
-/// here a ShopOwnerCap that will be minted as an object that will later be used to access specific functions.
-/// - Application state is modeled as shareable objects, not contract storage.
+/// - Authority is carried by capability objects instead of `msg.sender`. `create_shop` mints a
+///   `ShopOwnerCap` and hands it to the caller; later entry functions require that capability
+///   instead of trusting the transaction sender.
+/// - The shop is a shared object plus dynamic-field children, replacing Solidity-style module
+///   storage. State lives in objects that can be read or composed by any PTB.
+/// - Gating on the module’s `Publisher` is the Move-native way to let only the package author
+///   create curated shops, similar to restricting factory deployment in EVM.
 public entry fun create_shop(publisher: &pkg::Publisher, ctx: &mut tx::TxContext) {
     // Ensure the capability comes from this module; otherwise users could pass an
     // unrelated publisher.
@@ -350,8 +354,9 @@ public entry fun create_shop(publisher: &pkg::Publisher, ctx: &mut tx::TxContext
 ///
 /// Payouts should follow the current operator, not the address that originally created the shop.
 /// Sui mindset:
-/// - The operator proves authority with `ShopOwnerCap`; buyers keep using the shared `Shop` and do not
-///   need to pass any extra capabilities when purchasing.
+/// - Access control is explicit: the operator must show the `ShopOwnerCap` rather than relying on
+///   `tx::sender`. Rotating the cap keeps payouts aligned to the current operator.
+/// - Buyers never handle capabilities—checkout remains permissionless against the shared `Shop`.
 public entry fun update_shop_owner(
     shop: &mut Shop,
     owner_cap: &mut ShopOwnerCap,
@@ -375,16 +380,17 @@ public entry fun update_shop_owner(
 
 /// * Item Listing * ///
 
-/// Add an ItemListing attached to the Shop. The generic `T` encodes what will eventually be minted
-/// when a buyer completes checkout. Prices are provided in USD cents (e.g. $12.50 -> 125_00) to
-/// avoid floating point math.
+/// Add an `ItemListing` attached to the `Shop`. The generic `T` encodes what will eventually be
+/// minted when a buyer completes checkout. Prices are provided in USD cents (e.g. $12.50 -> 125_00)
+/// to avoid floating point math.
 ///
 /// Sui mindset:
-/// - For access control, we are not using modifier like `onlyOwner`,
-/// instead we require the ShopOwnerCap object that was minted on shop creation to be passed in the function itself.
-/// - Dynamic fields let each listing live inside its own child object,
-/// so different listings can be updated or sold in parallel without accessing a single shared Shop,
-/// this allows better concurrency and throughput that would not been possible if each buyer would have to write to the same store object one by one.
+/// - Capability-first auth replaces Solidity modifiers: the operator must present the `ShopOwnerCap`
+///   minted during `create_shop`; `tx::sender` alone is never trusted.
+/// - Listings live as dynamic-field children of the shared `Shop`, so updates or purchases lock only
+///   that child object instead of the whole shop. This pattern keeps PTBs parallel under load.
+/// - The type parameter `T` captures what will be minted, keeping item receipt types explicit rather
+///   than relying on ad-hoc metadata blobs.
 public entry fun add_item_listing<T: store>(
     shop: &mut Shop,
     name: vector<u8>,
@@ -419,7 +425,8 @@ public entry fun add_item_listing<T: store>(
         &listing.spotlight_discount_template_id,
     );
 
-    let listing_name_for_event = clone_bytes(&listing.name);
+    let listing_name_for_event: vector<u8> = clone_bytes(&listing.name);
+
     event::emit(ItemListingAdded {
         shop_address,
         item_listing_address: listing_address,
@@ -461,9 +468,10 @@ public entry fun update_item_listing_stock(
 /// Removing a dynamic field detaches that child object, allowing us to delete
 /// it cleanly without iterating over any collection.
 /// Sui mindset:
-/// - State mutation happens on owned objects. There’s no global contract storage like Solidity’s mapping.
-///   In this example Inventory lives in child objects attached to the shared Shop,
-///   so removing one item only touches its own record, no global mapping or shared vector needed
+/// - State lives in objects, not module storage. Inventory sits in per-listing child objects, so
+///   deleting a listing only touches its own object rather than editing a global mapping.
+/// - Removing the child avoids dangling state while leaving the shared `Shop` untouched, keeping
+///   contention and storage minimal.
 public entry fun remove_item_listing(
     shop: &mut Shop,
     item_listing_id: obj::ID,
@@ -473,12 +481,11 @@ public entry fun remove_item_listing(
     assert_owner_cap(shop, owner_cap);
 
     let listing: ItemListing = dynamic_field::remove(&mut shop.id, item_listing_id);
-    let shop_address: address = listing.shop_address;
     let listing_address: address = obj::uid_to_address(&listing.id);
     destroy_listing(listing);
 
     event::emit(ItemListingRemoved {
-        shop_address,
+        shop_address: shop_address(shop),
         item_listing_address: listing_address,
     });
 }
@@ -488,13 +495,14 @@ public entry fun remove_item_listing(
 /// Register a coin type that the shop will price through an oracle feed.
 ///
 /// Sui mindset:
-/// - Payment assets are native Move resources (`Coin<T>`, Currency<T>) not ERC20 balances, so registration works
-///   by storing rich type info instead of interface addresses.
-/// - Coin metadata (symbol, decimals) is globally stored in coin_registry (or coin_metadata) rather than queried via contract calls
-/// - Capability-based access control keeps the logic honest; only the matching `ShopOwnerCap`
-///   can mutate the shop configuration.
-/// - Dynamic fields keep each accepted currency as its own child object, so updating one feed does
-///   not serialize writes to the entire shop.
+/// - Payment assets are Move resources (`Coin<T>`, `Currency<T>`) instead of ERC-20 balances, so we
+///   register by type—not by interface address—to keep currencies separated at compile time.
+/// - Metadata (symbol/decimals) is fetched from `coin_registry`, a shared on-chain registry, rather
+///   than calling a token contract.
+/// - Operators prove authority with `ShopOwnerCap`; buyers never touch this path.
+/// - Each accepted currency is its own dynamic-field child, keeping feed updates parallel. Callers
+///   also pass the `PriceInfoObject` so the module can verify feed IDs and Pyth object IDs without
+///   trusting off-chain lookups.
 public entry fun add_accepted_currency<T: store>(
     shop: &mut Shop,
     currency: &registry::Currency<T>,
@@ -578,12 +586,18 @@ public entry fun remove_accepted_currency(
 
 /// Create a discount template anchored under the shop.
 ///
-/// Templates are shared immutable configs: by storing them as dynamic-field
-/// children they automatically inherit the shop’s access control and remain
-/// addressable by obj::ID for UIs. Callers still send primitive args (`rule_kind`
-/// of `0 = fixed` or `1 = percent`), but we immediately convert them into the
-/// strongly typed `DiscountRuleKind` for internal use.
-/// For `Fixed` rules the `rule_value` is denominated in USD cents to match listing prices.
+/// Templates are configuration objects stored as dynamic-field children, so they automatically
+/// inherit the shop’s access control and remain addressable by `obj::ID` for UIs. Callers send
+/// primitive args (`rule_kind` of `0 = fixed` or `1 = percent`), but we immediately convert them
+/// into the strongly typed `DiscountRule` before persisting. For `Fixed` rules the `rule_value` is
+/// denominated in USD cents to match listing prices.
+/// Sui mindset:
+/// - Discounts live as objects attached to the shared shop instead of rows in contract storage,
+///   making them easy to compose or read without privileged endpoints.
+/// - Converting user-friendly primitives into enums early avoids magic numbers and preserves type
+///   safety throughout the rest of the module.
+/// - Time windows and limits are stored on-chain; later calls validate against the shared `Clock`
+///   rather than assuming block timestamps.
 public entry fun create_discount_template(
     shop: &mut Shop,
     applies_to_listing: opt::Option<obj::ID>,
@@ -803,7 +817,7 @@ entry fun toggle_template_on_listing(
 ) {
     assert_owner_cap(shop, owner_cap);
     assert_listing_belongs_to_shop(shop, item_listing_id);
-    validate_belongs_to_shop_if_some(ReferenceKind::Template, shop, &discount_template_id);
+    assert_belongs_to_shop_if_some(ReferenceKind::Template, shop, &discount_template_id);
     assert_spotlight_template_matches_listing(
         shop,
         obj::id_to_address(&item_listing_id),
@@ -819,18 +833,16 @@ entry fun toggle_template_on_listing(
 /// Execute a purchase priced in USD cents but settled with any previously registered `AcceptedCurrency`.
 ///
 /// Sui mindset:
-/// - There is no global ERC20 allowance. The buyer passes an owned `Coin<T>` directly,
-///   the function splits only what is needed, and refunds the rest inside the same PTB.
-/// - The shared `Shop` is only read (not mutated) so the PTB only locks the specific listing
-///   and accepted currency records, keeping purchases parallel.
-/// - Buyers pass an explicit `mint_to` target so PTBs can gift or redirect receipts separate
-///   from the payer.
-/// - Refunds (any leftover payment) are sent to an explicit `refund_extra_to` address so PTBs can
-///   choose whether change returns to the payer or the recipient.
-/// - Oracles are first-class objects. The buyer supplies a refreshed `PriceInfoObject`
-///   so on-chain logic can deterministically verify freshness without off-chain trust.
-/// - Callers can tune oracle guardrails by passing `max_price_age_secs` / `max_confidence_ratio_bps`;
-///   `none` uses module defaults.
+/// - There is no global ERC-20 allowance; the buyer passes an owned `Coin<T>`, the function splits
+///   exactly what is needed, and refunds change in the same PTB.
+/// - The shared `Shop` is read-only; only the listing child mutates (stock decrements). That keeps
+///   contention scoped to the listing while other listings and currencies stay parallel.
+/// - Buyers pass explicit `mint_to` and `refund_extra_to` targets so PTBs can gift receipts or route
+///   change without extra hops—common for custody or marketplace flows.
+/// - Oracles are first-class objects. Callers supply a refreshed `PriceInfoObject`, and on-chain
+///   logic verifies identity/freshness against the shared `Clock` and feed metadata.
+/// - Guardrails (`max_price_age_secs`, `max_confidence_ratio_bps`) are caller-tunable; `none` uses
+///   module defaults.
 #[allow(lint(self_transfer))]
 public entry fun buy_item<TCoin>(
     shop: &Shop,
@@ -866,10 +878,10 @@ public entry fun buy_item<TCoin>(
 /// Same as `buy_item` but also validates and burns a `DiscountTicket`.
 ///
 /// Sui mindset:
-/// - Promotions are modeled as owned objects (`DiscountTicket`). They are burnt here so the
-///   on-chain state itself enforces single-use guarantees without external allowlists.
-/// - The discount template is a shared object that any PTB can read; callers do not need
-///   privileged APIs to prove the rule being applied.
+/// - Promotions are owned objects (`DiscountTicket`). Burning here enforces single-use on-chain
+///   without external allowlists or signatures.
+/// - The discount template is a shared object anyone can read; this function validates the
+///   template/listing/shop linkage and increments redemptions to keep limits accurate.
 /// - Refund destination is explicitly provided (`refund_extra_to`) so “gift” flows can return change
 ///   to the payer or recipient.
 /// - Oracle guardrails remain caller-tunable; pass `none` to use defaults.
@@ -938,6 +950,8 @@ public entry fun buy_item_with_discount<TCoin>(
 ///   transfer between separate transactions or commands.
 /// - Emits the same `DiscountClaimed` + `DiscountRedeem` events as the two-step flow so downstream
 ///   analytics remain consistent.
+/// - The ticket is created and consumed inside one PTB, minimizing custody risk while still using
+///   the template’s dynamic fields to enforce one-claim-per-address.
 #[allow(lint(self_transfer))]
 public entry fun claim_and_buy_item_with_discount<TCoin>(
     shop: &Shop,
@@ -990,7 +1004,9 @@ public entry fun claim_and_buy_item_with_discount<TCoin>(
 // Data //
 // ==== //
 
-fun destroy_listing(listing: ItemListing) {
+fun destroy_listing(listing: ItemListing): address {
+    let listing_address: address = obj::uid_to_address(&listing.id);
+
     let ItemListing {
         id,
         shop_address: _,
@@ -1001,6 +1017,8 @@ fun destroy_listing(listing: ItemListing) {
         spotlight_discount_template_id: _,
     } = listing;
     id.delete();
+
+    listing_address
 }
 
 fun destroy_accepted_currency(accepted_currency: AcceptedCurrency) {
@@ -1057,6 +1075,7 @@ fun new_item_listing<T: store>(
         spotlight_discount_template_id,
     };
     let listing_address: address = obj::uid_to_address(&listing.id);
+
     (listing, listing_address)
 }
 
@@ -1510,7 +1529,7 @@ fun validate_listing_inputs(
     assert!(!vec::is_empty(name), EEmptyItemName);
     assert!(base_price_usd_cents > 0, EInvalidPrice);
 
-    validate_belongs_to_shop_if_some(
+    assert_belongs_to_shop_if_some(
         ReferenceKind::Template,
         shop,
         spotlight_discount_template_id,
@@ -1524,7 +1543,7 @@ fun validate_discount_template_inputs(
     expires_at: &opt::Option<u64>,
 ) {
     assert_schedule(starts_at, expires_at);
-    validate_belongs_to_shop_if_some(ReferenceKind::Listing, shop, applies_to_listing);
+    assert_belongs_to_shop_if_some(ReferenceKind::Listing, shop, applies_to_listing);
 }
 
 fun assert_template_prunable(template: &DiscountTemplate, now: u64) {
@@ -1675,7 +1694,7 @@ public enum ReferenceKind has copy, drop {
     Listing,
 }
 
-fun validate_belongs_to_shop_if_some(
+fun assert_belongs_to_shop_if_some(
     kind: ReferenceKind,
     shop: &Shop,
     maybe_id: &opt::Option<obj::ID>,
@@ -1879,10 +1898,6 @@ public fun quote_amount_for_price_info_object(
     )
 }
 
-///==================///
-/// #[test_only] API ///
-///==================///
-
 fun clone_bytes(data: &vector<u8>): vector<u8> {
     let mut out: vector<u8> = vec::empty();
     let mut i: u64 = 0;
@@ -1893,6 +1908,10 @@ fun clone_bytes(data: &vector<u8>): vector<u8> {
     };
     out
 }
+
+///==================///
+/// #[test_only] API ///
+///==================///
 
 #[test_only]
 public struct TestPublisherOTW has drop {}
