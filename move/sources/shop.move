@@ -3,6 +3,7 @@ module sui_oracle_market::shop;
 
 use pyth::i64 as pyth_i64;
 use pyth::price as pyth_price;
+use pyth::price_feed as pyth_price_feed;
 use pyth::price_identifier as pyth_price_identifier;
 use pyth::price_info as pyth_price_info;
 use pyth::pyth;
@@ -61,6 +62,8 @@ const EConfidenceExceedsPrice: u64 = 33;
 const ESpotlightTemplateListingMismatch: u64 = 35;
 const EDiscountClaimsNotPrunable: u64 = 36;
 const EInvalidGuardrailCap: u64 = 37;
+const ETemplateFinalized: u64 = 38;
+const EPriceStatusNotTrading: u64 = 39;
 
 const CENTS_PER_DOLLAR: u64 = 100;
 const BASIS_POINT_DENOMINATOR: u64 = 10_000;
@@ -70,6 +73,7 @@ const MAX_DECIMAL_POWER: u64 = 38;
 const DEFAULT_MAX_CONFIDENCE_RATIO_BPS: u64 = 1_000; // Reject price feeds with σ/μ above 10%.
 const MAX_CONFIDENCE_RATIO_BPS_CAP: u64 = DEFAULT_MAX_CONFIDENCE_RATIO_BPS;
 const PYTH_PRICE_IDENTIFIER_LENGTH: u64 = 32;
+const MAX_PRICE_STATUS_LAG_SECS: u64 = 10; // Reject attestations that rely on a publish time that lags the attestation by more than 10s.
 // Powers of 10 from 10^0 through 10^38 for scaling Pyth prices and coin decimals.
 const POW10_U128: vector<u128> = vector[
     1, 10, 100, 1_000, 10_000, 100_000, 1_000_000, 10_000_000, 100_000_000, 1_000_000_000,
@@ -128,7 +132,7 @@ public struct ShopItem has key, store {
     acquired_at: u64,
 }
 
-/// Example strongly-typed item.
+// Example strongly-typed item.
 // public struct Bike has key, store {
 //     id: obj::UID,
 //     shop_address: address,
@@ -660,6 +664,8 @@ public entry fun create_discount_template(
 
 /// Update mutable fields on a template (schedule, rule, limits).
 /// For `Fixed` discounts the `rule_value` remains in USD cents.
+/// Templates that have reached an expiry or redemption cap are treated as finalized and cannot be
+/// updated to avoid re-opening claims after pruning.
 public entry fun update_discount_template(
     shop: &mut Shop,
     discount_template_id: obj::ID,
@@ -669,6 +675,7 @@ public entry fun update_discount_template(
     expires_at: opt::Option<u64>,
     max_redemptions: opt::Option<u64>,
     owner_cap: &ShopOwnerCap,
+    clock: &clock::Clock,
 ) {
     assert_owner_cap(shop, owner_cap);
     assert_template_belongs_to_shop(shop, discount_template_id);
@@ -680,6 +687,8 @@ public entry fun update_discount_template(
         &mut shop.id,
         discount_template_id,
     );
+    let now = now_secs(clock);
+    assert_template_updatable(discount_template, now);
 
     apply_discount_template_updates(
         discount_template,
@@ -954,7 +963,6 @@ public entry fun buy_item_with_discount<TCoin>(
         buyer,
     });
 
-    remove_discount_claim_if_exists(discount_template, buyer);
     burn_discount_ticket(discount_ticket);
 }
 
@@ -1236,7 +1244,7 @@ fun process_purchase<TCoin>(
     item_listing: &mut ItemListing,
     accepted_currency: &AcceptedCurrency,
     price_info_object: &pyth_price_info::PriceInfoObject,
-    mut payment: coin::Coin<TCoin>,
+    payment: coin::Coin<TCoin>,
     mint_to: address,
     refund_extra_to: address,
     discounted_price_usd_cents: u64,
@@ -1247,7 +1255,42 @@ fun process_purchase<TCoin>(
     ctx: &mut tx::TxContext,
 ): () {
     assert_listing_currency_match(shop, item_listing, accepted_currency);
+    process_purchase_core(
+        shop.owner,
+        shop_address(shop),
+        item_listing,
+        accepted_currency,
+        price_info_object,
+        payment,
+        mint_to,
+        refund_extra_to,
+        discounted_price_usd_cents,
+        discount_template_id,
+        max_price_age_secs,
+        max_confidence_ratio_bps,
+        clock,
+        ctx,
+    );
+}
+
+fun process_purchase_core<TCoin>(
+    shop_owner: address,
+    shop_address: address,
+    item_listing: &mut ItemListing,
+    accepted_currency: &AcceptedCurrency,
+    price_info_object: &pyth_price_info::PriceInfoObject,
+    mut payment: coin::Coin<TCoin>,
+    mint_to: address,
+    refund_extra_to: address,
+    discounted_price_usd_cents: u64,
+    discount_template_id: opt::Option<address>,
+    max_price_age_secs: opt::Option<u64>,
+    max_confidence_ratio_bps: opt::Option<u64>,
+    clock: &clock::Clock,
+    ctx: &mut tx::TxContext,
+): () {
     ensure_price_info_matches_currency(accepted_currency, price_info_object);
+    assert_price_status_trading(price_info_object);
     ensure_payment_coin_type<TCoin>(accepted_currency);
     assert_stock_available(item_listing);
     let requested_max_age = unwrap_or_default(
@@ -1279,7 +1322,7 @@ fun process_purchase<TCoin>(
         effective_confidence_ratio,
     );
 
-    pay_shop(&mut payment, quote_amount, shop.owner, ctx);
+    pay_shop(&mut payment, quote_amount, shop_owner, ctx);
 
     let buyer: address = tx::sender(ctx);
     let change_amount = coin::value(&payment);
@@ -1288,7 +1331,7 @@ fun process_purchase<TCoin>(
     decrement_stock(item_listing);
 
     event::emit(PurchaseCompleted {
-        shop_address: item_listing.shop_address,
+        shop_address,
         item_listing_address: obj::uid_to_address(&item_listing.id),
         buyer,
         mint_to,
@@ -1303,7 +1346,7 @@ fun process_purchase<TCoin>(
     });
 
     event::emit(ItemListingStockUpdated {
-        shop_address: item_listing.shop_address,
+        shop_address,
         item_listing_address: obj::uid_to_address(&item_listing.id),
         new_stock: item_listing.stock,
     });
@@ -1311,7 +1354,7 @@ fun process_purchase<TCoin>(
     let minted_item_id = mint_and_transfer_item(item_listing, mint_to, clock, ctx);
 
     event::emit(MintingCompleted {
-        shop_address: item_listing.shop_address,
+        shop_address,
         item_listing_address: obj::uid_to_address(&item_listing.id),
         buyer,
         minted_item_id,
@@ -1380,16 +1423,22 @@ fun quote_amount_from_usd_cents(
         max_confidence_ratio_bps,
     );
 
+    let coin_decimals_pow10 = pow10_u128(as_u64_from_u8(coin_decimals));
+    let exponent_pow10 = pow10_u128(exponent_magnitude);
+
     let mut numerator = as_u128_from_u64(usd_cents);
-    numerator = numerator * pow10_u128(as_u64_from_u8(coin_decimals));
+    numerator = checked_mul_u128(numerator, coin_decimals_pow10);
 
     if (exponent_is_negative) {
-        numerator = numerator * pow10_u128(exponent_magnitude);
+        numerator = checked_mul_u128(numerator, exponent_pow10);
     };
 
-    let mut denominator = conservative_mantissa * as_u128_from_u64(CENTS_PER_DOLLAR);
+    let mut denominator = checked_mul_u128(
+        conservative_mantissa,
+        as_u128_from_u64(CENTS_PER_DOLLAR),
+    );
     if (!exponent_is_negative) {
-        denominator = denominator * pow10_u128(exponent_magnitude);
+        denominator = checked_mul_u128(denominator, exponent_pow10);
     };
 
     let amount = ceil_div_u128(numerator, denominator);
@@ -1402,6 +1451,17 @@ fun pow10_u128(exponent: u64): u128 {
     assert!(exponent <= MAX_DECIMAL_POWER, EPriceOverflow);
     let pow10_table = POW10_U128;
     *vec::borrow(&pow10_table, exponent)
+}
+
+/// Multiplication with an explicit overflow guard so we can surface `EPriceOverflow` instead of a generic abort.
+fun checked_mul_u128(lhs: u128, rhs: u128): u128 {
+    if (lhs == 0 || rhs == 0) {
+        0
+    } else {
+        let max = u128::max_value!();
+        assert!(rhs <= max / lhs, EPriceOverflow);
+        lhs * rhs
+    }
 }
 
 fun ceil_div_u128(numerator: u128, denominator: u128): u128 {
@@ -1499,7 +1559,10 @@ fun apply_discount(base_price_usd_cents: u64, rule: &DiscountRule): u64 {
         DiscountRule::Percent { bps } => {
             let remaining_bps = BASIS_POINT_DENOMINATOR - as_u64_from_u16(*bps);
             let product = as_u128_from_u64(base_price_usd_cents) * as_u128_from_u64(remaining_bps);
-            let discounted = product / as_u128_from_u64(BASIS_POINT_DENOMINATOR);
+            let discounted = ceil_div_u128(
+                product,
+                as_u128_from_u64(BASIS_POINT_DENOMINATOR),
+            );
             let maybe_discounted = u128::try_as_u64(discounted);
             assert!(opt::is_some(&maybe_discounted), EPriceOverflow);
             opt::destroy_some(maybe_discounted)
@@ -1603,17 +1666,30 @@ fun validate_discount_template_inputs(
     assert_belongs_to_shop_if_some(ReferenceKind::Listing, shop, applies_to_listing);
 }
 
-fun assert_template_prunable(template: &DiscountTemplate, now: u64) {
+fun template_finished(template: &DiscountTemplate, now: u64): bool {
     let expired =
         opt::is_some(&template.expires_at)
         && now >= *opt::borrow(&template.expires_at);
     let maxed_out = if (opt::is_some(&template.max_redemptions)) {
         let max_redemptions = *opt::borrow(&template.max_redemptions);
-        (template.claims_issued >= max_redemptions) || (template.redemptions >= max_redemptions)
+        (max_redemptions > 0)
+            && ((template.claims_issued >= max_redemptions) || (template.redemptions >= max_redemptions))
     } else {
         false
     };
-    assert!(expired || maxed_out, EDiscountClaimsNotPrunable);
+    expired || maxed_out
+}
+
+fun assert_template_prunable(template: &DiscountTemplate, now: u64) {
+    assert!(template_finished(template, now), EDiscountClaimsNotPrunable);
+}
+
+fun assert_template_updatable(template: &DiscountTemplate, now: u64) {
+    // Freeze parameters after any claims or redemptions so previously issued tickets cannot be
+    // rugged via rule/listing/cap changes.
+    assert!(template.claims_issued == 0, ETemplateFinalized);
+    assert!(template.redemptions == 0, ETemplateFinalized);
+    assert!(!template_finished(template, now), ETemplateFinalized);
 }
 
 fun assert_discount_redemption_allowed(
@@ -1726,6 +1802,19 @@ fun ensure_price_info_matches_currency(
     let identifier = pyth_price_info::get_price_identifier(&price_info);
     let identifier_bytes = pyth_price_identifier::get_bytes(&identifier);
     assert!(bytes_equal(&accepted_currency.feed_id, &identifier_bytes), EFeedIdentifierMismatch);
+}
+
+fun assert_price_status_trading(price_info_object: &pyth_price_info::PriceInfoObject) {
+    let price_info = pyth_price_info::get_price_info_from_price_info_object(price_info_object);
+    let attestation_time = pyth_price_info::get_attestation_time(&price_info);
+    let publish_time = pyth_price::get_timestamp(
+        &pyth_price_feed::get_price(pyth_price_info::get_price_feed(&price_info)),
+    );
+    // Non-trading statuses reuse the last trading publish time. If the attestation races too far
+    // ahead of that publish time, treat the feed as unavailable.
+    assert!(attestation_time >= publish_time, EPriceStatusNotTrading);
+    let attestation_lag_secs = attestation_time - publish_time;
+    assert!(attestation_lag_secs <= MAX_PRICE_STATUS_LAG_SECS, EPriceStatusNotTrading);
 }
 
 fun ensure_payment_coin_type<TCoin>(accepted_currency: &AcceptedCurrency) {
@@ -1939,6 +2028,7 @@ public fun quote_amount_for_price_info_object(
         accepted_currency_id,
     );
     ensure_price_info_matches_currency(accepted_currency, price_info_object);
+    assert_price_status_trading(price_info_object);
     let effective_max_age = clamp_max(
         unwrap_or_default(&max_price_age_secs, accepted_currency.max_price_age_secs_cap),
         accepted_currency.max_price_age_secs_cap,
@@ -2013,6 +2103,16 @@ public fun test_quote_amount_from_usd_cents(
     max_confidence_ratio_bps: u64,
 ): u64 {
     quote_amount_from_usd_cents(usd_cents, coin_decimals, price, max_confidence_ratio_bps)
+}
+
+#[test_only]
+public fun test_max_price_status_lag_secs(): u64 {
+    MAX_PRICE_STATUS_LAG_SECS
+}
+
+#[test_only]
+public fun test_assert_price_status_trading(price_info_object: &pyth_price_info::PriceInfoObject) {
+    assert_price_status_trading(price_info_object);
 }
 
 #[test_only]
@@ -2111,6 +2211,86 @@ public fun test_claim_discount_ticket_inline(
 }
 
 #[test_only]
+public fun test_claim_and_buy_with_ids<TCoin>(
+    shop: &mut Shop,
+    item_listing_id: obj::ID,
+    accepted_currency_id: obj::ID,
+    template_id: obj::ID,
+    price_info_object: &pyth_price_info::PriceInfoObject,
+    payment: coin::Coin<TCoin>,
+    mint_to: address,
+    refund_extra_to: address,
+    max_price_age_secs: opt::Option<u64>,
+    max_confidence_ratio_bps: opt::Option<u64>,
+    clock: &clock::Clock,
+    ctx: &mut tx::TxContext,
+) {
+    let shop_owner = shop.owner;
+    let shop_address = shop_address(shop);
+    let accepted_currency: AcceptedCurrency = dynamic_field::remove(
+        &mut shop.id,
+        accepted_currency_id,
+    );
+    let mut discount_template: DiscountTemplate = dynamic_field::remove(
+        &mut shop.id,
+        template_id,
+    );
+    let item_listing: &mut ItemListing = dynamic_field::borrow_mut(
+        &mut shop.id,
+        item_listing_id,
+    );
+
+    let now = now_secs(clock);
+    let discount_ticket = claim_discount_ticket_inline(&mut discount_template, now, ctx);
+    let claimer = tx::sender(ctx);
+
+    event::emit(DiscountClaimed {
+        shop_address,
+        discount_template_id: template_address(&discount_template),
+        claimer,
+        discount_id: obj::uid_to_address(&discount_ticket.id),
+    });
+
+    let discounted_price_usd_cents = apply_discount(
+        item_listing.base_price_usd_cents,
+        &discount_template.rule,
+    );
+    let discount_template_id = opt::some(template_address(&discount_template));
+    let ticket_id = obj::uid_to_address(&discount_ticket.id);
+    discount_template.redemptions = discount_template.redemptions + 1;
+
+    process_purchase_core(
+        shop_owner,
+        shop_address,
+        item_listing,
+        &accepted_currency,
+        price_info_object,
+        payment,
+        mint_to,
+        refund_extra_to,
+        discounted_price_usd_cents,
+        discount_template_id,
+        max_price_age_secs,
+        max_confidence_ratio_bps,
+        clock,
+        ctx,
+    );
+
+    event::emit(DiscountRedeem {
+        shop_address,
+        discount_template_id: template_address(&discount_template),
+        discount_id: ticket_id,
+        listing_id: obj::uid_to_address(&item_listing.id),
+        buyer: claimer,
+    });
+
+    burn_discount_ticket(discount_ticket);
+
+    dynamic_field::add(&mut shop.id, accepted_currency_id, accepted_currency);
+    dynamic_field::add(&mut shop.id, template_id, discount_template);
+}
+
+#[test_only]
 public fun test_discount_rule_kind(rule: DiscountRule): u8 {
     match (rule) {
         DiscountRule::Fixed { amount_cents: _ } => 0,
@@ -2124,6 +2304,14 @@ public fun test_discount_rule_value(rule: DiscountRule): u64 {
         DiscountRule::Fixed { amount_cents } => amount_cents,
         DiscountRule::Percent { bps } => bps as u64,
     }
+}
+
+#[test_only]
+public fun test_apply_percent_discount(base_price_usd_cents: u64, bps: u16): u64 {
+    apply_discount(
+        base_price_usd_cents,
+        &DiscountRule::Percent { bps },
+    )
 }
 
 #[test_only]

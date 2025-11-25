@@ -12,6 +12,7 @@ use std::string;
 use std::type_name;
 use std::vector as vec;
 use sui::clock;
+use sui::coin;
 use sui::coin_registry as registry;
 use sui::event;
 use sui::object as obj;
@@ -60,6 +61,21 @@ fun create_price_info_object_for_feed_with_price(
     let price_identifier = pyth_price_identifier::from_byte_vec(feed_id);
     let price_feed = pyth_price_feed::new(price_identifier, price, price);
     let price_info = pyth_price_info::new_price_info(0, 0, price_feed);
+    let price_info_object = pyth_price_info::new_price_info_object_for_test(price_info, ctx);
+    let price_info_id = pyth_price_info::uid_to_inner(&price_info_object);
+    (price_info_object, price_info_id)
+}
+
+fun create_price_info_object_for_feed_with_price_and_times(
+    feed_id: vector<u8>,
+    price: pyth_price::Price,
+    attestation_time: u64,
+    arrival_time: u64,
+    ctx: &mut tx::TxContext,
+): (pyth_price_info::PriceInfoObject, obj::ID) {
+    let price_identifier = pyth_price_identifier::from_byte_vec(feed_id);
+    let price_feed = pyth_price_feed::new(price_identifier, price, price);
+    let price_info = pyth_price_info::new_price_info(attestation_time, arrival_time, price_feed);
     let price_info_object = pyth_price_info::new_price_info_object_for_test(price_info, ctx);
     let price_info_id = pyth_price_info::uid_to_inner(&price_info_object);
     (price_info_object, price_info_id)
@@ -625,7 +641,7 @@ fun add_accepted_currency_rejects_identifier_mismatch() {
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::EPythObjectMismatch)]
 fun add_accepted_currency_rejects_missing_price_object() {
-    let mut ctx = tx::new_from_hint(@0x0, 16, 0, 0, 0);
+    let mut ctx = tx::new_from_hint(@0x0, 17, 0, 0, 0);
     let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
     let currency = create_test_currency(&mut ctx);
     let (price_info_object, _) = create_price_info_object_for_feed(PRIMARY_FEED_ID, &mut ctx);
@@ -646,6 +662,42 @@ fun add_accepted_currency_rejects_missing_price_object() {
     shop::test_destroy_owner_cap(owner_cap);
     shop::test_destroy_shop(shop);
     abort E_ASSERT_FAILURE
+}
+
+#[test]
+fun price_status_allows_small_attestation_lag() {
+    let mut ctx = tx::new_from_hint(@0x0, 16, 0, 0, 0);
+    let publish_time = 100;
+    let attestation_time = publish_time + shop::test_max_price_status_lag_secs();
+    let price = pyth_price::new(pyth_i64::new(1_000, false), 10, pyth_i64::new(2, true), publish_time);
+    let (price_info_object, _) = create_price_info_object_for_feed_with_price_and_times(
+        PRIMARY_FEED_ID,
+        price,
+        attestation_time,
+        attestation_time,
+        &mut ctx,
+    );
+
+    shop::test_assert_price_status_trading(&price_info_object);
+    pyth_price_info::destroy(price_info_object);
+}
+
+#[test, expected_failure(abort_code = ::sui_oracle_market::shop::EPriceStatusNotTrading)]
+fun price_status_rejects_large_attestation_lag() {
+    let mut ctx = tx::new_from_hint(@0x0, 18, 0, 0, 0);
+    let publish_time = 200;
+    let attestation_time = publish_time + shop::test_max_price_status_lag_secs() + 1;
+    let price = pyth_price::new(pyth_i64::new(1_000, false), 10, pyth_i64::new(2, true), publish_time);
+    let (price_info_object, _) = create_price_info_object_for_feed_with_price_and_times(
+        PRIMARY_FEED_ID,
+        price,
+        attestation_time,
+        attestation_time,
+        &mut ctx,
+    );
+
+    shop::test_assert_price_status_trading(&price_info_object);
+    pyth_price_info::destroy(price_info_object);
 }
 
 #[test]
@@ -830,6 +882,26 @@ fun quote_view_matches_internal_math() {
     test_utils::destroy(currency);
     shop::test_destroy_owner_cap(owner_cap);
     shop::test_destroy_shop(shop);
+}
+
+#[test, expected_failure(abort_code = ::sui_oracle_market::shop::EPriceOverflow)]
+fun quote_amount_rejects_overflow_before_runtime_abort() {
+    let price = pyth_price::new(
+        pyth_i64::new(1, false),
+        0,
+        pyth_i64::new(0, false),
+        0,
+    );
+    let max_usd_cents: u64 = 18_446_744_073_709_551_615;
+
+    shop::test_quote_amount_from_usd_cents(
+        max_usd_cents,
+        38, // MAX_DECIMAL_POWER; forces usd_cents * 10^38 to overflow u128.
+        &price,
+        shop::test_default_max_confidence_ratio_bps(),
+    );
+
+    abort E_ASSERT_FAILURE
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::EPythObjectMismatch)]
@@ -1576,6 +1648,18 @@ fun create_discount_template_rejects_percent_above_limit() {
     abort E_ASSERT_FAILURE
 }
 
+#[test]
+fun percent_discount_rounds_up_instead_of_zeroing_low_prices() {
+    let discounted = shop::test_apply_percent_discount(1, 100);
+    assert!(discounted == 1, E_ASSERT_FAILURE);
+}
+
+#[test]
+fun percent_discount_allows_full_discount_to_reach_zero() {
+    let discounted = shop::test_apply_percent_discount(1, 10_000);
+    assert!(discounted == 0, E_ASSERT_FAILURE);
+}
+
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::ETemplateWindow)]
 fun create_discount_template_rejects_invalid_schedule() {
     let mut ctx = tx::dummy();
@@ -1664,6 +1748,8 @@ fun update_discount_template_updates_fields_and_emits_event() {
     );
     let template_id = shop::test_last_created_id(&ctx);
 
+    let mut clock_obj = clock::create_for_testing(&mut ctx);
+    clock::set_for_testing(&mut clock_obj, 1);
     shop::update_discount_template(
         &mut shop,
         template_id,
@@ -1673,7 +1759,9 @@ fun update_discount_template_updates_fields_and_emits_event() {
         opt::some(200),
         opt::some(10),
         &owner_cap,
+        &clock_obj,
     );
+    clock::destroy_for_testing(clock_obj);
 
     let (
         shop_address,
@@ -1734,6 +1822,7 @@ fun update_discount_template_rejects_foreign_owner_cap() {
     );
     let template_id = shop::test_last_created_id(&ctx);
 
+    let clock_obj = clock::create_for_testing(&mut ctx);
     shop::update_discount_template(
         &mut shop,
         template_id,
@@ -1743,6 +1832,7 @@ fun update_discount_template_rejects_foreign_owner_cap() {
         opt::none(),
         opt::none(),
         &other_cap,
+        &clock_obj,
     );
 
     shop::test_remove_template(&mut shop, template_id);
@@ -1760,6 +1850,7 @@ fun update_discount_template_rejects_foreign_template() {
     let (mut other_shop, other_cap) = shop::test_setup_shop(OTHER_OWNER, &mut ctx);
     let foreign_template = create_discount_template(&mut other_shop, &other_cap, &mut ctx);
 
+    let clock_obj = clock::create_for_testing(&mut ctx);
     shop::update_discount_template(
         &mut shop,
         foreign_template,
@@ -1769,6 +1860,7 @@ fun update_discount_template_rejects_foreign_template() {
         opt::none(),
         opt::none(),
         &owner_cap,
+        &clock_obj,
     );
 
     shop::test_destroy_owner_cap(owner_cap);
@@ -1797,6 +1889,7 @@ fun update_discount_template_rejects_invalid_schedule() {
     );
     let template_id = shop::test_last_created_id(&ctx);
 
+    let clock_obj = clock::create_for_testing(&mut ctx);
     shop::update_discount_template(
         &mut shop,
         template_id,
@@ -1806,6 +1899,7 @@ fun update_discount_template_rejects_invalid_schedule() {
         opt::some(50),
         opt::none(),
         &owner_cap,
+        &clock_obj,
     );
 
     shop::test_remove_template(&mut shop, template_id);
@@ -1832,6 +1926,7 @@ fun update_discount_template_rejects_invalid_rule_kind() {
     );
     let template_id = shop::test_last_created_id(&ctx);
 
+    let clock_obj = clock::create_for_testing(&mut ctx);
     shop::update_discount_template(
         &mut shop,
         template_id,
@@ -1841,6 +1936,7 @@ fun update_discount_template_rejects_invalid_rule_kind() {
         opt::none(),
         opt::none(),
         &owner_cap,
+        &clock_obj,
     );
 
     shop::test_remove_template(&mut shop, template_id);
@@ -1867,6 +1963,7 @@ fun update_discount_template_rejects_percent_above_limit() {
     );
     let template_id = shop::test_last_created_id(&ctx);
 
+    let clock_obj = clock::create_for_testing(&mut ctx);
     shop::update_discount_template(
         &mut shop,
         template_id,
@@ -1876,9 +1973,145 @@ fun update_discount_template_rejects_percent_above_limit() {
         opt::none(),
         opt::none(),
         &owner_cap,
+        &clock_obj,
     );
 
     shop::test_remove_template(&mut shop, template_id);
+    shop::test_destroy_owner_cap(owner_cap);
+    shop::test_destroy_shop(shop);
+    abort E_ASSERT_FAILURE
+}
+
+#[test, expected_failure(abort_code = ::sui_oracle_market::shop::ETemplateFinalized)]
+fun update_discount_template_rejects_after_claims_issued() {
+    let mut ctx = tx::dummy();
+    let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
+
+    shop::create_discount_template(
+        &mut shop,
+        opt::none(),
+        0,
+        500,
+        0,
+        opt::some(5_000),
+        opt::some(2),
+        &owner_cap,
+        &mut ctx,
+    );
+    let template_id = shop::test_last_created_id(&ctx);
+
+    let mut clock_obj = clock::create_for_testing(&mut ctx);
+    clock::set_for_testing(&mut clock_obj, 1);
+    shop::test_claim_discount_ticket(&mut shop, template_id, &clock_obj, &mut ctx);
+
+    shop::update_discount_template(
+        &mut shop,
+        template_id,
+        0,
+        250,
+        0,
+        opt::some(10_000),
+        opt::some(1),
+        &owner_cap,
+        &clock_obj,
+    );
+
+    clock::set_for_testing(&mut clock_obj, 10_000);
+    shop::prune_discount_claims(
+        &mut shop,
+        template_id,
+        vector[TEST_OWNER],
+        &owner_cap,
+        &clock_obj,
+    );
+    shop::test_remove_template(&mut shop, template_id);
+    clock::destroy_for_testing(clock_obj);
+    shop::test_destroy_owner_cap(owner_cap);
+    shop::test_destroy_shop(shop);
+    abort E_ASSERT_FAILURE
+}
+
+#[test, expected_failure(abort_code = ::sui_oracle_market::shop::ETemplateFinalized)]
+fun update_discount_template_rejects_after_expiry() {
+    let mut ctx = tx::dummy();
+    let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
+
+    shop::create_discount_template(
+        &mut shop,
+        opt::none(),
+        0,
+        500,
+        0,
+        opt::some(100),
+        opt::some(5),
+        &owner_cap,
+        &mut ctx,
+    );
+    let template_id = shop::test_last_created_id(&ctx);
+    let mut clock_obj = clock::create_for_testing(&mut ctx);
+    clock::set_for_testing(&mut clock_obj, 200_000);
+
+    shop::update_discount_template(
+        &mut shop,
+        template_id,
+        1,
+        250,
+        0,
+        opt::some(500),
+        opt::some(10),
+        &owner_cap,
+        &clock_obj,
+    );
+
+    clock::destroy_for_testing(clock_obj);
+    shop::test_remove_template(&mut shop, template_id);
+    shop::test_destroy_owner_cap(owner_cap);
+    shop::test_destroy_shop(shop);
+    abort E_ASSERT_FAILURE
+}
+
+#[test, expected_failure(abort_code = ::sui_oracle_market::shop::ETemplateFinalized)]
+fun update_discount_template_rejects_after_maxed_out() {
+    let mut ctx = tx::dummy();
+    let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
+
+    shop::create_discount_template(
+        &mut shop,
+        opt::none(),
+        0,
+        450,
+        0,
+        opt::some(10_000),
+        opt::some(1),
+        &owner_cap,
+        &mut ctx,
+    );
+    let template_id = shop::test_last_created_id(&ctx);
+    let mut clock_obj = clock::create_for_testing(&mut ctx);
+    clock::set_for_testing(&mut clock_obj, 1_000);
+    shop::test_claim_discount_ticket(&mut shop, template_id, &clock_obj, &mut ctx);
+
+    shop::update_discount_template(
+        &mut shop,
+        template_id,
+        0,
+        250,
+        0,
+        opt::some(10_500),
+        opt::some(2),
+        &owner_cap,
+        &clock_obj,
+    );
+
+    shop::prune_discount_claims(
+        &mut shop,
+        template_id,
+        vector[TEST_OWNER],
+        &owner_cap,
+        &clock_obj,
+    );
+    shop::test_remove_template(&mut shop, template_id);
+    clock::destroy_for_testing(clock_obj);
     shop::test_destroy_owner_cap(owner_cap);
     shop::test_destroy_shop(shop);
     abort E_ASSERT_FAILURE
@@ -2892,6 +3125,119 @@ fun claim_discount_ticket_rejects_duplicate_claim() {
     clock::destroy_for_testing(clock_obj);
     shop::test_destroy_owner_cap(owner_cap);
     shop::test_destroy_shop(shop);
+    abort E_ASSERT_FAILURE
+}
+
+#[test, expected_failure(abort_code = ::sui_oracle_market::shop::EDiscountAlreadyClaimed)]
+fun claim_and_buy_rejects_second_claim_after_redeem() {
+    let mut scn = scenario::begin(TEST_OWNER);
+    let publisher = shop::test_claim_publisher(scenario::ctx(&mut scn));
+
+    shop::create_shop(&publisher, scenario::ctx(&mut scn));
+    let created = event::events_by_type<shop::ShopCreated>();
+    let created_len = vec::length(&created);
+    assert!(created_len > 0, E_ASSERT_FAILURE);
+    let shop_created = vec::borrow(&created, created_len - 1);
+    let shop_id = obj::id_from_address(shop::test_shop_created_shop_address(shop_created));
+    let owner_cap_id = obj::id_from_address(shop::test_shop_created_owner_cap_id(shop_created));
+    shop::test_destroy_publisher(publisher);
+
+    let _ = scenario::next_tx(&mut scn, TEST_OWNER);
+
+    let owner_cap: shop::ShopOwnerCap = scenario::take_from_sender_by_id(&scn, owner_cap_id);
+    txf::public_transfer(owner_cap, @0x0);
+
+    let _ = scenario::next_tx(&mut scn, @0x0);
+
+    let mut shop_obj = scenario::take_shared_by_id(&scn, shop_id);
+    let owner_cap: shop::ShopOwnerCap = scenario::take_from_sender_by_id(&scn, owner_cap_id);
+    let currency = create_test_currency(scenario::ctx(&mut scn));
+    let (price_info_object, price_info_id) = create_price_info_object_for_feed(
+        PRIMARY_FEED_ID,
+        scenario::ctx(&mut scn),
+    );
+
+    shop::add_accepted_currency<TestCoin>(
+        &mut shop_obj,
+        &currency,
+        PRIMARY_FEED_ID,
+        price_info_id,
+        &price_info_object,
+        opt::none(),
+        opt::none(),
+        &owner_cap,
+        scenario::ctx(&mut scn),
+    );
+    let accepted_currency_id = shop::test_last_created_id(scenario::ctx(&mut scn));
+
+    shop::add_item_listing<shop::ShopItem>(
+        &mut shop_obj,
+        b"Promo Sock",
+        100,
+        2,
+        opt::none(),
+        &owner_cap,
+        scenario::ctx(&mut scn),
+    );
+    let listing_id = shop::test_last_created_id(scenario::ctx(&mut scn));
+
+    shop::create_discount_template(
+        &mut shop_obj,
+        opt::some(listing_id),
+        1,
+        10_000,
+        0,
+        opt::some(1_000),
+        opt::some(5),
+        &owner_cap,
+        scenario::ctx(&mut scn),
+    );
+    let template_id = shop::test_last_created_id(scenario::ctx(&mut scn));
+
+    txf::public_share_object(price_info_object);
+
+    scenario::return_to_sender(&scn, owner_cap);
+    scenario::return_shared(shop_obj);
+
+    let _ = scenario::next_tx(&mut scn, OTHER_OWNER);
+
+    let mut shared_shop = scenario::take_shared_by_id(&scn, shop_id);
+    let price_info_obj: pyth_price_info::PriceInfoObject = scenario::take_shared_by_id(
+        &scn,
+        price_info_id,
+    );
+    let mut clock_obj = clock::create_for_testing(scenario::ctx(&mut scn));
+    clock::set_for_testing(&mut clock_obj, 10);
+
+    let payment = coin::mint_for_testing<TestCoin>(1, scenario::ctx(&mut scn));
+
+    shop::test_claim_and_buy_with_ids<TestCoin>(
+        &mut shared_shop,
+        listing_id,
+        accepted_currency_id,
+        template_id,
+        &price_info_obj,
+        payment,
+        OTHER_OWNER,
+        OTHER_OWNER,
+        opt::none(),
+        opt::none(),
+        &clock_obj,
+        scenario::ctx(&mut scn),
+    );
+
+    assert!(
+        shop::test_discount_claim_exists(&shared_shop, template_id, OTHER_OWNER),
+        E_ASSERT_FAILURE,
+    );
+
+    shop::test_claim_discount_ticket(
+        &mut shared_shop,
+        template_id,
+        &clock_obj,
+        scenario::ctx(&mut scn),
+    );
+
     abort E_ASSERT_FAILURE
 }
 
