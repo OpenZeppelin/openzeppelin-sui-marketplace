@@ -60,12 +60,15 @@ const EConfidenceIntervalTooWide: u64 = 32;
 const EConfidenceExceedsPrice: u64 = 33;
 const ESpotlightTemplateListingMismatch: u64 = 35;
 const EDiscountClaimsNotPrunable: u64 = 36;
+const EInvalidGuardrailCap: u64 = 37;
 
 const CENTS_PER_DOLLAR: u64 = 100;
 const BASIS_POINT_DENOMINATOR: u64 = 10_000;
 const DEFAULT_MAX_PRICE_AGE_SECS: u64 = 60;
+const MAX_PRICE_AGE_SECS_CAP: u64 = DEFAULT_MAX_PRICE_AGE_SECS;
 const MAX_DECIMAL_POWER: u64 = 38;
 const DEFAULT_MAX_CONFIDENCE_RATIO_BPS: u64 = 1_000; // Reject price feeds with σ/μ above 10%.
+const MAX_CONFIDENCE_RATIO_BPS_CAP: u64 = DEFAULT_MAX_CONFIDENCE_RATIO_BPS;
 const PYTH_PRICE_IDENTIFIER_LENGTH: u64 = 32;
 // Powers of 10 from 10^0 through 10^38 for scaling Pyth prices and coin decimals.
 const POW10_U128: vector<u128> = vector[
@@ -153,6 +156,8 @@ public struct AcceptedCurrency has key, store {
     pyth_object_id: obj::ID, // ID of Pyth PriceInfoObject
     decimals: u8,
     symbol: vector<u8>,
+    max_price_age_secs_cap: u64,
+    max_confidence_ratio_bps_cap: u64,
 }
 
 /// Discount rules mirror the spec: fixed (USD cents) or percentage basis points off.
@@ -481,12 +486,10 @@ public entry fun remove_item_listing(
     assert_owner_cap(shop, owner_cap);
 
     let listing: ItemListing = dynamic_field::remove(&mut shop.id, item_listing_id);
-    let listing_address: address = obj::uid_to_address(&listing.id);
-    destroy_listing(listing);
 
     event::emit(ItemListingRemoved {
         shop_address: shop_address(shop),
-        item_listing_address: listing_address,
+        item_listing_address: destroy_listing(listing),
     });
 }
 
@@ -503,17 +506,23 @@ public entry fun remove_item_listing(
 /// - Each accepted currency is its own dynamic-field child, keeping feed updates parallel. Callers
 ///   also pass the `PriceInfoObject` so the module can verify feed IDs and Pyth object IDs without
 ///   trusting off-chain lookups.
+/// - Sellers can optionally tighten oracle guardrails per currency (`max_price_age_secs_cap`,
+///   `max_confidence_ratio_bps_cap`); caller overrides during checkout are clamped to these caps.
 public entry fun add_accepted_currency<T: store>(
     shop: &mut Shop,
     currency: &registry::Currency<T>,
     feed_id: vector<u8>,
     pyth_object_id: obj::ID,
     price_info_object: &pyth_price_info::PriceInfoObject,
+    max_price_age_secs_cap: opt::Option<u64>,
+    max_confidence_ratio_bps_cap: opt::Option<u64>,
     owner_cap: &ShopOwnerCap,
     ctx: &mut tx::TxContext,
 ) {
     assert_owner_cap(shop, owner_cap);
+
     let coin_type = currency_type<T>();
+
     validate_accepted_currency_inputs(
         shop,
         &coin_type,
@@ -522,12 +531,16 @@ public entry fun add_accepted_currency<T: store>(
         price_info_object,
     );
 
-    let confirmed_price_object = pyth_price_info::uid_to_inner(price_info_object);
-    assert!(confirmed_price_object == pyth_object_id, EPythObjectMismatch);
+    validate_pyth_price_object(price_info_object, pyth_object_id);
 
     let decimals: u8 = registry::decimals(currency);
     let symbol: vector<u8> = string::into_bytes(registry::symbol(currency));
     let shop_address: address = shop_address(shop);
+    let age_cap: u64 = resolve_guardrail_cap(&max_price_age_secs_cap, MAX_PRICE_AGE_SECS_CAP);
+    let confidence_cap = resolve_guardrail_cap(
+        &max_confidence_ratio_bps_cap,
+        MAX_CONFIDENCE_RATIO_BPS_CAP,
+    );
 
     let (accepted_currency, accepted_currency_address) = new_accepted_currency(
         shop_address,
@@ -536,9 +549,11 @@ public entry fun add_accepted_currency<T: store>(
         pyth_object_id,
         decimals,
         symbol,
+        age_cap,
+        confidence_cap,
         ctx,
     );
-    let feed_for_event = clone_bytes(&accepted_currency.feed_id);
+    let feed_for_event: vector<u8> = clone_bytes(&accepted_currency.feed_id);
 
     dynamic_field::add(
         &mut shop.id,
@@ -750,15 +765,14 @@ public entry fun claim_discount_ticket(
     clock: &clock::Clock,
     ctx: &mut tx::TxContext,
 ): () {
-    let claimer: address = tx::sender(ctx);
     let now_secs: u64 = now_secs(clock);
 
     let discount_ticket: DiscountTicket = claim_discount_ticket_inline(
         discount_template,
-        claimer,
         now_secs,
         ctx,
     );
+    let claimer: address = tx::sender(ctx);
 
     event::emit(DiscountClaimed {
         shop_address: discount_template.shop_address,
@@ -772,12 +786,14 @@ public entry fun claim_discount_ticket(
 
 /// Non-entry helper that returns the owned ticket so callers can inline claim + buy in one PTB.
 /// Intended to be composed inside future `buy_item` logic or higher-level scripts.
+/// The claimer is always bound to `tx::sender` to prevent third parties from minting on behalf of
+/// other addresses and exhausting template quotas.
 public fun claim_discount_ticket_inline(
     discount_template: &mut DiscountTemplate,
-    claimer: address,
     now_secs: u64,
     ctx: &mut tx::TxContext,
 ): DiscountTicket {
+    let claimer = tx::sender(ctx);
     assert_template_claimable(discount_template, claimer, now_secs);
 
     let discount_ticket: DiscountTicket = mew_discount_ticket(discount_template, claimer, ctx);
@@ -786,8 +802,8 @@ public fun claim_discount_ticket_inline(
 }
 
 /// Remove recorded claim markers for a template that is no longer serving new tickets.
-/// The template must be paused, expired, or maxed out so that pruning does not weaken
-/// the one-claim-per-address guarantee while the promotion is active.
+/// Pruning is only allowed once the template is irrevocably finished (expired or maxed out)
+/// so that a pause cannot be used to bypass the one-claim-per-address guarantee.
 public entry fun prune_discount_claims(
     shop: &mut Shop,
     discount_template_id: obj::ID,
@@ -841,8 +857,8 @@ entry fun toggle_template_on_listing(
 ///   change without extra hops—common for custody or marketplace flows.
 /// - Oracles are first-class objects. Callers supply a refreshed `PriceInfoObject`, and on-chain
 ///   logic verifies identity/freshness against the shared `Clock` and feed metadata.
-/// - Guardrails (`max_price_age_secs`, `max_confidence_ratio_bps`) are caller-tunable; `none` uses
-///   module defaults.
+/// - Guardrails (`max_price_age_secs`, `max_confidence_ratio_bps`) are caller-tunable only to
+///   tighten them; overrides are capped at seller-set per-currency limits and `none` uses those caps.
 #[allow(lint(self_transfer))]
 public entry fun buy_item<TCoin>(
     shop: &Shop,
@@ -967,14 +983,13 @@ public entry fun claim_and_buy_item_with_discount<TCoin>(
     clock: &clock::Clock,
     ctx: &mut tx::TxContext,
 ) {
-    let claimer = tx::sender(ctx);
     let now_secs = now_secs(clock);
     let discount_ticket = claim_discount_ticket_inline(
         discount_template,
-        claimer,
         now_secs,
         ctx,
     );
+    let claimer = tx::sender(ctx);
 
     event::emit(DiscountClaimed {
         shop_address: discount_template.shop_address,
@@ -1030,6 +1045,8 @@ fun destroy_accepted_currency(accepted_currency: AcceptedCurrency) {
         pyth_object_id: _,
         decimals: _,
         symbol: _,
+        max_price_age_secs_cap: _,
+        max_confidence_ratio_bps_cap: _,
     } = accepted_currency;
     id.delete();
 }
@@ -1041,6 +1058,8 @@ fun new_accepted_currency(
     pyth_object_id: obj::ID,
     decimals: u8,
     symbol: vector<u8>,
+    max_price_age_secs_cap: u64,
+    max_confidence_ratio_bps_cap: u64,
     ctx: &mut tx::TxContext,
 ): (AcceptedCurrency, address) {
     let accepted_currency: AcceptedCurrency = AcceptedCurrency {
@@ -1051,6 +1070,8 @@ fun new_accepted_currency(
         pyth_object_id,
         decimals,
         symbol,
+        max_price_age_secs_cap,
+        max_confidence_ratio_bps_cap,
     };
     let accepted_currency_address: address = obj::uid_to_address(&accepted_currency.id);
 
@@ -1194,6 +1215,22 @@ fun unwrap_or_default(value: &opt::Option<u64>, default_value: u64): u64 {
     }
 }
 
+/// Normalize a seller-provided guardrail cap, enforcing module-level ceilings and non-zero.
+fun resolve_guardrail_cap(proposed_cap: &opt::Option<u64>, module_cap: u64): u64 {
+    let value = unwrap_or_default(proposed_cap, module_cap);
+    assert!(value > 0, EInvalidGuardrailCap);
+    clamp_max(value, module_cap)
+}
+
+/// Clamp a caller-provided override so oracle guardrails cannot be loosened.
+fun clamp_max(value: u64, cap: u64): u64 {
+    if (value <= cap) {
+        value
+    } else {
+        cap
+    }
+}
+
 fun process_purchase<TCoin>(
     shop: &Shop,
     item_listing: &mut ItemListing,
@@ -1213,10 +1250,22 @@ fun process_purchase<TCoin>(
     ensure_price_info_matches_currency(accepted_currency, price_info_object);
     ensure_payment_coin_type<TCoin>(accepted_currency);
     assert_stock_available(item_listing);
-    let effective_max_age = unwrap_or_default(&max_price_age_secs, DEFAULT_MAX_PRICE_AGE_SECS);
-    let effective_confidence_ratio = unwrap_or_default(
+    let requested_max_age = unwrap_or_default(
+        &max_price_age_secs,
+        accepted_currency.max_price_age_secs_cap,
+    );
+    let requested_confidence_ratio = unwrap_or_default(
         &max_confidence_ratio_bps,
-        DEFAULT_MAX_CONFIDENCE_RATIO_BPS,
+        accepted_currency.max_confidence_ratio_bps_cap,
+    );
+    // Callers may only tighten oracle guardrails; overrides are clamped to per-currency caps.
+    let effective_max_age = clamp_max(
+        requested_max_age,
+        accepted_currency.max_price_age_secs_cap,
+    );
+    let effective_confidence_ratio = clamp_max(
+        requested_confidence_ratio,
+        accepted_currency.max_confidence_ratio_bps_cap,
     );
     let price: pyth_price::Price = pyth::get_price_no_older_than(
         price_info_object,
@@ -1518,6 +1567,14 @@ fun assert_schedule(starts_at: u64, expires_at: &opt::Option<u64>) {
     }
 }
 
+fun validate_pyth_price_object(
+    price_info_object: &pyth_price_info::PriceInfoObject,
+    pyth_object_id: obj::ID,
+) {
+    let confirmed_price_object = pyth_price_info::uid_to_inner(price_info_object);
+    assert!(confirmed_price_object == pyth_object_id, EPythObjectMismatch);
+}
+
 fun validate_listing_inputs(
     shop: &Shop,
     name: &vector<u8>,
@@ -1556,7 +1613,7 @@ fun assert_template_prunable(template: &DiscountTemplate, now: u64) {
     } else {
         false
     };
-    assert!(!template.active || expired || maxed_out, EDiscountClaimsNotPrunable);
+    assert!(expired || maxed_out, EDiscountClaimsNotPrunable);
 }
 
 fun assert_discount_redemption_allowed(
@@ -1818,7 +1875,7 @@ public fun listing_values(
 public fun accepted_currency_values(
     shop: &Shop,
     accepted_currency_id: obj::ID,
-): (address, TypeInfo, vector<u8>, obj::ID, u8, vector<u8>) {
+): (address, TypeInfo, vector<u8>, obj::ID, u8, vector<u8>, u64, u64) {
     assert_accepted_currency_exists(shop, accepted_currency_id);
     let accepted_currency: &AcceptedCurrency = dynamic_field::borrow(
         &shop.id,
@@ -1831,6 +1888,8 @@ public fun accepted_currency_values(
         accepted_currency.pyth_object_id,
         accepted_currency.decimals,
         clone_bytes(&accepted_currency.symbol),
+        accepted_currency.max_price_age_secs_cap,
+        accepted_currency.max_confidence_ratio_bps_cap,
     )
 }
 
@@ -1880,10 +1939,16 @@ public fun quote_amount_for_price_info_object(
         accepted_currency_id,
     );
     ensure_price_info_matches_currency(accepted_currency, price_info_object);
-    let effective_max_age = unwrap_or_default(&max_price_age_secs, DEFAULT_MAX_PRICE_AGE_SECS);
-    let effective_confidence_ratio = unwrap_or_default(
-        &max_confidence_ratio_bps,
-        DEFAULT_MAX_CONFIDENCE_RATIO_BPS,
+    let effective_max_age = clamp_max(
+        unwrap_or_default(&max_price_age_secs, accepted_currency.max_price_age_secs_cap),
+        accepted_currency.max_price_age_secs_cap,
+    );
+    let effective_confidence_ratio = clamp_max(
+        unwrap_or_default(
+            &max_confidence_ratio_bps,
+            accepted_currency.max_confidence_ratio_bps_cap,
+        ),
+        accepted_currency.max_confidence_ratio_bps_cap,
     );
     let price: pyth_price::Price = pyth::get_price_no_older_than(
         price_info_object,
@@ -1982,7 +2047,7 @@ public fun test_accepted_currency_exists(shop: &Shop, accepted_currency_id: obj:
 public fun test_accepted_currency_values(
     shop: &Shop,
     accepted_currency_id: obj::ID,
-): (address, TypeInfo, vector<u8>, obj::ID, u8, vector<u8>) {
+): (address, TypeInfo, vector<u8>, obj::ID, u8, vector<u8>, u64, u64) {
     accepted_currency_values(shop, accepted_currency_id)
 }
 
@@ -2038,12 +2103,11 @@ public fun test_claim_discount_ticket(
 public fun test_claim_discount_ticket_inline(
     shop: &mut Shop,
     template_id: obj::ID,
-    claimer: address,
     now_secs: u64,
     ctx: &mut tx::TxContext,
 ): DiscountTicket {
     let template: &mut DiscountTemplate = dynamic_field::borrow_mut(&mut shop.id, template_id);
-    claim_discount_ticket_inline(template, claimer, now_secs, ctx)
+    claim_discount_ticket_inline(template, now_secs, ctx)
 }
 
 #[test_only]

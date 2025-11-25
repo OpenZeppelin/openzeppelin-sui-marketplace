@@ -99,6 +99,8 @@ add_accepted_currency<USDC>(
     &usdc_currency,
     /* feed_id */ feed_id_bytes,
     /* pyth_object_id */ pyth_obj_id,
+    /* max_price_age_secs_cap */ none, // Optional tightenings; defaults enforce module caps.
+    /* max_confidence_ratio_bps_cap */ none,
     &price_info_object,
     &owner_cap,
     &mut ctx

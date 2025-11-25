@@ -79,6 +79,8 @@ fun add_currency_with_feed<T: store>(
         feed_id,
         price_info_id,
         &price_info_object,
+        opt::none(),
+        opt::none(),
         owner_cap,
         ctx,
     );
@@ -347,6 +349,8 @@ fun add_accepted_currency_records_currency_and_event() {
         expected_feed_id,
         pyth_object_id,
         &price_info_object,
+        opt::none(),
+        opt::none(),
         &owner_cap,
         &mut ctx,
     );
@@ -362,6 +366,8 @@ fun add_accepted_currency_records_currency_and_event() {
         stored_pyth,
         decimals,
         symbol,
+        max_age_cap,
+        conf_cap,
     ) = shop::test_accepted_currency_values(&shop, accepted_currency_id);
     assert!(shop_address == shop::test_shop_id(&shop), E_ASSERT_FAILURE);
     assert!(coin_type == test_coin_type(), E_ASSERT_FAILURE);
@@ -369,6 +375,8 @@ fun add_accepted_currency_records_currency_and_event() {
     assert!(stored_pyth == pyth_object_id, E_ASSERT_FAILURE);
     assert!(decimals == 9, E_ASSERT_FAILURE);
     assert!(symbol == b"TCO", E_ASSERT_FAILURE);
+    assert!(max_age_cap == shop::test_default_max_price_age_secs(), E_ASSERT_FAILURE);
+    assert!(conf_cap == shop::test_default_max_confidence_ratio_bps(), E_ASSERT_FAILURE);
     let mapped_id = shop::test_accepted_currency_id_for_type(&shop, coin_type);
     assert!(mapped_id == accepted_currency_id, E_ASSERT_FAILURE);
 
@@ -395,6 +403,98 @@ fun add_accepted_currency_records_currency_and_event() {
     shop::test_destroy_shop(shop);
 }
 
+#[test]
+fun add_accepted_currency_stores_custom_guardrail_caps() {
+    let mut ctx = tx::new_from_hint(@0x0, 7, 0, 0, 0);
+    let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
+    let currency = create_test_currency(&mut ctx);
+    let (price_info_object, pyth_object_id) = create_price_info_object_for_feed(
+        PRIMARY_FEED_ID,
+        &mut ctx,
+    );
+    let custom_age_cap = 30;
+    let custom_conf_cap = 500;
+
+    shop::add_accepted_currency<TestCoin>(
+        &mut shop,
+        &currency,
+        PRIMARY_FEED_ID,
+        pyth_object_id,
+        &price_info_object,
+        opt::some(custom_age_cap),
+        opt::some(custom_conf_cap),
+        &owner_cap,
+        &mut ctx,
+    );
+    let accepted_currency_id = shop::test_last_created_id(&ctx);
+    let (
+        _,
+        _,
+        _,
+        _,
+        _,
+        _,
+        stored_age_cap,
+        stored_conf_cap,
+    ) = shop::test_accepted_currency_values(&shop, accepted_currency_id);
+    assert!(stored_age_cap == custom_age_cap, E_ASSERT_FAILURE);
+    assert!(stored_conf_cap == custom_conf_cap, E_ASSERT_FAILURE);
+
+    txf::public_share_object(price_info_object);
+    test_utils::destroy(currency);
+    shop::test_destroy_owner_cap(owner_cap);
+    shop::test_destroy_shop(shop);
+}
+
+#[test]
+fun add_accepted_currency_clamps_guardrail_caps_to_defaults() {
+    let mut ctx = tx::new_from_hint(@0x0, 7, 0, 0, 0);
+    let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
+    let currency = create_test_currency(&mut ctx);
+    let (price_info_object, pyth_object_id) = create_price_info_object_for_feed(
+        PRIMARY_FEED_ID,
+        &mut ctx,
+    );
+    let over_age_cap = shop::test_default_max_price_age_secs() + 100;
+    let over_conf_cap = shop::test_default_max_confidence_ratio_bps() + 500;
+
+    shop::add_accepted_currency<TestCoin>(
+        &mut shop,
+        &currency,
+        PRIMARY_FEED_ID,
+        pyth_object_id,
+        &price_info_object,
+        opt::some(over_age_cap),
+        opt::some(over_conf_cap),
+        &owner_cap,
+        &mut ctx,
+    );
+    let accepted_currency_id = shop::test_last_created_id(&ctx);
+    let (
+        _,
+        _,
+        _,
+        _,
+        _,
+        _,
+        stored_age_cap,
+        stored_conf_cap,
+    ) = shop::test_accepted_currency_values(&shop, accepted_currency_id);
+    assert!(
+        stored_age_cap == shop::test_default_max_price_age_secs(),
+        E_ASSERT_FAILURE,
+    );
+    assert!(
+        stored_conf_cap == shop::test_default_max_confidence_ratio_bps(),
+        E_ASSERT_FAILURE,
+    );
+
+    txf::public_share_object(price_info_object);
+    test_utils::destroy(currency);
+    shop::test_destroy_owner_cap(owner_cap);
+    shop::test_destroy_shop(shop);
+}
+
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::EInvalidOwnerCap)]
 fun add_accepted_currency_rejects_foreign_owner_cap() {
     let mut ctx = tx::new_from_hint(@0x0, 8, 0, 0, 0);
@@ -412,6 +512,8 @@ fun add_accepted_currency_rejects_foreign_owner_cap() {
         b"BAD",
         price_info_id,
         &price_info_object,
+        opt::none(),
+        opt::none(),
         &other_cap,
         &mut ctx,
     );
@@ -454,6 +556,8 @@ fun add_accepted_currency_rejects_empty_feed_id() {
         b"",
         price_info_id,
         &price_info_object,
+        opt::none(),
+        opt::none(),
         &owner_cap,
         &mut ctx,
     );
@@ -479,6 +583,8 @@ fun add_accepted_currency_rejects_short_feed_id() {
         SHORT_FEED_ID,
         price_info_id,
         &price_info_object,
+        opt::none(),
+        opt::none(),
         &owner_cap,
         &mut ctx,
     );
@@ -505,6 +611,8 @@ fun add_accepted_currency_rejects_identifier_mismatch() {
         SECONDARY_FEED_ID,
         price_info_id,
         &price_info_object,
+        opt::none(),
+        opt::none(),
         &owner_cap,
         &mut ctx,
     );
@@ -528,6 +636,8 @@ fun add_accepted_currency_rejects_missing_price_object() {
         PRIMARY_FEED_ID,
         obj::id_from_address(@0xB),
         &price_info_object,
+        opt::none(),
+        opt::none(),
         &owner_cap,
         &mut ctx,
     );
@@ -667,6 +777,8 @@ fun quote_view_matches_internal_math() {
         PRIMARY_FEED_ID,
         price_info_id,
         &price_info_object,
+        opt::none(),
+        opt::none(),
         &owner_cap,
         &mut ctx,
     );
@@ -678,7 +790,11 @@ fun quote_view_matches_internal_math() {
         _,
         decimals,
         _,
+        max_age_cap,
+        conf_cap,
     ) = shop::test_accepted_currency_values(&shop, accepted_currency_id);
+    assert!(max_age_cap == shop::test_default_max_price_age_secs(), E_ASSERT_FAILURE);
+    assert!(conf_cap == shop::test_default_max_confidence_ratio_bps(), E_ASSERT_FAILURE);
 
     let mut clock_obj = clock::create_for_testing(&mut ctx);
     clock::set_for_testing(&mut clock_obj, 1);
@@ -733,6 +849,8 @@ fun quote_view_rejects_mismatched_price_info_object() {
         PRIMARY_FEED_ID,
         price_info_id,
         &price_info_object,
+        opt::none(),
+        opt::none(),
         &owner_cap,
         &mut ctx,
     );
@@ -1707,7 +1825,7 @@ fun update_discount_template_rejects_invalid_rule_kind() {
         0,
         1_000,
         0,
-        opt::none(),
+        opt::some(1_000),
         opt::none(),
         &owner_cap,
         &mut ctx,
@@ -1742,7 +1860,7 @@ fun update_discount_template_rejects_percent_above_limit() {
         0,
         1_000,
         0,
-        opt::none(),
+        opt::some(1_000),
         opt::none(),
         &owner_cap,
         &mut ctx,
@@ -2548,7 +2666,7 @@ fun claim_discount_ticket_mints_transfers_and_records_claim() {
 }
 
 #[test]
-fun prune_discount_claims_removes_marker_for_inactive_template() {
+fun prune_discount_claims_removes_marker_when_expired() {
     let mut ctx = tx::dummy();
     let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
 
@@ -2558,7 +2676,7 @@ fun prune_discount_claims_removes_marker_for_inactive_template() {
         0,
         1_000,
         0,
-        opt::none(),
+        opt::some(1_000),
         opt::none(),
         &owner_cap,
         &mut ctx,
@@ -2571,7 +2689,7 @@ fun prune_discount_claims_removes_marker_for_inactive_template() {
     let claimer = tx::sender(&ctx);
     assert!(shop::test_discount_claim_exists(&shop, template_id, claimer), E_ASSERT_FAILURE);
 
-    shop::toggle_discount_template(&mut shop, template_id, false, &owner_cap, &mut ctx);
+    clock::set_for_testing(&mut clock_obj, 1_001_000);
     let mut claimers = vec::empty<address>();
     vec::push_back(&mut claimers, claimer);
     shop::prune_discount_claims(
@@ -2591,7 +2709,7 @@ fun prune_discount_claims_removes_marker_for_inactive_template() {
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::EDiscountClaimsNotPrunable)]
-fun prune_discount_claims_rejects_active_template() {
+fun prune_discount_claims_rejects_unexpired_template_even_if_paused() {
     let mut ctx = tx::dummy();
     let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
 
@@ -2601,7 +2719,7 @@ fun prune_discount_claims_rejects_active_template() {
         0,
         1_000,
         0,
-        opt::none(),
+        opt::some(1_000),
         opt::none(),
         &owner_cap,
         &mut ctx,
@@ -2615,6 +2733,7 @@ fun prune_discount_claims_rejects_active_template() {
     let mut claimers = vec::empty<address>();
     vec::push_back(&mut claimers, claimer);
 
+    shop::toggle_discount_template(&mut shop, template_id, false, &owner_cap, &mut ctx);
     shop::prune_discount_claims(
         &mut shop,
         template_id,
@@ -2763,7 +2882,6 @@ fun claim_discount_ticket_rejects_duplicate_claim() {
     let ticket = shop::test_claim_discount_ticket_inline(
         &mut shop,
         template_id,
-        TEST_OWNER,
         1,
         &mut ctx,
     );
