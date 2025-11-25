@@ -69,42 +69,17 @@ const DEFAULT_MAX_CONFIDENCE_RATIO_BPS: u64 = 1_000; // Reject price feeds with 
 const PYTH_PRICE_IDENTIFIER_LENGTH: u64 = 32;
 // Powers of 10 from 10^0 through 10^38 for scaling Pyth prices and coin decimals.
 const POW10_U128: vector<u128> = vector[
-    1,
-    10,
-    100,
-    1_000,
-    10_000,
-    100_000,
-    1_000_000,
-    10_000_000,
-    100_000_000,
-    1_000_000_000,
-    10_000_000_000,
-    100_000_000_000,
-    1_000_000_000_000,
-    10_000_000_000_000,
-    100_000_000_000_000,
-    1_000_000_000_000_000,
-    10_000_000_000_000_000,
-    100_000_000_000_000_000,
-    1_000_000_000_000_000_000,
-    10_000_000_000_000_000_000,
-    100_000_000_000_000_000_000,
-    1_000_000_000_000_000_000_000,
-    10_000_000_000_000_000_000_000,
-    100_000_000_000_000_000_000_000,
-    1_000_000_000_000_000_000_000_000,
-    10_000_000_000_000_000_000_000_000,
-    100_000_000_000_000_000_000_000_000,
-    1_000_000_000_000_000_000_000_000_000,
-    10_000_000_000_000_000_000_000_000_000,
-    100_000_000_000_000_000_000_000_000_000,
-    1_000_000_000_000_000_000_000_000_000_000,
-    10_000_000_000_000_000_000_000_000_000_000,
-    100_000_000_000_000_000_000_000_000_000_000,
-    1_000_000_000_000_000_000_000_000_000_000_000,
-    10_000_000_000_000_000_000_000_000_000_000_000,
-    100_000_000_000_000_000_000_000_000_000_000_000,
+    1, 10, 100, 1_000, 10_000, 100_000, 1_000_000, 10_000_000, 100_000_000, 1_000_000_000,
+    10_000_000_000, 100_000_000_000, 1_000_000_000_000, 10_000_000_000_000, 100_000_000_000_000,
+    1_000_000_000_000_000, 10_000_000_000_000_000, 100_000_000_000_000_000,
+    1_000_000_000_000_000_000, 10_000_000_000_000_000_000, 100_000_000_000_000_000_000,
+    1_000_000_000_000_000_000_000, 10_000_000_000_000_000_000_000, 100_000_000_000_000_000_000_000,
+    1_000_000_000_000_000_000_000_000, 10_000_000_000_000_000_000_000_000,
+    100_000_000_000_000_000_000_000_000, 1_000_000_000_000_000_000_000_000_000,
+    10_000_000_000_000_000_000_000_000_000, 100_000_000_000_000_000_000_000_000_000,
+    1_000_000_000_000_000_000_000_000_000_000, 10_000_000_000_000_000_000_000_000_000_000,
+    100_000_000_000_000_000_000_000_000_000_000, 1_000_000_000_000_000_000_000_000_000_000_000,
+    10_000_000_000_000_000_000_000_000_000_000_000, 100_000_000_000_000_000_000_000_000_000_000_000,
     1_000_000_000_000_000_000_000_000_000_000_000_000,
     10_000_000_000_000_000_000_000_000_000_000_000_000,
     100_000_000_000_000_000_000_000_000_000_000_000_000,
@@ -151,23 +126,23 @@ public struct ShopItem has key, store {
 }
 
 /// Example strongly-typed item.
-public struct Bike has key, store {
-    id: obj::UID,
-    shop_address: address,
-    item_listing_address: address,
-    name: vector<u8>,
-    brand: vector<u8>,
-    acquired_at: u64,
-}
+// public struct Bike has key, store {
+//     id: obj::UID,
+//     shop_address: address,
+//     item_listing_address: address,
+//     name: vector<u8>,
+//     brand: vector<u8>,
+//     acquired_at: u64,
+// }
 
-public struct Tire has key, store {
-    id: obj::UID,
-    shop_address: address,
-    item_listing_address: address,
-    name: vector<u8>,
-    brand: vector<u8>,
-    acquired_at: u64,
-}
+// public struct Tire has key, store {
+//     id: obj::UID,
+//     shop_address: address,
+//     item_listing_address: address,
+//     name: vector<u8>,
+//     brand: vector<u8>,
+//     acquired_at: u64,
+// }
 
 /// Defines which external coins the shop is able to price/accept.
 public struct AcceptedCurrency has key, store {
@@ -2003,12 +1978,6 @@ public fun test_discount_template_exists(shop: &Shop, template_id: obj::ID): boo
 }
 
 #[test_only]
-public fun test_set_template_redemptions(shop: &mut Shop, template_id: obj::ID, value: u64) {
-    let template: &mut DiscountTemplate = dynamic_field::borrow_mut(&mut shop.id, template_id);
-    template.redemptions = value;
-}
-
-#[test_only]
 public fun test_discount_template_values(
     shop: &Shop,
     template_id: obj::ID,
@@ -2056,92 +2025,6 @@ public fun test_claim_discount_ticket_inline(
 ): DiscountTicket {
     let template: &mut DiscountTemplate = dynamic_field::borrow_mut(&mut shop.id, template_id);
     claim_discount_ticket_inline(template, claimer, now_secs, ctx)
-}
-
-#[test_only]
-public fun test_claim_and_buy_item_with_discount_ids<TCoin>(
-    shop: &mut Shop,
-    listing_id: obj::ID,
-    accepted_currency_id: obj::ID,
-    template_id: obj::ID,
-    price_info_object: &pyth_price_info::PriceInfoObject,
-    payment: coin::Coin<TCoin>,
-    mint_to: address,
-    refund_extra_to: address,
-    max_price_age_secs: opt::Option<u64>,
-    max_confidence_ratio_bps: opt::Option<u64>,
-    clock: &clock::Clock,
-    ctx: &mut tx::TxContext,
-): () {
-    let accepted_currency: AcceptedCurrency = dynamic_field::remove(
-        &mut shop.id,
-        accepted_currency_id,
-    );
-    let mut listing: ItemListing = dynamic_field::remove(&mut shop.id, listing_id);
-    let mut template: DiscountTemplate = dynamic_field::remove(&mut shop.id, template_id);
-
-    claim_and_buy_item_with_discount(
-        shop,
-        &mut listing,
-        &accepted_currency,
-        &mut template,
-        price_info_object,
-        payment,
-        mint_to,
-        refund_extra_to,
-        max_price_age_secs,
-        max_confidence_ratio_bps,
-        clock,
-        ctx,
-    );
-
-    dynamic_field::add(&mut shop.id, listing_id, listing);
-    dynamic_field::add(&mut shop.id, accepted_currency_id, accepted_currency);
-    dynamic_field::add(&mut shop.id, template_id, template);
-}
-
-#[test_only]
-public fun test_buy_item_with_discount_ids<TCoin>(
-    shop: &mut Shop,
-    listing_id: obj::ID,
-    accepted_currency_id: obj::ID,
-    template_id: obj::ID,
-    ticket: DiscountTicket,
-    price_info_object: &pyth_price_info::PriceInfoObject,
-    payment: coin::Coin<TCoin>,
-    mint_to: address,
-    refund_extra_to: address,
-    max_price_age_secs: opt::Option<u64>,
-    max_confidence_ratio_bps: opt::Option<u64>,
-    clock: &clock::Clock,
-    ctx: &mut tx::TxContext,
-): () {
-    let accepted_currency: AcceptedCurrency = dynamic_field::remove(
-        &mut shop.id,
-        accepted_currency_id,
-    );
-    let mut listing: ItemListing = dynamic_field::remove(&mut shop.id, listing_id);
-    let mut template: DiscountTemplate = dynamic_field::remove(&mut shop.id, template_id);
-
-    buy_item_with_discount(
-        shop,
-        &mut listing,
-        &accepted_currency,
-        &mut template,
-        ticket,
-        price_info_object,
-        payment,
-        mint_to,
-        refund_extra_to,
-        max_price_age_secs,
-        max_confidence_ratio_bps,
-        clock,
-        ctx,
-    );
-
-    dynamic_field::add(&mut shop.id, listing_id, listing);
-    dynamic_field::add(&mut shop.id, accepted_currency_id, accepted_currency);
-    dynamic_field::add(&mut shop.id, template_id, template);
 }
 
 #[test_only]
