@@ -6,7 +6,6 @@ use pyth::price as pyth_price;
 use pyth::price_feed as pyth_price_feed;
 use pyth::price_identifier as pyth_price_identifier;
 use pyth::price_info as pyth_price_info;
-use pyth::price_status as pyth_price_status;
 use pyth::pyth;
 use std::option as opt;
 use std::string;
@@ -66,7 +65,6 @@ fun create_price_info_object_for_feed_with_price(
         price,
         0,
         0,
-        pyth_price_status::new_trading(),
         ctx,
     )
 }
@@ -76,7 +74,6 @@ fun create_price_info_object_for_feed_with_price_and_times(
     price: pyth_price::Price,
     attestation_time: u64,
     arrival_time: u64,
-    price_status: pyth_price_status::PriceStatus,
     ctx: &mut tx::TxContext,
 ): (pyth_price_info::PriceInfoObject, obj::ID) {
     let price_identifier = pyth_price_identifier::from_byte_vec(feed_id);
@@ -85,7 +82,6 @@ fun create_price_info_object_for_feed_with_price_and_times(
         attestation_time,
         arrival_time,
         price_feed,
-        price_status,
     );
     let price_info_object = pyth_price_info::new_price_info_object_for_test(price_info, ctx);
     let price_info_id = pyth_price_info::uid_to_inner(&price_info_object);
@@ -631,6 +627,52 @@ fun add_accepted_currency_rejects_short_feed_id() {
     abort E_ASSERT_FAILURE
 }
 
+#[test]
+fun attestation_time_within_lag_is_allowed() {
+    let mut ctx = tx::new_from_hint(@0x0, 16, 0, 0, 0);
+    let publish_time = 100;
+    let attestation_time = publish_time + shop::test_max_price_status_lag_secs();
+    let price = pyth_price::new(
+        pyth_i64::new(1_000, false),
+        10,
+        pyth_i64::new(2, true),
+        publish_time,
+    );
+    let (price_info_object, _) = create_price_info_object_for_feed_with_price_and_times(
+        PRIMARY_FEED_ID,
+        price,
+        attestation_time,
+        attestation_time,
+        &mut ctx,
+    );
+
+    shop::test_assert_price_status_trading(&price_info_object);
+    pyth_price_info::destroy(price_info_object);
+}
+
+#[test, expected_failure(abort_code = ::sui_oracle_market::shop::EPriceStatusNotTrading)]
+fun attestation_time_lag_over_limit_is_rejected() {
+    let mut ctx = tx::new_from_hint(@0x0, 18, 0, 0, 0);
+    let publish_time = 200;
+    let attestation_time = publish_time + shop::test_max_price_status_lag_secs() + 1;
+    let price = pyth_price::new(
+        pyth_i64::new(1_000, false),
+        10,
+        pyth_i64::new(2, true),
+        publish_time,
+    );
+    let (price_info_object, _) = create_price_info_object_for_feed_with_price_and_times(
+        PRIMARY_FEED_ID,
+        price,
+        attestation_time,
+        attestation_time,
+        &mut ctx,
+    );
+
+    shop::test_assert_price_status_trading(&price_info_object);
+    pyth_price_info::destroy(price_info_object);
+}
+
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::EUnsupportedCurrencyDecimals)]
 fun add_accepted_currency_rejects_excessive_decimals() {
     let mut ctx = tx::new_from_hint(@0x0, 11, 0, 0, 0);
@@ -715,102 +757,6 @@ fun add_accepted_currency_rejects_missing_price_object() {
     abort E_ASSERT_FAILURE
 }
 
-#[test]
-fun price_status_requires_matching_attestation_time() {
-    let mut ctx = tx::new_from_hint(@0x0, 16, 0, 0, 0);
-    let publish_time = 100;
-    let attestation_time = publish_time + shop::test_max_price_status_lag_secs();
-    let price = pyth_price::new(
-        pyth_i64::new(1_000, false),
-        10,
-        pyth_i64::new(2, true),
-        publish_time,
-    );
-    let (price_info_object, _) = create_price_info_object_for_feed_with_price_and_times(
-        PRIMARY_FEED_ID,
-        price,
-        attestation_time,
-        attestation_time,
-        pyth_price_status::new_trading(),
-        &mut ctx,
-    );
-
-    shop::test_assert_price_status_trading(&price_info_object);
-    pyth_price_info::destroy(price_info_object);
-}
-
-#[test, expected_failure(abort_code = ::sui_oracle_market::shop::EPriceStatusNotTrading)]
-fun price_status_rejects_attestation_lag() {
-    let mut ctx = tx::new_from_hint(@0x0, 18, 0, 0, 0);
-    let publish_time = 200;
-    let attestation_time = publish_time + shop::test_max_price_status_lag_secs() + 1;
-    let price = pyth_price::new(
-        pyth_i64::new(1_000, false),
-        10,
-        pyth_i64::new(2, true),
-        publish_time,
-    );
-    let (price_info_object, _) = create_price_info_object_for_feed_with_price_and_times(
-        PRIMARY_FEED_ID,
-        price,
-        attestation_time,
-        attestation_time,
-        pyth_price_status::new_trading(),
-        &mut ctx,
-    );
-
-    shop::test_assert_price_status_trading(&price_info_object);
-    pyth_price_info::destroy(price_info_object);
-}
-
-#[test, expected_failure(abort_code = ::sui_oracle_market::shop::EPriceStatusNotTrading)]
-fun price_status_rejects_halted_status_even_without_lag() {
-    let mut ctx = tx::new_from_hint(@0x0, 19, 0, 0, 0);
-    let publish_time = 300;
-    let attestation_time = publish_time;
-    let price = pyth_price::new(
-        pyth_i64::new(1_000, false),
-        10,
-        pyth_i64::new(2, true),
-        publish_time,
-    );
-    let (price_info_object, _) = create_price_info_object_for_feed_with_price_and_times(
-        PRIMARY_FEED_ID,
-        price,
-        attestation_time,
-        attestation_time,
-        pyth_price_status::new_halted(),
-        &mut ctx,
-    );
-
-    shop::test_assert_price_status_trading(&price_info_object);
-    pyth_price_info::destroy(price_info_object);
-}
-
-#[test, expected_failure(abort_code = ::sui_oracle_market::shop::EPriceStatusNotTrading)]
-fun price_status_rejects_auction_status_even_within_lag() {
-    let mut ctx = tx::new_from_hint(@0x0, 20, 0, 0, 0);
-    let publish_time = 400;
-    let attestation_time = publish_time + shop::test_max_price_status_lag_secs();
-    let price = pyth_price::new(
-        pyth_i64::new(1_000, false),
-        10,
-        pyth_i64::new(2, true),
-        publish_time,
-    );
-    let (price_info_object, _) = create_price_info_object_for_feed_with_price_and_times(
-        PRIMARY_FEED_ID,
-        price,
-        attestation_time,
-        attestation_time,
-        pyth_price_status::new_auction(),
-        &mut ctx,
-    );
-
-    shop::test_assert_price_status_trading(&price_info_object);
-    pyth_price_info::destroy(price_info_object);
-}
-
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::EPriceStatusNotTrading)]
 fun quote_rejects_attestation_lag_above_currency_cap() {
     let mut ctx = tx::new_from_hint(@0x0, 19, 0, 0, 0);
@@ -829,7 +775,6 @@ fun quote_rejects_attestation_lag_above_currency_cap() {
         price,
         attestation_time,
         attestation_time,
-        pyth_price_status::new_trading(),
         &mut ctx,
     );
 
@@ -1003,8 +948,17 @@ fun quote_view_matches_internal_math() {
         &mut ctx,
     );
     let accepted_currency_id = shop::test_last_created_id(&ctx);
-    let (_, _, _, _, decimals, _, max_age_cap, conf_cap, status_cap) =
-        shop::test_accepted_currency_values(
+    let (
+        _,
+        _,
+        _,
+        _,
+        decimals,
+        _,
+        max_age_cap,
+        conf_cap,
+        status_cap,
+    ) = shop::test_accepted_currency_values(
         &shop,
         accepted_currency_id,
     );

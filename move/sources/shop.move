@@ -6,7 +6,6 @@ use pyth::price as pyth_price;
 use pyth::price_feed as pyth_price_feed;
 use pyth::price_identifier as pyth_price_identifier;
 use pyth::price_info as pyth_price_info;
-use pyth::price_status as pyth_price_status;
 use pyth::pyth;
 use std::option as opt;
 use std::string as string;
@@ -1870,14 +1869,11 @@ fun assert_price_status_trading(
     max_price_status_lag_secs: u64,
 ) {
     let price_info = pyth_price_info::get_price_info_from_price_info_object(price_info_object);
-    let price_status = pyth_price_info::get_price_status(&price_info);
-    assert!(pyth_price_status::is_trading(&price_status), EPriceStatusNotTrading);
     let attestation_time = pyth_price_info::get_attestation_time(&price_info);
     let publish_time = pyth_price::get_timestamp(
         &pyth_price_feed::get_price(pyth_price_info::get_price_feed(&price_info)),
     );
-    // Non-trading statuses reuse the last trading publish time. If the attestation timestamp drifts
-    // beyond the tolerated skew from that publish time, treat the feed as unavailable.
+    // Treat feeds with stale attestations as unavailable even if Pyth doesn't expose an explicit status.
     assert!(attestation_time >= publish_time, EPriceStatusNotTrading);
     let attestation_lag_secs = attestation_time - publish_time;
     assert!(attestation_lag_secs <= max_price_status_lag_secs, EPriceStatusNotTrading);
