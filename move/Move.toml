@@ -8,9 +8,8 @@ edition = "2024.beta"
 
 # Oracle price feeds
 [dependencies.Pyth]
-git = "https://github.com/pyth-network/pyth-crosschain.git"
-subdir = "target_chains/sui/contracts"
-rev = "9131a23c328292d4b0d878a4497358a4caa218e9"
+local = "deps/Pyth"
+override = true
 
 # For remote import, use the `{ git = "...", subdir = "...", rev = "..." }`.
 # Revision can be a branch, a tag, and a commit hash.
