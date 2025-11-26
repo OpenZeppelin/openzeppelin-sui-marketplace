@@ -1771,10 +1771,7 @@ fun assert_discount_redemption_allowed(
     if (opt::is_some(&discount_template.expires_at)) {
         assert!(now < *opt::borrow(&discount_template.expires_at), ETemplateExpired);
     };
-    assert!(
-        discount_template.claims_issued > discount_template.redemptions,
-        ETemplateMaxedOut,
-    );
+    assert!(discount_template.claims_issued > discount_template.redemptions, ETemplateMaxedOut);
     assert!(!redemption_cap_reached(discount_template), ETemplateMaxedOut);
 }
 
