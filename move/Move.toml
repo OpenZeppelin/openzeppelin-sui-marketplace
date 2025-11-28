@@ -12,6 +12,11 @@ git = "https://github.com/pyth-network/pyth-crosschain.git"
 subdir = "target_chains/sui/contracts"
 rev = "a7ba1f97aa427a2bf5a60173a5ac60b5d0f5b2e3"
 
+[dependencies.openzeppelin_math]
+git = "https://github.com/OpenZeppelin/contracts-sui.git"
+subdir = "math/core"
+rev = "main"
+
 # For remote import, use the `{ git = "...", subdir = "...", rev = "..." }`.
 # Revision can be a branch, a tag, and a commit hash.
 # MyRemotePackage = { git = "https://some.remote/host.git", subdir = "remote/path", rev = "main" }

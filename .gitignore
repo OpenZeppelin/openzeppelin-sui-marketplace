@@ -1,1 +1,7 @@
 PLAN*.md
+node_modules
+dist
+.env
+.DS_Store
+deployment.*.json
+chain/deployments

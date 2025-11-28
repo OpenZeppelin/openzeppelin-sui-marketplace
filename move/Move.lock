@@ -2,14 +2,15 @@
 
 [move]
 version = 3
-manifest_digest = "2EC899A1EBF907BABBAE0AE7298B8A3B4DB103CDF5924F345C5D9AD7142D0241"
-deps_digest = "397E6A9F7A624706DBDFEE056CE88391A15876868FD18A88504DA74EB458D697"
+manifest_digest = "E3BAB863AF3E45B1A0B29897FF65BFE36D88585C6FF00FB30535146016529A6E"
+deps_digest = "52B406A7A21811BEF51751CF88DA0E76DAEFFEAC888D4F4060B1A72BBE7D8D35"
 dependencies = [
   { id = "Bridge", name = "Bridge" },
   { id = "MoveStdlib", name = "MoveStdlib" },
   { id = "Pyth", name = "Pyth" },
   { id = "Sui", name = "Sui" },
   { id = "SuiSystem", name = "SuiSystem" },
+  { id = "openzeppelin_math", name = "openzeppelin_math" },
 ]
 
 [[move.package]]
@@ -58,6 +59,17 @@ source = { git = "https://github.com/wormhole-foundation/wormhole.git", rev = "8
 
 dependencies = [
   { id = "Sui", name = "Sui" },
+]
+
+[[move.package]]
+id = "openzeppelin_math"
+source = { git = "https://github.com/OpenZeppelin/contracts-sui.git", rev = "main", subdir = "math/core" }
+
+dependencies = [
+  { id = "Bridge", name = "Bridge" },
+  { id = "MoveStdlib", name = "MoveStdlib" },
+  { id = "Sui", name = "Sui" },
+  { id = "SuiSystem", name = "SuiSystem" },
 ]
 
 [move.toolchain-version]
