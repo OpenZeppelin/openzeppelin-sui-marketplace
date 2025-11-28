@@ -1,6 +1,6 @@
 {
   "name": "sui-oracle-market",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "private": true,
   "description": "Scripts and tooling for deploying the Sui Oracle Market Move package.",
   "scripts": {
