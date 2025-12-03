@@ -1,60 +1,75 @@
-import { SuiClient } from '@mysten/sui.js/client';
-import { Ed25519Keypair } from '@mysten/sui.js/keypairs/ed25519';
-import { TransactionBlock } from '@mysten/sui.js/transactions';
-import type { SuiTransactionBlockResponse } from '@mysten/sui.js/client';
-import type { BuildOutput, PublishResult } from './types';
+import {
+  SuiClient,
+  type SuiTransactionBlockResponse,
+} from "@mysten/sui/client";
+import { Ed25519Keypair } from "@mysten/sui/keypairs/ed25519";
+import { Transaction } from "@mysten/sui/transactions";
+import type { BuildOutput, PublishResult } from "./types";
 
 type PublishParams = {
-  client: SuiClient;
+  fullNodeUrl: string;
   keypair: Ed25519Keypair;
   buildOutput: BuildOutput;
   gasBudget: number;
 };
 
-export async function publishPackage(params: PublishParams) {
-  const tx = new TransactionBlock();
-  const [upgradeCap] = tx.publish({
-    modules: params.buildOutput.modules,
-    dependencies: params.buildOutput.dependencies,
+export async function publishPackage({
+  fullNodeUrl,
+  buildOutput,
+  gasBudget,
+  keypair,
+}: PublishParams) {
+  const suiClient = new SuiClient({ url: fullNodeUrl });
+
+  const tx = new Transaction();
+
+  console.log({
+    modules: buildOutput.modules,
+    dependencies: buildOutput.dependencies,
   });
 
-  tx.transferObjects([upgradeCap], tx.pure(params.keypair.toSuiAddress()));
-  tx.setGasBudget(params.gasBudget);
+  // const [upgradeCap] = tx.publish({
+  //   modules: buildOutput.modules,
+  //   dependencies: buildOutput.dependencies,
+  // });
 
-  const result = await params.client.signAndExecuteTransactionBlock({
-    transactionBlock: tx,
-    signer: params.keypair,
-    options: {
-      showEffects: true,
-      showObjectChanges: true,
-      showEvents: true,
-    },
-    requestType: 'WaitForLocalExecution',
-  });
+  // tx.transferObjects([upgradeCap], keypair.toSuiAddress());
+  // tx.setGasBudget(gasBudget);
 
-  if (result.effects?.status.status !== 'success') {
-    throw new Error(`Publish failed: ${result.effects?.status.error ?? 'unknown error'}`);
-  }
+  // const result = await suiClient.signAndExecuteTransactionBlock({
+  //   transactionBlock: tx,
+  //   signer: keypair,
+  //   options: {
+  //     showEffects: true,
+  //     showObjectChanges: true,
+  //     showEvents: true,
+  //   },
+  //   requestType: "WaitForLocalExecution",
+  // });
 
-  const publishInfo = extractPublishResult(result);
-  if (!publishInfo.packageId) {
-    throw new Error('Publish succeeded but no packageId was returned.');
-  }
+  // if (result.effects?.status.status !== "success") throw new Error(
+  //     `Publish failed: ${result.effects?.status.error ?? "unknown error"}`
+  //   )
 
-  return publishInfo;
+  // const publishInfo = extractPublishResult(result);
+  // if (!publishInfo.packageId) throw new Error("Publish succeeded but no packageId was returned.")
+
+  // return publishInfo;
 }
 
-function extractPublishResult(result: SuiTransactionBlockResponse): PublishResult {
+function extractPublishResult(
+  result: SuiTransactionBlockResponse
+): PublishResult {
   const packageChange = result.objectChanges?.find(
-    (change) => change.type === 'published',
+    (change) => change.type === "published"
   ) as { packageId?: string } | undefined;
 
   const upgradeCapChange = result.objectChanges?.find(
     (change) =>
-      change.type === 'created' &&
-      'objectType' in change &&
-      typeof change.objectType === 'string' &&
-      change.objectType.endsWith('::package::UpgradeCap'),
+      change.type === "created" &&
+      "objectType" in change &&
+      typeof change.objectType === "string" &&
+      change.objectType.endsWith("::package::UpgradeCap")
   ) as { objectId?: string } | undefined;
 
   return {

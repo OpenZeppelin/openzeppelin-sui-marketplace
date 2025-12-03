@@ -1,47 +1,60 @@
-import fs from 'node:fs/promises';
-import os from 'node:os';
-import path from 'node:path';
+import { readFile } from "node:fs/promises";
 
-import { decodeSuiPrivateKey } from '@mysten/sui.js/cryptography';
-import { Ed25519Keypair } from '@mysten/sui.js/keypairs/ed25519';
+import { decodeSuiPrivateKey } from "@mysten/sui/cryptography";
+import { Ed25519Keypair } from "@mysten/sui/keypairs/ed25519";
+import { fromBase64 } from "@mysten/sui/utils";
 
 type LoadKeypairOptions = {
   keystorePath?: string;
-  accountIndex: number;
-  envPrivateKey?: string | null;
-  envMnemonic?: string | null;
+  accountIndex?: number;
+  privateKey?: string;
+  mnemonic?: string;
 };
 
-export async function loadKeypair(options: LoadKeypairOptions) {
-  const envPrivateKey = options.envPrivateKey ?? null;
-  if (envPrivateKey) {
-    return keypairFromSecret(envPrivateKey);
-  }
+export const loadKeypair = async ({
+  privateKey,
+  mnemonic,
+  keystorePath,
+  accountIndex,
+}: LoadKeypairOptions) => {
+  if (privateKey) return keypairFromSecret(privateKey);
+  if (mnemonic) return Ed25519Keypair.deriveKeypair(mnemonic);
 
-  const envMnemonic = options.envMnemonic ?? null;
-  if (envMnemonic) {
-    return Ed25519Keypair.deriveKeypair(envMnemonic);
-  }
-
-  const keystorePath =
-    options.keystorePath ?? path.join(os.homedir(), '.sui', 'sui_config', 'sui.keystore');
-
-  const keystoreRaw = await fs.readFile(keystorePath, 'utf8');
-  const entries: string[] = JSON.parse(keystoreRaw);
-  const entry = entries[options.accountIndex];
-  if (!entry) {
-    throw new Error(
-      `Keystore entry at index ${options.accountIndex} not found in ${keystorePath}.`,
+  if (keystorePath && accountIndex?.toString())
+    return keypairFromSecret(
+      await getKeystoreEntry(keystorePath, accountIndex)
     );
-  }
 
-  return keypairFromSecret(entry);
-}
+  throw new Error(
+    `Could not get keypair from\nPrivate Key: ${privateKey}\nMnemonic: ${mnemonic}\nKeystore path: ${keystorePath}\nAccount Index: ${accountIndex}\nEnsure you are using either a private key, mnemonic or keystore to properly load keypair`
+  );
+};
 
-function keypairFromSecret(secret: string) {
-  const decoded = decodeSuiPrivateKey(secret.trim());
-  if (decoded.schema !== 'ED25519') {
-    throw new Error('Only ED25519 keys are supported for publishing.');
-  }
+const getKeystoreEntry = async (keystorePath: string, accountIndex: number) => {
+  const keystoreRaw = await readFile(keystorePath, "utf8");
+
+  const keystoreEntries: string[] = JSON.parse(keystoreRaw);
+  const accountEntry = keystoreEntries[accountIndex];
+
+  if (!accountEntry)
+    throw new Error(
+      `Keystore entry at index ${accountIndex} not found in ${keystorePath}.`
+    );
+
+  return accountEntry;
+};
+
+const isBech32PrivateKey = (value: string): boolean =>
+  value.startsWith("suiprivkey1");
+
+const keypairFromBech32 = (bech32Key: string): Ed25519Keypair => {
+  const decoded = decodeSuiPrivateKey(bech32Key.trim());
+
   return Ed25519Keypair.fromSecretKey(decoded.secretKey);
-}
+};
+
+const keypairFromSecret = async (secret: string) => {
+  if (isBech32PrivateKey(secret)) return keypairFromBech32(secret);
+
+  return Ed25519Keypair.fromSecretKey(fromBase64(secret.trim().slice(1)));
+};
