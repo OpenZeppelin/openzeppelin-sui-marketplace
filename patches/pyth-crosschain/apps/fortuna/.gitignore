@@ -1,0 +1,9 @@
+/target
+*config.yaml
+*secret*
+*private-key*
+.envrc
+fortuna.db*
+.env*
+
+dist/

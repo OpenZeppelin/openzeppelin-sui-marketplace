@@ -1,0 +1,9 @@
+[package]
+name = "local_mock_coin"
+edition = "2024.beta"
+
+[dependencies]
+Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework/packages/sui-framework", rev = "4e8b6eda7d6411d80c62f39ac8a4f028e8d174c4" }
+
+[addresses]
+local_mock_coin = "0x0"

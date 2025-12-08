@@ -1,0 +1,18 @@
+name: Publish Pyth SDK for Cosmwasm to crates.io
+
+on:
+  push:
+    tags:
+      - pyth-sdk-cw-v*
+jobs:
+  publish-pyth-sdk-cw:
+    name: Publish Pyth SDK CW
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v2
+
+      - run: cargo publish --token ${CARGO_REGISTRY_TOKEN}
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        working-directory: "target_chains/cosmwasm/sdk/rust"

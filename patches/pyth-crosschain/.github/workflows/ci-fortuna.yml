@@ -1,0 +1,28 @@
+name: Check Fortuna
+
+on:
+  pull_request:
+    paths:
+      - .github/workflows/ci-fortuna.yml
+      - apps/fortuna/**
+      - target_chains/ethereum/entropy_sdk/solidity/abis/**
+  push:
+    branches: [main]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/fortuna
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+      - name: Format check
+        run: cargo fmt --all -- --check
+        if: success() || failure()
+      - name: Clippy check
+        run: cargo clippy -p fortuna --all-targets -- --deny warnings
+        if: success() || failure()
+      - name: Run tests
+        run: cargo test -p fortuna -- --test-threads=1
+        if: success() || failure()

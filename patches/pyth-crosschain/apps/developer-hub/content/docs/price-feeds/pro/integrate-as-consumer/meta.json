@@ -1,0 +1,8 @@
+{
+  "title": "Integrate as a Consumer",
+  "pages": [
+    "[in SVM programs](/price-feeds/pro/integrate-as-consumer/svm)",
+    "[in EVM contracts](/price-feeds/pro/integrate-as-consumer/evm)"
+  ],
+  "defaultOpen": false
+}

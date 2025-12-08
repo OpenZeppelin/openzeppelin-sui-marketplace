@@ -1,7 +1,10 @@
 import { getFullnodeUrl } from "@mysten/sui/client";
 import type { NetworkName } from "./types";
 
-export function resolveRpcUrl(network: NetworkName, RpcUrlOverride?: string) {
+export const resolveRpcUrl = (
+  network: NetworkName,
+  RpcUrlOverride?: string
+) => {
   if (RpcUrlOverride) return RpcUrlOverride;
   switch (network) {
     case "localnet":
@@ -14,9 +17,9 @@ export function resolveRpcUrl(network: NetworkName, RpcUrlOverride?: string) {
     default:
       throw new Error(`Unsupported network ${network as string}`);
   }
-}
+};
 
-export function buildExplorerUrl(digest: string, network: NetworkName) {
+export const buildExplorerUrl = (digest: string, network: NetworkName) => {
   const explorerNetwork = network === "mainnet" ? "" : `?network=${network}`;
   return `https://explorer.sui.io/txblock/${digest}${explorerNetwork}`;
-}
+};

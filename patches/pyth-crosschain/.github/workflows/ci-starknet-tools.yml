@@ -1,0 +1,42 @@
+name: Check Starknet Tools
+
+on:
+  pull_request:
+    paths:
+      - target_chains/starknet/tools/**
+  push:
+    branches: [main]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: target_chains/starknet/tools/test_vaas
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+      - name: Install Scarb
+        uses: software-mansion/setup-scarb@v1
+        with:
+          tool-versions: target_chains/starknet/contracts/.tool-versions
+      - name: Install Starkli
+        run: |
+          curl https://get.starkli.sh | sh
+          . ~/.config/.starkli/env
+          starkliup -v $(awk '/starkli/{print $2}' ../../contracts/.tool-versions)
+          echo "${HOME}/.starkli/bin" >> "${GITHUB_PATH}"
+      - name: Check formatting
+        run: cargo fmt -- --check
+      - name: Run clippy
+        run: cargo clippy -p test_vaas --all-targets -- --deny warnings
+      - name: Run generate_keypair binary
+        run: cargo run --bin generate_keypair
+      - name: Check test data
+        run: |
+          . ~/.config/.starkli/env && cargo run --bin generate_test_data > ../../contracts/data.cairo
+          cd ../../contracts && scarb fmt data.cairo
+          if ! diff ./tests/data.cairo data.cairo; then
+            >&2 echo "Re-run generate_test_data to update data.cairo"
+            exit 1
+          fi
+          rm data.cairo

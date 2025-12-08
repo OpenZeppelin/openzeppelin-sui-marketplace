@@ -1,0 +1,60 @@
+@use "../theme";
+
+.singleToggleGroup {
+  gap: theme.spacing(2);
+
+  @include theme.row;
+
+  .toggleButton {
+    position: relative;
+
+    .bubble {
+      position: absolute;
+      inset: 0;
+      border-radius: theme.button-border-radius("sm");
+      background-color: theme.color("button", "solid", "background", "normal");
+      outline: 4px solid transparent;
+      outline-offset: 0;
+      z-index: -1;
+      transition-property: background-color, outline-color;
+      transition-duration: 100ms;
+      transition-timing-function: linear;
+    }
+
+    &[data-rounded] {
+      border-radius: theme.border-radius("full");
+
+      .bubble {
+        border-radius: theme.border-radius("full");
+      }
+    }
+
+    &[data-selected] {
+      color: theme.color("button", "solid", "foreground");
+      pointer-events: none;
+
+      &[data-selectable] {
+        pointer-events: auto;
+        -webkit-tap-highlight-color: transparent;
+
+        &[data-hovered] .bubble {
+          background-color: theme.color(
+            "button",
+            "solid",
+            "background",
+            "hover"
+          );
+        }
+
+        &[data-pressed] .bubble {
+          background-color: theme.color(
+            "button",
+            "solid",
+            "background",
+            "active"
+          );
+        }
+      }
+    }
+  }
+}

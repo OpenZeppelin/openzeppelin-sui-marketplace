@@ -1,0 +1,11 @@
+{
+  "pages": [
+    "pythnet",
+    "oracle-program",
+    "cross-chain",
+    "fees",
+    "hermes",
+    "price-aggregation",
+    "ema-price-aggregation"
+  ]
+}

@@ -1,0 +1,42 @@
+@use "../theme";
+
+.tabs {
+  border-bottom: 1px solid theme.color("border");
+
+  .tabList {
+    display: flex;
+    flex-flow: row nowrap;
+    gap: theme.spacing(2);
+    padding-bottom: theme.spacing(1);
+
+    @include theme.max-width;
+
+    .tab {
+      position: relative;
+      flex: 1 0 0;
+      width: 0;
+
+      @include theme.breakpoint("sm") {
+        flex: unset;
+        width: unset;
+      }
+
+      .underline {
+        position: absolute;
+        bottom: -#{theme.spacing(1.5)};
+        left: 0;
+        width: 100%;
+        height: theme.spacing(0.5);
+        background: theme.color("foreground");
+      }
+
+      &[data-selected] {
+        pointer-events: none;
+
+        &[data-selectable] {
+          pointer-events: auto;
+        }
+      }
+    }
+  }
+}

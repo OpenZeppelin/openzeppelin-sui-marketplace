@@ -4,7 +4,8 @@
   "private": true,
   "description": "Scripts and tooling for deploying the Sui Oracle Market Move package.",
   "scripts": {
-    "publish:package": "ts-node --transpile-only src/scripts/chain/publish-package.ts"
+    "publish:package": "ts-node --transpile-only src/scripts/chain/publish-package.ts",
+    "setup:local": "ts-node --transpile-only src/scripts/chain/setup-local.ts"
   },
   "dependencies": {
     "@mysten/sui": "^1.45.0",

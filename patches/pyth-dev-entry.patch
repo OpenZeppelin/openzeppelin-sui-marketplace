@@ -1,0 +1,46 @@
+diff --git a/target_chains/sui/contracts/sources/price_info.move b/target_chains/sui/contracts/sources/price_info.move
+index 8f5cea134..b5fd0e9cb 100644
+--- a/target_chains/sui/contracts/sources/price_info.move
++++ b/target_chains/sui/contracts/sources/price_info.move
+@@
+-module pyth::price_info;
++module pyth::price_info {
+@@
+-use pyth::price_feed::{Self, PriceFeed};
++use pyth::price_feed::{Self, PriceFeed};
++use pyth::price::Price;
+ use pyth::price_identifier::PriceIdentifier;
+ use sui::coin::{Self, Coin};
+ use sui::dynamic_object_field;
+ use sui::object::{Self, UID, ID};
+ use sui::sui::SUI;
+@@
+ 
+     /// Dev-only entry point to mint a PriceInfoObject without an off-chain VAA.
+     /// Useful for localnet/mock environments; DO NOT use on shared networks.
+-    public entry fun dev_new_price_info_object(
++    public fun dev_new_price_info_object(
+         price_info: PriceInfo,
+         ctx: &mut TxContext
+     ): PriceInfoObject {
+         new_price_info_object(price_info, ctx)
+     }
+ 
+     /// Convenience wrapper that builds a PriceFeed and PriceInfo in one call.
+     /// `price` and `ema_price` can be the same for simple mocks.
+-    public entry fun dev_new_price_info_object_with_feed(
++    public fun dev_new_price_info_object_with_feed(
+         price_identifier: PriceIdentifier,
+         price: Price,
+         ema_price: Price,
+         attestation_time: u64,
+         arrival_time: u64,
+@@
+     price_info_object.price_info =
+         new_price_info(
+             price_info.attestation_time,
+             price_info.arrival_time,
+             price_info.price_feed,
+         );
+ }
++}

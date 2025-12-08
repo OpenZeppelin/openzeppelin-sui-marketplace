@@ -1,0 +1,19 @@
+[package]
+name = "remote-executor-cli"
+version = "0.1.0"
+edition = "2018"
+
+[dependencies]
+clap = {version ="3.2.22", features = ["derive"]}
+remote-executor = {path = "../programs/remote-executor/"}
+solana-program = "1.10.31"
+solana-client = "1.10.31"
+solana-sdk = "1.10.31"
+anchor-client = "0.30.1"
+shellexpand = "2.1.2"
+anyhow = "1.0.65"
+base64 = "0.13.0"
+wormhole-solana = { git = "https://github.com/guibescos/wormhole-solana", rev="f14b3b54c1e37e1aaf8c2ac2a5e236832ffdb3c2"}
+wormhole-sdk = { git = "https://github.com/wormhole-foundation/wormhole", tag = "v2.17.1" }
+serde_wormhole = { git = "https://github.com/wormhole-foundation/wormhole", tag = "v2.17.1"}
+hex = "0.4.3"

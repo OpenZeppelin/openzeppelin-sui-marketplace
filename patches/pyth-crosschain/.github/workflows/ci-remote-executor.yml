@@ -1,0 +1,34 @@
+name: Check Remote Executor
+
+on:
+  pull_request:
+    paths:
+      - .github/workflows/ci-remote-executor.yml
+      - governance/remote_executor/**
+  push:
+    branches: [main]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: governance/remote_executor
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/setup-python@v2
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          cache-workspaces: "governance/remote_executor -> target"
+      - name: Install Solana
+        run: |
+          sh -c "$(curl -sSfL https://release.anza.xyz/v1.18.23/install)"
+          echo "/home/runner/.local/share/solana/install/active_release/bin" >> $GITHUB_PATH
+      - name: Format check
+        run: cargo fmt --all -- --check
+        if: success() || failure()
+      - name: Clippy check
+        run: cargo clippy --all-targets -- --deny warnings
+        if: success() || failure()
+      - name: Run executor tests
+        run: cargo test-sbf
+        if: success() || failure()

@@ -1,0 +1,6 @@
+.env*.local
+.source
+dist/
+
+# Ai Migration
+.ai/**

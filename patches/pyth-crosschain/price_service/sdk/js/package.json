@@ -1,0 +1,87 @@
+{
+  "name": "@pythnetwork/price-service-sdk",
+  "version": "1.9.0",
+  "description": "Pyth price service SDK",
+  "homepage": "https://pyth.network",
+  "main": "./dist/cjs/index.cjs",
+  "types": "./dist/cjs/index.d.ts",
+  "files": [
+    "dist/**/*"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/pyth-network/pyth-crosschain.git",
+    "directory": "price_service/sdk/js"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "ts-duality",
+    "gen-ts-schema": "quicktype --src-lang schema src/schemas/price_feed.json -o src/schemas/PriceFeed.ts --raw-type any --converters all-objects && prettier --write \"src/schemas/*.ts\"",
+    "test:unit": "jest",
+    "test:lint": "eslint src/ --max-warnings 0",
+    "fix:format": "prettier --write \"src/**/*.ts\"",
+    "fix:lint": "eslint src/ --fix --max-warnings 0",
+    "prepublishOnly": "pnpm run build && pnpm test:unit && pnpm run test:lint",
+    "preversion": "pnpm run test:lint",
+    "version": "pnpm run format && git add -A src",
+    "clean": "rm -rf ./dist"
+  },
+  "keywords": [
+    "pyth",
+    "oracle"
+  ],
+  "license": "Apache-2.0",
+  "devDependencies": {
+    "@cprussin/eslint-config": "catalog:",
+    "@pythnetwork/jest-config": "workspace:",
+    "@types/bn.js": "^5.1.5",
+    "@types/jest": "^29.4.0",
+    "eslint": "catalog:",
+    "jest": "^29.4.0",
+    "prettier": "catalog:",
+    "quicktype": "^23.0.76"
+  },
+  "dependencies": {
+    "bn.js": "^5.2.1"
+  },
+  "engines": {
+    "node": ">=22.14.0"
+  },
+  "type": "module",
+  "exports": {
+    "./AccumulatorUpdateData": {
+      "require": {
+        "types": "./dist/cjs/AccumulatorUpdateData.d.ts",
+        "default": "./dist/cjs/AccumulatorUpdateData.cjs"
+      },
+      "import": {
+        "types": "./dist/esm/AccumulatorUpdateData.d.ts",
+        "default": "./dist/esm/AccumulatorUpdateData.mjs"
+      }
+    },
+    ".": {
+      "require": {
+        "types": "./dist/cjs/index.d.ts",
+        "default": "./dist/cjs/index.cjs"
+      },
+      "import": {
+        "types": "./dist/esm/index.d.ts",
+        "default": "./dist/esm/index.mjs"
+      }
+    },
+    "./schemas/PriceFeed": {
+      "require": {
+        "types": "./dist/cjs/schemas/PriceFeed.d.ts",
+        "default": "./dist/cjs/schemas/PriceFeed.cjs"
+      },
+      "import": {
+        "types": "./dist/esm/schemas/PriceFeed.d.ts",
+        "default": "./dist/esm/schemas/PriceFeed.mjs"
+      }
+    },
+    "./package.json": "./package.json"
+  },
+  "module": "./dist/esm/index.mjs"
+}

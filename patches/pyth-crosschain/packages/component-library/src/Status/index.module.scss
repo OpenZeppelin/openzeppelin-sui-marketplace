@@ -1,0 +1,84 @@
+@use "../theme";
+
+.status {
+  display: inline-flex;
+  flex-flow: row nowrap;
+  align-items: center;
+  justify-content: center;
+  border-radius: theme.border-radius("3xl");
+  transition-property: color, background-color, border-color;
+  transition-duration: 100ms;
+  transition-timing-function: linear;
+  white-space: nowrap;
+  border-width: 1px;
+  border-style: solid;
+
+  .dot {
+    border-radius: theme.border-radius("full");
+    transition: background-color 100ms linear;
+  }
+
+  &[data-size="xs"] {
+    height: theme.spacing(4);
+    padding: theme.spacing(1);
+    padding-right: theme.spacing(2);
+    font-size: theme.font-size("xxs");
+    font-weight: theme.font-weight("medium");
+    gap: theme.spacing(1);
+
+    .dot {
+      width: theme.spacing(2);
+      height: theme.spacing(2);
+    }
+  }
+
+  &[data-size="md"] {
+    height: theme.spacing(6);
+    padding: theme.spacing(1.5);
+    padding-right: theme.spacing(3);
+    font-size: theme.font-size("xs");
+    font-weight: theme.font-weight("medium");
+    gap: theme.spacing(1.5);
+
+    .dot {
+      width: theme.spacing(3);
+      height: theme.spacing(3);
+    }
+  }
+
+  @each $variant in ("neutral", "info", "warning", "error", "data", "success") {
+    &[data-variant="#{$variant}"] {
+      color: theme.color("states", $variant, "normal");
+
+      .dot {
+        background-color: theme.color("states", $variant, "normal");
+      }
+
+      &[data-style="outline"] {
+        border-color: theme.color("states", $variant, "border");
+      }
+
+      &[data-style="filled"] {
+        border-color: theme.color("states", $variant, "background");
+        background-color: theme.color("states", $variant, "background");
+      }
+    }
+  }
+
+  &[data-variant="disabled"] {
+    color: theme.color("button", "disabled", "foreground");
+
+    .dot {
+      background-color: theme.color("button", "disabled", "foreground");
+    }
+
+    &[data-style="outline"] {
+      border-color: theme.color("button", "disabled", "foreground");
+    }
+
+    &[data-style="filled"] {
+      border-color: theme.color("button", "disabled", "background");
+      background-color: theme.color("button", "disabled", "background");
+    }
+  }
+}

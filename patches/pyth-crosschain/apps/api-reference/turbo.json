@@ -1,0 +1,13 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "extends": ["//"],
+  "tasks": {
+    "build:vercel": {
+      "env": [
+        "WALLETCONNECT_PROJECT_ID",
+        "AMPLITUDE_API_KEY",
+        "GOOGLE_ANALYTICS_ID"
+      ]
+    }
+  }
+}
