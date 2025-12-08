@@ -192,9 +192,19 @@ const extractDependencies = (
   buildInfoRaw: string,
   packageName: string
 ): string[] => {
+  // Only consider address aliases listed under `address_alias_instantiation` to
+  // avoid accidentally treating fields like `source_digest` as dependencies.
+  const addressSectionMatch = buildInfoRaw.match(
+    /address_alias_instantiation:\s*\n((?:\s+[A-Za-z0-9_]+\s*:\s*"?[0-9a-fA-F]{64}"?\s*\n)+)/
+  );
+
+  const dependenciesBlock = addressSectionMatch?.[1] ?? "";
   const dependencyMatches = [
-    ...buildInfoRaw.matchAll(/(\w+):\s*"?([0-9a-fA-F]{64})"?/g),
+    ...dependenciesBlock.matchAll(
+      /^\s+([A-Za-z0-9_]+)\s*:\s*"?([0-9a-fA-F]{64})"?/gm
+    ),
   ];
+
   return dependencyMatches
     .map(([, alias, addr]) => ({ alias, addr }))
     .filter(
@@ -202,6 +212,6 @@ const extractDependencies = (
         alias.toLowerCase() !== packageName.toLowerCase() &&
         alias.toLowerCase() !== "pyth"
     )
-    .map(({ addr }) => `0x${addr}`)
+    .map(({ addr }) => `0x${addr.toLowerCase()}`)
     .filter((addr, idx, arr) => arr.indexOf(addr) === idx);
 };
