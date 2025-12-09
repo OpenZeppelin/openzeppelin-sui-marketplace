@@ -14,6 +14,7 @@ export const simpleLogKeyValueColor =
 
 export const logSimpleBlue = simpleLogKeyValueColor("blue");
 export const logKeyValueBlue = logKeyValueColor("blue");
+export const logSimpleGreen = simpleLogKeyValueColor("green");
 export const logKeyValueGreen = logKeyValueColor("green");
 export const logKeyValueYellow = logKeyValueColor("yellow");
 export const logKeyValueRed = logKeyValueColor("red");

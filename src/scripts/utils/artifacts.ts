@@ -60,30 +60,3 @@ export const readArtifact = async <TArtifact>(
     );
   }
 };
-
-/**
- * Upserts a publish artifact by package ID or package path to avoid duplicates.
- */
-
-// addOrReplacePublishArtifact(
-//       deploymentArtifacts.artifacts,
-//       mockCoinPublishArtifact
-//     );
-
-//TODO review write here if needed
-// export const addOrReplacePublishArtifact = (
-//   artifacts: PublishArtifact[],
-//   next: PublishArtifact
-// ) => {
-//   const currentArtifactIndex = artifacts.findIndex(
-//     (item) =>
-//       item.packageId === next.packageId || item.packagePath === next.packagePath
-//   );
-
-//   if (currentArtifactIndex >= 0) {
-//     artifacts[currentArtifactIndex] = next;
-//     return;
-//   }
-
-//   artifacts.push(next);
-// };

@@ -1,3 +1,4 @@
+import { normalizeSuiObjectId } from "@mysten/sui/utils";
 import { writeArtifact } from "./artifacts";
 import { getArtifactPath } from "./constants";
 

@@ -4,7 +4,9 @@ import path from "node:path";
 import {
   SuiClient,
   type SuiObjectResponse,
+  type SuiObjectDataOptions,
   type SuiTransactionBlockResponse,
+  SuiObjectData,
 } from "@mysten/sui/client";
 import { Ed25519Keypair } from "@mysten/sui/keypairs/ed25519";
 import { deriveObjectID, normalizeSuiObjectId } from "@mysten/sui/utils";
@@ -13,8 +15,11 @@ import { hideBin } from "yargs/helpers";
 
 import { ensureFoundedAddress } from "../utils/address";
 import { readArtifact } from "../utils/artifacts";
-import { DEFAULT_KEYSTORE_PATH, getDeploymentArtifactPath } from "../utils/constants";
-import { hexToBytes } from "../utils/hex";
+import {
+  DEFAULT_KEYSTORE_PATH,
+  getDeploymentArtifactPath,
+  SUI_COIN_REGISTRY_ID,
+} from "../utils/constants";
 import { loadKeypair } from "../utils/keypair";
 import { logKeyValueBlue, logKeyValueGreen, logWarning } from "../utils/log";
 import { resolveRpcUrl } from "../utils/network";
@@ -27,8 +32,9 @@ import {
   type MockPriceFeedConfig,
 } from "../utils/pyth";
 import {
+  assertTransactionSuccess,
   findCreatedObjectIds,
-  newTx,
+  newTransaction,
   signAndExecute,
 } from "../utils/transactions";
 import type { NetworkName, PublishArtifact } from "../utils/types";
@@ -37,19 +43,18 @@ import {
   mockArtifactPath,
   writeMockArtifact,
 } from "../utils/mock";
+import { getSuiSharedObject, WrappedSuiSharedObject } from "../utils/object";
 
 type SetupLocalCliArgs = {
   keystorePath: string;
   accountIndex: number;
   coinContractPath: string;
   existingCoinPackageId?: string;
+  existingCoins?: CoinArtifact[];
   pythContractPath: string;
   existingPythPackageId?: string;
+  existingPriceFeeds?: PriceFeedArtifact[];
   rePublish: boolean;
-  shopPackageId?: string;
-  shopUpgradeCapId?: string;
-  shopPackagePath: string;
-  shopPublisherId?: string;
 };
 
 // Where the local Pyth stub lives.
@@ -64,41 +69,14 @@ const DEFAULT_COIN_CONTRACT_PATH = path.join(
   "coin-mock"
 );
 
-// ID of the shared CoinRegistry object.
-const COIN_REGISTRY_ID = normalizeSuiObjectId(
-  "0x000000000000000000000000000000000000000000000000000000000000000c"
-);
-
 type LabeledPriceFeedConfig = MockPriceFeedConfig & { label: string };
 type CoinArtifact = NonNullable<MockArtifact["coins"]>[number];
 type PriceFeedArtifact = NonNullable<MockArtifact["priceFeeds"]>[number];
-type ShopArtifact = NonNullable<MockArtifact["shop"]>;
-type AcceptedCurrencyArtifact =
-  NonNullable<MockArtifact["acceptedCurrencies"]>[number];
-type ItemListingArtifact = NonNullable<MockArtifact["itemListings"]>[number];
+
 type CoinSeed = {
   label: string;
   coinType: string;
   initTarget: string;
-};
-type SharedObjectRef = {
-  objectId: string;
-  initialSharedVersion: number | string | bigint;
-  mutable: boolean;
-};
-type AcceptedCurrencySeed = {
-  label: string;
-  coinLabel: string;
-  feedLabel: string;
-  maxPriceAgeSecsCap?: number;
-  maxConfidenceRatioBpsCap?: number;
-  maxPriceStatusLagSecsCap?: number;
-};
-type ItemListingSeed = {
-  label: string;
-  itemType: string;
-  basePriceUsdCents: number;
-  stock: number;
 };
 
 // Two sample feeds to seed Pyth price objects with.
@@ -121,35 +99,12 @@ const DEFAULT_FEEDS: LabeledPriceFeedConfig[] = [
   },
 ];
 
-const DEFAULT_ACCEPTED_CURRENCIES: AcceptedCurrencySeed[] = [
-  {
-    label: "MockUsdCurrency",
-    coinLabel: "LocalMockUsd",
-    feedLabel: "MOCK_USD_FEED",
-  },
-  {
-    label: "MockBtcCurrency",
-    coinLabel: "LocalMockBtc",
-    feedLabel: "MOCK_BTC_FEED",
-  },
-];
-
-const DEFAULT_ITEM_LISTINGS: ItemListingSeed[] = [
-  {
-    label: "Cool Bike",
-    itemType: "vector<u8>",
-    basePriceUsdCents: 125_00,
-    stock: 50,
-  },
-];
-
 const DEFAULT_TX_GAS_BUDGET = 100_000_000;
 
 runSuiScript(async () => {
   const localNetwork: NetworkName = "localnet";
 
   const mockArtifact = await readArtifact<MockArtifact>(mockArtifactPath, {});
-  const deploymentArtifacts = await readDeploymentArtifacts(localNetwork);
   const cliOptions = await parseSetupLocalCliArgs(mockArtifact ?? {});
   const fullNodeUrl = resolveRpcUrl(localNetwork);
 
@@ -170,131 +125,42 @@ runSuiScript(async () => {
     suiClient
   );
 
-  const sharedRefs = await resolveSharedObjectRefs(suiClient);
-
-  const coins = await ensureMockCoins({
-    coinPackageId,
-    owner: signerAddress,
-    suiClient,
-    signer: keypair,
-    registryRef: sharedRefs.coinRegistryRef,
-  });
-
-  await writeMockArtifact(mockArtifactPath, {
-    coins,
-  });
-
-  const priceFeeds = await ensurePriceFeeds({
-    pythPackageId,
-    suiClient,
-    signer: keypair,
-    clockRef: sharedRefs.clockRef,
-    // align with cli output pattern
-    existingPriceFeeds:
-      cliOptions.rePublish || !mockArtifact?.priceFeeds
-        ? []
-        : mockArtifact.priceFeeds,
-  });
-
-  await writeMockArtifact(mockArtifactPath, {
-    priceFeeds,
-  });
-
-  const shopConfig = resolveShopConfig({
-    cliOptions,
-    mockArtifact,
-    deploymentArtifacts,
-  });
-
-  const publisherId = await ensurePublisher({
-    suiClient,
-    signerAddress,
-    signer: keypair,
-    shopPackageId: shopConfig.shopPackageId,
-    upgradeCapId: shopConfig.shopUpgradeCapId,
-    existingPublisherId: shopConfig.shopPublisherId,
-  });
-
-  const shop = await ensureShop({
-    suiClient,
-    signer: keypair,
-    shopPackageId: shopConfig.shopPackageId,
-    publisherId,
-    existingShop: cliOptions.rePublish ? undefined : mockArtifact?.shop,
-  });
-  const shopSharedRef = await fetchSharedObjectRef(
-    suiClient,
-    shop.shopId,
-    true
+  const { coinRegistryObject, clockObject } = await resolveRegistryAndClockRefs(
+    suiClient
   );
 
-  await writeMockArtifact(mockArtifactPath, {
-    shop: {
-      packageId: shopConfig.shopPackageId,
-      upgradeCapId: shopConfig.shopUpgradeCapId,
-      publisherId,
-      shopId: shop.shopId,
-      shopOwnerCapId: shop.shopOwnerCapId,
-      shopInitialSharedVersion: Number(shopSharedRef.initialSharedVersion),
-    },
-  });
+  const coins =
+    cliOptions.existingCoins ||
+    (await ensureMockCoins({
+      coinPackageId,
+      owner: signerAddress,
+      suiClient,
+      signer: keypair,
+      coinRegistryObject,
+    }));
 
-  const acceptedCurrencies = await ensureAcceptedCurrencies({
-    suiClient,
-    signer: keypair,
-    shopPackageId: shopConfig.shopPackageId,
-    shopSharedRef,
-    ownerCapId: shop.shopOwnerCapId,
+  await writeMockArtifact(mockArtifactPath, {
     coins,
+  });
+
+  const priceFeeds =
+    cliOptions.existingPriceFeeds ||
+    (await ensurePriceFeeds({
+      pythPackageId,
+      suiClient,
+      signer: keypair,
+      clockObject,
+      existingPriceFeeds: cliOptions.existingPriceFeeds || [],
+    }));
+
+  await writeMockArtifact(mockArtifactPath, {
     priceFeeds,
-    rePublish: cliOptions.rePublish,
-    existingAcceptedCurrencies: cliOptions.rePublish
-      ? []
-      : mockArtifact.acceptedCurrencies ?? [],
-  });
-
-  await writeMockArtifact(mockArtifactPath, {
-    acceptedCurrencies,
-    shop: {
-      packageId: shopConfig.shopPackageId,
-      upgradeCapId: shopConfig.shopUpgradeCapId,
-      publisherId,
-      shopId: shop.shopId,
-      shopOwnerCapId: shop.shopOwnerCapId,
-      shopInitialSharedVersion: Number(shopSharedRef.initialSharedVersion),
-    },
-  });
-
-  const itemListings = await ensureItemListings({
-    suiClient,
-    signer: keypair,
-    shopPackageId: shopConfig.shopPackageId,
-    shopSharedRef,
-    ownerCapId: shop.shopOwnerCapId,
-    rePublish: cliOptions.rePublish,
-    existingListings: cliOptions.rePublish
-      ? []
-      : mockArtifact.itemListings ?? [],
-  });
-
-  await writeMockArtifact(mockArtifactPath, {
-    itemListings,
-    shop: {
-      packageId: shopConfig.shopPackageId,
-      upgradeCapId: shopConfig.shopUpgradeCapId,
-      publisherId,
-      shopId: shop.shopId,
-      shopOwnerCapId: shop.shopOwnerCapId,
-      shopInitialSharedVersion: Number(shopSharedRef.initialSharedVersion),
-    },
   });
 
   logKeyValueGreen("Pyth package")(pythPackageId);
   logKeyValueGreen("Coin package")(coinPackageId);
-  logKeyValueBlue("Feeds")(priceFeeds.length);
-  logKeyValueBlue("Coins")(coins.length);
-  logKeyValueBlue("Accepted currencies")(acceptedCurrencies.length);
-  logKeyValueBlue("Listings")(itemListings.length);
+  logKeyValueGreen("Feeds")(JSON.stringify(priceFeeds));
+  logKeyValueGreen("Coins")(JSON.stringify(coins));
 });
 
 const publishMockPackages = async (
@@ -376,56 +242,15 @@ const readDeploymentArtifacts = async (
   }
 };
 
-const resolveShopConfig = ({
-  cliOptions,
-  mockArtifact,
-  deploymentArtifacts,
-}: {
-  cliOptions: SetupLocalCliArgs;
-  mockArtifact: MockArtifact;
-  deploymentArtifacts: PublishArtifact[];
-}) => {
-  const deployment = findDeploymentByPathOrId(
-    deploymentArtifacts,
-    cliOptions.shopPackagePath,
-    cliOptions.shopPackageId ?? mockArtifact.shop?.packageId
-  );
-
-  const resolvedPackageId =
-    cliOptions.shopPackageId ??
-    mockArtifact.shop?.packageId ??
-    deployment?.packageId;
-
-  if (!resolvedPackageId)
-    throw new Error(
-      "Shop package ID is required. Publish the Move package or pass --shop-package-id."
-    );
-
-  const normalizedPackageId = normalizeSuiObjectId(resolvedPackageId);
-  const resolvedUpgradeCapId =
-    cliOptions.shopUpgradeCapId ??
-    mockArtifact.shop?.upgradeCapId ??
-    deployment?.upgradeCap;
-  const resolvedPublisherId =
-    cliOptions.shopPublisherId ?? mockArtifact.shop?.publisherId;
-
-  return {
-    shopPackageId: normalizedPackageId,
-    shopUpgradeCapId: resolvedUpgradeCapId
-      ? normalizeSuiObjectId(resolvedUpgradeCapId)
-      : undefined,
-    shopPublisherId: resolvedPublisherId
-      ? normalizeSuiObjectId(resolvedPublisherId)
-      : undefined,
-  };
-};
-
-const resolveSharedObjectRefs = async (suiClient: SuiClient) => {
-  const [coinRegistryRef, clockRef] = await Promise.all([
-    fetchSharedObjectRef(suiClient, COIN_REGISTRY_ID, true),
-    fetchSharedObjectRef(suiClient, SUI_CLOCK_ID, false),
+const resolveRegistryAndClockRefs = async (suiClient: SuiClient) => {
+  const [coinRegistryObject, clockObject] = await Promise.all([
+    getSuiSharedObject(
+      { objectId: SUI_COIN_REGISTRY_ID, mutable: true },
+      suiClient
+    ),
+    getSuiSharedObject({ objectId: SUI_CLOCK_ID }, suiClient),
   ]);
-  return { coinRegistryRef, clockRef };
+  return { coinRegistryObject, clockObject };
 };
 
 const ensureMockCoins = async ({
@@ -433,13 +258,13 @@ const ensureMockCoins = async ({
   owner,
   suiClient,
   signer,
-  registryRef,
+  coinRegistryObject,
 }: {
   coinPackageId: string;
   owner: string;
   suiClient: SuiClient;
   signer: Ed25519Keypair;
-  registryRef: SharedObjectRef;
+  coinRegistryObject: WrappedSuiSharedObject;
 }): Promise<CoinArtifact[]> => {
   const seeds = buildCoinSeeds(coinPackageId);
 
@@ -450,7 +275,7 @@ const ensureMockCoins = async ({
       owner,
       suiClient,
       signer,
-      registryRef,
+      coinRegistryObject,
     });
     coins.push(coin);
   }
@@ -463,18 +288,21 @@ const ensureCoin = async ({
   owner,
   suiClient,
   signer,
-  registryRef,
+  coinRegistryObject,
 }: {
   seed: CoinSeed;
   owner: string;
   suiClient: SuiClient;
   signer: Ed25519Keypair;
-  registryRef: SharedObjectRef;
+  coinRegistryObject: WrappedSuiSharedObject;
 }): Promise<CoinArtifact> => {
   const currencyObjectId = deriveCurrencyId(seed.coinType);
   const [metadata, currencyObject, mintedCoinObjectId] = await Promise.all([
     suiClient.getCoinMetadata({ coinType: seed.coinType }),
-    getObjectSafe(suiClient, currencyObjectId),
+    getObjectSafe(suiClient, currencyObjectId, {
+      showType: true,
+      showBcs: true,
+    }),
     findOwnedCoinObjectId({ suiClient, owner, coinType: seed.coinType }),
   ]);
   const coinTypeSuffix = `<${seed.coinType}>`;
@@ -496,10 +324,13 @@ const ensureCoin = async ({
     };
   }
 
-  const tx = newTx(DEFAULT_TX_GAS_BUDGET);
+  const tx = newTransaction(DEFAULT_TX_GAS_BUDGET);
   tx.moveCall({
     target: seed.initTarget,
-    arguments: [tx.sharedObjectRef(registryRef), tx.pure.address(owner)],
+    arguments: [
+      tx.sharedObjectRef(coinRegistryObject.sharedRef),
+      tx.pure.address(owner),
+    ],
   });
 
   const result = await signAndExecute({
@@ -563,13 +394,13 @@ const ensurePriceFeeds = async ({
   suiClient,
   signer,
   existingPriceFeeds,
-  clockRef,
+  clockObject,
 }: {
   pythPackageId: string;
   suiClient: SuiClient;
   signer: Ed25519Keypair;
   existingPriceFeeds: PriceFeedArtifact[];
-  clockRef: SharedObjectRef;
+  clockObject: WrappedSuiSharedObject;
 }): Promise<PriceFeedArtifact[]> => {
   const priceInfoType = getPythPriceInfoType(pythPackageId);
   const feeds: PriceFeedArtifact[] = [];
@@ -596,7 +427,7 @@ const ensurePriceFeeds = async ({
       pythPackageId,
       suiClient,
       signer,
-      clockRef,
+      clockObject,
     });
     feeds.push(createdFeed);
   }
@@ -609,20 +440,20 @@ const publishPriceFeed = async ({
   pythPackageId,
   suiClient,
   signer,
-  clockRef,
+  clockObject,
 }: {
   feedConfig: LabeledPriceFeedConfig;
   pythPackageId: string;
   suiClient: SuiClient;
   signer: Ed25519Keypair;
-  clockRef: SharedObjectRef;
+  clockObject: WrappedSuiSharedObject;
 }): Promise<PriceFeedArtifact> => {
-  const tx = newTx(DEFAULT_TX_GAS_BUDGET);
+  const tx = newTransaction(DEFAULT_TX_GAS_BUDGET);
   publishMockPriceFeed(
     tx,
     pythPackageId,
     feedConfig,
-    tx.sharedObjectRef(clockRef)
+    tx.sharedObjectRef(clockObject.sharedRef)
   );
 
   const result = await signAndExecute({
@@ -649,261 +480,6 @@ const publishPriceFeed = async ({
   };
 };
 
-const ensurePublisher = async ({
-  suiClient,
-  signerAddress,
-  signer,
-  shopPackageId,
-  upgradeCapId,
-  existingPublisherId,
-}: {
-  suiClient: SuiClient;
-  signerAddress: string;
-  signer: Ed25519Keypair;
-  shopPackageId: string;
-  upgradeCapId?: string;
-  existingPublisherId?: string;
-}): Promise<string> => {
-  const normalizedPackageId = normalizeSuiObjectId(shopPackageId);
-  if (existingPublisherId) {
-    const existing = await getObjectSafe(suiClient, existingPublisherId, {
-      showType: true,
-      showOwner: true,
-      showContent: true,
-    });
-    if (
-      objectTypeMatches(existing, "0x2::package::Publisher") &&
-      publisherMatchesPackage(existing, normalizedPackageId) &&
-      ownedByAddress(existing, signerAddress)
-    ) {
-      logKeyValueBlue("Publisher")(existingPublisherId);
-      return normalizeSuiObjectId(existingPublisherId);
-    }
-    logWarning(
-      `Publisher ${existingPublisherId} missing or mismatched; attempting to claim a new one.`
-    );
-  }
-
-  if (!upgradeCapId)
-    throw new Error(
-      "Upgrade cap ID is required to claim a Publisher for the shop package."
-    );
-
-  const upgradeCap = await getObjectSafe(suiClient, upgradeCapId, {
-    showType: true,
-    showOwner: true,
-    showContent: true,
-  });
-
-  if (!upgradeCap)
-    throw new Error(`Upgrade cap ${upgradeCapId} not found on chain.`);
-
-  if (!objectTypeMatches(upgradeCap, "0x2::package::UpgradeCap")) {
-    logWarning(
-      `Upgrade cap ${upgradeCapId} has unexpected type ${upgradeCap.data?.type}`
-    );
-  }
-
-  assertOwnedBy(upgradeCap, signerAddress, "Upgrade cap");
-  assertUpgradeCapMatchesPackage(upgradeCap, normalizedPackageId);
-
-  const tx = newTx(DEFAULT_TX_GAS_BUDGET);
-  tx.moveCall({
-    target: "0x2::package::claim",
-    arguments: [tx.object(upgradeCapId)],
-  });
-
-  const result = await signAndExecute({
-    client: suiClient,
-    tx,
-    signer,
-  });
-  assertTransactionSuccess(result);
-
-  const publisherId = firstCreatedBySuffix(result, "::package::Publisher");
-  if (!publisherId)
-    throw new Error("Publisher claim succeeded but no Publisher object found.");
-
-  logKeyValueGreen("Publisher")(publisherId);
-
-  return normalizeSuiObjectId(publisherId);
-};
-
-const ensureShop = async ({
-  suiClient,
-  signer,
-  shopPackageId,
-  publisherId,
-  existingShop,
-}: {
-  suiClient: SuiClient;
-  signer: Ed25519Keypair;
-  shopPackageId: string;
-  publisherId: string;
-  existingShop?: ShopArtifact;
-}): Promise<{ shopId: string; shopOwnerCapId: string }> => {
-  const signerAddress = signer.toSuiAddress();
-  const normalizedPackageId = normalizeSuiObjectId(shopPackageId);
-  const shopType = `${normalizedPackageId}::shop::Shop`;
-  const ownerCapType = `${normalizedPackageId}::shop::ShopOwnerCap`;
-  const reusable = await reuseExistingShop({
-    suiClient,
-    signerAddress,
-    existingShop,
-    shopType,
-    ownerCapType,
-  });
-
-  if (reusable) return reusable;
-
-  const tx = newTx(DEFAULT_TX_GAS_BUDGET);
-  tx.moveCall({
-    target: `${normalizedPackageId}::shop::create_shop`,
-    arguments: [tx.object(publisherId)],
-  });
-
-  const result = await signAndExecute({
-    client: suiClient,
-    tx,
-    signer,
-  });
-  assertTransactionSuccess(result);
-
-  const shopId = firstCreatedBySuffix(result, "::shop::Shop");
-  const shopOwnerCapId = firstCreatedBySuffix(
-    result,
-    "::shop::ShopOwnerCap"
-  );
-
-  if (!shopId || !shopOwnerCapId)
-    throw new Error("Shop creation succeeded without expected objects.");
-
-  logKeyValueGreen("Shop")(shopId);
-  logKeyValueGreen("Shop owner cap")(shopOwnerCapId);
-
-  return { shopId, shopOwnerCapId };
-};
-
-const ensureAcceptedCurrencies = async ({
-  suiClient,
-  signer,
-  shopPackageId,
-  shopSharedRef,
-  ownerCapId,
-  coins,
-  priceFeeds,
-  existingAcceptedCurrencies,
-  rePublish,
-}: {
-  suiClient: SuiClient;
-  signer: Ed25519Keypair;
-  shopPackageId: string;
-  shopSharedRef: SharedObjectRef;
-  ownerCapId: string;
-  coins: CoinArtifact[];
-  priceFeeds: PriceFeedArtifact[];
-  existingAcceptedCurrencies: AcceptedCurrencyArtifact[];
-  rePublish: boolean;
-}): Promise<AcceptedCurrencyArtifact[]> => {
-  const results: AcceptedCurrencyArtifact[] = [];
-  for (const seed of DEFAULT_ACCEPTED_CURRENCIES) {
-    const coin = requireCoin(coins, seed.coinLabel);
-    const feed = requirePriceFeed(priceFeeds, seed.feedLabel);
-    const existing = findMatchingAcceptedCurrency(
-      existingAcceptedCurrencies,
-      seed,
-      shopSharedRef.objectId,
-      coin.coinType,
-      feed.feedIdHex
-    );
-
-    if (existing && !rePublish) {
-      const reusable = await reuseAcceptedCurrency({
-        suiClient,
-        shopPackageId,
-        acceptedCurrency: existing,
-      });
-      if (reusable) {
-        results.push(reusable);
-        continue;
-      }
-      logWarning(
-        `Accepted currency ${existing.acceptedCurrencyId} missing or mismatched; recreating.`
-      );
-    }
-
-    const created = await createAcceptedCurrency({
-      suiClient,
-      signer,
-      shopPackageId,
-      shopSharedRef,
-      ownerCapId,
-      seed,
-      coin,
-      feed,
-    });
-    results.push(created);
-  }
-
-  return results;
-};
-
-const ensureItemListings = async ({
-  suiClient,
-  signer,
-  shopPackageId,
-  shopSharedRef,
-  ownerCapId,
-  existingListings,
-  rePublish,
-}: {
-  suiClient: SuiClient;
-  signer: Ed25519Keypair;
-  shopPackageId: string;
-  shopSharedRef: SharedObjectRef;
-  ownerCapId: string;
-  existingListings: ItemListingArtifact[];
-  rePublish: boolean;
-}): Promise<ItemListingArtifact[]> => {
-  const listings: ItemListingArtifact[] = [];
-
-  for (const seed of DEFAULT_ITEM_LISTINGS) {
-    const existing = findExistingListing(
-      existingListings,
-      shopSharedRef.objectId,
-      seed.label,
-      seed.itemType
-    );
-
-    if (existing && !rePublish) {
-      const reusable = await reuseListing({
-        suiClient,
-        shopPackageId,
-        listing: existing,
-      });
-      if (reusable) {
-        listings.push(reusable);
-        continue;
-      }
-      logWarning(
-        `Listing ${existing.itemListingId} missing or mismatched; creating a fresh one.`
-      );
-    }
-
-    const created = await createListing({
-      suiClient,
-      signer,
-      shopPackageId,
-      shopSharedRef,
-      ownerCapId,
-      seed,
-    });
-    listings.push(created);
-  }
-
-  return listings;
-};
-
 const buildCoinSeeds = (coinPackageId: string): CoinSeed[] => {
   const normalizedPackageId = normalizeSuiObjectId(coinPackageId);
   return [
@@ -922,7 +498,7 @@ const buildCoinSeeds = (coinPackageId: string): CoinSeed[] => {
 
 const deriveCurrencyId = (coinType: string) =>
   deriveObjectID(
-    COIN_REGISTRY_ID,
+    SUI_COIN_REGISTRY_ID,
     `0x2::coin_registry::CurrencyKey<${coinType}>`,
     new Uint8Array()
   );
@@ -939,22 +515,30 @@ const findMatchingFeed = (
 
 const getObjectSafe = async (
   suiClient: SuiClient,
-  objectId: string
+  objectId: string,
+  options: SuiObjectDataOptions = { showType: true, showBcs: true }
 ): Promise<SuiObjectResponse | undefined> => {
   try {
+    const normalizedId = normalizeSuiObjectId(objectId);
     return await suiClient.getObject({
-      id: objectId,
-      options: { showType: true },
+      id: normalizedId,
+      options: { showType: true, showBcs: true, ...options },
     });
   } catch {
     return undefined;
   }
 };
 
+const extractObjectType = (object: SuiObjectResponse | undefined) =>
+  object?.data?.type ||
+  // Some RPC responses only return the type inside BCS or content.
+  (object?.data as any)?.bcs?.type ||
+  (object?.data as any)?.content?.type;
+
 const objectTypeMatches = (
   object: SuiObjectResponse | undefined,
   expectedType: string
-) => object?.data?.type === expectedType;
+) => extractObjectType(object)?.toLowerCase() === expectedType.toLowerCase();
 
 const findOwnedCoinObjectId = async ({
   suiClient,
@@ -979,37 +563,6 @@ const firstCreatedBySuffix = (
 ) => findCreatedObjectIds(result, suffix)[0];
 
 const normalizeHex = (value: string) => value.toLowerCase().replace(/^0x/, "");
-
-const fetchSharedObjectRef = async (
-  suiClient: SuiClient,
-  objectId: string,
-  mutable: boolean
-): Promise<SharedObjectRef> => {
-  const normalizedId = normalizeSuiObjectId(objectId);
-  const object = await suiClient.getObject({
-    id: normalizedId,
-    options: { showOwner: true },
-  });
-  const owner: any = object.data?.owner;
-  const shared = owner?.Shared ?? owner?.shared;
-
-  if (!shared?.initial_shared_version)
-    throw new Error(`Object ${objectId} is not shared or missing metadata`);
-
-  return {
-    objectId: normalizedId,
-    initialSharedVersion: Number(shared.initial_shared_version),
-    mutable,
-  };
-};
-
-const assertTransactionSuccess = (result: SuiTransactionBlockResponse) => {
-  const status = result.effects?.status?.status;
-  if (status !== "success") {
-    const error = result.effects?.status?.error;
-    throw new Error(error || "Transaction failed");
-  }
-};
 
 /**
  * Parses CLI flags and enforces that publish/package ID inputs are provided.
@@ -1067,6 +620,12 @@ const parseSetupLocalCliArgs = async (
     existingCoinPackageId: providedCliArgument.rePublish
       ? undefined
       : providedCliArgument.coinPackageId || mockArtifact.coinPackageId,
+    existingPriceFeeds: providedCliArgument.rePublish
+      ? undefined
+      : mockArtifact.priceFeeds,
+    existingCoins: providedCliArgument.rePublish
+      ? undefined
+      : mockArtifact.coins,
   };
 };
 

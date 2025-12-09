@@ -34,7 +34,8 @@ export const publishMockPriceFeed = (
   return tx.moveCall({
     target: `${pythPackageId}::price_info::publish_price_feed`,
     arguments: [
-      tx.pure(new Uint8Array(feedIdBytes)),
+      // BCS-encode as vector<u8>; passing raw bytes would skip the length prefix and fail deserialization.
+      tx.pure.vector("u8", feedIdBytes),
       tx.pure.u64(priceMagnitude),
       tx.pure.bool(priceIsNegative),
       tx.pure.u64(config.confidence),

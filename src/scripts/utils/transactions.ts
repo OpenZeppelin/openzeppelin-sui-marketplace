@@ -12,7 +12,7 @@ type ExecuteParams = {
   requestType?: "WaitForEffectsCert" | "WaitForLocalExecution";
 };
 
-export const newTx = (gasBudget?: number) => {
+export const newTransaction = (gasBudget?: number) => {
   const tx = new Transaction();
   if (gasBudget) tx.setGasBudget(gasBudget);
   return tx;
@@ -35,38 +35,43 @@ export const signAndExecute = async ({
     requestType,
   });
 
+type ObjectChangeWithType = Extract<
+  NonNullable<SuiTransactionBlockResponse["objectChanges"]>[number],
+  { type: "created" }
+> & { objectType: string; objectId: string };
+
+const isCreatedWithType = (
+  change: NonNullable<SuiTransactionBlockResponse["objectChanges"]>[number]
+): change is ObjectChangeWithType =>
+  change.type === "created" &&
+  "objectType" in change &&
+  typeof change.objectType === "string" &&
+  "objectId" in change &&
+  typeof change.objectId === "string";
+
+const findCreatedByMatcher = (
+  result: SuiTransactionBlockResponse,
+  matcher: (objectType: string) => boolean
+): string[] =>
+  (result.objectChanges ?? [])
+    .filter(isCreatedWithType)
+    .filter((change) => matcher(change.objectType))
+    .map((change) => change.objectId);
+
 export const findCreatedObjectIds = (
   result: SuiTransactionBlockResponse,
   typeSuffix: string
-): string[] => {
-  if (!result.objectChanges) return [];
-
-  return result.objectChanges
-    .filter(
-      (change) =>
-        change.type === "created" &&
-        "objectType" in change &&
-        typeof change.objectType === "string" &&
-        change.objectType.endsWith(typeSuffix)
-    )
-    .map((change) => ("objectId" in change ? change.objectId : ""))
-    .filter(Boolean);
-};
+): string[] =>
+  findCreatedByMatcher(result, (objectType) => objectType.endsWith(typeSuffix));
 
 export const findCreatedByType = (
   result: SuiTransactionBlockResponse,
   matcher: (objectType: string) => boolean
-): string[] => {
-  if (!result.objectChanges) return [];
+): string[] => findCreatedByMatcher(result, matcher);
 
-  return result.objectChanges
-    .filter(
-      (change) =>
-        change.type === "created" &&
-        "objectType" in change &&
-        typeof change.objectType === "string" &&
-        matcher(change.objectType)
-    )
-    .map((change) => ("objectId" in change ? change.objectId : ""))
-    .filter(Boolean);
+export const assertTransactionSuccess = ({
+  effects,
+}: SuiTransactionBlockResponse) => {
+  if (effects?.status?.status !== "success")
+    throw new Error(effects?.status?.error || "Transaction failed");
 };

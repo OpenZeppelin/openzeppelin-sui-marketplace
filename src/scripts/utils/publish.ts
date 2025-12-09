@@ -18,6 +18,7 @@ import {
   logKeyValueGreen,
   logWarning,
   logSimpleBlue,
+  logSimpleGreen,
 } from "./log";
 import { runSuiCli } from "./suiCli";
 import { getDeploymentArtifactPath } from "./constants";
@@ -60,12 +61,12 @@ export const publishPackageWithLog = async (
     initiatedSuiClient
   );
 
-  logSimpleBlue("Publish succeeded ✅");
-  logKeyValueBlue("packageId")(artifact.packageId);
+  logSimpleGreen("Publish succeeded ✅");
+  logKeyValueGreen("packageId")(artifact.packageId);
   if (artifact.upgradeCap) logKeyValueBlue("upgradeCap")(artifact.upgradeCap);
 
-  logKeyValueBlue("digest")(artifact.digest);
-  if (artifact.explorerUrl) logKeyValueBlue("explorer")(artifact.explorerUrl);
+  logKeyValueGreen("digest")(artifact.digest);
+  if (artifact.explorerUrl) logKeyValueGreen("explorer")(artifact.explorerUrl);
 
   return artifact;
 };
