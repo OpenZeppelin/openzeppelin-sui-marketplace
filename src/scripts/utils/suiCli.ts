@@ -12,3 +12,22 @@ export const ensureSuiCli = async () => {
     );
   }
 };
+
+export const runSuiCli =
+  (baseCliArguments: string[]) =>
+  async (complementaryCliArguments: string[]) => {
+    try {
+      return await execFile(
+        "sui",
+        [...baseCliArguments, ...complementaryCliArguments],
+        { encoding: "utf-8" }
+      );
+    } catch (error: any) {
+      // `execFile` rejects on non-zero exit codes. We still want to surface
+      // whatever stdout was produced (warnings often go to stdout), so plumb it through.
+      return {
+        stdout: error?.stdout ?? "",
+        stderr: error?.stderr ?? error?.message ?? "",
+      };
+    }
+  };

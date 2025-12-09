@@ -1,0 +1,8 @@
+[package]
+name = "mock_coin"
+edition = "2024.beta"
+
+[dependencies]
+
+[addresses]
+mock_coin = "0x0"

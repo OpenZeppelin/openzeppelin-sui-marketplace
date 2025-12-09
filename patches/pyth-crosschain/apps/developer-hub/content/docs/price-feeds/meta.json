@@ -1,8 +1,0 @@
-{
-  "root": true,
-  "title": "Price Feeds",
-  "description": "Real-time financial market data",
-  "pages": ["core", "pro"],
-  "defaultOpen": true,
-  "icon": "ChartLine"
-}

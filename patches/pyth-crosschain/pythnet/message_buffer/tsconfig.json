@@ -1,7 +1,0 @@
-{
-  "extends": "@cprussin/tsconfig/base.json",
-  "compilerOptions": {
-    "types": ["chai", "mocha"]
-  },
-  "exclude": ["dist", "node_modules"]
-}

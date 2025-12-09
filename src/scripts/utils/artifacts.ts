@@ -1,34 +1,39 @@
 import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { dirname } from "node:path";
-import type { PublishArtifact } from "./types";
+import { PublishArtifact } from "./types";
 
-export const writeArtifact = async <TArtifact>(
-  filePath: string,
-  newArtifact: TArtifact
-): Promise<TArtifact> => {
-  try {
-    await mkdir(dirname(filePath), { recursive: true });
+export const writeArtifact =
+  <TArtifact>(defaultIfMissing?: TArtifact) =>
+  async (filePath: string, newArtifact: TArtifact): Promise<TArtifact> => {
+    try {
+      await mkdir(dirname(filePath), { recursive: true });
 
-    const currentArtifacts = await readArtifact<TArtifact>(filePath);
+      const currentArtifacts = await readArtifact<TArtifact>(
+        filePath,
+        defaultIfMissing
+      );
 
-    const updatedArtifacts = Array.isArray(currentArtifacts)
-      ? [...currentArtifacts, newArtifact]
-      : {
-          ...currentArtifacts,
-          ...newArtifact,
-        };
+      const updatedArtifacts =
+        Array.isArray(currentArtifacts) && Array.isArray(newArtifact)
+          ? [...currentArtifacts, ...newArtifact]
+          : {
+              ...currentArtifacts,
+              ...newArtifact,
+            };
 
-    await writeFile(filePath, JSON.stringify(updatedArtifacts, null, 2));
+      await writeFile(filePath, JSON.stringify(updatedArtifacts, null, 2));
 
-    return updatedArtifacts as unknown as TArtifact;
-  } catch (error) {
-    throw new Error(
-      `Failed to write artifact at ${filePath}: ${
-        error instanceof Error ? error.message : String(error)
-      }`
-    );
-  }
-};
+      return updatedArtifacts as unknown as TArtifact;
+    } catch (error) {
+      throw new Error(
+        `Failed to write artifact at ${filePath}: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
+    }
+  };
+
+export const writeDeploymentArtifact = writeArtifact<PublishArtifact[]>([]);
 
 export const readArtifact = async <TArtifact>(
   filePath: string,
@@ -59,19 +64,26 @@ export const readArtifact = async <TArtifact>(
 /**
  * Upserts a publish artifact by package ID or package path to avoid duplicates.
  */
-export const addOrReplacePublishArtifact = (
-  artifacts: PublishArtifact[],
-  next: PublishArtifact
-) => {
-  const idx = artifacts.findIndex(
-    (item) =>
-      item.packageId === next.packageId || item.packagePath === next.packagePath
-  );
 
-  if (idx >= 0) {
-    artifacts[idx] = next;
-    return;
-  }
+// addOrReplacePublishArtifact(
+//       deploymentArtifacts.artifacts,
+//       mockCoinPublishArtifact
+//     );
 
-  artifacts.push(next);
-};
+//TODO review write here if needed
+// export const addOrReplacePublishArtifact = (
+//   artifacts: PublishArtifact[],
+//   next: PublishArtifact
+// ) => {
+//   const currentArtifactIndex = artifacts.findIndex(
+//     (item) =>
+//       item.packageId === next.packageId || item.packagePath === next.packagePath
+//   );
+
+//   if (currentArtifactIndex >= 0) {
+//     artifacts[currentArtifactIndex] = next;
+//     return;
+//   }
+
+//   artifacts.push(next);
+// };

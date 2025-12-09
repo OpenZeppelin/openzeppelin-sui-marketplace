@@ -1,10 +1,11 @@
 import { execFile as execFileCallback } from "node:child_process";
 import { promisify } from "node:util";
 import type { BuildOutput } from "./types";
-import { logChalkWarning } from "./log";
+import { logWarning } from "./log";
 import path from "node:path";
 import { exitCode } from "node:process";
 import fs from "node:fs/promises";
+import { runSuiCli, runSuiCli } from "./suiCli";
 
 const execFile = promisify(execFileCallback);
 
@@ -16,11 +17,12 @@ export const buildMovePackage = async (
   if (!resolvedPackagePath)
     throw new Error(`Contracts not found at ${resolvedPackagePath}`);
 
-  const { stdout, stderr } = await runMoveBuild(
+  const { stdout, stderr } = await runMoveBuild([
+    "--path",
     resolvedPackagePath,
-    buildArguments
-  );
-  if (stderr) logChalkWarning(stderr.trim());
+    ...buildArguments,
+  ]);
+  if (stderr) logWarning(stderr.trim());
 
   const { modules, dependencies } = await resolveBuildArtifacts(
     stdout,
@@ -28,7 +30,7 @@ export const buildMovePackage = async (
   );
 
   if (exitCode !== undefined && exitCode !== 0) {
-    logChalkWarning(
+    logWarning(
       `sui move build returned non-zero exit code (${exitCode}) but JSON output was parsed.`
     );
   }
@@ -36,32 +38,11 @@ export const buildMovePackage = async (
   return { modules, dependencies };
 };
 
-const runMoveBuild = async (
-  resolvedPackagePath: string,
-  buildArguments: string[]
-): Promise<{ stdout: string; stderr: string }> => {
-  try {
-    return await execFile(
-      "sui",
-      [
-        "move",
-        "build",
-        "--dump-bytecode-as-base64",
-        "--path",
-        resolvedPackagePath,
-        ...buildArguments,
-      ],
-      { encoding: "utf-8" }
-    );
-  } catch (error: any) {
-    // `execFile` rejects on non-zero exit codes. We still want to surface
-    // whatever stdout was produced (warnings often go to stdout), so plumb it through.
-    return {
-      stdout: error?.stdout ?? "",
-      stderr: error?.stderr ?? error?.message ?? "",
-    };
-  }
-};
+export const runMoveBuild = runSuiCli([
+  "move",
+  "build",
+  "--dump-bytecode-as-base64",
+]);
 
 const resolveBuildArtifacts = async (
   stdout: string,
@@ -76,7 +57,7 @@ const resolveBuildArtifacts = async (
     : undefined;
 
   if (fallbackNeeded) {
-    logChalkWarning(
+    logWarning(
       "Build JSON contained no modules; using compiled artifacts from build/ instead."
     );
   }

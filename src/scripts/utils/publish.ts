@@ -10,38 +10,45 @@ import type {
   PublishArtifact,
   PublishResult,
 } from "./types";
-import { writeArtifact } from "./artifacts";
+import { writeDeploymentArtifact } from "./artifacts";
 import { buildExplorerUrl } from "./network";
 import { buildMovePackage } from "./move";
-import path from "path";
-import { logChalkBlue, logChalkGreen } from "./log";
+import {
+  logKeyValueBlue,
+  logKeyValueGreen,
+  logWarning,
+  logSimpleBlue,
+} from "./log";
+import { runSuiCli } from "./suiCli";
+import { getDeploymentArtifactPath } from "./constants";
 
 export const publishPackageWithLog = async (
   {
     network,
     fullNodeUrl,
     packagePath,
-    gasBudget,
     keypair,
+    gasBudget = 200_000_000,
     withUnpublishedDependencies = false,
   }: {
     network: NetworkName;
     packagePath: string;
     fullNodeUrl: string;
     keypair: Ed25519Keypair;
-    gasBudget: number;
+    gasBudget?: number;
     withUnpublishedDependencies?: boolean;
+    keystorePath?: string;
   },
   initiatedSuiClient?: SuiClient
 ) => {
-  logChalkBlue("Publishing package 💧")();
-  logChalkBlue("network")(`${network} / ${fullNodeUrl}`);
-  logChalkBlue("package")(packagePath);
-  logChalkBlue("publisher")(keypair.toSuiAddress());
+  logSimpleBlue("Publishing package 💧");
+  logKeyValueBlue("network")(`${network} / ${fullNodeUrl}`);
+  logKeyValueBlue("package")(packagePath);
+  logKeyValueBlue("publisher")(keypair.toSuiAddress());
   if (withUnpublishedDependencies)
-    logChalkBlue("with unpublished deps")("enabled");
+    logKeyValueBlue("with unpublished deps")("enabled");
 
-  const { packageId, explorerUrl, digest, upgradeCap } = await publishPackage(
+  const artifact = await publishPackage(
     {
       network,
       packagePath,
@@ -53,12 +60,14 @@ export const publishPackageWithLog = async (
     initiatedSuiClient
   );
 
-  logChalkGreen("\nPublish succeeded ✅");
-  logChalkBlue("packageId")(packageId);
-  if (upgradeCap) logChalkBlue("upgradeCap")(upgradeCap);
+  logSimpleBlue("Publish succeeded ✅");
+  logKeyValueBlue("packageId")(artifact.packageId);
+  if (artifact.upgradeCap) logKeyValueBlue("upgradeCap")(artifact.upgradeCap);
 
-  logChalkBlue("digest")(digest);
-  if (explorerUrl) logChalkBlue("explorer")(explorerUrl);
+  logKeyValueBlue("digest")(artifact.digest);
+  if (artifact.explorerUrl) logKeyValueBlue("explorer")(artifact.explorerUrl);
+
+  return artifact;
 };
 
 export const publishPackage = async (
@@ -100,7 +109,7 @@ export const publishPackage = async (
   const artifact: PublishArtifact = {
     network: network,
     rpcUrl: fullNodeUrl,
-    packagePath,
+    packagePath: packagePath,
     packageId: publishResult.packageId,
     upgradeCap: publishResult.upgradeCap,
     sender: keypair.toSuiAddress(),
@@ -111,10 +120,7 @@ export const publishPackage = async (
     explorerUrl: buildExplorerUrl(publishResult.digest, network as NetworkName),
   };
 
-  await writeArtifact(
-    path.join(process.cwd(), "deployments", `deployment.${network}.json`),
-    artifact
-  );
+  await writeDeploymentArtifact(getDeploymentArtifactPath(network), [artifact]);
 
   return artifact;
 };
@@ -135,27 +141,28 @@ export const doPublishPackage = async (
 ) => {
   const suiClient = initiatedSuiClient || new SuiClient({ url: fullNodeUrl });
 
-  const tx = new Transaction();
+  const publishTransaction = new Transaction();
 
-  const [upgradeCap] = tx.publish({
-    modules: buildOutput.modules,
-    dependencies: buildOutput.dependencies,
-  });
+  publishTransaction.setSender(keypair.getPublicKey().toSuiAddress());
+  publishTransaction.setGasBudget(gasBudget);
 
-  console.log({ upgradeCap });
+  const [upgrade_cap] = publishTransaction.publish(buildOutput);
 
-  tx.transferObjects([upgradeCap], keypair.toSuiAddress());
-  tx.setSender(keypair.toSuiAddress());
-  tx.setGasBudget(gasBudget);
+  publishTransaction.transferObjects(
+    [upgrade_cap],
+    keypair.getPublicKey().toSuiAddress()
+  );
 
   const result = await suiClient.signAndExecuteTransaction({
-    transaction: tx,
     signer: keypair,
-    requestType: "WaitForLocalExecution",
+    transaction: publishTransaction,
     options: {
+      showBalanceChanges: true,
       showEffects: true,
-      showObjectChanges: true,
       showEvents: true,
+      showInput: true,
+      showObjectChanges: true,
+      showRawInput: false,
     },
   });
 
@@ -169,6 +176,60 @@ export const doPublishPackage = async (
     throw new Error("Publish succeeded but no packageId was returned.");
 
   return publishInfo;
+};
+
+export const runClientPublish = runSuiCli(["client", "publish"]);
+
+const publishPackageWithCli = async (
+  {
+    packagePath,
+    gasBudget,
+    keystorePath,
+    rpcUrl,
+    signer,
+  }: {
+    packagePath: string;
+    gasBudget: number;
+    keystorePath?: string;
+    rpcUrl: string;
+    signer: string;
+  },
+  publishArguments: string[] = []
+): Promise<PublishResult> => {
+  if (!keystorePath) {
+    throw new Error(
+      "keystorePath is required when publishing with unpublished dependencies."
+    );
+  }
+
+  const { stdout, stderr } = await runClientPublish([
+    packagePath,
+    "--json",
+    "--gas-budget",
+    gasBudget.toString(),
+    ...publishArguments,
+  ]);
+
+  if (stderr?.trim()) logWarning(stderr.trim());
+
+  const parsed = parseCliJson(stdout);
+
+  return extractPublishResult(parsed as SuiTransactionBlockResponse);
+};
+
+const parseCliJson = (stdout: string) => {
+  const lines = stdout.trim().split(/\r?\n/).reverse();
+  for (const line of lines) {
+    const candidate = line.trim();
+    if (!candidate.startsWith("{") && !candidate.startsWith("[")) continue;
+    try {
+      return JSON.parse(candidate);
+    } catch {
+      /* keep scanning */
+    }
+  }
+
+  throw new Error("Failed to parse JSON from Sui CLI publish output.");
 };
 
 const extractPublishResult = (

@@ -1,8 +1,0 @@
-{
-  "extends": "@cprussin/tsconfig/base.json",
-  "compilerOptions": {
-    "moduleResolution": "node",
-    "module": "preserve"
-  },
-  "exclude": ["dist", "node_modules"]
-}

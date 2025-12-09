@@ -1,5 +1,23 @@
 {
   "cSpell.words": [
     "Keypair"
-  ]
+  ],
+  "files.watcherExclude": {
+    "patches/": true,
+    "**/patches": true,
+    "**/node_modules": true,
+    "**/dist": true
+  },
+  "files.exclude": {
+    "patches/": true,
+    "**/patches": true,
+    "**/node_modules": true,
+    "**/dist": true
+  },
+  "search.exclude": {
+    "patches/": true,
+    "**/patches": true,
+    "**/node_modules": true,
+    "**/dist": true
+  }
 }

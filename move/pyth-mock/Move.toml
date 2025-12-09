@@ -1,0 +1,8 @@
+[package]
+name = "Pyth"
+edition = "2024.beta"
+
+[dependencies]
+
+[addresses]
+pyth = "0x0"

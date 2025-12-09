@@ -1,1 +1,0 @@
-# @pythnetwork/known-publishers

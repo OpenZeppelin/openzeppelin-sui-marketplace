@@ -6,71 +6,41 @@ export type MockPriceFeedConfig = {
   price: bigint;
   confidence: bigint;
   exponent: number;
-  attestationTime?: bigint;
-  arrivalTime?: bigint;
 };
 
-const PYTH_PRICE_INFO_TYPE = "pyth::price_info::PriceInfoObject";
+const PYTH_PRICE_INFO_TYPE = "price_info::PriceInfoObject";
+export const SUI_CLOCK_ID =
+  "0x0000000000000000000000000000000000000000000000000000000000000006";
 
 export const getPythPriceInfoType = (pythPackageId: string) =>
   `${pythPackageId}::${PYTH_PRICE_INFO_TYPE}`;
 
-export const buildMockPriceInfoObject = (
+/**
+ * Adds a Move call to publish and share a mock price feed using the local Pyth stub.
+ * The object will be timestamped with the on-chain clock to satisfy freshness checks.
+ */
+export const publishMockPriceFeed = (
   tx: Transaction,
   pythPackageId: string,
-  config: MockPriceFeedConfig
+  config: MockPriceFeedConfig,
+  clockObject?: TransactionArgument
 ): TransactionArgument => {
-  const now = BigInt(Math.floor(Date.now() / 1000));
-  const attestationTime = config.attestationTime ?? now;
-  const arrivalTime = config.arrivalTime ?? now;
-
+  const feedIdBytes = assertBytesLength(hexToBytes(config.feedIdHex), 32);
   const priceMagnitude = config.price >= 0n ? config.price : -config.price;
   const priceIsNegative = config.price < 0n;
   const expoMagnitude = config.exponent >= 0 ? config.exponent : -config.exponent;
   const expoIsNegative = config.exponent < 0;
 
-  const priceValue = tx.moveCall({
-    target: `${pythPackageId}::i64::new`,
-    arguments: [tx.pure.u64(priceMagnitude), tx.pure.bool(priceIsNegative)],
-  });
-
-  const expoValue = tx.moveCall({
-    target: `${pythPackageId}::i64::new`,
-    arguments: [tx.pure.u64(expoMagnitude), tx.pure.bool(expoIsNegative)],
-  });
-
-  const priceStruct = tx.moveCall({
-    target: `${pythPackageId}::price::new`,
+  return tx.moveCall({
+    target: `${pythPackageId}::price_info::publish_price_feed`,
     arguments: [
-      priceValue,
+      tx.pure(new Uint8Array(feedIdBytes)),
+      tx.pure.u64(priceMagnitude),
+      tx.pure.bool(priceIsNegative),
       tx.pure.u64(config.confidence),
-      expoValue,
-      tx.pure.u64(attestationTime),
+      tx.pure.u64(expoMagnitude),
+      tx.pure.bool(expoIsNegative),
+      clockObject ?? tx.object(SUI_CLOCK_ID),
     ],
   });
-
-  const feedIdBytes = assertBytesLength(hexToBytes(config.feedIdHex), 32);
-  const priceIdentifier = tx.moveCall({
-    target: `${pythPackageId}::price_identifier::from_byte_vec`,
-    arguments: [tx.pure(new Uint8Array(feedIdBytes))],
-  });
-
-  const priceInfoObject = tx.moveCall({
-    target: `${pythPackageId}::price_info::dev_new_price_info_object_with_feed`,
-    arguments: [
-      priceIdentifier,
-      priceStruct,
-      priceStruct,
-      tx.pure.u64(attestationTime),
-      tx.pure.u64(arrivalTime),
-    ],
-  });
-
-  // Share so any caller can reuse the mock feed during checkout.
-  tx.moveCall({
-    target: "0x2::transfer::public_share_object",
-    arguments: [priceInfoObject],
-  });
-
-  return priceInfoObject;
 };

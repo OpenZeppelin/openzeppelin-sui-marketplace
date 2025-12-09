@@ -1,6 +1,6 @@
 import chalk, { type ColorName } from "chalk";
 
-export const logChalkColor =
+export const logKeyValueColor =
   (colorName: ColorName) =>
   (coloredText: string) =>
   (regularText?: string | number) =>
@@ -8,9 +8,15 @@ export const logChalkColor =
       `${chalk[colorName](coloredText.padEnd(8))}: ${chalk.gray(regularText)}`
     );
 
-export const logChalkBlue = logChalkColor("blue");
-export const logChalkGreen = logChalkColor("green");
-export const logChalkYellow = logChalkColor("yellow");
-export const logChalkRed = logChalkColor("red");
-export const logChalkError = logChalkRed("Error");
-export const logChalkWarning = logChalkYellow("Warning");
+export const simpleLogKeyValueColor =
+  (colorName: ColorName) => (coloredText: string) =>
+    console.log(`${chalk[colorName](coloredText.padEnd(8))}`);
+
+export const logSimpleBlue = simpleLogKeyValueColor("blue");
+export const logKeyValueBlue = logKeyValueColor("blue");
+export const logKeyValueGreen = logKeyValueColor("green");
+export const logKeyValueYellow = logKeyValueColor("yellow");
+export const logKeyValueRed = logKeyValueColor("red");
+
+export const logError = logKeyValueRed("Error");
+export const logWarning = logKeyValueYellow("Warning");

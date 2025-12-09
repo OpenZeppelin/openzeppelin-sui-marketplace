@@ -45,6 +45,7 @@ runSuiScript(async () => {
     keypair,
     gasBudget,
     withUnpublishedDependencies,
+    keystorePath: keystore,
   });
 });
 
@@ -68,11 +69,6 @@ const parsePublishPackageCliArgs = async () =>
       description: "Path to the Move package to publish",
       default: path.join(process.cwd(), "move"),
     })
-    .option("keystore", {
-      type: "string",
-      description: "Path to a Sui keystore file (defaults to CLI keystore)",
-      default: DEFAULT_KEYSTORE_PATH,
-    })
     .option("gas-budget", {
       type: "number",
       description: "Gas budget (in MIST) for the publish transaction",
@@ -83,6 +79,11 @@ const parsePublishPackageCliArgs = async () =>
       description:
         "Allow publishing even when dependencies do not have published addresses (passes --with-unpublished-dependencies to sui move build).",
       default: false,
+    })
+    .option("keystore", {
+      type: "string",
+      description: "Path to a Sui keystore file (defaults to CLI keystore)",
+      default: DEFAULT_KEYSTORE_PATH,
     })
     .option("account-index", {
       type: "number",

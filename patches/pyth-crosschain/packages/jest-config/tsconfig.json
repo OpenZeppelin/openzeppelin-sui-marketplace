@@ -1,8 +1,0 @@
-{
-  "extends": "@cprussin/tsconfig/base.json",
-  "compilerOptions": {
-    "incremental": false,
-    "noEmit": false,
-    "isolatedModules": false
-  }
-}
