@@ -15,7 +15,6 @@ import {
   logSimpleGreen,
   logWarning,
 } from "../utils/log";
-import { selectNetworkConfig } from "../utils/config";
 import { runSuiScript } from "../utils/process";
 
 type StartLocalnetCliArgs = {
@@ -38,59 +37,58 @@ type ProbeResult =
   | { status: "running"; snapshot: RpcSnapshot }
   | { status: "offline"; error: string };
 
-runSuiScript(async (config) => {
-  const cliArgs = await parseStartLocalnetCliArgs();
-  const { networkConfig } = selectNetworkConfig(config, "localnet");
-  const rpcUrl = networkConfig.url ?? getFullnodeUrl("localnet");
+runSuiScript(
+  async (
+    { network: { url: rpcUrl } },
+    { withFaucet, checkOnly, waitSeconds }
+  ) => {
+    const probeResult = await probeRpcHealth(rpcUrl);
 
-  const probeResult = await probeRpcHealth(rpcUrl);
+    if (probeResult.status === "running") {
+      logSimpleGreen("Localnet running 🚀");
+      logRpcSnapshot(probeResult.snapshot, withFaucet);
+      return;
+    }
 
-  if (probeResult.status === "running") {
-    logSimpleGreen("Localnet running 🚀");
-    logRpcSnapshot(probeResult.snapshot, cliArgs.withFaucet);
-    return;
-  }
+    if (checkOnly)
+      throw new Error(
+        `Localnet RPC unavailable at ${rpcUrl}: ${probeResult.error}`
+      );
 
-  if (cliArgs.checkOnly)
-    throw new Error(
-      `Localnet RPC unavailable at ${rpcUrl}: ${probeResult.error}`
-    );
+    const localnetProcess = startLocalnetProcess({
+      withFaucet: withFaucet,
+    });
 
-  const localnetProcess = startLocalnetProcess({
-    withFaucet: cliArgs.withFaucet,
-  });
+    const readySnapshot = await waitForRpcReadiness({
+      rpcUrl,
+      waitSeconds: waitSeconds,
+    });
 
-  const readySnapshot = await waitForRpcReadiness({
-    rpcUrl,
-    waitSeconds: cliArgs.waitSeconds,
-  });
+    logRpcSnapshot(readySnapshot, withFaucet);
 
-  logRpcSnapshot(readySnapshot, cliArgs.withFaucet);
-
-  await logProcessExit(localnetProcess);
-});
-
-const parseStartLocalnetCliArgs = async (): Promise<StartLocalnetCliArgs> =>
-  await yargs(hideBin(process.argv))
-    .scriptName("start-localnet")
-    .option("check-only", {
+    await logProcessExit(localnetProcess);
+  },
+  yargs()
+    .option("checkOnly", {
+      alias: "check-only",
       type: "boolean",
       description: "Only validate the RPC without starting a new localnet",
       default: false,
     })
-    .option("wait-seconds", {
+    .option("waitSeconds", {
+      alias: "wait-seconds",
       type: "number",
       description: "How long to wait for RPC readiness after starting",
       default: 25,
     })
-    .option("with-faucet", {
+    .option("withFaucet", {
+      alias: "with-faucet",
       type: "boolean",
       description: "Start the faucet alongside the local node",
       default: true,
     })
     .strict()
-    .help()
-    .parseAsync();
+);
 
 const probeRpcHealth = async (rpcUrl: string): Promise<ProbeResult> => {
   try {

@@ -1,6 +1,5 @@
 import path from "node:path";
 import os from "node:os";
-import { NetworkName } from "./types";
 import { normalizeSuiObjectId } from "@mysten/sui/utils";
 
 export const DEFAULT_KEYSTORE_PATH = path.join(
@@ -11,8 +10,7 @@ export const DEFAULT_KEYSTORE_PATH = path.join(
 );
 
 export const getArtifactPath =
-  (artifactType: "mock" | "deployment" | "object") =>
-  (network: NetworkName) =>
+  (artifactType: "mock" | "deployment" | "object") => (network: string) =>
     path.join(process.cwd(), "deployments", `${artifactType}.${network}.json`);
 
 export const getDeploymentArtifactPath = getArtifactPath("deployment");

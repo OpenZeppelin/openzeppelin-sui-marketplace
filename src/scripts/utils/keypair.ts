@@ -3,50 +3,17 @@ import { readFile } from "node:fs/promises";
 import { decodeSuiPrivateKey } from "@mysten/sui/cryptography";
 import { Ed25519Keypair } from "@mysten/sui/keypairs/ed25519";
 import { fromBase64, normalizeSuiAddress } from "@mysten/sui/utils";
-
-type LoadKeypairOptions = {
-  keystorePath?: string;
-  accountIndex?: number;
-  accountAddress?: string;
-  privateKey?: string;
-  mnemonic?: string;
-};
-/**
- * Loads the keypair used for publishing and seeding mock data.
- */
-export const loadDeployerKeypair = async ({
-  keystorePath,
-  accountIndex,
-  accountAddress,
-}: {
-  keystorePath: string;
-  accountIndex: number;
-  accountAddress?: string;
-}) => {
-  return loadKeypair({
-    keystorePath,
-    accountIndex,
-    accountAddress,
-    privateKey:
-      process.env.SUI_DEPLOYER_PRIVATE_KEY ??
-      process.env.SUI_PRIVATE_KEY ??
-      process.env.PRIVATE_KEY,
-    mnemonic:
-      process.env.SUI_DEPLOYER_MNEMONIC ??
-      process.env.SUI_MNEMONIC ??
-      process.env.MNEMONIC,
-  });
-};
+import { SuiAccountConfig } from "./config";
 
 export const loadKeypair = async ({
-  privateKey,
-  mnemonic,
+  accountPrivateKey,
+  accountMnemonic,
   keystorePath,
   accountIndex,
   accountAddress,
-}: LoadKeypairOptions) => {
-  if (privateKey) return keypairFromSecret(privateKey);
-  if (mnemonic) return Ed25519Keypair.deriveKeypair(mnemonic);
+}: SuiAccountConfig) => {
+  if (accountPrivateKey) return keypairFromSecret(accountPrivateKey);
+  if (accountMnemonic) return Ed25519Keypair.deriveKeypair(accountMnemonic);
 
   if (keystorePath) {
     const keystoreEntries = await readKeystoreEntries(keystorePath);
@@ -74,7 +41,7 @@ export const loadKeypair = async ({
   }
 
   throw new Error(
-    `Could not get keypair from\nPrivate Key: ${privateKey}\nMnemonic: ${mnemonic}\nKeystore path: ${keystorePath}\nAccount Index: ${accountIndex}\nAccount Address: ${accountAddress}\nEnsure you are using either a private key, mnemonic or keystore to properly load keypair`
+    `Could not get keypair from\nPrivate Key: ${accountPrivateKey}\nMnemonic: ${accountMnemonic}\nKeystore path: ${keystorePath}\nAccount Index: ${accountIndex}\nAccount Address: ${accountAddress}\nEnsure you are using either a private key, mnemonic or keystore to properly load keypair`
   );
 };
 

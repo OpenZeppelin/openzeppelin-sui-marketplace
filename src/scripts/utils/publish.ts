@@ -32,13 +32,12 @@ export const publishPackageWithLog = async (
     gasBudget = 200_000_000,
     withUnpublishedDependencies = false,
   }: {
-    network: NetworkName;
+    network: string;
     packagePath: string;
     fullNodeUrl: string;
     keypair: Ed25519Keypair;
     gasBudget?: number;
     withUnpublishedDependencies?: boolean;
-    keystorePath?: string;
   },
   initiatedSuiClient?: SuiClient
 ) => {
@@ -80,7 +79,7 @@ export const publishPackage = async (
     keypair,
     withUnpublishedDependencies = false,
   }: {
-    network: NetworkName;
+    network: string;
     packagePath: string;
     fullNodeUrl: string;
     keypair: Ed25519Keypair;

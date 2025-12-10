@@ -10,7 +10,7 @@ import {
 } from "@mysten/sui/client";
 import { Ed25519Keypair } from "@mysten/sui/keypairs/ed25519";
 import { deriveObjectID, normalizeSuiObjectId } from "@mysten/sui/utils";
-import yargs from "yargs";
+import yargs, { Argv } from "yargs";
 import { hideBin } from "yargs/helpers";
 
 import { ensureFoundedAddress } from "../utils/address";
@@ -20,11 +20,11 @@ import {
   getDeploymentArtifactPath,
   SUI_COIN_REGISTRY_ID,
 } from "../utils/constants";
-import { loadDeployerKeypair, loadKeypair } from "../utils/keypair";
+import { loadKeypair } from "../utils/keypair";
 import { logKeyValueBlue, logKeyValueGreen, logWarning } from "../utils/log";
 import { resolveRpcUrl } from "../utils/network";
 import { publishPackageWithLog } from "../utils/publish";
-import { runSuiScript } from "../utils/process";
+import { CommonCliArgs, runSuiScript } from "../utils/process";
 import {
   getPythPriceInfoType,
   publishMockPriceFeed,
@@ -44,19 +44,21 @@ import {
   writeMockArtifact,
 } from "../utils/mock";
 import { getSuiSharedObject, WrappedSuiSharedObject } from "../utils/object";
-import { resolveAccountsConfig, selectNetworkConfig } from "../utils/config";
+import { getAccountConfig } from "../utils/config";
 
 type SetupLocalCliArgs = {
-  keystorePath: string;
-  accountIndex: number;
-  accountAddress?: string;
+  coinPackageId?: string;
   coinContractPath: string;
+  pythPackageId?: string;
+  pythContractPath: string;
+  rePublish?: boolean;
+};
+
+type ExistingState = {
   existingCoinPackageId?: string;
   existingCoins?: CoinArtifact[];
-  pythContractPath: string;
   existingPythPackageId?: string;
   existingPriceFeeds?: PriceFeedArtifact[];
-  rePublish: boolean;
 };
 
 // Where the local Pyth stub lives.
@@ -103,131 +105,185 @@ const DEFAULT_FEEDS: LabeledPriceFeedConfig[] = [
 
 const DEFAULT_TX_GAS_BUDGET = 100_000_000;
 
-runSuiScript(async (config) => {
-  const localNetwork: NetworkName = "localnet";
-
-  const { networkConfig } = selectNetworkConfig(config, localNetwork);
-  const accountDefaults = resolveAccountsConfig(networkConfig, {
-    keystorePath: DEFAULT_KEYSTORE_PATH,
-    accountIndex: 0,
-    accountAddress: undefined,
-  });
+/**
+ * Parses CLI flags and enforces that publish/package ID inputs are provided.
+ */
+const extendCliArguments = async (
+  baseScriptArguments: SetupLocalCliArgs
+): Promise<ExistingState> => {
   const mockArtifact = await readArtifact<MockArtifact>(mockArtifactPath, {});
-  const cliOptions = await parseSetupLocalCliArgs(
-    mockArtifact ?? {},
-    accountDefaults
-  );
-  const fullNodeUrl = resolveRpcUrl(localNetwork, networkConfig.url);
 
-  const keypair = await loadDeployerKeypair(cliOptions);
-  const signerAddress = keypair.toSuiAddress();
+  return {
+    ...baseScriptArguments,
+    existingPythPackageId: baseScriptArguments.rePublish
+      ? undefined
+      : baseScriptArguments.pythPackageId || mockArtifact.pythPackageId,
+    existingCoinPackageId: baseScriptArguments.rePublish
+      ? undefined
+      : baseScriptArguments.coinPackageId || mockArtifact.coinPackageId,
+    existingPriceFeeds: baseScriptArguments.rePublish
+      ? undefined
+      : mockArtifact.priceFeeds,
+    existingCoins: baseScriptArguments.rePublish
+      ? undefined
+      : mockArtifact.coins,
+  };
+};
 
-  const suiClient = new SuiClient({ url: fullNodeUrl });
+runSuiScript(
+  async ({ network }, cliArguments) => {
+    const existingState = await extendCliArguments(cliArguments);
+    const localNetwork: NetworkName = "localnet";
 
-  await ensureFoundedAddress(
-    {
-      signerAddress,
-    },
-    suiClient
-  );
+    const fullNodeUrl = resolveRpcUrl(localNetwork, network.url);
 
-  const { coinPackageId, pythPackageId } = await publishMockPackages(
-    { network: localNetwork, fullNodeUrl, keypair, cliOptions },
-    suiClient
-  );
+    const keypair = await loadKeypair(getAccountConfig(network));
+    const signerAddress = keypair.toSuiAddress();
 
-  const { coinRegistryObject, clockObject } = await resolveRegistryAndClockRefs(
-    suiClient
-  );
+    const suiClient = new SuiClient({ url: fullNodeUrl });
 
-  const coins =
-    cliOptions.existingCoins ||
-    (await ensureMockCoins(
+    await ensureFoundedAddress(
       {
-        coinPackageId,
-        owner: signerAddress,
-
-        signer: keypair,
-        coinRegistryObject,
+        signerAddress,
       },
       suiClient
-    ));
+    );
 
-  await writeMockArtifact(mockArtifactPath, {
-    coins,
-  });
+    const { coinPackageId, pythPackageId } = await publishMockPackages(
+      {
+        network: localNetwork,
+        fullNodeUrl,
+        keypair,
+        existingState,
+        cliArguments,
+      },
+      suiClient
+    );
 
-  const priceFeeds =
-    cliOptions.existingPriceFeeds ||
-    (await ensurePriceFeeds({
-      pythPackageId,
-      suiClient,
-      signer: keypair,
-      clockObject,
-      existingPriceFeeds: cliOptions.existingPriceFeeds || [],
-    }));
+    const { coinRegistryObject, clockObject } =
+      await resolveRegistryAndClockRefs(suiClient);
 
-  await writeMockArtifact(mockArtifactPath, {
-    priceFeeds,
-  });
+    const coins =
+      existingState.existingCoins ||
+      (await ensureMockCoins(
+        {
+          coinPackageId,
+          owner: signerAddress,
 
-  logKeyValueGreen("Pyth package")(pythPackageId);
-  logKeyValueGreen("Coin package")(coinPackageId);
-  logKeyValueGreen("Feeds")(JSON.stringify(priceFeeds));
-  logKeyValueGreen("Coins")(JSON.stringify(coins));
-});
+          signer: keypair,
+          coinRegistryObject,
+        },
+        suiClient
+      ));
+
+    await writeMockArtifact(mockArtifactPath, {
+      coins,
+    });
+
+    const priceFeeds =
+      existingState.existingPriceFeeds ||
+      (await ensurePriceFeeds({
+        pythPackageId,
+        suiClient,
+        signer: keypair,
+        clockObject,
+        existingPriceFeeds: existingState.existingPriceFeeds || [],
+      }));
+
+    await writeMockArtifact(mockArtifactPath, {
+      priceFeeds,
+    });
+
+    logKeyValueGreen("Pyth package")(pythPackageId);
+    logKeyValueGreen("Coin package")(coinPackageId);
+    logKeyValueGreen("Feeds")(JSON.stringify(priceFeeds));
+    logKeyValueGreen("Coins")(JSON.stringify(coins));
+  },
+  yargs()
+    .option("coinPackageId", {
+      alias: "coin-package-id",
+      type: "string",
+      description:
+        "Package ID of the Coin Move package on the local localNetwork",
+    })
+    .option("coinContractPath", {
+      alias: "coin-contract-path",
+      type: "string",
+      description: "Path to the local coin stub Move package to publish",
+      default: DEFAULT_COIN_CONTRACT_PATH,
+    })
+    .option("pythPackageId", {
+      alias: "pyth-package-id",
+      type: "string",
+      description:
+        "Package ID of the Pyth Move package on the local localNetwork",
+    })
+    .option("pythContractPath", {
+      alias: "pyth-contract-path",
+      type: "string",
+      description: "Path to the local Pyth stub Move package to publish",
+      default: DEFAULT_PYTH_CONTRACT_PATH,
+    })
+    .option("rePublish", {
+      alias: "re-publish",
+      type: "boolean",
+      description: `Re-create and overwrite local mock data`,
+      default: false,
+    })
+    .strict()
+);
 
 const publishMockPackages = async (
   {
     network,
     fullNodeUrl,
     keypair,
-    cliOptions,
+    cliArguments,
+    existingState,
   }: {
     network: "localnet";
     fullNodeUrl: string;
     keypair: Ed25519Keypair;
-    cliOptions: SetupLocalCliArgs;
+    cliArguments: SetupLocalCliArgs;
+    existingState: ExistingState;
   },
   suiClient: SuiClient
 ) => {
   const pythPackageId =
-    cliOptions.existingPythPackageId ??
+    existingState.existingPythPackageId ??
     (
       await publishPackageWithLog(
         {
           network,
           fullNodeUrl,
-          packagePath: path.resolve(cliOptions.pythContractPath),
+          packagePath: path.resolve(cliArguments.pythContractPath),
           keypair,
           withUnpublishedDependencies: true,
-          keystorePath: cliOptions.keystorePath,
         },
         suiClient
       )
     ).packageId;
 
-  if (pythPackageId !== cliOptions.existingPythPackageId)
+  if (pythPackageId !== existingState.existingPythPackageId)
     await writeMockArtifact(mockArtifactPath, {
       pythPackageId,
     });
 
   const coinPackageId =
-    cliOptions.existingCoinPackageId ||
+    existingState.existingCoinPackageId ||
     (
       await publishPackageWithLog(
         {
           network,
           fullNodeUrl,
-          packagePath: path.resolve(cliOptions.coinContractPath),
+          packagePath: path.resolve(cliArguments.coinContractPath),
           keypair,
-          keystorePath: cliOptions.keystorePath,
         },
         suiClient
       )
     ).packageId;
 
-  if (coinPackageId !== cliOptions.existingCoinPackageId)
+  if (coinPackageId !== existingState.existingCoinPackageId)
     await writeMockArtifact(mockArtifactPath, {
       coinPackageId,
     });
@@ -236,24 +292,6 @@ const publishMockPackages = async (
     pythPackageId,
     coinPackageId,
   };
-};
-
-const readDeploymentArtifacts = async (
-  network: NetworkName
-): Promise<PublishArtifact[]> => {
-  try {
-    return await readArtifact<PublishArtifact[]>(
-      getDeploymentArtifactPath(network),
-      []
-    );
-  } catch (error) {
-    logWarning(
-      error instanceof Error
-        ? error.message
-        : "Unable to read deployment artifacts"
-    );
-    return [];
-  }
 };
 
 const resolveRegistryAndClockRefs = async (suiClient: SuiClient) => {
@@ -582,65 +620,3 @@ const firstCreatedBySuffix = (
 ) => findCreatedObjectIds(result, suffix)[0];
 
 const normalizeHex = (value: string) => value.toLowerCase().replace(/^0x/, "");
-
-/**
- * Parses CLI flags and enforces that publish/package ID inputs are provided.
- */
-const parseSetupLocalCliArgs = async (
-  mockArtifact: MockArtifact,
-  accounts: {
-    keystorePath: string;
-    accountIndex: number;
-    accountAddress?: string;
-  }
-): Promise<SetupLocalCliArgs> => {
-  const providedCliArgument = await yargs(hideBin(process.argv))
-    .scriptName("setup-local")
-    .option("coin-package-id", {
-      type: "string",
-      description:
-        "Package ID of the Coin Move package on the local localNetwork",
-    })
-    .option("coin-contract-path", {
-      type: "string",
-      description: "Path to the local coin stub Move package to publish",
-      default: DEFAULT_COIN_CONTRACT_PATH,
-    })
-    .option("pyth-package-id", {
-      type: "string",
-      description:
-        "Package ID of the Pyth Move package on the local localNetwork",
-    })
-    .option("pyth-contract-path", {
-      type: "string",
-      description: "Path to the local Pyth stub Move package to publish",
-      default: DEFAULT_PYTH_CONTRACT_PATH,
-    })
-    .option("re-publish", {
-      type: "boolean",
-      description: `Re-create and overwrite local mock data`,
-      default: false,
-    })
-    .strict()
-    .help()
-    .parseAsync();
-
-  return {
-    ...providedCliArgument,
-    keystorePath: accounts.keystorePath,
-    accountIndex: accounts.accountIndex,
-    accountAddress: accounts.accountAddress,
-    existingPythPackageId: providedCliArgument.rePublish
-      ? undefined
-      : providedCliArgument.pythPackageId || mockArtifact.pythPackageId,
-    existingCoinPackageId: providedCliArgument.rePublish
-      ? undefined
-      : providedCliArgument.coinPackageId || mockArtifact.coinPackageId,
-    existingPriceFeeds: providedCliArgument.rePublish
-      ? undefined
-      : mockArtifact.priceFeeds,
-    existingCoins: providedCliArgument.rePublish
-      ? undefined
-      : mockArtifact.coins,
-  };
-};

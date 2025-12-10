@@ -1,7 +1,13 @@
 {
   "cSpell.words": [
+    "Bech",
+    "devnet",
     "Keypair",
-    "Localnet"
+    "keypairs",
+    "Localnet",
+    "mysten",
+    "suiprivkey",
+    "Uleb"
   ],
   "files.watcherExclude": {
     "patches/": true,

@@ -15,14 +15,18 @@ import {
   DEFAULT_KEYSTORE_PATH,
   SUI_COIN_REGISTRY_ID,
 } from "../utils/constants";
-import { resolveAccountsConfig, selectNetworkConfig } from "../utils/config";
-import { loadDeployerKeypair } from "../utils/keypair";
-import { logKeyValueBlue, logKeyValueGreen, logKeyValueRed } from "../utils/log";
+import {
+  logKeyValueBlue,
+  logKeyValueGreen,
+  logKeyValueRed,
+} from "../utils/log";
 import { MockArtifact, mockArtifactPath } from "../utils/mock";
 import { resolveRpcUrl } from "../utils/network";
 import { getSuiSharedObject } from "../utils/object";
 import { runSuiScript } from "../utils/process";
 import type { NetworkName } from "../utils/types";
+import { getAccountConfig, getNetworkConfig } from "../utils/config";
+import { loadKeypair } from "../utils/keypair";
 
 type CliArgs = {
   registryId: string;
@@ -42,15 +46,15 @@ type CurrencyViewValues = {
   symbol: string;
   description: string;
   iconUrl: string;
-  metadataCapId: string | null;
+  metadataCapId?: string;
   metadataCapClaimed: boolean;
   metadataCapDeleted: boolean;
-  treasuryCapId: string | null;
-  denyCapId: string | null;
+  treasuryCapId?: string;
+  denyCapId?: string;
   supplyFixed: boolean;
   supplyBurnOnly: boolean;
   regulated: boolean;
-  totalSupply: bigint | null;
+  totalSupply?: bigint;
 };
 
 type CurrencyState = {
@@ -59,46 +63,34 @@ type CurrencyState = {
   currencyObjectId: string;
   metadataCapStatus: "claimed" | "unclaimed" | "deleted";
   supplyKind: "fixed" | "burn-only" | "unknown";
-  totalSupply: string | null;
+  totalSupply?: string;
   decimals: number;
   name: string;
   symbol: string;
   description: string;
   iconUrl: string;
-  metadataCapId?: string | null;
-  treasuryCapId?: string | null;
-  denyCapId?: string | null;
+  metadataCapId?: string;
+  treasuryCapId?: string;
+  denyCapId?: string;
   regulated: boolean;
 };
 
 type InspectReturnValue = [number[], string];
 type ViewCallPlan = {
   key: keyof CurrencyViewValues;
-  decode: (value: InspectReturnValue | undefined) => CurrencyViewValues[keyof CurrencyViewValues];
+  decode: (
+    value: InspectReturnValue | undefined
+  ) => CurrencyViewValues[keyof CurrencyViewValues];
 };
 
-runSuiScript(async (config) => {
+runSuiScript(async ({ network, currentNetwork }) => {
   const cliArgs = await parseCliArgs();
-  const { networkName, networkConfig } = selectNetworkConfig(
-    config,
-    "localnet"
-  );
 
-  ensureLocalnet(networkName as NetworkName);
+  ensureLocalnet(currentNetwork);
 
-  const fullNodeUrl = resolveRpcUrl(
-    networkName as NetworkName,
-    networkConfig.url
-  );
-  const suiClient = new SuiClient({ url: fullNodeUrl });
+  const suiClient = new SuiClient({ url: network.url });
 
-  const accounts = resolveAccountsConfig(networkConfig, {
-    keystorePath: DEFAULT_KEYSTORE_PATH,
-    accountIndex: 0,
-    accountAddress: undefined,
-  });
-
-  const keypair = await loadDeployerKeypair(accounts);
+  const keypair = await loadKeypair(network.account);
 
   const registrySharedObject = await getSuiSharedObject(
     { objectId: cliArgs.registryId, mutable: false },
@@ -153,7 +145,7 @@ const parseCliArgs = async (): Promise<CliArgs> => {
   };
 };
 
-const ensureLocalnet = (network: NetworkName) => {
+const ensureLocalnet = (network: string) => {
   if (network !== "localnet")
     throw new Error("get-mock-currency is intended for localnet only.");
 };
@@ -165,9 +157,7 @@ const resolveCoinInputs = (
   const artifactCoins = mockArtifact?.coins ?? [];
 
   if (coinTypes.length > 0) {
-    return coinTypes.map((coinType) =>
-      mergeCoinInput(coinType, artifactCoins)
-    );
+    return coinTypes.map((coinType) => mergeCoinInput(coinType, artifactCoins));
   }
 
   if (artifactCoins.length > 0) {
@@ -434,7 +424,9 @@ const enqueueViewCalls = ({
 
 const decodeViewResults = (
   viewPlan: ViewCallPlan[],
-  results: Awaited<ReturnType<SuiClient["devInspectTransactionBlock"]>>["results"]
+  results: Awaited<
+    ReturnType<SuiClient["devInspectTransactionBlock"]>
+  >["results"]
 ): CurrencyViewValues => {
   if (!results)
     throw new Error("Dev inspect returned no results for view calls.");
@@ -446,7 +438,9 @@ const decodeViewResults = (
 
   return viewPlan.reduce<Partial<CurrencyViewValues>>((acc, plan, index) => {
     const value = results[index]?.returnValues?.[0];
-    acc[plan.key] = plan.decode(value) as CurrencyViewValues[keyof CurrencyViewValues];
+    acc[plan.key] = plan.decode(
+      value
+    ) as CurrencyViewValues[keyof CurrencyViewValues];
     return acc;
   }, {}) as CurrencyViewValues;
 };
@@ -466,12 +460,12 @@ const decodeU8 =
 
 const decodeOptionalAddress =
   (label: string) =>
-  (value: InspectReturnValue | undefined): string | null =>
+  (value: InspectReturnValue | undefined): string | undefined =>
     decodeOption(unpackBytes(value, label), decodeAddress);
 
 const decodeOptionalU64 =
   (label: string) =>
-  (value: InspectReturnValue | undefined): bigint | null =>
+  (value: InspectReturnValue | undefined): bigint | undefined =>
     decodeOption(unpackBytes(value, label), decodeU64);
 
 const decodeString =
@@ -486,10 +480,10 @@ const decodeString =
 const decodeOption = <T>(
   bytes: Uint8Array,
   inner: (payload: Uint8Array) => T
-): T | null => {
+): T | undefined => {
   if (bytes.length === 0) throw new Error("Option payload is empty.");
   const [tag, ...rest] = Array.from(bytes);
-  if (tag === 0) return null;
+  if (tag === 0) return;
   if (tag !== 1)
     throw new Error(`Unexpected option tag ${tag}; expected 0 or 1.`);
   return inner(Uint8Array.from(rest));
@@ -507,7 +501,7 @@ const decodeU64 = (bytes: Uint8Array): bigint => {
 
   let value = 0n;
   for (let i = 0; i < 8; i++) {
-    value += BigInt(bytes[i]) << (BigInt(8 * i));
+    value += BigInt(bytes[i]) << BigInt(8 * i);
   }
   return value;
 };
@@ -567,7 +561,7 @@ const mapViewToState = ({
     currencyObjectId,
     metadataCapStatus,
     supplyKind,
-    totalSupply: viewValues.totalSupply?.toString() ?? null,
+    totalSupply: viewValues.totalSupply?.toString(),
     decimals: viewValues.decimals,
     name: viewValues.name,
     symbol: viewValues.symbol,

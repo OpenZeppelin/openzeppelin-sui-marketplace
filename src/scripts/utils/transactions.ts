@@ -2,6 +2,7 @@ import {
   type SuiTransactionBlockResponse,
   type SuiClient,
   type SuiObjectChangeCreated,
+  SuiObjectChange,
 } from "@mysten/sui/client";
 import { Transaction } from "@mysten/sui/transactions";
 import type { Ed25519Keypair } from "@mysten/sui/keypairs/ed25519";
@@ -51,7 +52,7 @@ export const signAndExecute = async (
       if (!staleObjectId) break;
 
       // Refresh gas with the latest version in case the stale object is a SUI coin.
-      const gasCoin = await pickFreshGasCoin(suiClient, signerAddress);
+      const gasCoin = await pickFreshGasCoin(signerAddress, suiClient);
       tx.setGasOwner(signerAddress);
       tx.setGasPayment([gasCoin]);
     }
@@ -104,26 +105,13 @@ export type CreatedObjectSummary = {
 /**
  * Returns the first created object whose type matches the provided predicate, preserving owner metadata.
  */
-export const findCreatedObject = (
+export const findObjectMatching = (
   result: SuiTransactionBlockResponse,
   matcher: (objectType: string) => boolean
-): CreatedObjectSummary | null => {
-  const created = (result.objectChanges ?? []).find(
+): SuiObjectChange | undefined =>
+  (result.objectChanges ?? []).find(
     (change) => isCreatedWithType(change) && matcher(change.objectType)
   );
-  if (!created) return null;
-
-  return {
-    objectId: created.objectId,
-    objectType: created.objectType,
-    owner: created.owner,
-    initialSharedVersion:
-      "Shared" in created.owner
-        ? (created.owner as { Shared: { initial_shared_version: number | string } })
-            .Shared.initial_shared_version
-        : undefined,
-  };
-};
 
 /**
  * Convenience wrapper for `findCreatedObject` that matches on a type suffix.
@@ -131,8 +119,8 @@ export const findCreatedObject = (
 export const findCreatedObjectBySuffix = (
   result: SuiTransactionBlockResponse,
   typeSuffix: string
-): CreatedObjectSummary | null =>
-  findCreatedObject(result, (objectType) => objectType.endsWith(typeSuffix));
+): SuiObjectChange | undefined =>
+  findObjectMatching(result, (objectType) => objectType.endsWith(typeSuffix));
 
 export const assertTransactionSuccess = ({
   effects,
@@ -161,7 +149,7 @@ const pickFreshGasCoin = async (owner: string, client: SuiClient) => {
   };
 };
 
-const parseStaleObjectId = (error: unknown): string | null => {
+const parseStaleObjectId = (error: unknown): string | undefined => {
   const message =
     error instanceof Error
       ? error.message
@@ -169,5 +157,5 @@ const parseStaleObjectId = (error: unknown): string | null => {
       ? error
       : "";
   const match = message.match(/Object ID (\S+)/);
-  return match?.[1] ?? null;
+  return match?.[1];
 };

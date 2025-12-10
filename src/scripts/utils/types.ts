@@ -1,4 +1,9 @@
-export type NetworkName = 'localnet' | 'devnet' | 'testnet' | 'mainnet' | 'custom';
+export type NetworkName =
+  | "mainnet"
+  | "testnet"
+  | "devnet"
+  | "localnet"
+  | "custom";
 
 export type BuildOutput = {
   modules: string[];

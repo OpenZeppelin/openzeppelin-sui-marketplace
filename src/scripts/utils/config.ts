@@ -1,17 +1,21 @@
+import { config } from "dotenv";
+config();
+
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
-
 import type { NetworkName } from "./types";
+import { resolveRpcUrl } from "./network";
+import { DeepPartial } from "./type-utils";
+import { DEFAULT_KEYSTORE_PATH } from "./constants";
 
-export type SuiAccountsConfig =
-  | string[]
-  | {
-      keystorePath?: string;
-      accountAddress?: string;
-      accountIndex?: number;
-      keypairBase64?: string;
-    };
+export type SuiAccountConfig = {
+  keystorePath?: string;
+  accountIndex?: number;
+  accountAddress?: string;
+  accountPrivateKey?: string;
+  accountMnemonic?: string;
+};
 
 export type SuiMoveConfig = {
   packagePath?: string;
@@ -19,9 +23,10 @@ export type SuiMoveConfig = {
 };
 
 export type SuiNetworkConfig = {
-  url?: string;
+  url: string;
   faucetUrl?: string;
-  accounts?: SuiAccountsConfig;
+  account: SuiAccountConfig;
+  accounts?: Record<string, SuiAccountConfig>;
   gasBudget?: number;
   move?: SuiMoveConfig;
 };
@@ -35,14 +40,16 @@ export type SuiPathsUserConfig = {
 
 export type SuiUserConfig = {
   defaultNetwork?: NetworkName | string;
-  networks?: Record<string, SuiNetworkConfig>;
+  networks?: Partial<Record<NetworkName | string, SuiNetworkConfig>>;
   paths?: SuiPathsUserConfig;
 };
 
 export type SuiResolvedConfig = {
-  defaultNetwork: NetworkName | string;
-  networks: Record<string, SuiNetworkConfig>;
+  defaultNetwork?: NetworkName | string;
+  currentNetwork: NetworkName | string;
+  networks: Partial<Record<NetworkName | string, SuiNetworkConfig>>;
   paths: Required<SuiPathsUserConfig>;
+  network: SuiNetworkConfig;
 };
 
 const DEFAULT_CONFIG_FILENAMES = [
@@ -67,21 +74,47 @@ const resolvePaths = (
   ),
 });
 
-const resolveConfig = (userConfig: SuiUserConfig): SuiResolvedConfig => ({
-  defaultNetwork:
-    userConfig.defaultNetwork ??
-    (process.env.SUI_NETWORK as NetworkName | string | undefined) ??
-    "localnet",
-  networks: userConfig.networks ?? {},
-  paths: resolvePaths(userConfig.paths),
+const withDefault = (
+  networkName: string,
+  networkConfig?: Partial<SuiNetworkConfig>
+): SuiNetworkConfig => ({
+  url: resolveRpcUrl(networkName),
+  account: {
+    keystorePath: process.env.SUI_KEYSTORE_PATH ?? DEFAULT_KEYSTORE_PATH,
+    accountIndex: Number(process.env.SUI_ACCOUNT_INDEX ?? 0),
+    accountAddress: process.env.SUI_ACCOUNT_ADDRESS,
+    accountPrivateKey: process.env.SUI_ACCOUNT_PRIVATE_KEY,
+    accountMnemonic: process.env.SUI_ACCOUNT_MNEMONIC,
+  },
+  ...networkConfig,
 });
+
+const resolveConfig = (userConfig: SuiUserConfig): SuiResolvedConfig => {
+  const currentNetwork =
+    userConfig.defaultNetwork ??
+    (process.env.SUI_NETWORK as NetworkName | undefined) ??
+    "localnet";
+
+  return {
+    currentNetwork,
+    defaultNetwork: userConfig.defaultNetwork,
+    networks: userConfig.networks || {},
+    paths: resolvePaths(userConfig.paths),
+    network: withDefault(
+      currentNetwork,
+      userConfig?.networks?.[currentNetwork]
+    ),
+  };
+};
 
 const findConfigPath = () =>
   DEFAULT_CONFIG_FILENAMES.map((filename) =>
     path.join(process.cwd(), filename)
   ).find((candidate) => existsSync(candidate));
 
-export const defineSuiConfig = (config: SuiUserConfig): SuiUserConfig => config;
+export const defineSuiConfig = (
+  config: DeepPartial<SuiUserConfig>
+): DeepPartial<SuiUserConfig> => config;
 
 export const loadSuiConfig = async (): Promise<SuiResolvedConfig> => {
   const configPath = findConfigPath();
@@ -105,33 +138,19 @@ export const loadSuiConfig = async (): Promise<SuiResolvedConfig> => {
   }
 };
 
-export const selectNetworkConfig = (
-  config: SuiResolvedConfig,
-  networkName?: string
-) => {
-  const selectedNetwork = networkName ?? config.defaultNetwork ?? "localnet";
-  return {
-    networkName: selectedNetwork,
-    networkConfig: config.networks[selectedNetwork] ?? {},
-  };
-};
+export const getNetworkConfig = (
+  networkName: string,
+  config: SuiResolvedConfig
+): SuiNetworkConfig =>
+  withDefault(
+    networkName,
+    config.networks[networkName || config.currentNetwork]
+  );
 
-export const resolveAccountsConfig = (
+export const getAccountConfig = (
   networkConfig: SuiNetworkConfig,
-  defaults: {
-    keystorePath: string;
-    accountIndex: number;
-    accountAddress?: string;
-  }
-) => {
-  const accounts = networkConfig.accounts;
-  if (accounts && !Array.isArray(accounts)) {
-    return {
-      keystorePath: accounts.keystorePath ?? defaults.keystorePath,
-      accountIndex: accounts.accountIndex ?? defaults.accountIndex,
-      accountAddress: accounts.accountAddress ?? defaults.accountAddress,
-    };
-  }
-
-  return defaults;
-};
+  accountName?: string
+): SuiAccountConfig =>
+  accountName
+    ? networkConfig.accounts?.[accountName] || networkConfig.account
+    : networkConfig.account;
