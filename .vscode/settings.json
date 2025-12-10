@@ -1,6 +1,7 @@
 {
   "cSpell.words": [
-    "Keypair"
+    "Keypair",
+    "Localnet"
   ],
   "files.watcherExclude": {
     "patches/": true,

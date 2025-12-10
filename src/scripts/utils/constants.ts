@@ -11,10 +11,12 @@ export const DEFAULT_KEYSTORE_PATH = path.join(
 );
 
 export const getArtifactPath =
-  (artifactType: "mock" | "deployment") => (network: NetworkName) =>
+  (artifactType: "mock" | "deployment" | "object") =>
+  (network: NetworkName) =>
     path.join(process.cwd(), "deployments", `${artifactType}.${network}.json`);
 
 export const getDeploymentArtifactPath = getArtifactPath("deployment");
+export const getObjectArtifactPath = getArtifactPath("object");
 
 export const SUI_CLOCK_ID = normalizeSuiObjectId(
   "0x0000000000000000000000000000000000000000000000000000000000000006"

@@ -20,7 +20,7 @@ import {
   getDeploymentArtifactPath,
   SUI_COIN_REGISTRY_ID,
 } from "../utils/constants";
-import { loadKeypair } from "../utils/keypair";
+import { loadDeployerKeypair, loadKeypair } from "../utils/keypair";
 import { logKeyValueBlue, logKeyValueGreen, logWarning } from "../utils/log";
 import { resolveRpcUrl } from "../utils/network";
 import { publishPackageWithLog } from "../utils/publish";
@@ -44,10 +44,12 @@ import {
   writeMockArtifact,
 } from "../utils/mock";
 import { getSuiSharedObject, WrappedSuiSharedObject } from "../utils/object";
+import { resolveAccountsConfig, selectNetworkConfig } from "../utils/config";
 
 type SetupLocalCliArgs = {
   keystorePath: string;
   accountIndex: number;
+  accountAddress?: string;
   coinContractPath: string;
   existingCoinPackageId?: string;
   existingCoins?: CoinArtifact[];
@@ -101,12 +103,21 @@ const DEFAULT_FEEDS: LabeledPriceFeedConfig[] = [
 
 const DEFAULT_TX_GAS_BUDGET = 100_000_000;
 
-runSuiScript(async () => {
+runSuiScript(async (config) => {
   const localNetwork: NetworkName = "localnet";
 
+  const { networkConfig } = selectNetworkConfig(config, localNetwork);
+  const accountDefaults = resolveAccountsConfig(networkConfig, {
+    keystorePath: DEFAULT_KEYSTORE_PATH,
+    accountIndex: 0,
+    accountAddress: undefined,
+  });
   const mockArtifact = await readArtifact<MockArtifact>(mockArtifactPath, {});
-  const cliOptions = await parseSetupLocalCliArgs(mockArtifact ?? {});
-  const fullNodeUrl = resolveRpcUrl(localNetwork);
+  const cliOptions = await parseSetupLocalCliArgs(
+    mockArtifact ?? {},
+    accountDefaults
+  );
+  const fullNodeUrl = resolveRpcUrl(localNetwork, networkConfig.url);
 
   const keypair = await loadDeployerKeypair(cliOptions);
   const signerAddress = keypair.toSuiAddress();
@@ -131,13 +142,16 @@ runSuiScript(async () => {
 
   const coins =
     cliOptions.existingCoins ||
-    (await ensureMockCoins({
-      coinPackageId,
-      owner: signerAddress,
-      suiClient,
-      signer: keypair,
-      coinRegistryObject,
-    }));
+    (await ensureMockCoins(
+      {
+        coinPackageId,
+        owner: signerAddress,
+
+        signer: keypair,
+        coinRegistryObject,
+      },
+      suiClient
+    ));
 
   await writeMockArtifact(mockArtifactPath, {
     coins,
@@ -253,50 +267,51 @@ const resolveRegistryAndClockRefs = async (suiClient: SuiClient) => {
   return { coinRegistryObject, clockObject };
 };
 
-const ensureMockCoins = async ({
-  coinPackageId,
-  owner,
-  suiClient,
-  signer,
-  coinRegistryObject,
-}: {
-  coinPackageId: string;
-  owner: string;
-  suiClient: SuiClient;
-  signer: Ed25519Keypair;
-  coinRegistryObject: WrappedSuiSharedObject;
-}): Promise<CoinArtifact[]> => {
-  const seeds = buildCoinSeeds(coinPackageId);
+const ensureMockCoins = async (
+  {
+    coinPackageId,
+    owner,
+    signer,
+    coinRegistryObject,
+  }: {
+    coinPackageId: string;
+    owner: string;
+    signer: Ed25519Keypair;
+    coinRegistryObject: WrappedSuiSharedObject;
+  },
+  suiClient: SuiClient
+): Promise<CoinArtifact[]> =>
+  await Promise.all(
+    buildCoinSeeds(coinPackageId).map(async (seed) => {
+      return await ensureCoin(
+        {
+          seed,
+          owner,
+          signer,
+          coinRegistryObject,
+        },
+        suiClient
+      );
+    })
+  );
 
-  const coins: CoinArtifact[] = [];
-  for (const seed of seeds) {
-    const coin = await ensureCoin({
-      seed,
-      owner,
-      suiClient,
-      signer,
-      coinRegistryObject,
-    });
-    coins.push(coin);
-  }
+const ensureCoin = async (
+  {
+    seed,
+    owner,
+    signer,
+    coinRegistryObject,
+  }: {
+    seed: CoinSeed;
+    owner: string;
 
-  return coins;
-};
-
-const ensureCoin = async ({
-  seed,
-  owner,
-  suiClient,
-  signer,
-  coinRegistryObject,
-}: {
-  seed: CoinSeed;
-  owner: string;
-  suiClient: SuiClient;
-  signer: Ed25519Keypair;
-  coinRegistryObject: WrappedSuiSharedObject;
-}): Promise<CoinArtifact> => {
+    signer: Ed25519Keypair;
+    coinRegistryObject: WrappedSuiSharedObject;
+  },
+  suiClient: SuiClient
+): Promise<CoinArtifact> => {
   const currencyObjectId = deriveCurrencyId(seed.coinType);
+
   const [metadata, currencyObject, mintedCoinObjectId] = await Promise.all([
     suiClient.getCoinMetadata({ coinType: seed.coinType }),
     getObjectSafe(suiClient, currencyObjectId, {
@@ -333,11 +348,13 @@ const ensureCoin = async ({
     ],
   });
 
-  const result = await signAndExecute({
-    client: suiClient,
-    tx,
-    signer,
-  });
+  const result = await signAndExecute(
+    {
+      tx,
+      signer,
+    },
+    suiClient
+  );
   assertTransactionSuccess(result);
 
   const created = coinArtifactsFromResult({
@@ -456,11 +473,13 @@ const publishPriceFeed = async ({
     tx.sharedObjectRef(clockObject.sharedRef)
   );
 
-  const result = await signAndExecute({
-    client: suiClient,
-    tx,
-    signer,
-  });
+  const result = await signAndExecute(
+    {
+      tx,
+      signer,
+    },
+    suiClient
+  );
   assertTransactionSuccess(result);
 
   const [priceInfoObjectId] = findCreatedObjectIds(
@@ -568,21 +587,15 @@ const normalizeHex = (value: string) => value.toLowerCase().replace(/^0x/, "");
  * Parses CLI flags and enforces that publish/package ID inputs are provided.
  */
 const parseSetupLocalCliArgs = async (
-  mockArtifact: MockArtifact
+  mockArtifact: MockArtifact,
+  accounts: {
+    keystorePath: string;
+    accountIndex: number;
+    accountAddress?: string;
+  }
 ): Promise<SetupLocalCliArgs> => {
   const providedCliArgument = await yargs(hideBin(process.argv))
     .scriptName("setup-local")
-    .option("keystore-path", {
-      type: "string",
-      description: "Path to a Sui keystore file (defaults to CLI keystore)",
-      default: DEFAULT_KEYSTORE_PATH,
-    })
-    .option("account-index", {
-      type: "number",
-      description:
-        "Account index to use from the keystore when no env key is set",
-      default: 0,
-    })
     .option("coin-package-id", {
       type: "string",
       description:
@@ -614,6 +627,9 @@ const parseSetupLocalCliArgs = async (
 
   return {
     ...providedCliArgument,
+    keystorePath: accounts.keystorePath,
+    accountIndex: accounts.accountIndex,
+    accountAddress: accounts.accountAddress,
     existingPythPackageId: providedCliArgument.rePublish
       ? undefined
       : providedCliArgument.pythPackageId || mockArtifact.pythPackageId,
@@ -627,25 +643,4 @@ const parseSetupLocalCliArgs = async (
       ? undefined
       : mockArtifact.coins,
   };
-};
-
-/**
- * Loads the keypair used for publishing and seeding mock data.
- */
-const loadDeployerKeypair = async ({
-  keystorePath,
-  accountIndex,
-}: SetupLocalCliArgs) => {
-  return loadKeypair({
-    keystorePath,
-    accountIndex,
-    privateKey:
-      process.env.SUI_DEPLOYER_PRIVATE_KEY ??
-      process.env.SUI_PRIVATE_KEY ??
-      process.env.PRIVATE_KEY,
-    mnemonic:
-      process.env.SUI_DEPLOYER_MNEMONIC ??
-      process.env.SUI_MNEMONIC ??
-      process.env.MNEMONIC,
-  });
 };

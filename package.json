@@ -4,8 +4,10 @@
   "private": true,
   "description": "Scripts and tooling for deploying the Sui Oracle Market Move package.",
   "scripts": {
+    "start:localnet": "ts-node --transpile-only src/scripts/chain/start-localnet.ts",
     "publish:package": "ts-node --transpile-only src/scripts/chain/publish-package.ts",
-    "setup:local": "ts-node --transpile-only src/scripts/chain/setup-local.ts"
+    "setup:local": "ts-node --transpile-only src/scripts/chain/setup-local.ts",
+    "get:mock-currency": "ts-node --transpile-only src/scripts/chain/get-mock-currency.ts"
   },
   "dependencies": {
     "@mysten/sui": "^1.45.0",

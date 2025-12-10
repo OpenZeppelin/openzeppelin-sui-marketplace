@@ -1,11 +1,14 @@
+import { loadSuiConfig, type SuiResolvedConfig } from "./config";
 import { logError } from "./log";
 import { ensureSuiCli } from "./suiCli";
 
-export const runSuiScript = (scriptToExecute: Function) => {
+type ScriptExecutor = (config: SuiResolvedConfig) => Promise<void> | void;
+
+export const runSuiScript = (scriptToExecute: ScriptExecutor) => {
   (async () => {
     try {
       await ensureSuiCli();
-      await scriptToExecute();
+      await scriptToExecute(await loadSuiConfig());
       process.exit(0);
     } catch (error) {
       console.log("\n");

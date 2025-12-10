@@ -1,0 +1,600 @@
+import "dotenv/config";
+
+import { SuiClient } from "@mysten/sui/client";
+import { Transaction } from "@mysten/sui/transactions";
+import {
+  deriveObjectID,
+  normalizeSuiObjectId,
+  normalizeSuiAddress,
+} from "@mysten/sui/utils";
+import yargs from "yargs";
+import { hideBin } from "yargs/helpers";
+
+import { readArtifact } from "../utils/artifacts";
+import {
+  DEFAULT_KEYSTORE_PATH,
+  SUI_COIN_REGISTRY_ID,
+} from "../utils/constants";
+import { resolveAccountsConfig, selectNetworkConfig } from "../utils/config";
+import { loadDeployerKeypair } from "../utils/keypair";
+import { logKeyValueBlue, logKeyValueGreen, logKeyValueRed } from "../utils/log";
+import { MockArtifact, mockArtifactPath } from "../utils/mock";
+import { resolveRpcUrl } from "../utils/network";
+import { getSuiSharedObject } from "../utils/object";
+import { runSuiScript } from "../utils/process";
+import type { NetworkName } from "../utils/types";
+
+type CliArgs = {
+  registryId: string;
+  coinTypes: string[];
+};
+
+type CoinInput = {
+  coinType: string;
+  label?: string;
+  currencyObjectId?: string;
+};
+
+type CurrencyViewValues = {
+  exists: boolean;
+  decimals: number;
+  name: string;
+  symbol: string;
+  description: string;
+  iconUrl: string;
+  metadataCapId: string | null;
+  metadataCapClaimed: boolean;
+  metadataCapDeleted: boolean;
+  treasuryCapId: string | null;
+  denyCapId: string | null;
+  supplyFixed: boolean;
+  supplyBurnOnly: boolean;
+  regulated: boolean;
+  totalSupply: bigint | null;
+};
+
+type CurrencyState = {
+  coinType: string;
+  label?: string;
+  currencyObjectId: string;
+  metadataCapStatus: "claimed" | "unclaimed" | "deleted";
+  supplyKind: "fixed" | "burn-only" | "unknown";
+  totalSupply: string | null;
+  decimals: number;
+  name: string;
+  symbol: string;
+  description: string;
+  iconUrl: string;
+  metadataCapId?: string | null;
+  treasuryCapId?: string | null;
+  denyCapId?: string | null;
+  regulated: boolean;
+};
+
+type InspectReturnValue = [number[], string];
+type ViewCallPlan = {
+  key: keyof CurrencyViewValues;
+  decode: (value: InspectReturnValue | undefined) => CurrencyViewValues[keyof CurrencyViewValues];
+};
+
+runSuiScript(async (config) => {
+  const cliArgs = await parseCliArgs();
+  const { networkName, networkConfig } = selectNetworkConfig(
+    config,
+    "localnet"
+  );
+
+  ensureLocalnet(networkName as NetworkName);
+
+  const fullNodeUrl = resolveRpcUrl(
+    networkName as NetworkName,
+    networkConfig.url
+  );
+  const suiClient = new SuiClient({ url: fullNodeUrl });
+
+  const accounts = resolveAccountsConfig(networkConfig, {
+    keystorePath: DEFAULT_KEYSTORE_PATH,
+    accountIndex: 0,
+    accountAddress: undefined,
+  });
+
+  const keypair = await loadDeployerKeypair(accounts);
+
+  const registrySharedObject = await getSuiSharedObject(
+    { objectId: cliArgs.registryId, mutable: false },
+    suiClient
+  );
+
+  const mockArtifact = await readArtifact<MockArtifact>(mockArtifactPath, {});
+  const coinInputs = resolveCoinInputs(cliArgs.coinTypes, mockArtifact);
+
+  for (const coinInput of coinInputs) {
+    try {
+      const currencyState = await inspectCurrency({
+        coinInput,
+        suiClient,
+        registrySharedObject,
+        registryId: cliArgs.registryId,
+        sender: keypair.toSuiAddress(),
+      });
+      logCurrencyState(currencyState);
+    } catch (error) {
+      logKeyValueRed("Currency")(
+        `${coinInput.label ?? coinInput.coinType} failed: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
+    }
+  }
+});
+
+const parseCliArgs = async (): Promise<CliArgs> => {
+  const providedArgs = await yargs(hideBin(process.argv))
+    .scriptName("get-mock-currency")
+    .option("registry-id", {
+      type: "string",
+      description: "Coin registry shared object id",
+      default: SUI_COIN_REGISTRY_ID,
+    })
+    .option("coin-type", {
+      type: "array",
+      string: true,
+      description:
+        "Coin types to inspect (defaults to the mock artifact coins when omitted)",
+      default: [] as string[],
+    })
+    .strict()
+    .help()
+    .parseAsync();
+
+  return {
+    registryId: normalizeSuiObjectId(providedArgs.registryId),
+    coinTypes: (providedArgs.coinType as string[]).map((coinType) => coinType),
+  };
+};
+
+const ensureLocalnet = (network: NetworkName) => {
+  if (network !== "localnet")
+    throw new Error("get-mock-currency is intended for localnet only.");
+};
+
+const resolveCoinInputs = (
+  coinTypes: string[],
+  mockArtifact: MockArtifact | undefined
+): CoinInput[] => {
+  const artifactCoins = mockArtifact?.coins ?? [];
+
+  if (coinTypes.length > 0) {
+    return coinTypes.map((coinType) =>
+      mergeCoinInput(coinType, artifactCoins)
+    );
+  }
+
+  if (artifactCoins.length > 0) {
+    return artifactCoins.map((coin) => ({
+      coinType: coin.coinType,
+      label: coin.label,
+      currencyObjectId: coin.currencyObjectId,
+    }));
+  }
+
+  throw new Error(
+    "No coin types provided. Pass --coin-type or run setup-local to seed mock coins."
+  );
+};
+
+const mergeCoinInput = (coinType: string, artifactCoins: CoinInput[]) => {
+  const normalized = normalizeType(coinType);
+  const match = artifactCoins.find(
+    (coin) => normalizeType(coin.coinType) === normalized
+  );
+  return {
+    coinType,
+    label: match?.label,
+    currencyObjectId: match?.currencyObjectId,
+  };
+};
+
+const normalizeType = (type: string) => type.toLowerCase();
+
+const inspectCurrency = async ({
+  coinInput,
+  suiClient,
+  registrySharedObject,
+  registryId,
+  sender,
+}: {
+  coinInput: CoinInput;
+  suiClient: SuiClient;
+  registrySharedObject: Awaited<ReturnType<typeof getSuiSharedObject>>;
+  registryId: string;
+  sender: string;
+}): Promise<CurrencyState> => {
+  const currencyObjectId = deriveCurrencyId(coinInput, registryId);
+  const currencySharedObject = await getSuiSharedObject(
+    { objectId: currencyObjectId, mutable: false },
+    suiClient
+  );
+
+  const viewValues = await runCoinRegistryViews({
+    coinType: coinInput.coinType,
+    suiClient,
+    registrySharedObject,
+    currencySharedObject,
+    sender,
+  });
+
+  return mapViewToState({
+    coinInput,
+    currencyObjectId,
+    viewValues,
+  });
+};
+
+const deriveCurrencyId = (coinInput: CoinInput, registryId: string) =>
+  normalizeSuiObjectId(
+    coinInput.currencyObjectId ??
+      deriveObjectID(
+        registryId,
+        `0x2::coin_registry::CurrencyKey<${coinInput.coinType}>`,
+        new Uint8Array()
+      )
+  );
+
+const runCoinRegistryViews = async ({
+  coinType,
+  suiClient,
+  registrySharedObject,
+  currencySharedObject,
+  sender,
+}: {
+  coinType: string;
+  suiClient: SuiClient;
+  registrySharedObject: Awaited<ReturnType<typeof getSuiSharedObject>>;
+  currencySharedObject: Awaited<ReturnType<typeof getSuiSharedObject>>;
+  sender: string;
+}): Promise<CurrencyViewValues> => {
+  const tx = new Transaction();
+
+  const registryArg = tx.sharedObjectRef(registrySharedObject.sharedRef);
+  const currencyArg = tx.sharedObjectRef(currencySharedObject.sharedRef);
+  const viewPlan = enqueueViewCalls({
+    tx,
+    coinType,
+    registryArg,
+    currencyArg,
+  });
+
+  const inspection = await suiClient.devInspectTransactionBlock({
+    transactionBlock: tx,
+    sender: normalizeSuiAddress(sender),
+  });
+
+  if (inspection.error)
+    throw new Error(`Dev inspect failed: ${inspection.error}`);
+
+  const results = inspection.results ?? [];
+  return decodeViewResults(viewPlan, results);
+};
+
+const enqueueViewCalls = ({
+  tx,
+  coinType,
+  registryArg,
+  currencyArg,
+}: {
+  tx: Transaction;
+  coinType: string;
+  registryArg: ReturnType<Transaction["sharedObjectRef"]>;
+  currencyArg: ReturnType<Transaction["sharedObjectRef"]>;
+}): ViewCallPlan[] => {
+  const target = (fn: string) => `0x2::coin_registry::${fn}`;
+
+  const viewCalls: ViewCallPlan[] = [
+    {
+      key: "exists",
+      decode: decodeBool("exists"),
+    },
+    {
+      key: "decimals",
+      decode: decodeU8("decimals"),
+    },
+    {
+      key: "name",
+      decode: decodeString("name"),
+    },
+    {
+      key: "symbol",
+      decode: decodeString("symbol"),
+    },
+    {
+      key: "description",
+      decode: decodeString("description"),
+    },
+    {
+      key: "iconUrl",
+      decode: decodeString("icon_url"),
+    },
+    {
+      key: "metadataCapClaimed",
+      decode: decodeBool("is_metadata_cap_claimed"),
+    },
+    {
+      key: "metadataCapDeleted",
+      decode: decodeBool("is_metadata_cap_deleted"),
+    },
+    {
+      key: "metadataCapId",
+      decode: decodeOptionalAddress("metadata_cap_id"),
+    },
+    {
+      key: "treasuryCapId",
+      decode: decodeOptionalAddress("treasury_cap_id"),
+    },
+    {
+      key: "denyCapId",
+      decode: decodeOptionalAddress("deny_cap_id"),
+    },
+    {
+      key: "supplyFixed",
+      decode: decodeBool("is_supply_fixed"),
+    },
+    {
+      key: "supplyBurnOnly",
+      decode: decodeBool("is_supply_burn_only"),
+    },
+    {
+      key: "regulated",
+      decode: decodeBool("is_regulated"),
+    },
+    {
+      key: "totalSupply",
+      decode: decodeOptionalU64("total_supply"),
+    },
+  ];
+
+  tx.moveCall({
+    target: target("exists"),
+    arguments: [registryArg],
+    typeArguments: [coinType],
+  });
+  tx.moveCall({
+    target: target("decimals"),
+    arguments: [currencyArg],
+    typeArguments: [coinType],
+  });
+  tx.moveCall({
+    target: target("name"),
+    arguments: [currencyArg],
+    typeArguments: [coinType],
+  });
+  tx.moveCall({
+    target: target("symbol"),
+    arguments: [currencyArg],
+    typeArguments: [coinType],
+  });
+  tx.moveCall({
+    target: target("description"),
+    arguments: [currencyArg],
+    typeArguments: [coinType],
+  });
+  tx.moveCall({
+    target: target("icon_url"),
+    arguments: [currencyArg],
+    typeArguments: [coinType],
+  });
+  tx.moveCall({
+    target: target("is_metadata_cap_claimed"),
+    arguments: [currencyArg],
+    typeArguments: [coinType],
+  });
+  tx.moveCall({
+    target: target("is_metadata_cap_deleted"),
+    arguments: [currencyArg],
+    typeArguments: [coinType],
+  });
+  tx.moveCall({
+    target: target("metadata_cap_id"),
+    arguments: [currencyArg],
+    typeArguments: [coinType],
+  });
+  tx.moveCall({
+    target: target("treasury_cap_id"),
+    arguments: [currencyArg],
+    typeArguments: [coinType],
+  });
+  tx.moveCall({
+    target: target("deny_cap_id"),
+    arguments: [currencyArg],
+    typeArguments: [coinType],
+  });
+  tx.moveCall({
+    target: target("is_supply_fixed"),
+    arguments: [currencyArg],
+    typeArguments: [coinType],
+  });
+  tx.moveCall({
+    target: target("is_supply_burn_only"),
+    arguments: [currencyArg],
+    typeArguments: [coinType],
+  });
+  tx.moveCall({
+    target: target("is_regulated"),
+    arguments: [currencyArg],
+    typeArguments: [coinType],
+  });
+  tx.moveCall({
+    target: target("total_supply"),
+    arguments: [currencyArg],
+    typeArguments: [coinType],
+  });
+
+  return viewCalls;
+};
+
+const decodeViewResults = (
+  viewPlan: ViewCallPlan[],
+  results: Awaited<ReturnType<SuiClient["devInspectTransactionBlock"]>>["results"]
+): CurrencyViewValues => {
+  if (!results)
+    throw new Error("Dev inspect returned no results for view calls.");
+
+  if (results.length < viewPlan.length)
+    throw new Error(
+      `Unexpected dev inspect response length ${results.length}; expected ${viewPlan.length}.`
+    );
+
+  return viewPlan.reduce<Partial<CurrencyViewValues>>((acc, plan, index) => {
+    const value = results[index]?.returnValues?.[0];
+    acc[plan.key] = plan.decode(value) as CurrencyViewValues[keyof CurrencyViewValues];
+    return acc;
+  }, {}) as CurrencyViewValues;
+};
+
+const decodeBool =
+  (label: string) =>
+  (value: InspectReturnValue | undefined): boolean =>
+    unpackBytes(value, label)[0] === 1;
+
+const decodeU8 =
+  (label: string) =>
+  (value: InspectReturnValue | undefined): number => {
+    const bytes = unpackBytes(value, label);
+    if (bytes.length < 1) throw new Error(`${label} returned empty bytes.`);
+    return bytes[0];
+  };
+
+const decodeOptionalAddress =
+  (label: string) =>
+  (value: InspectReturnValue | undefined): string | null =>
+    decodeOption(unpackBytes(value, label), decodeAddress);
+
+const decodeOptionalU64 =
+  (label: string) =>
+  (value: InspectReturnValue | undefined): bigint | null =>
+    decodeOption(unpackBytes(value, label), decodeU64);
+
+const decodeString =
+  (label: string) =>
+  (value: InspectReturnValue | undefined): string => {
+    const bytes = unpackBytes(value, label);
+    const [length, offset] = readUleb128(bytes);
+    const textBytes = bytes.slice(offset, offset + length);
+    return new TextDecoder().decode(textBytes);
+  };
+
+const decodeOption = <T>(
+  bytes: Uint8Array,
+  inner: (payload: Uint8Array) => T
+): T | null => {
+  if (bytes.length === 0) throw new Error("Option payload is empty.");
+  const [tag, ...rest] = Array.from(bytes);
+  if (tag === 0) return null;
+  if (tag !== 1)
+    throw new Error(`Unexpected option tag ${tag}; expected 0 or 1.`);
+  return inner(Uint8Array.from(rest));
+};
+
+const decodeAddress = (bytes: Uint8Array): string => {
+  if (bytes.length !== 32)
+    throw new Error(`Expected address bytes length 32, got ${bytes.length}.`);
+  return `0x${Buffer.from(bytes).toString("hex")}`;
+};
+
+const decodeU64 = (bytes: Uint8Array): bigint => {
+  if (bytes.length < 8)
+    throw new Error(`Expected at least 8 bytes for u64, got ${bytes.length}.`);
+
+  let value = 0n;
+  for (let i = 0; i < 8; i++) {
+    value += BigInt(bytes[i]) << (BigInt(8 * i));
+  }
+  return value;
+};
+
+const unpackBytes = (
+  value: InspectReturnValue | undefined,
+  label: string
+): Uint8Array => {
+  if (!value)
+    throw new Error(`Missing return value while decoding ${label} result.`);
+  const [rawBytes] = value;
+  return Uint8Array.from(rawBytes);
+};
+
+const readUleb128 = (bytes: Uint8Array): [number, number] => {
+  let value = 0;
+  let shift = 0;
+  let index = 0;
+
+  while (index < bytes.length) {
+    const byte = bytes[index];
+    value |= (byte & 0x7f) << shift;
+    index += 1;
+
+    if ((byte & 0x80) === 0) return [value, index];
+
+    shift += 7;
+  }
+
+  throw new Error("ULEB128 decode failed; ran out of bytes.");
+};
+
+const mapViewToState = ({
+  coinInput,
+  currencyObjectId,
+  viewValues,
+}: {
+  coinInput: CoinInput;
+  currencyObjectId: string;
+  viewValues: CurrencyViewValues;
+}): CurrencyState => {
+  const metadataCapStatus = viewValues.metadataCapDeleted
+    ? "deleted"
+    : viewValues.metadataCapClaimed
+    ? "claimed"
+    : "unclaimed";
+
+  const supplyKind = viewValues.supplyBurnOnly
+    ? "burn-only"
+    : viewValues.supplyFixed
+    ? "fixed"
+    : "unknown";
+
+  return {
+    coinType: coinInput.coinType,
+    label: coinInput.label,
+    currencyObjectId,
+    metadataCapStatus,
+    supplyKind,
+    totalSupply: viewValues.totalSupply?.toString() ?? null,
+    decimals: viewValues.decimals,
+    name: viewValues.name,
+    symbol: viewValues.symbol,
+    description: viewValues.description,
+    iconUrl: viewValues.iconUrl,
+    metadataCapId: viewValues.metadataCapId,
+    treasuryCapId: viewValues.treasuryCapId,
+    denyCapId: viewValues.denyCapId,
+    regulated: viewValues.regulated,
+  };
+};
+
+const logCurrencyState = (state: CurrencyState) => {
+  logKeyValueGreen("Currency")(state.label ?? state.coinType);
+  logKeyValueBlue("CoinType")(state.coinType);
+  logKeyValueBlue("Currency")(state.currencyObjectId);
+  logKeyValueBlue("Name")(state.name || "N/A");
+  logKeyValueBlue("Symbol")(state.symbol || "N/A");
+  logKeyValueBlue("Decimals")(state.decimals);
+  logKeyValueBlue("Supply")(state.supplyKind);
+  logKeyValueBlue("Total")(state.totalSupply ?? "unknown");
+  logKeyValueBlue("Regulated")(state.regulated ? "yes" : "no");
+  logKeyValueBlue("Metadata")(
+    `${state.metadataCapStatus}${
+      state.metadataCapId ? ` (${state.metadataCapId})` : ""
+    }`
+  );
+  logKeyValueBlue("Treasury")(state.treasuryCapId ?? "N/A");
+  logKeyValueBlue("DenyCap")(state.denyCapId ?? "None");
+};

@@ -2,7 +2,7 @@ import { getFullnodeUrl } from "@mysten/sui/client";
 import type { NetworkName } from "./types";
 
 export const resolveRpcUrl = (
-  network: NetworkName,
+  network: NetworkName | string,
   RpcUrlOverride?: string
 ) => {
   if (RpcUrlOverride) return RpcUrlOverride;
@@ -13,7 +13,7 @@ export const resolveRpcUrl = (
     case "mainnet":
       return getFullnodeUrl(network);
     case "custom":
-      throw new Error("Provide --rpc-url when using network=custom.");
+      throw new Error("Provide an RPC URL for network=custom (via config or env).");
     default:
       throw new Error(`Unsupported network ${network as string}`);
   }

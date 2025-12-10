@@ -63,7 +63,7 @@ export const publishPackageWithLog = async (
 
   logSimpleGreen("Publish succeeded ✅");
   logKeyValueGreen("packageId")(artifact.packageId);
-  if (artifact.upgradeCap) logKeyValueBlue("upgradeCap")(artifact.upgradeCap);
+  if (artifact.upgradeCap) logKeyValueGreen("upgradeCap")(artifact.upgradeCap);
 
   logKeyValueGreen("digest")(artifact.digest);
   if (artifact.explorerUrl) logKeyValueGreen("explorer")(artifact.explorerUrl);
