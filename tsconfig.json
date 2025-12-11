@@ -6,13 +6,17 @@
     "resolveJsonModule": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
+    "allowImportingTsExtensions": true,
     "strict": true,
     "outDir": "dist",
     "types": [
       "node"
     ]
   },
+  "ts-node": {
+    "esm": true
+  },
   "include": [
-    "src/**/*.ts"
+    "**/*.ts"
   ]
 }

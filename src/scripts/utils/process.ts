@@ -1,54 +1,60 @@
-import yargs, { Argv } from "yargs";
+import { config } from "dotenv"
+config({ quiet: true })
+
+import { basename } from "node:path"
+import { fileURLToPath } from "node:url"
+
+import { type Argv } from "yargs"
 import {
   loadSuiConfig,
   getNetworkConfig,
-  type SuiResolvedConfig,
-} from "./config";
-import { logError } from "./log";
-import { ensureSuiCli } from "./suiCli";
-import { hideBin } from "yargs/helpers";
-import { basename } from "path";
+  type SuiResolvedConfig
+} from "./config.ts"
+import { logError } from "./log.ts"
+import { ensureSuiCli } from "./suiCli.ts"
+import { hideBin } from "yargs/helpers"
 
 export type CommonCliArgs = {
-  network?: string;
-};
+  network?: string
+}
 
 type ScriptExecutor<TCliArgument> = (
   config: SuiResolvedConfig,
   cliArguments: TCliArgument & CommonCliArgs
-) => Promise<void> | void;
+) => Promise<void> | void
 
-const stripExt = (name: string): string => name.replace(/\.[^/.]+$/, "");
-const fileNameOnly = (fullPath: string): string => stripExt(basename(fullPath));
+const stripExt = (name: string): string => name.replace(/\.[^/.]+$/, "")
+const fileNameOnly = (fullPath: string): string => stripExt(basename(fullPath))
+const currentScriptName = () => fileNameOnly(fileURLToPath(import.meta.url))
 
-export type BaseYargs = Argv<CommonCliArgs>;
+export type BaseYargs = Argv<CommonCliArgs>
 
 export const addBaseOptions = async <TCliArguments>(
   cliOptions: Argv<TCliArguments>
 ): Promise<CommonCliArgs & TCliArguments> =>
   (await cliOptions
-    .scriptName(fileNameOnly(__filename))
+    .scriptName(currentScriptName())
     .option("network", {
       alias: "network",
       type: "string",
-      description: "Target network",
+      description: "Target network"
     })
     .strict()
     .help()
-    .parseAsync(hideBin(process.argv))) as CommonCliArgs & TCliArguments;
+    .parseAsync(hideBin(process.argv))) as CommonCliArgs & TCliArguments
 
 export const runSuiScript = <TCliArgument>(
   scriptToExecute: ScriptExecutor<TCliArgument>,
   cliOptions?: Argv<TCliArgument>
 ) => {
-  (async () => {
+  ;(async () => {
     try {
-      await ensureSuiCli();
+      await ensureSuiCli()
 
-      const suiConfig = await loadSuiConfig();
+      const suiConfig = await loadSuiConfig()
       const cliArguments = cliOptions
         ? await addBaseOptions<TCliArgument>(cliOptions)
-        : undefined;
+        : undefined
 
       await scriptToExecute(
         {
@@ -56,21 +62,21 @@ export const runSuiScript = <TCliArgument>(
           network: getNetworkConfig(
             cliArguments?.network || suiConfig.currentNetwork,
             suiConfig
-          ),
+          )
         },
-        cliArguments as CommonCliArgs & TCliArguments
-      );
-      process.exit(0);
+        cliArguments as CommonCliArgs & TCliArgument
+      )
+      process.exit(0)
     } catch (error) {
-      console.log("\n");
-      logError("Script failed ❌");
+      console.log("\n")
+      logError("Script failed ❌")
       logError(
         `${error instanceof Error ? error.message : String(error)}\n${
           error instanceof Error ? error.stack : ""
         }`
-      );
-      logError(`${error instanceof Error ? error.message : String(error)}\n`);
-      process.exitCode = 1;
+      )
+      logError(`${error instanceof Error ? error.message : String(error)}\n`)
+      process.exitCode = 1
     }
-  })();
-};
+  })()
+}

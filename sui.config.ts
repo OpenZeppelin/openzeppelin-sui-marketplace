@@ -1,4 +1,4 @@
-import { defineSuiConfig } from "./src/scripts/utils/config";
+import { defineSuiConfig } from "./src/scripts/utils/config.ts"
 
 export default defineSuiConfig({
   defaultNetwork: "localnet",
@@ -8,14 +8,14 @@ export default defineSuiConfig({
       account: {
         accountAddress: process.env.SUI_ACCOUNT_ADDRESS,
         accountPrivateKey: process.env.SUI_ACCOUNT_PRIVATE_KEY,
-        accountMnemonic: process.env.SUI_ACCOUNT_MNEMONIC,
-      },
-    },
+        accountMnemonic: process.env.SUI_ACCOUNT_MNEMONIC
+      }
+    }
   },
   paths: {
     move: "move",
     deployments: "deployments",
     artifacts: "deployments",
-    objects: "deployments",
-  },
-});
+    objects: "deployments"
+  }
+})

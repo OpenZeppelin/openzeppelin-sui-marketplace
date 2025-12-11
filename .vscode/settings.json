@@ -26,5 +26,13 @@
     "**/patches": true,
     "**/node_modules": true,
     "**/dist": true
-  }
+  },
+  "[typescript]": {
+    "editor.codeActionsOnSave": {
+      "source.organizeImports": "always",
+      "source.addMissingImports": "explicit",
+      "source.fixAll.eslint": "explicit"
+    },
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
 }

@@ -1,13 +1,15 @@
 {
   "name": "sui-oracle-market",
   "version": "0.0.0",
+  "type": "module",
   "private": true,
   "description": "Scripts and tooling for deploying the Sui Oracle Market Move package.",
   "scripts": {
-    "start:localnet": "ts-node --transpile-only src/scripts/chain/start-localnet.ts",
-    "publish:package": "ts-node --transpile-only src/scripts/chain/publish-package.ts",
-    "setup:local": "ts-node --transpile-only src/scripts/chain/setup-local.ts",
-    "get:mock-currency": "ts-node --transpile-only src/scripts/chain/get-mock-currency.ts"
+    "start:localnet": "ts-node-esm --transpile-only src/scripts/chain/start-localnet.ts",
+    "publish:package": "ts-node-esm --transpile-only src/scripts/chain/publish-package.ts",
+    "setup:local": "ts-node-esm --transpile-only src/scripts/chain/setup-local.ts",
+    "get:mock-currency": "ts-node-esm --transpile-only src/scripts/chain/get-mock-currency.ts",
+    "lint": "pnpm exec eslint ."
   },
   "dependencies": {
     "@mysten/sui": "^1.45.0",
@@ -16,9 +18,15 @@
     "yargs": "^18.0.0"
   },
   "devDependencies": {
-    "@types/node": "^22.19.1",
-    "@types/yargs": "^17.0.32",
+    "@types/node": "^22.19.2",
+    "@types/yargs": "^17.0.35",
+    "@eslint/js": "^9.39.1",
+    "eslint": "^9.39.1",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-prettier": "^5.5.4",
+    "eslint-plugin-unicorn": "^62.0.0",
     "ts-node": "^10.9.2",
-    "typescript": "^5.3.3"
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.49.0"
   }
 }

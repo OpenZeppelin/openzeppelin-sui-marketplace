@@ -1,34 +1,34 @@
-import { getFullnodeUrl } from "@mysten/sui/client";
-import type { NetworkName } from "./types";
+import { getFullnodeUrl } from "@mysten/sui/client"
+import type { NetworkName } from "./types.ts"
 
-export const resolveCommonRpcUrl = (network: NetworkName | string) => {
+export const resolveCommonRpcUrl = (
+  network: NetworkName | string
+): string | undefined => {
   switch (network) {
     case "localnet":
     case "devnet":
     case "testnet":
     case "mainnet":
-      return getFullnodeUrl(network);
+      return getFullnodeUrl(network)
     default:
-      undefined;
+      return undefined
   }
-};
+}
 
 export const resolveRpcUrl = (
   network: NetworkName | string,
   RpcUrlOverride?: string
 ) => {
-  if (RpcUrlOverride) return RpcUrlOverride;
+  if (RpcUrlOverride) return RpcUrlOverride
 
-  const RpcUrl = resolveCommonRpcUrl(network);
+  const RpcUrl = resolveCommonRpcUrl(network)
 
-  if (RpcUrl) return RpcUrl;
+  if (RpcUrl) return RpcUrl
 
-  throw new Error(
-    "Provide an RPC URL for custom networks (via config or env)."
-  );
-};
+  throw new Error("Provide an RPC URL for custom networks (via config or env).")
+}
 
 export const buildExplorerUrl = (digest: string, network: NetworkName) => {
-  const explorerNetwork = network === "mainnet" ? "" : `?network=${network}`;
-  return `https://explorer.sui.io/txblock/${digest}${explorerNetwork}`;
-};
+  const explorerNetwork = network === "mainnet" ? "" : `?network=${network}`
+  return `https://explorer.sui.io/txblock/${digest}${explorerNetwork}`
+}
