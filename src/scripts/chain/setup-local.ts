@@ -30,6 +30,7 @@ import type { WrappedSuiSharedObject } from "../utils/object.ts"
 import { getSuiSharedObject } from "../utils/object.ts"
 import { runSuiScript } from "../utils/process.ts"
 import { publishPackageWithLog } from "../utils/publish.ts"
+import type { PublishArtifact } from "../utils/types.ts"
 import {
   getPythPriceInfoType,
   publishMockPriceFeed,
@@ -70,6 +71,14 @@ type CoinSeed = {
   label: string
   coinType: string
   initTarget: string
+}
+
+const pickRootArtifact = (artifacts: PublishArtifact[]) => {
+  const artifact =
+    artifacts.find((candidate) => !candidate.isDependency) ?? artifacts[0]
+  if (!artifact)
+    throw new Error("Publish did not return any artifacts to select from.")
+  return artifact
 }
 
 // Two sample feeds to seed Pyth price objects with.
@@ -238,7 +247,7 @@ const publishMockPackages = async (
 ) => {
   const pythPackageId =
     existingState.existingPythPackageId ||
-    (
+    pickRootArtifact(
       await withTestnetFaucetRetry(
         {
           signerAddress: keypair.toSuiAddress(),
@@ -267,7 +276,7 @@ const publishMockPackages = async (
 
   const coinPackageId =
     existingState.existingCoinPackageId ||
-    (
+    pickRootArtifact(
       await withTestnetFaucetRetry(
         {
           signerAddress: keypair.toSuiAddress(),

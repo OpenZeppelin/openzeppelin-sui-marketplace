@@ -11,8 +11,7 @@ export type BuildOutput = {
 }
 
 export type PublishResult = {
-  packageId?: string
-  upgradeCap?: string
+  packages: PublishedPackage[]
   digest: string
 }
 
@@ -20,12 +19,23 @@ export type PublishArtifact = {
   network: string
   rpcUrl: string
   packagePath: string
+  packageName?: string
   packageId: string
   upgradeCap?: string
+  isDependency?: boolean
   sender: string
   digest: string
   publishedAt: string
   modules: string[]
   dependencies: string[]
   explorerUrl?: string
+  withUnpublishedDependencies?: boolean
+  unpublishedDependencies?: string[]
+}
+
+export type PublishedPackage = {
+  packageId: string
+  packageName?: string
+  upgradeCap?: string
+  isDependency?: boolean
 }

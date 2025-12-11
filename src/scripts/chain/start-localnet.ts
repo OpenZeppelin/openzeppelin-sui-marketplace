@@ -1,5 +1,7 @@
 import { spawn, type ChildProcess } from "node:child_process"
 import { once } from "node:events"
+import { readdir, unlink } from "node:fs/promises"
+import path from "node:path"
 import { setTimeout as delay } from "node:timers/promises"
 
 import { SuiClient } from "@mysten/sui/client"
@@ -29,26 +31,43 @@ type ProbeResult =
   | { status: "running"; snapshot: RpcSnapshot }
   | { status: "offline"; error: string }
 
-runSuiScript(
+type StartLocalnetCliArgs = {
+  checkOnly: boolean
+  waitSeconds: number
+  withFaucet: boolean
+  forceRegenesis: boolean
+}
+
+runSuiScript<StartLocalnetCliArgs>(
   async (
-    { network: { url: rpcUrl } },
-    { withFaucet, checkOnly, waitSeconds }
+    { network: { url: rpcUrl }, paths },
+    { withFaucet, checkOnly, waitSeconds, forceRegenesis }
   ) => {
     const probeResult = await probeRpcHealth(rpcUrl)
 
+    if (checkOnly) {
+      if (probeResult.status === "running") {
+        logSimpleGreen("Localnet running 🚀")
+        logRpcSnapshot(probeResult.snapshot, withFaucet)
+        return
+      }
+
+      throw new Error(
+        `Localnet RPC unavailable at ${rpcUrl}: ${probeResult.error}`
+      )
+    }
+
+    if (forceRegenesis) await deleteLocalnetDeployments(paths.deployments)
+
     if (probeResult.status === "running") {
-      logSimpleGreen("Localnet running 🚀")
+      logSimpleGreen("Localnet running")
       logRpcSnapshot(probeResult.snapshot, withFaucet)
       return
     }
 
-    if (checkOnly)
-      throw new Error(
-        `Localnet RPC unavailable at ${rpcUrl}: ${probeResult.error}`
-      )
-
     const localnetProcess = startLocalnetProcess({
-      withFaucet: withFaucet
+      withFaucet: withFaucet,
+      forceRegenesis
     })
 
     const readySnapshot = await waitForRpcReadiness({
@@ -78,6 +97,13 @@ runSuiScript(
       type: "boolean",
       description: "Start the faucet alongside the local node",
       default: true
+    })
+    .option("forceRegenesis", {
+      alias: "force-regenesis",
+      type: "boolean",
+      description:
+        "Force localnet regenesis (clears localnet deployments and passes --force-regenesis to sui start)",
+      default: false
     })
     .strict()
 )
@@ -144,11 +170,13 @@ const waitForRpcReadiness = async ({
 }
 
 const startLocalnetProcess = ({
-  withFaucet
+  withFaucet,
+  forceRegenesis
 }: {
   withFaucet: boolean
+  forceRegenesis: boolean
 }): ChildProcess => {
-  const args = buildStartArguments(withFaucet)
+  const args = buildStartArguments(withFaucet, forceRegenesis)
   const processHandle = spawn("sui", args, {
     stdio: "inherit"
   })
@@ -159,16 +187,15 @@ const startLocalnetProcess = ({
     )
   })
 
-  logKeyValueYellow("Starting")(
-    `sui ${buildStartArguments(withFaucet).join(" ")}`
-  )
+  logKeyValueYellow("Starting")(`sui ${args.join(" ")}`)
 
   return processHandle
 }
 
-const buildStartArguments = (withFaucet: boolean) => {
+const buildStartArguments = (withFaucet: boolean, forceRegenesis: boolean) => {
   const args = ["start"]
   if (withFaucet) args.push("--with-faucet")
+  if (forceRegenesis) args.push("--force-regenesis")
   return args
 }
 
@@ -230,3 +257,34 @@ const formatSui = (mist: bigint) => {
 
 const formatTimestamp = (timestampMs: number) =>
   new Date(timestampMs).toISOString()
+
+const deleteLocalnetDeployments = async (deploymentsPath: string) => {
+  try {
+    const entries = await readdir(deploymentsPath, { withFileTypes: true })
+    const localnetFiles = entries.filter(
+      (entry) => entry.isFile() && /\.localnet(\.|$)/.test(entry.name)
+    )
+
+    if (!localnetFiles.length) return
+
+    await Promise.all(
+      localnetFiles.map((entry) =>
+        unlink(path.join(deploymentsPath, entry.name))
+      )
+    )
+
+    logKeyValueYellow("Deployments")(
+      `Removed localnet artifacts: ${localnetFiles
+        .map((entry) => entry.name)
+        .join(", ")}`
+    )
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return
+
+    throw new Error(
+      `Failed to delete localnet deployment files in ${deploymentsPath}: ${
+        error instanceof Error ? error.message : String(error)
+      }`
+    )
+  }
+}
