@@ -28,7 +28,8 @@ export const publishPackageWithLog = async (
     packagePath,
     keypair,
     gasBudget = 200_000_000,
-    withUnpublishedDependencies = false
+    withUnpublishedDependencies = false,
+    useDevBuild = false
   }: {
     network: SuiNetworkConfig
     packagePath: string
@@ -36,6 +37,7 @@ export const publishPackageWithLog = async (
     keypair: Ed25519Keypair
     gasBudget?: number
     withUnpublishedDependencies?: boolean
+    useDevBuild?: boolean
   },
   initiatedSuiClient?: SuiClient
 ) => {
@@ -43,6 +45,7 @@ export const publishPackageWithLog = async (
   logKeyValueBlue("network")(`${network.networkName} / ${fullNodeUrl}`)
   logKeyValueBlue("package")(packagePath)
   logKeyValueBlue("publisher")(keypair.toSuiAddress())
+  if (useDevBuild) logKeyValueBlue("build mode")("dev (uses dev-dependencies)")
   if (withUnpublishedDependencies)
     logKeyValueBlue("with unpublished deps")("enabled")
 
@@ -53,7 +56,8 @@ export const publishPackageWithLog = async (
       fullNodeUrl,
       keypair,
       gasBudget,
-      withUnpublishedDependencies
+      withUnpublishedDependencies,
+      useDevBuild
     },
     initiatedSuiClient
   )
@@ -75,7 +79,8 @@ export const publishPackage = async (
     packagePath,
     gasBudget,
     keypair,
-    withUnpublishedDependencies = false
+    withUnpublishedDependencies = false,
+    useDevBuild = false
   }: {
     network: SuiNetworkConfig
     packagePath: string
@@ -83,13 +88,27 @@ export const publishPackage = async (
     keypair: Ed25519Keypair
     gasBudget: number
     withUnpublishedDependencies?: boolean
+    useDevBuild?: boolean
   },
   initiatedSuiClient?: SuiClient
 ): Promise<PublishArtifact> => {
-  const buildOutput = await buildMovePackage(
-    packagePath,
-    withUnpublishedDependencies ? ["--with-unpublished-dependencies"] : []
-  )
+  const buildFlags = [
+    "--dump-bytecode-as-base64",
+    "--skip-fetch-latest-git-deps"
+  ]
+  // Sui CLI 1.62 requires `--test` when compiling in dev mode so dependency
+  // test helpers (e.g. std::unit_test) are available.
+  if (useDevBuild) {
+    buildFlags.push("--dev")
+    buildFlags.push("--test")
+  }
+  if (withUnpublishedDependencies)
+    buildFlags.push("--with-unpublished-dependencies")
+
+  const buildOutput = await buildMovePackage(packagePath, buildFlags, {
+    // Strip test modules to keep publish transaction size under limits.
+    stripTestModules: true
+  })
 
   const publishResult = await doPublishPackage(
     {
@@ -169,6 +188,8 @@ export const doPublishPackage = async (
       showRawInput: false
     }
   })
+
+  console.log({ result })
 
   if (result.effects?.status.status !== "success")
     throw new Error(

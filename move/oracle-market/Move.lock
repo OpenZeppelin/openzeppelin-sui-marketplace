@@ -2,15 +2,17 @@
 
 [move]
 version = 3
-manifest_digest = "439749C7C9F6FA90D370CAB31979A42B9CC5C8E9500A2E1D3A429EF995159C11"
-deps_digest = "52B406A7A21811BEF51751CF88DA0E76DAEFFEAC888D4F4060B1A72BBE7D8D35"
+manifest_digest = "80A44D372BF2482CCB397CCFB1FC1328BE0FE83184ACD4C49643C16D3046A186"
+deps_digest = "CAFAD8A7CF51067FB4358215BECB86BD100DD64E57C2AC8A7AE7D74B688F5965"
 dependencies = [
   { id = "Bridge", name = "Bridge" },
   { id = "MoveStdlib", name = "MoveStdlib" },
-  { id = "Pyth", name = "Pyth" },
   { id = "Sui", name = "Sui" },
   { id = "SuiSystem", name = "SuiSystem" },
   { id = "openzeppelin_math", name = "openzeppelin_math" },
+]
+dev-dependencies = [
+  { id = "Pyth", name = "Pyth" },
 ]
 
 [[move.package]]
@@ -29,10 +31,13 @@ source = { git = "https://github.com/MystenLabs/sui.git", rev = "4e8b6eda7d6411d
 
 [[move.package]]
 id = "Pyth"
-source = { local = "pyth-mock" }
+source = { local = "../pyth-mock" }
 
 dependencies = [
+  { id = "Bridge", name = "Bridge" },
+  { id = "MoveStdlib", name = "MoveStdlib" },
   { id = "Sui", name = "Sui" },
+  { id = "SuiSystem", name = "SuiSystem" },
 ]
 
 [[move.package]]
@@ -64,6 +69,6 @@ dependencies = [
 ]
 
 [move.toolchain-version]
-compiler-version = "1.58.2"
+compiler-version = "1.62.0"
 edition = "2024.beta"
 flavor = "sui"

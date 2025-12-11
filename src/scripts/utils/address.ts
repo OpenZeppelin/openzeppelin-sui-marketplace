@@ -7,7 +7,6 @@ import {
 import type { Ed25519Keypair } from "@mysten/sui/keypairs/ed25519"
 import { Transaction } from "@mysten/sui/transactions"
 import { normalizeSuiAddress } from "@mysten/sui/utils"
-import { run } from "node:test"
 
 const DEFAULT_MINIMUM_COIN_OBJECTS = 2
 const DEFAULT_MINIMUM_GAS_COIN_BALANCE = 500_000_000n
@@ -439,20 +438,7 @@ export const withTestnetFaucetRetry = async <T>(
     networkName
   )
 
-  // Pre-fund before first attempt to avoid immediate gas failures.
-  if (faucetSupported) {
-    await ensureFoundedAddress(
-      {
-        network: "localnet",
-        signerAddress,
-        signer,
-        minimumBalance,
-        minimumCoinObjects,
-        minimumGasCoinBalance
-      },
-      suiClient
-    )
-  }
+  if (!faucetSupported) return await transactionRun()
 
   try {
     return await transactionRun()
@@ -471,6 +457,6 @@ export const withTestnetFaucetRetry = async <T>(
       suiClient
     )
 
-    return await run()
+    return await transactionRun()
   }
 }

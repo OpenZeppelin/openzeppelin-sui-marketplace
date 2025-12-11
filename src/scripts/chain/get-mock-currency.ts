@@ -13,7 +13,8 @@ import { SUI_COIN_REGISTRY_ID } from "../utils/constants.ts"
 import {
   logKeyValueBlue,
   logKeyValueGreen,
-  logKeyValueRed
+  logKeyValueRed,
+  logWarning
 } from "../utils/log.ts"
 import type { MockArtifact } from "../utils/mock.ts"
 import { mockArtifactPath } from "../utils/mock.ts"
@@ -55,7 +56,7 @@ type CurrencyState = {
   label?: string
   currencyObjectId: string
   metadataCapStatus: "claimed" | "unclaimed" | "deleted"
-  supplyKind: "fixed" | "burn-only" | "unknown"
+  supplyKind: "fixed" | "burn-only" | "mintable" | "unknown"
   totalSupply?: string
   decimals: number
   name: string
@@ -74,6 +75,11 @@ type ViewCallPlan = {
   decode: (
     value: InspectReturnValue | undefined
   ) => CurrencyViewValues[keyof CurrencyViewValues]
+}
+
+type ResolvedSupply = {
+  kind: CurrencyState["supplyKind"]
+  total?: bigint
 }
 
 runSuiScript(async ({ network, currentNetwork }) => {
@@ -207,10 +213,16 @@ const inspectCurrency = async ({
     sender
   })
 
+  const resolvedSupply = await resolveSupplyState({
+    viewValues,
+    suiClient
+  })
+
   return mapViewToState({
     coinInput,
     currencyObjectId,
-    viewValues
+    viewValues,
+    resolvedSupply
   })
 }
 
@@ -527,14 +539,96 @@ const readUleb128 = (bytes: Uint8Array): [number, number] => {
   throw new Error("ULEB128 decode failed; ran out of bytes.")
 }
 
+const resolveSupplyState = async ({
+  viewValues,
+  suiClient
+}: {
+  viewValues: CurrencyViewValues
+  suiClient: SuiClient
+}): Promise<ResolvedSupply> => {
+  const kind: CurrencyState["supplyKind"] = viewValues.supplyBurnOnly
+    ? "burn-only"
+    : viewValues.supplyFixed
+      ? "fixed"
+      : viewValues.treasuryCapId
+        ? "mintable"
+        : "unknown"
+
+  const total =
+    viewValues.totalSupply ??
+    (await fetchTreasuryCapSupply({
+      suiClient,
+      treasuryCapId: viewValues.treasuryCapId
+    }))
+
+  return { kind, total }
+}
+
+const fetchTreasuryCapSupply = async ({
+  suiClient,
+  treasuryCapId
+}: {
+  suiClient: SuiClient
+  treasuryCapId?: string
+}): Promise<bigint | undefined> => {
+  if (!treasuryCapId) return
+
+  try {
+    const { data, error } = await suiClient.getObject({
+      id: normalizeSuiObjectId(treasuryCapId),
+      options: { showContent: true }
+    })
+
+    if (error) throw new Error(error.code ?? "Unknown getObject error.")
+
+    const content = data?.content
+    if (!content || content.dataType !== "moveObject")
+      throw new Error("Treasury cap missing move object content.")
+
+    const totalSupply = extractSupplyValue(
+      // @ts-expect-error content typing in SDK is currently broad
+      content.fields?.total_supply
+    )
+
+    return totalSupply
+  } catch (error) {
+    logWarning(
+      `Failed to read treasury cap ${
+        treasuryCapId ?? ""
+      } supply: ${error instanceof Error ? error.message : String(error)}`
+    )
+    return
+  }
+}
+
+const extractSupplyValue = (supplyField: unknown): bigint | undefined => {
+  if (!supplyField) return
+  if (typeof supplyField === "string" && supplyField.length > 0)
+    return BigInt(supplyField)
+  if (typeof supplyField === "number") return BigInt(supplyField)
+  if (typeof supplyField !== "object") return
+
+  const candidate =
+    // Parsed fields from RPC usually live on `fields`
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (supplyField as any)?.fields?.value ??
+    // Some node versions expose nested structs flattened under `value`
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (supplyField as any)?.value
+
+  if (typeof candidate === "string" && candidate.length > 0) return BigInt(candidate)
+}
+
 const mapViewToState = ({
   coinInput,
   currencyObjectId,
-  viewValues
+  viewValues,
+  resolvedSupply
 }: {
   coinInput: CoinInput
   currencyObjectId: string
   viewValues: CurrencyViewValues
+  resolvedSupply: ResolvedSupply
 }): CurrencyState => {
   const metadataCapStatus = viewValues.metadataCapDeleted
     ? "deleted"
@@ -542,19 +636,13 @@ const mapViewToState = ({
       ? "claimed"
       : "unclaimed"
 
-  const supplyKind = viewValues.supplyBurnOnly
-    ? "burn-only"
-    : viewValues.supplyFixed
-      ? "fixed"
-      : "unknown"
-
   return {
     coinType: coinInput.coinType,
     label: coinInput.label,
     currencyObjectId,
     metadataCapStatus,
-    supplyKind,
-    totalSupply: viewValues.totalSupply?.toString(),
+    supplyKind: resolvedSupply.kind,
+    totalSupply: resolvedSupply.total?.toString(),
     decimals: viewValues.decimals,
     name: viewValues.name,
     symbol: viewValues.symbol,

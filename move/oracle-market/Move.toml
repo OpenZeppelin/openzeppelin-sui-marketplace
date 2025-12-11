@@ -8,7 +8,9 @@ edition = "2024.beta"
 
 # Oracle price feeds
 [dependencies.Pyth]
-local = "pyth-mock"
+git = "https://github.com/pyth-network/pyth-crosschain.git"
+subdir = "target_chains/sui/contracts"
+rev = "main"
 
 [dependencies.openzeppelin_math]
 git = "https://github.com/OpenZeppelin/contracts-sui.git"
@@ -34,9 +36,10 @@ sui_oracle_market = "0x0"
 # alice = "0xA11CE"
 
 [dev-dependencies]
-# The dev-dependencies section allows overriding dependencies for `--test` and
-# `--dev` modes. You can introduce test-only dependencies here.
-# Local = { local = "../path/to/dev-build" }
+[dev-dependencies.Pyth]
+# Use the local mock only for dev/test builds (e.g., localnet publishes with --dev).
+local = "../pyth-mock"
+override = true
 
 [dev-addresses]
 # The dev-addresses section allows overwriting named addresses for the `--test`

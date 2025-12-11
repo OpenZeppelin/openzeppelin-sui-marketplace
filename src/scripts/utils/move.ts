@@ -7,8 +7,10 @@ import type { BuildOutput } from "./types.ts"
 
 export const buildMovePackage = async (
   packagePath: string,
-  buildArguments: string[] = []
+  buildArguments: string[] = [],
+  options: { stripTestModules?: boolean } = {}
 ): Promise<BuildOutput> => {
+  const { stripTestModules = false } = options
   const resolvedPackagePath = path.resolve(packagePath)
   if (!resolvedPackagePath)
     throw new Error(`Contracts not found at ${resolvedPackagePath}`)
@@ -22,7 +24,8 @@ export const buildMovePackage = async (
 
   const { modules, dependencies } = await resolveBuildArtifacts(
     stdout,
-    resolvedPackagePath
+    resolvedPackagePath,
+    { stripTestModules }
   )
 
   if (exitCode !== undefined && exitCode !== 0) {
@@ -34,22 +37,23 @@ export const buildMovePackage = async (
   return { modules, dependencies }
 }
 
-export const runMoveBuild = runSuiCli([
-  "move",
-  "build",
-  "--dump-bytecode-as-base64"
-])
+export const runMoveBuild = runSuiCli(["move", "build"])
 
 const resolveBuildArtifacts = async (
   stdout: string,
-  resolvedPackagePath: string
+  resolvedPackagePath: string,
+  {
+    stripTestModules = false
+  }: {
+    stripTestModules?: boolean
+  } = {}
 ): Promise<BuildOutput> => {
   const parsed = parseBuildJson(stdout)
   const parsedModules = parsed?.modules ?? []
   const parsedDependencies = parsed?.dependencies ?? []
   const fallbackNeeded = parsedModules.length === 0
   const fallback = fallbackNeeded
-    ? await readBuildArtifacts(resolvedPackagePath)
+    ? await readBuildArtifacts(resolvedPackagePath, { stripTestModules })
     : undefined
 
   if (fallbackNeeded) {
@@ -58,7 +62,11 @@ const resolveBuildArtifacts = async (
     )
   }
 
-  const modules = fallbackNeeded ? fallback?.modules || [] : parsedModules
+  const modules = fallbackNeeded
+    ? fallback?.modules || []
+    : stripTestModules
+      ? parsedModules.filter((module) => !isTestModuleBytecode(module))
+      : parsedModules
   const dependencies =
     fallbackNeeded && parsedDependencies.length === 0
       ? fallback?.dependencies || []
@@ -123,7 +131,8 @@ const parseBuildJson = (
  * Useful when `sui move build --dump-bytecode-as-base64` does not emit modules.
  */
 const readBuildArtifacts = async (
-  resolvedPackagePath: string
+  resolvedPackagePath: string,
+  { stripTestModules = false }: { stripTestModules?: boolean } = {}
 ): Promise<{ modules: string[]; dependencies: string[] }> => {
   const buildDir = path.join(resolvedPackagePath, "build")
   const packageName = await inferPackageName(buildDir)
@@ -131,7 +140,11 @@ const readBuildArtifacts = async (
   const buildInfoPath = path.join(buildDir, packageName, "BuildInfo.yaml")
   const buildInfoRaw = await fs.readFile(buildInfoPath, "utf8")
 
-  const modules = await readBytecodeModules(buildDir, packageName)
+  const modules = await readBytecodeModules(
+    buildDir,
+    packageName,
+    stripTestModules
+  )
   const dependencies = extractDependencies(buildInfoRaw, packageName)
 
   return { modules, dependencies }
@@ -139,12 +152,32 @@ const readBuildArtifacts = async (
 
 const inferPackageName = async (buildDir: string): Promise<string> => {
   const buildEntries = await fs.readdir(buildDir, { withFileTypes: true })
-  return buildEntries.find((entry) => entry.isDirectory())?.name ?? "Pyth"
+  const candidateDirs = buildEntries
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => entry.name)
+
+  // Prefer a directory that actually contains BuildInfo.yaml (skips lock dirs).
+  for (const dir of candidateDirs) {
+    try {
+      await fs.access(path.join(buildDir, dir, "BuildInfo.yaml"))
+      return dir
+    } catch {
+      /* keep scanning */
+    }
+  }
+
+  // Fallback: pick the first non-metadata directory, then any, then a dummy name.
+  return (
+    candidateDirs.find((name) => name !== "locks" && name !== "deps") ||
+    candidateDirs[0] ||
+    "Pyth"
+  )
 }
 
 const readBytecodeModules = async (
   buildDir: string,
-  packageName: string
+  packageName: string,
+  stripTestModules: boolean
 ): Promise<string[]> => {
   const bytecodeDir = path.join(buildDir, packageName, "bytecode_modules")
   const bytecodeEntries = await fs.readdir(bytecodeDir, {
@@ -152,7 +185,12 @@ const readBytecodeModules = async (
   })
 
   const moduleFiles = bytecodeEntries
-    .filter((entry) => entry.isFile() && entry.name.endsWith(".mv"))
+    .filter(
+      (entry) =>
+        entry.isFile() &&
+        entry.name.endsWith(".mv") &&
+        !(stripTestModules && isTestModuleFilename(entry.name))
+    )
     .map((entry) => path.join(bytecodeDir, entry.name))
     .sort()
 
@@ -191,4 +229,28 @@ const extractDependencies = (
     )
     .map(({ addr }) => `0x${addr.toLowerCase()}`)
     .filter((addr, idx, arr) => arr.indexOf(addr) === idx)
+}
+
+const isTestModuleFilename = (filename: string): boolean => {
+  const lowered = filename.toLowerCase()
+  return (
+    lowered.endsWith("_tests.mv") ||
+    lowered.endsWith("_test.mv") ||
+    lowered.startsWith("test_")
+  )
+}
+
+const isTestModuleBytecode = (moduleB64: string): boolean => {
+  try {
+    const bytes = Buffer.from(moduleB64, "base64")
+    const decoded = new TextDecoder().decode(bytes).toLowerCase()
+    return (
+      decoded.includes("_tests") ||
+      decoded.includes("_test") ||
+      decoded.includes("test::") ||
+      decoded.includes("::test_")
+    )
+  } catch {
+    return false
+  }
 }
