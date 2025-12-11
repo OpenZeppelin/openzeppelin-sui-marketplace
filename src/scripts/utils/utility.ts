@@ -64,3 +64,20 @@ export const mergeDeepObjects = <
 
   return buildObjectFromEntries(mergedEntries) as Left & Right
 }
+
+const makeDelay = () => (ms: number) => {
+  const startTimer = (resolve: () => void) => {
+    const id = setTimeout(resolve, ms)
+    return () => clearTimeout(id)
+  }
+
+  let cancelFn = () => {}
+
+  const promise = new Promise((resolve) => {
+    cancelFn = startTimer(resolve)
+  })
+
+  return { promise, cancel: cancelFn }
+}
+
+export const wait = (ms: number) => makeDelay()(ms).promise

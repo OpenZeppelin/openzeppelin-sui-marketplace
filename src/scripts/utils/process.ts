@@ -5,14 +5,14 @@ import { basename } from "node:path"
 import { fileURLToPath } from "node:url"
 
 import { type Argv } from "yargs"
+import { hideBin } from "yargs/helpers"
 import {
-  loadSuiConfig,
   getNetworkConfig,
+  loadSuiConfig,
   type SuiResolvedConfig
 } from "./config.ts"
-import { logError } from "./log.ts"
+import { logError, logKeyValueBlue, logSimpleBlue } from "./log.ts"
 import { ensureSuiCli } from "./suiCli.ts"
-import { hideBin } from "yargs/helpers"
 
 export type CommonCliArgs = {
   network?: string
@@ -25,15 +25,22 @@ type ScriptExecutor<TCliArgument> = (
 
 const stripExt = (name: string): string => name.replace(/\.[^/.]+$/, "")
 const fileNameOnly = (fullPath: string): string => stripExt(basename(fullPath))
-const currentScriptName = () => fileNameOnly(fileURLToPath(import.meta.url))
+const currentScriptName = () => {
+  // Prefer the entrypoint passed to Node (so pnpm scripts show the actual script name)
+  const invokedScript = process.argv?.[1]
+  if (invokedScript) return fileNameOnly(invokedScript)
+
+  return fileNameOnly(fileURLToPath(import.meta.url))
+}
 
 export type BaseYargs = Argv<CommonCliArgs>
 
 export const addBaseOptions = async <TCliArguments>(
+  scriptName: string,
   cliOptions: Argv<TCliArguments>
 ): Promise<CommonCliArgs & TCliArguments> =>
   (await cliOptions
-    .scriptName(currentScriptName())
+    .scriptName(scriptName)
     .option("network", {
       alias: "network",
       type: "string",
@@ -52,9 +59,18 @@ export const runSuiScript = <TCliArgument>(
       await ensureSuiCli()
 
       const suiConfig = await loadSuiConfig()
+      const scriptName = currentScriptName()
+
       const cliArguments = cliOptions
-        ? await addBaseOptions<TCliArgument>(cliOptions)
+        ? await addBaseOptions<TCliArgument>(scriptName, cliOptions)
         : undefined
+
+      const networkToLoad = cliArguments?.network || suiConfig.currentNetwork
+
+      logSimpleBlue("Starting script 🤖")
+      logKeyValueBlue("Script")(scriptName)
+      logKeyValueBlue("Network")(networkToLoad)
+      console.log("\n")
 
       await scriptToExecute(
         {

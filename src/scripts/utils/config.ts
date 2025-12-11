@@ -16,11 +16,11 @@ export type SuiAccountConfig = {
 }
 
 export type SuiMoveConfig = {
-  packagePath?: string
   withUnpublishedDependencies?: boolean
 }
 
 export type SuiNetworkConfig = {
+  networkName: string
   url: string
   faucetUrl?: string
   account: SuiAccountConfig
@@ -79,6 +79,7 @@ const withDefault = (
   mergeDeepObjects(
     {
       url: resolveRpcUrl(networkName),
+      networkName,
       account: {
         keystorePath: process.env.SUI_KEYSTORE_PATH || DEFAULT_KEYSTORE_PATH,
         accountIndex: Number(process.env.SUI_ACCOUNT_INDEX ?? 0),

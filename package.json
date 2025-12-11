@@ -5,10 +5,10 @@
   "private": true,
   "description": "Scripts and tooling for deploying the Sui Oracle Market Move package.",
   "scripts": {
-    "start:localnet": "ts-node-esm --transpile-only src/scripts/chain/start-localnet.ts",
-    "publish:package": "ts-node-esm --transpile-only src/scripts/chain/publish-package.ts",
-    "setup:local": "ts-node-esm --transpile-only src/scripts/chain/setup-local.ts",
-    "get:mock-currency": "ts-node-esm --transpile-only src/scripts/chain/get-mock-currency.ts",
+    "start:localnet": "NODE_OPTIONS=\"--no-warnings\" ts-node-esm --transpile-only src/scripts/chain/start-localnet.ts",
+    "publish:package": "NODE_OPTIONS=\"--no-warnings\" ts-node-esm --transpile-only src/scripts/chain/publish-package.ts",
+    "setup:local": "NODE_OPTIONS=\"--no-warnings\" ts-node-esm --transpile-only src/scripts/chain/setup-local.ts",
+    "get:mock-currency": "NODE_OPTIONS=\"--no-warnings\" ts-node-esm --transpile-only src/scripts/chain/get-mock-currency.ts",
     "lint": "pnpm exec eslint ."
   },
   "dependencies": {

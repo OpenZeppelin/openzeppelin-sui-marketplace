@@ -10,10 +10,17 @@ import type { Ed25519Keypair } from "@mysten/sui/keypairs/ed25519"
 import { deriveObjectID, normalizeSuiObjectId } from "@mysten/sui/utils"
 import yargs from "yargs"
 
-import { ensureFoundedAddress } from "../utils/address.ts"
+import {
+  ensureFoundedAddress,
+  withTestnetFaucetRetry
+} from "../utils/address.ts"
 import { readArtifact } from "../utils/artifacts.ts"
+import type { SuiNetworkConfig } from "../utils/config.ts"
 import { getAccountConfig } from "../utils/config.ts"
-import { SUI_COIN_REGISTRY_ID } from "../utils/constants.ts"
+import {
+  DEFAULT_TX_GAS_BUDGET,
+  SUI_COIN_REGISTRY_ID
+} from "../utils/constants.ts"
 import { loadKeypair } from "../utils/keypair.ts"
 import { logKeyValueBlue, logKeyValueGreen, logWarning } from "../utils/log.ts"
 import type { MockArtifact } from "../utils/mock.ts"
@@ -35,7 +42,6 @@ import {
   newTransaction,
   signAndExecute
 } from "../utils/transactions.ts"
-import type { NetworkName } from "../utils/types.ts"
 
 type SetupLocalCliArgs = {
   coinPackageId?: string
@@ -86,8 +92,6 @@ const DEFAULT_FEEDS: LabeledPriceFeedConfig[] = [
   }
 ]
 
-const DEFAULT_TX_GAS_BUDGET = 100_000_000
-
 /**
  * Parses CLI flags and enforces that publish/package ID inputs are provided.
  */
@@ -116,9 +120,8 @@ const extendCliArguments = async (
 runSuiScript(
   async ({ network }, cliArguments) => {
     const existingState = await extendCliArguments(cliArguments)
-    const localNetwork: NetworkName = "localnet"
 
-    const fullNodeUrl = resolveRpcUrl(localNetwork, network.url)
+    const fullNodeUrl = resolveRpcUrl(network.networkName, network.url)
 
     const keypair = await loadKeypair(getAccountConfig(network))
     const signerAddress = keypair.toSuiAddress()
@@ -127,14 +130,15 @@ runSuiScript(
 
     await ensureFoundedAddress(
       {
-        signerAddress
+        signerAddress,
+        signer: keypair
       },
       suiClient
     )
 
     const { coinPackageId, pythPackageId } = await publishMockPackages(
       {
-        network: localNetwork,
+        network,
         fullNodeUrl,
         keypair,
         existingState,
@@ -224,7 +228,7 @@ const publishMockPackages = async (
     cliArguments,
     existingState
   }: {
-    network: "localnet"
+    network: SuiNetworkConfig
     fullNodeUrl: string
     keypair: Ed25519Keypair
     cliArguments: SetupLocalCliArgs
@@ -233,16 +237,25 @@ const publishMockPackages = async (
   suiClient: SuiClient
 ) => {
   const pythPackageId =
-    existingState.existingPythPackageId ??
+    existingState.existingPythPackageId ||
     (
-      await publishPackageWithLog(
+      await withTestnetFaucetRetry(
         {
-          network,
-          fullNodeUrl,
-          packagePath: path.resolve(cliArguments.pythContractPath),
-          keypair,
-          withUnpublishedDependencies: true
+          signerAddress: keypair.toSuiAddress(),
+          network: "localnet",
+          signer: keypair
         },
+        async () =>
+          await publishPackageWithLog(
+            {
+              network,
+              fullNodeUrl,
+              packagePath: path.resolve(cliArguments.pythContractPath),
+              keypair,
+              withUnpublishedDependencies: true
+            },
+            suiClient
+          ),
         suiClient
       )
     ).packageId
@@ -255,13 +268,22 @@ const publishMockPackages = async (
   const coinPackageId =
     existingState.existingCoinPackageId ||
     (
-      await publishPackageWithLog(
+      await withTestnetFaucetRetry(
         {
-          network,
-          fullNodeUrl,
-          packagePath: path.resolve(cliArguments.coinContractPath),
-          keypair
+          signerAddress: keypair.toSuiAddress(),
+          network: "localnet",
+          signer: keypair
         },
+        async () =>
+          await publishPackageWithLog(
+            {
+              network,
+              fullNodeUrl,
+              packagePath: path.resolve(cliArguments.coinContractPath),
+              keypair
+            },
+            suiClient
+          ),
         suiClient
       )
     ).packageId
@@ -325,7 +347,6 @@ const ensureCoin = async (
   }: {
     seed: CoinSeed
     owner: string
-
     signer: Ed25519Keypair
     coinRegistryObject: WrappedSuiSharedObject
   },
@@ -370,11 +391,20 @@ const ensureCoin = async (
     ]
   })
 
-  const result = await signAndExecute(
+  const result = await withTestnetFaucetRetry(
     {
-      transaction: initTransaction,
+      signerAddress: signer.toSuiAddress(),
+      network: "localnet",
       signer
     },
+    async () =>
+      await signAndExecute(
+        {
+          transaction: initTransaction,
+          signer
+        },
+        suiClient
+      ),
     suiClient
   )
   assertTransactionSuccess(result)
@@ -495,11 +525,20 @@ const publishPriceFeed = async ({
     publishPriceFeedTransaction.sharedObjectRef(clockObject.sharedRef)
   )
 
-  const result = await signAndExecute(
+  const result = await withTestnetFaucetRetry(
     {
-      transaction: publishPriceFeedTransaction,
+      signerAddress: signer.toSuiAddress(),
+      network: "localnet",
       signer
     },
+    async () =>
+      await signAndExecute(
+        {
+          transaction: publishPriceFeedTransaction,
+          signer
+        },
+        suiClient
+      ),
     suiClient
   )
   assertTransactionSuccess(result)

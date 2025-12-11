@@ -1,6 +1,12 @@
-import path from "node:path"
-import os from "node:os"
 import { normalizeSuiObjectId } from "@mysten/sui/utils"
+import os from "node:os"
+import path from "node:path"
+
+export const ONE_SUI = 1_000_000_000n
+export const MINIMUM_GAS_COIN_BALANCE = ONE_SUI
+export const MINIMUM_GAS_COIN_OBJECTS = 3
+export const MINIMUM_ACCOUNT_BALANCE = MINIMUM_GAS_COIN_BALANCE * 5n
+export const DEFAULT_TX_GAS_BUDGET = 100_000_000
 
 export const DEFAULT_KEYSTORE_PATH = path.join(
   os.homedir(),

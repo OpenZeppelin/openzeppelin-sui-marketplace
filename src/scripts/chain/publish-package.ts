@@ -1,40 +1,38 @@
-import { publishPackageWithLog } from "../utils/publish.ts"
-import { runSuiScript } from "../utils/process.ts"
+import yargs from "yargs"
 import { getAccountConfig } from "../utils/config.ts"
 import { loadKeypair } from "../utils/keypair.ts"
-import yargs from "yargs"
+import { runSuiScript } from "../utils/process.ts"
+import { publishPackageWithLog } from "../utils/publish.ts"
 
 runSuiScript(
-  async (
-    { network, currentNetwork, paths },
-    { withUnpublishedDependencies, gasBudget }
-  ) => {
-    const packagePath = network.move?.packagePath ?? paths.move
+  async ({ network, paths }, { withUnpublishedDependencies, packagePath }) => {
+    const fullPackagePath = `${paths.move}/${packagePath}`.replace("//", "/")
 
     const accounts = getAccountConfig(network)
 
     const keypair = await loadKeypair(accounts)
 
     await publishPackageWithLog({
-      network: currentNetwork,
-      packagePath,
+      network,
+      packagePath: fullPackagePath,
       fullNodeUrl: network.url,
       keypair,
-      gasBudget,
+      gasBudget: network.gasBudget,
       withUnpublishedDependencies
     })
   },
   yargs()
+    .option("packagePath", {
+      alias: "package-path",
+      type: "string",
+      description: `The path of the package to publish in "move" directory`,
+      demandOption: true
+    })
     .option("withUnpublishedDependencies", {
       alias: "with-unpublished-dependencies",
       type: "boolean",
       description: `Publish package with unpublished dependencies`,
       default: false
-    })
-    .option("gasBudget", {
-      alias: "gas-budget",
-      type: "number",
-      description: `Gas budget for publishing`
     })
     .strict()
 )

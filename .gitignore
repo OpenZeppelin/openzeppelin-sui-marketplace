@@ -5,4 +5,8 @@ dist
 .DS_Store
 deployments/
 
+move/**/build/
+move/**/.trace
+move/**/.coverage*
+
 patches/pyth-crosschain/

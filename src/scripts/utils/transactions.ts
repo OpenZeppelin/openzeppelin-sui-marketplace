@@ -45,13 +45,10 @@ export const signAndExecute = async (
     force?: boolean,
     excludeObjectIds: Set<string> = new Set()
   ) => {
+    const payment = transaction.getData().gasData.payment
+
     // If payment is already set (and force is not requested) keep the caller's selection.
-    if (
-      !force &&
-      Array.isArray(transaction.blockData.gasConfig.payment) &&
-      transaction.blockData.gasConfig.payment.length > 0
-    )
-      return
+    if (!force && Array.isArray(payment) && payment.length > 0) return
 
     const gasCoin = await pickFreshGasCoin(
       signerAddress,
@@ -172,10 +169,17 @@ const pickFreshGasCoin = async (
   const latestCoin = coins.data?.find(
     (coin) => !excludeObjectIds.has(coin.coinObjectId.toLowerCase())
   )
-  if (!latestCoin)
+
+  if (!latestCoin) {
+    if (excludeObjectIds.size > 0 && (coins.data?.length ?? 0) > 0)
+      throw new Error(
+        "No usable SUI coins available for gas; fund the account or request faucet."
+      )
+
     throw new Error(
       "No usable SUI coins available for gas; fund the account or request faucet."
     )
+  }
 
   return {
     objectId: latestCoin.coinObjectId,
@@ -189,8 +193,8 @@ const parseStaleObjectId = (error: unknown): string | undefined => {
     error instanceof Error
       ? error.message
       : typeof error === "string"
-        ? error
-        : ""
+      ? error
+      : ""
   const match = message.match(/Object ID (\S+)/)
   return match?.[1]
 }
@@ -200,8 +204,8 @@ const parseLockedObjectIds = (error: unknown): Set<string> => {
     error instanceof Error
       ? error.message
       : typeof error === "string"
-        ? error
-        : ""
+      ? error
+      : ""
 
   const lockedIds = new Set<string>()
   for (const line of message.split("\n")) {

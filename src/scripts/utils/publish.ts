@@ -2,6 +2,7 @@ import { SuiClient, type SuiTransactionBlockResponse } from "@mysten/sui/client"
 import type { Ed25519Keypair } from "@mysten/sui/keypairs/ed25519"
 import { Transaction } from "@mysten/sui/transactions"
 import { writeDeploymentArtifact } from "./artifacts.ts"
+import type { SuiNetworkConfig } from "./config.ts"
 import { getDeploymentArtifactPath } from "./constants.ts"
 import {
   logKeyValueBlue,
@@ -29,7 +30,7 @@ export const publishPackageWithLog = async (
     gasBudget = 200_000_000,
     withUnpublishedDependencies = false
   }: {
-    network: string
+    network: SuiNetworkConfig
     packagePath: string
     fullNodeUrl: string
     keypair: Ed25519Keypair
@@ -39,7 +40,7 @@ export const publishPackageWithLog = async (
   initiatedSuiClient?: SuiClient
 ) => {
   logSimpleBlue("Publishing package 💧")
-  logKeyValueBlue("network")(`${network} / ${fullNodeUrl}`)
+  logKeyValueBlue("network")(`${network.networkName} / ${fullNodeUrl}`)
   logKeyValueBlue("package")(packagePath)
   logKeyValueBlue("publisher")(keypair.toSuiAddress())
   if (withUnpublishedDependencies)
@@ -76,7 +77,7 @@ export const publishPackage = async (
     keypair,
     withUnpublishedDependencies = false
   }: {
-    network: string
+    network: SuiNetworkConfig
     packagePath: string
     fullNodeUrl: string
     keypair: Ed25519Keypair
@@ -104,7 +105,7 @@ export const publishPackage = async (
     throw new Error("Publish succeeded but no packageId was returned.")
 
   const artifact: PublishArtifact = {
-    network: network,
+    network: network.networkName,
     rpcUrl: fullNodeUrl,
     packagePath: packagePath,
     packageId: publishResult.packageId,
@@ -114,10 +115,16 @@ export const publishPackage = async (
     publishedAt: new Date().toISOString(),
     modules: buildOutput.modules,
     dependencies: buildOutput.dependencies,
-    explorerUrl: buildExplorerUrl(publishResult.digest, network as NetworkName)
+    explorerUrl: buildExplorerUrl(
+      publishResult.digest,
+      network.networkName as NetworkName
+    )
   }
 
-  await writeDeploymentArtifact(getDeploymentArtifactPath(network), [artifact])
+  await writeDeploymentArtifact(
+    getDeploymentArtifactPath(network.networkName),
+    [artifact]
+  )
 
   return artifact
 }
