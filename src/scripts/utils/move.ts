@@ -3,7 +3,37 @@ import path from "node:path"
 import { exitCode } from "node:process"
 import { logWarning } from "./log.ts"
 import { runSuiCli } from "./suiCli.ts"
-import type { BuildOutput } from "./types.ts"
+import type { BuildOutput, PublishArtifact } from "./types.ts"
+
+export const canonicalizePackagePath = (packagePath: string) =>
+  path.normalize(path.resolve(packagePath))
+
+export const resolveFullPackagePath = (
+  moveRootPath: string,
+  providedPackagePath: string
+): string => {
+  const absoluteProvidedPath = path.isAbsolute(providedPackagePath)
+    ? providedPackagePath
+    : path.resolve(process.cwd(), providedPackagePath)
+  const relativeToMoveRoot = path.relative(moveRootPath, absoluteProvidedPath)
+  const isUnderMoveRoot =
+    relativeToMoveRoot === "" || !relativeToMoveRoot.startsWith("..")
+
+  return isUnderMoveRoot
+    ? absoluteProvidedPath
+    : path.resolve(moveRootPath, providedPackagePath)
+}
+
+export const hasDeploymentForPackage = (
+  deploymentArtifacts: PublishArtifact[],
+  packagePath: string
+) => {
+  const normalizedTargetPath = canonicalizePackagePath(packagePath)
+  return deploymentArtifacts.some(
+    (artifact) =>
+      canonicalizePackagePath(artifact.packagePath) === normalizedTargetPath
+  )
+}
 
 export const buildMovePackage = async (
   packagePath: string,
@@ -20,10 +50,10 @@ export const buildMovePackage = async (
     resolvedPackagePath,
     ...buildArguments
   ])
-  if (stderr) logWarning(stderr.trim())
+  if (stderr) logWarning(stderr.toString())
 
   const { modules, dependencies } = await resolveBuildArtifacts(
-    stdout,
+    stdout.toString(),
     resolvedPackagePath,
     { stripTestModules }
   )
@@ -51,26 +81,34 @@ const resolveBuildArtifacts = async (
   const parsed = parseBuildJson(stdout)
   const parsedModules = parsed?.modules ?? []
   const parsedDependencies = parsed?.dependencies ?? []
-  const fallbackNeeded = parsedModules.length === 0
-  const fallback = fallbackNeeded
+  const shouldReadArtifacts =
+    stripTestModules ||
+    parsedModules.length === 0 ||
+    parsedDependencies.length === 0
+  const fallback = shouldReadArtifacts
     ? await readBuildArtifacts(resolvedPackagePath, { stripTestModules })
     : undefined
 
-  if (fallbackNeeded) {
+  if (parsedModules.length === 0) {
     logWarning(
       "Build JSON contained no modules; using compiled artifacts from build/ instead."
     )
+  } else if (stripTestModules && fallback?.modules?.length) {
+    logWarning(
+      "Using compiled artifacts to strip test modules (BuildInfo.yaml)."
+    )
   }
 
-  const modules = fallbackNeeded
-    ? fallback?.modules || []
-    : stripTestModules
-      ? parsedModules.filter((module) => !isTestModuleBytecode(module))
-      : parsedModules
+  const modules = stripTestModules
+    ? fallback?.modules ||
+      parsedModules.filter((module) => !isTestModuleBytecode(module))
+    : parsedModules.length > 0
+    ? parsedModules
+    : fallback?.modules || []
   const dependencies =
-    fallbackNeeded && parsedDependencies.length === 0
-      ? fallback?.dependencies || []
-      : parsedDependencies
+    parsedDependencies.length > 0
+      ? parsedDependencies
+      : fallback?.dependencies || []
 
   if (!modules.length) {
     const codeSuffix = exitCode !== undefined ? ` (exit code ${exitCode})` : ""

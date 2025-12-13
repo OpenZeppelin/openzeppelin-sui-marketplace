@@ -28,6 +28,7 @@ export type PublishArtifact = {
   publishedAt: string
   modules: string[]
   dependencies: string[]
+  dependencyAddresses?: Record<string, string>
   explorerUrl?: string
   withUnpublishedDependencies?: boolean
   unpublishedDependencies?: string[]

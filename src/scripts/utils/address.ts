@@ -7,6 +7,7 @@ import {
 import type { Ed25519Keypair } from "@mysten/sui/keypairs/ed25519"
 import { Transaction } from "@mysten/sui/transactions"
 import { normalizeSuiAddress } from "@mysten/sui/utils"
+import { logKeyValueBlue, logWarning } from "./log.ts"
 
 const DEFAULT_MINIMUM_COIN_OBJECTS = 2
 const DEFAULT_MINIMUM_GAS_COIN_BALANCE = 500_000_000n
@@ -22,6 +23,7 @@ type FundingSnapshot = {
   coins: CoinBalance[]
   coinCount: number
   hasEnoughBalance: boolean
+  hasSufficientGasCoin: boolean
   ready: boolean
 }
 
@@ -92,11 +94,13 @@ const fundingSnapshot = async (
   {
     signerAddress,
     minimumBalance,
-    minimumCoinObjects
+    minimumCoinObjects,
+    minimumGasCoinBalance
   }: {
     signerAddress: string
     minimumBalance: bigint
     minimumCoinObjects: number
+    minimumGasCoinBalance: bigint
   },
   client: SuiClient
 ): Promise<FundingSnapshot> => {
@@ -109,12 +113,19 @@ const fundingSnapshot = async (
     },
     client
   )
+  const hasSufficientGasCoin =
+    minimumGasCoinBalance <= 0n ||
+    coins.some((coin) => BigInt(coin.balance) >= minimumGasCoinBalance)
 
   return {
     coins,
     coinCount,
     hasEnoughBalance,
-    ready: coinCount >= minimumCoinObjects && hasEnoughBalance
+    hasSufficientGasCoin,
+    ready:
+      coinCount >= minimumCoinObjects &&
+      hasEnoughBalance &&
+      hasSufficientGasCoin
   }
 }
 
@@ -236,7 +247,8 @@ export const ensureFoundedAddress = async (
       {
         signerAddress,
         minimumBalance: effectiveMinimumBalance,
-        minimumCoinObjects
+        minimumCoinObjects,
+        minimumGasCoinBalance
       },
       client
     )
@@ -410,6 +422,16 @@ const isNoGasError = (error: unknown) => {
   return message.includes("No usable SUI coins available for gas")
 }
 
+const isInsufficientGasError = (error: unknown) => {
+  const message =
+    error instanceof Error
+      ? error.message
+      : typeof error === "string"
+      ? error
+      : ""
+  return /insufficient\s*gas/i.test(message)
+}
+
 /**
  * Wraps an operation and, on faucet-supported networks, tops up and retries once
  * if we hit the "No usable SUI coins available for gas" error.
@@ -433,29 +455,41 @@ export const withTestnetFaucetRetry = async <T>(
   transactionRun: () => Promise<T>,
   suiClient: SuiClient
 ): Promise<T> => {
-  const networkName = network || "localnet"
+  const networkName = (network || "localnet").toLowerCase()
   const faucetSupported = ["localnet", "devnet", "testnet"].includes(
     networkName
   )
+  const ensureOptions = {
+    network: networkName as EnsureFoundedAddressOptions["network"],
+    signerAddress,
+    signer,
+    minimumBalance,
+    minimumCoinObjects,
+    minimumGasCoinBalance
+  }
 
-  if (!faucetSupported) return await transactionRun()
+  if (faucetSupported) {
+    logKeyValueBlue("faucet")(
+      `ensure funds for ${normalizeSuiAddress(signerAddress)} on ${networkName}`
+    )
+    await ensureFoundedAddress(ensureOptions, suiClient)
+  }
 
   try {
     return await transactionRun()
   } catch (error) {
-    if (!isNoGasError(error) || !faucetSupported) throw error
-
-    await ensureFoundedAddress(
-      {
-        network: "localnet",
-        signerAddress,
-        signer,
-        minimumBalance,
-        minimumCoinObjects,
-        minimumGasCoinBalance
-      },
-      suiClient
+    if (
+      !faucetSupported ||
+      (!isNoGasError(error) && !isInsufficientGasError(error))
     )
+      throw error
+
+    logWarning(
+      `Gas funding issue detected (${
+        error instanceof Error ? error.message : String(error)
+      }); requesting faucet and retrying.`
+    )
+    await ensureFoundedAddress(ensureOptions, suiClient)
 
     return await transactionRun()
   }

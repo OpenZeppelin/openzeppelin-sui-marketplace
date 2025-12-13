@@ -28,6 +28,7 @@ rev = "main"
 # override use `override = true`
 # Override = { local = "../conflicting/version", override = true }
 
+# Update `pyth` if you publish a different Pyth package on your target network.
 [addresses]
 sui_oracle_market = "0x0"
 
@@ -40,8 +41,16 @@ sui_oracle_market = "0x0"
 # Use the local mock only for dev/test builds (e.g., localnet publishes with --dev).
 local = "../pyth-mock"
 override = true
+[dev-dependencies.mock_coin]
+# Local-only mock assets for localnet demos; ignored on shared networks.
+local = "../coin-mock"
 
-[dev-addresses]
-# The dev-addresses section allows overwriting named addresses for the `--test`
-# and `--dev` modes.
-# alice = "0xB0B"
+[dev-dependencies.openzeppelin_math]
+# Use local OZ math (with test modules marked #[test_only]) to satisfy CLI dev builds.
+local = "../../../sui-contracts/math/core"
+override = true
+
+# [dev-addresses]
+# # The dev-addresses section allows overwriting named addresses for the `--test`
+# # and `--dev` modes.
+# pyth = "0x25891f189a00639f17a5dd298d426970b93cf3366f7abf69f27ab5434fb8bd97"

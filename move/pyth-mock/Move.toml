@@ -5,4 +5,4 @@ edition = "2024.beta"
 [dependencies]
 
 [addresses]
-pyth = "0x0"
+pyth = "0x0" # Zeroed so localnet publishes can pick up the package ID at deploy time.

@@ -261,7 +261,8 @@ const publishMockPackages = async (
               fullNodeUrl,
               packagePath: path.resolve(cliArguments.pythContractPath),
               keypair,
-              withUnpublishedDependencies: true
+              withUnpublishedDependencies: true,
+              useCliPublish: true
             },
             suiClient
           ),
@@ -289,7 +290,8 @@ const publishMockPackages = async (
               network,
               fullNodeUrl,
               packagePath: path.resolve(cliArguments.coinContractPath),
-              keypair
+              keypair,
+              useCliPublish: true
             },
             suiClient
           ),

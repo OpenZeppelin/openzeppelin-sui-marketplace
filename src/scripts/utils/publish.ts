@@ -4,9 +4,12 @@ import path from "node:path"
 import { SuiClient, type SuiTransactionBlockResponse } from "@mysten/sui/client"
 import type { Ed25519Keypair } from "@mysten/sui/keypairs/ed25519"
 import { Transaction } from "@mysten/sui/transactions"
-import { writeDeploymentArtifact } from "./artifacts.ts"
+import {
+  getDeploymentArtifactPath,
+  writeDeploymentArtifact
+} from "./artifacts.ts"
 import type { SuiNetworkConfig } from "./config.ts"
-import { getDeploymentArtifactPath } from "./constants.ts"
+import { DEFAULT_PUBLISH_GAS_BUDGET } from "./constants.ts"
 import {
   logKeyValueBlue,
   logKeyValueGreen,
@@ -37,6 +40,9 @@ type PublishPlan = {
   unpublishedDependencies: string[]
   buildFlags: string[]
   packageNames: PackageNames
+  dependencyAddressesFromLock: Record<string, string>
+  useCliPublish?: boolean
+  keystorePath?: string
   useDevBuild?: boolean
 }
 
@@ -46,9 +52,10 @@ export const publishPackageWithLog = async (
     fullNodeUrl,
     packagePath,
     keypair,
-    gasBudget = 200_000_000,
+    gasBudget = DEFAULT_PUBLISH_GAS_BUDGET,
     withUnpublishedDependencies = false,
-    useDevBuild = false
+    useDevBuild = false,
+    useCliPublish = false
   }: {
     network: SuiNetworkConfig
     packagePath: string
@@ -57,6 +64,7 @@ export const publishPackageWithLog = async (
     gasBudget?: number
     withUnpublishedDependencies?: boolean
     useDevBuild?: boolean
+    useCliPublish?: boolean
   },
   initiatedSuiClient?: SuiClient
 ): Promise<PublishArtifact[]> => {
@@ -67,7 +75,8 @@ export const publishPackageWithLog = async (
     keypair,
     gasBudget,
     withUnpublishedDependencies,
-    useDevBuild
+    useDevBuild,
+    useCliPublish
   })
 
   logPublishStart(publishPlan)
@@ -79,26 +88,46 @@ export const publishPackageWithLog = async (
   return artifacts
 }
 
+/** Publishes a Move package according to a prepared plan. */
 export const publishPackage = async (
   publishPlan: PublishPlan,
   initiatedSuiClient?: SuiClient
 ): Promise<PublishArtifact[]> => {
+  const shouldStripTestModules = !publishPlan.shouldUseUnpublishedDependencies
   const buildOutput = await buildMovePackage(
     publishPlan.packagePath,
     publishPlan.buildFlags,
     {
-      // Strip test modules to keep publish transaction size under limits.
-      stripTestModules: true
+      stripTestModules: shouldStripTestModules
     }
   )
 
-  const publishResult = await doPublishPackage(
-    { ...publishPlan, buildOutput },
-    initiatedSuiClient
-  )
+  let publishResult: PublishResult
+  try {
+    publishResult = publishPlan.useCliPublish
+      ? await publishViaCli(publishPlan)
+      : await doPublishPackage(publishPlan, buildOutput, initiatedSuiClient)
+  } catch (error) {
+    if (shouldRetryWithCli(publishPlan, error)) {
+      logWarning(
+        "SDK publish exceeded transaction limits; retrying with Sui CLI publish (handles unpublished dependencies natively)."
+      )
+      publishResult = await publishViaCli({
+        ...publishPlan,
+        useCliPublish: true
+      })
+    } else {
+      throw error
+    }
+  }
 
   if (!publishResult.packages.length)
     throw new Error("Publish succeeded but no packageId was returned.")
+
+  const dependencyAddresses = mergeDependencyAddresses(
+    publishPlan.dependencyAddressesFromLock,
+    publishResult.packages
+  )
 
   const artifacts: PublishArtifact[] = publishResult.packages.map(
     (pkg, idx) => ({
@@ -116,6 +145,7 @@ export const publishPackage = async (
       publishedAt: new Date().toISOString(),
       modules: pkg.isDependency ? [] : buildOutput.modules,
       dependencies: pkg.isDependency ? [] : buildOutput.dependencies,
+      dependencyAddresses,
       withUnpublishedDependencies: publishPlan.shouldUseUnpublishedDependencies,
       unpublishedDependencies: publishPlan.unpublishedDependencies,
       explorerUrl: buildExplorerUrl(
@@ -133,15 +163,19 @@ export const publishPackage = async (
   return artifacts
 }
 
+/**
+ * Executes a publish transaction via the SDK and returns parsed publish results.
+ */
 export const doPublishPackage = async (
-  publishPlan: PublishPlan & { buildOutput: BuildOutput },
+  publishPlan: PublishPlan,
+  buildOutput: BuildOutput,
   initiatedSuiClient?: SuiClient
 ): Promise<PublishResult> => {
   const suiClient =
     initiatedSuiClient || new SuiClient({ url: publishPlan.fullNodeUrl })
 
   const publishTransaction = createPublishTransaction(
-    publishPlan.buildOutput,
+    buildOutput,
     publishPlan.keypair,
     publishPlan.gasBudget
   )
@@ -177,6 +211,9 @@ export const doPublishPackage = async (
  * 2) publishes the compiled modules
  * 3) transfers the upgrade cap back to the sender
  */
+/**
+ * Builds the publish transaction payload with gas budget, publish command, and upgrade-cap transfer.
+ */
 const createPublishTransaction = (
   buildOutput: BuildOutput,
   keypair: Ed25519Keypair,
@@ -206,7 +243,8 @@ const buildPublishPlan = async ({
   keypair,
   gasBudget,
   withUnpublishedDependencies = false,
-  useDevBuild = false
+  useDevBuild = false,
+  useCliPublish = false
 }: {
   network: SuiNetworkConfig
   packagePath: string
@@ -215,6 +253,7 @@ const buildPublishPlan = async ({
   gasBudget: number
   withUnpublishedDependencies?: boolean
   useDevBuild?: boolean
+  useCliPublish?: boolean
 }): Promise<PublishPlan> => {
   const { unpublishedDependencies, shouldUseUnpublishedDependencies } =
     await resolveUnpublishedDependencyUsage(
@@ -235,6 +274,10 @@ const buildPublishPlan = async ({
     includeUnpublishedDeps: shouldUseUnpublishedDependencies
   })
 
+  // Prefer CLI for standard publishes; dev builds fall back to SDK because
+  // Sui CLI rejects packages that require test-only code (e.g. std::unit_test).
+  const cliPublish = useCliPublish || !useDevBuild
+
   return {
     network,
     packagePath,
@@ -245,12 +288,18 @@ const buildPublishPlan = async ({
     shouldUseUnpublishedDependencies,
     unpublishedDependencies,
     buildFlags,
+    dependencyAddressesFromLock: await readDependencyAddresses(packagePath),
+    useCliPublish: cliPublish,
+    keystorePath: network.account?.keystorePath,
     packageNames: await resolvePackageNames(
       packagePath,
       unpublishedDependencies
     )
   }
 }
+
+const SKIP_FETCH_LATEST_GIT_DEPS_FLAG = "--skip-fetch-latest-git-deps"
+const DUMP_BYTECODE_AS_BASE64_FLAG = "--dump-bytecode-as-base64"
 
 /**
  * Derives the Move build flags for publishing.
@@ -262,16 +311,16 @@ const buildMoveBuildFlags = ({
   useDevBuild: boolean
   includeUnpublishedDeps: boolean
 }) => {
-  const flags = ["--dump-bytecode-as-base64", "--skip-fetch-latest-git-deps"]
+  const flags = [DUMP_BYTECODE_AS_BASE64_FLAG, SKIP_FETCH_LATEST_GIT_DEPS_FLAG]
   if (useDevBuild) {
-    // Sui CLI 1.62 requires `--test` when compiling in dev mode so dependency
-    // test helpers (e.g. std::unit_test) are available.
     flags.push("--dev", "--test")
   }
   if (includeUnpublishedDeps) flags.push("--with-unpublished-dependencies")
+
   return flags
 }
 
+/** Logs publish plan details before execution. */
 const logPublishStart = (plan: PublishPlan) => {
   logSimpleBlue("Publishing package 💧")
   logKeyValueBlue("network")(
@@ -279,6 +328,8 @@ const logPublishStart = (plan: PublishPlan) => {
   )
   logKeyValueBlue("package")(plan.packagePath)
   logKeyValueBlue("publisher")(plan.keypair.toSuiAddress())
+  logKeyValueBlue("gas budget")(plan.gasBudget)
+  logKeyValueBlue("mode")(plan.useCliPublish ? "cli" : "sdk")
   if (plan.useDevBuild)
     logKeyValueBlue("build mode")("dev (uses dev-dependencies)")
 
@@ -291,13 +342,14 @@ const logPublishStart = (plan: PublishPlan) => {
   }
 }
 
+/** Logs successful publish output for all artifacts. */
 const logPublishSuccess = (artifacts: PublishArtifact[]) => {
   logSimpleGreen("Publish succeeded ✅")
-  artifacts.forEach((pkg, idx) => {
-    const label = derivePackageLabel(pkg, idx)
+  artifacts.forEach((artifact, idx) => {
+    const label = derivePackageLabel(artifact, idx)
     logKeyValueGreen("package")(label)
-    logKeyValueGreen("packageId")(pkg.packageId)
-    if (pkg.upgradeCap) logKeyValueGreen("upgradeCap")(pkg.upgradeCap)
+    logKeyValueGreen("packageId")(artifact.packageId)
+    if (artifact.upgradeCap) logKeyValueGreen("upgradeCap")(artifact.upgradeCap)
   })
 
   if (artifacts[0]) {
@@ -307,57 +359,134 @@ const logPublishSuccess = (artifacts: PublishArtifact[]) => {
   }
 }
 
-const derivePackageLabel = (pkg: PublishArtifact, idx: number) =>
-  pkg.packageName ?? (pkg.isDependency ? `dependency #${idx}` : "root package")
+const derivePackageLabel = (artifact: PublishArtifact, idx: number) =>
+  artifact.packageName ??
+  (artifact.isDependency ? `dependency #${idx}` : "root package")
 
-const _publishPackageWithCli = async (
-  {
-    packagePath,
-    gasBudget,
-    keystorePath
-  }: {
-    packagePath: string
-    gasBudget: number
-    keystorePath?: string
-    rpcUrl: string
-    signer: string
-  },
-  publishArguments: string[] = []
-): Promise<PublishResult> => {
-  if (!keystorePath) {
+/** Combines dependency addresses from Move.lock with newly published dependency packages. */
+const mergeDependencyAddresses = (
+  lockAddresses: Record<string, string>,
+  publishedPackages: PublishedPackage[]
+) => {
+  const publishedDependencyAddresses = publishedPackages
+    .filter(
+      (publishedPackage) =>
+        publishedPackage.isDependency && publishedPackage.packageName
+    )
+    .reduce<Record<string, string>>((acc, publishedPackage) => {
+      acc[publishedPackage.packageName as string] = publishedPackage.packageId
+      return acc
+    }, {})
+
+  return { ...lockAddresses, ...publishedDependencyAddresses }
+}
+
+const buildCliPublishArguments = (plan: PublishPlan): string[] => {
+  const args = [
+    plan.packagePath,
+    "--json",
+    "--gas-budget",
+    plan.gasBudget.toString(),
+    SKIP_FETCH_LATEST_GIT_DEPS_FLAG,
+    "--sender",
+    plan.keypair.toSuiAddress()
+  ]
+
+  if (plan.useDevBuild) args.push("--dev")
+
+  if (plan.shouldUseUnpublishedDependencies)
+    args.push("--with-unpublished-dependencies")
+
+  return args
+}
+
+/**
+ * Publishes using `sui client publish` to mirror CLI behavior (including Move.lock updates).
+ */
+const publishViaCli = async (plan: PublishPlan): Promise<PublishResult> => {
+  const args = buildCliPublishArguments(plan)
+
+  warnIfCliMissingKeystore(plan)
+
+  const cliEnv =
+    plan.keystorePath !== undefined
+      ? { ...process.env, SUI_KEYSTORE_PATH: plan.keystorePath }
+      : undefined
+
+  const { stdout, stderr, exitCode } = await runClientPublish(args, {
+    env: cliEnv
+  })
+  if (stderr?.trim()) logWarning(stderr.trim())
+
+  if (exitCode && exitCode !== 0) {
+    const outputTail = [stdout, stderr]
+      .filter(Boolean)
+      .map((chunk) => chunk.trim())
+      .filter(Boolean)
+      .join("\n")
     throw new Error(
-      "keystorePath is required when publishing with unpublished dependencies."
+      `Sui CLI publish exited with code ${exitCode}${
+        outputTail ? `:\n${outputTail}` : ""
+      }`
     )
   }
 
-  const { stdout, stderr } = await runClientPublish([
-    packagePath,
-    "--json",
-    "--gas-budget",
-    gasBudget.toString(),
-    ...publishArguments
-  ])
-
-  if (stderr?.trim()) logWarning(stderr.trim())
-
   const parsed = parseCliJson(stdout)
+  const publishResult = extractPublishResult(
+    parsed as SuiTransactionBlockResponse
+  )
 
-  return extractPublishResult(parsed as SuiTransactionBlockResponse)
+  return labelPublishResult(publishResult, plan.packageNames)
 }
 
+/** Warns when CLI publish may need a keystore path but none was provided. */
+const warnIfCliMissingKeystore = (plan: PublishPlan) => {
+  if (!plan.shouldUseUnpublishedDependencies) return
+  if (plan.keystorePath) return
+
+  logWarning(
+    "Publishing with unpublished dependencies via CLI but no keystore path override was provided; relying on the default Sui CLI keystore (set SUI_KEYSTORE_PATH to override)."
+  )
+}
+
+/** Finds the last JSON-looking line in CLI stdout and parses it. */
 const parseCliJson = (stdout: string) => {
-  const lines = stdout.trim().split(/\r?\n/).reverse()
-  for (const line of lines) {
-    const candidate = line.trim()
-    if (!candidate.startsWith("{") && !candidate.startsWith("[")) continue
+  const trimmed = stdout.trim()
+  if (!trimmed)
+    throw new Error("Failed to parse JSON from Sui CLI publish output.")
+
+  const tryParse = (candidate: string) => {
     try {
       return JSON.parse(candidate)
     } catch {
-      /* keep scanning */
+      return undefined
     }
   }
 
-  throw new Error("Failed to parse JSON from Sui CLI publish output.")
+  const direct = tryParse(trimmed)
+  if (direct) return direct
+
+  const lines = trimmed.split(/\r?\n/)
+  for (let idx = lines.length - 1; idx >= 0; idx -= 1) {
+    const line = lines[idx]?.trimStart()
+    if (!line || (!line.startsWith("{") && !line.startsWith("["))) continue
+
+    const candidate = lines.slice(idx).join("\n").trim()
+    const parsed = tryParse(candidate)
+    if (parsed) return parsed
+  }
+
+  const trailingBlockMatch = trimmed.match(/(\{[\s\S]*\}|\[[\s\S]*\])\s*$/)
+  const trailingJson = trailingBlockMatch?.[1]?.trim()
+  if (trailingJson) {
+    const parsed = tryParse(trailingJson)
+    if (parsed) return parsed
+  }
+
+  const tail = lines.slice(-20).join("\n")
+  throw new Error(
+    `Failed to parse JSON from Sui CLI publish output. stdout tail:\n${tail}`
+  )
 }
 
 /**
@@ -509,3 +638,53 @@ const resolvePackageNames = async (
 
   return { root, dependencies: unpublishedDependencies }
 }
+
+/**
+ * Reads Move.lock for published-at/published-id addresses keyed by package id/name.
+ */
+const readDependencyAddresses = async (
+  packagePath: string
+): Promise<Record<string, string>> => {
+  const lockPath = path.join(packagePath, "Move.lock")
+  try {
+    const lockContents = await fs.readFile(lockPath, "utf8")
+    return parsePublishedAddresses(lockContents)
+  } catch {
+    return {}
+  }
+}
+
+/** Parses published addresses from a Move.lock blob keyed by package alias. */
+const parsePublishedAddresses = (
+  lockContents: string
+): Record<string, string> => {
+  const blocks = lockContents.split(/\[\[move\.package\]\]/).slice(1)
+  const addresses: Record<string, string> = {}
+
+  for (const block of blocks) {
+    const idMatch = block.match(/id\s*=\s*"([^"]+)"/)
+    const publishedMatch =
+      block.match(/published-at\s*=\s*"0x([0-9a-fA-F]+)"/) ||
+      block.match(/published-id\s*=\s*"0x([0-9a-fA-F]+)"/)
+
+    if (idMatch && publishedMatch) {
+      const alias = idMatch[1]
+      const address = `0x${publishedMatch[1].toLowerCase()}`
+      addresses[alias] = address
+    }
+  }
+
+  return addresses
+}
+
+const isSizeLimitError = (error: unknown) => {
+  const message =
+    error instanceof Error ? error.message : error ? String(error) : ""
+  return (
+    message.toLowerCase().includes("size limit exceeded") ||
+    message.toLowerCase().includes("serialized transaction size")
+  )
+}
+
+const shouldRetryWithCli = (plan: PublishPlan, error: unknown) =>
+  !plan.useCliPublish && isSizeLimitError(error)

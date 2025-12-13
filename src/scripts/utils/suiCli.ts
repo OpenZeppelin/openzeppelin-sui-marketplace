@@ -1,4 +1,4 @@
-import type { ExecException } from "node:child_process"
+import type { ExecException, ExecFileOptions } from "node:child_process"
 import { execFile as execFileCallback } from "node:child_process"
 import { promisify } from "node:util"
 
@@ -16,20 +16,28 @@ export const ensureSuiCli = async () => {
 
 export const runSuiCli =
   (baseCliArguments: string[]) =>
-  async (complementaryCliArguments: string[]) => {
+  async (
+    complementaryCliArguments: string[],
+    options: ExecFileOptions = {}
+  ) => {
     try {
-      return await execFile(
+      const result = await execFile(
         "sui",
         [...baseCliArguments, ...complementaryCliArguments],
-        { encoding: "utf-8" }
+        { encoding: "utf-8", ...options }
       )
+      return { ...result, exitCode: 0 }
     } catch (error) {
       const executionError = error as ExecException
       // `execFile` rejects on non-zero exit codes. We still want to surface
       // whatever stdout was produced (warnings often go to stdout), so plumb it through.
       return {
         stdout: executionError?.stdout ?? "",
-        stderr: executionError?.stderr ?? executionError?.message ?? ""
+        stderr: executionError?.stderr ?? executionError?.message ?? "",
+        exitCode:
+          typeof executionError?.code === "number"
+            ? executionError.code
+            : undefined
       }
     }
   }

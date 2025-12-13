@@ -1,5 +1,5 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises"
-import { dirname } from "node:path"
+import path, { dirname } from "node:path"
 import type { PublishArtifact } from "./types.ts"
 
 export const writeArtifact =
@@ -60,3 +60,13 @@ export const readArtifact = async <TArtifact>(
     )
   }
 }
+
+export const getArtifactPath =
+  (artifactType: "mock" | "deployment" | "object") => (network: string) =>
+    path.join(process.cwd(), "deployments", `${artifactType}.${network}.json`)
+
+export const getDeploymentArtifactPath = getArtifactPath("deployment")
+export const getObjectArtifactPath = getArtifactPath("object")
+
+export const loadDeploymentArtifacts = (networkName: string) =>
+  readArtifact<PublishArtifact[]>(getDeploymentArtifactPath(networkName), [])

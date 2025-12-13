@@ -7,6 +7,7 @@ export const MINIMUM_GAS_COIN_BALANCE = ONE_SUI
 export const MINIMUM_GAS_COIN_OBJECTS = 3
 export const MINIMUM_ACCOUNT_BALANCE = MINIMUM_GAS_COIN_BALANCE * 5n
 export const DEFAULT_TX_GAS_BUDGET = 100_000_000
+export const DEFAULT_PUBLISH_GAS_BUDGET = 2_000_000_000
 
 export const DEFAULT_KEYSTORE_PATH = path.join(
   os.homedir(),
@@ -14,13 +15,6 @@ export const DEFAULT_KEYSTORE_PATH = path.join(
   "sui_config",
   "sui.keystore"
 )
-
-export const getArtifactPath =
-  (artifactType: "mock" | "deployment" | "object") => (network: string) =>
-    path.join(process.cwd(), "deployments", `${artifactType}.${network}.json`)
-
-export const getDeploymentArtifactPath = getArtifactPath("deployment")
-export const getObjectArtifactPath = getArtifactPath("object")
 
 export const SUI_CLOCK_ID = normalizeSuiObjectId(
   "0x0000000000000000000000000000000000000000000000000000000000000006"

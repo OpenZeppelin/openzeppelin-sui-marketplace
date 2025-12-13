@@ -2,14 +2,15 @@ import { SuiClient } from "@mysten/sui/client"
 import { Transaction } from "@mysten/sui/transactions"
 import {
   deriveObjectID,
-  normalizeSuiObjectId,
-  normalizeSuiAddress
+  normalizeSuiAddress,
+  normalizeSuiObjectId
 } from "@mysten/sui/utils"
 import yargs from "yargs"
 import { hideBin } from "yargs/helpers"
 
 import { readArtifact } from "../utils/artifacts.ts"
 import { SUI_COIN_REGISTRY_ID } from "../utils/constants.ts"
+import { loadKeypair } from "../utils/keypair.ts"
 import {
   logKeyValueBlue,
   logKeyValueGreen,
@@ -20,7 +21,6 @@ import type { MockArtifact } from "../utils/mock.ts"
 import { mockArtifactPath } from "../utils/mock.ts"
 import { getSuiSharedObject } from "../utils/object.ts"
 import { runSuiScript } from "../utils/process.ts"
-import { loadKeypair } from "../utils/keypair.ts"
 
 type CliArgs = {
   registryId: string
@@ -549,10 +549,10 @@ const resolveSupplyState = async ({
   const kind: CurrencyState["supplyKind"] = viewValues.supplyBurnOnly
     ? "burn-only"
     : viewValues.supplyFixed
-      ? "fixed"
-      : viewValues.treasuryCapId
-        ? "mintable"
-        : "unknown"
+    ? "fixed"
+    : viewValues.treasuryCapId
+    ? "mintable"
+    : "unknown"
 
   const total =
     viewValues.totalSupply ??
@@ -593,9 +593,9 @@ const fetchTreasuryCapSupply = async ({
     return totalSupply
   } catch (error) {
     logWarning(
-      `Failed to read treasury cap ${
-        treasuryCapId ?? ""
-      } supply: ${error instanceof Error ? error.message : String(error)}`
+      `Failed to read treasury cap ${treasuryCapId ?? ""} supply: ${
+        error instanceof Error ? error.message : String(error)
+      }`
     )
     return
   }
@@ -616,7 +616,8 @@ const extractSupplyValue = (supplyField: unknown): bigint | undefined => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (supplyField as any)?.value
 
-  if (typeof candidate === "string" && candidate.length > 0) return BigInt(candidate)
+  if (typeof candidate === "string" && candidate.length > 0)
+    return BigInt(candidate)
 }
 
 const mapViewToState = ({
@@ -633,8 +634,8 @@ const mapViewToState = ({
   const metadataCapStatus = viewValues.metadataCapDeleted
     ? "deleted"
     : viewValues.metadataCapClaimed
-      ? "claimed"
-      : "unclaimed"
+    ? "claimed"
+    : "unclaimed"
 
   return {
     coinType: coinInput.coinType,

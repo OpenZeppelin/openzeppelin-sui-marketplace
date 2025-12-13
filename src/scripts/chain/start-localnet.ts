@@ -8,6 +8,9 @@ import { SuiClient } from "@mysten/sui/client"
 import { getFaucetHost } from "@mysten/sui/faucet"
 import yargs from "yargs"
 
+import { ensureFoundedAddress } from "../utils/address.ts"
+import type { SuiNetworkConfig } from "../utils/config.ts"
+import { loadKeypair } from "../utils/keypair.ts"
 import {
   logKeyValueBlue,
   logKeyValueGreen,
@@ -40,9 +43,10 @@ type StartLocalnetCliArgs = {
 
 runSuiScript<StartLocalnetCliArgs>(
   async (
-    { network: { url: rpcUrl }, paths },
+    { network, paths },
     { withFaucet, checkOnly, waitSeconds, forceRegenesis }
   ) => {
+    const rpcUrl = network.url
     const probeResult = await probeRpcHealth(rpcUrl)
 
     if (checkOnly) {
@@ -62,6 +66,12 @@ runSuiScript<StartLocalnetCliArgs>(
     if (probeResult.status === "running") {
       logSimpleGreen("Localnet running")
       logRpcSnapshot(probeResult.snapshot, withFaucet)
+      await maybeFundAfterRegenesis({
+        forceRegenesis,
+        withFaucet,
+        network,
+        rpcUrl
+      })
       return
     }
 
@@ -76,6 +86,13 @@ runSuiScript<StartLocalnetCliArgs>(
     })
 
     logRpcSnapshot(readySnapshot, withFaucet)
+
+    await maybeFundAfterRegenesis({
+      forceRegenesis,
+      withFaucet,
+      network,
+      rpcUrl
+    })
 
     await logProcessExit(localnetProcess)
   },
@@ -237,6 +254,96 @@ const deriveFaucetUrl = (rpcUrl: string) => {
     return faucetUrl.toString()
   } catch {
     return "http://127.0.0.1:9123/v2/gas"
+  }
+}
+
+const maybeFundAfterRegenesis = async ({
+  forceRegenesis,
+  withFaucet,
+  network,
+  rpcUrl
+}: {
+  forceRegenesis: boolean
+  withFaucet: boolean
+  network: SuiNetworkConfig
+  rpcUrl: string
+}) => {
+  if (!forceRegenesis) return
+  if (!withFaucet) {
+    logKeyValueYellow("Faucet")(
+      "Skipping auto-funding; faucet not started (--with-faucet=false)"
+    )
+    return
+  }
+
+  await fundConfiguredAddressIfPossible({ network, rpcUrl })
+}
+
+type FundingTarget = {
+  signerAddress: string
+  signer?: Awaited<ReturnType<typeof loadKeypair>>
+}
+
+const isFaucetSupportedNetwork = (
+  networkName: string
+): networkName is "localnet" | "devnet" | "testnet" =>
+  ["localnet", "devnet", "testnet"].includes(networkName)
+
+const deriveFundingTarget = async (
+  network: SuiNetworkConfig
+): Promise<FundingTarget | null> => {
+  try {
+    const signer = await loadKeypair(network.account)
+    return { signerAddress: signer.toSuiAddress(), signer }
+  } catch (error) {
+    if (network.account.accountAddress)
+      return { signerAddress: network.account.accountAddress }
+
+    logWarning(
+      `Skipping faucet funding; unable to derive signer address: ${
+        error instanceof Error ? error.message : String(error)
+      }`
+    )
+    return null
+  }
+}
+
+const fundConfiguredAddressIfPossible = async ({
+  network,
+  rpcUrl
+}: {
+  network: SuiNetworkConfig
+  rpcUrl: string
+}) => {
+  if (!isFaucetSupportedNetwork(network.networkName)) {
+    logWarning(
+      `Skipping faucet funding; faucet unsupported for ${network.networkName}`
+    )
+    return
+  }
+
+  const fundingTarget = await deriveFundingTarget(network)
+  if (!fundingTarget) return
+
+  try {
+    await ensureFoundedAddress(
+      {
+        network: network.networkName,
+        signerAddress: fundingTarget.signerAddress,
+        signer: fundingTarget.signer
+      },
+      buildSuiClient(rpcUrl)
+    )
+
+    logKeyValueGreen("Faucet")(
+      `Funded ${fundingTarget.signerAddress} after regenesis`
+    )
+  } catch (error) {
+    logWarning(
+      `Faucet funding failed for ${fundingTarget.signerAddress}: ${
+        error instanceof Error ? error.message : String(error)
+      }`
+    )
   }
 }
 
