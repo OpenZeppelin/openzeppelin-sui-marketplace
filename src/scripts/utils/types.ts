@@ -32,6 +32,7 @@ export type PublishArtifact = {
   explorerUrl?: string
   withUnpublishedDependencies?: boolean
   unpublishedDependencies?: string[]
+  suiCliVersion?: string
 }
 
 export type PublishedPackage = {

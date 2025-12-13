@@ -207,8 +207,7 @@ const inferPackageName = async (buildDir: string): Promise<string> => {
   // Fallback: pick the first non-metadata directory, then any, then a dummy name.
   return (
     candidateDirs.find((name) => name !== "locks" && name !== "deps") ||
-    candidateDirs[0] ||
-    "Pyth"
+    candidateDirs[0]
   )
 }
 

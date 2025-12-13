@@ -7,7 +7,7 @@ edition = "2024.beta"
 [dependencies]
 
 # Oracle price feeds
-[dependencies.Pyth]
+[dependencies.pyth]
 git = "https://github.com/pyth-network/pyth-crosschain.git"
 subdir = "target_chains/sui/contracts"
 rev = "main"
@@ -37,7 +37,7 @@ sui_oracle_market = "0x0"
 # alice = "0xA11CE"
 
 [dev-dependencies]
-[dev-dependencies.Pyth]
+[dev-dependencies.pyth]
 # Use the local mock only for dev/test builds (e.g., localnet publishes with --dev).
 local = "../pyth-mock"
 override = true

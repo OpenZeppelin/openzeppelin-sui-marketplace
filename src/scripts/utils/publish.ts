@@ -44,6 +44,7 @@ type PublishPlan = {
   useCliPublish?: boolean
   keystorePath?: string
   useDevBuild?: boolean
+  suiCliVersion?: string
 }
 
 export const publishPackageWithLog = async (
@@ -148,6 +149,7 @@ export const publishPackage = async (
       dependencyAddresses,
       withUnpublishedDependencies: publishPlan.shouldUseUnpublishedDependencies,
       unpublishedDependencies: publishPlan.unpublishedDependencies,
+      suiCliVersion: publishPlan.suiCliVersion,
       explorerUrl: buildExplorerUrl(
         publishResult.digest,
         publishPlan.network.networkName as NetworkName
@@ -232,6 +234,7 @@ const createPublishTransaction = (
 }
 
 export const runClientPublish = runSuiCli(["client", "publish"])
+const runSuiCliVersion = runSuiCli([])
 
 /**
  * Builds the full plan for a publish, including flags, dependency strategy, and package naming.
@@ -260,6 +263,8 @@ const buildPublishPlan = async ({
       packagePath,
       withUnpublishedDependencies
     )
+
+  await assertFrameworkRevisionConsistency(packagePath)
 
   if (unpublishedDependencies.length > 0 && !withUnpublishedDependencies) {
     logWarning(
@@ -291,6 +296,7 @@ const buildPublishPlan = async ({
     dependencyAddressesFromLock: await readDependencyAddresses(packagePath),
     useCliPublish: cliPublish,
     keystorePath: network.account?.keystorePath,
+    suiCliVersion: await fetchSuiCliVersion(),
     packageNames: await resolvePackageNames(
       packagePath,
       unpublishedDependencies
@@ -652,6 +658,136 @@ const readDependencyAddresses = async (
   } catch {
     return {}
   }
+}
+
+/** Ensures the root package and any local dependencies share the same framework git revision. */
+const assertFrameworkRevisionConsistency = async (packagePath: string) => {
+  const rootFrameworkRevision = await readFrameworkRevisionForPackage(
+    packagePath
+  )
+  if (!rootFrameworkRevision) return
+
+  const dependencyPackages = await discoverLocalDependencyPackages(packagePath)
+  const mismatchedRevisions = collectMismatchedFrameworkRevisions(
+    rootFrameworkRevision,
+    dependencyPackages
+  )
+
+  if (mismatchedRevisions.length) {
+    throw new Error(buildFrameworkMismatchMessage(mismatchedRevisions))
+  }
+}
+
+const collectMismatchedFrameworkRevisions = (
+  rootFrameworkRevision: string,
+  dependencyPackages: Array<{ name: string; path: string }>
+) =>
+  dependencyPackages
+    .map((dependencyPackage) => {
+      const dependencyFrameworkRevision = dependencyPackage.frameworkRevision
+      if (
+        dependencyFrameworkRevision &&
+        dependencyFrameworkRevision !== rootFrameworkRevision
+      ) {
+        return `${dependencyPackage.name} (${dependencyPackage.path}) uses rev ${dependencyFrameworkRevision}, root uses ${rootFrameworkRevision}`
+      }
+      return undefined
+    })
+    .filter(Boolean) as string[]
+
+const buildFrameworkMismatchMessage = (mismatches: string[]) =>
+  [
+    "Framework version mismatch detected across Move.lock files.",
+    ...mismatches.map((mismatch) => `- ${mismatch}`),
+    "Align all packages to the same Sui framework commit (e.g., run `sui move update` in each package) before publishing."
+  ].join("\n")
+
+const readFrameworkRevisionForPackage = async (
+  packagePath: string
+): Promise<string | undefined> => {
+  const lockPath = path.join(packagePath, "Move.lock")
+  try {
+    const lockContents = await fs.readFile(lockPath, "utf8")
+    return extractFrameworkRevisionFromLock(lockContents)
+  } catch {
+    return undefined
+  }
+}
+
+const extractFrameworkRevisionFromLock = (
+  lockContents: string
+): string | undefined => {
+  const packageBlocks = lockContents.split(/\[\[move\.package\]\]/).slice(1)
+  for (const packageBlock of packageBlocks) {
+    const isFrameworkBlock =
+      /id\s*=\s*"Bridge"/i.test(packageBlock) ||
+      /id\s*=\s*"Sui"/i.test(packageBlock)
+    if (!isFrameworkBlock) continue
+
+    const revisionMatch = packageBlock.match(/rev\s*=\s*"([^"]+)"/)
+    if (revisionMatch) return revisionMatch[1]
+  }
+  return undefined
+}
+
+const discoverLocalDependencyPackages = async (
+  packagePath: string
+): Promise<Array<{ name: string; path: string; frameworkRevision?: string }>> => {
+  const moveTomlPath = path.join(packagePath, "Move.toml")
+  try {
+    const moveTomlContents = await fs.readFile(moveTomlPath, "utf8")
+    const dependencyMatches = [
+      ...moveTomlContents.matchAll(
+        /\[(?:dev-dependencies|dependencies)\.([^\]]+)\][\s\S]*?local\s*=\s*"([^"]+)"/g
+      )
+    ]
+
+    const localDependencyPaths = new Map<
+      string,
+      { name: string; path: string }
+    >()
+    for (const match of dependencyMatches) {
+      const dependencyName = match[1]
+      const relativeDependencyPath = match[2]
+      const absoluteDependencyPath = path.resolve(
+        packagePath,
+        relativeDependencyPath
+      )
+      localDependencyPaths.set(absoluteDependencyPath, {
+        name: dependencyName,
+        path: absoluteDependencyPath
+      })
+    }
+
+    const dependencyPackages = [...localDependencyPaths.values()]
+    return Promise.all(
+      dependencyPackages.map(async (dependency) => ({
+        ...dependency,
+        frameworkRevision: await readFrameworkRevisionForPackage(
+          dependency.path
+        )
+      }))
+    )
+  } catch {
+    return []
+  }
+}
+
+const fetchSuiCliVersion = async (): Promise<string | undefined> => {
+  try {
+    const { stdout, exitCode } = await runSuiCliVersion(["--version"])
+    if (exitCode && exitCode !== 0) return undefined
+    return parseSuiCliVersionOutput(stdout)
+  } catch {
+    return undefined
+  }
+}
+
+const parseSuiCliVersionOutput = (stdout: string): string | undefined => {
+  if (!stdout?.trim()) return undefined
+  const firstLine = stdout.trim().split(/\r?\n/)[0] ?? ""
+  const versionMatch = firstLine.match(/sui\s+([^\s]+)/i)
+  return versionMatch?.[1] ?? firstLine || undefined
 }
 
 /** Parses published addresses from a Move.lock blob keyed by package alias. */
