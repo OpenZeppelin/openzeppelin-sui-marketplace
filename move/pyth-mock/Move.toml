@@ -1,5 +1,5 @@
 [package]
-name = "pyth"
+name = "Pyth"
 edition = "2024.beta"
 
 [dependencies]

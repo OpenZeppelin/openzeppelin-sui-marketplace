@@ -13,12 +13,21 @@ const PYTH_PRICE_INFO_TYPE = "price_info::PriceInfoObject"
 export const SUI_CLOCK_ID =
   "0x0000000000000000000000000000000000000000000000000000000000000006"
 
+/**
+ * Returns the fully qualified Move type for a Pyth PriceInfoObject in a given package.
+ * Useful when asserting object types on-chain or in RPC reads.
+ */
 export const getPythPriceInfoType = (pythPackageId: string) =>
   `${pythPackageId}::${PYTH_PRICE_INFO_TYPE}`
 
 /**
  * Adds a Move call to publish and share a mock price feed using the local Pyth stub.
  * The object will be timestamped with the on-chain clock to satisfy freshness checks.
+ */
+/**
+ * Adds a Move call to publish and share a mock price feed using the local Pyth stub.
+ * Why: Localnet has no VAA/relayer pipeline; this helper materializes a PriceInfoObject
+ * with fresh timestamps so oracle-dependent flows can run end-to-end.
  */
 export const publishMockPriceFeed = (
   transaction: Transaction,

@@ -215,8 +215,9 @@ const fundingFailure = (address: string, network: string, lastError: unknown) =>
   )
 
 /**
- * Ensures the signer has spendable SUI; auto-faucets on localnet/devnet/testnet if empty.
- * Also hydrates a second gas coin if only one is present, to avoid lock contention on a single coin object.
+ * Ensures the signer has spendable SUI coin objects and splits gas so multiple coins exist.
+ * Why: Sui treats coins as objects; having at least two spendable gas coins avoids lock contention
+ * and mirrors how wallets fund PTBs. On localnet/devnet/testnet, this will auto-request from the faucet.
  */
 export const ensureFoundedAddress = async (
   {
@@ -417,8 +418,8 @@ const isNoGasError = (error: unknown) => {
     error instanceof Error
       ? error.message
       : typeof error === "string"
-      ? error
-      : ""
+        ? error
+        : ""
   return message.includes("No usable SUI coins available for gas")
 }
 
@@ -427,14 +428,15 @@ const isInsufficientGasError = (error: unknown) => {
     error instanceof Error
       ? error.message
       : typeof error === "string"
-      ? error
-      : ""
+        ? error
+        : ""
   return /insufficient\s*gas/i.test(message)
 }
 
 /**
- * Wraps an operation and, on faucet-supported networks, tops up and retries once
- * if we hit the "No usable SUI coins available for gas" error.
+ * Runs a transaction-like operation with a faucet-backed retry when gas is missing.
+ * Why: Sui requires real gas coin objects for signing; this helper pre-funds (and retries once)
+ * on localnet/devnet/testnet to smooth developer flows similar to an EVM auto-faucet.
  */
 export const withTestnetFaucetRetry = async <T>(
   {

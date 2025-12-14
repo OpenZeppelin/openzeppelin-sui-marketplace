@@ -115,6 +115,11 @@ export const defineSuiConfig = (
   config: DeepPartial<SuiUserConfig>
 ): DeepPartial<SuiUserConfig> => config
 
+/**
+ * Loads `sui.config.*`, merges env overrides, and returns a resolved config with defaults.
+ * Why: Sui tooling expects network/account paths similar to Hardhat’s config, but here we
+ * produce a fully resolved object so scripts can run non-interactively across networks.
+ */
 export const loadSuiConfig = async (): Promise<SuiResolvedConfig> => {
   const configPath = findConfigPath()
   if (!configPath) {

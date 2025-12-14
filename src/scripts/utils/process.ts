@@ -50,6 +50,11 @@ export const addBaseOptions = async <TCliArguments>(
     .help()
     .parseAsync(hideBin(process.argv))) as CommonCliArgs & TCliArguments
 
+/**
+ * Thin wrapper around yargs + Sui config loading to run CLI scripts consistently.
+ * Why: Centralizes logging, network resolution, and Sui CLI presence so each script
+ * behaves like a Hardhat task equivalent in EVM tooling.
+ */
 export const runSuiScript = <TCliArgument>(
   scriptToExecute: ScriptExecutor<TCliArgument>,
   cliOptions?: Argv<TCliArgument>

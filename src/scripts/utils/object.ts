@@ -6,6 +6,10 @@ import type {
 } from "@mysten/sui/client"
 import { normalizeSuiObjectId } from "@mysten/sui/utils"
 
+/**
+ * Fetches an object with owner metadata, normalizing the ID.
+ * Useful for scripts that need to reason about ownership (shared vs owned) before building PTBs.
+ */
 export const getSuiObject = async (
   { objectId }: { objectId: string },
   suiClient: SuiClient
@@ -41,6 +45,11 @@ export type WrappedSuiSharedObject = {
   error?: ObjectResponseError
 }
 
+/**
+ * Fetches a shared object and returns the shared reference fields needed for Move calls.
+ * Why: Shared objects carry an `initial_shared_version` that must be supplied in PTBs;
+ * this helper extracts it so devs coming from EVM (where storage is global) don’t have to.
+ */
 export const getSuiSharedObject = async (
   { objectId, mutable = false }: { objectId: string; mutable?: boolean },
   suiClient: SuiClient

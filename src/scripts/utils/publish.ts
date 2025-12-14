@@ -45,8 +45,16 @@ type PublishPlan = {
   keystorePath?: string
   useDevBuild?: boolean
   suiCliVersion?: string
+  allowAutoUnpublishedDependencies?: boolean
+  ignoreChainDuringBuild: boolean
 }
 
+/**
+ * Builds and publishes a Move package, logging friendly output and persisting artifacts.
+ * Why: Publishing on Sui requires bundling compiled modules, dependency addresses, and gas strategy;
+ * this helper mirrors common EVM “deploy script” ergonomics while honoring Sui-specific constraints
+ * (unpublished deps, Move.lock addresses, UpgradeCap transfer).
+ */
 export const publishPackageWithLog = async (
   {
     network,
@@ -56,7 +64,8 @@ export const publishPackageWithLog = async (
     gasBudget = DEFAULT_PUBLISH_GAS_BUDGET,
     withUnpublishedDependencies = false,
     useDevBuild = false,
-    useCliPublish = false
+    useCliPublish = false,
+    allowAutoUnpublishedDependencies = true
   }: {
     network: SuiNetworkConfig
     packagePath: string
@@ -66,6 +75,7 @@ export const publishPackageWithLog = async (
     withUnpublishedDependencies?: boolean
     useDevBuild?: boolean
     useCliPublish?: boolean
+    allowAutoUnpublishedDependencies?: boolean
   },
   initiatedSuiClient?: SuiClient
 ): Promise<PublishArtifact[]> => {
@@ -77,7 +87,8 @@ export const publishPackageWithLog = async (
     gasBudget,
     withUnpublishedDependencies,
     useDevBuild,
-    useCliPublish
+    useCliPublish,
+    allowAutoUnpublishedDependencies
   })
 
   logPublishStart(publishPlan)
@@ -90,6 +101,10 @@ export const publishPackageWithLog = async (
 }
 
 /** Publishes a Move package according to a prepared plan. */
+/**
+ * Publishes a Move package according to a prepared plan (build flags, dep strategy).
+ * Returns publish artifacts persisted to disk, similar to an EVM deploy receipt.
+ */
 export const publishPackage = async (
   publishPlan: PublishPlan,
   initiatedSuiClient?: SuiClient
@@ -247,7 +262,8 @@ const buildPublishPlan = async ({
   gasBudget,
   withUnpublishedDependencies = false,
   useDevBuild = false,
-  useCliPublish = false
+  useCliPublish = false,
+  allowAutoUnpublishedDependencies = true
 }: {
   network: SuiNetworkConfig
   packagePath: string
@@ -257,26 +273,50 @@ const buildPublishPlan = async ({
   withUnpublishedDependencies?: boolean
   useDevBuild?: boolean
   useCliPublish?: boolean
+  allowAutoUnpublishedDependencies?: boolean
 }): Promise<PublishPlan> => {
-  const { unpublishedDependencies, shouldUseUnpublishedDependencies } =
-    await resolveUnpublishedDependencyUsage(
-      packagePath,
-      withUnpublishedDependencies
+  const {
+    unpublishedDependencies,
+    shouldUseUnpublishedDependencies,
+    lockMissing
+  } = await resolveUnpublishedDependencyUsage(
+    packagePath,
+    withUnpublishedDependencies,
+    allowAutoUnpublishedDependencies
+  )
+
+  if (
+    !shouldSkipFrameworkConsistency(
+      network.networkName,
+      useDevBuild,
+      allowAutoUnpublishedDependencies
     )
+  ) {
+    await assertFrameworkRevisionConsistency(packagePath)
+  }
 
-  await assertFrameworkRevisionConsistency(packagePath)
+  const implicitlyEnabledUnpublishedDeps =
+    (unpublishedDependencies.length > 0 || lockMissing) &&
+    !withUnpublishedDependencies &&
+    shouldUseUnpublishedDependencies
 
-  if (unpublishedDependencies.length > 0 && !withUnpublishedDependencies) {
+  if (implicitlyEnabledUnpublishedDeps) {
     logWarning(
-      `Enabling --with-unpublished-dependencies for ${packagePath} (unpublished packages: ${unpublishedDependencies.join(
-        ", "
-      )})`
+      lockMissing
+        ? `Enabling --with-unpublished-dependencies for ${packagePath} (Move.lock missing; cannot resolve published dependency addresses).`
+        : `Enabling --with-unpublished-dependencies for ${packagePath} (unpublished packages: ${unpublishedDependencies.join(
+            ", "
+          )})`
     )
   }
 
   const buildFlags = buildMoveBuildFlags({
     useDevBuild,
-    includeUnpublishedDeps: shouldUseUnpublishedDependencies
+    includeUnpublishedDeps: shouldUseUnpublishedDependencies,
+    ignoreChain: shouldIgnoreChain(network.networkName, {
+      allowAutoUnpublishedDependencies,
+      useDevBuild
+    })
   })
 
   // Prefer CLI for standard publishes; dev builds fall back to SDK because
@@ -300,35 +340,58 @@ const buildPublishPlan = async ({
     packageNames: await resolvePackageNames(
       packagePath,
       unpublishedDependencies
-    )
+    ),
+    allowAutoUnpublishedDependencies,
+    ignoreChainDuringBuild: shouldIgnoreChain(network.networkName, {
+      allowAutoUnpublishedDependencies,
+      useDevBuild
+    })
   }
 }
 
 const SKIP_FETCH_LATEST_GIT_DEPS_FLAG = "--skip-fetch-latest-git-deps"
 const DUMP_BYTECODE_AS_BASE64_FLAG = "--dump-bytecode-as-base64"
+const shouldSkipFrameworkConsistency = (
+  networkName: string,
+  useDevBuild: boolean,
+  allowAutoUnpublishedDependencies: boolean
+) =>
+  networkName === "localnet" || useDevBuild || allowAutoUnpublishedDependencies
+const shouldIgnoreChain = (
+  networkName: string,
+  {
+    allowAutoUnpublishedDependencies,
+    useDevBuild
+  }: { allowAutoUnpublishedDependencies: boolean; useDevBuild: boolean }
+) =>
+  networkName === "localnet" ||
+  (allowAutoUnpublishedDependencies && useDevBuild)
 
 /**
  * Derives the Move build flags for publishing.
  */
 const buildMoveBuildFlags = ({
   useDevBuild,
-  includeUnpublishedDeps
+  includeUnpublishedDeps,
+  ignoreChain
 }: {
   useDevBuild: boolean
   includeUnpublishedDeps: boolean
+  ignoreChain: boolean
 }) => {
   const flags = [DUMP_BYTECODE_AS_BASE64_FLAG, SKIP_FETCH_LATEST_GIT_DEPS_FLAG]
   if (useDevBuild) {
     flags.push("--dev", "--test")
   }
   if (includeUnpublishedDeps) flags.push("--with-unpublished-dependencies")
+  if (ignoreChain) flags.push("--ignore-chain")
 
   return flags
 }
 
 /** Logs publish plan details before execution. */
 const logPublishStart = (plan: PublishPlan) => {
-  logSimpleBlue("Publishing package 💧")
+  logSimpleBlue("\nPublishing package 💧")
   logKeyValueBlue("network")(
     `${plan.network.networkName} / ${plan.fullNodeUrl}`
   )
@@ -350,7 +413,7 @@ const logPublishStart = (plan: PublishPlan) => {
 
 /** Logs successful publish output for all artifacts. */
 const logPublishSuccess = (artifacts: PublishArtifact[]) => {
-  logSimpleGreen("Publish succeeded ✅")
+  logSimpleGreen("Publish succeeded ✅\n")
   artifacts.forEach((artifact, idx) => {
     const label = derivePackageLabel(artifact, idx)
     logKeyValueGreen("package")(label)
@@ -560,7 +623,7 @@ const CORE_PUBLISHED_DEPENDENCIES = new Set([
  */
 const findUnpublishedDependencies = async (
   packagePath: string
-): Promise<string[]> => {
+): Promise<{ unpublishedDependencies: string[]; lockMissing: boolean }> => {
   const lockPath = path.join(packagePath, "Move.lock")
   try {
     const lockContents = await fs.readFile(lockPath, "utf8")
@@ -579,9 +642,9 @@ const findUnpublishedDependencies = async (
       if (!hasPublishedAddress) unpublishedDependencies.push(idMatch[1])
     }
 
-    return unpublishedDependencies
+    return { unpublishedDependencies, lockMissing: false }
   } catch {
-    return []
+    return { unpublishedDependencies: [], lockMissing: true }
   }
 }
 
@@ -590,14 +653,52 @@ const findUnpublishedDependencies = async (
  */
 const resolveUnpublishedDependencyUsage = async (
   packagePath: string,
-  explicitWithUnpublished?: boolean
+  explicitWithUnpublished?: boolean,
+  allowImplicitUnpublished?: boolean
 ) => {
-  const unpublishedDependencies = await findUnpublishedDependencies(packagePath)
-  const shouldUseUnpublishedDependencies =
-    explicitWithUnpublished || unpublishedDependencies.length > 0
+  const { unpublishedDependencies, lockMissing } =
+    await findUnpublishedDependencies(packagePath)
 
-  return { unpublishedDependencies, shouldUseUnpublishedDependencies }
+  if (lockMissing && !allowImplicitUnpublished && !explicitWithUnpublished) {
+    throw new Error(buildMissingMoveLockError(packagePath))
+  }
+
+  const shouldUseUnpublishedDependencies =
+    explicitWithUnpublished ||
+    (allowImplicitUnpublished &&
+      (unpublishedDependencies.length > 0 || lockMissing))
+
+  if (unpublishedDependencies.length > 0 && !shouldUseUnpublishedDependencies) {
+    throw new Error(
+      buildUnpublishedDependencyError(packagePath, unpublishedDependencies)
+    )
+  }
+
+  return {
+    unpublishedDependencies,
+    shouldUseUnpublishedDependencies,
+    lockMissing
+  }
 }
+
+const buildUnpublishedDependencyError = (
+  packagePath: string,
+  unpublishedDependencies: string[]
+) =>
+  [
+    `Unpublished dependencies detected for ${packagePath}: ${unpublishedDependencies.join(
+      ", "
+    )}.`,
+    "Publishing to shared networks requires linking to already deployed packages.",
+    "Add published addresses to Move.lock (or pass --with-unpublished-dependencies only on localnet) before publishing."
+  ].join("\n")
+
+const buildMissingMoveLockError = (packagePath: string) =>
+  [
+    `Move.lock not found for ${packagePath}.`,
+    "Publishing to shared networks requires a Move.lock that pins dependency addresses to deployed packages.",
+    "Run `sui move build --skip-fetch-latest-git-deps` against the intended dependency set or copy an existing Move.lock before publishing."
+  ].join("\n")
 
 /**
  * Adds human-friendly names to the publish result, pairing upgrade caps with package names.
@@ -662,9 +763,8 @@ const readDependencyAddresses = async (
 
 /** Ensures the root package and any local dependencies share the same framework git revision. */
 const assertFrameworkRevisionConsistency = async (packagePath: string) => {
-  const rootFrameworkRevision = await readFrameworkRevisionForPackage(
-    packagePath
-  )
+  const rootFrameworkRevision =
+    await readFrameworkRevisionForPackage(packagePath)
   if (!rootFrameworkRevision) return
 
   const dependencyPackages = await discoverLocalDependencyPackages(packagePath)
@@ -732,7 +832,9 @@ const extractFrameworkRevisionFromLock = (
 
 const discoverLocalDependencyPackages = async (
   packagePath: string
-): Promise<Array<{ name: string; path: string; frameworkRevision?: string }>> => {
+): Promise<
+  Array<{ name: string; path: string; frameworkRevision?: string }>
+> => {
   const moveTomlPath = path.join(packagePath, "Move.toml")
   try {
     const moveTomlContents = await fs.readFile(moveTomlPath, "utf8")
@@ -787,7 +889,7 @@ const parseSuiCliVersionOutput = (stdout: string): string | undefined => {
   if (!stdout?.trim()) return undefined
   const firstLine = stdout.trim().split(/\r?\n/)[0] ?? ""
   const versionMatch = firstLine.match(/sui\s+([^\s]+)/i)
-  return versionMatch?.[1] ?? firstLine || undefined
+  return (versionMatch?.[1] ?? firstLine) || undefined
 }
 
 /** Parses published addresses from a Move.lock blob keyed by package alias. */

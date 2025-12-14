@@ -15,12 +15,20 @@ type ExecuteParams = {
   assertSuccess?: boolean
 }
 
+/**
+ * Creates a Transaction and optionally seeds a gas budget.
+ * Why: Sui PTBs are built client-side; setting gas early mirrors how wallets prepare PTBs.
+ */
 export const newTransaction = (gasBudget?: number) => {
   const tx = new Transaction()
   if (gasBudget) tx.setGasBudget(gasBudget)
   return tx
 }
 
+/**
+ * Throws if a transaction block did not succeed.
+ * Mirrors EVM receipt status checks to keep scripts predictable.
+ */
 export const assertTransactionSuccess = ({
   effects
 }: SuiTransactionBlockResponse) => {
@@ -28,6 +36,11 @@ export const assertTransactionSuccess = ({
     throw new Error(effects?.status?.error || "Transaction failed")
 }
 
+/**
+ * Signs and executes a transaction, retrying once on stale/locked gas objects.
+ * Why: Gas coins are objects with versions; this helper refreshes gas to align with Sui’s
+ * object model, similar to replacing a nonce-bumped tx in EVM when a coin is outdated.
+ */
 export const signAndExecute = async (
   {
     transaction,
@@ -193,8 +206,8 @@ const parseStaleObjectId = (error: unknown): string | undefined => {
     error instanceof Error
       ? error.message
       : typeof error === "string"
-      ? error
-      : ""
+        ? error
+        : ""
   const match = message.match(/Object ID (\S+)/)
   return match?.[1]
 }
@@ -204,8 +217,8 @@ const parseLockedObjectIds = (error: unknown): Set<string> => {
     error instanceof Error
       ? error.message
       : typeof error === "string"
-      ? error
-      : ""
+        ? error
+        : ""
 
   const lockedIds = new Set<string>()
   for (const line of message.split("\n")) {

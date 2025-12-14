@@ -5,6 +5,9 @@ import { logWarning } from "./log.ts"
 import { runSuiCli } from "./suiCli.ts"
 import type { BuildOutput, PublishArtifact } from "./types.ts"
 
+/**
+ * Normalizes an absolute Move package path for stable comparisons.
+ */
 export const canonicalizePackagePath = (packagePath: string) =>
   path.normalize(path.resolve(packagePath))
 
@@ -35,6 +38,12 @@ export const hasDeploymentForPackage = (
   )
 }
 
+/**
+ * Builds a Move package and returns compiled modules + dependency addresses.
+ * Why: Publishing on Sui needs base64-encoded modules and resolved dep addresses
+ * (from Move.lock or build artifacts); this helper mirrors `sui move build` behavior
+ * while allowing dev/test builds to strip test modules for publish.
+ */
 export const buildMovePackage = async (
   packagePath: string,
   buildArguments: string[] = [],
@@ -103,8 +112,8 @@ const resolveBuildArtifacts = async (
     ? fallback?.modules ||
       parsedModules.filter((module) => !isTestModuleBytecode(module))
     : parsedModules.length > 0
-    ? parsedModules
-    : fallback?.modules || []
+      ? parsedModules
+      : fallback?.modules || []
   const dependencies =
     parsedDependencies.length > 0
       ? parsedDependencies
@@ -244,13 +253,13 @@ const extractDependencies = (
   buildInfoRaw: string,
   packageName: string
 ): string[] => {
-  // Only consider address aliases listed under `address_alias_instantiation` to
-  // avoid accidentally treating fields like `source_digest` as dependencies.
   const addressSectionMatch = buildInfoRaw.match(
     /address_alias_instantiation:\s*\n((?:\s+[A-Za-z0-9_]+\s*:\s*"?[0-9a-fA-F]{64}"?\s*\n)+)/
   )
 
-  const dependenciesBlock = addressSectionMatch?.[1] ?? ""
+  if (!addressSectionMatch) return []
+
+  const dependenciesBlock = addressSectionMatch[1]
   const dependencyMatches = [
     ...dependenciesBlock.matchAll(
       /^\s+([A-Za-z0-9_]+)\s*:\s*"?([0-9a-fA-F]{64})"?/gm
@@ -258,14 +267,10 @@ const extractDependencies = (
   ]
 
   return dependencyMatches
-    .map(([, alias, addr]) => ({ alias, addr }))
-    .filter(
-      ({ alias }) =>
-        alias.toLowerCase() !== packageName.toLowerCase() &&
-        alias.toLowerCase() !== "pyth"
-    )
-    .map(({ addr }) => `0x${addr.toLowerCase()}`)
-    .filter((addr, idx, arr) => arr.indexOf(addr) === idx)
+    .map(([, alias, address]) => ({ alias, address }))
+    .filter(({ alias }) => alias.toLowerCase() !== packageName.toLowerCase())
+    .map(({ address }) => `0x${address.toLowerCase()}`)
+    .filter((address, index, all) => all.indexOf(address) === index)
 }
 
 const isTestModuleFilename = (filename: string): boolean => {

@@ -2,6 +2,11 @@ import { mkdir, readFile, writeFile } from "node:fs/promises"
 import path, { dirname } from "node:path"
 import type { PublishArtifact } from "./types.ts"
 
+/**
+ * Curried writer that appends/merges JSON artifacts on disk.
+ * Why: deployment/mock scripts share a consistent artifact format so other tools
+ * (indexers, relayers) can pick up package IDs and object IDs without bespoke parsing.
+ */
 export const writeArtifact =
   <TArtifact>(defaultIfMissing?: TArtifact) =>
   async (filePath: string, newArtifact: TArtifact): Promise<TArtifact> => {
@@ -35,6 +40,10 @@ export const writeArtifact =
 
 export const writeDeploymentArtifact = writeArtifact<PublishArtifact[]>([])
 
+/**
+ * Reads a JSON artifact from disk, optionally creating it with defaults when missing.
+ * Useful for idempotent flows where artifacts double as state storage between runs.
+ */
 export const readArtifact = async <TArtifact>(
   filePath: string,
   defaultIfMissing?: TArtifact

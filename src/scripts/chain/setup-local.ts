@@ -25,12 +25,11 @@ import { loadKeypair } from "../utils/keypair.ts"
 import { logKeyValueBlue, logKeyValueGreen, logWarning } from "../utils/log.ts"
 import type { MockArtifact } from "../utils/mock.ts"
 import { mockArtifactPath, writeMockArtifact } from "../utils/mock.ts"
-import { resolveRpcUrl } from "../utils/network.ts"
+import { assertLocalnetNetwork, resolveRpcUrl } from "../utils/network.ts"
 import type { WrappedSuiSharedObject } from "../utils/object.ts"
 import { getSuiSharedObject } from "../utils/object.ts"
 import { runSuiScript } from "../utils/process.ts"
 import { publishPackageWithLog } from "../utils/publish.ts"
-import type { PublishArtifact } from "../utils/types.ts"
 import {
   getPythPriceInfoType,
   publishMockPriceFeed,
@@ -43,6 +42,7 @@ import {
   newTransaction,
   signAndExecute
 } from "../utils/transactions.ts"
+import type { PublishArtifact } from "../utils/types.ts"
 
 type SetupLocalCliArgs = {
   coinPackageId?: string
@@ -101,9 +101,7 @@ const DEFAULT_FEEDS: LabeledPriceFeedConfig[] = [
   }
 ]
 
-/**
- * Parses CLI flags and enforces that publish/package ID inputs are provided.
- */
+// Parse CLI flags and reuse prior mock artifacts unless --re-publish is set.
 const extendCliArguments = async (
   baseScriptArguments: SetupLocalCliArgs
 ): Promise<ExistingState> => {
@@ -128,15 +126,23 @@ const extendCliArguments = async (
 
 runSuiScript(
   async ({ network }, cliArguments) => {
+    // Guard: mock seeding must be localnet-only to avoid leaking dev packages to shared networks.
+    assertLocalnetNetwork(network.networkName)
+
+    // Load prior artifacts unless --re-publish was passed (idempotent runs).
     const existingState = await extendCliArguments(cliArguments)
 
+    // Resolve RPC URL (defaults to localnet if not overridden).
     const fullNodeUrl = resolveRpcUrl(network.networkName, network.url)
 
+    // Load signer (env/keystore) and derive address; Sui requires explicit key material for PTBs.
     const keypair = await loadKeypair(getAccountConfig(network))
     const signerAddress = keypair.toSuiAddress()
 
+    // Instantiate Sui client for RPC interactions.
     const suiClient = new SuiClient({ url: fullNodeUrl })
 
+    // Ensure the account has gas coins (auto-faucet on localnet) to avoid funding errors downstream.
     await ensureFoundedAddress(
       {
         signerAddress,
@@ -145,6 +151,7 @@ runSuiScript(
       suiClient
     )
 
+    // Publish or reuse mock Pyth + mock coin packages; record package IDs for later steps.
     const { coinPackageId, pythPackageId } = await publishMockPackages(
       {
         network,
@@ -156,9 +163,11 @@ runSuiScript(
       suiClient
     )
 
+    // Fetch shared Coin Registry and Clock objects; required for minting coins and timestamping price feeds.
     const { coinRegistryObject, clockObject } =
       await resolveRegistryAndClockRefs(suiClient)
 
+    // Ensure mock coins exist (mint + register in coin registry if missing); reuse if already minted.
     const coins =
       existingState.existingCoins ||
       (await ensureMockCoins(
@@ -172,10 +181,12 @@ runSuiScript(
         suiClient
       ))
 
+    // Persist coin artifacts for reuse in later runs/scripts.
     await writeMockArtifact(mockArtifactPath, {
       coins
     })
 
+    // Ensure mock price feeds exist with fresh timestamps; reuse if valid objects already present.
     const priceFeeds =
       existingState.existingPriceFeeds ||
       (await ensurePriceFeeds({
@@ -186,6 +197,7 @@ runSuiScript(
         existingPriceFeeds: existingState.existingPriceFeeds || []
       }))
 
+    // Persist price feed artifacts for reuse.
     await writeMockArtifact(mockArtifactPath, {
       priceFeeds
     })
@@ -245,6 +257,7 @@ const publishMockPackages = async (
   },
   suiClient: SuiClient
 ) => {
+  // Publish or reuse the local Pyth stub. We allow unpublished deps here because this is localnet-only.
   const pythPackageId =
     existingState.existingPythPackageId ||
     pickRootArtifact(
@@ -275,6 +288,7 @@ const publishMockPackages = async (
       pythPackageId
     })
 
+  // Publish or reuse the local mock coin package.
   const coinPackageId =
     existingState.existingCoinPackageId ||
     pickRootArtifact(
@@ -311,6 +325,7 @@ const publishMockPackages = async (
 }
 
 const resolveRegistryAndClockRefs = async (suiClient: SuiClient) => {
+  // Coin registry is a shared object; clock is used to timestamp price feeds for freshness checks.
   const [coinRegistryObject, clockObject] = await Promise.all([
     getSuiSharedObject(
       { objectId: SUI_COIN_REGISTRY_ID, mutable: true },
@@ -337,6 +352,7 @@ const ensureMockCoins = async (
 ): Promise<CoinArtifact[]> =>
   await Promise.all(
     buildCoinSeeds(coinPackageId).map(async (seed) => {
+      // For each mock coin type, ensure currency/metadata/treasury exist; mint and register if missing.
       return await ensureCoin(
         {
           seed,
@@ -365,6 +381,7 @@ const ensureCoin = async (
 ): Promise<CoinArtifact> => {
   const currencyObjectId = deriveCurrencyId(seed.coinType)
 
+  // Read any existing coin metadata/currency object and any minted coin for the owner.
   const [metadata, currencyObject, mintedCoinObjectId] = await Promise.all([
     suiClient.getCoinMetadata({ coinType: seed.coinType }),
     getObjectSafe(suiClient, currencyObjectId, {
@@ -377,6 +394,7 @@ const ensureCoin = async (
   const currencyType = `0x2::coin_registry::Currency${coinTypeSuffix}`
 
   if (metadata || objectTypeMatches(currencyObject, currencyType)) {
+    // Already initialized; return discovered artifacts (may be partial).
     if (!objectTypeMatches(currencyObject, currencyType)) {
       logWarning(
         `Currency object for ${seed.label} not readable; using derived ID ${currencyObjectId}.`
@@ -392,6 +410,7 @@ const ensureCoin = async (
     }
   }
 
+  // Not found: initialize the mock coin via coin registry and fund the owner.
   const initTransaction = newTransaction(DEFAULT_TX_GAS_BUDGET)
 
   initTransaction.moveCall({
@@ -420,6 +439,7 @@ const ensureCoin = async (
   )
   assertTransactionSuccess(result)
 
+  // Parse created objects from the transaction (currency, treasury cap, metadata, minted coin).
   const created = coinArtifactsFromResult({
     result,
     seed,
@@ -486,6 +506,7 @@ const ensurePriceFeeds = async ({
   const feeds: PriceFeedArtifact[] = []
 
   for (const feedConfig of DEFAULT_FEEDS) {
+    // If a matching feed exists and the object type matches, reuse it.
     const matchingExisting = findMatchingFeed(existingPriceFeeds, feedConfig)
     const existingObject = matchingExisting
       ? await getObjectSafe(suiClient, matchingExisting.priceInfoObjectId)
@@ -502,6 +523,7 @@ const ensurePriceFeeds = async ({
       )
     }
 
+    // Publish a fresh price feed object with current timestamps via the mock Pyth package.
     const createdFeed = await publishPriceFeed({
       feedConfig,
       pythPackageId,

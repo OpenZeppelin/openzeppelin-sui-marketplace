@@ -8,6 +8,11 @@ import { Ed25519Keypair } from "@mysten/sui/keypairs/ed25519"
 import { fromBase64, normalizeSuiAddress } from "@mysten/sui/utils"
 import type { SuiAccountConfig } from "./config.ts"
 
+/**
+ * Loads an Ed25519 keypair from env/config (private key, mnemonic, or Sui keystore).
+ * Why: Sui uses explicit key material for signing PTBs; this mirrors EVM-style deployer wallets
+ * while supporting the Sui CLI keystore format for local workflows.
+ */
 export const loadKeypair = async ({
   accountPrivateKey,
   accountMnemonic,

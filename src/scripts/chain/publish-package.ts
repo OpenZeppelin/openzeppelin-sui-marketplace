@@ -21,9 +21,15 @@ import type { PublishArtifact } from "../utils/types.ts"
 
 type PublishScriptArguments = {
   packagePath: string
-  withUnpublishedDependencies: boolean
+  withUnpublishedDependencies?: boolean
   dev?: boolean
   rePublish?: boolean
+}
+
+type ResolvedPublishOptions = {
+  useDevBuild: boolean
+  withUnpublishedDependencies: boolean
+  allowAutoUnpublishedDependencies: boolean
 }
 
 const shouldSkipPublish = (
@@ -52,7 +58,7 @@ const buildFundingRequirements = (gasBudget: number) => {
 const publishPackageToNetwork = async (
   network: SuiNetworkConfig,
   packagePath: string,
-  cliArguments: PublishScriptArguments
+  publishOptions: ResolvedPublishOptions
 ) => {
   const gasBudget = network.gasBudget ?? DEFAULT_PUBLISH_GAS_BUDGET
   const { minimumGasCoinBalance, minimumBalance } =
@@ -78,9 +84,12 @@ const publishPackageToNetwork = async (
           fullNodeUrl: network.url,
           keypair,
           gasBudget,
-          withUnpublishedDependencies: cliArguments.withUnpublishedDependencies,
-          useDevBuild: Boolean(cliArguments.dev),
-          useCliPublish: true
+          withUnpublishedDependencies:
+            publishOptions.withUnpublishedDependencies,
+          useDevBuild: publishOptions.useDevBuild,
+          useCliPublish: true,
+          allowAutoUnpublishedDependencies:
+            publishOptions.allowAutoUnpublishedDependencies
         },
         suiClient
       ),
@@ -88,13 +97,40 @@ const publishPackageToNetwork = async (
   )
 }
 
+const derivePublishOptions = (
+  networkName: string,
+  cliArguments: PublishScriptArguments
+): ResolvedPublishOptions => {
+  const targetingLocalnet = networkName === "localnet"
+  const useDevBuild = cliArguments.dev ?? targetingLocalnet
+
+  if (useDevBuild && !targetingLocalnet)
+    throw new Error(
+      "Dev builds are limited to localnet. Remove --dev when publishing to shared networks."
+    )
+
+  if (!targetingLocalnet && cliArguments.withUnpublishedDependencies)
+    throw new Error(
+      "--with-unpublished-dependencies is reserved for localnet. Link to published packages in Move.lock for shared networks."
+    )
+
+  return {
+    useDevBuild,
+    withUnpublishedDependencies:
+      cliArguments.withUnpublishedDependencies ?? targetingLocalnet,
+    allowAutoUnpublishedDependencies: targetingLocalnet
+  }
+}
+
 runSuiScript(
   async ({ network, paths }, cliArguments) => {
+    // Resolve the absolute Move package path (relative to repo root or move/).
     const fullPackagePath = resolveFullPackagePath(
       path.resolve(paths.move),
       cliArguments.packagePath
     )
 
+    // Load prior deployment artifacts to short-circuit if already published (unless --re-publish).
     const deploymentArtifacts = await loadDeploymentArtifacts(
       network.networkName
     )
@@ -108,7 +144,12 @@ runSuiScript(
     )
       return logSkippedPublish(network.networkName, fullPackagePath)
 
-    await publishPackageToNetwork(network, fullPackagePath, cliArguments)
+    // Publish with network-aware options (dev builds localnet-only, published deps on shared nets).
+    await publishPackageToNetwork(
+      network,
+      fullPackagePath,
+      derivePublishOptions(network.networkName, cliArguments)
+    )
   },
   yargs()
     .option("packagePath", {
@@ -121,7 +162,7 @@ runSuiScript(
       alias: "with-unpublished-dependencies",
       type: "boolean",
       description: `Publish package with unpublished dependencies`,
-      default: false
+      default: undefined
     })
     .option("dev", {
       type: "boolean",
