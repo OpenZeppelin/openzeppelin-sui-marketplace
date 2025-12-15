@@ -763,8 +763,9 @@ const readDependencyAddresses = async (
 
 /** Ensures the root package and any local dependencies share the same framework git revision. */
 const assertFrameworkRevisionConsistency = async (packagePath: string) => {
-  const rootFrameworkRevision =
-    await readFrameworkRevisionForPackage(packagePath)
+  const rootFrameworkRevision = await readFrameworkRevisionForPackage(
+    packagePath
+  )
   if (!rootFrameworkRevision) return
 
   const dependencyPackages = await discoverLocalDependencyPackages(packagePath)

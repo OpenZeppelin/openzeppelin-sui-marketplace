@@ -50,7 +50,7 @@ flavor = "sui"
 [env]
 
 [env.localnet]
-chain-id = "fe5164d1"
-original-published-id = "0x298cac001207cdc72f36cef0e6241d37dd59ec1d94fd6682175ad5e6c16d1ac0"
-latest-published-id = "0x298cac001207cdc72f36cef0e6241d37dd59ec1d94fd6682175ad5e6c16d1ac0"
+chain-id = "bdb30a7a"
+original-published-id = "0x3d5aa552a5f60b680a88da3b01d9716157b924d48b169257fa8e5623256eb984"
+latest-published-id = "0x3d5aa552a5f60b680a88da3b01d9716157b924d48b169257fa8e5623256eb984"
 published-version = "1"

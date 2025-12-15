@@ -1,5 +1,5 @@
-import { defineSuiConfig } from "./src/scripts/utils/config.ts"
-import { DEFAULT_PUBLISH_GAS_BUDGET } from "./src/scripts/utils/constants.ts"
+import { defineSuiConfig } from "./src/tooling/config.ts"
+import { DEFAULT_PUBLISH_GAS_BUDGET } from "./src/tooling/constants.ts"
 
 export default defineSuiConfig({
   defaultNetwork: "localnet",

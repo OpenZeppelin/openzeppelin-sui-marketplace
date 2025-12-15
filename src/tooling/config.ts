@@ -1,11 +1,11 @@
 import { existsSync } from "node:fs"
 import path from "node:path"
 import { pathToFileURL } from "node:url"
+import { mergeDeepObjects } from "../utils/utility.ts"
 import { DEFAULT_KEYSTORE_PATH } from "./constants.ts"
 import { resolveRpcUrl } from "./network.ts"
 import type { DeepPartial } from "./type-utils.ts"
 import type { NetworkName } from "./types.ts"
-import { mergeDeepObjects } from "./utility.ts"
 
 export type SuiAccountConfig = {
   keystorePath?: string

@@ -8,19 +8,19 @@ import {
 import yargs from "yargs"
 import { hideBin } from "yargs/helpers"
 
-import { readArtifact } from "../utils/artifacts.ts"
-import { SUI_COIN_REGISTRY_ID } from "../utils/constants.ts"
-import { loadKeypair } from "../utils/keypair.ts"
+import type { MockArtifact } from "../../models/mock.ts"
+import { mockArtifactPath } from "../../models/mock.ts"
+import { readArtifact } from "../../tooling/artifacts.ts"
+import { SUI_COIN_REGISTRY_ID } from "../../tooling/constants.ts"
+import { loadKeypair } from "../../tooling/keypair.ts"
 import {
   logKeyValueBlue,
   logKeyValueGreen,
   logKeyValueRed,
   logWarning
-} from "../utils/log.ts"
-import type { MockArtifact } from "../utils/mock.ts"
-import { mockArtifactPath } from "../utils/mock.ts"
-import { getSuiSharedObject } from "../utils/object.ts"
-import { runSuiScript } from "../utils/process.ts"
+} from "../../tooling/log.ts"
+import { getSuiSharedObject } from "../../tooling/object.ts"
+import { runSuiScript } from "../../tooling/process.ts"
 
 type CliArgs = {
   registryId: string
@@ -549,10 +549,10 @@ const resolveSupplyState = async ({
   const kind: CurrencyState["supplyKind"] = viewValues.supplyBurnOnly
     ? "burn-only"
     : viewValues.supplyFixed
-      ? "fixed"
-      : viewValues.treasuryCapId
-        ? "mintable"
-        : "unknown"
+    ? "fixed"
+    : viewValues.treasuryCapId
+    ? "mintable"
+    : "unknown"
 
   const total =
     viewValues.totalSupply ??
@@ -634,8 +634,8 @@ const mapViewToState = ({
   const metadataCapStatus = viewValues.metadataCapDeleted
     ? "deleted"
     : viewValues.metadataCapClaimed
-      ? "claimed"
-      : "unclaimed"
+    ? "claimed"
+    : "unclaimed"
 
   return {
     coinType: coinInput.coinType,

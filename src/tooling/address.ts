@@ -7,7 +7,7 @@ import {
 import type { Ed25519Keypair } from "@mysten/sui/keypairs/ed25519"
 import { Transaction } from "@mysten/sui/transactions"
 import { normalizeSuiAddress } from "@mysten/sui/utils"
-import { logKeyValueBlue, logWarning } from "./log.ts"
+import { logWarning } from "./log.ts"
 
 const DEFAULT_MINIMUM_COIN_OBJECTS = 2
 const DEFAULT_MINIMUM_GAS_COIN_BALANCE = 500_000_000n
@@ -418,8 +418,8 @@ const isNoGasError = (error: unknown) => {
     error instanceof Error
       ? error.message
       : typeof error === "string"
-        ? error
-        : ""
+      ? error
+      : ""
   return message.includes("No usable SUI coins available for gas")
 }
 
@@ -428,8 +428,8 @@ const isInsufficientGasError = (error: unknown) => {
     error instanceof Error
       ? error.message
       : typeof error === "string"
-        ? error
-        : ""
+      ? error
+      : ""
   return /insufficient\s*gas/i.test(message)
 }
 
@@ -470,12 +470,7 @@ export const withTestnetFaucetRetry = async <T>(
     minimumGasCoinBalance
   }
 
-  if (faucetSupported) {
-    logKeyValueBlue("faucet")(
-      `ensure funds for ${normalizeSuiAddress(signerAddress)} on ${networkName}`
-    )
-    await ensureFoundedAddress(ensureOptions, suiClient)
-  }
+  if (faucetSupported) await ensureFoundedAddress(ensureOptions, suiClient)
 
   try {
     return await transactionRun()

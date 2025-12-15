@@ -2,7 +2,8 @@ import type {
   ObjectOwner,
   ObjectResponseError,
   SuiClient,
-  SuiObjectData
+  SuiObjectData,
+  SuiObjectDataOptions
 } from "@mysten/sui/client"
 import { normalizeSuiObjectId } from "@mysten/sui/utils"
 
@@ -11,7 +12,10 @@ import { normalizeSuiObjectId } from "@mysten/sui/utils"
  * Useful for scripts that need to reason about ownership (shared vs owned) before building PTBs.
  */
 export const getSuiObject = async (
-  { objectId }: { objectId: string },
+  {
+    objectId,
+    options = { showOwner: true }
+  }: { objectId: string; options?: SuiObjectDataOptions },
   suiClient: SuiClient
 ): Promise<{
   object: SuiObjectData
@@ -20,7 +24,7 @@ export const getSuiObject = async (
 }> => {
   const { data: object, error } = await suiClient.getObject({
     id: normalizeSuiObjectId(objectId),
-    options: { showOwner: true }
+    options: { showOwner: true, ...options }
   })
 
   if (!object)

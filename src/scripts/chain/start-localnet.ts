@@ -8,17 +8,17 @@ import { SuiClient } from "@mysten/sui/client"
 import { getFaucetHost } from "@mysten/sui/faucet"
 import yargs from "yargs"
 
-import { ensureFoundedAddress } from "../utils/address.ts"
-import type { SuiNetworkConfig } from "../utils/config.ts"
-import { loadKeypair } from "../utils/keypair.ts"
+import { ensureFoundedAddress } from "../../tooling/address.ts"
+import type { SuiNetworkConfig } from "../../tooling/config.ts"
+import { loadKeypair } from "../../tooling/keypair.ts"
 import {
   logKeyValueBlue,
   logKeyValueGreen,
   logKeyValueYellow,
   logSimpleGreen,
   logWarning
-} from "../utils/log.ts"
-import { runSuiScript } from "../utils/process.ts"
+} from "../../tooling/log.ts"
+import { runSuiScript } from "../../tooling/process.ts"
 
 type RpcSnapshot = {
   rpcUrl: string
@@ -195,8 +195,10 @@ const startLocalnetProcess = ({
 }): ChildProcess => {
   const args = buildStartArguments(withFaucet, forceRegenesis)
   const processHandle = spawn("sui", args, {
-    stdio: "inherit"
+    stdio: ["inherit", "pipe", "pipe"]
   })
+
+  streamLocalnetLogs(processHandle)
 
   processHandle.once("error", (error) => {
     logWarning(
@@ -214,6 +216,14 @@ const buildStartArguments = (withFaucet: boolean, forceRegenesis: boolean) => {
   if (withFaucet) args.push("--with-faucet")
   if (forceRegenesis) args.push("--force-regenesis")
   return args
+}
+
+const streamLocalnetLogs = (processHandle: ChildProcess) => {
+  processHandle.stdout?.setEncoding("utf-8")
+  processHandle.stdout?.on("data", (chunk) => process.stdout.write(chunk))
+
+  processHandle.stderr?.setEncoding("utf-8")
+  processHandle.stderr?.on("data", (chunk) => process.stderr.write(chunk))
 }
 
 const logRpcSnapshot = (snapshot: RpcSnapshot, withFaucet: boolean) => {

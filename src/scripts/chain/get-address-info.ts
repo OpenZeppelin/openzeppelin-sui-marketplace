@@ -2,21 +2,24 @@ import { SuiClient } from "@mysten/sui/client"
 import { normalizeSuiAddress } from "@mysten/sui/utils"
 import yargs from "yargs"
 
-import { getAccountConfig, type SuiNetworkConfig } from "../utils/config.ts"
-import { loadKeypair } from "../utils/keypair.ts"
+import {
+  getAccountConfig,
+  type SuiNetworkConfig
+} from "../../tooling/config.ts"
+import { loadKeypair } from "../../tooling/keypair.ts"
 import {
   logEachGreen,
   logKeyValueBlue,
   logKeyValueGreen,
   logKeyValueYellow
-} from "../utils/log.ts"
+} from "../../tooling/log.ts"
 import {
   buildOwnedObjectLogFields,
   countUniqueObjectTypes,
   mapOwnerToLabel,
   type OwnedObjectSummary
-} from "../utils/object-info.ts"
-import { runSuiScript } from "../utils/process.ts"
+} from "../../tooling/object-info.ts"
+import { runSuiScript } from "../../tooling/process.ts"
 
 type GetAddressInfoCliArgs = {
   address?: string
@@ -74,7 +77,8 @@ runSuiScript<GetAddressInfoCliArgs>(
   yargs().option("address", {
     type: "string",
     description:
-      "Address to inspect. Defaults to the configured account when omitted."
+      "Address to inspect. Defaults to the configured account when omitted.",
+    demandOption: true
   })
 )
 

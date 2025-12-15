@@ -1,8 +1,11 @@
 import { normalizeSuiObjectId } from "@mysten/sui/utils"
 
-import { readArtifact, writeArtifact } from "./artifacts.ts"
-import { getObjectArtifactPath } from "./constants.ts"
-import type { NetworkName } from "./types.ts"
+import {
+  getObjectArtifactPath,
+  readArtifact,
+  writeArtifact
+} from "../tooling/artifacts.ts"
+import type { NetworkName } from "../tooling/types.ts"
 
 export type ShopObjectArtifact = Partial<{
   packageId: string
@@ -50,7 +53,7 @@ export const readShopObjectArtifact = async (
  * Writes the shop object artifact to disk after normalizing IDs and shared versions.
  */
 export const writeShopObjectArtifact = async (
-  network: NetworkName,
+  network: string,
   artifact: ShopObjectArtifact,
   options: { artifactPath?: string } = {}
 ): Promise<{ artifactPath: string; artifact: ShopObjectArtifact }> => {

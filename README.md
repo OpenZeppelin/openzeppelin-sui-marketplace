@@ -138,10 +138,13 @@ What it does:
 - Builds with `--dev` and `--with-unpublished-dependencies` (allows local mocks).
 - Uses `--ignore-chain` for dev builds so it doesn’t need an active RPC during build.
 - Publishes via CLI and writes deployment artifacts to `deployments/deployment.localnet.json`.
+- Claims the `0x2::package::Publisher` for the published package using the returned `UpgradeCap` (stored as `publisherId` in the deployment artifact). Disable with `--no-claim-publisher` if you manage publishers separately.
+- If the package is already published and missing a `publisherId` in artifacts, rerunning `pnpm publish:package` will claim the Publisher (unless `--no-claim-publisher`).
 
 Flags:
 - `--re-publish`: force a new publish even if already recorded.
 - `--with-unpublished-dependencies`: should stay `false` off-localnet; dev mode auto-enables it on localnet.
+- `--no-claim-publisher`: skip claiming the Publisher after publish (defaults to claiming).
 
 Why dev vs non-dev:
 - `--dev` uses `[dev-dependencies]` (local mocks) and enables test-only modules. Shared networks must use published dependencies and omit `--dev`.
@@ -158,7 +161,7 @@ Why dev vs non-dev:
    ```
    pnpm publish:package --package-path move/oracle-market --network testnet
    ```
-4) Record the `packageId` and `UpgradeCap` from `deployments/deployment.testnet.json`.
+4) Record the `packageId`, `UpgradeCap`, and `publisherId` from `deployments/deployment.testnet.json`.
 
 Key differences vs localnet:
 - No unpublished deps; all dependency addresses must be in `Move.lock`.
@@ -170,7 +173,7 @@ Key differences vs localnet:
 
 - `pnpm start:localnet`: Runs `sui start`, waits for RPC, optionally `--force-regenesis`.
 - `pnpm setup:local`: Publishes mocks, mints coins, seeds Pyth price feeds, writes mock artifacts.
-- `pnpm publish:package`: Publishes any Move package under `move/`; accepts `--package-path`, `--dev`, `--re-publish`.
+- `pnpm publish:package`: Publishes any Move package under `move/`; accepts `--package-path`, `--dev`, `--re-publish`, `--no-claim-publisher`.
 - `pnpm get:mock-currency`: Fetches mock coin metadata/objects from artifacts.
 - `pnpm stop:localnet`: Stops localnet if scripted (optional).
 
@@ -215,6 +218,9 @@ Docs links:
 
 - **Framework version mismatch**  
   On localnet/dev this is skipped; on shared networks ensure all `Move.lock` files (root + local deps) reference the same Sui framework commit (run `sui move update`).
+
+- **`create_shop` fails asking for Publisher vs UpgradeCap**  
+  The shop module needs the `0x2::package::Publisher` for the package, not the `UpgradeCap`. The publish script now claims the Publisher by default and records `publisherId` in `deployments/deployment.<network>.json`. If you used `--no-claim-publisher`, mint it manually with `sui client call --package 0x2 --module package --function claim --args <upgradeCapId>`.
 
 - **`sui start` port errors on macOS**  
   Ensure no other Sui nodes running; retry with `--force-regenesis`; sometimes macOS sandboxing blocks port scans—restart terminal or adjust permissions.

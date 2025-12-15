@@ -22,6 +22,7 @@ export type PublishArtifact = {
   packageName?: string
   packageId: string
   upgradeCap?: string
+  publisherId?: string
   isDependency?: boolean
   sender: string
   digest: string

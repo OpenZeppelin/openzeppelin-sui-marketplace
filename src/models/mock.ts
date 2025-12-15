@@ -1,4 +1,4 @@
-import { getArtifactPath, writeArtifact } from "./artifacts.ts"
+import { getArtifactPath, writeArtifact } from "../tooling/artifacts.ts"
 
 export type MockArtifact = Partial<{
   pythPackageId: string

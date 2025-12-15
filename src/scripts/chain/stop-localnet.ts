@@ -5,7 +5,7 @@ import {
   logKeyValueGreen,
   logKeyValueYellow,
   logWarning
-} from "../utils/log.ts"
+} from "../../tooling/log.ts"
 
 const execFile = promisify(execFileCallback)
 

@@ -34,3 +34,14 @@ export const logEach =
 
 export const logEachBlue = logEach(logKeyValueBlue)
 export const logEachGreen = logEach(logKeyValueGreen)
+
+export const logStructuredJson = (
+  heading: string,
+  content: Record<string, unknown> | unknown[]
+) => {
+  if (Object.keys(content).length === 0)
+    return logKeyValueYellow(heading)("No fields present.")
+
+  console.log(`${heading}:`)
+  console.log(JSON.stringify(content, null, 2))
+}

@@ -1,6 +1,6 @@
 import type { Transaction } from "@mysten/sui/transactions"
 import { type TransactionArgument } from "@mysten/sui/transactions"
-import { assertBytesLength, hexToBytes } from "./hex.ts"
+import { assertBytesLength, hexToBytes } from "../tooling/hex.ts"
 
 export type MockPriceFeedConfig = {
   feedIdHex: string

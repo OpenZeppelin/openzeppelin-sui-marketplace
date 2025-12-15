@@ -10,39 +10,43 @@ import type { Ed25519Keypair } from "@mysten/sui/keypairs/ed25519"
 import { deriveObjectID, normalizeSuiObjectId } from "@mysten/sui/utils"
 import yargs from "yargs"
 
-import {
-  ensureFoundedAddress,
-  withTestnetFaucetRetry
-} from "../utils/address.ts"
-import { readArtifact } from "../utils/artifacts.ts"
-import type { SuiNetworkConfig } from "../utils/config.ts"
-import { getAccountConfig } from "../utils/config.ts"
-import {
-  DEFAULT_TX_GAS_BUDGET,
-  SUI_COIN_REGISTRY_ID
-} from "../utils/constants.ts"
-import { loadKeypair } from "../utils/keypair.ts"
-import { logKeyValueBlue, logKeyValueGreen, logWarning } from "../utils/log.ts"
-import type { MockArtifact } from "../utils/mock.ts"
-import { mockArtifactPath, writeMockArtifact } from "../utils/mock.ts"
-import { assertLocalnetNetwork, resolveRpcUrl } from "../utils/network.ts"
-import type { WrappedSuiSharedObject } from "../utils/object.ts"
-import { getSuiSharedObject } from "../utils/object.ts"
-import { runSuiScript } from "../utils/process.ts"
-import { publishPackageWithLog } from "../utils/publish.ts"
+import type { MockArtifact } from "../../models/mock.ts"
+import { mockArtifactPath, writeMockArtifact } from "../../models/mock.ts"
 import {
   getPythPriceInfoType,
   publishMockPriceFeed,
   SUI_CLOCK_ID,
   type MockPriceFeedConfig
-} from "../utils/pyth.ts"
+} from "../../models/pyth.ts"
+import {
+  ensureFoundedAddress,
+  withTestnetFaucetRetry
+} from "../../tooling/address.ts"
+import { readArtifact } from "../../tooling/artifacts.ts"
+import type { SuiNetworkConfig } from "../../tooling/config.ts"
+import { getAccountConfig } from "../../tooling/config.ts"
+import {
+  DEFAULT_TX_GAS_BUDGET,
+  SUI_COIN_REGISTRY_ID
+} from "../../tooling/constants.ts"
+import { loadKeypair } from "../../tooling/keypair.ts"
+import {
+  logKeyValueBlue,
+  logKeyValueGreen,
+  logWarning
+} from "../../tooling/log.ts"
+import { assertLocalnetNetwork, resolveRpcUrl } from "../../tooling/network.ts"
+import type { WrappedSuiSharedObject } from "../../tooling/object.ts"
+import { getSuiSharedObject } from "../../tooling/object.ts"
+import { runSuiScript } from "../../tooling/process.ts"
+import { publishPackageWithLog } from "../../tooling/publish.ts"
 import {
   assertTransactionSuccess,
   findCreatedObjectIds,
   newTransaction,
   signAndExecute
-} from "../utils/transactions.ts"
-import type { PublishArtifact } from "../utils/types.ts"
+} from "../../tooling/transactions.ts"
+import type { PublishArtifact } from "../../tooling/types.ts"
 
 type SetupLocalCliArgs = {
   coinPackageId?: string
