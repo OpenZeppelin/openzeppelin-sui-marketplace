@@ -1,6 +1,10 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises"
 import path, { dirname } from "node:path"
+import type { ObjectArtifact } from "./object.ts"
 import type { PublishArtifact } from "./types.ts"
+
+export const ARTIFACTS_FILES = ["mock", "deployment", "objects"] as const
+export type ArtifactFile = (typeof ARTIFACTS_FILES)[number]
 
 /**
  * Curried writer that appends/merges JSON artifacts on disk.
@@ -15,7 +19,7 @@ export const writeArtifact =
 
       const currentArtifacts = await readArtifact<TArtifact>(
         filePath,
-        defaultIfMissing
+        defaultIfMissing as TArtifact
       )
 
       const updatedArtifacts =
@@ -39,6 +43,7 @@ export const writeArtifact =
   }
 
 export const writeDeploymentArtifact = writeArtifact<PublishArtifact[]>([])
+export const writeObjectArtifact = writeArtifact<ObjectArtifact[]>([])
 
 /**
  * Reads a JSON artifact from disk, optionally creating it with defaults when missing.
@@ -71,11 +76,11 @@ export const readArtifact = async <TArtifact>(
 }
 
 export const getArtifactPath =
-  (artifactType: "mock" | "deployment" | "object") => (network: string) =>
+  (artifactType: ArtifactFile) => (network: string) =>
     path.join(process.cwd(), "deployments", `${artifactType}.${network}.json`)
 
 export const getDeploymentArtifactPath = getArtifactPath("deployment")
-export const getObjectArtifactPath = getArtifactPath("object")
+export const getObjectArtifactPath = getArtifactPath("objects")
 
 export const loadDeploymentArtifacts = (networkName: string) =>
   readArtifact<PublishArtifact[]>(getDeploymentArtifactPath(networkName), [])

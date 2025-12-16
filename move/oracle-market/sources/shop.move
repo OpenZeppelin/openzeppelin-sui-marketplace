@@ -96,6 +96,28 @@ const POW10_U128: vector<u128> = vector[
   100_000_000_000_000_000_000_000_000_000_000_000_000,
 ];
 
+/// Claims and returns the module's Publisher object during publish.
+public struct SHOP has drop {}
+
+fun init(publisher_witness: SHOP, ctx: &mut tx::TxContext) {
+  let publisher: pkg::Publisher = claim_publisher(publisher_witness, ctx);
+  transfer_publisher_to_sender(publisher, ctx);
+}
+
+fun claim_publisher(
+  publisher_witness: SHOP,
+  ctx: &mut tx::TxContext,
+): pkg::Publisher {
+  pkg::claim<SHOP>(publisher_witness, ctx)
+}
+
+fun transfer_publisher_to_sender(
+  publisher: pkg::Publisher,
+  ctx: &mut tx::TxContext,
+) {
+  txf::public_transfer(publisher, tx::sender(ctx));
+}
+
 ///====================///
 /// Capability & Core ///
 ///====================///

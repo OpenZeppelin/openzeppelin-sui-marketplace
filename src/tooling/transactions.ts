@@ -1,4 +1,4 @@
-import type { SuiObjectChange } from "@mysten/sui/client"
+import type { ObjectOwner, SuiObjectChange } from "@mysten/sui/client"
 import {
   type SuiClient,
   type SuiObjectChangeCreated,
@@ -13,6 +13,16 @@ type ExecuteParams = {
   requestType?: "WaitForEffectsCert" | "WaitForLocalExecution"
   retryOnGasStale?: boolean
   assertSuccess?: boolean
+}
+
+type SuiObjectCreated = {
+  digest: string
+  objectId: string
+  objectType: string
+  owner: ObjectOwner
+  sender: string
+  type: "created"
+  version: string
 }
 
 /**
@@ -159,6 +169,18 @@ export const findObjectMatching = (
     (change) => isCreatedWithType(change) && matcher(change.objectType)
   )
 
+export const assertCreatedObject = (
+  objectChange: SuiObjectChange | undefined,
+  objectToFind: string
+): SuiObjectChangeCreated => {
+  if (!objectChange || objectChange.type !== "created")
+    throw new Error(
+      `Transaction succeeded but ${objectToFind} was not found in object changes.`
+    )
+
+  return objectChange as SuiObjectChangeCreated
+}
+
 /**
  * Convenience wrapper for `findCreatedObject` that matches on a type suffix.
  */
@@ -167,6 +189,15 @@ export const findCreatedObjectBySuffix = (
   typeSuffix: string
 ): SuiObjectChange | undefined =>
   findObjectMatching(result, (objectType) => objectType.endsWith(typeSuffix))
+
+export const ensureCreatedObject = (
+  objectToFind: string,
+  transactionResult: Awaited<ReturnType<typeof signAndExecute>>
+): SuiObjectChangeCreated =>
+  assertCreatedObject(
+    findCreatedObjectBySuffix(transactionResult, objectToFind),
+    objectToFind
+  )
 
 const pickFreshGasCoin = async (
   owner: string,
@@ -206,8 +237,8 @@ const parseStaleObjectId = (error: unknown): string | undefined => {
     error instanceof Error
       ? error.message
       : typeof error === "string"
-        ? error
-        : ""
+      ? error
+      : ""
   const match = message.match(/Object ID (\S+)/)
   return match?.[1]
 }
@@ -217,8 +248,8 @@ const parseLockedObjectIds = (error: unknown): Set<string> => {
     error instanceof Error
       ? error.message
       : typeof error === "string"
-        ? error
-        : ""
+      ? error
+      : ""
 
   const lockedIds = new Set<string>()
   for (const line of message.split("\n")) {

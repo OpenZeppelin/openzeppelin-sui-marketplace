@@ -155,6 +155,7 @@ export const publishPackage = async (
       packageName: pkg.packageName,
       packageId: pkg.packageId,
       upgradeCap: pkg.upgradeCap,
+      publisherId: pkg.publisherId,
       isDependency: pkg.isDependency ?? idx > 0,
       sender: publishPlan.keypair.toSuiAddress(),
       digest: publishResult.digest,
@@ -419,6 +420,7 @@ const logPublishSuccess = (artifacts: PublishArtifact[]) => {
     logKeyValueGreen("package")(label)
     logKeyValueGreen("packageId")(artifact.packageId)
     if (artifact.upgradeCap) logKeyValueGreen("upgradeCap")(artifact.upgradeCap)
+    if (artifact.publisherId) logKeyValueGreen("publisher")(artifact.publisherId)
   })
 
   if (artifacts[0]) {
@@ -564,6 +566,28 @@ const parseCliJson = (stdout: string) => {
 const extractPublishResult = (
   result: SuiTransactionBlockResponse
 ): PublishResult => {
+  const collectCreatedObjectIds = (
+    predicate: (objectType: string) => boolean
+  ): string[] =>
+    result.objectChanges
+      ?.filter(
+        (change) =>
+          change.type === "created" &&
+          "objectType" in change &&
+          typeof change.objectType === "string" &&
+          predicate(change.objectType as string) &&
+          "objectId" in change &&
+          typeof change.objectId === "string"
+      )
+      .map((change) => (change as { objectId: string }).objectId) || []
+
+  const warnOnCountMismatch = (label: string, actual: number, expected: number) => {
+    if (actual === 0 || actual === expected) return
+    logWarning(
+      `Publish returned ${expected} package(s) but ${actual} ${label}(s); pairing by index.`
+    )
+  }
+
   const publishedPackages =
     result.objectChanges
       ?.filter(
@@ -587,6 +611,10 @@ const extractPublishResult = (
       )
       .map((change) => (change as { objectId: string }).objectId) || []
 
+  const publisherIds = collectCreatedObjectIds((objectType) =>
+    objectType.endsWith("::package::Publisher")
+  )
+
   if (publishedPackages.length === 0) {
     return { packages: [], digest: result.digest }
   }
@@ -595,15 +623,13 @@ const extractPublishResult = (
     (packageId, idx) => ({
       packageId,
       upgradeCap: upgradeCaps[idx],
+      publisherId: publisherIds[idx],
       isDependency: idx > 0
     })
   )
 
-  if (upgradeCaps.length && upgradeCaps.length !== packages.length) {
-    logWarning(
-      `Publish returned ${packages.length} package(s) but ${upgradeCaps.length} upgrade cap(s); pairing by index.`
-    )
-  }
+  warnOnCountMismatch("upgrade cap", upgradeCaps.length, packages.length)
+  warnOnCountMismatch("publisher object", publisherIds.length, packages.length)
 
   return {
     packages,

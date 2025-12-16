@@ -1,69 +1,49 @@
-import { normalizeSuiObjectId } from "@mysten/sui/utils"
+// const normalizeShopArtifact = (
+//   artifact: ShopObjectArtifact
+// ): ShopObjectArtifact => ({
+//   ...artifact,
+//   packageId: normalizeOptionalId(artifact.packageId),
+//   publisherId: normalizeOptionalId(artifact.publisherId),
+//   creator: normalizeOptionalAddress(artifact.creator),
+//   transactionDigest: artifact.transactionDigest,
+//   objects: artifact.objects?.map(normalizeObject) ?? [],
+//   // Remove legacy fields on write by overriding with undefined (JSON.stringify drops them).
+//   shopId: undefined,
+//   shopOwnerCapId: undefined,
+//   shopInitialSharedVersion: undefined,
+//   shopOwnerAddress: undefined,
+//   digest: undefined
+// })
 
-import {
-  getObjectArtifactPath,
-  readArtifact,
-  writeArtifact
-} from "../tooling/artifacts.ts"
-import type { NetworkName } from "../tooling/types.ts"
-
-export type ShopObjectArtifact = Partial<{
-  packageId: string
-  publisherId: string
-  shopId: string
-  shopOwnerCapId: string
-  shopInitialSharedVersion?: number | string
-  shopOwnerAddress?: string
-  digest?: string
-}>
-
-const normalizeOptionalId = (value?: string) =>
-  value ? normalizeSuiObjectId(value) : value
-
-const normalizeSharedVersion = (value?: number | string) =>
-  value === undefined ? value : Number(value)
-
-const normalizeShopArtifact = (
-  artifact: ShopObjectArtifact
-): ShopObjectArtifact => ({
-  ...artifact,
-  packageId: normalizeOptionalId(artifact.packageId),
-  publisherId: normalizeOptionalId(artifact.publisherId),
-  shopId: normalizeOptionalId(artifact.shopId),
-  shopOwnerCapId: normalizeOptionalId(artifact.shopOwnerCapId),
-  shopInitialSharedVersion: normalizeSharedVersion(
-    artifact.shopInitialSharedVersion
-  )
-})
-
-const DEFAULT_ARTIFACT: ShopObjectArtifact = {}
+// const DEFAULT_ARTIFACT: ShopObjectArtifact = { objects: [] }
 
 /**
  * Reads the shop object artifact for a network, creating an empty baseline when missing.
  */
-export const readShopObjectArtifact = async (
-  network: NetworkName
-): Promise<ShopObjectArtifact> =>
-  readArtifact<ShopObjectArtifact>(
-    getObjectArtifactPath(network),
-    DEFAULT_ARTIFACT
-  )
+//TODO review and create a lookout
+// export const readShopObjectArtifact = async (
+//   network: NetworkName
+// ): Promise<ShopObjectArtifact> =>
+//   readArtifact<ShopObjectArtifact>(
+//     getObjectArtifactPath(network),
+//     DEFAULT_ARTIFACT
+//   )
 
 /**
  * Writes the shop object artifact to disk after normalizing IDs and shared versions.
  */
-export const writeShopObjectArtifact = async (
-  network: string,
-  artifact: ShopObjectArtifact,
-  options: { artifactPath?: string } = {}
-): Promise<{ artifactPath: string; artifact: ShopObjectArtifact }> => {
-  const targetPath = options.artifactPath ?? getObjectArtifactPath(network)
-  const normalizedArtifact = normalizeShopArtifact(artifact)
+// export const writeShopObjectArtifact = async (
+//   network: string,
+//   artifact: ShopObjectArtifact,
+//   options: { artifactPath?: string } = {}
+// ): Promise<{ artifactPath: string; artifact: ShopObjectArtifact }> => {
+//   const targetPath = options.artifactPath ?? getObjectArtifactPath(network)
+//   const normalizedArtifact = normalizeShopArtifact(artifact)
 
-  const merged = await writeArtifact<ShopObjectArtifact>(DEFAULT_ARTIFACT)(
-    targetPath,
-    normalizedArtifact
-  )
+//   const merged = await writeObjectArtifact(DEFAULT_ARTIFACT)(
+//     targetPath,
+//     normalizedArtifact
+//   )
 
-  return { artifactPath: targetPath, artifact: merged }
-}
+//   return { artifactPath: targetPath, artifact: merged }
+// }

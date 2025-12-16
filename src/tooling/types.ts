@@ -40,5 +40,6 @@ export type PublishedPackage = {
   packageId: string
   packageName?: string
   upgradeCap?: string
+  publisherId?: string
   isDependency?: boolean
 }

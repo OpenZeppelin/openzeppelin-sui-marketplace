@@ -1,13 +1,9 @@
 import { SuiClient } from "@mysten/sui/client"
-import { writeFile } from "node:fs/promises"
 import path from "path"
 import yargs from "yargs"
 
 import { withTestnetFaucetRetry } from "../../tooling/address.ts"
-import {
-  getDeploymentArtifactPath,
-  loadDeploymentArtifacts
-} from "../../tooling/artifacts.ts"
+import { loadDeploymentArtifacts } from "../../tooling/artifacts.ts"
 import {
   getAccountConfig,
   type SuiNetworkConfig
@@ -23,10 +19,7 @@ import {
   resolveFullPackagePath
 } from "../../tooling/move.ts"
 import { runSuiScript } from "../../tooling/process.ts"
-import {
-  claimPublisherForArtifact,
-  publishPackageWithLog
-} from "../../tooling/publish.ts"
+import { publishPackageWithLog } from "../../tooling/publish.ts"
 import type { PublishArtifact } from "../../tooling/types.ts"
 
 type PublishScriptArguments = {
@@ -34,14 +27,12 @@ type PublishScriptArguments = {
   withUnpublishedDependencies?: boolean
   dev?: boolean
   rePublish?: boolean
-  claimPublisher?: boolean
 }
 
 type ResolvedPublishOptions = {
   useDevBuild: boolean
   withUnpublishedDependencies: boolean
   allowAutoUnpublishedDependencies: boolean
-  claimPublisher: boolean
 }
 
 const shouldSkipPublish = (
@@ -57,22 +48,6 @@ const logSkippedPublish = (networkName: string, packagePath: string) => {
   logKeyValueBlue("network")(networkName)
   logKeyValueBlue("package")(packagePath)
 }
-
-const persistDeploymentArtifacts = async (
-  networkName: string,
-  artifacts: PublishArtifact[]
-) => {
-  const artifactPath = getDeploymentArtifactPath(networkName)
-  await writeFile(artifactPath, JSON.stringify(artifacts, null, 2))
-}
-
-const findArtifactForPackage = (
-  artifacts: PublishArtifact[],
-  packagePath: string
-) =>
-  artifacts.find((artifact) =>
-    (artifact.packagePath ?? "").startsWith(packagePath)
-  )
 
 const buildFundingRequirements = (gasBudget: number) => {
   const minimumGasCoinBalance = BigInt(gasBudget) + 500_000_000n
@@ -115,7 +90,6 @@ const publishPackageToNetwork = async (
           withUnpublishedDependencies:
             publishOptions.withUnpublishedDependencies,
           useDevBuild: publishOptions.useDevBuild,
-          claimPublisher: publishOptions.claimPublisher,
           useCliPublish: true,
           allowAutoUnpublishedDependencies:
             publishOptions.allowAutoUnpublishedDependencies
@@ -147,8 +121,7 @@ const derivePublishOptions = (
     useDevBuild,
     withUnpublishedDependencies:
       cliArguments.withUnpublishedDependencies ?? targetingLocalnet,
-    allowAutoUnpublishedDependencies: targetingLocalnet,
-    claimPublisher: cliArguments.claimPublisher ?? true
+    allowAutoUnpublishedDependencies: targetingLocalnet
   }
 }
 
@@ -164,10 +137,6 @@ runSuiScript(
     const deploymentArtifacts = await loadDeploymentArtifacts(
       network.networkName
     )
-    const existingArtifact = findArtifactForPackage(
-      deploymentArtifacts,
-      fullPackagePath
-    )
 
     if (
       shouldSkipPublish(
@@ -176,38 +145,7 @@ runSuiScript(
         fullPackagePath
       )
     ) {
-      if (
-        cliArguments.claimPublisher !== false &&
-        existingArtifact &&
-        !existingArtifact.publisherId
-      ) {
-        const keypair = await loadKeypair(getAccountConfig(network))
-        const publisherId = await claimPublisherForArtifact(
-          {
-            artifact: existingArtifact,
-            network,
-            fullNodeUrl: network.url,
-            keypair,
-            gasBudget: network.gasBudget ?? DEFAULT_PUBLISH_GAS_BUDGET
-          },
-          new SuiClient({ url: network.url })
-        )
-
-        const updatedArtifacts = deploymentArtifacts.map((artifact) =>
-          artifact.packageId === existingArtifact.packageId
-            ? { ...artifact, publisherId }
-            : artifact
-        )
-
-        await persistDeploymentArtifacts(
-          network.networkName,
-          updatedArtifacts
-        )
-
-        logKeyValueBlue("publisher")(publisherId)
-      } else {
-        logSkippedPublish(network.networkName, fullPackagePath)
-      }
+      logSkippedPublish(network.networkName, fullPackagePath)
       return
     }
 
@@ -243,13 +181,6 @@ runSuiScript(
       description:
         "Re-publish the package even if it already exists in the deployment artifact",
       default: false
-    })
-    .option("claimPublisher", {
-      alias: ["claim-publisher"],
-      type: "boolean",
-      description:
-        "Claim the 0x2::package::Publisher with the returned UpgradeCap (pass --no-claim-publisher to skip)",
-      default: true
     })
     .strict()
 )
