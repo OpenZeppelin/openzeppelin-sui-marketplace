@@ -18,7 +18,7 @@ pnpm start:localnet --with-faucet
 pnpm setup:local
 
 # 4) Publish oracle-market with dev dependencies (local mocks)
-pnpm publish:package --package-path move/oracle-market --dev
+pnpm publish:package --package-path oracle-market --dev
 ```
 
 If you hit errors, keep reading—every step is explained in detail with troubleshooting tips.
@@ -132,7 +132,7 @@ Why needed:
 
 ### 5) Publish oracle-market (local/dev)
 ```
-pnpm publish:package --package-path move/oracle-market --dev
+pnpm publish:package --package-path oracle-market --dev
 ```
 What it does:
 - Builds with `--dev` and `--with-unpublished-dependencies` (allows local mocks).
@@ -159,7 +159,7 @@ Why dev vs non-dev:
 2) Fund the publisher address with enough SUI (gas budget in `sui.config.ts` defaults to `2_000_000_000`).
 3) Publish:
    ```
-   pnpm publish:package --package-path move/oracle-market --network testnet
+   pnpm publish:package --package-path oracle-market --network testnet
    ```
 4) Record the `packageId`, `UpgradeCap`, and `publisherId` from `deployments/deployment.testnet.json`.
 
@@ -235,9 +235,9 @@ Docs links:
 
 ## Workflow Cheat Sheet
 
-- **Full local demo**: `pnpm start:localnet` → `pnpm setup:local` → `pnpm publish:package --package-path move/oracle-market --dev`
+- **Full local demo**: `pnpm start:localnet` → `pnpm setup:local` → `pnpm publish:package --package-path oracle-market --dev`
 - **Re-seed mocks**: `pnpm setup:local --re-publish`
-- **Publish to testnet** (after pinning real deps): `pnpm publish:package --package-path move/oracle-market --network testnet`
+- **Publish to testnet** (after pinning real deps): `pnpm publish:package --package-path oracle-market --network testnet`
 
 ---
 
