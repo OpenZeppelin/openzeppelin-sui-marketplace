@@ -76,12 +76,13 @@ runSuiScript(
       signer.toSuiAddress(),
       network.networkName
     )
-    const listingObject = await fetchItemListing({
+    const listingObject = await getItemListing({
       listingId,
       shopId: inputs.shopId,
       client: suiClient
     })
 
+    //TODO transform this function to a withArtifact function that take any function that returns an object and save it in the artifacts (same with delete but adds a deleted: timestamp key)
     await writeObjectArtifact(getObjectArtifactPath(network.networkName), [
       buildItemListingArtifact(packageInfo, listingObject)
     ])
@@ -294,7 +295,7 @@ const findListingIdInEvents = (
     undefined
   )
 
-const fetchItemListing = async ({
+const getItemListing = async ({
   listingId,
   shopId,
   client
@@ -303,7 +304,7 @@ const fetchItemListing = async ({
   shopId: string
   client: SuiClient
 }) => {
-  const { object: dynamicField } = await getSuiDynamicFieldObject(
+  const dynamicFieldObject = await getSuiDynamicFieldObject(
     {
       childObjectId: listingId,
       parentObjectId: shopId
@@ -313,11 +314,14 @@ const fetchItemListing = async ({
 
   return {
     objectId: normalizeSuiObjectId(listingId),
-    objectType: dynamicField.type,
-    owner: dynamicField.owner,
-    initialSharedVersion: extractInitialSharedVersion(dynamicField),
-    version: dynamicField.version,
-    digest: dynamicField.digest
+    objectType: dynamicFieldObject.object.type,
+    dynamicFieldId: dynamicFieldObject.dynamicFieldId,
+    owner: dynamicFieldObject.object.owner,
+    initialSharedVersion: extractInitialSharedVersion(
+      dynamicFieldObject.object
+    ),
+    version: dynamicFieldObject.object.version,
+    digest: dynamicFieldObject.object.digest
   }
 }
 
@@ -364,11 +368,12 @@ const resolvePublisherFromArtifacts = async (
 
 const buildItemListingArtifact = (
   packageInfo: ObjectArtifactPackageInfo,
-  listingObject: Awaited<ReturnType<typeof fetchItemListing>>
+  listingObject: Awaited<ReturnType<typeof getItemListing>>
 ): ObjectArtifact => ({
   ...packageInfo,
   objectId: listingObject.objectId,
   objectType: listingObject.objectType || "MISSING",
+  dynamicFieldId: listingObject.dynamicFieldId,
   objectName: "itemListing",
   owner: mapOwnerToArtifact(listingObject.owner || undefined),
   initialSharedVersion: normalizeVersion(listingObject.initialSharedVersion),
@@ -377,7 +382,7 @@ const buildItemListingArtifact = (
 })
 
 const logListingCreation = (
-  listing: Awaited<ReturnType<typeof fetchItemListing>>
+  listing: Awaited<ReturnType<typeof getItemListing>>
 ) => {
   logKeyValueGreen("item id")(listing.objectId)
   if (listing.digest) logKeyValueGreen("digest")(listing.digest)

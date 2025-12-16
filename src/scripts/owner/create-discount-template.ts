@@ -30,7 +30,7 @@ import {
   newTransaction,
   signAndExecute
 } from "../../tooling/transactions.ts"
-import { tryParseBigInt } from "../../utils/utility.ts"
+import { parseNonNegativeU64, parseOptionalU64 } from "../../utils/utility.ts"
 
 type RuleKind = "fixed" | "percent"
 
@@ -285,23 +285,6 @@ const parsePercentToBasisPoints = (rawPercent: string): bigint => {
 
   return basisPoints
 }
-
-const parseNonNegativeU64 = (rawValue: string, label: string): bigint => {
-  const value = tryParseBigInt(rawValue)
-  if (value < 0n) throw new Error(`${label} cannot be negative.`)
-
-  const maxU64 = (1n << 64n) - 1n
-  if (value > maxU64)
-    throw new Error(`${label} exceeds the maximum allowed u64 value.`)
-
-  return value
-}
-
-const parseOptionalU64 = (
-  rawValue: string | undefined,
-  label: string
-): bigint | undefined =>
-  rawValue === undefined ? undefined : parseNonNegativeU64(rawValue, label)
 
 const validateSchedule = (startsAt: bigint, expiresAt?: bigint) => {
   if (expiresAt !== undefined && expiresAt <= startsAt)

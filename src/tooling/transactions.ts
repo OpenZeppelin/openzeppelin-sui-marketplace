@@ -36,6 +36,95 @@ export const assertTransactionSuccess = ({
     throw new Error(effects?.status?.error || "Transaction failed")
 }
 
+type GasPaymentOptions = {
+  transaction: Transaction
+  signerAddress: string
+  suiClient: SuiClient
+  forceUpdate?: boolean
+  excludedObjectIds?: Set<string>
+}
+
+const hasExistingGasPayment = (transaction: Transaction) => {
+  const payment = transaction.getData().gasData.payment
+  return Array.isArray(payment) && payment.length > 0
+}
+
+const ensureGasPayment = async ({
+  transaction,
+  signerAddress,
+  suiClient,
+  forceUpdate = false,
+  excludedObjectIds = new Set()
+}: GasPaymentOptions) => {
+  if (!forceUpdate && hasExistingGasPayment(transaction)) return
+
+  const gasCoin = await pickFreshGasCoin(
+    signerAddress,
+    suiClient,
+    excludedObjectIds
+  )
+  transaction.setGasOwner(signerAddress)
+  transaction.setGasPayment([gasCoin])
+}
+
+type ExecuteOnceArgs = {
+  transaction: Transaction
+  signer: Ed25519Keypair
+  suiClient: SuiClient
+  requestType: ExecuteParams["requestType"]
+  assertSuccess: boolean
+}
+
+const executeTransactionOnce = async ({
+  transaction,
+  signer,
+  suiClient,
+  requestType,
+  assertSuccess
+}: ExecuteOnceArgs) => {
+  const transactionResult = await suiClient.signAndExecuteTransaction({
+    transaction,
+    signer,
+    options: {
+      showEffects: true,
+      showEvents: true,
+      showObjectChanges: true
+    },
+    requestType
+  })
+
+  if (assertSuccess) assertTransactionSuccess(transactionResult)
+
+  return transactionResult
+}
+
+type RetryDecision = {
+  shouldRetry: boolean
+  lockedObjectIds: Set<string>
+}
+
+const decideRetryForGasIssues = (
+  error: unknown,
+  allowRetryOnGasStale: boolean,
+  attemptIndex: number
+): RetryDecision => {
+  if (!allowRetryOnGasStale || attemptIndex > 0)
+    return { shouldRetry: false, lockedObjectIds: new Set() }
+
+  const staleObjectId = parseStaleObjectId(error)
+  const lockedObjectIds = parseLockedObjectIds(error)
+  const encounteredGasIssue =
+    Boolean(staleObjectId) || lockedObjectIds.size > 0
+
+  return {
+    shouldRetry: encounteredGasIssue,
+    lockedObjectIds
+  }
+}
+
+const normalizeUnknownError = (error: unknown) =>
+  error instanceof Error ? error : new Error(String(error))
+
 /**
  * Signs and executes a transaction, retrying once on stale/locked gas objects.
  * Why: Gas coins are objects with versions; this helper refreshes gas to align with Sui’s
@@ -52,59 +141,41 @@ export const signAndExecute = async (
   suiClient: SuiClient
 ): Promise<SuiTransactionBlockResponse> => {
   const signerAddress = signer.toSuiAddress()
-  let lastError: unknown
-
-  const ensureFreshGasPayment = async (
-    force?: boolean,
-    excludeObjectIds: Set<string> = new Set()
-  ) => {
-    const payment = transaction.getData().gasData.payment
-
-    // If payment is already set (and force is not requested) keep the caller's selection.
-    if (!force && Array.isArray(payment) && payment.length > 0) return
-
-    const gasCoin = await pickFreshGasCoin(
-      signerAddress,
-      suiClient,
-      excludeObjectIds
-    )
-    transaction.setGasOwner(signerAddress)
-    transaction.setGasPayment([gasCoin])
-  }
+  const maximumAttempts = retryOnGasStale ? 2 : 1
 
   // Pre-populate gas with the freshest coin to avoid stale object errors on the first attempt.
-  await ensureFreshGasPayment()
+  await ensureGasPayment({ transaction, signerAddress, suiClient })
 
-  for (let attempt = 0; attempt < (retryOnGasStale ? 2 : 1); attempt++) {
+  for (let attemptIndex = 0; attemptIndex < maximumAttempts; attemptIndex++) {
     try {
-      const transactionResult = await suiClient.signAndExecuteTransaction({
-        transaction: transaction,
+      return await executeTransactionOnce({
+        transaction,
         signer,
-        options: {
-          showEffects: true,
-          showEvents: true,
-          showObjectChanges: true
-        },
-        requestType
+        suiClient,
+        requestType,
+        assertSuccess
       })
-
-      if (assertSuccess) assertTransactionSuccess(transactionResult)
-
-      return transactionResult
     } catch (error) {
-      lastError = error
-      if (!retryOnGasStale || attempt > 0) break
+      const { shouldRetry, lockedObjectIds } = decideRetryForGasIssues(
+        error,
+        retryOnGasStale,
+        attemptIndex
+      )
 
-      const staleObjectId = parseStaleObjectId(error)
-      const lockedObjectIds = parseLockedObjectIds(error)
-      if (!staleObjectId && lockedObjectIds.size === 0) break
+      if (!shouldRetry) throw normalizeUnknownError(error)
 
       // Refresh gas with the latest version in case the stale object is a SUI coin.
-      await ensureFreshGasPayment(true, lockedObjectIds)
+      await ensureGasPayment({
+        transaction,
+        signerAddress,
+        suiClient,
+        forceUpdate: true,
+        excludedObjectIds: lockedObjectIds
+      })
     }
   }
 
-  throw lastError instanceof Error ? lastError : new Error(String(lastError))
+  throw new Error("Unable to execute transaction after retries.")
 }
 
 type ObjectChangeWithType = Extract<

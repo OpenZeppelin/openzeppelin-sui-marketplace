@@ -5,13 +5,10 @@ import yargs from "yargs"
 import { getLatestObjectFromArtifact } from "../../tooling/artifacts.ts"
 import { loadKeypair } from "../../tooling/keypair.ts"
 import { logKeyValueGreen } from "../../tooling/log.ts"
-import {
-  getSuiSharedObject,
-  resolveItemListingIdForShop
-} from "../../tooling/object.ts"
+import { getSuiSharedObject } from "../../tooling/object.ts"
 import { runSuiScript } from "../../tooling/process.ts"
 import { newTransaction, signAndExecute } from "../../tooling/transactions.ts"
-import { tryParseBigInt } from "../../utils/utility.ts"
+import { parseNonNegativeU64 } from "../../utils/utility.ts"
 
 type UpdateStockArguments = {
   shopPackageId?: string
@@ -34,13 +31,6 @@ runSuiScript(
     const inputs = await normalizeInputs(cliArguments, network.networkName)
     const suiClient = new SuiClient({ url: network.url })
     const signer = await loadKeypair(network.account)
-    const resolvedListing = await resolveItemListingIdForShop(
-      {
-        shopId: inputs.shopId,
-        candidateListingId: inputs.itemListingId
-      },
-      suiClient
-    )
     const shopSharedObject = await getSuiSharedObject(
       { objectId: inputs.shopId, mutable: true },
       suiClient
@@ -50,7 +40,7 @@ runSuiScript(
       packageId: inputs.packageId,
       shop: shopSharedObject,
       ownerCapId: inputs.ownerCapId,
-      itemListingId: resolvedListing.listingId,
+      itemListingId: inputs.itemListingId,
       newStock: inputs.newStock
     })
 
@@ -63,10 +53,9 @@ runSuiScript(
       parseUpdatedStockEvent(transactionResult) || inputs.newStock
 
     logStockUpdate({
-      itemListingId: resolvedListing.listingId,
+      itemListingId: inputs.itemListingId,
       newStock: updatedStock,
-      digest: transactionResult.digest,
-      fieldObjectId: resolvedListing.fieldObjectId
+      digest: transactionResult.digest
     })
   },
   yargs()
@@ -145,17 +134,6 @@ const normalizeInputs = async (
   }
 }
 
-const parseNonNegativeU64 = (rawValue: string, label: string): bigint => {
-  const value = tryParseBigInt(rawValue)
-  if (value < 0n) throw new Error(`${label} cannot be negative.`)
-
-  const maxU64 = (1n << 64n) - 1n
-  if (value > maxU64)
-    throw new Error(`${label} exceeds the maximum allowed u64 value.`)
-
-  return value
-}
-
 const buildUpdateStockTransaction = ({
   packageId,
   shop,
@@ -208,17 +186,13 @@ const parseUpdatedStockEvent = (
 const logStockUpdate = ({
   itemListingId,
   newStock,
-  digest,
-  fieldObjectId
+  digest
 }: {
   itemListingId: string
   newStock: bigint
   digest?: string
-  fieldObjectId?: string
 }) => {
   logKeyValueGreen("item id")(itemListingId)
-  if (fieldObjectId && fieldObjectId !== itemListingId)
-    logKeyValueGreen("field id")(fieldObjectId)
   logKeyValueGreen("new stock")(newStock.toString())
   if (digest) logKeyValueGreen("digest")(digest)
 }

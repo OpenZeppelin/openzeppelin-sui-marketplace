@@ -29,6 +29,7 @@ export type ObjectArtifactObjectInfo = {
   objectType: string
   objectName?: string
   owner?: ObjectOwnerArtifact
+  dynamicFieldId?: string
   initialSharedVersion?: string
   version?: string
   digest?: string
@@ -180,6 +181,12 @@ export type WrappedSuiObject = {
   error?: ObjectResponseError
 }
 
+export type WrappedSuiDynamicFieldObject = WrappedSuiObject & {
+  childObjectId: string
+  parentObjectId: string
+  dynamicFieldId: string
+}
+
 export type WrappedSuiSharedObject = WrappedSuiObject & {
   sharedRef: {
     objectId: string
@@ -228,7 +235,7 @@ export const getSuiDynamicFieldObject = async (
     parentObjectId: string
   },
   suClient: SuiClient
-): Promise<WrappedSuiObject> => {
+): Promise<WrappedSuiDynamicFieldObject> => {
   const { data: dynamicFieldObject, error } =
     await suClient.getDynamicFieldObject({
       parentId: normalizeSuiObjectId(parentObjectId),
@@ -243,121 +250,9 @@ export const getSuiDynamicFieldObject = async (
 
   return {
     object: dynamicFieldObject,
+    parentObjectId,
+    childObjectId,
+    dynamicFieldId: dynamicFieldObject.objectId,
     error: error || undefined
   }
-}
-
-type DynamicFieldEntry = Awaited<
-  ReturnType<SuiClient["getDynamicFields"]>
->["data"][number]
-
-const normalizeDynamicFieldNameId = (
-  nameValue: unknown
-): string | undefined => {
-  const candidate =
-    typeof nameValue === "string"
-      ? nameValue
-      : typeof nameValue === "object" &&
-          nameValue &&
-          "value" in (nameValue as Record<string, unknown>) &&
-          typeof (nameValue as { value?: unknown }).value === "string"
-        ? (nameValue as { value?: string }).value
-        : typeof nameValue === "object" &&
-            nameValue &&
-            "fields" in (nameValue as Record<string, unknown>)
-          ? (() => {
-              const fields = (nameValue as { fields?: Record<string, unknown> })
-                .fields
-              if (!fields) return undefined
-
-              const nestedId =
-                typeof fields.id === "string"
-                  ? fields.id
-                  : typeof fields.value === "string"
-                    ? fields.value
-                    : typeof fields.bytes === "string"
-                      ? fields.bytes
-                      : undefined
-
-              if (
-                typeof nestedId === "undefined" &&
-                typeof fields === "object" &&
-                fields &&
-                "id" in fields &&
-                typeof (fields as { id?: { bytes?: string } }).id?.bytes ===
-                  "string"
-              )
-                return (fields as { id?: { bytes?: string } }).id?.bytes
-
-              return nestedId
-            })()
-          : undefined
-
-  if (!candidate) return undefined
-
-  try {
-    return normalizeSuiObjectId(candidate)
-  } catch {
-    return undefined
-  }
-}
-
-const isItemListingDynamicField = (field: DynamicFieldEntry): boolean =>
-  typeof field.objectType === "string" &&
-  field.objectType.includes("::shop::ItemListing") &&
-  typeof field.name?.type === "string" &&
-  field.name.type === "0x2::object::ID"
-
-/**
- * Resolves an item listing identifier to the Move-facing ID used by shop entry functions.
- * Accepts either the listing object's ID (dynamic field name) or the dynamic field object ID
- * itself, so scripts can cope with artifacts that stored the wrapper instead of the child ID.
- */
-export const resolveItemListingIdForShop = async (
-  {
-    shopId,
-    candidateListingId
-  }: { shopId: string; candidateListingId: string },
-  suiClient: SuiClient
-): Promise<{ listingId: string; fieldObjectId?: string }> => {
-  const normalizedShopId = normalizeSuiObjectId(shopId)
-  const normalizedCandidate = normalizeSuiObjectId(candidateListingId)
-
-  let cursor: string | undefined
-  do {
-    const { data, hasNextPage, nextCursor } = await suiClient.getDynamicFields({
-      parentId: normalizedShopId,
-      cursor,
-      limit: 50
-    })
-
-    const match = data.find((field) => {
-      if (!isItemListingDynamicField(field)) return false
-
-      const listingId = normalizeDynamicFieldNameId(field.name.value)
-      const fieldObjectId = normalizeSuiObjectId(field.objectId)
-
-      return (
-        (listingId && listingId === normalizedCandidate) ||
-        fieldObjectId === normalizedCandidate
-      )
-    })
-
-    if (match) {
-      const listingId = normalizeDynamicFieldNameId(match.name.value)
-      if (!listingId)
-        throw new Error(
-          `Found listing dynamic field ${match.objectId} but could not parse its name as an object ID.`
-        )
-
-      return { listingId, fieldObjectId: normalizeSuiObjectId(match.objectId) }
-    }
-
-    cursor = hasNextPage ? nextCursor || undefined : undefined
-  } while (cursor)
-
-  throw new Error(
-    `Listing ${normalizedCandidate} is not a child of shop ${normalizedShopId}. ` +
-      "Use the ItemListing object ID (not the dynamic field object ID)."
-  )
 }
