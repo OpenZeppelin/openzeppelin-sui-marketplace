@@ -81,3 +81,11 @@ const makeDelay = () => (ms: number) => {
 }
 
 export const wait = (ms: number) => makeDelay()(ms).promise
+
+export const tryParseBigInt = (value: string): bigint => {
+  try {
+    return BigInt(value)
+  } catch {
+    throw new Error(`Invalid numeric value: ${value}`)
+  }
+}
