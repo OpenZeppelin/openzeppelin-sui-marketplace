@@ -2,6 +2,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises"
 import path, { dirname } from "node:path"
 import type { ObjectArtifact } from "./object.ts"
 import type { PublishArtifact } from "./types.ts"
+import { normalizeSuiObjectId } from "@mysten/sui/utils"
 
 export const ARTIFACTS_FILES = ["mock", "deployment", "objects"] as const
 export type ArtifactFile = (typeof ARTIFACTS_FILES)[number]
@@ -91,7 +92,20 @@ export const loadObjectArtifacts = (networkName: string) =>
 export const getLatestObjectFromArtifact = async (
   objectTypeSuffix: string,
   networkName: string
-): Promise<ObjectArtifact | undefined> =>
-  (await loadObjectArtifacts(networkName)).find((artifact) =>
-    artifact.objectType?.endsWith(objectTypeSuffix)
+): Promise<ObjectArtifact | undefined> => {
+  const objectArtifacts = await loadObjectArtifacts(networkName)
+
+  return objectArtifacts.reduceRight<ObjectArtifact | undefined>(
+    (latestMatch, artifact) => {
+      if (latestMatch) return latestMatch
+      if (!artifact.objectType?.endsWith(objectTypeSuffix)) return undefined
+
+      return {
+        ...artifact,
+        packageId: normalizeSuiObjectId(artifact.packageId),
+        objectId: normalizeSuiObjectId(artifact.objectId)
+      }
+    },
+    undefined
   )
+}

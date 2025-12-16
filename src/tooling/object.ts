@@ -122,13 +122,16 @@ export const normalizeOptionalId = (value?: string) =>
 export const normalizeOptionalAddress = (value?: string) =>
   value ? normalizeSuiAddress(value) : value
 
-export const normalizeVersion = (value?: number | string) =>
-  value === undefined ? value : String(value)
+export const normalizeVersion = (value?: number | string) => String(value)
 
 export const extractInitialSharedVersion = (
-  created: SuiObjectChangeCreated
+  created: SuiObjectChangeCreated | SuiObjectData
 ): string | undefined => {
-  if (typeof created.owner === "object" && "Shared" in created.owner)
+  if (
+    created.owner &&
+    typeof created.owner === "object" &&
+    "Shared" in created.owner
+  )
     return normalizeVersion(created.owner.Shared.initial_shared_version)
 
   if ("initialSharedVersion" in created)
@@ -172,14 +175,17 @@ export const getSuiObject = async (
   }
 }
 
-export type WrappedSuiSharedObject = {
+export type WrappedSuiObject = {
   object: SuiObjectData
+  error?: ObjectResponseError
+}
+
+export type WrappedSuiSharedObject = WrappedSuiObject & {
   sharedRef: {
     objectId: string
     mutable: boolean
-    initialSharedVersion: number | string
+    initialSharedVersion: string
   }
-  error?: ObjectResponseError
 }
 
 /**
@@ -206,7 +212,37 @@ export const getSuiSharedObject = async (
     sharedRef: {
       objectId: suiObject.object.objectId,
       mutable,
-      initialSharedVersion: sharedProperty.initial_shared_version
+      initialSharedVersion: normalizeVersion(
+        sharedProperty.initial_shared_version
+      )
     }
+  }
+}
+
+export const getSuiDynamicFieldObject = async (
+  {
+    childObjectId,
+    parentObjectId
+  }: {
+    childObjectId: string
+    parentObjectId: string
+  },
+  suClient: SuiClient
+): Promise<WrappedSuiObject> => {
+  const { data: dynamicFieldObject, error } =
+    await suClient.getDynamicFieldObject({
+      parentId: normalizeSuiObjectId(parentObjectId),
+      name: {
+        type: "0x2::object::ID",
+        value: normalizeSuiObjectId(childObjectId)
+      }
+    })
+
+  if (!dynamicFieldObject)
+    throw new Error(`Could not fetch dynamic field for ${childObjectId}`)
+
+  return {
+    object: dynamicFieldObject,
+    error: error || undefined
   }
 }

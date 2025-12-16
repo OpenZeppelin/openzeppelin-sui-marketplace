@@ -3,6 +3,7 @@ import { SuiClient } from "@mysten/sui/client"
 import { normalizeSuiObjectId } from "@mysten/sui/utils"
 import yargs from "yargs"
 
+import { parseUsdToCents } from "../../models/shop.ts"
 import {
   getLatestObjectFromArtifact,
   getObjectArtifactPath,
@@ -13,6 +14,7 @@ import { loadKeypair } from "../../tooling/keypair.ts"
 import { logKeyValueGreen } from "../../tooling/log.ts"
 import {
   extractInitialSharedVersion,
+  getSuiDynamicFieldObject,
   getSuiSharedObject,
   mapOwnerToArtifact,
   normalizeOptionalId,
@@ -26,7 +28,6 @@ import {
   newTransaction,
   signAndExecute
 } from "../../tooling/transactions.ts"
-import { parseUsdToCents } from "../../models/shop.ts"
 import { tryParseBigInt } from "../../utils/utility.ts"
 
 type AddItemArguments = {
@@ -68,19 +69,25 @@ runSuiScript(
       suiClient
     )
 
-    const createdListing = extractItemListing(transactionResult)
+    const listingId = extractItemListingId(transactionResult)
     const packageInfo = await resolvePackageInfo(
       inputs.packageId,
       inputs.publisherId,
       signer.toSuiAddress(),
       network.networkName
     )
+    const listingObject = await fetchItemListing({
+      listingId,
+      shopId: inputs.shopId,
+      client: suiClient,
+      packageId: inputs.packageId
+    })
 
     await writeObjectArtifact(getObjectArtifactPath(network.networkName), [
-      buildItemListingArtifact(packageInfo, createdListing)
+      buildItemListingArtifact(packageInfo, listingObject)
     ])
 
-    logListingCreation(createdListing)
+    logListingCreation(listingObject)
   },
   yargs()
     .option("shopPackageId", {
@@ -254,6 +261,67 @@ const extractItemListing = (
 ): SuiObjectChangeCreated =>
   ensureCreatedObject("shop::ItemListing", transactionResult)
 
+const extractItemListingId = (
+  transactionResult: Awaited<ReturnType<typeof signAndExecute>>
+): string => {
+  try {
+    return extractItemListing(transactionResult).objectId
+  } catch {
+    const listingIdFromEvents = findListingIdInEvents(transactionResult)
+    if (listingIdFromEvents) return listingIdFromEvents
+    throw new Error(
+      "Transaction succeeded but ItemListing was not found; no ItemListingAdded event present."
+    )
+  }
+}
+
+const findListingIdInEvents = (
+  transactionResult: Awaited<ReturnType<typeof signAndExecute>>
+): string | undefined =>
+  (transactionResult.events ?? []).reduce<string | undefined>(
+    (found, event) => {
+      if (found) return found
+      const parsed = event.parsedJson as
+        | {
+            item_listing_address?: string
+          }
+        | undefined
+      const matches =
+        typeof event.type === "string" &&
+        event.type.endsWith("::shop::ItemListingAdded") &&
+        typeof parsed?.item_listing_address === "string"
+      return matches ? parsed.item_listing_address : undefined
+    },
+    undefined
+  )
+
+const fetchItemListing = async ({
+  listingId,
+  shopId,
+  client
+}: {
+  listingId: string
+  shopId: string
+  client: SuiClient
+}) => {
+  const { object: dynamicField } = await getSuiDynamicFieldObject(
+    {
+      childObjectId: listingId,
+      parentObjectId: shopId
+    },
+    client
+  )
+
+  return {
+    objectId: normalizeSuiObjectId(listingId),
+    objectType: dynamicField.type,
+    owner: dynamicField.owner,
+    initialSharedVersion: extractInitialSharedVersion(dynamicField),
+    version: dynamicField.version,
+    digest: dynamicField.digest
+  }
+}
+
 const resolvePackageInfo = async (
   packageId: string,
   publisherId: string | undefined,
@@ -297,19 +365,21 @@ const resolvePublisherFromArtifacts = async (
 
 const buildItemListingArtifact = (
   packageInfo: ObjectArtifactPackageInfo,
-  createdListing: SuiObjectChangeCreated
+  listingObject: Awaited<ReturnType<typeof fetchItemListing>>
 ): ObjectArtifact => ({
   ...packageInfo,
-  objectId: createdListing.objectId,
-  objectType: createdListing.objectType,
+  objectId: listingObject.objectId,
+  objectType: listingObject.objectType || "MISSING",
   objectName: "itemListing",
-  owner: mapOwnerToArtifact(createdListing.owner),
-  initialSharedVersion: extractInitialSharedVersion(createdListing),
-  version: normalizeVersion(createdListing.version),
-  digest: createdListing.digest
+  owner: mapOwnerToArtifact(listingObject.owner || undefined),
+  initialSharedVersion: normalizeVersion(listingObject.initialSharedVersion),
+  version: normalizeVersion(listingObject.version),
+  digest: listingObject.digest
 })
 
-const logListingCreation = (listing: SuiObjectChangeCreated) => {
+const logListingCreation = (
+  listing: Awaited<ReturnType<typeof fetchItemListing>>
+) => {
   logKeyValueGreen("item id")(listing.objectId)
-  logKeyValueGreen("digest")(listing.digest)
+  if (listing.digest) logKeyValueGreen("digest")(listing.digest)
 }
