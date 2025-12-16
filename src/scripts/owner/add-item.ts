@@ -164,7 +164,8 @@ const buildAddItemTransaction = ({
   const shopArgument = transaction.sharedObjectRef(shop.sharedRef)
 
   transaction.moveCall({
-    target: `${packageId}::shop::add_item_listing<${itemType}>`,
+    target: `${packageId}::shop::add_item_listing`,
+    typeArguments: [itemType],
     arguments: [
       shopArgument,
       transaction.pure.vector("u8", encodeItemName(itemName)),
