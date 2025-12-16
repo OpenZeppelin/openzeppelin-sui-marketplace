@@ -184,7 +184,7 @@ const readBuildArtifacts = async (
   const buildDir = path.join(resolvedPackagePath, "build")
   const packageName = await inferPackageName(buildDir)
 
-  const buildInfoPath = path.join(buildDir, packageName, "BuildInfo.yaml")
+  const buildInfoPath = await findBuildInfoPath(buildDir, packageName)
   const buildInfoRaw = await fs.readFile(buildInfoPath, "utf8")
 
   const modules = await readBytecodeModules(
@@ -217,6 +217,40 @@ const inferPackageName = async (buildDir: string): Promise<string> => {
   return (
     candidateDirs.find((name) => name !== "locks" && name !== "deps") ||
     candidateDirs[0]
+  )
+}
+
+const findBuildInfoPath = async (
+  buildDir: string,
+  packageName: string
+): Promise<string> => {
+  const packageRoot = path.join(buildDir, packageName)
+  const targets = [packageRoot]
+  const buildInfoFilename = "BuildInfo.yaml"
+
+  while (targets.length) {
+    const currentDir = targets.pop()
+    if (!currentDir) continue
+
+    try {
+      const entries = await fs.readdir(currentDir, { withFileTypes: true })
+
+      for (const entry of entries) {
+        const entryPath = path.join(currentDir, entry.name)
+        if (entry.isFile() && entry.name === buildInfoFilename) {
+          return entryPath
+        }
+        if (entry.isDirectory()) {
+          targets.push(entryPath)
+        }
+      }
+    } catch {
+      continue
+    }
+  }
+
+  throw new Error(
+    `BuildInfo.yaml not found under ${packageRoot}. Ensure the package was built successfully.`
   )
 }
 

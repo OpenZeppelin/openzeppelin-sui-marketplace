@@ -55,3 +55,13 @@ export const validateDiscountSchedule = (
 
 export const describeRuleKind = (ruleKind: NormalizedRuleKind): string =>
   ruleKind === 0 ? "fixed" : "percent"
+
+export const formatRuleValue = (
+  ruleKind: NormalizedRuleKind,
+  ruleValue: bigint
+): string => {
+  if (ruleKind === 0) return `${ruleValue.toString()} cents`
+
+  const percentage = Number(ruleValue) / 100
+  return `${percentage.toFixed(2)}%`
+}

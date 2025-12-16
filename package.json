@@ -11,6 +11,7 @@
     "get:mock-currency": "NODE_OPTIONS=\"--no-warnings\" ts-node-esm --transpile-only src/scripts/chain/get-mock-currency.ts",
     "describe:address": "NODE_OPTIONS=\"--no-warnings\" ts-node-esm --transpile-only src/scripts/chain/describe-address.ts",
     "describe:object": "NODE_OPTIONS=\"--no-warnings\" ts-node-esm --transpile-only src/scripts/chain/describe-object.ts",
+    "describe:dynamic-field-object": "NODE_OPTIONS=\"--no-warnings\" ts-node-esm --transpile-only src/scripts/chain/describe-dynamic-field-object.ts",
     "stop:localnet": "NODE_OPTIONS=\"--no-warnings\" ts-node-esm --transpile-only src/scripts/chain/stop-localnet.ts",
     "owner:create-shop": "NODE_OPTIONS=\"--no-warnings\" ts-node-esm --transpile-only src/scripts/owner/create-shop.ts",
     "owner:add-item-listing": "NODE_OPTIONS=\"--no-warnings\" ts-node-esm --transpile-only src/scripts/owner/add-item-listing.ts",
@@ -18,6 +19,7 @@
     "owner:update-item-listing-stock": "NODE_OPTIONS=\"--no-warnings\" ts-node-esm --transpile-only src/scripts/owner/update-item-listing-stock.ts",
     "owner:create-discount-template": "NODE_OPTIONS=\"--no-warnings\" ts-node-esm --transpile-only src/scripts/owner/create-discount-template.ts",
     "owner:update-discount-template": "NODE_OPTIONS=\"--no-warnings\" ts-node-esm --transpile-only src/scripts/owner/update-discount-template.ts",
+    "owner:toogle-discount-template": "NODE_OPTIONS=\"--no-warnings\" ts-node-esm --transpile-only src/scripts/owner/toggle-discount-template.ts",
     "lint": "pnpm exec eslint ."
   },
   "dependencies": {

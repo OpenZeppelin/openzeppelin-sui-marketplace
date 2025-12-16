@@ -6,6 +6,7 @@ import {
   defaultStartTimestampSeconds,
   describeRuleKind,
   discountRuleChoices,
+  formatRuleValue,
   parseDiscountRuleKind,
   parseDiscountRuleValue,
   validateDiscountSchedule,
@@ -273,14 +274,4 @@ const logDiscountTemplateUpdate = ({
   if (maxRedemptions !== undefined)
     logKeyValueGreen("max redemptions")(maxRedemptions.toString())
   if (digest) logKeyValueGreen("digest")(digest)
-}
-
-const formatRuleValue = (
-  ruleKind: NormalizedRuleKind,
-  ruleValue: bigint
-): string => {
-  if (ruleKind === 0) return `${ruleValue.toString()} cents`
-
-  const percentage = Number(ruleValue) / 100
-  return `${percentage.toFixed(2)}%`
 }
