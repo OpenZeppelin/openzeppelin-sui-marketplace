@@ -5,7 +5,10 @@ import yargs from "yargs"
 import { getLatestObjectFromArtifact } from "../../tooling/artifacts.ts"
 import { loadKeypair } from "../../tooling/keypair.ts"
 import { logKeyValueGreen } from "../../tooling/log.ts"
-import { getSuiSharedObject } from "../../tooling/object.ts"
+import {
+  getSuiSharedObject,
+  resolveItemListingIdForShop
+} from "../../tooling/object.ts"
 import { runSuiScript } from "../../tooling/process.ts"
 import { newTransaction, signAndExecute } from "../../tooling/transactions.ts"
 import { tryParseBigInt } from "../../utils/utility.ts"
@@ -31,6 +34,13 @@ runSuiScript(
     const inputs = await normalizeInputs(cliArguments, network.networkName)
     const suiClient = new SuiClient({ url: network.url })
     const signer = await loadKeypair(network.account)
+    const resolvedListing = await resolveItemListingIdForShop(
+      {
+        shopId: inputs.shopId,
+        candidateListingId: inputs.itemListingId
+      },
+      suiClient
+    )
     const shopSharedObject = await getSuiSharedObject(
       { objectId: inputs.shopId, mutable: true },
       suiClient
@@ -40,7 +50,7 @@ runSuiScript(
       packageId: inputs.packageId,
       shop: shopSharedObject,
       ownerCapId: inputs.ownerCapId,
-      itemListingId: inputs.itemListingId,
+      itemListingId: resolvedListing.listingId,
       newStock: inputs.newStock
     })
 
@@ -53,9 +63,10 @@ runSuiScript(
       parseUpdatedStockEvent(transactionResult) || inputs.newStock
 
     logStockUpdate({
-      itemListingId: inputs.itemListingId,
+      itemListingId: resolvedListing.listingId,
       newStock: updatedStock,
-      digest: transactionResult.digest
+      digest: transactionResult.digest,
+      fieldObjectId: resolvedListing.fieldObjectId
     })
   },
   yargs()
@@ -197,13 +208,17 @@ const parseUpdatedStockEvent = (
 const logStockUpdate = ({
   itemListingId,
   newStock,
-  digest
+  digest,
+  fieldObjectId
 }: {
   itemListingId: string
   newStock: bigint
   digest?: string
+  fieldObjectId?: string
 }) => {
   logKeyValueGreen("item id")(itemListingId)
+  if (fieldObjectId && fieldObjectId !== itemListingId)
+    logKeyValueGreen("field id")(fieldObjectId)
   logKeyValueGreen("new stock")(newStock.toString())
   if (digest) logKeyValueGreen("digest")(digest)
 }

@@ -13,8 +13,9 @@
     "get:object-info": "NODE_OPTIONS=\"--no-warnings\" ts-node-esm --transpile-only src/scripts/chain/get-object-info.ts",
     "stop:localnet": "NODE_OPTIONS=\"--no-warnings\" ts-node-esm --transpile-only src/scripts/chain/stop-localnet.ts",
     "owner:create-shop": "NODE_OPTIONS=\"--no-warnings\" ts-node-esm --transpile-only src/scripts/owner/create-shop.ts",
-    "owner:add-item": "NODE_OPTIONS=\"--no-warnings\" ts-node-esm --transpile-only src/scripts/owner/add-item-listing.ts",
-    "owner:remove-item": "NODE_OPTIONS=\"--no-warnings\" ts-node-esm --transpile-only src/scripts/owner/remove-item.ts",
+    "owner:add-item-listing": "NODE_OPTIONS=\"--no-warnings\" ts-node-esm --transpile-only src/scripts/owner/add-item-listing.ts",
+    "owner:remove-item-listing": "NODE_OPTIONS=\"--no-warnings\" ts-node-esm --transpile-only src/scripts/owner/remove-item-listing.ts",
+    "owner:update-item-listing-stock": "NODE_OPTIONS=\"--no-warnings\" ts-node-esm --transpile-only src/scripts/owner/update-item-listing-stock.ts",
     "lint": "pnpm exec eslint ."
   },
   "dependencies": {
@@ -31,6 +32,7 @@
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-prettier": "^5.5.4",
     "eslint-plugin-unicorn": "^62.0.0",
+    "prettier": "^3.7.4",
     "ts-node": "^10.9.2",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.49.0"

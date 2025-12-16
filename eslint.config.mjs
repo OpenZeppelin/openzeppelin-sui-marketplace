@@ -17,16 +17,7 @@ export default typescriptEslint.config(
         { argsIgnorePattern: "^_", varsIgnorePattern: "^_" }
       ],
       "@typescript-eslint/consistent-type-imports": "error",
-      "prettier/prettier": [
-        "error",
-        {
-          trailingComma: "none",
-          tabWidth: 2,
-          semi: false,
-          singleQuote: false,
-          bracketSpacing: true
-        }
-      ]
+      "prettier/prettier": ["error"]
     }
   },
   {

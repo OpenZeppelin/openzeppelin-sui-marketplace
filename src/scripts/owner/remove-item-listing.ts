@@ -5,7 +5,10 @@ import yargs from "yargs"
 import { getLatestObjectFromArtifact } from "../../tooling/artifacts.ts"
 import { loadKeypair } from "../../tooling/keypair.ts"
 import { logKeyValueGreen } from "../../tooling/log.ts"
-import { getSuiSharedObject } from "../../tooling/object.ts"
+import {
+  getSuiSharedObject,
+  resolveItemListingIdForShop
+} from "../../tooling/object.ts"
 import { runSuiScript } from "../../tooling/process.ts"
 import { newTransaction, signAndExecute } from "../../tooling/transactions.ts"
 
@@ -21,13 +24,20 @@ runSuiScript(
     const inputs = await normalizeInputs(cliArguments, network.networkName)
     const suiClient = new SuiClient({ url: network.url })
     const signer = await loadKeypair(network.account)
+    const resolvedListing = await resolveItemListingIdForShop(
+      {
+        shopId: inputs.shopId,
+        candidateListingId: inputs.itemListingId
+      },
+      suiClient
+    )
     const shopSharedObject = await fetchMutableShop(inputs.shopId, suiClient)
 
     const removeItemTransaction = buildRemoveItemTransaction({
       packageId: inputs.packageId,
       shop: shopSharedObject,
       ownerCapId: inputs.ownerCapId,
-      itemListingId: inputs.itemListingId
+      itemListingId: resolvedListing.listingId
     })
 
     const transactionResult = await signAndExecute(
@@ -37,10 +47,14 @@ runSuiScript(
 
     const removedListingId = findRemovedListingId(
       transactionResult,
-      inputs.itemListingId
+      resolvedListing.listingId
     )
 
-    logRemovalResult(removedListingId, transactionResult.digest)
+    logRemovalResult({
+      removedListingId,
+      digest: transactionResult.digest,
+      fieldObjectId: resolvedListing.fieldObjectId
+    })
   },
   yargs()
     .option("itemListingId", {
@@ -171,7 +185,17 @@ const parseItemListingRemovedEvent = (
     undefined
   )
 
-const logRemovalResult = (removedListingId: string, digest?: string) => {
+const logRemovalResult = ({
+  removedListingId,
+  digest,
+  fieldObjectId
+}: {
+  removedListingId: string
+  digest?: string
+  fieldObjectId?: string
+}) => {
   logKeyValueGreen("removed")(removedListingId)
+  if (fieldObjectId && fieldObjectId !== removedListingId)
+    logKeyValueGreen("field id")(fieldObjectId)
   if (digest) logKeyValueGreen("digest")(digest)
 }
