@@ -5,10 +5,8 @@ import yargs from "yargs"
 import { getLatestObjectFromArtifact } from "../../tooling/artifacts.ts"
 import { loadKeypair } from "../../tooling/keypair.ts"
 import { logKeyValueGreen } from "../../tooling/log.ts"
-import {
-  getSuiSharedObject,
-  resolveItemListingIdForShop
-} from "../../tooling/object.ts"
+import type { ObjectArtifact } from "../../tooling/object.ts"
+import { getSuiSharedObject } from "../../tooling/object.ts"
 import { runSuiScript } from "../../tooling/process.ts"
 import { newTransaction, signAndExecute } from "../../tooling/transactions.ts"
 
@@ -24,37 +22,29 @@ runSuiScript(
     const inputs = await normalizeInputs(cliArguments, network.networkName)
     const suiClient = new SuiClient({ url: network.url })
     const signer = await loadKeypair(network.account)
-    const resolvedListing = await resolveItemListingIdForShop(
-      {
-        shopId: inputs.shopId,
-        candidateListingId: inputs.itemListingId
-      },
-      suiClient
-    )
-    const shopSharedObject = await fetchMutableShop(inputs.shopId, suiClient)
 
+    const shopSharedObject = await fetchMutableShop(inputs.shopId, suiClient)
     const removeItemTransaction = buildRemoveItemTransaction({
       packageId: inputs.packageId,
       shop: shopSharedObject,
       ownerCapId: inputs.ownerCapId,
-      itemListingId: resolvedListing.listingId
+      itemListingId: cliArguments.itemListingId
     })
 
-    const transactionResult = await signAndExecute(
-      { transaction: removeItemTransaction, signer },
+    const {
+      objectArtifacts: { deleted }
+    } = await signAndExecute(
+      {
+        transaction: removeItemTransaction,
+        signer,
+        networkName: network.networkName
+      },
       suiClient
     )
 
-    const removedListingId = findRemovedListingId(
-      transactionResult,
-      resolvedListing.listingId
-    )
+    console.log(deleted)
 
-    logRemovalResult({
-      removedListingId,
-      digest: transactionResult.digest,
-      fieldObjectId: resolvedListing.fieldObjectId
-    })
+    logRemovalResult(deleted[0])
   },
   yargs()
     .option("itemListingId", {
@@ -160,42 +150,8 @@ const buildRemoveItemTransaction = ({
   return transaction
 }
 
-const findRemovedListingId = (
-  transactionResult: Awaited<ReturnType<typeof signAndExecute>>,
-  fallbackItemListingId: string
-): string =>
-  parseItemListingRemovedEvent(transactionResult) ?? fallbackItemListingId
-
-const parseItemListingRemovedEvent = (
-  transactionResult: Awaited<ReturnType<typeof signAndExecute>>
-): string | undefined =>
-  (transactionResult.events ?? []).reduce<string | undefined>(
-    (foundListingId, event) => {
-      if (foundListingId) return foundListingId
-
-      const parsed = event.parsedJson as { item_listing_address?: string }
-
-      const matches =
-        typeof event.type === "string" &&
-        event.type.endsWith("::shop::ItemListingRemoved") &&
-        typeof parsed?.item_listing_address === "string"
-
-      return matches ? parsed.item_listing_address : undefined
-    },
-    undefined
-  )
-
-const logRemovalResult = ({
-  removedListingId,
-  digest,
-  fieldObjectId
-}: {
-  removedListingId: string
-  digest?: string
-  fieldObjectId?: string
-}) => {
-  logKeyValueGreen("removed")(removedListingId)
-  if (fieldObjectId && fieldObjectId !== removedListingId)
-    logKeyValueGreen("field id")(fieldObjectId)
-  if (digest) logKeyValueGreen("digest")(digest)
+const logRemovalResult = (deletedItemListing: ObjectArtifact) => {
+  logKeyValueGreen("removed")(deletedItemListing.objectId)
+  if (deletedItemListing.digest)
+    logKeyValueGreen("digest")(deletedItemListing.digest)
 }

@@ -1,33 +1,18 @@
-import type { SuiObjectChangeCreated } from "@mysten/sui/client"
 import { SuiClient } from "@mysten/sui/client"
 import { normalizeSuiObjectId } from "@mysten/sui/utils"
 import yargs from "yargs"
 
 import { parseUsdToCents } from "../../models/shop.ts"
-import {
-  getLatestObjectFromArtifact,
-  getObjectArtifactPath,
-  readArtifact,
-  writeObjectArtifact
-} from "../../tooling/artifacts.ts"
+import { getLatestObjectFromArtifact } from "../../tooling/artifacts.ts"
 import { loadKeypair } from "../../tooling/keypair.ts"
 import { logKeyValueGreen } from "../../tooling/log.ts"
+import type { ObjectArtifact } from "../../tooling/object.ts"
 import {
-  extractInitialSharedVersion,
-  getSuiDynamicFieldObject,
   getSuiSharedObject,
-  mapOwnerToArtifact,
-  normalizeOptionalId,
-  normalizeVersion,
-  type ObjectArtifact,
-  type ObjectArtifactPackageInfo
+  normalizeOptionalId
 } from "../../tooling/object.ts"
 import { runSuiScript } from "../../tooling/process.ts"
-import {
-  ensureCreatedObject,
-  newTransaction,
-  signAndExecute
-} from "../../tooling/transactions.ts"
+import { newTransaction, signAndExecute } from "../../tooling/transactions.ts"
 import { tryParseBigInt } from "../../utils/utility.ts"
 
 type AddItemArguments = {
@@ -64,30 +49,20 @@ runSuiScript(
       spotlightDiscountId: inputs.spotlightDiscountId
     })
 
-    const transactionResult = await signAndExecute(
-      { transaction: addItemTransaction, signer },
+    const {
+      objectArtifacts: {
+        created: [createdItemListing]
+      }
+    } = await signAndExecute(
+      {
+        transaction: addItemTransaction,
+        signer,
+        networkName: network.networkName
+      },
       suiClient
     )
 
-    const listingId = extractItemListingId(transactionResult)
-    const packageInfo = await resolvePackageInfo(
-      inputs.packageId,
-      inputs.publisherId,
-      signer.toSuiAddress(),
-      network.networkName
-    )
-    const listingObject = await getItemListing({
-      listingId,
-      shopId: inputs.shopId,
-      client: suiClient
-    })
-
-    //TODO transform this function to a withArtifact function that take any function that returns an object and save it in the artifacts (same with delete but adds a deleted: timestamp key)
-    await writeObjectArtifact(getObjectArtifactPath(network.networkName), [
-      buildItemListingArtifact(packageInfo, listingObject)
-    ])
-
-    logListingCreation(listingObject)
+    logListingCreation(createdItemListing)
   },
   yargs()
     .option("shopPackageId", {
@@ -256,134 +231,7 @@ const parsePositiveU64 = (rawValue: string, label: string): bigint => {
   return value
 }
 
-const extractItemListing = (
-  transactionResult: Awaited<ReturnType<typeof signAndExecute>>
-): SuiObjectChangeCreated =>
-  ensureCreatedObject("shop::ItemListing", transactionResult)
-
-const extractItemListingId = (
-  transactionResult: Awaited<ReturnType<typeof signAndExecute>>
-): string => {
-  try {
-    return extractItemListing(transactionResult).objectId
-  } catch {
-    const listingIdFromEvents = findListingIdInEvents(transactionResult)
-    if (listingIdFromEvents) return listingIdFromEvents
-    throw new Error(
-      "Transaction succeeded but ItemListing was not found; no ItemListingAdded event present."
-    )
-  }
-}
-
-const findListingIdInEvents = (
-  transactionResult: Awaited<ReturnType<typeof signAndExecute>>
-): string | undefined =>
-  (transactionResult.events ?? []).reduce<string | undefined>(
-    (found, event) => {
-      if (found) return found
-      const parsed = event.parsedJson as
-        | {
-            item_listing_address?: string
-          }
-        | undefined
-      const matches =
-        typeof event.type === "string" &&
-        event.type.endsWith("::shop::ItemListingAdded") &&
-        typeof parsed?.item_listing_address === "string"
-      return matches ? parsed.item_listing_address : undefined
-    },
-    undefined
-  )
-
-const getItemListing = async ({
-  listingId,
-  shopId,
-  client
-}: {
-  listingId: string
-  shopId: string
-  client: SuiClient
-}) => {
-  const dynamicFieldObject = await getSuiDynamicFieldObject(
-    {
-      childObjectId: listingId,
-      parentObjectId: shopId
-    },
-    client
-  )
-
-  return {
-    objectId: normalizeSuiObjectId(listingId),
-    objectType: dynamicFieldObject.object.type,
-    dynamicFieldId: dynamicFieldObject.dynamicFieldId,
-    owner: dynamicFieldObject.object.owner,
-    initialSharedVersion: extractInitialSharedVersion(
-      dynamicFieldObject.object
-    ),
-    version: dynamicFieldObject.object.version,
-    digest: dynamicFieldObject.object.digest
-  }
-}
-
-const resolvePackageInfo = async (
-  packageId: string,
-  publisherId: string | undefined,
-  signer: string,
-  networkName: string
-): Promise<ObjectArtifactPackageInfo> => {
-  const normalizedPackageId = normalizeSuiObjectId(packageId)
-  const normalizedPublisherId =
-    publisherId ??
-    (await resolvePublisherFromArtifacts(normalizedPackageId, networkName))
-
-  if (!normalizedPublisherId)
-    throw new Error(
-      "Unable to resolve publisherId. Provide --publisher-id or ensure objects artifact contains one."
-    )
-
-  return {
-    packageId: normalizedPackageId,
-    publisherId: normalizedPublisherId,
-    signer
-  }
-}
-
-const resolvePublisherFromArtifacts = async (
-  packageId: string,
-  networkName: string
-): Promise<string | undefined> => {
-  const objectArtifacts = await readArtifact<ObjectArtifact[]>(
-    getObjectArtifactPath(networkName),
-    []
-  )
-
-  const artifact = objectArtifacts.find(
-    (existing) => existing.packageId === packageId
-  )
-
-  return artifact?.publisherId
-    ? normalizeSuiObjectId(artifact.publisherId)
-    : undefined
-}
-
-const buildItemListingArtifact = (
-  packageInfo: ObjectArtifactPackageInfo,
-  listingObject: Awaited<ReturnType<typeof getItemListing>>
-): ObjectArtifact => ({
-  ...packageInfo,
-  objectId: listingObject.objectId,
-  objectType: listingObject.objectType || "MISSING",
-  dynamicFieldId: listingObject.dynamicFieldId,
-  objectName: "itemListing",
-  owner: mapOwnerToArtifact(listingObject.owner || undefined),
-  initialSharedVersion: normalizeVersion(listingObject.initialSharedVersion),
-  version: normalizeVersion(listingObject.version),
-  digest: listingObject.digest
-})
-
-const logListingCreation = (
-  listing: Awaited<ReturnType<typeof getItemListing>>
-) => {
-  logKeyValueGreen("item id")(listing.objectId)
-  if (listing.digest) logKeyValueGreen("digest")(listing.digest)
+const logListingCreation = (listing?: ObjectArtifact) => {
+  logKeyValueGreen("item id")(listing?.objectId)
+  if (listing?.digest) logKeyValueGreen("digest")(listing?.digest)
 }

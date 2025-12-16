@@ -178,7 +178,7 @@ runSuiScript(
         {
           coinPackageId,
           owner: signerAddress,
-
+          networkName: network.networkName,
           signer: keypair,
           coinRegistryObject
         },
@@ -198,6 +198,7 @@ runSuiScript(
         suiClient,
         signer: keypair,
         clockObject,
+        networkName: network.networkName,
         existingPriceFeeds: existingState.existingPriceFeeds || []
       }))
 
@@ -344,11 +345,13 @@ const ensureMockCoins = async (
   {
     coinPackageId,
     owner,
+    networkName,
     signer,
     coinRegistryObject
   }: {
     coinPackageId: string
     owner: string
+    networkName: string
     signer: Ed25519Keypair
     coinRegistryObject: WrappedSuiSharedObject
   },
@@ -361,6 +364,7 @@ const ensureMockCoins = async (
         {
           seed,
           owner,
+          networkName,
           signer,
           coinRegistryObject
         },
@@ -373,11 +377,13 @@ const ensureCoin = async (
   {
     seed,
     owner,
+    networkName,
     signer,
     coinRegistryObject
   }: {
     seed: CoinSeed
     owner: string
+    networkName: string
     signer: Ed25519Keypair
     coinRegistryObject: WrappedSuiSharedObject
   },
@@ -435,7 +441,8 @@ const ensureCoin = async (
       await signAndExecute(
         {
           transaction: initTransaction,
-          signer
+          signer,
+          networkName
         },
         suiClient
       ),
@@ -497,12 +504,14 @@ const ensurePriceFeeds = async ({
   pythPackageId,
   suiClient,
   signer,
+  networkName,
   existingPriceFeeds,
   clockObject
 }: {
   pythPackageId: string
   suiClient: SuiClient
   signer: Ed25519Keypair
+  networkName: string
   existingPriceFeeds: PriceFeedArtifact[]
   clockObject: WrappedSuiSharedObject
 }): Promise<PriceFeedArtifact[]> => {
@@ -533,6 +542,7 @@ const ensurePriceFeeds = async ({
       pythPackageId,
       suiClient,
       signer,
+      networkName,
       clockObject
     })
     feeds.push(createdFeed)
@@ -546,12 +556,14 @@ const publishPriceFeed = async ({
   pythPackageId,
   suiClient,
   signer,
+  networkName,
   clockObject
 }: {
   feedConfig: LabeledPriceFeedConfig
   pythPackageId: string
   suiClient: SuiClient
   signer: Ed25519Keypair
+  networkName: string
   clockObject: WrappedSuiSharedObject
 }): Promise<PriceFeedArtifact> => {
   const publishPriceFeedTransaction = newTransaction(DEFAULT_TX_GAS_BUDGET)
@@ -572,7 +584,8 @@ const publishPriceFeed = async ({
       await signAndExecute(
         {
           transaction: publishPriceFeedTransaction,
-          signer
+          signer,
+          networkName
         },
         suiClient
       ),

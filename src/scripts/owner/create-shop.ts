@@ -1,32 +1,12 @@
-import type { SuiObjectChangeCreated } from "@mysten/sui/client"
 import { SuiClient } from "@mysten/sui/client"
 import { normalizeSuiObjectId } from "@mysten/sui/utils"
 import yargs from "yargs"
 
-import {
-  getObjectArtifactPath,
-  writeObjectArtifact
-} from "../../tooling/artifacts.ts"
 import { loadKeypair } from "../../tooling/keypair.ts"
 import { logKeyValueGreen } from "../../tooling/log.ts"
-import type { ObjectArtifactPackageInfo } from "../../tooling/object.ts"
-import {
-  mapOwnerToArtifact,
-  normalizeVersion,
-  type ObjectArtifact
-} from "../../tooling/object.ts"
+import { type ObjectArtifact } from "../../tooling/object.ts"
 import { runSuiScript } from "../../tooling/process.ts"
-import {
-  ensureCreatedObject,
-  newTransaction,
-  signAndExecute
-} from "../../tooling/transactions.ts"
-
-type ShopCreation = {
-  shop: SuiObjectChangeCreated
-  shopOwnerCap: SuiObjectChangeCreated
-  digest?: string
-}
+import { newTransaction, signAndExecute } from "../../tooling/transactions.ts"
 
 runSuiScript(
   async ({ network }, { shopPackageId, publisherCapId }) => {
@@ -40,28 +20,20 @@ runSuiScript(
       arguments: [createShopTransaction.object(publisherCapId)]
     })
 
-    const shopCreationTransactionResult = await signAndExecute(
-      { transaction: createShopTransaction, signer },
+    const {
+      objectArtifacts: {
+        created: [createdShop, createdOwnerCap]
+      }
+    } = await signAndExecute(
+      {
+        transaction: createShopTransaction,
+        signer,
+        networkName: network.networkName
+      },
       suiClient
     )
 
-    const shopCreatedObjects = extractShopCreationObject(
-      shopCreationTransactionResult
-    )
-
-    const shopCreationArtifact = buildArtifactPayload({
-      packageId,
-      publisherId: publisherCapId,
-      createdObjects: shopCreatedObjects,
-      signer: signer.toSuiAddress()
-    })
-
-    await writeObjectArtifact(
-      getObjectArtifactPath(network.networkName),
-      shopCreationArtifact
-    )
-
-    logShopCreation(shopCreatedObjects)
+    logShopCreation({ createdShop, createdOwnerCap })
   },
   yargs()
     .option("shopPackageId", {
@@ -80,68 +52,14 @@ runSuiScript(
     .strict()
 )
 
-const extractShopCreationObject = (
-  transactionResult: Awaited<ReturnType<typeof signAndExecute>>
-): ShopCreation => ({
-  shop: ensureCreatedObject("shop::Shop", transactionResult),
-  shopOwnerCap: ensureCreatedObject("shop::ShopOwnerCap", transactionResult),
-  digest: transactionResult.digest || undefined
-})
-
-const buildArtifactPayload = ({
-  packageId,
-  publisherId,
-  createdObjects,
-  signer
+const logShopCreation = ({
+  createdOwnerCap,
+  createdShop
 }: {
-  packageId: string
-  publisherId: string
-  createdObjects: ShopCreation
-  signer: string
-}): ObjectArtifact[] => {
-  const packageInfo = {
-    packageId,
-    publisherId,
-    signer
-  }
-
-  return [
-    buildObjectArtifact({
-      objectName: "shop",
-      createdObject: createdObjects.shop,
-      packageInfo
-    }),
-    buildObjectArtifact({
-      objectName: "shopOwnerCap",
-      createdObject: createdObjects.shopOwnerCap,
-      packageInfo
-    })
-  ]
-}
-
-const buildObjectArtifact = ({
-  packageInfo: { packageId, publisherId, signer },
-  objectName,
-  createdObject
-}: {
-  packageInfo: ObjectArtifactPackageInfo
-  objectName: string
-  createdObject: SuiObjectChangeCreated
-}): ObjectArtifact => ({
-  packageId,
-  publisherId,
-  signer,
-  objectId: createdObject.objectId,
-  objectType: createdObject.objectType,
-  objectName,
-  owner: mapOwnerToArtifact(createdObject.owner),
-  initialSharedVersion: normalizeVersion(createdObject.version),
-  version: normalizeVersion(createdObject.version),
-  digest: createdObject.digest
-})
-
-const logShopCreation = (creation: ShopCreation) => {
-  logKeyValueGreen("shop")(creation.shop.objectId)
-  logKeyValueGreen("owner cap")(creation.shopOwnerCap.objectId)
-  if (creation.digest) logKeyValueGreen("digest")(creation.digest)
+  createdShop: ObjectArtifact
+  createdOwnerCap: ObjectArtifact
+}) => {
+  logKeyValueGreen("shop")(createdShop?.objectId)
+  logKeyValueGreen("owner cap")(createdOwnerCap.objectId)
+  if (createdShop?.digest) logKeyValueGreen("digest")(createdShop?.digest)
 }

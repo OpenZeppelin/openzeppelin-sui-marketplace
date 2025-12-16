@@ -1,8 +1,8 @@
+import { normalizeSuiObjectId } from "@mysten/sui/utils"
 import { mkdir, readFile, writeFile } from "node:fs/promises"
 import path, { dirname } from "node:path"
 import type { ObjectArtifact } from "./object.ts"
 import type { PublishArtifact } from "./types.ts"
-import { normalizeSuiObjectId } from "@mysten/sui/utils"
 
 export const ARTIFACTS_FILES = ["mock", "deployment", "objects"] as const
 export type ArtifactFile = (typeof ARTIFACTS_FILES)[number]
@@ -45,6 +45,29 @@ export const writeArtifact =
 
 export const writeDeploymentArtifact = writeArtifact<PublishArtifact[]>([])
 export const writeObjectArtifact = writeArtifact<ObjectArtifact[]>([])
+
+export const rewriteUpdatedArtifacts = async <TArtifact>({
+  objectArtifacts,
+  networkName
+}: {
+  objectArtifacts: TArtifact[]
+  networkName: string
+}): Promise<void> => {
+  const objectArtifactPath = getObjectArtifactPath(networkName)
+
+  try {
+    await writeFile(
+      objectArtifactPath,
+      JSON.stringify(objectArtifacts, null, 2)
+    )
+  } catch (error) {
+    throw new Error(
+      `Failed to persist updated object artifacts at ${objectArtifactPath}: ${
+        error instanceof Error ? error.message : String(error)
+      }`
+    )
+  }
+}
 
 /**
  * Reads a JSON artifact from disk, optionally creating it with defaults when missing.

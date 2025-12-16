@@ -2,10 +2,28 @@ import type { SuiObjectChange } from "@mysten/sui/client"
 import {
   type SuiClient,
   type SuiObjectChangeCreated,
+  type SuiObjectData,
   type SuiTransactionBlockResponse
 } from "@mysten/sui/client"
 import type { Ed25519Keypair } from "@mysten/sui/keypairs/ed25519"
 import { Transaction } from "@mysten/sui/transactions"
+import { normalizeSuiObjectId } from "@mysten/sui/utils"
+import {
+  getObjectArtifactPath,
+  loadObjectArtifacts,
+  rewriteUpdatedArtifacts,
+  writeObjectArtifact
+} from "./artifacts.ts"
+import type { ObjectArtifact } from "./object.ts"
+import {
+  deriveRelevantPackageId,
+  extractInitialSharedVersion,
+  getObjectIdFromDynamicFieldObject,
+  getSuiObject,
+  isDynamicFieldObject,
+  mapOwnerToArtifact,
+  normalizeVersion
+} from "./object.ts"
 
 type ExecuteParams = {
   transaction: Transaction
@@ -13,6 +31,7 @@ type ExecuteParams = {
   requestType?: "WaitForEffectsCert" | "WaitForLocalExecution"
   retryOnGasStale?: boolean
   assertSuccess?: boolean
+  networkName: string
 }
 
 /**
@@ -73,14 +92,16 @@ type ExecuteOnceArgs = {
   suiClient: SuiClient
   requestType: ExecuteParams["requestType"]
   assertSuccess: boolean
+  networkName: string
 }
 
-const executeTransactionOnce = async ({
+export const executeTransactionOnce = async ({
   transaction,
   signer,
   suiClient,
   requestType,
-  assertSuccess
+  assertSuccess,
+  networkName
 }: ExecuteOnceArgs) => {
   const transactionResult = await suiClient.signAndExecuteTransaction({
     transaction,
@@ -95,7 +116,17 @@ const executeTransactionOnce = async ({
 
   if (assertSuccess) assertTransactionSuccess(transactionResult)
 
-  return transactionResult
+  const objectArtifacts = await persistObjectsIfAny({
+    transactionResult,
+    suiClient,
+    signerAddress: signer.toSuiAddress(),
+    networkName
+  })
+
+  return {
+    transactionResult,
+    objectArtifacts
+  }
 }
 
 type RetryDecision = {
@@ -113,8 +144,7 @@ const decideRetryForGasIssues = (
 
   const staleObjectId = parseStaleObjectId(error)
   const lockedObjectIds = parseLockedObjectIds(error)
-  const encounteredGasIssue =
-    Boolean(staleObjectId) || lockedObjectIds.size > 0
+  const encounteredGasIssue = Boolean(staleObjectId) || lockedObjectIds.size > 0
 
   return {
     shouldRetry: encounteredGasIssue,
@@ -136,10 +166,14 @@ export const signAndExecute = async (
     signer,
     requestType = "WaitForLocalExecution",
     retryOnGasStale = true,
-    assertSuccess = true
+    assertSuccess = true,
+    networkName
   }: ExecuteParams,
   suiClient: SuiClient
-): Promise<SuiTransactionBlockResponse> => {
+): Promise<{
+  transactionResult: SuiTransactionBlockResponse
+  objectArtifacts: PersistedObjectArtifacts
+}> => {
   const signerAddress = signer.toSuiAddress()
   const maximumAttempts = retryOnGasStale ? 2 : 1
 
@@ -153,7 +187,8 @@ export const signAndExecute = async (
         signer,
         suiClient,
         requestType,
-        assertSuccess
+        assertSuccess,
+        networkName
       })
     } catch (error) {
       const { shouldRetry, lockedObjectIds } = decideRetryForGasIssues(
@@ -253,12 +288,256 @@ export const findCreatedObjectBySuffix = (
 
 export const ensureCreatedObject = (
   objectToFind: string,
-  transactionResult: Awaited<ReturnType<typeof signAndExecute>>
+  transactionResult: Awaited<
+    ReturnType<typeof signAndExecute>
+  >["transactionResult"]
 ): SuiObjectChangeCreated =>
   assertCreatedObject(
     findCreatedObjectBySuffix(transactionResult, objectToFind),
     objectToFind
   )
+
+type ObjectChangeDeleted = Extract<
+  NonNullable<SuiTransactionBlockResponse["objectChanges"]>[number],
+  { type: "deleted" }
+>
+
+type ObjectChangesByType = {
+  created: SuiObjectChangeCreated[]
+  deleted: ObjectChangeDeleted[]
+}
+
+type CreatedObjectWithData = {
+  change: SuiObjectChangeCreated
+  object: SuiObjectData
+}
+
+type PersistedObjectArtifacts = {
+  created: ObjectArtifact[]
+  deleted: ObjectArtifact[]
+}
+
+const persistObjectsIfAny = async ({
+  transactionResult,
+  suiClient,
+  signerAddress,
+  networkName
+}: {
+  transactionResult: SuiTransactionBlockResponse
+  suiClient: SuiClient
+  signerAddress: string
+  networkName: string
+}): Promise<PersistedObjectArtifacts> => {
+  const { created, deleted } = groupObjectChanges(
+    transactionResult.objectChanges
+  )
+
+  const objectCreatedArtifacts = await persistCreatedArtifacts(
+    {
+      createdChanges: created,
+      signerAddress,
+      networkName
+    },
+    suiClient
+  )
+
+  const deletedArtifacts = await persistDeletedArtifacts({
+    deletedChanges: deleted,
+    networkName
+  })
+
+  return {
+    created: objectCreatedArtifacts,
+    deleted: deletedArtifacts
+  }
+}
+
+const persistCreatedArtifacts = async (
+  {
+    createdChanges,
+    signerAddress,
+    networkName
+  }: {
+    createdChanges: SuiObjectChangeCreated[]
+    signerAddress: string
+    networkName: string
+  },
+  suiClient: SuiClient
+): Promise<ObjectArtifact[]> => {
+  if (!createdChanges.length) return []
+
+  const createdObjectsWithData = await fetchCreatedObjectsWithData(
+    createdChanges,
+    suiClient
+  )
+
+  const objectCreatedArtifacts = buildArtifactsForCreatedObjects({
+    createdObjectsWithData,
+    signerAddress
+  })
+
+  if (objectCreatedArtifacts.length)
+    await writeObjectArtifact(
+      getObjectArtifactPath(networkName),
+      objectCreatedArtifacts
+    )
+
+  return objectCreatedArtifacts
+}
+
+const isNewlyDeletedArtifact =
+  (deletedObjectIds: Set<string>) => (artifact: ObjectArtifact) => {
+    const objectId = isDynamicFieldObject(artifact.objectType)
+      ? normalizeObjectIdSafe(artifact.dynamicFieldId)
+      : normalizeObjectIdSafe(artifact.objectId)
+
+    return objectId && deletedObjectIds.has(objectId)
+  }
+
+const persistDeletedArtifacts = async ({
+  deletedChanges,
+  networkName
+}: {
+  deletedChanges: ObjectChangeDeleted[]
+  networkName: string
+}): Promise<ObjectArtifact[]> => {
+  if (!deletedChanges.length) return []
+
+  const deletedObjectIds = buildDeletedObjectIdSet(deletedChanges)
+
+  const currentObjectArtifacts = await loadObjectArtifacts(networkName)
+
+  const updatedObjectArtifacts = currentObjectArtifacts.map((artifact) =>
+    isNewlyDeletedArtifact(deletedObjectIds)(artifact)
+      ? {
+          ...artifact,
+          deletedAt: new Date().toISOString()
+        }
+      : artifact
+  )
+
+  const deletedArtifacts = currentObjectArtifacts.filter(
+    isNewlyDeletedArtifact(deletedObjectIds)
+  )
+
+  if (!deletedArtifacts.length) return []
+
+  await rewriteUpdatedArtifacts({
+    objectArtifacts: updatedObjectArtifacts,
+    networkName
+  })
+
+  return deletedArtifacts
+}
+
+const groupObjectChanges = (
+  objectChanges: SuiTransactionBlockResponse["objectChanges"]
+): ObjectChangesByType => ({
+  created: (objectChanges || []).filter(
+    (change): change is SuiObjectChangeCreated => change.type === "created"
+  ),
+  deleted: (objectChanges || []).filter(
+    (change): change is ObjectChangeDeleted => change.type === "deleted"
+  )
+})
+
+const normalizeObjectIdSafe = (
+  candidate?: string | null
+): string | undefined =>
+  candidate
+    ? (() => {
+        try {
+          return normalizeSuiObjectId(candidate)
+        } catch {
+          return undefined
+        }
+      })()
+    : undefined
+
+const buildDeletedObjectIdSet = (
+  deletedChanges: ObjectChangeDeleted[]
+): Set<string> =>
+  deletedChanges.reduce<Set<string>>((deletedIds, change) => {
+    const normalizedObjectId = normalizeObjectIdSafe(change.objectId)
+    if (normalizedObjectId) deletedIds.add(normalizedObjectId)
+    return deletedIds
+  }, new Set())
+
+const fetchCreatedObjectsWithData = async (
+  createdChanges: SuiObjectChangeCreated[],
+  suiClient: SuiClient
+): Promise<CreatedObjectWithData[]> =>
+  Promise.all(
+    createdChanges.map(async (change) => {
+      const { object } = await getSuiObject(
+        {
+          objectId: change.objectId
+        },
+        suiClient
+      )
+
+      return {
+        change,
+        object
+      }
+    })
+  )
+
+const buildArtifactsForCreatedObjects = ({
+  createdObjectsWithData,
+  signerAddress
+}: {
+  createdObjectsWithData: CreatedObjectWithData[]
+  signerAddress: string
+}): ObjectArtifact[] => {
+  const objectArtifacts: ObjectArtifact[] = []
+
+  for (const createdObject of createdObjectsWithData) {
+    const artifact = buildObjectArtifactFromCreatedObject({
+      createdObject,
+      signerAddress
+    })
+
+    if (artifact) objectArtifacts.push(artifact)
+  }
+
+  return objectArtifacts
+}
+
+const buildObjectArtifactFromCreatedObject = ({
+  createdObject,
+  signerAddress
+}: {
+  createdObject: CreatedObjectWithData
+  signerAddress: string
+}): ObjectArtifact | undefined => {
+  const objectType =
+    createdObject.object.type || createdObject.change.objectType || ""
+  const packageId = deriveRelevantPackageId(objectType)
+
+  const objectId =
+    (isDynamicFieldObject(createdObject.object.type || undefined)
+      ? getObjectIdFromDynamicFieldObject(createdObject.object)
+      : createdObject.object.objectId) || createdObject.object.objectId
+
+  const initialSharedVersion =
+    extractInitialSharedVersion(createdObject.object) ??
+    normalizeVersion(createdObject.change.version)
+
+  return {
+    packageId,
+    signer: signerAddress,
+    objectId: normalizeSuiObjectId(objectId),
+    objectType,
+    owner: mapOwnerToArtifact(createdObject.object.owner || undefined),
+    dynamicFieldId: isDynamicFieldObject(createdObject.object.type || undefined)
+      ? normalizeSuiObjectId(createdObject.object.objectId)
+      : undefined,
+    initialSharedVersion,
+    version: normalizeVersion(createdObject.object.version),
+    digest: createdObject.change.digest
+  }
+}
 
 const pickFreshGasCoin = async (
   owner: string,

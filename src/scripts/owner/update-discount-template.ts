@@ -4,49 +4,45 @@ import yargs from "yargs"
 
 import {
   defaultStartTimestampSeconds,
+  describeRuleKind,
   discountRuleChoices,
   parseDiscountRuleKind,
   parseDiscountRuleValue,
+  validateDiscountSchedule,
   type DiscountRuleKindLabel,
-  type NormalizedRuleKind,
-  validateDiscountSchedule
+  type NormalizedRuleKind
 } from "../../models/discount.ts"
+import { SUI_CLOCK_ID } from "../../models/pyth.ts"
 import { getLatestObjectFromArtifact } from "../../tooling/artifacts.ts"
 import { loadKeypair } from "../../tooling/keypair.ts"
 import { logKeyValueGreen } from "../../tooling/log.ts"
-import type { ObjectArtifact } from "../../tooling/object.ts"
-import {
-  getSuiSharedObject,
-  normalizeOptionalId
-} from "../../tooling/object.ts"
+import { getSuiSharedObject } from "../../tooling/object.ts"
 import { runSuiScript } from "../../tooling/process.ts"
 import { newTransaction, signAndExecute } from "../../tooling/transactions.ts"
 import { parseNonNegativeU64, parseOptionalU64 } from "../../utils/utility.ts"
 
-type CreateDiscountTemplateArguments = {
+type UpdateDiscountTemplateArguments = {
   shopPackageId?: string
   shopId?: string
   ownerCapId?: string
-  listingId?: string
+  discountTemplateId: string
   ruleKind: DiscountRuleKindLabel
   value: string
   startsAt?: string
   expiresAt?: string
   maxRedemptions?: string
-  publisherId?: string
 }
 
 type NormalizedInputs = {
   packageId: string
   shopId: string
   ownerCapId: string
-  appliesToListingId?: string
+  discountTemplateId: string
   ruleKind: NormalizedRuleKind
   ruleValue: bigint
   startsAt: bigint
   expiresAt?: bigint
   maxRedemptions?: bigint
-  publisherId?: string
 }
 
 runSuiScript(
@@ -60,11 +56,11 @@ runSuiScript(
       suiClient
     )
 
-    const createDiscountTemplateTransaction =
-      buildCreateDiscountTemplateTransaction({
+    const updateDiscountTemplateTransaction =
+      buildUpdateDiscountTemplateTransaction({
         packageId: inputs.packageId,
         shop: shopSharedObject,
-        appliesToListingId: inputs.appliesToListingId,
+        discountTemplateId: inputs.discountTemplateId,
         ruleKind: inputs.ruleKind,
         ruleValue: inputs.ruleValue,
         startsAt: inputs.startsAt,
@@ -73,25 +69,32 @@ runSuiScript(
         ownerCapId: inputs.ownerCapId
       })
 
-    const {
-      objectArtifacts: {
-        created: [createdDiscountTemplate]
-      }
-    } = await signAndExecute(
+    const { transactionResult } = await signAndExecute(
       {
-        transaction: createDiscountTemplateTransaction,
+        transaction: updateDiscountTemplateTransaction,
         signer,
         networkName: network.networkName
       },
       suiClient
     )
 
-    logDiscountTemplateCreation({
-      applyToListingId: cliArguments.listingId,
-      createdDiscountTemplate
+    logDiscountTemplateUpdate({
+      discountTemplateId: inputs.discountTemplateId,
+      ruleKind: inputs.ruleKind,
+      ruleValue: inputs.ruleValue,
+      startsAt: inputs.startsAt,
+      expiresAt: inputs.expiresAt,
+      maxRedemptions: inputs.maxRedemptions,
+      digest: transactionResult.digest
     })
   },
   yargs()
+    .option("discountTemplateId", {
+      alias: ["discount-template-id", "template-id"],
+      type: "string",
+      description: "DiscountTemplate object ID to update.",
+      demandOption: true
+    })
     .option("ruleKind", {
       alias: ["rule", "rule-kind"],
       choices: discountRuleChoices,
@@ -125,12 +128,6 @@ runSuiScript(
       description:
         "Optional global redemption cap. Omit for unlimited redemptions."
     })
-    .option("listingId", {
-      alias: ["listing-id", "applies-to"],
-      type: "string",
-      description:
-        "Optional ItemListing object ID to pin this template to a single SKU."
-    })
     .option("shopPackageId", {
       alias: "shop-package-id",
       type: "string",
@@ -147,19 +144,13 @@ runSuiScript(
       alias: ["owner-cap-id", "owner-cap"],
       type: "string",
       description:
-        "ShopOwnerCap object ID that authorizes template creation; defaults to the latest artifact when omitted."
-    })
-    .option("publisherId", {
-      alias: "publisher-id",
-      type: "string",
-      description:
-        "Optional Publisher object ID for artifact metadata; resolved from existing artifacts when omitted."
+        "ShopOwnerCap object ID that authorizes updating the discount template; defaults to the latest artifact when omitted."
     })
     .strict()
 )
 
 const normalizeInputs = async (
-  cliArguments: CreateDiscountTemplateArguments,
+  cliArguments: UpdateDiscountTemplateArguments,
   networkName: string
 ): Promise<NormalizedInputs> => {
   const shopArtifact = await getLatestObjectFromArtifact(
@@ -202,7 +193,7 @@ const normalizeInputs = async (
     packageId: normalizeSuiObjectId(packageId),
     shopId: normalizeSuiObjectId(shopId),
     ownerCapId: normalizeSuiObjectId(ownerCapId),
-    appliesToListingId: normalizeOptionalId(cliArguments.listingId),
+    discountTemplateId: normalizeSuiObjectId(cliArguments.discountTemplateId),
     ruleKind,
     ruleValue: parseDiscountRuleValue(ruleKind, cliArguments.value),
     startsAt,
@@ -210,17 +201,14 @@ const normalizeInputs = async (
     maxRedemptions: parseOptionalU64(
       cliArguments.maxRedemptions,
       "maxRedemptions"
-    ),
-    publisherId: cliArguments.publisherId
-      ? normalizeSuiObjectId(cliArguments.publisherId)
-      : undefined
+    )
   }
 }
 
-const buildCreateDiscountTemplateTransaction = ({
+const buildUpdateDiscountTemplateTransaction = ({
   packageId,
   shop,
-  appliesToListingId,
+  discountTemplateId,
   ruleKind,
   ruleValue,
   startsAt,
@@ -230,7 +218,7 @@ const buildCreateDiscountTemplateTransaction = ({
 }: {
   packageId: string
   shop: Awaited<ReturnType<typeof getSuiSharedObject>>
-  appliesToListingId?: string
+  discountTemplateId: string
   ruleKind: NormalizedRuleKind
   ruleValue: bigint
   startsAt: bigint
@@ -242,31 +230,57 @@ const buildCreateDiscountTemplateTransaction = ({
   const shopArgument = transaction.sharedObjectRef(shop.sharedRef)
 
   transaction.moveCall({
-    target: `${packageId}::shop::create_discount_template`,
+    target: `${packageId}::shop::update_discount_template`,
     arguments: [
       shopArgument,
-      transaction.pure.option("address", appliesToListingId ?? null),
+      transaction.pure.id(discountTemplateId),
       transaction.pure.u8(ruleKind),
       transaction.pure.u64(ruleValue),
       transaction.pure.u64(startsAt),
       transaction.pure.option("u64", expiresAt ?? null),
       transaction.pure.option("u64", maxRedemptions ?? null),
-      transaction.object(ownerCapId)
+      transaction.object(ownerCapId),
+      transaction.object(SUI_CLOCK_ID)
     ]
   })
 
   return transaction
 }
 
-const logDiscountTemplateCreation = ({
-  createdDiscountTemplate,
-  applyToListingId
+const logDiscountTemplateUpdate = ({
+  discountTemplateId,
+  ruleKind,
+  ruleValue,
+  startsAt,
+  expiresAt,
+  maxRedemptions,
+  digest
 }: {
-  createdDiscountTemplate: ObjectArtifact
-  applyToListingId?: string
+  discountTemplateId: string
+  ruleKind: NormalizedRuleKind
+  ruleValue: bigint
+  startsAt: bigint
+  expiresAt?: bigint
+  maxRedemptions?: bigint
+  digest?: string
 }) => {
-  logKeyValueGreen("discount template")(createdDiscountTemplate.objectId)
-  if (applyToListingId) logKeyValueGreen("applies to listing")(applyToListingId)
-  if (createdDiscountTemplate.digest)
-    logKeyValueGreen("digest")(createdDiscountTemplate.digest)
+  logKeyValueGreen("discount template")(discountTemplateId)
+  logKeyValueGreen("rule kind")(describeRuleKind(ruleKind))
+  logKeyValueGreen("rule value")(formatRuleValue(ruleKind, ruleValue))
+  logKeyValueGreen("starts at")(startsAt.toString())
+  if (expiresAt !== undefined)
+    logKeyValueGreen("expires at")(expiresAt.toString())
+  if (maxRedemptions !== undefined)
+    logKeyValueGreen("max redemptions")(maxRedemptions.toString())
+  if (digest) logKeyValueGreen("digest")(digest)
+}
+
+const formatRuleValue = (
+  ruleKind: NormalizedRuleKind,
+  ruleValue: bigint
+): string => {
+  if (ruleKind === 0) return `${ruleValue.toString()} cents`
+
+  const percentage = Number(ruleValue) / 100
+  return `${percentage.toFixed(2)}%`
 }

@@ -11,7 +11,7 @@ import {
   loadSuiConfig,
   type SuiResolvedConfig
 } from "./config.ts"
-import { logError, logKeyValueBlue, logSimpleBlue } from "./log.ts"
+import { logEachBlue, logError, logKeyValueBlue, logSimpleBlue } from "./log.ts"
 import { ensureSuiCli } from "./suiCli.ts"
 
 export type CommonCliArgs = {
@@ -75,6 +75,7 @@ export const runSuiScript = <TCliArgument>(
       logSimpleBlue("Starting script 🤖")
       logKeyValueBlue("Script")(scriptName)
       logKeyValueBlue("Network")(networkToLoad)
+      logEachBlue(cliArguments || {})
       console.log("\n")
 
       await scriptToExecute(

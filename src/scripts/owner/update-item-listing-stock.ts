@@ -44,17 +44,18 @@ runSuiScript(
       newStock: inputs.newStock
     })
 
-    const transactionResult = await signAndExecute(
-      { transaction: updateStockTransaction, signer },
+    const { transactionResult } = await signAndExecute(
+      {
+        transaction: updateStockTransaction,
+        signer,
+        networkName: network.networkName
+      },
       suiClient
     )
 
-    const updatedStock =
-      parseUpdatedStockEvent(transactionResult) || inputs.newStock
-
     logStockUpdate({
       itemListingId: inputs.itemListingId,
-      newStock: updatedStock,
+      newStock: inputs.newStock,
       digest: transactionResult.digest
     })
   },
@@ -162,26 +163,6 @@ const buildUpdateStockTransaction = ({
 
   return transaction
 }
-
-const parseUpdatedStockEvent = (
-  transactionResult: Awaited<ReturnType<typeof signAndExecute>>
-): bigint | undefined =>
-  (transactionResult.events ?? []).reduce<bigint | undefined>(
-    (latestValue, event) => {
-      if (latestValue !== undefined) return latestValue
-      const parsed = event.parsedJson as
-        | { new_stock?: string | number }
-        | undefined
-      const matches =
-        typeof event.type === "string" &&
-        event.type.endsWith("::shop::ItemListingStockUpdated") &&
-        (typeof parsed?.new_stock === "string" ||
-          typeof parsed?.new_stock === "number")
-
-      return matches ? BigInt(parsed?.new_stock ?? 0) : undefined
-    },
-    undefined
-  )
 
 const logStockUpdate = ({
   itemListingId,

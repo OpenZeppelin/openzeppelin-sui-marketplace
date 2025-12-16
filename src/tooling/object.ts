@@ -20,19 +20,18 @@ export type ObjectOwnerArtifact =
 
 export type ObjectArtifactPackageInfo = {
   packageId: string
-  publisherId: string
   signer: string
 }
 
 export type ObjectArtifactObjectInfo = {
   objectId: string
   objectType: string
-  objectName?: string
   owner?: ObjectOwnerArtifact
   dynamicFieldId?: string
   initialSharedVersion?: string
   version?: string
   digest?: string
+  deletedAt?: string
 }
 
 export type ObjectArtifact = ObjectArtifactPackageInfo &
@@ -151,7 +150,7 @@ export const extractInitialSharedVersion = (
 export const getSuiObject = async (
   {
     objectId,
-    options = { showOwner: true }
+    options = { showOwner: true, showContent: true, showType: true }
   }: { objectId: string; options?: SuiObjectDataOptions },
   suiClient: SuiClient
 ): Promise<{
@@ -226,6 +225,19 @@ export const getSuiSharedObject = async (
   }
 }
 
+export const getObjectIdFromDynamicFieldObject = ({
+  content
+}: SuiObjectData): string | undefined =>
+  //@ts-expect-error the fields will be there for object (not for package)
+  content?.fields?.value.fields.id.id
+
+export const isDynamicFieldObject = (objectType?: string) =>
+  objectType?.includes("0x2::dynamic_field")
+
+export const dynamicFieldObjectNormalization = (suiObject: SuiObjectData) => ({
+  ...suiObject
+})
+
 export const getSuiDynamicFieldObject = async (
   {
     childObjectId,
@@ -255,4 +267,14 @@ export const getSuiDynamicFieldObject = async (
     dynamicFieldId: dynamicFieldObject.objectId,
     error: error || undefined
   }
+}
+
+export const deriveRelevantPackageId = (objectType: string): string => {
+  const packageIdMatches = objectType.match(/0x[0-9a-fA-F]{64}/g)
+  const packageIdCandidate =
+    packageIdMatches && packageIdMatches.length > 0
+      ? packageIdMatches[packageIdMatches.length - 1]
+      : objectType.split("::")[0]
+
+  return normalizeSuiObjectId(packageIdCandidate)
 }
