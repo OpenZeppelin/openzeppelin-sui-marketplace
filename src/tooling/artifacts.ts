@@ -84,3 +84,14 @@ export const getObjectArtifactPath = getArtifactPath("objects")
 
 export const loadDeploymentArtifacts = (networkName: string) =>
   readArtifact<PublishArtifact[]>(getDeploymentArtifactPath(networkName), [])
+
+export const loadObjectArtifacts = (networkName: string) =>
+  readArtifact<ObjectArtifact[]>(getObjectArtifactPath(networkName), [])
+
+export const getLatestObjectFromArtifact = async (
+  objectTypeSuffix: string,
+  networkName: string
+): Promise<ObjectArtifact | undefined> =>
+  (await loadObjectArtifacts(networkName)).find((artifact) =>
+    artifact.objectType?.endsWith(objectTypeSuffix)
+  )
