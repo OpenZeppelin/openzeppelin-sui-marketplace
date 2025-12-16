@@ -79,8 +79,7 @@ runSuiScript(
     const listingObject = await fetchItemListing({
       listingId,
       shopId: inputs.shopId,
-      client: suiClient,
-      packageId: inputs.packageId
+      client: suiClient
     })
 
     await writeObjectArtifact(getObjectArtifactPath(network.networkName), [

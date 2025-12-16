@@ -62,7 +62,8 @@ runSuiScript(
     .option("itemListingId", {
       alias: ["item-listing-id", "item-id", "listing-id"],
       type: "string",
-      description: "ItemListing object ID to update (object ID, not a type tag).",
+      description:
+        "ItemListing object ID to update (object ID, not a type tag).",
       demandOption: true
     })
     .option("stock", {

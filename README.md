@@ -31,7 +31,7 @@ If you hit errors, keep reading—every step is explained in detail with trouble
 - **Sui CLI** on your `PATH` (see Sui install docs: https://docs.sui.io/build/install).
 - **Rust toolchain** (via `rustup`) if you need to build Sui locally.
 - **Git** for cloning and managing patches.
-- A machine that can run a local Sui fullnode and faucet (CPU/RAM similar to a local dev Ethereum node).
+- A machine that can run a local Sui full node and faucet (CPU/RAM similar to a local dev Ethereum node).
 
 > Why Sui CLI? Publishing and object inspection rely on the CLI, and `sui start` bootstraps the localnet.
 

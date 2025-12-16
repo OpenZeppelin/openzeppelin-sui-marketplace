@@ -22,10 +22,6 @@ import {
 import { getSuiObject } from "../../tooling/object.ts"
 import { runSuiScript } from "../../tooling/process.ts"
 
-type GetObjectInfoCliArgs = {
-  objectId: string
-}
-
 type ObjectInformation = {
   objectId: string
   objectType?: string

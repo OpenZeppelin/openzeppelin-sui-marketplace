@@ -56,8 +56,8 @@ export const mergeDeepObjects = <
       leftHasKey && rightHasKey
         ? mergeValuesAtPath(leftValue, rightValue)
         : leftHasKey
-        ? leftValue
-        : rightValue
+          ? leftValue
+          : rightValue
 
     return [...entries, [key, mergedValue]]
   }, [])

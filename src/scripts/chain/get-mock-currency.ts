@@ -549,10 +549,10 @@ const resolveSupplyState = async ({
   const kind: CurrencyState["supplyKind"] = viewValues.supplyBurnOnly
     ? "burn-only"
     : viewValues.supplyFixed
-    ? "fixed"
-    : viewValues.treasuryCapId
-    ? "mintable"
-    : "unknown"
+      ? "fixed"
+      : viewValues.treasuryCapId
+        ? "mintable"
+        : "unknown"
 
   const total =
     viewValues.totalSupply ??
@@ -634,8 +634,8 @@ const mapViewToState = ({
   const metadataCapStatus = viewValues.metadataCapDeleted
     ? "deleted"
     : viewValues.metadataCapClaimed
-    ? "claimed"
-    : "unclaimed"
+      ? "claimed"
+      : "unclaimed"
 
   return {
     coinType: coinInput.coinType,

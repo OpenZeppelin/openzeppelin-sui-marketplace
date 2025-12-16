@@ -1,4 +1,4 @@
-import type { ObjectOwner, SuiObjectChange } from "@mysten/sui/client"
+import type { SuiObjectChange } from "@mysten/sui/client"
 import {
   type SuiClient,
   type SuiObjectChangeCreated,
@@ -13,16 +13,6 @@ type ExecuteParams = {
   requestType?: "WaitForEffectsCert" | "WaitForLocalExecution"
   retryOnGasStale?: boolean
   assertSuccess?: boolean
-}
-
-type SuiObjectCreated = {
-  digest: string
-  objectId: string
-  objectType: string
-  owner: ObjectOwner
-  sender: string
-  type: "created"
-  version: string
 }
 
 /**
@@ -237,8 +227,8 @@ const parseStaleObjectId = (error: unknown): string | undefined => {
     error instanceof Error
       ? error.message
       : typeof error === "string"
-      ? error
-      : ""
+        ? error
+        : ""
   const match = message.match(/Object ID (\S+)/)
   return match?.[1]
 }
@@ -248,8 +238,8 @@ const parseLockedObjectIds = (error: unknown): Set<string> => {
     error instanceof Error
       ? error.message
       : typeof error === "string"
-      ? error
-      : ""
+        ? error
+        : ""
 
   const lockedIds = new Set<string>()
   for (const line of message.split("\n")) {

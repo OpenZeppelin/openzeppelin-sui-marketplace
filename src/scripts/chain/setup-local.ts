@@ -167,7 +167,7 @@ runSuiScript(
       suiClient
     )
 
-    // Fetch shared Coin Registry and Clock objects; required for minting coins and timestamping price feeds.
+    // Fetch shared Coin Registry and Clock objects; required for minting coins and timestamp price feeds.
     const { coinRegistryObject, clockObject } =
       await resolveRegistryAndClockRefs(suiClient)
 

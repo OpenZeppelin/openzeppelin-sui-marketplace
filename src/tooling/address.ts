@@ -418,8 +418,8 @@ const isNoGasError = (error: unknown) => {
     error instanceof Error
       ? error.message
       : typeof error === "string"
-      ? error
-      : ""
+        ? error
+        : ""
   return message.includes("No usable SUI coins available for gas")
 }
 
@@ -428,8 +428,8 @@ const isInsufficientGasError = (error: unknown) => {
     error instanceof Error
       ? error.message
       : typeof error === "string"
-      ? error
-      : ""
+        ? error
+        : ""
   return /insufficient\s*gas/i.test(message)
 }
 

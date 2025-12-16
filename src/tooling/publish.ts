@@ -313,7 +313,7 @@ const buildPublishPlan = async ({
 
   const buildFlags = buildMoveBuildFlags({
     useDevBuild,
-    includeUnpublishedDeps: shouldUseUnpublishedDependencies,
+    includeUnpublishedDeps: Boolean(shouldUseUnpublishedDependencies),
     ignoreChain: shouldIgnoreChain(network.networkName, {
       allowAutoUnpublishedDependencies,
       useDevBuild
@@ -331,7 +331,7 @@ const buildPublishPlan = async ({
     keypair,
     gasBudget,
     useDevBuild,
-    shouldUseUnpublishedDependencies,
+    shouldUseUnpublishedDependencies: Boolean(shouldUseUnpublishedDependencies),
     unpublishedDependencies,
     buildFlags,
     dependencyAddressesFromLock: await readDependencyAddresses(packagePath),
@@ -420,7 +420,8 @@ const logPublishSuccess = (artifacts: PublishArtifact[]) => {
     logKeyValueGreen("package")(label)
     logKeyValueGreen("packageId")(artifact.packageId)
     if (artifact.upgradeCap) logKeyValueGreen("upgradeCap")(artifact.upgradeCap)
-    if (artifact.publisherId) logKeyValueGreen("publisher")(artifact.publisherId)
+    if (artifact.publisherId)
+      logKeyValueGreen("publisher")(artifact.publisherId)
   })
 
   if (artifacts[0]) {
@@ -487,12 +488,12 @@ const publishViaCli = async (plan: PublishPlan): Promise<PublishResult> => {
   const { stdout, stderr, exitCode } = await runClientPublish(args, {
     env: cliEnv
   })
-  if (stderr?.trim()) logWarning(stderr.trim())
+  if (stderr?.toString().trim()) logWarning(stderr.toString().trim())
 
   if (exitCode && exitCode !== 0) {
     const outputTail = [stdout, stderr]
       .filter(Boolean)
-      .map((chunk) => chunk.trim())
+      .map((chunk) => chunk.toString().trim())
       .filter(Boolean)
       .join("\n")
     throw new Error(
@@ -502,7 +503,7 @@ const publishViaCli = async (plan: PublishPlan): Promise<PublishResult> => {
     )
   }
 
-  const parsed = parseCliJson(stdout)
+  const parsed = parseCliJson(stdout.toString())
   const publishResult = extractPublishResult(
     parsed as SuiTransactionBlockResponse
   )
@@ -581,7 +582,11 @@ const extractPublishResult = (
       )
       .map((change) => (change as { objectId: string }).objectId) || []
 
-  const warnOnCountMismatch = (label: string, actual: number, expected: number) => {
+  const warnOnCountMismatch = (
+    label: string,
+    actual: number,
+    expected: number
+  ) => {
     if (actual === 0 || actual === expected) return
     logWarning(
       `Publish returned ${expected} package(s) but ${actual} ${label}(s); pairing by index.`
@@ -807,7 +812,11 @@ const assertFrameworkRevisionConsistency = async (packagePath: string) => {
 
 const collectMismatchedFrameworkRevisions = (
   rootFrameworkRevision: string,
-  dependencyPackages: Array<{ name: string; path: string }>
+  dependencyPackages: Array<{
+    name: string
+    path: string
+    frameworkRevision?: string
+  }>
 ) =>
   dependencyPackages
     .map((dependencyPackage) => {
@@ -906,7 +915,7 @@ const fetchSuiCliVersion = async (): Promise<string | undefined> => {
   try {
     const { stdout, exitCode } = await runSuiCliVersion(["--version"])
     if (exitCode && exitCode !== 0) return undefined
-    return parseSuiCliVersionOutput(stdout)
+    return parseSuiCliVersionOutput(stdout.toString())
   } catch {
     return undefined
   }

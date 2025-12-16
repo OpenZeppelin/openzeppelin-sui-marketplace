@@ -84,8 +84,8 @@ runSuiScript(
       suiClient
     )
 
-    const createDiscountTemplateTransaction = buildCreateDiscountTemplateTransaction(
-      {
+    const createDiscountTemplateTransaction =
+      buildCreateDiscountTemplateTransaction({
         packageId: inputs.packageId,
         shop: shopSharedObject,
         appliesToListingId: inputs.appliesToListingId,
@@ -95,8 +95,7 @@ runSuiScript(
         expiresAt: inputs.expiresAt,
         maxRedemptions: inputs.maxRedemptions,
         ownerCapId: inputs.ownerCapId
-      }
-    )
+      })
 
     const transactionResult = await signAndExecute(
       { transaction: createDiscountTemplateTransaction, signer },
@@ -262,11 +261,14 @@ const parseRuleValue = (
   ruleKind: NormalizedRuleKind,
   rawValue: string
 ): bigint =>
-  ruleKind === 0 ? parseUsdToCents(rawValue) : parsePercentToBasisPoints(rawValue)
+  ruleKind === 0
+    ? parseUsdToCents(rawValue)
+    : parsePercentToBasisPoints(rawValue)
 
 const parsePercentToBasisPoints = (rawPercent: string): bigint => {
   const normalized = rawPercent.trim()
-  if (!normalized) throw new Error("A percent value is required for ruleKind=percent.")
+  if (!normalized)
+    throw new Error("A percent value is required for ruleKind=percent.")
 
   const percentMatch = normalized.match(/^(\d+)(?:\.(\d{1,2}))?$/)
   if (!percentMatch)
@@ -487,6 +489,7 @@ const logDiscountTemplateCreation = ({
   digest?: string
 }) => {
   logKeyValueGreen("discount template")(templateId)
-  if (appliesToListingId) logKeyValueGreen("applies to listing")(appliesToListingId)
+  if (appliesToListingId)
+    logKeyValueGreen("applies to listing")(appliesToListingId)
   if (digest) logKeyValueGreen("digest")(digest)
 }
