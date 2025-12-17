@@ -171,146 +171,156 @@ Key differences vs localnet:
 
 ## Script Reference
 
-All scripts run from the repo root and honor `sui.config.ts` (or `--network <name>`) for RPC/account selection. When shop objects/caps are omitted, owner/buyer scripts try to reuse the latest artifacts from `deployments/objects.<network>.json`.
+All scripts run from the repo root and honor `sui.config.ts` (or `--network <name>`) for RPC/account selection. Owner/buyer scripts fall back to the latest Shop/OwnerCap/Publisher artifacts in `deployments/objects.<network>.json` when IDs are omitted. Every CLI is strict (unknown flags fail) and uses dashed flag names listed below.
 
 ### Chain + Localnet Scripts (infra + inspection)
 
 #### `pnpm start:localnet`
-- Boots `sui start` with optional faucet, waits for RPC readiness, logs the protocol snapshot, and exits early if a node is already running. With `--force-regenesis` it also deletes `deployments/*.localnet*` artifacts and auto-faucets the configured signer when a faucet is available.
+- Boots `sui start`, streams stdout/stderr, waits for RPC health, and logs a snapshot (epoch, checkpoint, gas price, validator count). If a node is already up it logs the snapshot and exits cleanly. After a regenesis with a running faucet it will faucet the configured signer.
 - Flags:
-  - `--check-only`: probe the RPC and exit; fail if unreachable.
-  - `--wait-seconds <n>`: readiness timeout (default 25s).
-  - `--with-faucet`: start the faucet alongside the node (default true; required for auto-funding).
-  - `--force-regenesis`: pass `--force-regenesis` to `sui start` and clear localnet deployment artifacts before booting.
+  - `--check-only`: probe the RPC and exit without starting a new node; fails if unreachable.
+  - `--wait-seconds <n>`: readiness timeout while waiting for RPC (default 25).
+  - `--with-faucet`: start `sui start --with-faucet` (default true); also controls whether post-regenesis auto-funding is attempted.
+  - `--force-regenesis`: pass `--force-regenesis` to `sui start` **and** delete `deployments/*.localnet*` artifacts before booting.
 
 #### `pnpm stop:localnet`
-- Scans background processes for detached `sui start` instances (TTY `?` / `-`) and SIGTERMs them so you don’t accumulate orphaned local nodes. No flags.
+- Scans `ps` output for detached `sui start` processes (TTY `?` / `-`) and SIGTERMs them so you don’t accumulate background local nodes. No flags.
 
 #### `pnpm setup:local`
-- Localnet-only seeding. Publishes or reuses `move/pyth-mock` and `move/coin-mock`, mints mock coins + registry entries, and creates two mock Pyth `PriceInfoObject`s with current timestamps. Writes results to `deployments/mock.localnet.json` and reuses recorded IDs unless `--re-publish` is set.
+- Localnet-only seeding. Publishes (or reuses) `move/pyth-mock` and `move/coin-mock`, ensures mock coins are registered + minted to the signer, and creates two mock Pyth `PriceInfoObject`s with fresh timestamps via the on-chain clock. Artifacts are written to/reused from `deployments/mock.localnet.json`.
 - Flags:
-  - `--coin-package-id <id>` / `--pyth-package-id <id>`: reuse existing mock packages instead of publishing.
-  - `--coin-contract-path <path>` / `--pyth-contract-path <path>`: override the Move package paths (defaults `move/coin-mock` and `move/pyth-mock`).
-  - `--re-publish`: ignore recorded artifacts and republish + remint everything.
+  - `--coin-package-id <id>` / `--pyth-package-id <id>`: reuse existing mock package IDs instead of publishing.
+  - `--coin-contract-path <path>` / `--pyth-contract-path <path>`: override Move package paths (defaults `move/coin-mock` and `move/pyth-mock`).
+  - `--re-publish`: ignore existing artifacts; republish mocks, re-mint coins, and recreate feeds.
 
 #### `pnpm publish:package`
-- Builds and publishes a Move package under `move/`, funding the signer if balances are low, and records artifacts in `deployments/deployment.<network>.json`. Dev builds and unpublished deps are restricted to localnet; shared networks must use published deps.
+- Builds and publishes a Move package under `move/`, skipping if a deployment artifact already exists unless `--re-publish` is set. Uses faucet funding on faucet-supported networks to satisfy gas budgets and records results in `deployments/deployment.<network>.json`. Dev builds and unpublished dependencies are enforced as localnet-only.
 - Flags:
-  - `--package-path <path>`: package folder relative to `move/` (required).
-  - `--dev`: build with dev-dependencies (localnet only; defaults to true on localnet).
-  - `--with-unpublished-dependencies`: allow unpublished deps (localnet only).
-  - `--re-publish`: publish even if the package already has an artifact entry.
+  - `--package-path <path>`: package folder relative to `move/` (required; resolved to an absolute path).
+  - `--dev`: build with dev-dependencies (defaults to true on localnet; rejected on shared networks).
+  - `--with-unpublished-dependencies`: allow unpublished deps (defaults to true on localnet; rejected on shared networks).
+  - `--re-publish`: publish even if a deployment artifact already exists.
 
 #### `pnpm get:mock-currency`
-- Localnet-only coin/registry inspection. Resolves coin types from `deployments/mock.localnet.json` when `--coin-type` is omitted, then prints metadata (name/symbol/decimals/icon), treasury/deny caps, supply, and any minted sample coins.
+- Localnet-only coin/registry inspection. If `--coin-type` is omitted it pulls the mock coin types from `deployments/mock.localnet.json`. Performs `devInspect` view calls on the coin registry to print metadata (name/symbol/decimals/icon), treasury/deny caps, supply state, regulation flags, and any minted sample coin objects.
 - Flags:
   - `--registry-id <id>`: coin registry shared object (default Sui registry).
   - `--coin-type <type>`: coin type(s) to inspect (repeatable; defaults to the artifact coins).
 
 #### `pnpm describe:address`
-- Summarizes an address: SUI balance, per-coin balances, stake totals, and a truncated sample of owned object types to avoid huge output. The CLI currently requires passing an address flag even if you want the configured account.
+- Summarizes an address: SUI balance, all coin balances (with locked totals), stake totals, and a truncated owned-object sample (first 10 of up to 200 fetched). CLI requires the flag even though the script can derive the configured account.
 - Flags:
   - `--address <0x...>`: address to inspect (required).
 
 #### `pnpm describe:object`
-- Fetches any object by ID with type, owner, version, and display/content fields.
+- Fetches any object by ID with owner/version/digest/storage rebate plus content summary, display data, and a BCS preview.
 - Flags:
-  - `--object-id <id>`: target object ID (required; aliases `--id`).
+  - `--object-id <id>`: target object ID (required; alias `--id`).
 
 #### `pnpm describe:dynamic-field-object`
-- Looks up the dynamic field object under a shared parent and fetches the child object, logging the resolved dynamic field object ID.
+- Resolves the dynamic field object under a shared parent, logs the dynamic field ID, and describes the child object using the same formatter as `describe:object`.
 - Flags:
   - `--parent-id <id>`: shared parent object ID (required).
   - `--child-id <id>`: dynamic field name/child object ID (required; alias `--name`).
 
 ### Shop Owner Scripts (commerce flows)
 
+Owner scripts default `--shop-package-id`, `--shop-id`, and `--owner-cap-id` from the latest entries in `deployments/objects.<network>.json` when omitted.
+
 #### `pnpm owner:create-shop`
-- Calls `shop::create_shop` using a `0x2::package::Publisher` to create a shared `Shop` plus `ShopOwnerCap`; stores them in `deployments/objects.<network>.json`.
+- Calls `shop::create_shop` using a `0x2::package::Publisher` to create the shared `Shop` plus `ShopOwnerCap`; persists both objects to the artifacts file.
 - Flags:
   - `--shop-package-id <id>`: published `sui_oracle_market` package ID (required).
   - `--publisher-cap-id <id>`: `0x2::package::Publisher` object ID (required; not the UpgradeCap).
 
 #### `pnpm owner:add-currency`
-- Registers an accepted currency by linking a coin type to a Pyth feed (`PriceInfoObject`) with optional freshness/confidence/status guardrails. Short-circuits if the currency already exists. Defaults package/shop/owner cap and registry currency ID from artifacts when omitted.
+- Registers an accepted currency by linking a coin type to a Pyth feed with optional freshness/confidence/status guardrails. Short-circuits if the coin type already exists under the shop (logs the existing dynamic field IDs).
 - Flags:
   - `--coin-type <0x...::Coin>`: coin type to accept (required).
-  - `--feed-id <hex>`: 32-byte Pyth feed ID (required).
-  - `--price-info-object-id <id>`: shared Pyth `PriceInfoObject` (required; also passed as `pyth_object_id`).
-  - `--currency-id <id>`: coin registry `Currency` object (defaults to the derived `CurrencyKey` under the Sui registry).
-  - `--shop-package-id <id>` / `--shop-id <id>` / `--owner-cap-id <id>`: overrides for package/shop/cap artifacts.
-  - `--max-price-age-secs-cap <u64>` / `--max-confidence-ratio-bps-cap <u64>` / `--max-price-status-lag-secs-cap <u64>`: optional guardrail caps (omit to use module defaults).
+  - `--feed-id <hex>`: 32-byte Pyth feed ID as hex (required).
+  - `--price-info-object-id <id>`: shared Pyth `PriceInfoObject` ID (required; also passed as `pyth_object_id`).
+  - `--currency-id <id>`: coin registry `Currency` object (defaults to the derived `CurrencyKey<T>` under the shared registry).
+  - `--max-price-age-secs-cap <u64>` / `--max-confidence-ratio-bps-cap <u64>` / `--max-price-status-lag-secs-cap <u64>`: optional positive guardrail caps (omit to use module defaults).
+  - `--shop-package-id <id>` / `--shop-id <id>` / `--owner-cap-id <id>`: override artifact defaults.
+
+#### `pnpm owner:remove-currency`
+- Deregisters an accepted currency. Provide either the `AcceptedCurrency` object ID or the coin type and the script will resolve the dynamic field under the shop. Logs the type-index and accepted-currency field IDs that were removed.
+- Flags:
+  - `--accepted-currency-id <id>`: specific `AcceptedCurrency` object ID to remove.
+  - `--coin-type <0x...::Coin>`: coin type to resolve/remove when `--accepted-currency-id` is omitted.
+  - `--shop-package-id <id>` / `--shop-id <id>` / `--owner-cap-id <id>`: override artifact defaults.
+  - One of `--accepted-currency-id` or `--coin-type` is required.
 
 #### `pnpm owner:add-item-listing`
-- Creates an item listing with a USD price (accepts dollars or cents), initial stock (>0), and Move type for the SKU; can spotlight a discount template. Uses artifact defaults for package/shop/cap.
+- Creates an item listing with a USD price (parses dollars like `12.50` into cents or accepts integer cents), initial stock (>0), Move item type, and optional spotlighted discount template. Stores the created listing artifact.
 - Flags:
-  - `--name <string>`: item name (required).
-  - `--price <usd-or-cents>`: price as USD (e.g., `12.50`) or cents (e.g., `1250`) (required).
+  - `--name <string>`: item name (required; encoded as UTF-8 bytes).
+  - `--price <usd-or-cents>`: price as USD string (`12.50`) or integer cents (`1250`) (required).
   - `--stock <u64>`: initial inventory (>0) (required).
   - `--item-type <0x...::Type>`: fully qualified item type (required).
-  - `--spotlight-discount-id <id>`: optional discount template to spotlight.
-  - `--publisher-id <id>`: optional publisher object metadata field (not required).
-  - `--shop-package-id <id>` / `--shop-id <id>` / `--owner-cap-id <id>`: overrides for package/shop/cap artifacts.
+  - `--spotlight-discount-id <id>`: optional discount template to spotlight on creation.
+  - `--publisher-id <id>`: optional publisher metadata flag (parsed but not passed on-chain).
+  - `--shop-package-id <id>` / `--shop-id <id>` / `--owner-cap-id <id>`: override artifact defaults.
 
 #### `pnpm owner:remove-item-listing`
-- Deletes an `ItemListing` object and logs the deletion digest. Uses artifact defaults for package/shop/cap when omitted.
+- Deletes an `ItemListing` object and logs the deletion artifact/digest.
 - Flags:
-  - `--item-listing-id <id>`: listing to remove (required).
-  - `--shop-package-id <id>` / `--shop-id <id>` / `--owner-cap-id <id>`: overrides for package/shop/cap artifacts.
+  - `--item-listing-id <id>`: listing object ID to remove (required).
+  - `--shop-package-id <id>` / `--shop-id <id>` / `--owner-cap-id <id>`: override artifact defaults.
 
 #### `pnpm owner:update-item-listing-stock`
-- Updates inventory for an existing listing; `0` pauses sales without removing the listing. Uses artifact defaults for package/shop/cap.
+- Updates inventory for an existing listing; setting `0` pauses sales without removing the listing.
 - Flags:
-  - `--item-listing-id <id>`: listing to update (required).
+  - `--item-listing-id <id>`: listing object ID (required).
   - `--stock <u64>`: new quantity (required; can be zero).
-  - `--shop-package-id <id>` / `--shop-id <id>` / `--owner-cap-id <id>`: overrides for package/shop/cap artifacts.
+  - `--shop-package-id <id>` / `--shop-id <id>` / `--owner-cap-id <id>`: override artifact defaults.
 
 #### `pnpm owner:create-discount-template`
-- Creates a reusable discount template with scheduling and optional SKU scoping; supports fixed USD or percent discounts. Records the created template in artifacts.
+- Creates a reusable discount template with scheduling and optional SKU scoping; supports fixed USD cents or percent discounts. Records the created template artifact.
 - Flags:
   - `--rule-kind <fixed|percent>`: discount rule type (required).
   - `--value <amount>`: USD value (fixed) or percentage (percent) (required).
   - `--starts-at <epoch-seconds>`: activation time (defaults to now).
-  - `--expires-at <epoch-seconds>`: optional expiry.
+  - `--expires-at <epoch-seconds>`: optional expiry (must be > `starts-at` when set).
   - `--max-redemptions <u64>`: optional redemption cap.
-  - `--listing-id <id>`: optional SKU to scope the template to.
-  - `--publisher-id <id>`: optional publisher object metadata field.
-  - `--shop-package-id <id>` / `--shop-id <id>` / `--owner-cap-id <id>`: overrides for package/shop/cap artifacts.
+  - `--listing-id <id>`: optional ItemListing to pin this template to (only usable on that listing).
+  - `--publisher-id <id>`: optional publisher metadata flag (parsed but not passed on-chain).
+  - `--shop-package-id <id>` / `--shop-id <id>` / `--owner-cap-id <id>`: override artifact defaults.
 
 #### `pnpm owner:update-discount-template`
-- Rewrites an existing template’s rule, schedule, and redemption cap using the on-chain clock (`0x6::clock`) for validation. Uses artifact defaults for package/shop/cap.
+- Rewrites an existing template’s rule/schedule/redemption cap using the on-chain clock (`0x6::clock`) for validation.
 - Flags:
-  - `--discount-template-id <id>`: template to update (required).
+  - `--discount-template-id <id>`: template object ID (required).
   - `--rule-kind <fixed|percent>` / `--value <amount>`: new rule type and value (required).
   - `--starts-at <epoch-seconds>`: new start time (defaults to now).
   - `--expires-at <epoch-seconds>`: optional new expiry.
   - `--max-redemptions <u64>`: optional new redemption cap.
-  - `--shop-package-id <id>` / `--shop-id <id>` / `--owner-cap-id <id>`: overrides for package/shop/cap artifacts.
+  - `--shop-package-id <id>` / `--shop-id <id>` / `--owner-cap-id <id>`: override artifact defaults.
 
 #### `pnpm owner:toggle-discount-template`
-- Toggles a discount template’s active flag; use explicit boolean switches.
+- Toggles a discount template’s active flag.
 - Flags:
-  - `--discount-template-id <id>`: template to toggle (required).
-  - `--active` / `--no-active`: desired activation state (required).
-  - `--shop-package-id <id>` / `--shop-id <id>` / `--owner-cap-id <id>`: overrides for package/shop/cap artifacts.
+  - `--discount-template-id <id>`: template object ID (required).
+  - `--active` / `--no-active`: desired activation state (required boolean flag).
+  - `--shop-package-id <id>` / `--shop-id <id>` / `--owner-cap-id <id>`: override artifact defaults.
 
 #### `pnpm owner:attach-discount-template`
-- Attaches a discount template to an item listing for spotlighting. Validates that both objects belong to the same shop and that pinned templates are only attached to their designated listing.
+- Attaches a discount template to an item listing for spotlighting. Validates both objects belong to the same shop and rejects templates pinned to a different listing.
 - Flags:
-  - `--item-listing-id <id>`: listing to attach to (required).
-  - `--discount-template-id <id>`: template to attach (required).
-  - `--shop-package-id <id>` / `--shop-id <id>` / `--owner-cap-id <id>`: overrides for package/shop/cap artifacts.
+  - `--item-listing-id <id>`: listing object ID to attach to (required).
+  - `--discount-template-id <id>`: template object ID to attach (required).
+  - `--shop-package-id <id>` / `--shop-id <id>` / `--owner-cap-id <id>`: override artifact defaults.
 
 #### `pnpm owner:clear-discount-template`
-- Removes the spotlighted discount template from a listing (does not delete the template itself). Confirms the listing belongs to the target shop before clearing.
+- Removes the spotlighted discount template from a listing (does not delete the template). Verifies the listing belongs to the target shop first.
 - Flags:
-  - `--item-listing-id <id>`: listing to clear (required).
-  - `--shop-package-id <id>` / `--shop-id <id>` / `--owner-cap-id <id>`: overrides for package/shop/cap artifacts.
+  - `--item-listing-id <id>`: listing object ID to clear (required).
+  - `--shop-package-id <id>` / `--shop-id <id>` / `--owner-cap-id <id>`: override artifact defaults.
 
 ### Buyer + Discovery Scripts
 
 #### `pnpm buyer:list-currencies`
-- Read-only listing of all `AcceptedCurrency` dynamic fields under a shop. Prints coin type, symbol/decimals (when present), Pyth feed ID/object, guardrail caps, and the dynamic field object ID so buyers can know what to pay with.
+- Read-only listing of all `AcceptedCurrency` dynamic fields under a shop. Prints coin type, symbol/decimals (when present), Pyth feed ID/object, guardrail caps, derived hex feed ID, and the dynamic field object ID so buyers know which coins are accepted.
 - Flags:
   - `--shop-id <id>`: shop to inspect; defaults to the latest `Shop` in `deployments/objects.<network>.json`.
 
