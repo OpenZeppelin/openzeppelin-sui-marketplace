@@ -17,13 +17,15 @@ import {
 import type { ObjectArtifact } from "./object.ts"
 import {
   deriveRelevantPackageId,
-  extractInitialSharedVersion,
-  getObjectIdFromDynamicFieldObject,
   getSuiObject,
-  isDynamicFieldObject,
   mapOwnerToArtifact,
   normalizeVersion
 } from "./object.ts"
+import {
+  getObjectIdFromDynamicFieldObject,
+  isDynamicFieldObject
+} from "./dynamic-fields.ts"
+import { extractInitialSharedVersion } from "./shared-object.ts"
 
 type ExecuteParams = {
   transaction: Transaction

@@ -126,25 +126,6 @@ export const normalizeOptionalAddress = (value?: string) =>
 
 export const normalizeVersion = (value?: number | string) => String(value)
 
-export const extractInitialSharedVersion = (
-  created: SuiObjectChangeCreated | SuiObjectData
-): string | undefined => {
-  if (
-    created.owner &&
-    typeof created.owner === "object" &&
-    "Shared" in created.owner
-  )
-    return normalizeVersion(created.owner.Shared.initial_shared_version)
-
-  if ("initialSharedVersion" in created)
-    return normalizeVersion(
-      (created as unknown as { initialSharedVersion?: number | string })
-        .initialSharedVersion
-    )
-
-  return undefined
-}
-
 /**
  * Fetches an object with owner metadata, normalizing the ID.
  * Useful for scripts that need to reason about ownership (shared vs owned) before building PTBs.
@@ -181,57 +162,6 @@ export type WrappedSuiObject = {
   object: SuiObjectData
   error?: ObjectResponseError
 }
-
-export type WrappedSuiDynamicFieldObject = WrappedSuiObject & {
-  childObjectId: string
-  parentObjectId: string
-  dynamicFieldId: string
-}
-
-export type WrappedSuiSharedObject = WrappedSuiObject & {
-  sharedRef: {
-    objectId: string
-    mutable: boolean
-    initialSharedVersion: string
-  }
-}
-
-/**
- * Fetches a shared object and returns the shared reference fields needed for Move calls.
- * Why: Shared objects carry an `initial_shared_version` that must be supplied in PTBs;
- * this helper extracts it so devs coming from EVM (where storage is global) don’t have to.
- */
-export const getSuiSharedObject = async (
-  { objectId, mutable = false }: { objectId: string; mutable?: boolean },
-  suiClient: SuiClient
-): Promise<WrappedSuiSharedObject> => {
-  const suiObject = await getSuiObject({ objectId }, suiClient)
-
-  //@ts-expect-error Shared do exist on owner if a shared object
-  const sharedProperty = suiObject.owner?.Shared as {
-    initial_shared_version: string
-  }
-
-  if (!sharedProperty)
-    throw new Error(`Object ${objectId} is not shared or missing metadata`)
-
-  return {
-    ...suiObject,
-    sharedRef: {
-      objectId: suiObject.object.objectId,
-      mutable,
-      initialSharedVersion: normalizeVersion(
-        sharedProperty.initial_shared_version
-      )
-    }
-  }
-}
-
-export const getObjectIdFromDynamicFieldObject = ({
-  content
-}: SuiObjectData): string | undefined =>
-  //@ts-expect-error the fields will be there for object (not for package)
-  content?.fields?.value?.fields?.id?.id
 
 export const normalizeOptionalIdFromValue = (
   value: unknown
@@ -297,72 +227,6 @@ export const unwrapMoveObjectFields = (
   return fields
 }
 
-export const isDynamicFieldObject = (objectType?: string) =>
-  objectType?.includes("0x2::dynamic_field")
-
-export const dynamicFieldObjectNormalization = (suiObject: SuiObjectData) => ({
-  ...suiObject
-})
-
-export const getSuiDynamicFieldObject = async (
-  {
-    childObjectId,
-    parentObjectId
-  }: {
-    childObjectId: string
-    parentObjectId: string
-  },
-  suClient: SuiClient
-): Promise<WrappedSuiDynamicFieldObject> => {
-  const { data: dynamicFieldObject, error } =
-    await suClient.getDynamicFieldObject({
-      parentId: normalizeSuiObjectId(parentObjectId),
-      name: {
-        type: "0x2::object::ID",
-        value: normalizeSuiObjectId(childObjectId)
-      }
-    })
-
-  if (!dynamicFieldObject)
-    throw new Error(`Could not fetch dynamic field for ${childObjectId}`)
-
-  return {
-    object: dynamicFieldObject,
-    parentObjectId,
-    childObjectId,
-    dynamicFieldId: dynamicFieldObject.objectId,
-    error: error || undefined
-  }
-}
-
-export const fetchObjectWithDynamicFieldFallback = async (
-  {
-    objectId,
-    parentObjectId,
-    options = { showContent: true, showOwner: true, showType: true }
-  }: {
-    objectId: string
-    parentObjectId: string
-    options?: SuiObjectDataOptions
-  },
-  suiClient: SuiClient
-): Promise<SuiObjectData> => {
-  try {
-    const { object } = await getSuiObject({ objectId, options }, suiClient)
-    return object
-  } catch (error) {
-    try {
-      const { object } = await getSuiDynamicFieldObject(
-        { childObjectId: objectId, parentObjectId },
-        suiClient
-      )
-      return object
-    } catch {
-      throw error
-    }
-  }
-}
-
 export const deriveRelevantPackageId = (objectType: string): string => {
   const packageIdMatches = objectType.match(/0x[0-9a-fA-F]{64}/g)
   const packageIdCandidate =
@@ -377,3 +241,34 @@ export const normalizeIdOrThrow = (
   id: string | undefined,
   errorMessage: string
 ): string => normalizeSuiObjectId(requireValue(id, errorMessage))
+
+export const fetchAllOwnedObjects = async (
+  {
+    ownerAddress,
+    discountTicketType
+  }: {
+    ownerAddress: string
+    discountTicketType: string
+  },
+  suiClient: SuiClient
+): Promise<SuiObjectData[]> => {
+  const ownedObjects: SuiObjectData[] = []
+  let cursor: string | null | undefined
+
+  do {
+    const page = await suiClient.getOwnedObjects({
+      owner: normalizeSuiAddress(ownerAddress),
+      cursor: cursor,
+      filter: { StructType: discountTicketType },
+      options: { showContent: true, showType: true }
+    })
+
+    const pageObjects =
+      page.data?.flatMap(({ data }) => (data ? [data] : [])) || []
+
+    ownedObjects.push(...pageObjects)
+    cursor = page.hasNextPage ? page.nextCursor : undefined
+  } while (cursor)
+
+  return ownedObjects
+}

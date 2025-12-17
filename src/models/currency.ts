@@ -1,10 +1,10 @@
 import type { SuiClient } from "@mysten/sui/client"
 
+import { fetchAllDynamicFields } from "../tooling/dynamic-fields.ts"
 import {
   getSuiObject,
   normalizeOptionalIdFromValue
 } from "../tooling/object.ts"
-import { fetchAllDynamicFields } from "../utils/dynamic-fields.ts"
 import {
   formatTypeName,
   isMatchingTypeName,

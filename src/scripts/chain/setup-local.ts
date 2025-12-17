@@ -36,8 +36,10 @@ import {
   logWarning
 } from "../../tooling/log.ts"
 import { assertLocalnetNetwork, resolveRpcUrl } from "../../tooling/network.ts"
-import type { WrappedSuiSharedObject } from "../../tooling/object.ts"
-import { getSuiSharedObject } from "../../tooling/object.ts"
+import {
+  getSuiSharedObject,
+  type WrappedSuiSharedObject
+} from "../../tooling/shared-object.ts"
 import { runSuiScript } from "../../tooling/process.ts"
 import { publishPackageWithLog } from "../../tooling/publish.ts"
 import {

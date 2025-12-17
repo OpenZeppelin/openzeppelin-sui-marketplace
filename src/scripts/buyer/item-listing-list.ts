@@ -3,6 +3,7 @@ import { SuiClient } from "@mysten/sui/client"
 import yargs from "yargs"
 
 import { getLatestObjectFromArtifact } from "../../tooling/artifacts.ts"
+import { fetchAllDynamicFields } from "../../tooling/dynamic-fields.ts"
 import {
   logKeyValueBlue,
   logKeyValueGreen,
@@ -15,7 +16,6 @@ import {
   unwrapMoveObjectFields
 } from "../../tooling/object.ts"
 import { runSuiScript } from "../../tooling/process.ts"
-import { fetchAllDynamicFields } from "../../utils/dynamic-fields.ts"
 import {
   decodeUtf8Vector,
   formatOptionalNumericValue

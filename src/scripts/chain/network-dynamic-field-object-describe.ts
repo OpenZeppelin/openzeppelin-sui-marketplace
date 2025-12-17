@@ -1,7 +1,7 @@
 import yargs from "yargs"
 
 import { logKeyValueBlue, logKeyValueGreen } from "../../tooling/log.ts"
-import { getSuiDynamicFieldObject } from "../../tooling/object.ts"
+import { getSuiDynamicFieldObject } from "../../tooling/dynamic-fields.ts"
 import { runSuiScript } from "../../tooling/process.ts"
 import {
   buildObjectInformation,

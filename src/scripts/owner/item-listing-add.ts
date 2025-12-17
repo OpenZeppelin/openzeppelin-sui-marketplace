@@ -9,10 +9,8 @@ import {
 import { loadKeypair } from "../../tooling/keypair.ts"
 import { logKeyValueGreen } from "../../tooling/log.ts"
 import type { ObjectArtifact } from "../../tooling/object.ts"
-import {
-  getSuiSharedObject,
-  normalizeOptionalId
-} from "../../tooling/object.ts"
+import { normalizeOptionalId } from "../../tooling/object.ts"
+import { getSuiSharedObject } from "../../tooling/shared-object.ts"
 import { runSuiScript } from "../../tooling/process.ts"
 import { newTransaction, signAndExecute } from "../../tooling/transactions.ts"
 import { tryParseBigInt } from "../../utils/utility.ts"

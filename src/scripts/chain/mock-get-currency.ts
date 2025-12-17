@@ -19,7 +19,7 @@ import {
   logKeyValueRed,
   logWarning
 } from "../../tooling/log.ts"
-import { getSuiSharedObject } from "../../tooling/object.ts"
+import { getSuiSharedObject } from "../../tooling/shared-object.ts"
 import { runSuiScript } from "../../tooling/process.ts"
 
 type CliArgs = {

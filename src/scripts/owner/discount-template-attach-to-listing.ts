@@ -6,11 +6,11 @@ import { resolveLatestShopIdentifiers } from "../../models/shop.ts"
 import { loadKeypair } from "../../tooling/keypair.ts"
 import { logKeyValueGreen } from "../../tooling/log.ts"
 import {
-  fetchObjectWithDynamicFieldFallback,
-  getSuiSharedObject,
   normalizeOptionalIdFromValue,
   unwrapMoveObjectFields
 } from "../../tooling/object.ts"
+import { fetchObjectWithDynamicFieldFallback } from "../../tooling/dynamic-fields.ts"
+import { getSuiSharedObject } from "../../tooling/shared-object.ts"
 import { runSuiScript } from "../../tooling/process.ts"
 import { newTransaction, signAndExecute } from "../../tooling/transactions.ts"
 
