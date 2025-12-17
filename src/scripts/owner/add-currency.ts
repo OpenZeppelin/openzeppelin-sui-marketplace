@@ -2,13 +2,13 @@ import { SuiClient } from "@mysten/sui/client"
 import { deriveObjectID, normalizeSuiObjectId } from "@mysten/sui/utils"
 import yargs from "yargs"
 
-import { getLatestObjectFromArtifact } from "../../tooling/artifacts.ts"
+import { resolveShopIdentifiers } from "../../models/shop.ts"
 import { SUI_COIN_REGISTRY_ID } from "../../tooling/constants.ts"
 import { assertBytesLength, hexToBytes } from "../../tooling/hex.ts"
 import { loadKeypair } from "../../tooling/keypair.ts"
 import { logKeyValueGreen } from "../../tooling/log.ts"
-import { getSuiSharedObject } from "../../tooling/object.ts"
 import type { ObjectArtifact } from "../../tooling/object.ts"
+import { getSuiSharedObject } from "../../tooling/object.ts"
 import { runSuiScript } from "../../tooling/process.ts"
 import { newTransaction, signAndExecute } from "../../tooling/transactions.ts"
 import { parseOptionalU64 } from "../../utils/utility.ts"
@@ -100,7 +100,8 @@ runSuiScript(
     .option("shopId", {
       alias: "shop-id",
       type: "string",
-      description: "Shared Shop object ID; defaults to the latest Shop artifact when available.",
+      description:
+        "Shared Shop object ID; defaults to the latest Shop artifact when available.",
       demandOption: false
     })
     .option("ownerCapId", {
@@ -162,43 +163,31 @@ const normalizeInputs = async (
   cliArguments: AddCurrencyArguments,
   networkName: string
 ): Promise<NormalizedInputs> => {
-  const shopArtifact = await getLatestObjectFromArtifact("shop::Shop", networkName)
-  const ownerCapArtifact = await getLatestObjectFromArtifact(
-    "shop::ShopOwnerCap",
+  const { packageId, shopId, ownerCapId } = await resolveShopIdentifiers(
+    {
+      packageId: cliArguments.shopPackageId,
+      shopId: cliArguments.shopId,
+      ownerCapId: cliArguments.ownerCapId
+    },
     networkName
   )
 
-  const packageId = cliArguments.shopPackageId || shopArtifact?.packageId
-  if (!packageId)
-    throw new Error(
-      "A shop package id is required; publish the package first or provide --shop-package-id."
-    )
-
-  const shopId = cliArguments.shopId || shopArtifact?.objectId
-  if (!shopId)
-    throw new Error(
-      "A shop id is required; create a shop first or provide --shop-id."
-    )
-
-  const ownerCapId = cliArguments.ownerCapId || ownerCapArtifact?.objectId
-  if (!ownerCapId)
-    throw new Error(
-      "An owner cap id is required; create a shop first or provide --owner-cap-id."
-    )
-
   const coinType = cliArguments.coinType.trim()
   if (!coinType)
-    throw new Error("coinType must be a fully qualified Move type (e.g., 0x2::sui::SUI).")
+    throw new Error(
+      "coinType must be a fully qualified Move type (e.g., 0x2::sui::SUI)."
+    )
 
   const feedIdBytes = assertBytesLength(hexToBytes(cliArguments.feedId), 32)
   const priceInfoObjectId = normalizeSuiObjectId(cliArguments.priceInfoObjectId)
   const currencyId =
-    cliArguments.currencyId || deriveCurrencyObjectId(coinType, SUI_COIN_REGISTRY_ID)
+    cliArguments.currencyId ||
+    deriveCurrencyObjectId(coinType, SUI_COIN_REGISTRY_ID)
 
   return {
-    packageId: normalizeSuiObjectId(packageId),
-    shopId: normalizeSuiObjectId(shopId),
-    ownerCapId: normalizeSuiObjectId(ownerCapId),
+    packageId,
+    shopId,
+    ownerCapId,
     coinType,
     currencyId: normalizeSuiObjectId(currencyId),
     feedIdBytes,
@@ -224,7 +213,8 @@ const parseOptionalPositiveU64 = (
 ): bigint | undefined => {
   const parsedValue = parseOptionalU64(rawValue, label)
   if (parsedValue === undefined) return undefined
-  if (parsedValue <= 0n) throw new Error(`${label} must be greater than zero when provided.`)
+  if (parsedValue <= 0n)
+    throw new Error(`${label} must be greater than zero when provided.`)
   return parsedValue
 }
 
@@ -266,7 +256,9 @@ const buildAddCurrencyTransaction = ({
 
   const shopArgument = transaction.sharedObjectRef(shop.sharedRef)
   const currencyArgument = transaction.sharedObjectRef(currency.sharedRef)
-  const priceInfoArgument = transaction.sharedObjectRef(priceInfoObject.sharedRef)
+  const priceInfoArgument = transaction.sharedObjectRef(
+    priceInfoObject.sharedRef
+  )
 
   transaction.moveCall({
     target: `${packageId}::shop::add_accepted_currency`,
@@ -305,5 +297,6 @@ const logAcceptedCurrencyCreation = ({
     logKeyValueGreen("accepted currency id")(createdAcceptedCurrency.objectId)
   logKeyValueGreen("coin type")(coinType)
   logKeyValueGreen("feed id")(feedId)
-  if (createdAcceptedCurrency?.digest) logKeyValueGreen("digest")(createdAcceptedCurrency.digest)
+  if (createdAcceptedCurrency?.digest)
+    logKeyValueGreen("digest")(createdAcceptedCurrency.digest)
 }

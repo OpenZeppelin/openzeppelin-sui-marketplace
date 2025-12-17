@@ -7,6 +7,7 @@ import type {
   SuiObjectDataOptions
 } from "@mysten/sui/client"
 import { normalizeSuiAddress, normalizeSuiObjectId } from "@mysten/sui/utils"
+import { requireValue } from "../utils/utility.ts"
 
 type ObjectOwnerAddress =
   | { ownerType: "address"; address: string }
@@ -370,3 +371,8 @@ export const deriveRelevantPackageId = (objectType: string): string => {
 
   return normalizeSuiObjectId(packageIdCandidate)
 }
+
+export const normalizeIdOrThrow = (
+  id: string | undefined,
+  errorMessage: string
+): string => normalizeSuiObjectId(requireValue(id, errorMessage))

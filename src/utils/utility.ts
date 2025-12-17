@@ -109,3 +109,11 @@ export const parseOptionalU64 = (
   label: string
 ): bigint | undefined =>
   rawValue === undefined ? undefined : parseNonNegativeU64(rawValue, label)
+
+export const requireValue = <T>(
+  value: T | undefined,
+  errorMessage: string
+): T => {
+  if (!value) throw new Error(errorMessage)
+  return value
+}

@@ -11,7 +11,7 @@ import {
   type NormalizedRuleKind,
   validateDiscountSchedule
 } from "../../models/discount.ts"
-import { getLatestObjectFromArtifact } from "../../tooling/artifacts.ts"
+import { resolveShopIdentifiers } from "../../models/shop.ts"
 import { loadKeypair } from "../../tooling/keypair.ts"
 import { logKeyValueGreen } from "../../tooling/log.ts"
 import type { ObjectArtifact } from "../../tooling/object.ts"
@@ -162,32 +162,14 @@ const normalizeInputs = async (
   cliArguments: CreateDiscountTemplateArguments,
   networkName: string
 ): Promise<NormalizedInputs> => {
-  const shopArtifact = await getLatestObjectFromArtifact(
-    "shop::Shop",
+  const { packageId, shopId, ownerCapId } = await resolveShopIdentifiers(
+    {
+      packageId: cliArguments.shopPackageId,
+      shopId: cliArguments.shopId,
+      ownerCapId: cliArguments.ownerCapId
+    },
     networkName
   )
-  const ownerCapArtifact = await getLatestObjectFromArtifact(
-    "shop::ShopOwnerCap",
-    networkName
-  )
-
-  const packageId = cliArguments.shopPackageId || shopArtifact?.packageId
-  if (!packageId)
-    throw new Error(
-      "A shop package id is required; publish the package first or provide --shop-package-id."
-    )
-
-  const shopId = cliArguments.shopId || shopArtifact?.objectId
-  if (!shopId)
-    throw new Error(
-      "A shop id is required; create a shop first or provide --shop-id."
-    )
-
-  const ownerCapId = cliArguments.ownerCapId || ownerCapArtifact?.objectId
-  if (!ownerCapId)
-    throw new Error(
-      "An owner cap id is required; create a shop first or provide --owner-cap-id."
-    )
 
   const ruleKind = parseDiscountRuleKind(cliArguments.ruleKind)
   const startsAt = parseNonNegativeU64(
@@ -199,9 +181,9 @@ const normalizeInputs = async (
   validateDiscountSchedule(startsAt, expiresAt)
 
   return {
-    packageId: normalizeSuiObjectId(packageId),
-    shopId: normalizeSuiObjectId(shopId),
-    ownerCapId: normalizeSuiObjectId(ownerCapId),
+    packageId,
+    shopId,
+    ownerCapId,
     appliesToListingId: normalizeOptionalId(cliArguments.listingId),
     ruleKind,
     ruleValue: parseDiscountRuleValue(ruleKind, cliArguments.value),

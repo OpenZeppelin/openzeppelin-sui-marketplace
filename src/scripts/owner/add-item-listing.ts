@@ -2,8 +2,7 @@ import { SuiClient } from "@mysten/sui/client"
 import { normalizeSuiObjectId } from "@mysten/sui/utils"
 import yargs from "yargs"
 
-import { parseUsdToCents } from "../../models/shop.ts"
-import { getLatestObjectFromArtifact } from "../../tooling/artifacts.ts"
+import { parseUsdToCents, resolveShopIdentifiers } from "../../models/shop.ts"
 import { loadKeypair } from "../../tooling/keypair.ts"
 import { logKeyValueGreen } from "../../tooling/log.ts"
 import type { ObjectArtifact } from "../../tooling/object.ts"
@@ -170,37 +169,14 @@ const normalizeInputs = async (
   cliArguments: AddItemArguments,
   networkName: string
 ) => {
-  const latestShopObject = await getLatestObjectFromArtifact(
-    "shop::Shop",
+  const { packageId, shopId, ownerCapId } = await resolveShopIdentifiers(
+    {
+      packageId: cliArguments.shopPackageId,
+      shopId: cliArguments.shopId,
+      ownerCapId: cliArguments.ownerCapId
+    },
     networkName
   )
-
-  const latestOwnerCapObject = await getLatestObjectFromArtifact(
-    "shop::ShopOwnerCap",
-    networkName
-  )
-
-  const shopPackageId =
-    cliArguments.shopPackageId || latestShopObject?.packageId
-
-  if (!shopPackageId)
-    throw new Error(
-      "A shop package id is required, publish first or pass it as --shop-package-id "
-    )
-
-  const shopId = cliArguments.shopId || latestShopObject?.objectId
-
-  if (!shopId)
-    throw new Error(
-      "A shop store id is required, create a new store first or pass it as --shop-id "
-    )
-
-  const ownerCapId = cliArguments.ownerCapId || latestOwnerCapObject?.objectId
-
-  if (!ownerCapId)
-    throw new Error(
-      "A owner cap id is required, create a new store first or pass it as --owner-cap-id"
-    )
 
   const spotlightDiscountId = normalizeOptionalId(
     cliArguments.spotlightDiscountId
@@ -211,9 +187,9 @@ const normalizeInputs = async (
     throw new Error("itemType must be a fully qualified Move type.")
 
   return {
-    packageId: normalizeSuiObjectId(shopPackageId),
-    shopId: normalizeSuiObjectId(shopId),
-    ownerCapId: normalizeSuiObjectId(ownerCapId),
+    packageId,
+    shopId,
+    ownerCapId,
     spotlightDiscountId,
     itemType,
     name: cliArguments.name,

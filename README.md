@@ -237,8 +237,8 @@ All scripts run from the repo root and honor `sui.config.ts` (or `--network <nam
   - `--shop-package-id <id>`: published `sui_oracle_market` package ID (required).
   - `--publisher-cap-id <id>`: `0x2::package::Publisher` object ID (required; not the UpgradeCap).
 
-#### `pnpm ts-node-esm --transpile-only src/scripts/owner/add-currency.ts`
-- Adds an accepted currency by linking a coin type to a Pyth `PriceInfoObject` plus optional seller guardrails (max age/confidence/status lag).
+#### `pnpm owner:add-currency`
+- Adds an accepted currency by linking a coin type to a Pyth `PriceInfoObject` plus optional seller guardrails (max age/confidence/status lag). Defaults to the latest recorded shop artifacts when IDs are omitted.
 - Flags:
   - `--coin-type <0x...::Coin>`: coin type to accept (required).
   - `--feed-id <hex>`: 32-byte Pyth feed ID (required).
@@ -294,21 +294,21 @@ All scripts run from the repo root and honor `sui.config.ts` (or `--network <nam
   - `--max-redemptions <u64>`: optional new redemption cap.
   - `--shop-package-id <id>` / `--shop-id <id>` / `--owner-cap-id <id>`: overrides for package/shop/cap artifacts.
 
-#### `pnpm owner:toogle-discount-template`
+#### `pnpm owner:toggle-discount-template`
 - Toggles a discount template’s active flag (command name keeps the existing “toogle” alias in `package.json`).
 - Flags:
   - `--discount-template-id <id>`: template to toggle (required).
   - `--active` / `--no-active`: target activation state (required).
   - `--shop-package-id <id>` / `--shop-id <id>` / `--owner-cap-id <id>`: overrides for package/shop/cap artifacts.
 
-#### `pnpm ts-node-esm --transpile-only src/scripts/owner/attach-discount-template.ts`
+#### `pnpm owner:attach-discount-template`
 - Attaches a discount template to an item listing so it is spotlighted for that SKU.
 - Flags:
   - `--item-listing-id <id>`: listing to attach to (required).
   - `--discount-template-id <id>`: template to attach (required).
   - `--shop-package-id <id>` / `--shop-id <id>` / `--owner-cap-id <id>`: overrides for package/shop/cap artifacts.
 
-#### `pnpm ts-node-esm --transpile-only src/scripts/owner/clear-discount-template.ts`
+#### `pnpm owner:clear-discount-template`
 - Removes the spotlighted discount template from an item listing (does not delete the template itself).
 - Flags:
   - `--item-listing-id <id>`: listing to clear (required).
