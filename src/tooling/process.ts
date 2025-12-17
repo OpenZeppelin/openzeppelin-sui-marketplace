@@ -93,7 +93,10 @@ const sanitizeCliArgumentsForLogging = <TCliArgument>(
   const filteredEntries = Object.entries(cliArguments)
     .filter(([key]) => key !== "_" && key !== "$0")
     .map(([key, value]) => {
-      const canonicalKey = aliasToCanonical.get(key) ?? key
+      const canonicalKey =
+        aliasToCanonical.get(key) ??
+        aliasToCanonical.get(toCamelCase(key)) ??
+        key
       return [canonicalKey, value] as const
     })
     .filter(([canonicalKey]) => {

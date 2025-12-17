@@ -5,7 +5,12 @@ import yargs from "yargs"
 import { getLatestObjectFromArtifact } from "../../tooling/artifacts.ts"
 import { loadKeypair } from "../../tooling/keypair.ts"
 import { logKeyValueGreen } from "../../tooling/log.ts"
-import { getSuiSharedObject } from "../../tooling/object.ts"
+import {
+  fetchObjectWithDynamicFieldFallback,
+  getSuiSharedObject,
+  normalizeOptionalIdFromValue,
+  unwrapMoveObjectFields
+} from "../../tooling/object.ts"
 import { runSuiScript } from "../../tooling/process.ts"
 import { newTransaction, signAndExecute } from "../../tooling/transactions.ts"
 
@@ -27,6 +32,11 @@ runSuiScript(
   async ({ network }, cliArguments) => {
     const inputs = await normalizeInputs(cliArguments, network.networkName)
     const suiClient = new SuiClient({ url: network.url })
+    const resolvedListingId = await resolveListingId({
+      shopId: inputs.shopId,
+      itemListingId: inputs.itemListingId,
+      suiClient
+    })
     const signer = await loadKeypair(network.account)
     const shopSharedObject = await getSuiSharedObject(
       { objectId: inputs.shopId, mutable: true },
@@ -37,7 +47,7 @@ runSuiScript(
       buildClearDiscountTemplateTransaction({
         packageId: inputs.packageId,
         shop: shopSharedObject,
-        itemListingId: inputs.itemListingId,
+        itemListingId: resolvedListingId,
         ownerCapId: inputs.ownerCapId
       })
 
@@ -51,7 +61,7 @@ runSuiScript(
     )
 
     logClearResult({
-      itemListingId: inputs.itemListingId,
+      itemListingId: resolvedListingId,
       digest: transactionResult.digest
     })
   },
@@ -121,6 +131,40 @@ const normalizeInputs = async (
     ownerCapId: normalizeSuiObjectId(ownerCapId),
     itemListingId: normalizeSuiObjectId(cliArguments.itemListingId)
   }
+}
+
+const resolveListingId = async ({
+  shopId,
+  itemListingId,
+  suiClient
+}: {
+  shopId: string
+  itemListingId: string
+  suiClient: SuiClient
+}): Promise<string> => {
+  const normalizedShopId = normalizeSuiObjectId(shopId)
+  const listingObject = await fetchObjectWithDynamicFieldFallback(
+    { objectId: itemListingId, parentObjectId: normalizedShopId },
+    suiClient
+  )
+  const fields = unwrapMoveObjectFields(listingObject)
+
+  const rawShopAddress = fields.shop_address
+  if (typeof rawShopAddress !== "string")
+    throw new Error(
+      `Item listing ${itemListingId} is missing a shop_address field.`
+    )
+
+  const listingShop = normalizeSuiObjectId(rawShopAddress)
+  if (listingShop !== normalizedShopId)
+    throw new Error(
+      `Item listing ${itemListingId} belongs to shop ${listingShop}, not ${normalizedShopId}.`
+    )
+
+  return (
+    normalizeOptionalIdFromValue(fields.id) ??
+    normalizeSuiObjectId(itemListingId)
+  )
 }
 
 const buildClearDiscountTemplateTransaction = ({

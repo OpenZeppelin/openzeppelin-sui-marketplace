@@ -231,6 +231,70 @@ export const getObjectIdFromDynamicFieldObject = ({
   //@ts-expect-error the fields will be there for object (not for package)
   content?.fields?.value.fields.id.id
 
+export const normalizeOptionalIdFromValue = (
+  value: unknown
+): string | undefined => {
+  if (!value) return undefined
+
+  const attemptNormalize = (candidate: unknown): string | undefined => {
+    if (typeof candidate === "string") return normalizeSuiObjectId(candidate)
+    if (
+      candidate &&
+      typeof candidate === "object" &&
+      "id" in candidate &&
+      typeof (candidate as { id?: unknown }).id === "string"
+    )
+      return normalizeSuiObjectId((candidate as { id: string }).id)
+    if (
+      candidate &&
+      typeof candidate === "object" &&
+      "bytes" in candidate &&
+      typeof (candidate as { bytes?: unknown }).bytes === "string"
+    )
+      return normalizeSuiObjectId((candidate as { bytes: string }).bytes)
+    if (candidate && typeof candidate === "object" && "fields" in candidate)
+      return attemptNormalize((candidate as { fields?: unknown }).fields)
+    return undefined
+  }
+
+  if (
+    typeof value === "object" &&
+    value !== null &&
+    "some" in value &&
+    (value as { some?: unknown }).some !== undefined
+  )
+    return attemptNormalize((value as { some?: unknown }).some)
+
+  if (
+    typeof value === "object" &&
+    value !== null &&
+    "none" in value &&
+    (value as { none?: unknown }).none === null
+  )
+    return undefined
+
+  if (typeof value === "object" && value !== null && "fields" in value)
+    return attemptNormalize((value as { fields?: unknown }).fields)
+
+  return attemptNormalize(value)
+}
+
+export const unwrapMoveObjectFields = (
+  object: SuiObjectData
+): Record<string, unknown> => {
+  const moveContent = object.content
+  if (!moveContent || moveContent.dataType !== "moveObject")
+    throw new Error(`Object ${object.objectId} is missing Move content.`)
+
+  const fields = (moveContent.fields ?? {}) as Record<string, unknown>
+  if ("value" in fields && fields.value && typeof fields.value === "object") {
+    const nested = (fields.value as { fields?: Record<string, unknown> }).fields
+    if (nested) return nested
+  }
+
+  return fields
+}
+
 export const isDynamicFieldObject = (objectType?: string) =>
   objectType?.includes("0x2::dynamic_field")
 
@@ -266,6 +330,34 @@ export const getSuiDynamicFieldObject = async (
     childObjectId,
     dynamicFieldId: dynamicFieldObject.objectId,
     error: error || undefined
+  }
+}
+
+export const fetchObjectWithDynamicFieldFallback = async (
+  {
+    objectId,
+    parentObjectId,
+    options = { showContent: true, showOwner: true, showType: true }
+  }: {
+    objectId: string
+    parentObjectId: string
+    options?: SuiObjectDataOptions
+  },
+  suiClient: SuiClient
+): Promise<SuiObjectData> => {
+  try {
+    const { object } = await getSuiObject({ objectId, options }, suiClient)
+    return object
+  } catch (error) {
+    try {
+      const { object } = await getSuiDynamicFieldObject(
+        { childObjectId: objectId, parentObjectId },
+        suiClient
+      )
+      return object
+    } catch {
+      throw error
+    }
   }
 }
 

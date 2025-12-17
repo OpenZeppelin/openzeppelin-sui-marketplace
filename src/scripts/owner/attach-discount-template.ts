@@ -5,7 +5,12 @@ import yargs from "yargs"
 import { getLatestObjectFromArtifact } from "../../tooling/artifacts.ts"
 import { loadKeypair } from "../../tooling/keypair.ts"
 import { logKeyValueGreen } from "../../tooling/log.ts"
-import { getSuiSharedObject } from "../../tooling/object.ts"
+import {
+  fetchObjectWithDynamicFieldFallback,
+  getSuiSharedObject,
+  normalizeOptionalIdFromValue,
+  unwrapMoveObjectFields
+} from "../../tooling/object.ts"
 import { runSuiScript } from "../../tooling/process.ts"
 import { newTransaction, signAndExecute } from "../../tooling/transactions.ts"
 
@@ -29,6 +34,14 @@ runSuiScript(
   async ({ network }, cliArguments) => {
     const inputs = await normalizeInputs(cliArguments, network.networkName)
     const suiClient = new SuiClient({ url: network.url })
+
+    const resolvedIds = await validateTemplateAndListing({
+      shopId: inputs.shopId,
+      itemListingId: inputs.itemListingId,
+      discountTemplateId: inputs.discountTemplateId,
+      suiClient
+    })
+
     const signer = await loadKeypair(network.account)
     const shopSharedObject = await getSuiSharedObject(
       { objectId: inputs.shopId, mutable: true },
@@ -39,8 +52,8 @@ runSuiScript(
       buildAttachDiscountTemplateTransaction({
         packageId: inputs.packageId,
         shop: shopSharedObject,
-        itemListingId: inputs.itemListingId,
-        discountTemplateId: inputs.discountTemplateId,
+        itemListingId: resolvedIds.itemListingId,
+        discountTemplateId: resolvedIds.discountTemplateId,
         ownerCapId: inputs.ownerCapId
       })
 
@@ -54,8 +67,8 @@ runSuiScript(
     )
 
     logAttachmentResult({
-      itemListingId: inputs.itemListingId,
-      discountTemplateId: inputs.discountTemplateId,
+      itemListingId: resolvedIds.itemListingId,
+      discountTemplateId: resolvedIds.discountTemplateId,
       digest: transactionResult.digest
     })
   },
@@ -132,6 +145,98 @@ const normalizeInputs = async (
     ownerCapId: normalizeSuiObjectId(ownerCapId),
     itemListingId: normalizeSuiObjectId(cliArguments.itemListingId),
     discountTemplateId: normalizeSuiObjectId(cliArguments.discountTemplateId)
+  }
+}
+
+const fetchItemListingMetadata = async (
+  listingId: string,
+  shopId: string,
+  suiClient: SuiClient
+) => {
+  const object = await fetchObjectWithDynamicFieldFallback(
+    { objectId: listingId, parentObjectId: shopId },
+    suiClient
+  )
+
+  const fields = unwrapMoveObjectFields(object)
+  const rawShopAddress = fields.shop_address
+  if (typeof rawShopAddress !== "string")
+    throw new Error(
+      `Item listing ${listingId} is missing a shop_address field.`
+    )
+  const shopAddress = normalizeSuiObjectId(rawShopAddress)
+  const normalizedListingId =
+    normalizeOptionalIdFromValue(fields.id) ?? normalizeSuiObjectId(listingId)
+
+  return {
+    id: normalizedListingId,
+    shopAddress
+  }
+}
+
+const fetchDiscountTemplateMetadata = async (
+  templateId: string,
+  shopId: string,
+  suiClient: SuiClient
+) => {
+  const object = await fetchObjectWithDynamicFieldFallback(
+    { objectId: templateId, parentObjectId: shopId },
+    suiClient
+  )
+
+  const fields = unwrapMoveObjectFields(object)
+  const rawShopAddress = fields.shop_address
+  if (typeof rawShopAddress !== "string")
+    throw new Error(
+      `Discount template ${templateId} is missing a shop_address field.`
+    )
+  const shopAddress = normalizeSuiObjectId(rawShopAddress)
+
+  return {
+    id:
+      normalizeOptionalIdFromValue(fields.id) ??
+      normalizeSuiObjectId(templateId),
+    shopAddress,
+    appliesToListing: normalizeOptionalIdFromValue(fields.applies_to_listing)
+  }
+}
+
+const validateTemplateAndListing = async ({
+  shopId,
+  itemListingId,
+  discountTemplateId,
+  suiClient
+}: {
+  shopId: string
+  itemListingId: string
+  discountTemplateId: string
+  suiClient: SuiClient
+}): Promise<{ itemListingId: string; discountTemplateId: string }> => {
+  const [listing, template] = await Promise.all([
+    fetchItemListingMetadata(itemListingId, shopId, suiClient),
+    fetchDiscountTemplateMetadata(discountTemplateId, shopId, suiClient)
+  ])
+
+  const normalizedShopId = normalizeSuiObjectId(shopId)
+
+  if (listing.shopAddress !== normalizedShopId)
+    throw new Error(
+      `Item listing ${listing.id} belongs to shop ${listing.shopAddress}, not ${normalizedShopId}.`
+    )
+
+  if (template.shopAddress !== normalizedShopId)
+    throw new Error(
+      `Discount template ${template.id} belongs to shop ${template.shopAddress}, not ${normalizedShopId}.`
+    )
+
+  if (template.appliesToListing && template.appliesToListing !== listing.id)
+    throw new Error(
+      `Discount template ${template.id} is pinned to listing ${template.appliesToListing} and cannot be attached to ${listing.id}. Create a template for this listing or use the pinned listing.`
+    )
+
+  return {
+    itemListingId: listing.id,
+    discountTemplateId: template.id
   }
 }
 
