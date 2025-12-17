@@ -1,5 +1,5 @@
-import type { MoveStruct } from "@mysten/sui/client"
 import type {
+  MoveStruct,
   ObjectResponseError,
   SuiObjectData,
   SuiObjectDataOptions
@@ -62,7 +62,8 @@ export const OBJECT_REQUEST_OPTIONS: SuiObjectDataOptions = {
   showType: true
 }
 
-export const createSuiClient = (rpcUrl: string) => new SuiClient({ url: rpcUrl })
+export const createSuiClient = (rpcUrl: string) =>
+  new SuiClient({ url: rpcUrl })
 
 export const normalizeTargetObjectId = (objectId: string) =>
   normalizeSuiObjectId(objectId)
@@ -79,7 +80,7 @@ export const logInspectionContext = ({
   logKeyValueBlue("Network")(networkName)
   logKeyValueBlue("RPC")(rpcUrl)
   logKeyValueBlue("Inspecting")(objectId)
-  console.log("\n")
+  console.log("")
 }
 
 export const buildObjectInformation = ({
@@ -117,7 +118,9 @@ export const logObjectInformation = (objectInformation: ObjectInformation) => {
   if (objectInformation.previousTransaction)
     logKeyValueGreen("Previous-tx")(objectInformation.previousTransaction)
   if (objectInformation.hasPublicTransfer !== undefined)
-    logKeyValueGreen("Public-transfer")(formatBoolean(objectInformation.hasPublicTransfer))
+    logKeyValueGreen("Public-transfer")(
+      formatBoolean(objectInformation.hasPublicTransfer)
+    )
   if (objectInformation.errorMessage)
     logKeyValueYellow("Rpc-warning")(objectInformation.errorMessage)
 
@@ -210,7 +213,9 @@ const logDisplayData = (displayData?: Record<string, string>) => {
   logEachGreen(displayData)
 }
 
-const extractBcsSummary = (bcs: SuiObjectData["bcs"]): ObjectBcsSummary | undefined => {
+const extractBcsSummary = (
+  bcs: SuiObjectData["bcs"]
+): ObjectBcsSummary | undefined => {
   if (!bcs) return undefined
 
   const baseSummary: ObjectBcsSummary = {

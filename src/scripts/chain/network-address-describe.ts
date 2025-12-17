@@ -368,9 +368,6 @@ const logAddressInformation = (addressInformation: AddressInformation) => {
 }
 
 /**
- * Builds the log fields for an owned object to make the output more actionable.
- */
-/**
  * Logs the script execution context for clarity.
  */
 const logInspectionContext = ({
@@ -385,7 +382,7 @@ const logInspectionContext = ({
   logKeyValueBlue("Network")(networkName)
   logKeyValueBlue("RPC")(rpcUrl)
   logKeyValueBlue("Inspecting")(address)
-  console.log("\n")
+  console.log("")
 }
 
 /**

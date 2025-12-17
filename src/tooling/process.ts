@@ -138,7 +138,7 @@ export const runSuiScript = <TCliArgument>(
       logKeyValueBlue("Script")(scriptName)
       logKeyValueBlue("Network")(networkToLoad)
       logEachBlue(cliArgumentsToLog)
-      console.log("\n")
+      console.log("")
 
       await scriptToExecute(
         {
@@ -152,7 +152,7 @@ export const runSuiScript = <TCliArgument>(
       )
       process.exit(0)
     } catch (error) {
-      console.log("\n")
+      console.log("")
       logError("Script failed ❌")
       logError(
         `${error instanceof Error ? error.message : String(error)}\n${
