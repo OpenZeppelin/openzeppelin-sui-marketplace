@@ -301,10 +301,25 @@ type ObjectChangeDeleted = Extract<
   NonNullable<SuiTransactionBlockResponse["objectChanges"]>[number],
   { type: "deleted" }
 >
+type ObjectChangeMutated = Extract<
+  NonNullable<SuiTransactionBlockResponse["objectChanges"]>[number],
+  { type: "mutated" }
+>
+type ObjectChangeWrapped = Extract<
+  NonNullable<SuiTransactionBlockResponse["objectChanges"]>[number],
+  { type: "wrapped" }
+>
+type ObjectChangeTransferred = Extract<
+  NonNullable<SuiTransactionBlockResponse["objectChanges"]>[number],
+  { type: "transferred" }
+>
 
 type ObjectChangesByType = {
   created: SuiObjectChangeCreated[]
   deleted: ObjectChangeDeleted[]
+  mutated: ObjectChangeMutated[]
+  wrapped: ObjectChangeWrapped[]
+  transferred: ObjectChangeTransferred[]
 }
 
 type CreatedObjectWithData = {
@@ -315,7 +330,20 @@ type CreatedObjectWithData = {
 type PersistedObjectArtifacts = {
   created: ObjectArtifact[]
   deleted: ObjectArtifact[]
+  updated: ObjectArtifact[]
+  wrapped: ObjectArtifact[]
 }
+
+const EMPTY_OBJECT_ARTIFACTS: PersistedObjectArtifacts = {
+  created: [],
+  deleted: [],
+  updated: [],
+  wrapped: []
+}
+
+const didTransactionSucceed = (
+  transactionResult: SuiTransactionBlockResponse
+) => transactionResult.effects?.status?.status === "success"
 
 const persistObjectsIfAny = async ({
   transactionResult,
@@ -328,9 +356,10 @@ const persistObjectsIfAny = async ({
   signerAddress: string
   networkName: string
 }): Promise<PersistedObjectArtifacts> => {
-  const { created, deleted } = groupObjectChanges(
-    transactionResult.objectChanges
-  )
+  if (!didTransactionSucceed(transactionResult)) return EMPTY_OBJECT_ARTIFACTS
+
+  const { created, deleted, mutated, transferred, wrapped } =
+    groupObjectChanges(transactionResult.objectChanges)
 
   const objectCreatedArtifacts = await persistCreatedArtifacts(
     {
@@ -341,14 +370,26 @@ const persistObjectsIfAny = async ({
     suiClient
   )
 
+  const updatedArtifacts = await persistUpdatedArtifacts({
+    updatedChanges: [...mutated, ...transferred],
+    networkName
+  })
+
   const deletedArtifacts = await persistDeletedArtifacts({
     deletedChanges: deleted,
     networkName
   })
 
+  const wrappedArtifacts = await persistWrappedArtifacts({
+    wrappedChanges: wrapped,
+    networkName
+  })
+
   return {
     created: objectCreatedArtifacts,
-    deleted: deletedArtifacts
+    deleted: deletedArtifacts,
+    updated: updatedArtifacts,
+    wrapped: wrappedArtifacts
   }
 }
 
@@ -385,49 +426,91 @@ const persistCreatedArtifacts = async (
   return objectCreatedArtifacts
 }
 
-const isNewlyDeletedArtifact =
-  (deletedObjectIds: Set<string>) => (artifact: ObjectArtifact) => {
-    const objectId = isDynamicFieldObject(artifact.objectType)
-      ? normalizeObjectIdSafe(artifact.dynamicFieldId)
-      : normalizeObjectIdSafe(artifact.objectId)
+const deriveArtifactObjectId = (artifact: ObjectArtifact) =>
+  isDynamicFieldObject(artifact.objectType)
+    ? normalizeObjectIdSafe(artifact.dynamicFieldId ?? artifact.objectId)
+    : normalizeObjectIdSafe(artifact.objectId)
 
-    return objectId && deletedObjectIds.has(objectId)
-  }
+const indexUpdatesByObjectId = (
+  updatedChanges: ObjectChangeWithOwner[]
+): Map<string, ObjectChangeWithOwner> =>
+  updatedChanges.reduce<Map<string, ObjectChangeWithOwner>>(
+    (accumulator, change) => {
+      const normalizedId = normalizeObjectIdSafe(change.objectId)
+      if (normalizedId) accumulator.set(normalizedId, change)
+      return accumulator
+    },
+    new Map()
+  )
 
-const persistDeletedArtifacts = async ({
-  deletedChanges,
+type ObjectChangeWithOwner = ObjectChangeMutated | ObjectChangeTransferred
+type ObjectChangeWithObjectId =
+  | ObjectChangeWithOwner
+  | ObjectChangeDeleted
+  | ObjectChangeWrapped
+type TimestampField = "deletedAt" | "wrappedAt"
+
+const mapOwnerFromObjectChange = (change: ObjectChangeWithOwner) =>
+  "recipient" in change ? change.recipient : change.owner
+
+const applyUpdatesToArtifacts = ({
+  currentObjectArtifacts,
+  updatesById
+}: {
+  currentObjectArtifacts: ObjectArtifact[]
+  updatesById: Map<string, ObjectChangeWithOwner>
+}) => {
+  const updatedArtifacts: ObjectArtifact[] = []
+
+  const nextArtifacts = currentObjectArtifacts.map((artifact) => {
+    const artifactObjectId = deriveArtifactObjectId(artifact)
+    if (!artifactObjectId) return artifact
+
+    const matchingChange = updatesById.get(artifactObjectId)
+    if (!matchingChange) return artifact
+
+    const updatedArtifact: ObjectArtifact = {
+      ...artifact,
+      owner: mapOwnerToArtifact(mapOwnerFromObjectChange(matchingChange)),
+      version: normalizeVersion(matchingChange.version),
+      digest: matchingChange.digest
+    }
+
+    updatedArtifacts.push(updatedArtifact)
+    return updatedArtifact
+  })
+
+  return { updatedArtifacts, nextArtifacts }
+}
+
+const persistUpdatedArtifacts = async ({
+  updatedChanges,
   networkName
 }: {
-  deletedChanges: ObjectChangeDeleted[]
+  updatedChanges: ObjectChangeWithOwner[]
   networkName: string
 }): Promise<ObjectArtifact[]> => {
-  if (!deletedChanges.length) return []
+  if (!updatedChanges.length) return []
 
-  const deletedObjectIds = buildDeletedObjectIdSet(deletedChanges)
+  const updatesById = indexUpdatesByObjectId(updatedChanges)
+
+  if (!updatesById.size) return []
 
   const currentObjectArtifacts = await loadObjectArtifacts(networkName)
 
-  const updatedObjectArtifacts = currentObjectArtifacts.map((artifact) =>
-    isNewlyDeletedArtifact(deletedObjectIds)(artifact)
-      ? {
-          ...artifact,
-          deletedAt: new Date().toISOString()
-        }
-      : artifact
-  )
+  const { updatedArtifacts, nextArtifacts } = applyUpdatesToArtifacts({
+    currentObjectArtifacts,
+    updatesById
+  })
 
-  const deletedArtifacts = currentObjectArtifacts.filter(
-    isNewlyDeletedArtifact(deletedObjectIds)
-  )
-
-  if (!deletedArtifacts.length) return []
+  if (!updatedArtifacts.length) return []
 
   await rewriteUpdatedArtifacts({
-    objectArtifacts: updatedObjectArtifacts,
+    objectArtifacts: nextArtifacts,
     networkName
   })
 
-  return deletedArtifacts
+  return updatedArtifacts
 }
 
 const groupObjectChanges = (
@@ -438,6 +521,15 @@ const groupObjectChanges = (
   ),
   deleted: (objectChanges || []).filter(
     (change): change is ObjectChangeDeleted => change.type === "deleted"
+  ),
+  mutated: (objectChanges || []).filter(
+    (change): change is ObjectChangeMutated => change.type === "mutated"
+  ),
+  wrapped: (objectChanges || []).filter(
+    (change): change is ObjectChangeWrapped => change.type === "wrapped"
+  ),
+  transferred: (objectChanges || []).filter(
+    (change): change is ObjectChangeTransferred => change.type === "transferred"
   )
 })
 
@@ -454,14 +546,134 @@ const normalizeObjectIdSafe = (
       })()
     : undefined
 
-const buildDeletedObjectIdSet = (
-  deletedChanges: ObjectChangeDeleted[]
+const buildNormalizedObjectIdSet = (
+  changes: ObjectChangeWithObjectId[]
 ): Set<string> =>
-  deletedChanges.reduce<Set<string>>((deletedIds, change) => {
+  changes.reduce<Set<string>>((objectIds, change) => {
     const normalizedObjectId = normalizeObjectIdSafe(change.objectId)
-    if (normalizedObjectId) deletedIds.add(normalizedObjectId)
-    return deletedIds
+    if (normalizedObjectId) objectIds.add(normalizedObjectId)
+    return objectIds
   }, new Set())
+
+const shouldApplyTimestamp = ({
+  artifact,
+  targetObjectIds,
+  predicate
+}: {
+  artifact: ObjectArtifact
+  targetObjectIds: Set<string>
+  predicate: (artifact: ObjectArtifact) => boolean
+}): boolean => {
+  const artifactObjectId = deriveArtifactObjectId(artifact)
+  return Boolean(
+    artifactObjectId &&
+    targetObjectIds.has(artifactObjectId) &&
+    predicate(artifact)
+  )
+}
+
+const markArtifactsWithTimestamp = ({
+  objectArtifacts,
+  targetObjectIds,
+  timestampField,
+  timestampValue,
+  predicate
+}: {
+  objectArtifacts: ObjectArtifact[]
+  targetObjectIds: Set<string>
+  timestampField: TimestampField
+  timestampValue: string
+  predicate: (artifact: ObjectArtifact) => boolean
+}) => {
+  const affectedArtifacts: ObjectArtifact[] = []
+
+  const nextArtifacts = objectArtifacts.map((artifact) => {
+    if (
+      shouldApplyTimestamp({
+        artifact,
+        targetObjectIds,
+        predicate
+      })
+    ) {
+      const updatedArtifact = {
+        ...artifact,
+        [timestampField]: timestampValue
+      } as ObjectArtifact
+
+      affectedArtifacts.push(updatedArtifact)
+      return updatedArtifact
+    }
+
+    return artifact
+  })
+
+  return { affectedArtifacts, nextArtifacts }
+}
+
+const timestampArtifactsForObjectChanges = async ({
+  changes,
+  networkName,
+  timestampField,
+  shouldTimestampArtifact
+}: {
+  changes: ObjectChangeWithObjectId[]
+  networkName: string
+  timestampField: TimestampField
+  shouldTimestampArtifact: (artifact: ObjectArtifact) => boolean
+}): Promise<ObjectArtifact[]> => {
+  if (!changes.length) return []
+
+  const targetObjectIds = buildNormalizedObjectIdSet(changes)
+  if (!targetObjectIds.size) return []
+
+  const currentObjectArtifacts = await loadObjectArtifacts(networkName)
+  const timestampValue = new Date().toISOString()
+
+  const { affectedArtifacts, nextArtifacts } = markArtifactsWithTimestamp({
+    objectArtifacts: currentObjectArtifacts,
+    targetObjectIds,
+    timestampField,
+    timestampValue,
+    predicate: shouldTimestampArtifact
+  })
+
+  if (!affectedArtifacts.length) return []
+
+  await rewriteUpdatedArtifacts({
+    objectArtifacts: nextArtifacts,
+    networkName
+  })
+
+  return affectedArtifacts
+}
+
+const persistDeletedArtifacts = async ({
+  deletedChanges,
+  networkName
+}: {
+  deletedChanges: ObjectChangeDeleted[]
+  networkName: string
+}): Promise<ObjectArtifact[]> =>
+  timestampArtifactsForObjectChanges({
+    changes: deletedChanges,
+    networkName,
+    timestampField: "deletedAt",
+    shouldTimestampArtifact: () => true
+  })
+
+const persistWrappedArtifacts = async ({
+  wrappedChanges,
+  networkName
+}: {
+  wrappedChanges: ObjectChangeWrapped[]
+  networkName: string
+}): Promise<ObjectArtifact[]> =>
+  timestampArtifactsForObjectChanges({
+    changes: wrappedChanges,
+    networkName,
+    timestampField: "wrappedAt",
+    shouldTimestampArtifact: (artifact) => !artifact.wrappedAt
+  })
 
 const fetchCreatedObjectsWithData = async (
   createdChanges: SuiObjectChangeCreated[],

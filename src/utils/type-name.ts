@@ -1,0 +1,105 @@
+import { normalizeSuiObjectId } from "@mysten/sui/utils"
+
+export type TypeNameParts = {
+  packageId: string
+  moduleName: string
+  structName: string
+}
+
+/**
+ * Parses a fully qualified Move type string into its parts.
+ * Throws when the type is not well formed to keep caller validation explicit.
+ */
+export const parseTypeNameFromString = (typeName: string): TypeNameParts => {
+  const [packageId, moduleName, structName] = typeName.split("::")
+  if (!packageId || !moduleName || !structName)
+    throw new Error(
+      "Type must be fully qualified (e.g., 0x2::sui::SUI or 0x...::module::Type)."
+    )
+
+  return {
+    packageId: normalizeSuiObjectId(packageId),
+    moduleName,
+    structName
+  }
+}
+
+export const normalizeTypeNameFromFieldValue = (
+  fieldValue: unknown
+): TypeNameParts | undefined => {
+  if (!fieldValue) return undefined
+
+  const tryParseFromString = (value: unknown) => {
+    if (typeof value !== "string") return undefined
+
+    try {
+      return parseTypeNameFromString(value)
+    } catch {
+      return undefined
+    }
+  }
+
+  const parsedFromString = tryParseFromString(fieldValue)
+  if (parsedFromString) return parsedFromString
+
+  if (typeof fieldValue !== "object") return undefined
+
+  const value = fieldValue as Record<string, unknown>
+
+  if ("fields" in value && value.fields !== undefined) {
+    const parsedFromFields = normalizeTypeNameFromFieldValue(value.fields)
+    if (parsedFromFields) return parsedFromFields
+  }
+
+  const packageId = value.package ?? value.address
+  const moduleName = value.module ?? value.module_name
+  const structName = value.name ?? value.struct ?? value.struct_name
+
+  if (
+    typeof packageId === "string" &&
+    typeof moduleName === "string" &&
+    typeof structName === "string"
+  ) {
+    try {
+      return {
+        packageId: normalizeSuiObjectId(packageId),
+        moduleName,
+        structName
+      }
+    } catch {
+      return undefined
+    }
+  }
+
+  const fallbackTypeName = tryParseFromString(structName)
+  if (fallbackTypeName) return fallbackTypeName
+
+  if (typeof value.name === "string") return tryParseFromString(value.name)
+
+  return undefined
+}
+
+export const isMatchingTypeName = (
+  expectedTypeName: TypeNameParts,
+  candidateFieldValue: unknown
+): boolean => {
+  const normalizedCandidate =
+    normalizeTypeNameFromFieldValue(candidateFieldValue)
+  if (!normalizedCandidate) return false
+
+  return (
+    normalizedCandidate.packageId === expectedTypeName.packageId &&
+    normalizedCandidate.moduleName === expectedTypeName.moduleName &&
+    normalizedCandidate.structName === expectedTypeName.structName
+  )
+}
+
+export const formatTypeName = (typeName: TypeNameParts) =>
+  `${typeName.packageId}::${typeName.moduleName}::${typeName.structName}`
+
+export const formatTypeNameFromFieldValue = (fieldValue: unknown) => {
+  const typeName = normalizeTypeNameFromFieldValue(fieldValue)
+  if (!typeName) return undefined
+
+  return formatTypeName(typeName)
+}

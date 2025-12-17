@@ -2,6 +2,11 @@ import { SuiClient } from "@mysten/sui/client"
 import { deriveObjectID, normalizeSuiObjectId } from "@mysten/sui/utils"
 import yargs from "yargs"
 
+import {
+  type AcceptedCurrencyMatch,
+  findAcceptedCurrencyByCoinType,
+  normalizeCoinType
+} from "../../models/currency.ts"
 import { resolveLatestShopIdentifiers } from "../../models/shop.ts"
 import { SUI_COIN_REGISTRY_ID } from "../../tooling/constants.ts"
 import { assertBytesLength, hexToBytes } from "../../tooling/hex.ts"
@@ -43,6 +48,18 @@ runSuiScript(
   async ({ network }, cliArguments) => {
     const inputs = await normalizeInputs(cliArguments, network.networkName)
     const suiClient = new SuiClient({ url: network.url })
+    const existingAcceptedCurrency = await findAcceptedCurrencyByCoinType({
+      coinType: inputs.coinType,
+      shopId: inputs.shopId,
+      suiClient
+    })
+    if (existingAcceptedCurrency) {
+      logExistingAcceptedCurrency({
+        coinType: inputs.coinType,
+        existingAcceptedCurrency
+      })
+      return
+    }
     const signer = await loadKeypair(network.account)
 
     const shopSharedObject = await getSuiSharedObject(
@@ -172,11 +189,7 @@ const normalizeInputs = async (
     networkName
   )
 
-  const coinType = cliArguments.coinType.trim()
-  if (!coinType)
-    throw new Error(
-      "coinType must be a fully qualified Move type (e.g., 0x2::sui::SUI)."
-    )
+  const coinType = normalizeCoinType(cliArguments.coinType)
 
   const feedIdBytes = assertBytesLength(hexToBytes(cliArguments.feedId), 32)
   const priceInfoObjectId = normalizeSuiObjectId(cliArguments.priceInfoObjectId)
@@ -277,6 +290,31 @@ const buildAddCurrencyTransaction = ({
   })
 
   return transaction
+}
+
+const logExistingAcceptedCurrency = ({
+  coinType,
+  existingAcceptedCurrency
+}: {
+  coinType: string
+  existingAcceptedCurrency: AcceptedCurrencyMatch
+}) => {
+  logKeyValueGreen("coin type")(coinType)
+  logKeyValueGreen("status")(
+    "already registered; skipping add_accepted_currency"
+  )
+  if (existingAcceptedCurrency.acceptedCurrencyId)
+    logKeyValueGreen("accepted currency id")(
+      existingAcceptedCurrency.acceptedCurrencyId
+    )
+  if (existingAcceptedCurrency.acceptedCurrencyFieldId)
+    logKeyValueGreen("currency field id")(
+      existingAcceptedCurrency.acceptedCurrencyFieldId
+    )
+  if (existingAcceptedCurrency.typeIndexFieldId)
+    logKeyValueGreen("type index field id")(
+      existingAcceptedCurrency.typeIndexFieldId
+    )
 }
 
 const findAcceptedCurrency = (createdArtifacts?: ObjectArtifact[]) =>

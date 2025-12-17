@@ -33,6 +33,7 @@ export type ObjectArtifactObjectInfo = {
   version?: string
   digest?: string
   deletedAt?: string
+  wrappedAt?: string
 }
 
 export type ObjectArtifact = ObjectArtifactPackageInfo &
