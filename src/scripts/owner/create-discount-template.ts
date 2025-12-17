@@ -7,11 +7,11 @@ import {
   discountRuleChoices,
   parseDiscountRuleKind,
   parseDiscountRuleValue,
+  validateDiscountSchedule,
   type DiscountRuleKindLabel,
-  type NormalizedRuleKind,
-  validateDiscountSchedule
+  type NormalizedRuleKind
 } from "../../models/discount.ts"
-import { resolveShopIdentifiers } from "../../models/shop.ts"
+import { resolveLatestShopIdentifiers } from "../../models/shop.ts"
 import { loadKeypair } from "../../tooling/keypair.ts"
 import { logKeyValueGreen } from "../../tooling/log.ts"
 import type { ObjectArtifact } from "../../tooling/object.ts"
@@ -162,7 +162,7 @@ const normalizeInputs = async (
   cliArguments: CreateDiscountTemplateArguments,
   networkName: string
 ): Promise<NormalizedInputs> => {
-  const { packageId, shopId, ownerCapId } = await resolveShopIdentifiers(
+  const { packageId, shopId, ownerCapId } = await resolveLatestShopIdentifiers(
     {
       packageId: cliArguments.shopPackageId,
       shopId: cliArguments.shopId,

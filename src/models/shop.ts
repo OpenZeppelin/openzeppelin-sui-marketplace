@@ -31,7 +31,7 @@ export const parseUsdToCents = (rawPrice: string): bigint => {
   return BigInt(dollars) * 100n + BigInt(fractional)
 }
 
-export const resolveShopIdentifiers = async (
+export const resolveLatestShopIdentifiers = async (
   providedIdentifiers: ShopIdentifierInputs,
   networkName: string
 ): Promise<ShopIdentifiers> => {

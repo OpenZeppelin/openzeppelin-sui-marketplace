@@ -2,7 +2,7 @@ import { SuiClient } from "@mysten/sui/client"
 import { deriveObjectID, normalizeSuiObjectId } from "@mysten/sui/utils"
 import yargs from "yargs"
 
-import { resolveShopIdentifiers } from "../../models/shop.ts"
+import { resolveLatestShopIdentifiers } from "../../models/shop.ts"
 import { SUI_COIN_REGISTRY_ID } from "../../tooling/constants.ts"
 import { assertBytesLength, hexToBytes } from "../../tooling/hex.ts"
 import { loadKeypair } from "../../tooling/keypair.ts"
@@ -163,7 +163,7 @@ const normalizeInputs = async (
   cliArguments: AddCurrencyArguments,
   networkName: string
 ): Promise<NormalizedInputs> => {
-  const { packageId, shopId, ownerCapId } = await resolveShopIdentifiers(
+  const { packageId, shopId, ownerCapId } = await resolveLatestShopIdentifiers(
     {
       packageId: cliArguments.shopPackageId,
       shopId: cliArguments.shopId,

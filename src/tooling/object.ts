@@ -230,7 +230,7 @@ export const getObjectIdFromDynamicFieldObject = ({
   content
 }: SuiObjectData): string | undefined =>
   //@ts-expect-error the fields will be there for object (not for package)
-  content?.fields?.value.fields.id.id
+  content?.fields?.value?.fields?.id?.id
 
 export const normalizeOptionalIdFromValue = (
   value: unknown

@@ -2,7 +2,10 @@ import { SuiClient } from "@mysten/sui/client"
 import { normalizeSuiObjectId } from "@mysten/sui/utils"
 import yargs from "yargs"
 
-import { parseUsdToCents, resolveShopIdentifiers } from "../../models/shop.ts"
+import {
+  parseUsdToCents,
+  resolveLatestShopIdentifiers
+} from "../../models/shop.ts"
 import { loadKeypair } from "../../tooling/keypair.ts"
 import { logKeyValueGreen } from "../../tooling/log.ts"
 import type { ObjectArtifact } from "../../tooling/object.ts"
@@ -169,7 +172,7 @@ const normalizeInputs = async (
   cliArguments: AddItemArguments,
   networkName: string
 ) => {
-  const { packageId, shopId, ownerCapId } = await resolveShopIdentifiers(
+  const { packageId, shopId, ownerCapId } = await resolveLatestShopIdentifiers(
     {
       packageId: cliArguments.shopPackageId,
       shopId: cliArguments.shopId,
