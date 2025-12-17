@@ -81,17 +81,23 @@ const DEFAULT_MAX_PRICE_STATUS_LAG_SECS: u64 = 5; // Allow small attestation/pub
 const MAX_PRICE_STATUS_LAG_SECS_CAP: u64 = DEFAULT_MAX_PRICE_STATUS_LAG_SECS;
 // Powers of 10 from 10^0 through 10^38 for scaling Pyth prices and coin decimals.
 const POW10_U128: vector<u128> = vector[
-  1, 10, 100, 1_000, 10_000, 100_000, 1_000_000, 10_000_000, 100_000_000, 1_000_000_000,
-  10_000_000_000, 100_000_000_000, 1_000_000_000_000, 10_000_000_000_000, 100_000_000_000_000,
-  1_000_000_000_000_000, 10_000_000_000_000_000, 100_000_000_000_000_000, 1_000_000_000_000_000_000,
-  10_000_000_000_000_000_000, 100_000_000_000_000_000_000, 1_000_000_000_000_000_000_000,
-  10_000_000_000_000_000_000_000, 100_000_000_000_000_000_000_000, 1_000_000_000_000_000_000_000_000,
+  1, 10, 100, 1_000, 10_000, 100_000, 1_000_000, 10_000_000, 100_000_000,
+  1_000_000_000, 10_000_000_000, 100_000_000_000, 1_000_000_000_000,
+  10_000_000_000_000, 100_000_000_000_000, 1_000_000_000_000_000,
+  10_000_000_000_000_000, 100_000_000_000_000_000, 1_000_000_000_000_000_000,
+  10_000_000_000_000_000_000, 100_000_000_000_000_000_000,
+  1_000_000_000_000_000_000_000, 10_000_000_000_000_000_000_000,
+  100_000_000_000_000_000_000_000, 1_000_000_000_000_000_000_000_000,
   10_000_000_000_000_000_000_000_000, 100_000_000_000_000_000_000_000_000,
   1_000_000_000_000_000_000_000_000_000, 10_000_000_000_000_000_000_000_000_000,
-  100_000_000_000_000_000_000_000_000_000, 1_000_000_000_000_000_000_000_000_000_000,
-  10_000_000_000_000_000_000_000_000_000_000, 100_000_000_000_000_000_000_000_000_000_000,
-  1_000_000_000_000_000_000_000_000_000_000_000, 10_000_000_000_000_000_000_000_000_000_000_000,
-  100_000_000_000_000_000_000_000_000_000_000_000, 1_000_000_000_000_000_000_000_000_000_000_000_000,
+  100_000_000_000_000_000_000_000_000_000,
+  1_000_000_000_000_000_000_000_000_000_000,
+  10_000_000_000_000_000_000_000_000_000_000,
+  100_000_000_000_000_000_000_000_000_000_000,
+  1_000_000_000_000_000_000_000_000_000_000_000,
+  10_000_000_000_000_000_000_000_000_000_000_000,
+  100_000_000_000_000_000_000_000_000_000_000_000,
+  1_000_000_000_000_000_000_000_000_000_000_000_000,
   10_000_000_000_000_000_000_000_000_000_000_000_000,
   100_000_000_000_000_000_000_000_000_000_000_000_000,
 ];
@@ -111,9 +117,10 @@ fun claim_publisher(
   pkg::claim<SHOP>(publisher_witness, ctx)
 }
 
+#[allow(lint(self_transfer))]
 fun transfer_publisher_to_sender(
   publisher: pkg::Publisher,
-  ctx: &mut tx::TxContext,
+  ctx: &tx::TxContext,
 ) {
   txf::public_transfer(publisher, tx::sender(ctx));
 }
@@ -216,6 +223,12 @@ public struct DiscountTemplate has key, store {
   claims_issued: u64,
   redemptions: u64,
   active: bool,
+}
+
+/// Marker stored under the shop to record template membership.
+public struct DiscountTemplateMarker has copy, drop, store {
+  template_id: obj::ID,
+  applies_to_listing: opt::Option<obj::ID>,
 }
 
 /// Discount ticket that future buyers will redeem to later use during purchase flow.
@@ -364,7 +377,10 @@ public struct MintingCompleted has copy, drop {
 /// - Publisher gate: consuming `pkg::Publisher` enforces that only the package publisher can create
 ///   curated shops. In EVM you would gate on `onlyOwner` or a factory contract; on Sui the publisher
 ///   object is the canonical, on-chain proof of authorship.
-public entry fun create_shop(publisher: &pkg::Publisher, ctx: &mut tx::TxContext) {
+public entry fun create_shop(
+  publisher: &pkg::Publisher,
+  ctx: &mut tx::TxContext,
+) {
   // Ensure the capability comes from this module; otherwise users could pass an
   // unrelated publisher.
   assert!(pkg::from_module<Shop>(publisher), EInvalidPublisher);
@@ -482,7 +498,11 @@ public entry fun add_item_listing<T: store>(
     stock,
   });
 
-  dynamic_field::add(&mut shop.id, obj::id_from_address(listing_address), listing);
+  dynamic_field::add(
+    &mut shop.id,
+    obj::id_from_address(listing_address),
+    listing,
+  );
 }
 
 /// Update the inventory count for a listing (0 inventory to pause selling).
@@ -495,7 +515,10 @@ public entry fun update_item_listing_stock(
 ) {
   assert_owner_cap(shop, owner_cap);
 
-  let listing: &mut ItemListing = dynamic_field::borrow_mut(&mut shop.id, item_listing_id);
+  let listing: &mut ItemListing = dynamic_field::borrow_mut(
+    &mut shop.id,
+    item_listing_id,
+  );
   listing.stock = new_stock;
 
   event::emit(ItemListingStockUpdated {
@@ -523,7 +546,10 @@ public entry fun remove_item_listing(
 ) {
   assert_owner_cap(shop, owner_cap);
 
-  let listing: ItemListing = dynamic_field::remove(&mut shop.id, item_listing_id);
+  let listing: ItemListing = dynamic_field::remove(
+    &mut shop.id,
+    item_listing_id,
+  );
 
   event::emit(ItemListingRemoved {
     shop_address: shop_address(shop),
@@ -581,7 +607,10 @@ public entry fun add_accepted_currency<T: store>(
   assert_supported_decimals(decimals);
   let symbol: vector<u8> = string::into_bytes(registry::symbol(currency));
   let shop_address: address = shop_address(shop);
-  let age_cap: u64 = resolve_guardrail_cap(&max_price_age_secs_cap, MAX_PRICE_AGE_SECS_CAP);
+  let age_cap: u64 = resolve_guardrail_cap(
+    &max_price_age_secs_cap,
+    MAX_PRICE_AGE_SECS_CAP,
+  );
   let confidence_cap = resolve_guardrail_cap(
     &max_confidence_ratio_bps_cap,
     MAX_CONFIDENCE_RATIO_BPS_CAP,
@@ -611,7 +640,11 @@ public entry fun add_accepted_currency<T: store>(
     accepted_currency,
   );
 
-  dynamic_field::add(&mut shop.id, coin_type, obj::id_from_address(accepted_currency_address));
+  dynamic_field::add(
+    &mut shop.id,
+    coin_type,
+    obj::id_from_address(accepted_currency_address),
+  );
 
   event::emit(AcceptedCoinAdded {
     shop_address,
@@ -649,6 +682,49 @@ public entry fun remove_accepted_currency(
 
 /// * Discount * ///
 
+fun create_discount_template_core(
+  shop: &mut Shop,
+  applies_to_listing: opt::Option<obj::ID>,
+  rule_kind: u8,
+  rule_value: u64,
+  starts_at: u64,
+  expires_at: opt::Option<u64>,
+  max_redemptions: opt::Option<u64>,
+  ctx: &mut tx::TxContext,
+): (DiscountTemplate, obj::ID, DiscountRule, address) {
+  validate_discount_template_inputs(
+    shop,
+    &applies_to_listing,
+    starts_at,
+    &expires_at,
+  );
+
+  let discount_rule_kind: DiscountRuleKind = parse_rule_kind(rule_kind);
+  let discount_rule: DiscountRule = build_discount_rule(
+    discount_rule_kind,
+    rule_value,
+  );
+  let shop_address: address = shop_address(shop);
+  let (discount_template, discount_template_address) = new_discount_template(
+    shop_address,
+    applies_to_listing,
+    discount_rule,
+    starts_at,
+    expires_at,
+    max_redemptions,
+    ctx,
+  );
+
+  let discount_template_id = obj::id_from_address(discount_template_address);
+  add_template_marker(shop, discount_template_id, applies_to_listing);
+  (
+    discount_template,
+    discount_template_id,
+    discount_rule,
+    discount_template_address,
+  )
+}
+
 /// Create a discount template anchored under the shop.
 ///
 /// Templates are configuration objects stored as dynamic-field children, so they automatically
@@ -666,6 +742,7 @@ public entry fun remove_accepted_currency(
 /// - Time windows and limits are stored on-chain and later checked against the shared `Clock`
 ///   (milliseconds → seconds). That is more predictable than `block.timestamp`, which can drift by
 ///   15s+ on EVM and cannot be read in view functions without implicit trust in miners.
+#[allow(lint(share_owned))]
 public entry fun create_discount_template(
   shop: &mut Shop,
   applies_to_listing: opt::Option<obj::ID>,
@@ -678,32 +755,24 @@ public entry fun create_discount_template(
   ctx: &mut tx::TxContext,
 ) {
   assert_owner_cap(shop, owner_cap);
-  validate_discount_template_inputs(
-    shop,
-    &applies_to_listing,
-    starts_at,
-    &expires_at,
-  );
-
-  let discount_rule_kind: DiscountRuleKind = parse_rule_kind(rule_kind);
-  let discount_rule: DiscountRule = build_discount_rule(discount_rule_kind, rule_value);
-  let shop_address: address = shop_address(shop);
-  let (discount_template, discount_template_address) = new_discount_template(
-    shop_address,
-    applies_to_listing,
+  let (
+    discount_template,
+    _discount_template_id,
     discount_rule,
+    discount_template_address,
+  ) = create_discount_template_core(
+    shop,
+    applies_to_listing,
+    rule_kind,
+    rule_value,
     starts_at,
     expires_at,
     max_redemptions,
     ctx,
   );
+  txf::share_object(discount_template);
 
-  dynamic_field::add(
-    &mut shop.id,
-    obj::id_from_address(discount_template_address),
-    discount_template,
-  );
-
+  let shop_address: address = shop_address(shop);
   event::emit(DiscountTemplateCreated {
     shop_address,
     discount_template_id: discount_template_address,
@@ -716,8 +785,8 @@ public entry fun create_discount_template(
 /// Templates that have reached an expiry or redemption cap are treated as finalized and cannot be
 /// updated to avoid re-opening claims after pruning.
 public entry fun update_discount_template(
-  shop: &mut Shop,
-  discount_template_id: obj::ID,
+  shop: &Shop,
+  discount_template: &mut DiscountTemplate,
   rule_kind: u8,
   rule_value: u64,
   starts_at: u64,
@@ -727,14 +796,13 @@ public entry fun update_discount_template(
   clock: &clock::Clock,
 ) {
   assert_owner_cap(shop, owner_cap);
-  assert_template_belongs_to_shop(shop, discount_template_id);
+  assert_template_matches_shop(shop, discount_template);
   assert_schedule(starts_at, &expires_at);
 
   let discount_rule_kind: DiscountRuleKind = parse_rule_kind(rule_kind);
-  let discount_rule: DiscountRule = build_discount_rule(discount_rule_kind, rule_value);
-  let discount_template: &mut DiscountTemplate = dynamic_field::borrow_mut(
-    &mut shop.id,
-    discount_template_id,
+  let discount_rule: DiscountRule = build_discount_rule(
+    discount_rule_kind,
+    rule_value,
   );
   let now: u64 = now_secs(clock);
   assert_template_updatable(discount_template, now);
@@ -749,31 +817,26 @@ public entry fun update_discount_template(
 
   event::emit(DiscountTemplateUpdated {
     shop_address: discount_template.shop_address,
-    discount_template_id: obj::id_to_address(&discount_template_id),
+    discount_template_id: template_address(discount_template),
   });
 }
 
 /// Quickly enable/disable a coupon without deleting it.
 public entry fun toggle_discount_template(
-  shop: &mut Shop,
-  discount_template_id: obj::ID,
+  shop: &Shop,
+  discount_template: &mut DiscountTemplate,
   active: bool,
   owner_cap: &ShopOwnerCap,
   _ctx: &mut tx::TxContext,
 ) {
   assert_owner_cap(shop, owner_cap);
-  assert_template_belongs_to_shop(shop, discount_template_id);
-
-  let discount_template: &mut DiscountTemplate = dynamic_field::borrow_mut(
-    &mut shop.id,
-    discount_template_id,
-  );
+  assert_template_matches_shop(shop, discount_template);
 
   discount_template.active = active;
 
   event::emit(DiscountTemplateToggled {
     shop_address: discount_template.shop_address,
-    discount_template_id: obj::id_to_address(&discount_template_id),
+    discount_template_id: template_address(discount_template),
     active,
   });
 }
@@ -782,17 +845,25 @@ public entry fun toggle_discount_template(
 public entry fun attach_template_to_listing(
   shop: &mut Shop,
   item_listing_id: obj::ID,
-  discount_template_id: obj::ID,
+  discount_template: &DiscountTemplate,
   owner_cap: &ShopOwnerCap,
   _ctx: &mut tx::TxContext,
 ) {
-  toggle_template_on_listing(
+  assert_owner_cap(shop, owner_cap);
+  assert_template_matches_shop(shop, discount_template);
+  assert_listing_belongs_to_shop(shop, item_listing_id);
+  assert_spotlight_template_matches_listing(
     shop,
+    obj::id_to_address(&item_listing_id),
+    &opt::some(template_id(discount_template)),
+  );
+
+  let item_listing: &mut ItemListing = dynamic_field::borrow_mut(
+    &mut shop.id,
     item_listing_id,
-    opt::some(discount_template_id),
-    owner_cap,
-    _ctx,
-  )
+  );
+  item_listing.spotlight_discount_template_id =
+    opt::some(template_id(discount_template));
 }
 
 /// Remove the promotion banner from a listing.
@@ -802,7 +873,14 @@ public entry fun clear_template_from_listing(
   owner_cap: &ShopOwnerCap,
   _ctx: &mut tx::TxContext,
 ) {
-  toggle_template_on_listing(shop, item_listing_id, opt::none(), owner_cap, _ctx)
+  assert_owner_cap(shop, owner_cap);
+  assert_listing_belongs_to_shop(shop, item_listing_id);
+
+  let item_listing: &mut ItemListing = dynamic_field::borrow_mut(
+    &mut shop.id,
+    item_listing_id,
+  );
+  item_listing.spotlight_discount_template_id = opt::none();
 }
 
 /// Mint a single-use discount ticket to the caller using the template schedule and limits.
@@ -822,10 +900,13 @@ public entry fun clear_template_from_listing(
 ///   the object will make it unusable. In EVM you might airdrop ERC-1155 coupons; here the object
 ///   identity plus `tx::sender` check guarantee single-claimer semantics without extra storage.
 public entry fun claim_discount_ticket(
+  shop: &Shop,
   discount_template: &mut DiscountTemplate,
   clock: &clock::Clock,
   ctx: &mut tx::TxContext,
 ): () {
+  assert_template_matches_shop(shop, discount_template);
+
   let now_secs: u64 = now_secs(clock);
   let (discount_ticket, claimer) = claim_discount_ticket_with_event(
     discount_template,
@@ -848,7 +929,11 @@ public fun claim_discount_ticket_inline(
   let claimer = tx::sender(ctx);
   assert_template_claimable(discount_template, claimer, now_secs);
 
-  let discount_ticket: DiscountTicket = new_discount_ticket(discount_template, claimer, ctx);
+  let discount_ticket: DiscountTicket = new_discount_ticket(
+    discount_template,
+    claimer,
+    ctx,
+  );
   record_discount_claim(discount_template, claimer, ctx);
   discount_ticket
 }
@@ -858,7 +943,11 @@ fun claim_discount_ticket_with_event(
   now_secs: u64,
   ctx: &mut tx::TxContext,
 ): (DiscountTicket, address) {
-  let discount_ticket = claim_discount_ticket_inline(discount_template, now_secs, ctx);
+  let discount_ticket = claim_discount_ticket_inline(
+    discount_template,
+    now_secs,
+    ctx,
+  );
   let claimer = tx::sender(ctx);
 
   event::emit(DiscountClaimed {
@@ -875,45 +964,20 @@ fun claim_discount_ticket_with_event(
 /// Pruning is only allowed once the template is irrevocably finished (expired or maxed out)
 /// so that a pause cannot be used to bypass the one-claim-per-address guarantee.
 public entry fun prune_discount_claims(
-  shop: &mut Shop,
-  discount_template_id: obj::ID,
+  shop: &Shop,
+  discount_template: &mut DiscountTemplate,
   claimers: vector<address>,
   owner_cap: &ShopOwnerCap,
   clock: &clock::Clock,
 ) {
   assert_owner_cap(shop, owner_cap);
-  assert_template_belongs_to_shop(shop, discount_template_id);
-
-  let template: &mut DiscountTemplate = dynamic_field::borrow_mut(
-    &mut shop.id,
-    discount_template_id,
-  );
+  assert_template_matches_shop(shop, discount_template);
   let now_secs = now_secs(clock);
-  assert_template_prunable(template, now_secs);
-  prune_claim_markers(template, claimers);
+  assert_template_prunable(discount_template, now_secs);
+  prune_claim_markers(discount_template, claimers);
 }
 
 /// Attach or clear a template banner on a listing depending on whether the `Option` carries an id.
-entry fun toggle_template_on_listing(
-  shop: &mut Shop,
-  item_listing_id: obj::ID,
-  discount_template_id: opt::Option<obj::ID>,
-  owner_cap: &ShopOwnerCap,
-  _ctx: &mut tx::TxContext,
-) {
-  assert_owner_cap(shop, owner_cap);
-  assert_listing_belongs_to_shop(shop, item_listing_id);
-  assert_belongs_to_shop_if_some(ReferenceKind::Template, shop, &discount_template_id);
-  assert_spotlight_template_matches_listing(
-    shop,
-    obj::id_to_address(&item_listing_id),
-    &discount_template_id,
-  );
-
-  let item_listing: &mut ItemListing = dynamic_field::borrow_mut(&mut shop.id, item_listing_id);
-  item_listing.spotlight_discount_template_id = discount_template_id;
-}
-
 /// * Checkout * ///
 
 /// Execute a purchase priced in USD cents but settled with any previously registered `AcceptedCurrency`.
@@ -997,15 +1061,19 @@ public entry fun buy_item_with_discount<TItem: store, TCoin>(
   ctx: &mut tx::TxContext,
 ) {
   let buyer = tx::sender(ctx);
-  let template_id = obj::id_from_address(template_address(discount_template));
-  assert_template_belongs_to_shop(shop, template_id);
+  assert_template_matches_shop(shop, discount_template);
   assert_listing_belongs_to_shop(
     shop,
     obj::id_from_address(obj::uid_to_address(&item_listing.id)),
   );
   let now = now_secs(clock);
   assert_discount_redemption_allowed(discount_template, item_listing, now);
-  assert_ticket_matches_context(&discount_ticket, discount_template, item_listing, buyer);
+  assert_ticket_matches_context(
+    &discount_ticket,
+    discount_template,
+    item_listing,
+    buyer,
+  );
 
   let discounted_price_usd_cents = apply_discount(
     item_listing.base_price_usd_cents,
@@ -1070,8 +1138,7 @@ public entry fun claim_and_buy_item_with_discount<TItem: store, TCoin>(
   clock: &clock::Clock,
   ctx: &mut tx::TxContext,
 ) {
-  let template_id = obj::id_from_address(template_address(discount_template));
-  assert_template_belongs_to_shop(shop, template_id);
+  assert_template_matches_shop(shop, discount_template);
   let now_secs = now_secs(clock);
   let (discount_ticket, _claimer) = claim_discount_ticket_with_event(
     discount_template,
@@ -1159,7 +1226,9 @@ fun new_accepted_currency(
     max_confidence_ratio_bps_cap,
     max_price_status_lag_secs_cap,
   };
-  let accepted_currency_address: address = obj::uid_to_address(&accepted_currency.id);
+  let accepted_currency_address: address = obj::uid_to_address(
+    &accepted_currency.id,
+  );
 
   (accepted_currency, accepted_currency_address)
 }
@@ -1208,7 +1277,9 @@ fun new_discount_template(
     active: true,
   };
 
-  let discount_template_address: address = obj::uid_to_address(&discount_template.id);
+  let discount_template_address: address = obj::uid_to_address(
+    &discount_template.id,
+  );
   (discount_template, discount_template_address)
 }
 
@@ -1244,8 +1315,16 @@ fun record_discount_claim(
   );
 }
 
-fun remove_discount_claim_if_exists(template: &mut DiscountTemplate, claimer: address) {
-  if (dynamic_field::exists_with_type<address, DiscountClaim>(&template.id, claimer)) {
+fun remove_discount_claim_if_exists(
+  template: &mut DiscountTemplate,
+  claimer: address,
+) {
+  if (
+    dynamic_field::exists_with_type<address, DiscountClaim>(
+      &template.id,
+      claimer,
+    )
+  ) {
     let DiscountClaim {
       id,
       claimer: _,
@@ -1254,7 +1333,10 @@ fun remove_discount_claim_if_exists(template: &mut DiscountTemplate, claimer: ad
   };
 }
 
-fun prune_claim_markers(template: &mut DiscountTemplate, claimers: vector<address>) {
+fun prune_claim_markers(
+  template: &mut DiscountTemplate,
+  claimers: vector<address>,
+) {
   let mut i = 0;
   let total = vec::length(&claimers);
   while (i < total) {
@@ -1298,6 +1380,40 @@ fun shop_address(shop: &Shop): address {
   obj::uid_to_address(&shop.id)
 }
 
+fun template_id(template: &DiscountTemplate): obj::ID {
+  obj::id_from_address(template_address(template))
+}
+
+fun add_template_marker(
+  shop: &mut Shop,
+  template_id: obj::ID,
+  applies_to_listing: opt::Option<obj::ID>,
+) {
+  dynamic_field::add(
+    &mut shop.id,
+    template_id,
+    DiscountTemplateMarker {
+      template_id,
+      applies_to_listing,
+    },
+  );
+}
+
+fun assert_template_registered(shop: &Shop, template_id: obj::ID) {
+  assert!(
+    dynamic_field::exists_with_type<obj::ID, DiscountTemplateMarker>(
+      &shop.id,
+      template_id,
+    ),
+    ETemplateShopMismatch,
+  );
+}
+
+fun assert_template_matches_shop(shop: &Shop, template: &DiscountTemplate) {
+  assert_template_registered(shop, template_id(template));
+  assert!(template.shop_address == shop_address(shop), ETemplateShopMismatch);
+}
+
 fun unwrap_or_default(value: &opt::Option<u64>, default_value: u64): u64 {
   if (opt::is_some(value)) {
     *opt::borrow(value)
@@ -1307,7 +1423,10 @@ fun unwrap_or_default(value: &opt::Option<u64>, default_value: u64): u64 {
 }
 
 /// Normalize a seller-provided guardrail cap, enforcing module-level ceilings and non-zero.
-fun resolve_guardrail_cap(proposed_cap: &opt::Option<u64>, module_cap: u64): u64 {
+fun resolve_guardrail_cap(
+  proposed_cap: &opt::Option<u64>,
+  module_cap: u64,
+): u64 {
   let value = unwrap_or_default(proposed_cap, module_cap);
   assert!(value > 0, EInvalidGuardrailCap);
   clamp_max(value, module_cap)
@@ -1358,7 +1477,10 @@ fun borrow_registered_accepted_currency(
 ): &AcceptedCurrency {
   let accepted_currency_id = accepted_currency_id(accepted_currency);
   assert!(
-    dynamic_field::exists_with_type<obj::ID, AcceptedCurrency>(&shop.id, accepted_currency_id),
+    dynamic_field::exists_with_type<obj::ID, AcceptedCurrency>(
+      &shop.id,
+      accepted_currency_id,
+    ),
     EAcceptedCurrencyMissing,
   );
   dynamic_field::borrow(&shop.id, accepted_currency_id)
@@ -1372,7 +1494,10 @@ fun quote_amount_with_guardrails(
   max_confidence_ratio_bps: &opt::Option<u64>,
   clock: &clock::Clock,
 ): u64 {
-  let (effective_max_age, effective_confidence_ratio) = resolve_effective_guardrails(
+  let (
+    effective_max_age,
+    effective_confidence_ratio,
+  ) = resolve_effective_guardrails(
     max_price_age_secs,
     max_confidence_ratio_bps,
     accepted_currency,
@@ -1406,7 +1531,10 @@ fun process_purchase<TItem: store, TCoin>(
   ctx: &mut tx::TxContext,
 ): () {
   assert_listing_type_matches<TItem>(item_listing);
-  let accepted_currency = borrow_registered_accepted_currency(shop, accepted_currency);
+  let accepted_currency = borrow_registered_accepted_currency(
+    shop,
+    accepted_currency,
+  );
 
   assert_listing_currency_match(shop, item_listing, accepted_currency);
   process_purchase_core<TItem, TCoin>(
@@ -1444,7 +1572,10 @@ fun process_purchase_core<TItem: store, TCoin>(
   ctx: &mut tx::TxContext,
 ): () {
   ensure_price_info_matches_currency(accepted_currency, price_info_object);
-  assert_price_status_trading(price_info_object, accepted_currency.max_price_status_lag_secs_cap);
+  assert_price_status_trading(
+    price_info_object,
+    accepted_currency.max_price_status_lag_secs_cap,
+  );
   assert_payment_coin_type<TCoin>(accepted_currency);
   assert_stock_available(item_listing);
   let quote_amount: u64 = quote_amount_with_guardrails(
@@ -1485,7 +1616,12 @@ fun process_purchase_core<TItem: store, TCoin>(
     new_stock: item_listing.stock,
   });
 
-  let minted_item_id = mint_and_transfer_item<TItem>(item_listing, mint_to, clock, ctx);
+  let minted_item_id = mint_and_transfer_item<TItem>(
+    item_listing,
+    mint_to,
+    clock,
+    ctx,
+  );
 
   event::emit(MintingCompleted {
     shop_address,
@@ -1508,7 +1644,10 @@ fun parse_rule_kind(raw_kind: u8): DiscountRuleKind {
   }
 }
 
-fun build_discount_rule(rule_kind: DiscountRuleKind, rule_value: u64): DiscountRule {
+fun build_discount_rule(
+  rule_kind: DiscountRuleKind,
+  rule_value: u64,
+): DiscountRule {
   match (rule_kind) {
     DiscountRuleKind::Fixed => DiscountRule::Fixed { amount_cents: rule_value },
     DiscountRuleKind::Percent => {
@@ -1518,7 +1657,9 @@ fun build_discount_rule(rule_kind: DiscountRuleKind, rule_value: u64): DiscountR
   }
 }
 
-fun map_id_option_to_address(source: &opt::Option<obj::ID>): opt::Option<address> {
+fun map_id_option_to_address(
+  source: &opt::Option<obj::ID>,
+): opt::Option<address> {
   if (opt::is_some(source)) {
     opt::some(obj::id_to_address(opt::borrow(source)))
   } else {
@@ -1616,7 +1757,8 @@ fun conservative_price_mantissa(
   max_confidence_ratio_bps: u64,
 ): u128 {
   assert!(mantissa > confidence, EConfidenceExceedsPrice);
-  let scaled_confidence = confidence * as_u128_from_u64(BASIS_POINT_DENOMINATOR);
+  let scaled_confidence =
+    confidence * as_u128_from_u64(BASIS_POINT_DENOMINATOR);
   let max_allowed = mantissa * as_u128_from_u64(max_confidence_ratio_bps);
   assert!(scaled_confidence <= max_allowed, EConfidenceIntervalTooWide);
   mantissa - confidence
@@ -1691,7 +1833,8 @@ fun apply_discount(base_price_usd_cents: u64, rule: &DiscountRule): u64 {
     },
     DiscountRule::Percent { bps } => {
       let remaining_bps = BASIS_POINT_DENOMINATOR - as_u64_from_u16(*bps);
-      let product = as_u128_from_u64(base_price_usd_cents) * as_u128_from_u64(remaining_bps);
+      let product =
+        as_u128_from_u64(base_price_usd_cents) * as_u128_from_u64(remaining_bps);
       let discounted = ceil_div_u128(
         product,
         as_u128_from_u64(BASIS_POINT_DENOMINATOR),
@@ -1746,7 +1889,10 @@ fun as_u128_from_u64(value: u64): u128 {
 // ======================= //
 
 fun assert_owner_cap(shop: &Shop, owner_cap: &ShopOwnerCap) {
-  assert!(owner_cap.shop_address == obj::uid_to_address(&shop.id), EInvalidOwnerCap);
+  assert!(
+    owner_cap.shop_address == obj::uid_to_address(&shop.id),
+    EInvalidOwnerCap,
+  );
 }
 
 fun assert_non_zero_stock(stock: u64) {
@@ -1788,7 +1934,11 @@ fun validate_discount_template_inputs(
   expires_at: &opt::Option<u64>,
 ) {
   assert_schedule(starts_at, expires_at);
-  assert_belongs_to_shop_if_some(ReferenceKind::Listing, shop, applies_to_listing);
+  assert_belongs_to_shop_if_some(
+    ReferenceKind::Listing,
+    shop,
+    applies_to_listing,
+  );
 }
 
 fun assert_template_in_time_window(template: &DiscountTemplate, now_secs: u64) {
@@ -1832,8 +1982,13 @@ fun assert_discount_redemption_allowed(
   now: u64,
 ) {
   assert!(discount_template.active, ETemplateInactive);
-  assert!(discount_template.shop_address == item_listing.shop_address, EDiscountShopMismatch);
-  let applies_to = map_id_option_to_address(&discount_template.applies_to_listing);
+  assert!(
+    discount_template.shop_address == item_listing.shop_address,
+    EDiscountShopMismatch,
+  );
+  let applies_to = map_id_option_to_address(
+    &discount_template.applies_to_listing,
+  );
   if (opt::is_some(&applies_to)) {
     assert!(
       *opt::borrow(&applies_to) == obj::uid_to_address(&item_listing.id),
@@ -1841,7 +1996,10 @@ fun assert_discount_redemption_allowed(
     );
   };
   assert_template_in_time_window(discount_template, now);
-  assert!(discount_template.claims_issued > discount_template.redemptions, ETemplateMaxedOut);
+  assert!(
+    discount_template.claims_issued > discount_template.redemptions,
+    ETemplateMaxedOut,
+  );
   assert!(!redemption_cap_reached(discount_template), ETemplateMaxedOut);
 }
 
@@ -1851,13 +2009,18 @@ fun assert_ticket_matches_context(
   item_listing: &ItemListing,
   buyer: address,
 ) {
-  assert!(discount_ticket.shop_address == item_listing.shop_address, EDiscountTicketShopMismatch);
+  assert!(
+    discount_ticket.shop_address == item_listing.shop_address,
+    EDiscountTicketShopMismatch,
+  );
   assert!(
     discount_ticket.discount_template_id == template_address(discount_template),
     EDiscountTicketMismatch,
   );
   assert!(discount_ticket.claimer == buyer, EDiscountTicketOwnerMismatch);
-  let applies_to_listing = map_id_option_to_address(&discount_ticket.listing_id);
+  let applies_to_listing = map_id_option_to_address(
+    &discount_ticket.listing_id,
+  );
   if (opt::is_some(&applies_to_listing)) {
     assert!(
       *opt::borrow(&applies_to_listing) == obj::uid_to_address(&item_listing.id),
@@ -1880,7 +2043,10 @@ fun validate_accepted_currency_inputs(
 
 fun assert_valid_feed_id(feed_id: &vector<u8>) {
   assert!(!vec::is_empty(feed_id), EEmptyFeedId);
-  assert!(vec::length(feed_id) == PYTH_PRICE_IDENTIFIER_LENGTH, EInvalidFeedIdLength);
+  assert!(
+    vec::length(feed_id) == PYTH_PRICE_IDENTIFIER_LENGTH,
+    EInvalidFeedIdLength,
+  );
 }
 
 fun assert_price_info_identity(
@@ -1889,25 +2055,45 @@ fun assert_price_info_identity(
   price_info_object: &pyth_price_info::PriceInfoObject,
 ) {
   let confirmed_price_object = pyth_price_info::uid_to_inner(price_info_object);
-  assert!(confirmed_price_object == *expected_pyth_object_id, EPythObjectMismatch);
+  assert!(
+    confirmed_price_object == *expected_pyth_object_id,
+    EPythObjectMismatch,
+  );
 
-  let price_info = pyth_price_info::get_price_info_from_price_info_object(price_info_object);
+  let price_info = pyth_price_info::get_price_info_from_price_info_object(
+    price_info_object,
+  );
   let identifier = pyth_price_info::get_price_identifier(&price_info);
   let identifier_bytes = pyth_price_identifier::get_bytes(&identifier);
-  assert!(bytes_equal(expected_feed_id, &identifier_bytes), EFeedIdentifierMismatch);
+  assert!(
+    bytes_equal(expected_feed_id, &identifier_bytes),
+    EFeedIdentifierMismatch,
+  );
 }
 
 fun assert_currency_not_registered(shop: &Shop, coin_type: &TypeInfo) {
-  assert!(!dynamic_field::exists_<TypeInfo>(&shop.id, *coin_type), EAcceptedCurrencyExists);
+  assert!(
+    !dynamic_field::exists_<TypeInfo>(&shop.id, *coin_type),
+    EAcceptedCurrencyExists,
+  );
 }
 
 fun assert_supported_decimals(decimals: u8) {
-  assert!(as_u64_from_u8(decimals) <= MAX_DECIMAL_POWER, EUnsupportedCurrencyDecimals);
+  assert!(
+    as_u64_from_u8(decimals) <= MAX_DECIMAL_POWER,
+    EUnsupportedCurrencyDecimals,
+  );
 }
 
-fun assert_accepted_currency_exists(shop: &Shop, accepted_currency_id: obj::ID) {
+fun assert_accepted_currency_exists(
+  shop: &Shop,
+  accepted_currency_id: obj::ID,
+) {
   assert!(
-    dynamic_field::exists_with_type<obj::ID, AcceptedCurrency>(&shop.id, accepted_currency_id),
+    dynamic_field::exists_with_type<obj::ID, AcceptedCurrency>(
+      &shop.id,
+      accepted_currency_id,
+    ),
     EAcceptedCurrencyMissing,
   );
 }
@@ -1917,8 +2103,14 @@ fun assert_listing_currency_match(
   item_listing: &ItemListing,
   accepted_currency: &AcceptedCurrency,
 ) {
-  assert!(item_listing.shop_address == shop_address(shop), EListingShopMismatch);
-  assert!(item_listing.shop_address == accepted_currency.shop_address, ECurrencyListingMismatch);
+  assert!(
+    item_listing.shop_address == shop_address(shop),
+    EListingShopMismatch,
+  );
+  assert!(
+    item_listing.shop_address == accepted_currency.shop_address,
+    ECurrencyListingMismatch,
+  );
 }
 
 fun ensure_price_info_matches_currency(
@@ -1936,7 +2128,9 @@ fun assert_price_status_trading(
   price_info_object: &pyth_price_info::PriceInfoObject,
   max_price_status_lag_secs: u64,
 ) {
-  let price_info = pyth_price_info::get_price_info_from_price_info_object(price_info_object);
+  let price_info = pyth_price_info::get_price_info_from_price_info_object(
+    price_info_object,
+  );
   let attestation_time = pyth_price_info::get_attestation_time(&price_info);
   let publish_time = pyth_price::get_timestamp(
     &pyth_price_feed::get_price(pyth_price_info::get_price_feed(&price_info)),
@@ -1944,7 +2138,10 @@ fun assert_price_status_trading(
   // Treat feeds with stale attestations as unavailable even if Pyth doesn't expose an explicit status.
   assert!(attestation_time >= publish_time, EPriceStatusNotTrading);
   let attestation_lag_secs = attestation_time - publish_time;
-  assert!(attestation_lag_secs <= max_price_status_lag_secs, EPriceStatusNotTrading);
+  assert!(
+    attestation_lag_secs <= max_price_status_lag_secs,
+    EPriceStatusNotTrading,
+  );
 }
 
 fun assert_payment_coin_type<TCoin>(accepted_currency: &AcceptedCurrency) {
@@ -1952,16 +2149,23 @@ fun assert_payment_coin_type<TCoin>(accepted_currency: &AcceptedCurrency) {
   assert!(accepted_currency.coin_type == payment_type, EInvalidPaymentCoinType);
 }
 
-fun assert_template_belongs_to_shop(shop: &Shop, discount_template_id: obj::ID) {
-  assert!(dynamic_field::exists_<obj::ID>(&shop.id, discount_template_id), ETemplateShopMismatch);
-  let template: &DiscountTemplate = dynamic_field::borrow(&shop.id, discount_template_id);
-  assert!(template.shop_address == obj::uid_to_address(&shop.id), ETemplateShopMismatch);
+fun assert_template_belongs_to_shop(
+  shop: &Shop,
+  discount_template_id: obj::ID,
+) {
+  assert_template_registered(shop, discount_template_id);
 }
 
 fun assert_listing_belongs_to_shop(shop: &Shop, listing_id: obj::ID) {
-  assert!(dynamic_field::exists_<obj::ID>(&shop.id, listing_id), EListingShopMismatch);
+  assert!(
+    dynamic_field::exists_<obj::ID>(&shop.id, listing_id),
+    EListingShopMismatch,
+  );
   let listing: &ItemListing = dynamic_field::borrow(&shop.id, listing_id);
-  assert!(listing.shop_address == obj::uid_to_address(&shop.id), EListingShopMismatch);
+  assert!(
+    listing.shop_address == obj::uid_to_address(&shop.id),
+    EListingShopMismatch,
+  );
 }
 
 /// Internal selector for which reference to validate.
@@ -1991,8 +2195,14 @@ fun assert_spotlight_template_matches_listing(
 ) {
   if (opt::is_some(discount_template_id)) {
     let template_id = *opt::borrow(discount_template_id);
-    let template: &DiscountTemplate = dynamic_field::borrow(&shop.id, template_id);
-    let applies_to_listing = map_id_option_to_address(&template.applies_to_listing);
+    assert_template_belongs_to_shop(shop, template_id);
+    let marker: &DiscountTemplateMarker = dynamic_field::borrow(
+      &shop.id,
+      template_id,
+    );
+    let applies_to_listing = map_id_option_to_address(
+      &marker.applies_to_listing,
+    );
     if (opt::is_some(&applies_to_listing)) {
       assert!(
         *opt::borrow(&applies_to_listing) == listing_address,
@@ -2003,7 +2213,11 @@ fun assert_spotlight_template_matches_listing(
 }
 
 /// Guardrails to keep claims inside schedule/limits and unique per address.
-fun assert_template_claimable(template: &DiscountTemplate, claimer: address, now_secs: u64) {
+fun assert_template_claimable(
+  template: &DiscountTemplate,
+  claimer: address,
+  now_secs: u64,
+) {
   assert!(template.active, ETemplateInactive);
   assert_template_in_time_window(template, now_secs);
 
@@ -2014,7 +2228,10 @@ fun assert_template_claimable(template: &DiscountTemplate, claimer: address, now
   };
 
   assert!(
-    !dynamic_field::exists_with_type<address, DiscountClaim>(&template.id, claimer),
+    !dynamic_field::exists_with_type<address, DiscountClaim>(
+      &template.id,
+      claimer,
+    ),
     EDiscountAlreadyClaimed,
   );
 }
@@ -2030,16 +2247,28 @@ public fun listing_exists(shop: &Shop, listing_id: obj::ID): bool {
 
 #[ext(view)]
 public fun discount_template_exists(shop: &Shop, template_id: obj::ID): bool {
-  dynamic_field::exists_with_type<obj::ID, DiscountTemplate>(&shop.id, template_id)
+  dynamic_field::exists_with_type<obj::ID, DiscountTemplateMarker>(
+    &shop.id,
+    template_id,
+  )
 }
 
 #[ext(view)]
-public fun accepted_currency_exists(shop: &Shop, accepted_currency_id: obj::ID): bool {
-  dynamic_field::exists_with_type<obj::ID, AcceptedCurrency>(&shop.id, accepted_currency_id)
+public fun accepted_currency_exists(
+  shop: &Shop,
+  accepted_currency_id: obj::ID,
+): bool {
+  dynamic_field::exists_with_type<obj::ID, AcceptedCurrency>(
+    &shop.id,
+    accepted_currency_id,
+  )
 }
 
 #[ext(view)]
-public fun accepted_currency_id_for_type(shop: &Shop, coin_type: TypeInfo): opt::Option<obj::ID> {
+public fun accepted_currency_id_for_type(
+  shop: &Shop,
+  coin_type: TypeInfo,
+): opt::Option<obj::ID> {
   if (dynamic_field::exists_with_type<TypeInfo, obj::ID>(&shop.id, coin_type)) {
     opt::some(*dynamic_field::borrow<TypeInfo, obj::ID>(&shop.id, coin_type))
   } else {
@@ -2048,7 +2277,10 @@ public fun accepted_currency_id_for_type(shop: &Shop, coin_type: TypeInfo): opt:
 }
 
 #[ext(view)]
-public fun listing_id_for_address(shop: &Shop, listing_address: address): opt::Option<obj::ID> {
+public fun listing_id_for_address(
+  shop: &Shop,
+  listing_address: address,
+): opt::Option<obj::ID> {
   let listing_id = obj::id_from_address(listing_address);
   if (listing_exists(shop, listing_id)) {
     opt::some(listing_id)
@@ -2112,7 +2344,7 @@ public fun accepted_currency_values(
 #[ext(view)]
 public fun discount_template_values(
   shop: &Shop,
-  template_id: obj::ID,
+  template: &DiscountTemplate,
 ): (
   address,
   opt::Option<obj::ID>,
@@ -2124,8 +2356,7 @@ public fun discount_template_values(
   u64,
   bool,
 ) {
-  assert_template_belongs_to_shop(shop, template_id);
-  let template: &DiscountTemplate = dynamic_field::borrow(&shop.id, template_id);
+  assert_template_matches_shop(shop, template);
   (
     template.shop_address,
     template.applies_to_listing,
@@ -2155,7 +2386,10 @@ public fun quote_amount_for_price_info_object(
     accepted_currency_id,
   );
   ensure_price_info_matches_currency(accepted_currency, price_info_object);
-  assert_price_status_trading(price_info_object, accepted_currency.max_price_status_lag_secs_cap);
+  assert_price_status_trading(
+    price_info_object,
+    accepted_currency.max_price_status_lag_secs_cap,
+  );
   quote_amount_with_guardrails(
     accepted_currency,
     price_info_object,
@@ -2195,7 +2429,10 @@ public fun test_destroy_publisher(publisher: pkg::Publisher) {
 }
 
 #[test_only]
-public fun test_setup_shop(owner: address, ctx: &mut tx::TxContext): (Shop, ShopOwnerCap) {
+public fun test_setup_shop(
+  owner: address,
+  ctx: &mut tx::TxContext,
+): (Shop, ShopOwnerCap) {
   let shop = Shop {
     id: obj::new(ctx),
     owner,
@@ -2209,13 +2446,59 @@ public fun test_setup_shop(owner: address, ctx: &mut tx::TxContext): (Shop, Shop
 }
 
 #[test_only]
+public fun test_template_id(template: &DiscountTemplate): obj::ID {
+  template_id(template)
+}
+
+#[test_only]
+public fun test_create_discount_template_local(
+  shop: &mut Shop,
+  applies_to_listing: opt::Option<obj::ID>,
+  rule_kind: u8,
+  rule_value: u64,
+  starts_at: u64,
+  expires_at: opt::Option<u64>,
+  max_redemptions: opt::Option<u64>,
+  ctx: &mut tx::TxContext,
+): (DiscountTemplate, obj::ID) {
+  let (
+    template,
+    template_id,
+    discount_rule,
+    template_address,
+  ) = create_discount_template_core(
+    shop,
+    applies_to_listing,
+    rule_kind,
+    rule_value,
+    starts_at,
+    expires_at,
+    max_redemptions,
+    ctx,
+  );
+
+  event::emit(DiscountTemplateCreated {
+    shop_address: shop_address(shop),
+    discount_template_id: template_address,
+    rule: discount_rule,
+  });
+
+  (template, template_id)
+}
+
+#[test_only]
 public fun test_quote_amount_from_usd_cents(
   usd_cents: u64,
   coin_decimals: u8,
   price: &pyth_price::Price,
   max_confidence_ratio_bps: u64,
 ): u64 {
-  quote_amount_from_usd_cents(usd_cents, coin_decimals, price, max_confidence_ratio_bps)
+  quote_amount_from_usd_cents(
+    usd_cents,
+    coin_decimals,
+    price,
+    max_confidence_ratio_bps,
+  )
 }
 
 #[test_only]
@@ -2229,8 +2512,13 @@ public fun test_default_max_price_status_lag_secs(): u64 {
 }
 
 #[test_only]
-public fun test_assert_price_status_trading(price_info_object: &pyth_price_info::PriceInfoObject) {
-  assert_price_status_trading(price_info_object, DEFAULT_MAX_PRICE_STATUS_LAG_SECS);
+public fun test_assert_price_status_trading(
+  price_info_object: &pyth_price_info::PriceInfoObject,
+) {
+  assert_price_status_trading(
+    price_info_object,
+    DEFAULT_MAX_PRICE_STATUS_LAG_SECS,
+  );
 }
 
 #[test_only]
@@ -2262,7 +2550,10 @@ public fun test_listing_exists(shop: &Shop, listing_id: obj::ID): bool {
 }
 
 #[test_only]
-public fun test_accepted_currency_exists(shop: &Shop, accepted_currency_id: obj::ID): bool {
+public fun test_accepted_currency_exists(
+  shop: &Shop,
+  accepted_currency_id: obj::ID,
+): bool {
   accepted_currency_exists(shop, accepted_currency_id)
 }
 
@@ -2275,19 +2566,25 @@ public fun test_accepted_currency_values(
 }
 
 #[test_only]
-public fun test_accepted_currency_id_for_type(shop: &Shop, coin_type: TypeInfo): obj::ID {
+public fun test_accepted_currency_id_for_type(
+  shop: &Shop,
+  coin_type: TypeInfo,
+): obj::ID {
   opt::destroy_some(accepted_currency_id_for_type(shop, coin_type))
 }
 
 #[test_only]
-public fun test_discount_template_exists(shop: &Shop, template_id: obj::ID): bool {
+public fun test_discount_template_exists(
+  shop: &Shop,
+  template_id: obj::ID,
+): bool {
   discount_template_exists(shop, template_id)
 }
 
 #[test_only]
 public fun test_discount_template_values(
   shop: &Shop,
-  template_id: obj::ID,
+  template: &DiscountTemplate,
 ): (
   address,
   opt::Option<obj::ID>,
@@ -2299,37 +2596,35 @@ public fun test_discount_template_values(
   u64,
   bool,
 ) {
-  discount_template_values(shop, template_id)
+  discount_template_values(shop, template)
 }
 
 #[test_only]
-public fun test_discount_claim_exists(shop: &Shop, template_id: obj::ID, claimer: address): bool {
-  let template: &DiscountTemplate = dynamic_field::borrow(&shop.id, template_id);
+public fun test_discount_claim_exists(
+  template: &DiscountTemplate,
+  claimer: address,
+): bool {
   dynamic_field::exists_with_type<address, DiscountClaim>(&template.id, claimer)
 }
 
 #[test_only]
 public fun test_claim_discount_ticket(
-  shop: &mut Shop,
-  template_id: obj::ID,
+  shop: &Shop,
+  template: &mut DiscountTemplate,
   clock: &clock::Clock,
   ctx: &mut tx::TxContext,
 ): () {
-  let discount_template: &mut DiscountTemplate = dynamic_field::borrow_mut(
-    &mut shop.id,
-    template_id,
-  );
-  claim_discount_ticket(discount_template, clock, ctx)
+  claim_discount_ticket(shop, template, clock, ctx)
 }
 
 #[test_only]
 public fun test_claim_discount_ticket_inline(
-  shop: &mut Shop,
-  template_id: obj::ID,
+  shop: &Shop,
+  template: &mut DiscountTemplate,
   now_secs: u64,
   ctx: &mut tx::TxContext,
 ): DiscountTicket {
-  let template: &mut DiscountTemplate = dynamic_field::borrow_mut(&mut shop.id, template_id);
+  assert_template_matches_shop(shop, template);
   claim_discount_ticket_inline(template, now_secs, ctx)
 }
 
@@ -2338,7 +2633,7 @@ public fun test_claim_and_buy_with_ids<TItem: store, TCoin>(
   shop: &mut Shop,
   item_listing_id: obj::ID,
   accepted_currency_id: obj::ID,
-  template_id: obj::ID,
+  discount_template: &mut DiscountTemplate,
   price_info_object: &pyth_price_info::PriceInfoObject,
   payment: coin::Coin<TCoin>,
   mint_to: address,
@@ -2350,63 +2645,61 @@ public fun test_claim_and_buy_with_ids<TItem: store, TCoin>(
 ) {
   let shop_owner = shop.owner;
   let shop_address = shop_address(shop);
-  let accepted_currency: AcceptedCurrency = dynamic_field::remove(
-    &mut shop.id,
-    accepted_currency_id,
-  );
-  let mut discount_template: DiscountTemplate = dynamic_field::remove(
-    &mut shop.id,
-    template_id,
-  );
-  let item_listing: &mut ItemListing = dynamic_field::borrow_mut(
+  let mut item_listing: ItemListing = dynamic_field::remove(
     &mut shop.id,
     item_listing_id,
   );
+  {
+    let accepted_currency: &AcceptedCurrency = dynamic_field::borrow(
+      &shop.id,
+      accepted_currency_id,
+    );
+    assert_template_matches_shop(shop, discount_template);
 
-  let now = now_secs(clock);
-  let (discount_ticket, claimer) = claim_discount_ticket_with_event(
-    &mut discount_template,
-    now,
-    ctx,
-  );
+    let now = now_secs(clock);
+    let (discount_ticket, claimer) = claim_discount_ticket_with_event(
+      discount_template,
+      now,
+      ctx,
+    );
 
-  let discounted_price_usd_cents = apply_discount(
-    item_listing.base_price_usd_cents,
-    &discount_template.rule,
-  );
-  let discount_template_id = opt::some(template_address(&discount_template));
-  let ticket_id = obj::uid_to_address(&discount_ticket.id);
-  discount_template.redemptions = discount_template.redemptions + 1;
+    let discounted_price_usd_cents = apply_discount(
+      item_listing.base_price_usd_cents,
+      &discount_template.rule,
+    );
+    let discount_template_id = opt::some(template_address(discount_template));
+    let ticket_id = obj::uid_to_address(&discount_ticket.id);
+    discount_template.redemptions = discount_template.redemptions + 1;
 
-  process_purchase_core<TItem, TCoin>(
-    shop_owner,
-    shop_address,
-    item_listing,
-    &accepted_currency,
-    price_info_object,
-    payment,
-    mint_to,
-    refund_extra_to,
-    discounted_price_usd_cents,
-    discount_template_id,
-    max_price_age_secs,
-    max_confidence_ratio_bps,
-    clock,
-    ctx,
-  );
+    process_purchase_core<TItem, TCoin>(
+      shop_owner,
+      shop_address,
+      &mut item_listing,
+      accepted_currency,
+      price_info_object,
+      payment,
+      mint_to,
+      refund_extra_to,
+      discounted_price_usd_cents,
+      discount_template_id,
+      max_price_age_secs,
+      max_confidence_ratio_bps,
+      clock,
+      ctx,
+    );
 
-  event::emit(DiscountRedeem {
-    shop_address,
-    discount_template_id: template_address(&discount_template),
-    discount_id: ticket_id,
-    listing_id: obj::uid_to_address(&item_listing.id),
-    buyer: claimer,
-  });
+    event::emit(DiscountRedeem {
+      shop_address,
+      discount_template_id: template_address(discount_template),
+      discount_id: ticket_id,
+      listing_id: obj::uid_to_address(&item_listing.id),
+      buyer: claimer,
+    });
 
-  burn_discount_ticket(discount_ticket);
+    burn_discount_ticket(discount_ticket);
+  };
 
-  dynamic_field::add(&mut shop.id, accepted_currency_id, accepted_currency);
-  dynamic_field::add(&mut shop.id, template_id, discount_template);
+  dynamic_field::add(&mut shop.id, item_listing_id, item_listing);
 }
 
 #[test_only]
@@ -2426,7 +2719,10 @@ public fun test_discount_rule_value(rule: DiscountRule): u64 {
 }
 
 #[test_only]
-public fun test_apply_percent_discount(base_price_usd_cents: u64, bps: u16): u64 {
+public fun test_apply_percent_discount(
+  base_price_usd_cents: u64,
+  bps: u16,
+): u64 {
   apply_discount(
     base_price_usd_cents,
     &DiscountRule::Percent { bps },
@@ -2434,47 +2730,65 @@ public fun test_apply_percent_discount(base_price_usd_cents: u64, bps: u16): u64
 }
 
 #[test_only]
-public fun test_discount_template_created_shop(event: &DiscountTemplateCreated): address {
+public fun test_discount_template_created_shop(
+  event: &DiscountTemplateCreated,
+): address {
   event.shop_address
 }
 
 #[test_only]
-public fun test_discount_template_created_id(event: &DiscountTemplateCreated): address {
+public fun test_discount_template_created_id(
+  event: &DiscountTemplateCreated,
+): address {
   event.discount_template_id
 }
 
 #[test_only]
-public fun test_discount_template_created_rule(event: &DiscountTemplateCreated): DiscountRule {
+public fun test_discount_template_created_rule(
+  event: &DiscountTemplateCreated,
+): DiscountRule {
   event.rule
 }
 
 #[test_only]
-public fun test_discount_template_updated_shop(event: &DiscountTemplateUpdated): address {
+public fun test_discount_template_updated_shop(
+  event: &DiscountTemplateUpdated,
+): address {
   event.shop_address
 }
 
 #[test_only]
-public fun test_discount_template_updated_id(event: &DiscountTemplateUpdated): address {
+public fun test_discount_template_updated_id(
+  event: &DiscountTemplateUpdated,
+): address {
   event.discount_template_id
 }
 
 #[test_only]
-public fun test_discount_template_toggled_shop(event: &DiscountTemplateToggled): address {
+public fun test_discount_template_toggled_shop(
+  event: &DiscountTemplateToggled,
+): address {
   event.shop_address
 }
 
 #[test_only]
-public fun test_discount_template_toggled_id(event: &DiscountTemplateToggled): address {
+public fun test_discount_template_toggled_id(
+  event: &DiscountTemplateToggled,
+): address {
   event.discount_template_id
 }
 
 #[test_only]
-public fun test_discount_template_toggled_active(event: &DiscountTemplateToggled): bool {
+public fun test_discount_template_toggled_active(
+  event: &DiscountTemplateToggled,
+): bool {
   event.active
 }
 
 #[test_only]
-public fun test_purchase_completed_discounted_price(event: &PurchaseCompleted): u64 {
+public fun test_purchase_completed_discounted_price(
+  event: &PurchaseCompleted,
+): u64 {
   event.discounted_price_usd_cents
 }
 
@@ -2502,7 +2816,12 @@ public fun test_discount_claimed_discount_id(event: &DiscountClaimed): address {
 public fun test_discount_ticket_values(
   ticket: &DiscountTicket,
 ): (address, address, opt::Option<obj::ID>, address) {
-  (ticket.discount_template_id, ticket.shop_address, ticket.listing_id, ticket.claimer)
+  (
+    ticket.discount_template_id,
+    ticket.shop_address,
+    ticket.listing_id,
+    ticket.claimer,
+  )
 }
 
 #[test_only]
@@ -2518,6 +2837,11 @@ public fun test_destroy_discount_ticket(ticket: DiscountTicket) {
 }
 
 #[test_only]
+public fun test_destroy_discount_template(template: DiscountTemplate) {
+  destroy_template(template);
+}
+
+#[test_only]
 public fun test_last_created_id(ctx: &tx::TxContext): obj::ID {
   obj::id_from_address(tx::last_created_object_id(ctx))
 }
@@ -2530,8 +2854,17 @@ public fun test_remove_listing(shop: &mut Shop, listing_id: obj::ID) {
 
 #[test_only]
 public fun test_remove_template(shop: &mut Shop, template_id: obj::ID) {
-  let template: DiscountTemplate = dynamic_field::remove(&mut shop.id, template_id);
-  destroy_template(template);
+  if (
+    dynamic_field::exists_with_type<obj::ID, DiscountTemplateMarker>(
+      &shop.id,
+      template_id,
+    )
+  ) {
+    let _marker: DiscountTemplateMarker = dynamic_field::remove(
+      &mut shop.id,
+      template_id,
+    );
+  };
 }
 
 #[test_only]
@@ -2611,22 +2944,30 @@ public fun test_shop_owner_updated_cap_id(event: &ShopOwnerUpdated): address {
 }
 
 #[test_only]
-public fun test_shop_owner_updated_rotated_by(event: &ShopOwnerUpdated): address {
+public fun test_shop_owner_updated_rotated_by(
+  event: &ShopOwnerUpdated,
+): address {
   event.rotated_by
 }
 
 #[test_only]
-public fun test_item_listing_stock_updated_shop(event: &ItemListingStockUpdated): address {
+public fun test_item_listing_stock_updated_shop(
+  event: &ItemListingStockUpdated,
+): address {
   event.shop_address
 }
 
 #[test_only]
-public fun test_item_listing_stock_updated_listing(event: &ItemListingStockUpdated): address {
+public fun test_item_listing_stock_updated_listing(
+  event: &ItemListingStockUpdated,
+): address {
   event.item_listing_address
 }
 
 #[test_only]
-public fun test_item_listing_stock_updated_new_stock(event: &ItemListingStockUpdated): u64 {
+public fun test_item_listing_stock_updated_new_stock(
+  event: &ItemListingStockUpdated,
+): u64 {
   event.new_stock
 }
 
@@ -2646,7 +2987,9 @@ public fun test_item_listing_added_name(event: &ItemListingAdded): vector<u8> {
 }
 
 #[test_only]
-public fun test_item_listing_added_base_price_usd_cents(event: &ItemListingAdded): u64 {
+public fun test_item_listing_added_base_price_usd_cents(
+  event: &ItemListingAdded,
+): u64 {
   event.base_price_usd_cents
 }
 
@@ -2668,7 +3011,9 @@ public fun test_item_listing_removed_shop(event: &ItemListingRemoved): address {
 }
 
 #[test_only]
-public fun test_item_listing_removed_listing(event: &ItemListingRemoved): address {
+public fun test_item_listing_removed_listing(
+  event: &ItemListingRemoved,
+): address {
   event.item_listing_address
 }
 
@@ -2678,17 +3023,23 @@ public fun test_accepted_coin_added_shop(event: &AcceptedCoinAdded): address {
 }
 
 #[test_only]
-public fun test_accepted_coin_added_coin_type(event: &AcceptedCoinAdded): TypeInfo {
+public fun test_accepted_coin_added_coin_type(
+  event: &AcceptedCoinAdded,
+): TypeInfo {
   event.coin_type
 }
 
 #[test_only]
-public fun test_accepted_coin_added_feed_id(event: &AcceptedCoinAdded): vector<u8> {
+public fun test_accepted_coin_added_feed_id(
+  event: &AcceptedCoinAdded,
+): vector<u8> {
   clone_bytes(&event.feed_id)
 }
 
 #[test_only]
-public fun test_accepted_coin_added_pyth_object_id(event: &AcceptedCoinAdded): obj::ID {
+public fun test_accepted_coin_added_pyth_object_id(
+  event: &AcceptedCoinAdded,
+): obj::ID {
   event.pyth_object_id
 }
 
@@ -2698,12 +3049,16 @@ public fun test_accepted_coin_added_decimals(event: &AcceptedCoinAdded): u8 {
 }
 
 #[test_only]
-public fun test_accepted_coin_removed_shop(event: &AcceptedCoinRemoved): address {
+public fun test_accepted_coin_removed_shop(
+  event: &AcceptedCoinRemoved,
+): address {
   event.shop_address
 }
 
 #[test_only]
-public fun test_accepted_coin_removed_coin_type(event: &AcceptedCoinRemoved): TypeInfo {
+public fun test_accepted_coin_removed_coin_type(
+  event: &AcceptedCoinRemoved,
+): TypeInfo {
   event.coin_type
 }
 

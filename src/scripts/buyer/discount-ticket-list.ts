@@ -181,7 +181,12 @@ const fetchDiscountTickets = async ({
 const buildDiscountTicketSummary = (
   discountTicketObject: SuiObjectData
 ): DiscountTicketSummary => {
-  const discountTicketFields = unwrapMoveObjectFields(discountTicketObject)
+  const discountTicketFields = unwrapMoveObjectFields<{
+    discount_template_id: string
+    shop_address: string
+    claimer: string
+    listing_id: string | undefined
+  }>(discountTicketObject)
 
   const discountTicketId = normalizeIdOrThrow(
     discountTicketObject.objectId,

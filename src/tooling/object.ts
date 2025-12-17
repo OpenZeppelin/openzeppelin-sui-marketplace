@@ -211,9 +211,9 @@ export const normalizeOptionalIdFromValue = (
   return attemptNormalize(value)
 }
 
-export const unwrapMoveObjectFields = (
+export const unwrapMoveObjectFields = <TFields = Record<string, unknown>>(
   object: SuiObjectData
-): Record<string, unknown> => {
+): TFields => {
   const moveContent = object.content
   if (!moveContent || moveContent.dataType !== "moveObject")
     throw new Error(`Object ${object.objectId} is missing Move content.`)
@@ -221,10 +221,10 @@ export const unwrapMoveObjectFields = (
   const fields = (moveContent.fields ?? {}) as Record<string, unknown>
   if ("value" in fields && fields.value && typeof fields.value === "object") {
     const nested = (fields.value as { fields?: Record<string, unknown> }).fields
-    if (nested) return nested
+    if (nested) return nested as TFields
   }
 
-  return fields
+  return fields as TFields
 }
 
 export const deriveRelevantPackageId = (

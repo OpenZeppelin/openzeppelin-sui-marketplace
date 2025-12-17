@@ -17,8 +17,8 @@ import { SUI_CLOCK_ID } from "../../models/pyth.ts"
 import { resolveLatestShopIdentifiers } from "../../models/shop.ts"
 import { loadKeypair } from "../../tooling/keypair.ts"
 import { logKeyValueGreen } from "../../tooling/log.ts"
-import { getSuiSharedObject } from "../../tooling/shared-object.ts"
 import { runSuiScript } from "../../tooling/process.ts"
+import { getSuiSharedObject } from "../../tooling/shared-object.ts"
 import { newTransaction, signAndExecute } from "../../tooling/transactions.ts"
 import { parseNonNegativeU64, parseOptionalU64 } from "../../utils/utility.ts"
 
@@ -56,18 +56,27 @@ runSuiScript(
       { objectId: inputs.shopId, mutable: true },
       suiClient
     )
+    const discountTemplateShared = await getSuiSharedObject(
+      { objectId: inputs.discountTemplateId, mutable: true },
+      suiClient
+    )
+    const sharedClockObject = await getSuiSharedObject(
+      { objectId: SUI_CLOCK_ID },
+      suiClient
+    )
 
     const updateDiscountTemplateTransaction =
       buildUpdateDiscountTemplateTransaction({
         packageId: inputs.packageId,
         shop: shopSharedObject,
-        discountTemplateId: inputs.discountTemplateId,
+        discountTemplate: discountTemplateShared,
         ruleKind: inputs.ruleKind,
         ruleValue: inputs.ruleValue,
         startsAt: inputs.startsAt,
         expiresAt: inputs.expiresAt,
         maxRedemptions: inputs.maxRedemptions,
-        ownerCapId: inputs.ownerCapId
+        ownerCapId: inputs.ownerCapId,
+        sharedClockObject
       })
 
     const { transactionResult } = await signAndExecute(
@@ -191,39 +200,45 @@ const normalizeInputs = async (
 const buildUpdateDiscountTemplateTransaction = ({
   packageId,
   shop,
-  discountTemplateId,
+  discountTemplate,
   ruleKind,
   ruleValue,
   startsAt,
   expiresAt,
   maxRedemptions,
-  ownerCapId
+  ownerCapId,
+  sharedClockObject
 }: {
   packageId: string
   shop: Awaited<ReturnType<typeof getSuiSharedObject>>
-  discountTemplateId: string
+  discountTemplate: Awaited<ReturnType<typeof getSuiSharedObject>>
   ruleKind: NormalizedRuleKind
   ruleValue: bigint
   startsAt: bigint
   expiresAt?: bigint
   maxRedemptions?: bigint
   ownerCapId: string
+  sharedClockObject: Awaited<ReturnType<typeof getSuiSharedObject>>
 }) => {
   const transaction = newTransaction()
   const shopArgument = transaction.sharedObjectRef(shop.sharedRef)
+  const discountTemplateArgument = transaction.sharedObjectRef(
+    discountTemplate.sharedRef
+  )
+  const clockArgument = transaction.sharedObjectRef(sharedClockObject.sharedRef)
 
   transaction.moveCall({
     target: `${packageId}::shop::update_discount_template`,
     arguments: [
       shopArgument,
-      transaction.pure.id(discountTemplateId),
+      discountTemplateArgument,
       transaction.pure.u8(ruleKind),
       transaction.pure.u64(ruleValue),
       transaction.pure.u64(startsAt),
       transaction.pure.option("u64", expiresAt ?? null),
       transaction.pure.option("u64", maxRedemptions ?? null),
       transaction.object(ownerCapId),
-      transaction.object(SUI_CLOCK_ID)
+      clockArgument
     ]
   })
 

@@ -5,8 +5,8 @@ import yargs from "yargs"
 import { resolveLatestShopIdentifiers } from "../../models/shop.ts"
 import { loadKeypair } from "../../tooling/keypair.ts"
 import { logKeyValueGreen } from "../../tooling/log.ts"
-import { getSuiSharedObject } from "../../tooling/shared-object.ts"
 import { runSuiScript } from "../../tooling/process.ts"
+import { getSuiSharedObject } from "../../tooling/shared-object.ts"
 import { newTransaction, signAndExecute } from "../../tooling/transactions.ts"
 
 type ToggleDiscountTemplateArguments = {
@@ -34,12 +34,16 @@ runSuiScript(
       { objectId: inputs.shopId, mutable: true },
       suiClient
     )
+    const discountTemplateShared = await getSuiSharedObject(
+      { objectId: inputs.discountTemplateId, mutable: true },
+      suiClient
+    )
 
     const toggleDiscountTemplateTransaction =
       buildToggleDiscountTemplateTransaction({
         packageId: inputs.packageId,
         shop: shopSharedObject,
-        discountTemplateId: inputs.discountTemplateId,
+        discountTemplate: discountTemplateShared,
         active: inputs.active,
         ownerCapId: inputs.ownerCapId
       })
@@ -118,24 +122,27 @@ const normalizeInputs = async (
 const buildToggleDiscountTemplateTransaction = ({
   packageId,
   shop,
-  discountTemplateId,
+  discountTemplate,
   active,
   ownerCapId
 }: {
   packageId: string
   shop: Awaited<ReturnType<typeof getSuiSharedObject>>
-  discountTemplateId: string
+  discountTemplate: Awaited<ReturnType<typeof getSuiSharedObject>>
   active: boolean
   ownerCapId: string
 }) => {
   const transaction = newTransaction()
   const shopArgument = transaction.sharedObjectRef(shop.sharedRef)
+  const discountTemplateArgument = transaction.sharedObjectRef(
+    discountTemplate.sharedRef
+  )
 
   transaction.moveCall({
     target: `${packageId}::shop::toggle_discount_template`,
     arguments: [
       shopArgument,
-      transaction.pure.id(discountTemplateId),
+      discountTemplateArgument,
       transaction.pure.bool(active),
       transaction.object(ownerCapId)
     ]
