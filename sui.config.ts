@@ -5,6 +5,7 @@ export default defineSuiConfig({
   defaultNetwork: "localnet",
   networks: {
     localnet: {
+      url: "http://127.0.0.1:9000",
       gasBudget: DEFAULT_PUBLISH_GAS_BUDGET,
       account: {
         accountAddress: process.env.SUI_ACCOUNT_ADDRESS,

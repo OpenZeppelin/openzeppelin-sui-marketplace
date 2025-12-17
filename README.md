@@ -12,13 +12,13 @@ git clone <your fork url> && cd sui-oracle-market
 pnpm install
 
 # 2) Start localnet (new terminal)
-pnpm start:localnet --with-faucet
+pnpm chain:localnet-start --with-faucet
 
 # 3) Seed mocks (coins + Pyth stub + price feeds)
-pnpm setup:local
+pnpm chain:mock-setup
 
 # 4) Publish oracle-market with dev dependencies (local mocks)
-pnpm publish:package --package-path oracle-market --dev
+pnpm chain:publish-package --package-path oracle-market --dev
 ```
 
 If you hit errors, keep reading—every step is explained in detail with troubleshooting tips.
@@ -103,7 +103,7 @@ How it’s used:
 
 ### 3) Start localnet
 ```
-pnpm start:localnet --with-faucet
+pnpm chain:localnet-start --with-faucet
 ```
 - Spawns `sui start --with-faucet`.
 - Waits for RPC readiness at `http://127.0.0.1:9000`.
@@ -115,7 +115,7 @@ pnpm start:localnet --with-faucet
 
 ### 4) Seed mocks (coins + Pyth)
 ```
-pnpm setup:local
+pnpm chain:mock-setup
 ```
 What it does:
 - Publishes `move/pyth-mock` (Pyth stub) and `move/coin-mock` if not already recorded in `deployments/mock.localnet.json`.
@@ -132,14 +132,14 @@ Why needed:
 
 ### 5) Publish oracle-market (local/dev)
 ```
-pnpm publish:package --package-path oracle-market --dev
+pnpm chain:publish-package --package-path oracle-market --dev
 ```
 What it does:
 - Builds with `--dev` and `--with-unpublished-dependencies` (allows local mocks).
 - Uses `--ignore-chain` for dev builds so it doesn’t need an active RPC during build.
 - Publishes via CLI and writes deployment artifacts to `deployments/deployment.localnet.json`.
 - Claims the `0x2::package::Publisher` for the published package using the returned `UpgradeCap` (stored as `publisherId` in the deployment artifact). Disable with `--no-claim-publisher` if you manage publishers separately.
-- If the package is already published and missing a `publisherId` in artifacts, rerunning `pnpm publish:package` will claim the Publisher (unless `--no-claim-publisher`).
+- If the package is already published and missing a `publisherId` in artifacts, rerunning `pnpm chain:publish-package` will claim the Publisher (unless `--no-claim-publisher`).
 
 Flags:
 - `--re-publish`: force a new publish even if already recorded.
@@ -159,7 +159,7 @@ Why dev vs non-dev:
 2) Fund the publisher address with enough SUI (gas budget in `sui.config.ts` defaults to `2_000_000_000`).
 3) Publish:
    ```
-   pnpm publish:package --package-path oracle-market --network testnet
+   pnpm chain:publish-package --package-path oracle-market --network testnet
    ```
 4) Record the `packageId`, `UpgradeCap`, and `publisherId` from `deployments/deployment.testnet.json`.
 
@@ -175,7 +175,7 @@ All scripts run from the repo root and honor `sui.config.ts` (or `--network <nam
 
 ### Chain + Localnet Scripts (infra + inspection)
 
-#### `pnpm start:localnet`
+#### `pnpm chain:localnet-start`
 - Boots `sui start`, streams stdout/stderr, waits for RPC health, and logs a snapshot (epoch, checkpoint, gas price, validator count). If a node is already up it logs the snapshot and exits cleanly. After a regenesis with a running faucet it will faucet the configured signer.
 - Flags:
   - `--check-only`: probe the RPC and exit without starting a new node; fails if unreachable.
@@ -183,17 +183,17 @@ All scripts run from the repo root and honor `sui.config.ts` (or `--network <nam
   - `--with-faucet`: start `sui start --with-faucet` (default true); also controls whether post-regenesis auto-funding is attempted.
   - `--force-regenesis`: pass `--force-regenesis` to `sui start` **and** delete `deployments/*.localnet*` artifacts before booting.
 
-#### `pnpm stop:localnet`
+#### `pnpm chain:localnet-stop`
 - Scans `ps` output for detached `sui start` processes (TTY `?` / `-`) and SIGTERMs them so you don’t accumulate background local nodes. No flags.
 
-#### `pnpm setup:local`
+#### `pnpm chain:mock-setup`
 - Localnet-only seeding. Publishes (or reuses) `move/pyth-mock` and `move/coin-mock`, ensures mock coins are registered + minted to the signer, and creates two mock Pyth `PriceInfoObject`s with fresh timestamps via the on-chain clock. Artifacts are written to/reused from `deployments/mock.localnet.json`.
 - Flags:
   - `--coin-package-id <id>` / `--pyth-package-id <id>`: reuse existing mock package IDs instead of publishing.
   - `--coin-contract-path <path>` / `--pyth-contract-path <path>`: override Move package paths (defaults `move/coin-mock` and `move/pyth-mock`).
   - `--re-publish`: ignore existing artifacts; republish mocks, re-mint coins, and recreate feeds.
 
-#### `pnpm publish:package`
+#### `pnpm chain:publish-package`
 - Builds and publishes a Move package under `move/`, skipping if a deployment artifact already exists unless `--re-publish` is set. Uses faucet funding on faucet-supported networks to satisfy gas budgets and records results in `deployments/deployment.<network>.json`. Dev builds and unpublished dependencies are enforced as localnet-only.
 - Flags:
   - `--package-path <path>`: package folder relative to `move/` (required; resolved to an absolute path).
@@ -201,23 +201,23 @@ All scripts run from the repo root and honor `sui.config.ts` (or `--network <nam
   - `--with-unpublished-dependencies`: allow unpublished deps (defaults to true on localnet; rejected on shared networks).
   - `--re-publish`: publish even if a deployment artifact already exists.
 
-#### `pnpm get:mock-currency`
+#### `pnpm chain:mock-get-currency`
 - Localnet-only coin/registry inspection. If `--coin-type` is omitted it pulls the mock coin types from `deployments/mock.localnet.json`. Performs `devInspect` view calls on the coin registry to print metadata (name/symbol/decimals/icon), treasury/deny caps, supply state, regulation flags, and any minted sample coin objects.
 - Flags:
   - `--registry-id <id>`: coin registry shared object (default Sui registry).
   - `--coin-type <type>`: coin type(s) to inspect (repeatable; defaults to the artifact coins).
 
-#### `pnpm describe:address`
+#### `pnpm chain:describe-address`
 - Summarizes an address: SUI balance, all coin balances (with locked totals), stake totals, and a truncated owned-object sample (first 10 of up to 200 fetched). CLI requires the flag even though the script can derive the configured account.
 - Flags:
   - `--address <0x...>`: address to inspect (required).
 
-#### `pnpm describe:object`
+#### `pnpm chain:describe-object`
 - Fetches any object by ID with owner/version/digest/storage rebate plus content summary, display data, and a BCS preview.
 - Flags:
   - `--object-id <id>`: target object ID (required; alias `--id`).
 
-#### `pnpm describe:dynamic-field-object`
+#### `pnpm chain:describe-dynamic-field-object`
 - Resolves the dynamic field object under a shared parent, logs the dynamic field ID, and describes the child object using the same formatter as `describe:object`.
 - Flags:
   - `--parent-id <id>`: shared parent object ID (required).
@@ -227,13 +227,13 @@ All scripts run from the repo root and honor `sui.config.ts` (or `--network <nam
 
 Owner scripts default `--shop-package-id`, `--shop-id`, and `--owner-cap-id` from the latest entries in `deployments/objects.<network>.json` when omitted.
 
-#### `pnpm owner:create-shop`
+#### `pnpm owner:shop:create`
 - Calls `shop::create_shop` using a `0x2::package::Publisher` to create the shared `Shop` plus `ShopOwnerCap`; persists both objects to the artifacts file.
 - Flags:
   - `--shop-package-id <id>`: published `sui_oracle_market` package ID (required).
   - `--publisher-cap-id <id>`: `0x2::package::Publisher` object ID (required; not the UpgradeCap).
 
-#### `pnpm owner:add-currency`
+#### `pnpm owner:currency:add`
 - Registers an accepted currency by linking a coin type to a Pyth feed with optional freshness/confidence/status guardrails. Short-circuits if the coin type already exists under the shop (logs the existing dynamic field IDs).
 - Flags:
   - `--coin-type <0x...::Coin>`: coin type to accept (required).
@@ -243,7 +243,7 @@ Owner scripts default `--shop-package-id`, `--shop-id`, and `--owner-cap-id` fro
   - `--max-price-age-secs-cap <u64>` / `--max-confidence-ratio-bps-cap <u64>` / `--max-price-status-lag-secs-cap <u64>`: optional positive guardrail caps (omit to use module defaults).
   - `--shop-package-id <id>` / `--shop-id <id>` / `--owner-cap-id <id>`: override artifact defaults.
 
-#### `pnpm owner:remove-currency`
+#### `pnpm owner:currency:remove`
 - Deregisters an accepted currency. Provide either the `AcceptedCurrency` object ID or the coin type and the script will resolve the dynamic field under the shop. Logs the type-index and accepted-currency field IDs that were removed.
 - Flags:
   - `--accepted-currency-id <id>`: specific `AcceptedCurrency` object ID to remove.
@@ -251,7 +251,7 @@ Owner scripts default `--shop-package-id`, `--shop-id`, and `--owner-cap-id` fro
   - `--shop-package-id <id>` / `--shop-id <id>` / `--owner-cap-id <id>`: override artifact defaults.
   - One of `--accepted-currency-id` or `--coin-type` is required.
 
-#### `pnpm owner:add-item-listing`
+#### `pnpm owner:item-listing:add`
 - Creates an item listing with a USD price (parses dollars like `12.50` into cents or accepts integer cents), initial stock (>0), Move item type, and optional spotlighted discount template. Stores the created listing artifact.
 - Flags:
   - `--name <string>`: item name (required; encoded as UTF-8 bytes).
@@ -262,20 +262,20 @@ Owner scripts default `--shop-package-id`, `--shop-id`, and `--owner-cap-id` fro
   - `--publisher-id <id>`: optional publisher metadata flag (parsed but not passed on-chain).
   - `--shop-package-id <id>` / `--shop-id <id>` / `--owner-cap-id <id>`: override artifact defaults.
 
-#### `pnpm owner:remove-item-listing`
+#### `pnpm owner:item-listing:remove`
 - Deletes an `ItemListing` object and logs the deletion artifact/digest.
 - Flags:
   - `--item-listing-id <id>`: listing object ID to remove (required).
   - `--shop-package-id <id>` / `--shop-id <id>` / `--owner-cap-id <id>`: override artifact defaults.
 
-#### `pnpm owner:update-item-listing-stock`
+#### `pnpm owner:item-listing:update-stock`
 - Updates inventory for an existing listing; setting `0` pauses sales without removing the listing.
 - Flags:
   - `--item-listing-id <id>`: listing object ID (required).
   - `--stock <u64>`: new quantity (required; can be zero).
   - `--shop-package-id <id>` / `--shop-id <id>` / `--owner-cap-id <id>`: override artifact defaults.
 
-#### `pnpm owner:create-discount-template`
+#### `pnpm owner:discount-template:create`
 - Creates a reusable discount template with scheduling and optional SKU scoping; supports fixed USD cents or percent discounts. Records the created template artifact.
 - Flags:
   - `--rule-kind <fixed|percent>`: discount rule type (required).
@@ -287,7 +287,7 @@ Owner scripts default `--shop-package-id`, `--shop-id`, and `--owner-cap-id` fro
   - `--publisher-id <id>`: optional publisher metadata flag (parsed but not passed on-chain).
   - `--shop-package-id <id>` / `--shop-id <id>` / `--owner-cap-id <id>`: override artifact defaults.
 
-#### `pnpm owner:update-discount-template`
+#### `pnpm owner:discount-template:update`
 - Rewrites an existing template’s rule/schedule/redemption cap using the on-chain clock (`0x6::clock`) for validation.
 - Flags:
   - `--discount-template-id <id>`: template object ID (required).
@@ -297,21 +297,21 @@ Owner scripts default `--shop-package-id`, `--shop-id`, and `--owner-cap-id` fro
   - `--max-redemptions <u64>`: optional new redemption cap.
   - `--shop-package-id <id>` / `--shop-id <id>` / `--owner-cap-id <id>`: override artifact defaults.
 
-#### `pnpm owner:toggle-discount-template`
+#### `pnpm owner:discount-template:toggle`
 - Toggles a discount template’s active flag.
 - Flags:
   - `--discount-template-id <id>`: template object ID (required).
   - `--active` / `--no-active`: desired activation state (required boolean flag).
   - `--shop-package-id <id>` / `--shop-id <id>` / `--owner-cap-id <id>`: override artifact defaults.
 
-#### `pnpm owner:attach-discount-template`
+#### `pnpm owner:discount-template:attach-to-listing`
 - Attaches a discount template to an item listing for spotlighting. Validates both objects belong to the same shop and rejects templates pinned to a different listing.
 - Flags:
   - `--item-listing-id <id>`: listing object ID to attach to (required).
   - `--discount-template-id <id>`: template object ID to attach (required).
   - `--shop-package-id <id>` / `--shop-id <id>` / `--owner-cap-id <id>`: override artifact defaults.
 
-#### `pnpm owner:clear-discount-template`
+#### `pnpm owner:discount-template:clear-from-listing`
 - Removes the spotlighted discount template from a listing (does not delete the template). Verifies the listing belongs to the target shop first.
 - Flags:
   - `--item-listing-id <id>`: listing object ID to clear (required).
@@ -319,7 +319,7 @@ Owner scripts default `--shop-package-id`, `--shop-id`, and `--owner-cap-id` fro
 
 ### Buyer + Discovery Scripts
 
-#### `pnpm buyer:list-currencies`
+#### `pnpm buyer:currency:list`
 - Read-only listing of all `AcceptedCurrency` dynamic fields under a shop. Prints coin type, symbol/decimals (when present), Pyth feed ID/object, guardrail caps, derived hex feed ID, and the dynamic field object ID so buyers know which coins are accepted.
 - Flags:
   - `--shop-id <id>`: shop to inspect; defaults to the latest `Shop` in `deployments/objects.<network>.json`.
@@ -352,7 +352,7 @@ Artifacts land in `deployments/` after running scripts. Use them to reuse packag
   - `suiCliVersion`: Sui CLI version used during publish (useful for reproducibility).
 
 ### `deployments/mock.<network>.json`
-- Captures local-only mocks produced by `setup:local`.
+- Captures local-only mocks produced by `chain:mock-setup`.
 - Key fields:
   - `pythPackageId` / `coinPackageId`: package IDs for the mock Pyth and mock coin Move packages.
   - `coins`: array of minted mock coins:
@@ -413,9 +413,9 @@ Docs links:
 
 ## Workflow Cheat Sheet
 
-- **Full local demo**: `pnpm start:localnet` → `pnpm setup:local` → `pnpm publish:package --package-path oracle-market --dev`
-- **Re-seed mocks**: `pnpm setup:local --re-publish`
-- **Publish to testnet** (after pinning real deps): `pnpm publish:package --package-path oracle-market --network testnet`
+- **Full local demo**: `pnpm chain:localnet-start` → `pnpm chain:mock-setup` → `pnpm chain:publish-package --package-path oracle-market --dev`
+- **Re-seed mocks**: `pnpm chain:mock-setup --re-publish`
+- **Publish to testnet** (after pinning real deps): `pnpm chain:publish-package --package-path oracle-market --network testnet`
 
 ---
 

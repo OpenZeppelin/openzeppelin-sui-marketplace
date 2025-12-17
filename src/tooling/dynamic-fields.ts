@@ -5,13 +5,72 @@ import type {
 } from "@mysten/sui/client"
 import { normalizeSuiObjectId } from "@mysten/sui/utils"
 
-import { getSuiObject } from "./object.ts"
 import type { WrappedSuiObject } from "./object.ts"
+import { getSuiObject } from "./object.ts"
 
 export type WrappedSuiDynamicFieldObject = WrappedSuiObject & {
   childObjectId: string
   parentObjectId: string
   dynamicFieldId: string
+}
+
+type DynamicFieldInfo = Awaited<
+  ReturnType<SuiClient["getDynamicFields"]>
+>["data"][number]
+
+export const fetchAllDynamicFields = async (
+  {
+    parentObjectId,
+    objectTypeFilter
+  }: { parentObjectId: string; objectTypeFilter?: string },
+  suiClient: SuiClient
+): Promise<DynamicFieldInfo[]> => {
+  const dynamicFields: DynamicFieldInfo[] = []
+  let cursor: string | null | undefined
+
+  do {
+    const page = await suiClient.getDynamicFields({
+      parentId: normalizeSuiObjectId(parentObjectId),
+      cursor
+    })
+
+    dynamicFields.push(...page.data)
+    cursor = page.hasNextPage ? page.nextCursor : undefined
+  } while (cursor)
+
+  return objectTypeFilter
+    ? dynamicFields.filter((dynamicField) =>
+        dynamicField.objectType?.includes(objectTypeFilter)
+      )
+    : dynamicFields
+}
+
+export const fetchAllDynamicFieldObjects = async (
+  {
+    parentObjectId,
+    objectTypeFilter
+  }: { parentObjectId: string; objectTypeFilter?: string },
+  suiClient: SuiClient
+): Promise<WrappedSuiDynamicFieldObject[]> => {
+  const allDynamicFields = await fetchAllDynamicFields(
+    {
+      parentObjectId,
+      objectTypeFilter
+    },
+    suiClient
+  )
+
+  return await Promise.all(
+    allDynamicFields.map(({ name }) =>
+      getSuiDynamicFieldObject(
+        {
+          childObjectId: name.value as string,
+          parentObjectId
+        },
+        suiClient
+      )
+    )
+  )
 }
 
 export const getObjectIdFromDynamicFieldObject = ({

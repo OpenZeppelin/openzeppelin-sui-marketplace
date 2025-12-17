@@ -9,8 +9,8 @@ importers:
   .:
     dependencies:
       '@mysten/sui':
-        specifier: ^1.45.0
-        version: 1.45.0(typescript@5.9.3)
+        specifier: ^1.45.2
+        version: 1.45.2(typescript@5.9.3)
       chalk:
         specifier: ^5.3.0
         version: 5.6.2
@@ -171,8 +171,8 @@ packages:
   '@mysten/bcs@1.9.2':
     resolution: {integrity: sha512-kBk5xrxV9OWR7i+JhL/plQrgQ2/KJhB2pB5gj+w6GXhbMQwS3DPpOvi/zN0Tj84jwPvHMllpEl0QHj6ywN7/eQ==}
 
-  '@mysten/sui@1.45.0':
-    resolution: {integrity: sha512-WYpZmrGWE/FeQaRhYrAYpHcHallj4BFIfSmjq6BkODzEhP9HfMplQAtd8AmtctwO7cpHJ+BjPUOguEAcf1gU4g==}
+  '@mysten/sui@1.45.2':
+    resolution: {integrity: sha512-gftf7fNpFSiXyfXpbtP2afVEnhc7p2m/MEYc/SO5pov92dacGKOpQIF7etZsGDI1Wvhv+dpph+ulRNpnYSs7Bg==}
     engines: {node: '>=18'}
 
   '@mysten/utils@0.2.0':
@@ -830,8 +830,13 @@ packages:
   v8-compile-cache-lib@3.0.1:
     resolution: {integrity: sha512-wa7YjyUGfNZngI/vtK0UHAN+lgDCxBPCylVXGp0zu59Fz5aiGtNXaq3DhIov063MorB+VfufLh3JlF2KdTK3xg==}
 
-  valibot@0.36.0:
-    resolution: {integrity: sha512-CjF1XN4sUce8sBK9TixrDqFM7RwNkuXdJu174/AwmQUB62QbCQADg5lLe8ldBalFgtj1uKj+pKwDJiNo4Mn+eQ==}
+  valibot@1.2.0:
+    resolution: {integrity: sha512-mm1rxUsmOxzrwnX5arGS+U4T25RdvpPjPN4yR0u9pUBov9+zGVtO84tif1eY4r6zWxVxu3KzIyknJy3rxfRZZg==}
+    peerDependencies:
+      typescript: '>=5'
+    peerDependenciesMeta:
+      typescript:
+        optional: true
 
   which@2.0.2:
     resolution: {integrity: sha512-BLI3Tl1TW3Pvl70l3yq3Y64i+awpwXqsGBYWkkqMtnbXgrMD+yj7rhW0kuEDxzJaYXGjEW5ogapKNMEKNMjibA==}
@@ -972,7 +977,7 @@ snapshots:
       '@mysten/utils': 0.2.0
       '@scure/base': 1.2.6
 
-  '@mysten/sui@1.45.0(typescript@5.9.3)':
+  '@mysten/sui@1.45.2(typescript@5.9.3)':
     dependencies:
       '@graphql-typed-document-node/core': 3.2.0(graphql@16.12.0)
       '@mysten/bcs': 1.9.2
@@ -988,7 +993,7 @@ snapshots:
       gql.tada: 1.9.0(graphql@16.12.0)(typescript@5.9.3)
       graphql: 16.12.0
       poseidon-lite: 0.2.1
-      valibot: 0.36.0
+      valibot: 1.2.0(typescript@5.9.3)
     transitivePeerDependencies:
       - '@gql.tada/svelte-support'
       - '@gql.tada/vue-support'
@@ -1630,7 +1635,9 @@ snapshots:
 
   v8-compile-cache-lib@3.0.1: {}
 
-  valibot@0.36.0: {}
+  valibot@1.2.0(typescript@5.9.3):
+    optionalDependencies:
+      typescript: 5.9.3
 
   which@2.0.2:
     dependencies:

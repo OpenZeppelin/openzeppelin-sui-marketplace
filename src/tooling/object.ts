@@ -227,12 +227,17 @@ export const unwrapMoveObjectFields = (
   return fields
 }
 
-export const deriveRelevantPackageId = (objectType: string): string => {
-  const packageIdMatches = objectType.match(/0x[0-9a-fA-F]{64}/g)
+export const deriveRelevantPackageId = (
+  objectType: SuiObjectData["type"]
+): string => {
+  const packageIdMatches = objectType?.match(/0x[0-9a-fA-F]{64}/g)
   const packageIdCandidate =
     packageIdMatches && packageIdMatches.length > 0
       ? packageIdMatches[packageIdMatches.length - 1]
-      : objectType.split("::")[0]
+      : objectType?.split("::")[0]
+
+  if (!packageIdCandidate)
+    throw new Error(`Could not resolve package id from ${objectType}`)
 
   return normalizeSuiObjectId(packageIdCandidate)
 }
