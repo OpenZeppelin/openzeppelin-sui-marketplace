@@ -233,6 +233,14 @@ Owner scripts default `--shop-package-id`, `--shop-id`, and `--owner-cap-id` fro
   - `--shop-package-id <id>`: published `sui_oracle_market` package ID (required).
   - `--publisher-cap-id <id>`: `0x2::package::Publisher` object ID (required; not the UpgradeCap).
 
+#### `pnpm owner:shop:update-owner`
+- Rotates the shop owner/payout address via `shop::update_shop_owner`, logging the previous and new owner along with the transaction digest.
+- Flags:
+  - `--new-owner <0x...>`: address to become the new shop owner/payout recipient (required; aliases `--newOwner` / `--payout-address`).
+  - `--shop-package-id <id>`: published `sui_oracle_market` package ID; inferred from artifacts when omitted.
+  - `--shop-id <id>`: shared `Shop` object ID; defaults to the latest Shop artifact.
+  - `--owner-cap-id <id>`: `ShopOwnerCap` object ID authorizing the rotation; defaults to the latest artifact.
+
 #### `pnpm owner:currency:add`
 - Registers an accepted currency by linking a coin type to a Pyth feed with optional freshness/confidence/status guardrails. Short-circuits if the coin type already exists under the shop (logs the existing dynamic field IDs).
 - Flags:
@@ -323,6 +331,29 @@ Owner scripts default `--shop-package-id`, `--shop-id`, and `--owner-cap-id` fro
 - Read-only listing of all `AcceptedCurrency` dynamic fields under a shop. Prints coin type, symbol/decimals (when present), Pyth feed ID/object, guardrail caps, derived hex feed ID, and the dynamic field object ID so buyers know which coins are accepted.
 - Flags:
   - `--shop-id <id>`: shop to inspect; defaults to the latest `Shop` in `deployments/objects.<network>.json`.
+
+#### `pnpm buyer:item-listing:list`
+- Lists all item listings under a shop, showing the listing object ID, name, item type, USD cents price, stock, spotlighted discount template (if any), and the dynamic field object ID.
+- Flags:
+  - `--shop-id <id>`: shop to inspect; defaults to the latest `Shop` artifact.
+
+#### `pnpm buyer:discount-template:list`
+- Lists all discount templates under a shop with active status, rule, schedule, redemption caps/usage, listing scope, and the dynamic field object ID.
+- Flags:
+  - `--shop-id <id>`: shop to inspect; defaults to the latest `Shop` artifact.
+
+#### `pnpm buyer:discount-ticket:list`
+- Lists `DiscountTicket` objects owned by an address (default the configured account), including template, shop, claimer, optional listing scope, and supports filtering to a specific shop.
+- Flags:
+  - `--address <0x...>`: owner address whose tickets to list; defaults to the configured account.
+  - `--shop-package-id <id>`: `sui_oracle_market` package ID used for type filtering; inferred from the latest Shop artifact when omitted.
+  - `--shop-id <id>`: optional shop object ID filter to only show tickets for one shop.
+
+#### `pnpm buyer:discount-ticket:claim`
+- Claims a single-use `DiscountTicket` from a `DiscountTemplate` (direct object or dynamic field), using the shared clock and logging the created ticket ID and transaction digest.
+- Flags:
+  - `--discount-template-id <id>`: `DiscountTemplate` object ID to claim from (required).
+  - `--shop-id <id>`: parent Shop object ID for resolving dynamic fields; defaults to the latest Shop artifact.
 
 Utilities (TS helpers):
 - `src/utils/publish.ts`: Builds Move packages, handles CLI/SDK publish, manages `Move.lock` dependency addresses.

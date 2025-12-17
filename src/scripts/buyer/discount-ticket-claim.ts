@@ -45,6 +45,7 @@ runSuiScript(
       cliArguments,
       network.networkName
     )
+    console.log("[debug] RPC URL", network.url)
     const suiClient = new SuiClient({ url: network.url })
     const signer = await loadKeypair(network.account)
 
