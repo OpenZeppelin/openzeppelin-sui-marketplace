@@ -3,7 +3,7 @@ import chalk, { type ColorName } from "chalk"
 export const logKeyValueColor =
   (colorName: ColorName) =>
   (coloredText: string) =>
-  (regularText?: string | number) =>
+  (regularText?: string | number | boolean) =>
     console.log(
       `${chalk[colorName](coloredText.padEnd(8))}: ${chalk.gray(regularText)}`
     )
@@ -27,7 +27,7 @@ export const toKebabCase = (value: string) =>
 
 export const logEach =
   (logKeyValueFunction: typeof logKeyValueGreen) =>
-  (entries: Record<string, string | number | undefined>) =>
+  (entries: Record<string, string | number | boolean | undefined>) =>
     Object.entries(entries).forEach(([key, value]) =>
       logKeyValueFunction(toKebabCase(key))(value)
     )
