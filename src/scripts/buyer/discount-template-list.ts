@@ -1,53 +1,29 @@
-import type { SuiObjectData } from "@mysten/sui/client"
 import { SuiClient } from "@mysten/sui/client"
 import yargs from "yargs"
 
-import {
-  deriveTemplateStatus,
-  formatOnChainDiscountRule,
-  normalizeOptionalU64FromValue,
-  parseDiscountRuleFromField
-} from "../../models/discount.ts"
-import { getLatestObjectFromArtifact } from "../../tooling/artifacts.ts"
-import { fetchAllDynamicFields } from "../../tooling/dynamic-fields.ts"
+import type { DiscountTemplateSummary } from "../../models/discount.ts"
+import { fetchDiscountTemplateSummaries } from "../../models/discount.ts"
+import { resolveLatestArtifactShopId } from "../../models/shop.ts"
 import {
   logKeyValueBlue,
   logKeyValueGreen,
   logKeyValueYellow
 } from "../../tooling/log.ts"
-import {
-  getSuiObject,
-  normalizeIdOrThrow,
-  normalizeOptionalIdFromValue,
-  unwrapMoveObjectFields
-} from "../../tooling/object.ts"
 import { runSuiScript } from "../../tooling/process.ts"
-import { formatOptionalNumericValue } from "../../utils/formatters.ts"
 
 type ListDiscountTemplatesArguments = {
   shopId?: string
 }
 
-type DiscountTemplateSummary = {
-  discountTemplateId: string
-  markerObjectId: string
-  shopAddress: string
-  appliesToListingId?: string
-  ruleDescription: string
-  startsAt?: string
-  expiresAt?: string
-  maxRedemptions?: string
-  claimsIssued?: string
-  redemptions?: string
-  activeFlag: boolean
-  status: string
-}
-
-const DISCOUNT_TEMPLATE_MARKER_TYPE_FRAGMENT = "::shop::DiscountTemplateMarker"
-
 runSuiScript(
-  async ({ network, currentNetwork }, cliArguments) => {
-    const { shopId } = await resolveInputs(cliArguments, network.networkName)
+  async (
+    { network, currentNetwork },
+    cliArguments: ListDiscountTemplatesArguments
+  ) => {
+    const shopId = await resolveLatestArtifactShopId(
+      cliArguments.shopId,
+      network.networkName
+    )
     const suiClient = new SuiClient({ url: network.url })
 
     logListContext({
@@ -56,7 +32,10 @@ runSuiScript(
       networkName: currentNetwork
     })
 
-    const discountTemplates = await fetchDiscountTemplates(shopId, suiClient)
+    const discountTemplates = await fetchDiscountTemplateSummaries(
+      shopId,
+      suiClient
+    )
     if (discountTemplates.length === 0)
       return logKeyValueYellow("Discount-templates")("No templates found.")
 
@@ -74,124 +53,6 @@ runSuiScript(
     })
     .strict()
 )
-
-const resolveInputs = async (
-  cliArguments: ListDiscountTemplatesArguments,
-  networkName: string
-) => {
-  const shopArtifact = await getLatestObjectFromArtifact(
-    "shop::Shop",
-    networkName
-  )
-
-  return {
-    shopId: normalizeIdOrThrow(
-      cliArguments.shopId ?? shopArtifact?.objectId,
-      "A shop id is required; create a shop first or provide --shop-id."
-    )
-  }
-}
-
-const fetchDiscountTemplates = async (
-  shopId: string,
-  suiClient: SuiClient
-): Promise<DiscountTemplateSummary[]> => {
-  const discountTemplateMarkers = await fetchAllDynamicFields(
-    {
-      parentObjectId: shopId,
-      objectTypeFilter: DISCOUNT_TEMPLATE_MARKER_TYPE_FRAGMENT
-    },
-    suiClient
-  )
-
-  if (discountTemplateMarkers.length === 0) return []
-
-  const discountTemplateIds = discountTemplateMarkers.map((marker) =>
-    normalizeIdOrThrow(
-      normalizeOptionalIdFromValue((marker.name as { value: string })?.value),
-      `Missing DiscountTemplate id for dynamic field ${marker.objectId}.`
-    )
-  )
-
-  const discountTemplateObjects = await Promise.all(
-    discountTemplateIds.map((discountTemplateId) =>
-      getSuiObject(
-        {
-          objectId: discountTemplateId,
-          options: { showContent: true, showType: true }
-        },
-        suiClient
-      )
-    )
-  )
-
-  return discountTemplateObjects.map((response, index) =>
-    buildDiscountTemplateSummary(
-      response.object,
-      discountTemplateIds[index],
-      discountTemplateMarkers[index].objectId
-    )
-  )
-}
-
-const buildDiscountTemplateSummary = (
-  discountTemplateObject: SuiObjectData,
-  discountTemplateId: string,
-  markerObjectId: string
-): DiscountTemplateSummary => {
-  const discountTemplateFields = unwrapMoveObjectFields(discountTemplateObject)
-  const shopAddress = normalizeOptionalIdFromValue(
-    discountTemplateFields.shop_address
-  )
-  const appliesToListingId = normalizeOptionalIdFromValue(
-    discountTemplateFields.applies_to_listing
-  )
-
-  const rule = parseDiscountRuleFromField(discountTemplateFields.rule)
-  const startsAt = normalizeOptionalU64FromValue(
-    discountTemplateFields.starts_at
-  )
-  const expiresAt = normalizeOptionalU64FromValue(
-    discountTemplateFields.expires_at
-  )
-  const maxRedemptions = normalizeOptionalU64FromValue(
-    discountTemplateFields.max_redemptions
-  )
-  const claimsIssued = normalizeOptionalU64FromValue(
-    discountTemplateFields.claims_issued
-  )
-  const redemptions = normalizeOptionalU64FromValue(
-    discountTemplateFields.redemptions
-  )
-  const activeFlag = Boolean(discountTemplateFields.active)
-
-  return {
-    discountTemplateId,
-    markerObjectId,
-    shopAddress: normalizeIdOrThrow(
-      shopAddress,
-      `Missing shop_address for DiscountTemplate ${discountTemplateId}.`
-    ),
-    appliesToListingId,
-    ruleDescription: formatOnChainDiscountRule(rule),
-    startsAt: formatOptionalNumericValue(startsAt),
-    expiresAt: formatOptionalNumericValue(expiresAt),
-    maxRedemptions:
-      maxRedemptions === undefined
-        ? undefined
-        : formatOptionalNumericValue(maxRedemptions),
-    claimsIssued: formatOptionalNumericValue(claimsIssued),
-    redemptions: formatOptionalNumericValue(redemptions),
-    activeFlag,
-    status: deriveTemplateStatus({
-      activeFlag,
-      startsAt,
-      expiresAt,
-      maxRedemptions,
-      redemptions
-    })
-  }
-}
 
 const logListContext = ({
   shopId,

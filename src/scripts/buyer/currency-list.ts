@@ -1,51 +1,29 @@
-import type { SuiObjectData } from "@mysten/sui/client"
 import { SuiClient } from "@mysten/sui/client"
 import yargs from "yargs"
 
-import { getLatestObjectFromArtifact } from "../../tooling/artifacts.ts"
-import { fetchAllDynamicFields } from "../../tooling/dynamic-fields.ts"
+import type { AcceptedCurrencySummary } from "../../models/currency.ts"
+import { fetchAcceptedCurrencySummaries } from "../../models/currency.ts"
+import { resolveLatestArtifactShopId } from "../../models/shop.ts"
 import {
   logKeyValueBlue,
   logKeyValueGreen,
   logKeyValueYellow
 } from "../../tooling/log.ts"
-import {
-  getSuiObject,
-  normalizeIdOrThrow,
-  normalizeOptionalIdFromValue,
-  unwrapMoveObjectFields
-} from "../../tooling/object.ts"
 import { runSuiScript } from "../../tooling/process.ts"
-import {
-  decodeUtf8Vector,
-  formatOptionalNumericValue,
-  formatVectorBytesAsHex,
-  parseOptionalNumber
-} from "../../utils/formatters.ts"
-import { formatTypeNameFromFieldValue } from "../../utils/type-name.ts"
 
 type ListCurrenciesArguments = {
   shopId?: string
 }
 
-type AcceptedCurrencySummary = {
-  acceptedCurrencyId: string
-  markerObjectId: string
-  coinType: string
-  symbol?: string
-  decimals?: number
-  feedIdHex: string
-  pythObjectId?: string
-  maxPriceAgeSecsCap?: string
-  maxConfidenceRatioBpsCap?: string
-  maxPriceStatusLagSecsCap?: string
-}
-
-const ACCEPTED_CURRENCY_TYPE_FRAGMENT = "::shop::AcceptedCurrencyMarker"
-
 runSuiScript(
-  async ({ network, currentNetwork }, cliArguments) => {
-    const { shopId } = await resolveInputs(cliArguments, network.networkName)
+  async (
+    { network, currentNetwork },
+    cliArguments: ListCurrenciesArguments
+  ) => {
+    const shopId = await resolveLatestArtifactShopId(
+      cliArguments.shopId,
+      network.networkName
+    )
     const suiClient = new SuiClient({ url: network.url })
 
     logListContext({
@@ -54,7 +32,10 @@ runSuiScript(
       networkName: currentNetwork
     })
 
-    const acceptedCurrencies = await fetchAcceptedCurrencies(shopId, suiClient)
+    const acceptedCurrencies = await fetchAcceptedCurrencySummaries(
+      shopId,
+      suiClient
+    )
     if (acceptedCurrencies.length === 0)
       return logKeyValueYellow("Accepted-currencies")(
         "No currencies registered."
@@ -74,96 +55,6 @@ runSuiScript(
     })
     .strict()
 )
-
-const resolveInputs = async (
-  cliArguments: ListCurrenciesArguments,
-  networkName: string
-) => {
-  const shopArtifact = await getLatestObjectFromArtifact(
-    "shop::Shop",
-    networkName
-  )
-
-  return {
-    shopId: normalizeIdOrThrow(
-      cliArguments.shopId ?? shopArtifact?.objectId,
-      "A shop id is required; create a shop first or provide --shop-id."
-    )
-  }
-}
-
-const fetchAcceptedCurrencies = async (
-  shopId: string,
-  suiClient: SuiClient
-): Promise<AcceptedCurrencySummary[]> => {
-  const dynamicFields = await fetchAllDynamicFields(
-    { parentObjectId: shopId },
-    suiClient
-  )
-  const acceptedCurrencyMarkers = dynamicFields.filter((dynamicField) =>
-    dynamicField.objectType?.includes(ACCEPTED_CURRENCY_TYPE_FRAGMENT)
-  )
-
-  if (acceptedCurrencyMarkers.length === 0) return []
-
-  const acceptedCurrencyIds = acceptedCurrencyMarkers.map((marker) =>
-    normalizeIdOrThrow(
-      normalizeOptionalIdFromValue((marker.name as { value: string })?.value),
-      `Missing AcceptedCurrency id for dynamic field ${marker.objectId}.`
-    )
-  )
-
-  const acceptedCurrencyObjects = await Promise.all(
-    acceptedCurrencyIds.map((currencyId) =>
-      getSuiObject(
-        {
-          objectId: currencyId,
-          options: { showContent: true, showType: true }
-        },
-        suiClient
-      )
-    )
-  )
-
-  return acceptedCurrencyObjects.map((response, index) =>
-    buildAcceptedCurrencySummary(
-      response.object,
-      acceptedCurrencyIds[index],
-      acceptedCurrencyMarkers[index].objectId
-    )
-  )
-}
-
-const buildAcceptedCurrencySummary = (
-  acceptedCurrencyObject: SuiObjectData,
-  acceptedCurrencyId: string,
-  markerObjectId: string
-): AcceptedCurrencySummary => {
-  const acceptedCurrencyFields = unwrapMoveObjectFields(acceptedCurrencyObject)
-  const coinType =
-    formatTypeNameFromFieldValue(acceptedCurrencyFields.coin_type) || "Unknown"
-
-  return {
-    acceptedCurrencyId,
-    markerObjectId,
-    coinType,
-    symbol: decodeUtf8Vector(acceptedCurrencyFields.symbol),
-    decimals: parseOptionalNumber(acceptedCurrencyFields.decimals),
-    feedIdHex: formatVectorBytesAsHex(acceptedCurrencyFields.feed_id),
-    pythObjectId: normalizeOptionalIdFromValue(
-      acceptedCurrencyFields.pyth_object_id
-    ),
-    maxPriceAgeSecsCap: formatOptionalNumericValue(
-      acceptedCurrencyFields.max_price_age_secs_cap
-    ),
-    maxConfidenceRatioBpsCap: formatOptionalNumericValue(
-      acceptedCurrencyFields.max_confidence_ratio_bps_cap
-    ),
-    maxPriceStatusLagSecsCap: formatOptionalNumericValue(
-      acceptedCurrencyFields.max_price_status_lag_secs_cap
-    )
-  }
-}
 
 const logListContext = ({
   shopId,

@@ -1,12 +1,21 @@
-import type { SuiClient } from "@mysten/sui/client"
+import type { SuiClient, SuiObjectData } from "@mysten/sui/client"
 
 import { fetchAllDynamicFields } from "../tooling/dynamic-fields.ts"
 import {
   getSuiObject,
-  normalizeOptionalIdFromValue
+  normalizeIdOrThrow,
+  normalizeOptionalIdFromValue,
+  unwrapMoveObjectFields
 } from "../tooling/object.ts"
 import {
+  decodeUtf8Vector,
+  formatOptionalNumericValue,
+  formatVectorBytesAsHex,
+  parseOptionalNumber
+} from "../utils/formatters.ts"
+import {
   formatTypeName,
+  formatTypeNameFromFieldValue,
   isMatchingTypeName,
   parseTypeNameFromString
 } from "../utils/type-name.ts"
@@ -105,4 +114,90 @@ const extractAcceptedCurrencyIdFromTypeIndexField = async (
   // Dynamic field values can be nested; normalizeOptionalIdFromValue handles common shapes.
   // @ts-expect-error Move object content exposes fields for dynamic field values.
   return normalizeOptionalIdFromValue(object.content?.fields?.value)
+}
+
+export type AcceptedCurrencySummary = {
+  acceptedCurrencyId: string
+  markerObjectId: string
+  coinType: string
+  symbol?: string
+  decimals?: number
+  feedIdHex: string
+  pythObjectId?: string
+  maxPriceAgeSecsCap?: string
+  maxConfidenceRatioBpsCap?: string
+  maxPriceStatusLagSecsCap?: string
+}
+
+export const fetchAcceptedCurrencySummaries = async (
+  shopId: string,
+  suiClient: SuiClient
+): Promise<AcceptedCurrencySummary[]> => {
+  const acceptedCurrencyMarkers = await fetchAllDynamicFields(
+    {
+      parentObjectId: shopId,
+      objectTypeFilter: ACCEPTED_CURRENCY_TYPE_FRAGMENT
+    },
+    suiClient
+  )
+
+  if (acceptedCurrencyMarkers.length === 0) return []
+
+  const acceptedCurrencyIds = acceptedCurrencyMarkers.map((marker) =>
+    normalizeIdOrThrow(
+      normalizeOptionalIdFromValue((marker.name as { value: string })?.value),
+      `Missing AcceptedCurrency id for dynamic field ${marker.objectId}.`
+    )
+  )
+
+  const acceptedCurrencyObjects = await Promise.all(
+    acceptedCurrencyIds.map((currencyId) =>
+      getSuiObject(
+        {
+          objectId: currencyId,
+          options: { showContent: true, showType: true }
+        },
+        suiClient
+      )
+    )
+  )
+
+  return acceptedCurrencyObjects.map((response, index) =>
+    buildAcceptedCurrencySummary(
+      response.object,
+      acceptedCurrencyIds[index],
+      acceptedCurrencyMarkers[index].objectId
+    )
+  )
+}
+
+const buildAcceptedCurrencySummary = (
+  acceptedCurrencyObject: SuiObjectData,
+  acceptedCurrencyId: string,
+  markerObjectId: string
+): AcceptedCurrencySummary => {
+  const acceptedCurrencyFields = unwrapMoveObjectFields(acceptedCurrencyObject)
+  const coinType =
+    formatTypeNameFromFieldValue(acceptedCurrencyFields.coin_type) || "Unknown"
+
+  return {
+    acceptedCurrencyId,
+    markerObjectId,
+    coinType,
+    symbol: decodeUtf8Vector(acceptedCurrencyFields.symbol),
+    decimals: parseOptionalNumber(acceptedCurrencyFields.decimals),
+    feedIdHex: formatVectorBytesAsHex(acceptedCurrencyFields.feed_id),
+    pythObjectId: normalizeOptionalIdFromValue(
+      acceptedCurrencyFields.pyth_object_id
+    ),
+    maxPriceAgeSecsCap: formatOptionalNumericValue(
+      acceptedCurrencyFields.max_price_age_secs_cap
+    ),
+    maxConfidenceRatioBpsCap: formatOptionalNumericValue(
+      acceptedCurrencyFields.max_confidence_ratio_bps_cap
+    ),
+    maxPriceStatusLagSecsCap: formatOptionalNumericValue(
+      acceptedCurrencyFields.max_price_status_lag_secs_cap
+    )
+  }
 }

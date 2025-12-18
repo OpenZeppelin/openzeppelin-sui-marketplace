@@ -1,6 +1,12 @@
+import type { SuiClient } from "@mysten/sui/client"
 import { getLatestObjectFromArtifact } from "../tooling/artifacts.ts"
-import { normalizeIdOrThrow } from "../tooling/object.ts"
-import { tryParseBigInt } from "../utils/utility.ts"
+import {
+  getSuiObject,
+  normalizeIdOrThrow,
+  normalizeOptionalAddress,
+  unwrapMoveObjectFields
+} from "../tooling/object.ts"
+import { requireValue, tryParseBigInt } from "../utils/utility.ts"
 
 export type ShopIdentifierInputs = {
   packageId?: string
@@ -53,5 +59,45 @@ export const resolveLatestShopIdentifiers = async (
       providedIdentifiers.ownerCapId ?? ownerCapArtifact?.objectId,
       "An owner cap id is required; create a shop first or provide --owner-cap-id."
     )
+  }
+}
+
+export const resolveLatestArtifactShopId = async (
+  providedShopId: string | undefined,
+  networkName: string
+): Promise<string> => {
+  const shopArtifact = await getLatestObjectFromArtifact(
+    "shop::Shop",
+    networkName
+  )
+
+  return normalizeIdOrThrow(
+    providedShopId ?? shopArtifact?.objectId,
+    "A shop id is required; create a shop first or provide --shop-id."
+  )
+}
+
+export type ShopOverview = {
+  shopId: string
+  ownerAddress: string
+}
+
+export const fetchShopOverview = async (
+  shopId: string,
+  suiClient: SuiClient
+): Promise<ShopOverview> => {
+  const { object } = await getSuiObject(
+    { objectId: shopId, options: { showContent: true, showType: true } },
+    suiClient
+  )
+  const shopFields = unwrapMoveObjectFields<{ owner: unknown }>(object)
+  const ownerAddress = requireValue(
+    normalizeOptionalAddress(shopFields.owner as string | undefined),
+    `Missing owner address for shop ${shopId}.`
+  )
+
+  return {
+    shopId,
+    ownerAddress
   }
 }

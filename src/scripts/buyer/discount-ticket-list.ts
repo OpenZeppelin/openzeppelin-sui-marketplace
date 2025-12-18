@@ -2,11 +2,11 @@ import { SuiClient } from "@mysten/sui/client"
 import { normalizeSuiAddress } from "@mysten/sui/utils"
 import yargs from "yargs"
 
+import type { DiscountTicketDetails } from "../../models/discount.ts"
 import {
   formatDiscountTicketStructType,
-  parseDiscountTicketFromObject,
-  type DiscountTicketDetails
-} from "../../models/discount-ticket.ts"
+  parseDiscountTicketFromObject
+} from "../../models/discount.ts"
 import { getLatestObjectFromArtifact } from "../../tooling/artifacts.ts"
 import {
   getAccountConfig,
@@ -32,7 +32,7 @@ type ListDiscountTicketsArguments = {
 
 type NormalizedInputs = {
   ownerAddress: string
-  packageId: string
+  shopPackageId: string
   discountTicketStructType: string
   shopId?: string
 }
@@ -50,7 +50,7 @@ runSuiScript(
 
     logListContext({
       ownerAddress: inputs.ownerAddress,
-      packageId: inputs.packageId,
+      packageId: inputs.shopPackageId,
       shopId: inputs.shopId,
       rpcUrl: network.url,
       networkName: currentNetwork
@@ -101,18 +101,25 @@ const resolveInputs = async (
   networkName: string,
   networkConfig: SuiNetworkConfig
 ): Promise<NormalizedInputs> => {
-  const packageId = await resolveShopPackageId(
-    cliArguments.shopPackageId,
+  const shopArtifact = await getLatestObjectFromArtifact(
+    "shop::Shop",
     networkName
   )
+
+  const shopPackageId = cliArguments.shopPackageId || shopArtifact?.packageId
+
+  if (!shopPackageId)
+    throw new Error(
+      "A shop package id is required and was not found in the object.network.json artifact please enter one as cli argument"
+    )
 
   return {
     ownerAddress: await resolveOwnerAddress(
       cliArguments.address,
       networkConfig
     ),
-    packageId,
-    discountTicketStructType: formatDiscountTicketStructType(packageId),
+    shopPackageId,
+    discountTicketStructType: formatDiscountTicketStructType(shopPackageId),
     shopId: cliArguments.shopId
       ? normalizeIdOrThrow(cliArguments.shopId, "Invalid shop id provided.")
       : undefined
@@ -132,27 +139,6 @@ const resolveOwnerAddress = async (
 
   const keypair = await loadKeypair(accountConfig)
   return normalizeSuiAddress(keypair.toSuiAddress())
-}
-
-const resolveShopPackageId = async (
-  shopPackageId: string | undefined,
-  networkName: string
-): Promise<string> => {
-  if (shopPackageId)
-    return normalizeIdOrThrow(
-      shopPackageId,
-      "Invalid shop package id provided."
-    )
-
-  const shopArtifact = await getLatestObjectFromArtifact(
-    "shop::Shop",
-    networkName
-  )
-
-  return normalizeIdOrThrow(
-    shopArtifact?.packageId,
-    "A shop package id is required; publish the package first or provide --shop-package-id."
-  )
 }
 
 const fetchDiscountTickets = async ({

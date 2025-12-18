@@ -1,4 +1,15 @@
-import { tryParseBigInt } from "../utils/utility.ts"
+import type { SuiClient, SuiObjectData } from "@mysten/sui/client"
+import { normalizeSuiObjectId } from "@mysten/sui/utils"
+import { fetchAllDynamicFields } from "../tooling/dynamic-fields.ts"
+import {
+  getSuiObject,
+  normalizeIdOrThrow,
+  normalizeOptionalAddress,
+  normalizeOptionalIdFromValue,
+  unwrapMoveObjectFields
+} from "../tooling/object.ts"
+import { formatOptionalNumericValue } from "../utils/formatters.ts"
+import { requireValue, tryParseBigInt } from "../utils/utility.ts"
 import { parseUsdToCents } from "./shop.ts"
 
 export const DISCOUNT_TEMPLATE_TYPE_FRAGMENT = "::shop::DiscountTemplate"
@@ -249,4 +260,174 @@ export const deriveTemplateStatus = ({
   if (isScheduled) return "scheduled"
 
   return "active"
+}
+
+export type DiscountTemplateSummary = {
+  discountTemplateId: string
+  markerObjectId: string
+  shopAddress: string
+  appliesToListingId?: string
+  ruleDescription: string
+  startsAt?: string
+  expiresAt?: string
+  maxRedemptions?: string
+  claimsIssued?: string
+  redemptions?: string
+  activeFlag: boolean
+  status: string
+}
+
+export const fetchDiscountTemplateSummaries = async (
+  shopId: string,
+  suiClient: SuiClient
+): Promise<DiscountTemplateSummary[]> => {
+  const discountTemplateMarkers = await fetchAllDynamicFields(
+    {
+      parentObjectId: shopId,
+      objectTypeFilter: DISCOUNT_TEMPLATE_MARKER_TYPE_FRAGMENT
+    },
+    suiClient
+  )
+
+  if (discountTemplateMarkers.length === 0) return []
+
+  const discountTemplateIds = discountTemplateMarkers.map((marker) =>
+    normalizeIdOrThrow(
+      normalizeOptionalIdFromValue((marker.name as { value: string })?.value),
+      `Missing DiscountTemplate id for dynamic field ${marker.objectId}.`
+    )
+  )
+
+  const discountTemplateObjects = await Promise.all(
+    discountTemplateIds.map((discountTemplateId) =>
+      getSuiObject(
+        {
+          objectId: discountTemplateId,
+          options: { showContent: true, showType: true }
+        },
+        suiClient
+      )
+    )
+  )
+
+  return discountTemplateObjects.map((response, index) =>
+    buildDiscountTemplateSummary(
+      response.object,
+      discountTemplateIds[index],
+      discountTemplateMarkers[index].objectId
+    )
+  )
+}
+
+const buildDiscountTemplateSummary = (
+  discountTemplateObject: SuiObjectData,
+  discountTemplateId: string,
+  markerObjectId: string
+): DiscountTemplateSummary => {
+  const discountTemplateFields = unwrapMoveObjectFields(discountTemplateObject)
+  const shopAddress = normalizeOptionalIdFromValue(
+    discountTemplateFields.shop_address
+  )
+  const appliesToListingId = normalizeOptionalIdFromValue(
+    discountTemplateFields.applies_to_listing
+  )
+
+  const rule = parseDiscountRuleFromField(discountTemplateFields.rule)
+  const startsAt = normalizeOptionalU64FromValue(
+    discountTemplateFields.starts_at
+  )
+  const expiresAt = normalizeOptionalU64FromValue(
+    discountTemplateFields.expires_at
+  )
+  const maxRedemptions = normalizeOptionalU64FromValue(
+    discountTemplateFields.max_redemptions
+  )
+  const claimsIssued = normalizeOptionalU64FromValue(
+    discountTemplateFields.claims_issued
+  )
+  const redemptions = normalizeOptionalU64FromValue(
+    discountTemplateFields.redemptions
+  )
+  const activeFlag = Boolean(discountTemplateFields.active)
+
+  return {
+    discountTemplateId,
+    markerObjectId,
+    shopAddress: normalizeIdOrThrow(
+      shopAddress,
+      `Missing shop_address for DiscountTemplate ${discountTemplateId}.`
+    ),
+    appliesToListingId,
+    ruleDescription: formatOnChainDiscountRule(rule),
+    startsAt: formatOptionalNumericValue(startsAt),
+    expiresAt: formatOptionalNumericValue(expiresAt),
+    maxRedemptions:
+      maxRedemptions === undefined
+        ? undefined
+        : formatOptionalNumericValue(maxRedemptions),
+    claimsIssued: formatOptionalNumericValue(claimsIssued),
+    redemptions: formatOptionalNumericValue(redemptions),
+    activeFlag,
+    status: deriveTemplateStatus({
+      activeFlag,
+      startsAt,
+      expiresAt,
+      maxRedemptions,
+      redemptions
+    })
+  }
+}
+
+export const DISCOUNT_TICKET_TYPE_FRAGMENT = "::shop::DiscountTicket"
+export const DISCOUNT_TEMPLATE_MARKER_TYPE_FRAGMENT =
+  "::shop::DiscountTemplateMarker"
+
+export const formatDiscountTicketStructType = (packageId: string): string =>
+  `${normalizeSuiObjectId(packageId)}${DISCOUNT_TICKET_TYPE_FRAGMENT}`
+
+export type DiscountTicketDetails = {
+  discountTicketId: string
+  discountTemplateId: string
+  shopAddress: string
+  listingId?: string
+  claimer: string
+}
+
+export const parseDiscountTicketFromObject = (
+  discountTicketObject: SuiObjectData
+): DiscountTicketDetails => {
+  const discountTicketId = normalizeIdOrThrow(
+    discountTicketObject.objectId,
+    "DiscountTicket object is missing an id."
+  )
+
+  const discountTicketFields = unwrapMoveObjectFields<{
+    discount_template_id: unknown
+    shop_address: unknown
+    listing_id: unknown
+    claimer: unknown
+  }>(discountTicketObject)
+
+  const listingId = normalizeOptionalIdFromValue(
+    discountTicketFields.listing_id
+  )
+
+  return {
+    discountTicketId,
+    discountTemplateId: normalizeIdOrThrow(
+      normalizeOptionalIdFromValue(discountTicketFields.discount_template_id),
+      `Missing discount_template_id for DiscountTicket ${discountTicketId}.`
+    ),
+    shopAddress: normalizeIdOrThrow(
+      normalizeOptionalIdFromValue(discountTicketFields.shop_address),
+      `Missing shop_address for DiscountTicket ${discountTicketId}.`
+    ),
+    listingId: listingId ? normalizeSuiObjectId(listingId) : undefined,
+    claimer: requireValue(
+      normalizeOptionalAddress(
+        discountTicketFields.claimer as string | undefined
+      ),
+      `Missing claimer for DiscountTicket ${discountTicketId}.`
+    )
+  }
 }

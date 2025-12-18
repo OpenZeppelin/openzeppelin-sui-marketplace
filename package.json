@@ -30,6 +30,7 @@
     "buyer:discount-template:list": "NODE_OPTIONS=\"--no-warnings\" ts-node-esm --transpile-only src/scripts/buyer/discount-template-list.ts",
     "buyer:discount-ticket:list": "NODE_OPTIONS=\"--no-warnings\" ts-node-esm --transpile-only src/scripts/buyer/discount-ticket-list.ts",
     "buyer:discount-ticket:claim": "NODE_OPTIONS=\"--no-warnings\" ts-node-esm --transpile-only src/scripts/buyer/discount-ticket-claim.ts",
+    "buyer:shop:view": "NODE_OPTIONS=\"--no-warnings\" ts-node-esm --transpile-only src/scripts/buyer/shop-view.ts",
     "lint": "pnpm exec eslint .",
     "lint:fix": "pnpm exec eslint . --fix"
   },
