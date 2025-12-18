@@ -481,6 +481,31 @@ fun add_accepted_currency_records_currency_and_event() {
     scenario::ctx(&mut scn),
   );
   let accepted_currency_id = shop::test_last_created_id(scenario::ctx(&mut scn));
+  let added_events = event::events_by_type<shop::AcceptedCoinAdded>();
+  let added_len = vec::length(&added_events);
+  assert!(added_len > events_before, E_ASSERT_FAILURE);
+  let added_event = vec::borrow(&added_events, added_len - 1);
+  assert!(
+    shop::test_accepted_coin_added_shop(added_event) == shop::test_shop_id(&shop_obj),
+    E_ASSERT_FAILURE,
+  );
+  assert!(
+    shop::test_accepted_coin_added_coin_type(added_event) == test_coin_type(),
+    E_ASSERT_FAILURE,
+  );
+  assert!(
+    shop::test_accepted_coin_added_feed_id(added_event) == expected_feed_id,
+    E_ASSERT_FAILURE,
+  );
+  assert!(
+    shop::test_accepted_coin_added_pyth_object_id(added_event) == pyth_object_id,
+    E_ASSERT_FAILURE,
+  );
+  assert!(
+    shop::test_accepted_coin_added_decimals(added_event) == 9,
+    E_ASSERT_FAILURE,
+  );
+
   scenario::return_to_sender(&scn, owner_cap_obj);
   scenario::return_shared(shop_obj);
   txf::public_share_object(price_info_object);
@@ -517,31 +542,6 @@ fun add_accepted_currency_records_currency_and_event() {
   assert!(opt::is_some(&mapped_id), E_ASSERT_FAILURE);
   assert!(
     *opt::borrow(&mapped_id) == accepted_currency_id,
-    E_ASSERT_FAILURE,
-  );
-
-  let added_events = event::events_by_type<shop::AcceptedCoinAdded>();
-  let added_len = vec::length(&added_events);
-  assert!(added_len > events_before, E_ASSERT_FAILURE);
-  let added_event = vec::borrow(&added_events, added_len - 1);
-  assert!(
-    shop::test_accepted_coin_added_shop(added_event) == shop::test_shop_id(&shared_shop),
-    E_ASSERT_FAILURE,
-  );
-  assert!(
-    shop::test_accepted_coin_added_coin_type(added_event) == test_coin_type(),
-    E_ASSERT_FAILURE,
-  );
-  assert!(
-    shop::test_accepted_coin_added_feed_id(added_event) == expected_feed_id,
-    E_ASSERT_FAILURE,
-  );
-  assert!(
-    shop::test_accepted_coin_added_pyth_object_id(added_event) == pyth_object_id,
-    E_ASSERT_FAILURE,
-  );
-  assert!(
-    shop::test_accepted_coin_added_decimals(added_event) == 9,
     E_ASSERT_FAILURE,
   );
 
@@ -1083,6 +1083,7 @@ fun remove_accepted_currency_removes_state_and_emits_event() {
   let owner_cap_id = obj::id_from_address(shop::test_shop_created_owner_cap_id(shop_created));
   shop::test_destroy_publisher(publisher);
 
+  let _ = scenario::next_tx(&mut scn, TEST_OWNER);
   let _ = scenario::next_tx(&mut scn, @0x0);
   let primary_currency = create_test_currency(scenario::ctx(&mut scn));
   let secondary_currency = create_alt_test_currency(scenario::ctx(&mut scn));
@@ -1254,16 +1255,19 @@ fun remove_accepted_currency_rejects_foreign_owner_cap() {
   let owner_cap_id = obj::id_from_address(shop::test_shop_created_owner_cap_id(shop_created));
   shop::test_destroy_publisher(publisher);
 
+  let _ = scenario::next_tx(&mut scn, TEST_OWNER);
+  let mut owner_cap_obj: shop::ShopOwnerCap = scenario::take_from_sender(&scn);
   let mut other_scn = scenario::begin(OTHER_OWNER);
   let other_publisher = shop::test_claim_publisher(scenario::ctx(&mut other_scn));
   shop::create_shop(&other_publisher, scenario::ctx(&mut other_scn));
-  let other_created = vec::borrow(&event::events_by_type<shop::ShopCreated>(), 1);
-  let other_owner_cap_id = obj::id_from_address(
+  let other_created = vec::borrow(&event::events_by_type<shop::ShopCreated>(), 0);
+  let _other_owner_cap_id = obj::id_from_address(
     shop::test_shop_created_owner_cap_id(other_created),
   );
   shop::test_destroy_publisher(other_publisher);
 
   let _ = scenario::next_tx(&mut other_scn, OTHER_OWNER);
+  let wrong_cap: shop::ShopOwnerCap = scenario::take_from_sender(&other_scn);
 
   let currency = prepare_test_currency_for_owner(&mut scn, TEST_OWNER);
   let (price_info_object, price_info_id) = create_price_info_object_for_feed(
@@ -1272,10 +1276,6 @@ fun remove_accepted_currency_rejects_foreign_owner_cap() {
   );
 
   let mut shop_obj = scenario::take_shared_by_id(&scn, shop_id);
-  let owner_cap_obj: shop::ShopOwnerCap = scenario::take_from_sender_by_id(
-    &scn,
-    owner_cap_id,
-  );
   shop::add_accepted_currency<TestCoin>(
     &mut shop_obj,
     &currency,
@@ -1299,10 +1299,6 @@ fun remove_accepted_currency_rejects_foreign_owner_cap() {
   let accepted_currency = scenario::take_shared_by_id<shop::AcceptedCurrency>(
     &scn,
     accepted_currency_id,
-  );
-  let wrong_cap: shop::ShopOwnerCap = scenario::take_from_sender_by_id(
-    &other_scn,
-    other_owner_cap_id,
   );
 
   shop::remove_accepted_currency(
@@ -1334,10 +1330,11 @@ fun remove_accepted_currency_rejects_missing_id() {
   let owner_cap_id = obj::id_from_address(shop::test_shop_created_owner_cap_id(shop_created));
   shop::test_destroy_publisher(publisher);
 
+  let _ = scenario::next_tx(&mut scn, TEST_OWNER);
   let mut other_scn = scenario::begin(OTHER_OWNER);
   let other_publisher = shop::test_claim_publisher(scenario::ctx(&mut other_scn));
   shop::create_shop(&other_publisher, scenario::ctx(&mut other_scn));
-  let other_created = vec::borrow(&event::events_by_type<shop::ShopCreated>(), 1);
+  let other_created = vec::borrow(&event::events_by_type<shop::ShopCreated>(), 0);
   let other_shop_id = obj::id_from_address(shop::test_shop_created_shop_address(other_created));
   let other_owner_cap_id = obj::id_from_address(
     shop::test_shop_created_owner_cap_id(other_created),
@@ -1379,10 +1376,7 @@ fun remove_accepted_currency_rejects_missing_id() {
 
   let _ = scenario::next_tx(&mut scn, TEST_OWNER);
   let mut shared_shop = scenario::take_shared_by_id(&scn, shop_id);
-  let owner_cap_obj: shop::ShopOwnerCap = scenario::take_from_sender_by_id(
-    &scn,
-    owner_cap_id,
-  );
+  let owner_cap_obj: shop::ShopOwnerCap = scenario::take_from_sender(&scn);
   shop::remove_accepted_currency(
     &mut shared_shop,
     &foreign_currency,

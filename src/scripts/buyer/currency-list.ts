@@ -96,7 +96,10 @@ const fetchAcceptedCurrencies = async (
   shopId: string,
   suiClient: SuiClient
 ): Promise<AcceptedCurrencySummary[]> => {
-  const dynamicFields = await fetchAllDynamicFields(shopId, suiClient)
+  const dynamicFields = await fetchAllDynamicFields(
+    { parentObjectId: shopId },
+    suiClient
+  )
   const acceptedCurrencyMarkers = dynamicFields.filter((dynamicField) =>
     dynamicField.objectType?.includes(ACCEPTED_CURRENCY_TYPE_FRAGMENT)
   )

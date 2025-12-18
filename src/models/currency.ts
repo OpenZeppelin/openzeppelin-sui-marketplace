@@ -42,7 +42,10 @@ export const findAcceptedCurrencyByCoinType = async ({
 }): Promise<AcceptedCurrencyMatch | undefined> => {
   const normalizedCoinType = normalizeCoinType(coinType)
   const expectedTypeName = parseTypeNameFromString(normalizedCoinType)
-  const dynamicFields = await fetchAllDynamicFields(shopId, suiClient)
+  const dynamicFields = await fetchAllDynamicFields(
+    { parentObjectId: shopId },
+    suiClient
+  )
 
   const typeIndexField = dynamicFields.find(
     (dynamicField) =>
