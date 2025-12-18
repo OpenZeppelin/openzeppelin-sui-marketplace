@@ -57,10 +57,8 @@ runSuiScript(
     })
 
     const discountTemplates = await fetchDiscountTemplates(shopId, suiClient)
-    if (discountTemplates.length === 0) {
-      logKeyValueYellow("Discount-templates")("No templates found.")
-      return
-    }
+    if (discountTemplates.length === 0)
+      return logKeyValueYellow("Discount-templates")("No templates found.")
 
     discountTemplates.forEach((template, index) =>
       logDiscountTemplate(template, index + 1)
@@ -98,12 +96,12 @@ const fetchDiscountTemplates = async (
   shopId: string,
   suiClient: SuiClient
 ): Promise<DiscountTemplateSummary[]> => {
-  const dynamicFields = await fetchAllDynamicFields(
-    { parentObjectId: shopId },
+  const discountTemplateMarkers = await fetchAllDynamicFields(
+    {
+      parentObjectId: shopId,
+      objectTypeFilter: DISCOUNT_TEMPLATE_MARKER_TYPE_FRAGMENT
+    },
     suiClient
-  )
-  const discountTemplateMarkers = dynamicFields.filter((dynamicField) =>
-    dynamicField.objectType?.includes(DISCOUNT_TEMPLATE_MARKER_TYPE_FRAGMENT)
   )
 
   if (discountTemplateMarkers.length === 0) return []
