@@ -247,13 +247,13 @@ export const normalizeIdOrThrow = (
   errorMessage: string
 ): string => normalizeSuiObjectId(requireValue(id, errorMessage))
 
-export const fetchAllOwnedObjects = async (
+export const fetchAllOwnedObjectsByType = async (
   {
     ownerAddress,
-    discountTicketType
+    structType
   }: {
     ownerAddress: string
-    discountTicketType: string
+    structType: string
   },
   suiClient: SuiClient
 ): Promise<SuiObjectData[]> => {
@@ -264,7 +264,7 @@ export const fetchAllOwnedObjects = async (
     const page = await suiClient.getOwnedObjects({
       owner: normalizeSuiAddress(ownerAddress),
       cursor: cursor,
-      filter: { StructType: discountTicketType },
+      filter: { StructType: structType },
       options: { showContent: true, showType: true }
     })
 
@@ -277,3 +277,5 @@ export const fetchAllOwnedObjects = async (
 
   return ownedObjects
 }
+
+export const fetchAllOwnedObjects = fetchAllOwnedObjectsByType

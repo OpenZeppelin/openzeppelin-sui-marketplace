@@ -11,13 +11,21 @@ A comprehensive, opinionated onboarding guide for Solidity/EVM developers buildi
 git clone <your fork url> && cd sui-oracle-market
 pnpm install
 
-# 2) Start localnet (new terminal)
+# 2) Create or reuse an address
+sui client new-address ed25519
+sui client active-address   # ensure the desired address is active
+
+# 3) Configure this address in SUI config file or export
+export SUI_ACCOUNT_ADDRESS=<0x...>
+export SUI_ACCOUNT_PRIVATE_KEY=<base64 or hex>
+
+# 4) Start localnet (new terminal)
 pnpm chain:localnet:start --with-faucet
 
-# 3) Seed mocks (coins + Pyth stub + price feeds)
+# 5) Seed mocks (coins + Pyth stub + price feeds)
 pnpm chain:mock:setup
 
-# 4) Publish oracle-market with dev dependencies (local mocks)
+# 6) Publish oracle-market with dev dependencies (local mocks)
 pnpm chain:publish-package --package-path oracle-market --dev
 ```
 

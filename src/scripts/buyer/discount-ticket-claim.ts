@@ -10,7 +10,10 @@ import {
   logKeyValueYellow
 } from "../../tooling/log.ts"
 import type { ObjectArtifact } from "../../tooling/object.ts"
-import { normalizeIdOrThrow } from "../../tooling/object.ts"
+import {
+  deriveRelevantPackageId,
+  normalizeIdOrThrow
+} from "../../tooling/object.ts"
 import { runSuiScript } from "../../tooling/process.ts"
 import { getSuiSharedObject } from "../../tooling/shared-object.ts"
 import { newTransaction, signAndExecute } from "../../tooling/transactions.ts"
@@ -38,18 +41,18 @@ runSuiScript(
       suiClient
     )
 
-    const packageId = await resolvePackageId(network.networkName)
+    const shopPackageId = deriveRelevantPackageId(shopShared.object.type)
 
     logClaimContext({
       discountTemplateId,
-      packageId,
+      packageId: shopPackageId,
       shopAddress: shopId,
       rpcUrl: network.url,
       networkName: currentNetwork
     })
 
     const claimDiscountTicketTransaction = buildClaimDiscountTicketTransaction({
-      packageId,
+      packageId: shopPackageId,
       shopShared,
       discountTemplateShared,
       sharedClockObject: await getSuiSharedObject(
@@ -125,15 +128,14 @@ const buildClaimDiscountTicketTransaction = ({
   sharedClockObject: Awaited<ReturnType<typeof getSuiSharedObject>>
 }) => {
   const transaction = newTransaction()
-  const shopArgument = transaction.sharedObjectRef(shopShared.sharedRef)
-  const templateArgument = transaction.sharedObjectRef(
-    discountTemplateShared.sharedRef
-  )
-  const clockArgument = transaction.sharedObjectRef(sharedClockObject.sharedRef)
 
   transaction.moveCall({
     target: `${packageId}::shop::claim_discount_ticket`,
-    arguments: [shopArgument, templateArgument, clockArgument]
+    arguments: [
+      transaction.sharedObjectRef(shopShared.sharedRef),
+      transaction.sharedObjectRef(discountTemplateShared.sharedRef),
+      transaction.sharedObjectRef(sharedClockObject.sharedRef)
+    ]
   })
 
   return transaction
@@ -184,6 +186,7 @@ const logClaimResult = ({
     )
   if (digest) logKeyValueGreen("digest")(digest)
 }
+
 const resolvePackageId = async (networkName: string): Promise<string> => {
   const shopArtifact = await getLatestObjectFromArtifact(
     "shop::Shop",

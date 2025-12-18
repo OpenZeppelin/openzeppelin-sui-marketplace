@@ -1,8 +1,12 @@
-import type { SuiObjectData } from "@mysten/sui/client"
 import { SuiClient } from "@mysten/sui/client"
-import { normalizeSuiAddress, normalizeSuiObjectId } from "@mysten/sui/utils"
+import { normalizeSuiAddress } from "@mysten/sui/utils"
 import yargs from "yargs"
 
+import {
+  formatDiscountTicketStructType,
+  parseDiscountTicketFromObject,
+  type DiscountTicketDetails
+} from "../../models/discount-ticket.ts"
 import { getLatestObjectFromArtifact } from "../../tooling/artifacts.ts"
 import {
   getAccountConfig,
@@ -15,11 +19,8 @@ import {
   logKeyValueYellow
 } from "../../tooling/log.ts"
 import {
-  fetchAllOwnedObjects,
-  normalizeIdOrThrow,
-  normalizeOptionalAddress,
-  normalizeOptionalIdFromValue,
-  unwrapMoveObjectFields
+  fetchAllOwnedObjectsByType,
+  normalizeIdOrThrow
 } from "../../tooling/object.ts"
 import { runSuiScript } from "../../tooling/process.ts"
 
@@ -32,16 +33,11 @@ type ListDiscountTicketsArguments = {
 type NormalizedInputs = {
   ownerAddress: string
   packageId: string
+  discountTicketStructType: string
   shopId?: string
 }
 
-type DiscountTicketSummary = {
-  discountTicketId: string
-  discountTemplateId: string
-  shopAddress: string
-  listingId?: string
-  claimer: string
-}
+type DiscountTicketSummary = DiscountTicketDetails
 
 runSuiScript(
   async ({ network, currentNetwork }, cliArguments) => {
@@ -62,7 +58,7 @@ runSuiScript(
 
     const discountTickets = await fetchDiscountTickets({
       ownerAddress: inputs.ownerAddress,
-      packageId: inputs.packageId,
+      discountTicketStructType: inputs.discountTicketStructType,
       shopFilterId: inputs.shopId,
       suiClient
     })
@@ -104,18 +100,24 @@ const resolveInputs = async (
   cliArguments: ListDiscountTicketsArguments,
   networkName: string,
   networkConfig: SuiNetworkConfig
-): Promise<NormalizedInputs> => ({
-  ownerAddress: await resolveOwnerAddress(cliArguments.address, networkConfig),
-  packageId: await resolveShopPackageId(
+): Promise<NormalizedInputs> => {
+  const packageId = await resolveShopPackageId(
     cliArguments.shopPackageId,
     networkName
-  ),
-  shopId: cliArguments.shopId
-    ? normalizeSuiObjectId(
-        normalizeIdOrThrow(cliArguments.shopId, "Invalid shop id provided.")
-      )
-    : undefined
-})
+  )
+
+  return {
+    ownerAddress: await resolveOwnerAddress(
+      cliArguments.address,
+      networkConfig
+    ),
+    packageId,
+    discountTicketStructType: formatDiscountTicketStructType(packageId),
+    shopId: cliArguments.shopId
+      ? normalizeIdOrThrow(cliArguments.shopId, "Invalid shop id provided.")
+      : undefined
+  }
+}
 
 const resolveOwnerAddress = async (
   providedAddress: string | undefined,
@@ -136,7 +138,11 @@ const resolveShopPackageId = async (
   shopPackageId: string | undefined,
   networkName: string
 ): Promise<string> => {
-  if (shopPackageId) return normalizeSuiObjectId(shopPackageId)
+  if (shopPackageId)
+    return normalizeIdOrThrow(
+      shopPackageId,
+      "Invalid shop package id provided."
+    )
 
   const shopArtifact = await getLatestObjectFromArtifact(
     "shop::Shop",
@@ -151,74 +157,37 @@ const resolveShopPackageId = async (
 
 const fetchDiscountTickets = async ({
   ownerAddress,
-  packageId,
+  discountTicketStructType,
   shopFilterId,
   suiClient
 }: {
   ownerAddress: string
-  packageId: string
+  discountTicketStructType: string
   shopFilterId?: string
   suiClient: SuiClient
 }): Promise<DiscountTicketSummary[]> => {
-  const discountTicketObjects = await fetchAllOwnedObjects(
+  const discountTicketObjects = await fetchAllOwnedObjectsByType(
     {
       ownerAddress,
-      discountTicketType: `${packageId}::shop::DiscountTicket`
+      structType: discountTicketStructType
     },
     suiClient
   )
 
-  const discountTickets = discountTicketObjects.map(buildDiscountTicketSummary)
+  const discountTickets = discountTicketObjects.map(
+    parseDiscountTicketFromObject
+  )
 
   if (!shopFilterId) return discountTickets
 
-  const normalizedShopFilterId = normalizeSuiObjectId(shopFilterId)
+  const normalizedShopFilterId = normalizeIdOrThrow(
+    shopFilterId,
+    "Invalid shop id provided for filtering."
+  )
+
   return discountTickets.filter(
     (discountTicket) => discountTicket.shopAddress === normalizedShopFilterId
   )
-}
-
-const buildDiscountTicketSummary = (
-  discountTicketObject: SuiObjectData
-): DiscountTicketSummary => {
-  const discountTicketFields = unwrapMoveObjectFields<{
-    discount_template_id: string
-    shop_address: string
-    claimer: string
-    listing_id: string | undefined
-  }>(discountTicketObject)
-
-  const discountTicketId = normalizeIdOrThrow(
-    discountTicketObject.objectId,
-    "DiscountTicket object is missing an id."
-  )
-
-  const discountTemplateId = normalizeIdOrThrow(
-    normalizeOptionalIdFromValue(discountTicketFields.discount_template_id),
-    `Missing discount_template_id for DiscountTicket ${discountTicketId}.`
-  )
-
-  const shopAddress = normalizeIdOrThrow(
-    normalizeOptionalIdFromValue(discountTicketFields.shop_address),
-    `Missing shop_address for DiscountTicket ${discountTicketId}.`
-  )
-
-  const listingId = normalizeOptionalIdFromValue(
-    discountTicketFields.listing_id
-  )
-
-  const claimer = normalizeIdOrThrow(
-    normalizeOptionalAddress(discountTicketFields.claimer),
-    `Missing claimer for DiscountTicket ${discountTicketId}.`
-  )
-
-  return {
-    discountTicketId,
-    discountTemplateId,
-    shopAddress,
-    listingId: listingId ? normalizeSuiObjectId(listingId) : undefined,
-    claimer
-  }
 }
 
 const logListContext = ({

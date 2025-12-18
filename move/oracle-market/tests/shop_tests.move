@@ -33,6 +33,7 @@ public struct TestCoin has key, store { id: obj::UID }
 public struct AltTestCoin has key, store { id: obj::UID }
 public struct HighDecimalCoin has key, store { id: obj::UID }
 public struct TestItem has store {}
+public struct OtherItem has store {}
 
 const PRIMARY_FEED_ID: vector<u8> =
   x"000102030405060708090a0b0c0d0e0f000102030405060708090a0b0c0d0e0f";
@@ -1099,7 +1100,93 @@ fun quote_rejects_attestation_lag_above_currency_cap() {
   // Unreachable due to expected failure.
   scenario::return_shared(shared_shop);
   scenario::return_shared(accepted_currency);
-  scenario::return_shared(clock_obj);
+  clock::destroy_for_testing(clock_obj);
+  std::unit_test::destroy(currency);
+  abort E_ASSERT_FAILURE
+}
+
+#[test, expected_failure(abort_code = 0, location = ::pyth::pyth)]
+fun quote_rejects_price_timestamp_older_than_max_age() {
+  let mut scn = scenario::begin(TEST_OWNER);
+  let publisher = shop::test_claim_publisher(scenario::ctx(&mut scn));
+  shop::create_shop(&publisher, scenario::ctx(&mut scn));
+  let created_events = event::events_by_type<shop::ShopCreated>();
+  let shop_created = vec::borrow(&created_events, 0);
+  let shop_id = obj::id_from_address(
+    shop::test_shop_created_shop_address(shop_created),
+  );
+  let owner_cap_id = obj::id_from_address(
+    shop::test_shop_created_owner_cap_id(shop_created),
+  );
+  shop::test_destroy_publisher(publisher);
+
+  let currency = prepare_test_currency_for_owner(&mut scn, TEST_OWNER);
+  // Timestamp = 0 keeps the Price stale once we advance the on-chain clock.
+  let publish_time = 0;
+  let price = pyth_price::new(
+    pyth_i64::new(1_000, false),
+    10,
+    pyth_i64::new(2, true),
+    publish_time,
+  );
+  let (
+    price_info_object,
+    price_info_id,
+  ) = create_price_info_object_for_feed_with_price_and_times(
+    PRIMARY_FEED_ID,
+    price,
+    publish_time,
+    publish_time,
+    scenario::ctx(&mut scn),
+  );
+
+  let mut shop_obj = scenario::take_shared_by_id(&scn, shop_id);
+  let owner_cap_obj: shop::ShopOwnerCap = scenario::take_from_sender_by_id(
+    &scn,
+    owner_cap_id,
+  );
+  shop::add_accepted_currency<TestCoin>(
+    &mut shop_obj,
+    &currency,
+    PRIMARY_FEED_ID,
+    price_info_id,
+    &price_info_object,
+    opt::none(),
+    opt::none(),
+    opt::none(),
+    &owner_cap_obj,
+    scenario::ctx(&mut scn),
+  );
+  let accepted_currency_id = shop::test_last_created_id(
+    scenario::ctx(&mut scn),
+  );
+  scenario::return_to_sender(&scn, owner_cap_obj);
+  scenario::return_shared(shop_obj);
+  txf::public_share_object(price_info_object);
+
+  let _ = scenario::next_tx(&mut scn, TEST_OWNER);
+
+  let shared_shop = scenario::take_shared_by_id(&scn, shop_id);
+  let accepted_currency = scenario::take_shared_by_id<shop::AcceptedCurrency>(
+    &scn,
+    accepted_currency_id,
+  );
+  let mut clock_obj = clock::create_for_testing(scenario::ctx(&mut scn));
+  clock::set_for_testing(&mut clock_obj, 200_000);
+
+  shop::quote_amount_for_price_info_object(
+    &shared_shop,
+    &accepted_currency,
+    &scenario::take_shared_by_id(&scn, price_info_id),
+    10_000,
+    opt::some(10),
+    opt::none(),
+    &clock_obj,
+  );
+  // Unreachable due to expected failure.
+  scenario::return_shared(shared_shop);
+  scenario::return_shared(accepted_currency);
+  clock::destroy_for_testing(clock_obj);
   std::unit_test::destroy(currency);
   abort E_ASSERT_FAILURE
 }
@@ -1578,7 +1665,7 @@ fun quote_view_rejects_mismatched_price_info_object() {
 
   scenario::return_shared(shared_shop);
   scenario::return_shared(accepted_currency);
-  scenario::return_shared(clock_obj);
+  clock::destroy_for_testing(clock_obj);
   scenario::return_shared(mismatched_price_info_object);
   std::unit_test::destroy(currency);
   abort E_ASSERT_FAILURE
@@ -4630,8 +4717,514 @@ fun claim_and_buy_rejects_second_claim_after_redeem() {
   scenario::return_shared(listing_obj);
   scenario::return_shared(shared_shop);
   scenario::return_shared(price_info_obj);
-  scenario::return_shared(clock_obj);
+  clock::destroy_for_testing(clock_obj);
   scenario::return_shared(template_obj);
+  abort E_ASSERT_FAILURE
+}
+
+fun setup_shop_with_currency_listing_and_price_info(
+  scn: &mut scenario::Scenario,
+  base_price_usd_cents: u64,
+  stock: u64,
+): (obj::ID, obj::ID, obj::ID, obj::ID) {
+  let currency = prepare_test_currency_for_owner(scn, TEST_OWNER);
+
+  let (mut shop_obj, owner_cap) = shop::test_setup_shop(
+    TEST_OWNER,
+    scenario::ctx(scn),
+  );
+  let shop_id = obj::id(&shop_obj);
+  let (price_info_object, price_info_id) = create_price_info_object_for_feed(
+    PRIMARY_FEED_ID,
+    scenario::ctx(scn),
+  );
+
+  shop::add_accepted_currency<TestCoin>(
+    &mut shop_obj,
+    &currency,
+    PRIMARY_FEED_ID,
+    price_info_id,
+    &price_info_object,
+    opt::none(),
+    opt::none(),
+    opt::none(),
+    &owner_cap,
+    scenario::ctx(scn),
+  );
+  let accepted_currency_id = shop::test_last_created_id(scenario::ctx(scn));
+  std::unit_test::destroy(currency);
+
+  shop::add_item_listing<TestItem>(
+    &mut shop_obj,
+    b"Checkout Item",
+    base_price_usd_cents,
+    stock,
+    opt::none(),
+    &owner_cap,
+    scenario::ctx(scn),
+  );
+  let listing_id = shop::test_last_created_id(scenario::ctx(scn));
+
+  txf::public_share_object(price_info_object);
+  txf::public_share_object(shop_obj);
+  txf::public_transfer(owner_cap, @0x0);
+
+  (shop_id, accepted_currency_id, listing_id, price_info_id)
+}
+
+#[test]
+fun buy_item_emits_events_decrements_stock_and_refunds_change() {
+  let mut scn = scenario::begin(TEST_OWNER);
+  let (
+    shop_id,
+    accepted_currency_id,
+    listing_id,
+    price_info_id,
+  ) = setup_shop_with_currency_listing_and_price_info(&mut scn, 100, 2);
+
+  let _ = scenario::next_tx(&mut scn, OTHER_OWNER);
+
+  let shared_shop = scenario::take_shared_by_id(&scn, shop_id);
+  let accepted_currency = scenario::take_shared_by_id<shop::AcceptedCurrency>(
+    &scn,
+    accepted_currency_id,
+  );
+  let mut listing = scenario::take_shared_by_id<shop::ItemListing>(
+    &scn,
+    listing_id,
+  );
+  let price_info_obj: pyth_price_info::PriceInfoObject = scenario::take_shared_by_id(
+    &scn,
+    price_info_id,
+  );
+
+  let mut clock_obj = clock::create_for_testing(scenario::ctx(&mut scn));
+  clock::set_for_testing(&mut clock_obj, 10);
+
+  let quote_amount = shop::quote_amount_for_price_info_object(
+    &shared_shop,
+    &accepted_currency,
+    &price_info_obj,
+    100,
+    opt::none(),
+    opt::none(),
+    &clock_obj,
+  );
+
+  let purchase_before = vec::length(
+    &event::events_by_type<shop::PurchaseCompleted>(),
+  );
+  let mint_before = vec::length(
+    &event::events_by_type<shop::MintingCompleted>(),
+  );
+  let stock_before = vec::length(
+    &event::events_by_type<shop::ItemListingStockUpdated>(),
+  );
+
+  let extra = 7;
+  let payment = coin::mint_for_testing<TestCoin>(
+    quote_amount + extra,
+    scenario::ctx(&mut scn),
+  );
+
+  shop::buy_item<TestItem, TestCoin>(
+    &shared_shop,
+    &mut listing,
+    &accepted_currency,
+    &price_info_obj,
+    payment,
+    OTHER_OWNER,
+    OTHER_OWNER,
+    opt::none(),
+    opt::none(),
+    &clock_obj,
+    scenario::ctx(&mut scn),
+  );
+
+  let purchases = event::events_by_type<shop::PurchaseCompleted>();
+  assert!(vec::length(&purchases) == purchase_before + 1, E_ASSERT_FAILURE);
+  let purchase = vec::borrow(&purchases, vec::length(&purchases) - 1);
+  assert!(
+    shop::test_purchase_completed_shop(purchase) == shop::test_shop_id(&shared_shop),
+    E_ASSERT_FAILURE,
+  );
+  assert!(
+    shop::test_purchase_completed_listing(purchase) == shop::test_listing_address(&listing),
+    E_ASSERT_FAILURE,
+  );
+  assert!(
+    shop::test_purchase_completed_buyer(purchase) == OTHER_OWNER,
+    E_ASSERT_FAILURE,
+  );
+  assert!(
+    shop::test_purchase_completed_mint_to(purchase) == OTHER_OWNER,
+    E_ASSERT_FAILURE,
+  );
+  assert!(
+    shop::test_purchase_completed_amount_paid(purchase) == quote_amount,
+    E_ASSERT_FAILURE,
+  );
+  assert!(
+    shop::test_purchase_completed_quote_amount(purchase) == quote_amount,
+    E_ASSERT_FAILURE,
+  );
+  assert!(
+    shop::test_purchase_completed_discounted_price(purchase) == 100,
+    E_ASSERT_FAILURE,
+  );
+  assert!(
+    shop::test_purchase_completed_base_price_usd_cents(purchase) == 100,
+    E_ASSERT_FAILURE,
+  );
+  assert!(
+    shop::test_purchase_completed_accepted_currency_id(purchase) == obj::id_to_address(&accepted_currency_id),
+    E_ASSERT_FAILURE,
+  );
+  assert!(
+    shop::test_purchase_completed_feed_id(purchase) == PRIMARY_FEED_ID,
+    E_ASSERT_FAILURE,
+  );
+  assert!(
+    opt::is_none(&shop::test_purchase_completed_discount_template_id(purchase)),
+    E_ASSERT_FAILURE,
+  );
+
+  let stock_events = event::events_by_type<shop::ItemListingStockUpdated>();
+  assert!(vec::length(&stock_events) == stock_before + 1, E_ASSERT_FAILURE);
+  let stock_event = vec::borrow(&stock_events, vec::length(&stock_events) - 1);
+  assert!(
+    shop::test_item_listing_stock_updated_listing(stock_event) == shop::test_listing_address(&listing),
+    E_ASSERT_FAILURE,
+  );
+  assert!(
+    shop::test_item_listing_stock_updated_new_stock(stock_event) == 1,
+    E_ASSERT_FAILURE,
+  );
+
+  let mints = event::events_by_type<shop::MintingCompleted>();
+  assert!(vec::length(&mints) == mint_before + 1, E_ASSERT_FAILURE);
+  let mint = vec::borrow(&mints, vec::length(&mints) - 1);
+  assert!(
+    shop::test_minting_completed_shop(mint) == shop::test_shop_id(&shared_shop),
+    E_ASSERT_FAILURE,
+  );
+  assert!(
+    shop::test_minting_completed_listing(mint) == shop::test_listing_address(&listing),
+    E_ASSERT_FAILURE,
+  );
+  assert!(
+    shop::test_minting_completed_buyer(mint) == OTHER_OWNER,
+    E_ASSERT_FAILURE,
+  );
+  assert!(
+    shop::test_minting_completed_mint_to(mint) == OTHER_OWNER,
+    E_ASSERT_FAILURE,
+  );
+  assert!(
+    shop::test_minting_completed_refund_to(mint) == OTHER_OWNER,
+    E_ASSERT_FAILURE,
+  );
+  assert!(
+    shop::test_minting_completed_change_amount(mint) == extra,
+    E_ASSERT_FAILURE,
+  );
+
+  scenario::return_shared(shared_shop);
+  scenario::return_shared(accepted_currency);
+  scenario::return_shared(listing);
+  scenario::return_shared(price_info_obj);
+  clock::destroy_for_testing(clock_obj);
+  let _ = scenario::end(scn);
+}
+
+#[
+  test,
+  expected_failure(
+    abort_code = ::sui_oracle_market::shop::EInsufficientPayment,
+  ),
+]
+fun buy_item_rejects_insufficient_payment() {
+  let mut scn = scenario::begin(TEST_OWNER);
+  let (
+    shop_id,
+    accepted_currency_id,
+    listing_id,
+    price_info_id,
+  ) = setup_shop_with_currency_listing_and_price_info(&mut scn, 10_000, 2);
+
+  let _ = scenario::next_tx(&mut scn, OTHER_OWNER);
+
+  let shared_shop = scenario::take_shared_by_id(&scn, shop_id);
+  let accepted_currency = scenario::take_shared_by_id<shop::AcceptedCurrency>(
+    &scn,
+    accepted_currency_id,
+  );
+  let mut listing = scenario::take_shared_by_id<shop::ItemListing>(
+    &scn,
+    listing_id,
+  );
+  let price_info_obj: pyth_price_info::PriceInfoObject = scenario::take_shared_by_id(
+    &scn,
+    price_info_id,
+  );
+
+  let mut clock_obj = clock::create_for_testing(scenario::ctx(&mut scn));
+  clock::set_for_testing(&mut clock_obj, 10);
+
+  let quote_amount = shop::quote_amount_for_price_info_object(
+    &shared_shop,
+    &accepted_currency,
+    &price_info_obj,
+    10_000,
+    opt::none(),
+    opt::none(),
+    &clock_obj,
+  );
+  let payment = coin::mint_for_testing<TestCoin>(
+    quote_amount - 1,
+    scenario::ctx(&mut scn),
+  );
+
+  shop::buy_item<TestItem, TestCoin>(
+    &shared_shop,
+    &mut listing,
+    &accepted_currency,
+    &price_info_obj,
+    payment,
+    OTHER_OWNER,
+    OTHER_OWNER,
+    opt::none(),
+    opt::none(),
+    &clock_obj,
+    scenario::ctx(&mut scn),
+  );
+
+  scenario::return_shared(shared_shop);
+  scenario::return_shared(accepted_currency);
+  scenario::return_shared(listing);
+  scenario::return_shared(price_info_obj);
+  clock::destroy_for_testing(clock_obj);
+  abort E_ASSERT_FAILURE
+}
+
+#[
+  test,
+  expected_failure(
+    abort_code = ::sui_oracle_market::shop::EInvalidPaymentCoinType,
+  ),
+]
+fun buy_item_rejects_wrong_coin_type() {
+  let mut scn = scenario::begin(TEST_OWNER);
+  let (
+    shop_id,
+    accepted_currency_id,
+    listing_id,
+    price_info_id,
+  ) = setup_shop_with_currency_listing_and_price_info(&mut scn, 100, 1);
+
+  let _ = scenario::next_tx(&mut scn, OTHER_OWNER);
+
+  let shared_shop = scenario::take_shared_by_id(&scn, shop_id);
+  let accepted_currency = scenario::take_shared_by_id<shop::AcceptedCurrency>(
+    &scn,
+    accepted_currency_id,
+  );
+  let mut listing = scenario::take_shared_by_id<shop::ItemListing>(
+    &scn,
+    listing_id,
+  );
+  let price_info_obj: pyth_price_info::PriceInfoObject = scenario::take_shared_by_id(
+    &scn,
+    price_info_id,
+  );
+  let mut clock_obj = clock::create_for_testing(scenario::ctx(&mut scn));
+  clock::set_for_testing(&mut clock_obj, 10);
+
+  let payment = coin::mint_for_testing<AltTestCoin>(
+    1,
+    scenario::ctx(&mut scn),
+  );
+  shop::buy_item<TestItem, AltTestCoin>(
+    &shared_shop,
+    &mut listing,
+    &accepted_currency,
+    &price_info_obj,
+    payment,
+    OTHER_OWNER,
+    OTHER_OWNER,
+    opt::none(),
+    opt::none(),
+    &clock_obj,
+    scenario::ctx(&mut scn),
+  );
+
+  scenario::return_shared(shared_shop);
+  scenario::return_shared(accepted_currency);
+  scenario::return_shared(listing);
+  scenario::return_shared(price_info_obj);
+  clock::destroy_for_testing(clock_obj);
+  abort E_ASSERT_FAILURE
+}
+
+#[
+  test,
+  expected_failure(
+    abort_code = ::sui_oracle_market::shop::EItemTypeMismatch,
+  ),
+]
+fun buy_item_rejects_item_type_mismatch() {
+  let mut scn = scenario::begin(TEST_OWNER);
+  let (
+    shop_id,
+    accepted_currency_id,
+    listing_id,
+    price_info_id,
+  ) = setup_shop_with_currency_listing_and_price_info(&mut scn, 100, 1);
+
+  let _ = scenario::next_tx(&mut scn, OTHER_OWNER);
+
+  let shared_shop = scenario::take_shared_by_id(&scn, shop_id);
+  let accepted_currency = scenario::take_shared_by_id<shop::AcceptedCurrency>(
+    &scn,
+    accepted_currency_id,
+  );
+  let mut listing = scenario::take_shared_by_id<shop::ItemListing>(
+    &scn,
+    listing_id,
+  );
+  let price_info_obj: pyth_price_info::PriceInfoObject = scenario::take_shared_by_id(
+    &scn,
+    price_info_id,
+  );
+  let mut clock_obj = clock::create_for_testing(scenario::ctx(&mut scn));
+  clock::set_for_testing(&mut clock_obj, 10);
+
+  let payment = coin::mint_for_testing<TestCoin>(1, scenario::ctx(&mut scn));
+  shop::buy_item<OtherItem, TestCoin>(
+    &shared_shop,
+    &mut listing,
+    &accepted_currency,
+    &price_info_obj,
+    payment,
+    OTHER_OWNER,
+    OTHER_OWNER,
+    opt::none(),
+    opt::none(),
+    &clock_obj,
+    scenario::ctx(&mut scn),
+  );
+
+  scenario::return_shared(shared_shop);
+  scenario::return_shared(accepted_currency);
+  scenario::return_shared(listing);
+  scenario::return_shared(price_info_obj);
+  clock::destroy_for_testing(clock_obj);
+  abort E_ASSERT_FAILURE
+}
+
+#[
+  test,
+  expected_failure(
+    abort_code = ::sui_oracle_market::shop::EInvalidGuardrailCap,
+  ),
+]
+fun buy_item_rejects_guardrail_override_above_cap() {
+  let mut scn = scenario::begin(TEST_OWNER);
+  let publisher = shop::test_claim_publisher(scenario::ctx(&mut scn));
+  shop::create_shop(&publisher, scenario::ctx(&mut scn));
+  let created_events = event::events_by_type<shop::ShopCreated>();
+  let shop_created = vec::borrow(&created_events, 0);
+  let shop_id = obj::id_from_address(
+    shop::test_shop_created_shop_address(shop_created),
+  );
+  let owner_cap_id = obj::id_from_address(
+    shop::test_shop_created_owner_cap_id(shop_created),
+  );
+  shop::test_destroy_publisher(publisher);
+
+  let currency = prepare_test_currency_for_owner(&mut scn, TEST_OWNER);
+  let (price_info_object, pyth_object_id) = create_price_info_object_for_feed(
+    PRIMARY_FEED_ID,
+    scenario::ctx(&mut scn),
+  );
+
+  let mut shop_obj = scenario::take_shared_by_id(&scn, shop_id);
+  let owner_cap_obj: shop::ShopOwnerCap = scenario::take_from_sender_by_id(
+    &scn,
+    owner_cap_id,
+  );
+
+  // Seller caps must be non-zero; zero should abort with EInvalidGuardrailCap.
+  shop::add_accepted_currency<TestCoin>(
+    &mut shop_obj,
+    &currency,
+    PRIMARY_FEED_ID,
+    pyth_object_id,
+    &price_info_object,
+    opt::some(0),
+    opt::some(0),
+    opt::some(0),
+    &owner_cap_obj,
+    scenario::ctx(&mut scn),
+  );
+
+  abort E_ASSERT_FAILURE
+}
+
+#[
+  test,
+  expected_failure(
+    abort_code = ::sui_oracle_market::shop::EPriceNonPositive,
+  ),
+]
+fun quote_amount_from_usd_cents_rejects_negative_price() {
+  let price_value = pyth_i64::new(1, true);
+  let expo = pyth_i64::new(0, false);
+  let price = pyth_price::new(price_value, 0, expo, 0);
+  let _ = shop::test_quote_amount_from_usd_cents(
+    100,
+    9,
+    &price,
+    shop::test_default_max_confidence_ratio_bps(),
+  );
+  abort E_ASSERT_FAILURE
+}
+
+#[
+  test,
+  expected_failure(
+    abort_code = ::sui_oracle_market::shop::EConfidenceExceedsPrice,
+  ),
+]
+fun quote_amount_from_usd_cents_rejects_confidence_exceeds_price() {
+  let price_value = pyth_i64::new(10, false);
+  let expo = pyth_i64::new(0, false);
+  let price = pyth_price::new(price_value, 10, expo, 0);
+  let _ = shop::test_quote_amount_from_usd_cents(
+    100,
+    9,
+    &price,
+    shop::test_default_max_confidence_ratio_bps(),
+  );
+  abort E_ASSERT_FAILURE
+}
+
+#[
+  test,
+  expected_failure(
+    abort_code = ::sui_oracle_market::shop::EConfidenceIntervalTooWide,
+  ),
+]
+fun quote_amount_from_usd_cents_rejects_confidence_interval_too_wide() {
+  let price_value = pyth_i64::new(100, false);
+  let expo = pyth_i64::new(0, false);
+  let price = pyth_price::new(price_value, 50, expo, 0);
+  let _ = shop::test_quote_amount_from_usd_cents(
+    100,
+    9,
+    &price,
+    shop::test_default_max_confidence_ratio_bps(),
+  );
   abort E_ASSERT_FAILURE
 }
 

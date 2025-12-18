@@ -15,7 +15,7 @@ rev = "main"
 [dependencies.openzeppelin_math]
 git = "https://github.com/OpenZeppelin/contracts-sui.git"
 subdir = "math/core"
-rev = "main"
+rev = "v0.1"
 
 # For remote import, use the `{ git = "...", subdir = "...", rev = "..." }`.
 # Revision can be a branch, a tag, and a commit hash.
@@ -44,11 +44,6 @@ override = true
 [dev-dependencies.mock_coin]
 # Local-only mock assets for localnet demos; ignored on shared networks.
 local = "../coin-mock"
-
-[dev-dependencies.openzeppelin_math]
-# Use local OZ math (with test modules marked #[test_only]) to satisfy CLI dev builds.
-local = "../../../sui-contracts/math/core"
-override = true
 
 # [dev-addresses]
 # # The dev-addresses section allows overwriting named addresses for the `--test`

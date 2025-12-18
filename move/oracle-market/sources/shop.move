@@ -2821,6 +2821,142 @@ public fun test_purchase_completed_discounted_price(
 }
 
 #[test_only]
+public fun test_purchase_completed_shop(event: &PurchaseCompleted): address {
+  event.shop_address
+}
+
+#[test_only]
+public fun test_purchase_completed_listing(event: &PurchaseCompleted): address {
+  event.item_listing_address
+}
+
+#[test_only]
+public fun test_purchase_completed_buyer(event: &PurchaseCompleted): address {
+  event.buyer
+}
+
+#[test_only]
+public fun test_purchase_completed_mint_to(event: &PurchaseCompleted): address {
+  event.mint_to
+}
+
+#[test_only]
+public fun test_purchase_completed_coin_type(
+  event: &PurchaseCompleted,
+): TypeInfo {
+  event.coin_type
+}
+
+#[test_only]
+public fun test_purchase_completed_amount_paid(event: &PurchaseCompleted): u64 {
+  event.amount_paid
+}
+
+#[test_only]
+public fun test_purchase_completed_discount_template_id(
+  event: &PurchaseCompleted,
+): opt::Option<address> {
+  event.discount_template_id
+}
+
+#[test_only]
+public fun test_purchase_completed_accepted_currency_id(
+  event: &PurchaseCompleted,
+): address {
+  event.accepted_currency_id
+}
+
+#[test_only]
+public fun test_purchase_completed_feed_id(
+  event: &PurchaseCompleted,
+): vector<u8> {
+  clone_bytes(&event.feed_id)
+}
+
+#[test_only]
+public fun test_purchase_completed_base_price_usd_cents(
+  event: &PurchaseCompleted,
+): u64 {
+  event.base_price_usd_cents
+}
+
+#[test_only]
+public fun test_purchase_completed_quote_amount(
+  event: &PurchaseCompleted,
+): u64 {
+  event.quote_amount
+}
+
+#[test_only]
+public fun test_minting_completed_shop(event: &MintingCompleted): address {
+  event.shop_address
+}
+
+#[test_only]
+public fun test_minting_completed_listing(event: &MintingCompleted): address {
+  event.item_listing_address
+}
+
+#[test_only]
+public fun test_minting_completed_buyer(event: &MintingCompleted): address {
+  event.buyer
+}
+
+#[test_only]
+public fun test_minting_completed_minted_item_id(
+  event: &MintingCompleted,
+): address {
+  event.minted_item_id
+}
+
+#[test_only]
+public fun test_minting_completed_mint_to(event: &MintingCompleted): address {
+  event.mint_to
+}
+
+#[test_only]
+public fun test_minting_completed_refund_to(event: &MintingCompleted): address {
+  event.refund_to
+}
+
+#[test_only]
+public fun test_minting_completed_change_amount(event: &MintingCompleted): u64 {
+  event.change_amount
+}
+
+#[test_only]
+public fun test_minting_completed_coin_type(
+  event: &MintingCompleted,
+): TypeInfo {
+  event.coin_type
+}
+
+#[test_only]
+public fun test_discount_redeem_shop(event: &DiscountRedeem): address {
+  event.shop_address
+}
+
+#[test_only]
+public fun test_discount_redeem_template_id(event: &DiscountRedeem): address {
+  event.discount_template_id
+}
+
+#[test_only]
+public fun test_discount_redeem_discount_id(event: &DiscountRedeem): address {
+  event.discount_id
+}
+
+#[test_only]
+public fun test_discount_redeem_listing_id(event: &DiscountRedeem): address {
+  event.listing_id
+}
+
+#[test_only]
+public fun test_discount_redeem_buyer(event: &DiscountRedeem): address {
+  event.buyer
+}
+
+#[test_only]
 public fun test_discount_claimed_shop(event: &DiscountClaimed): address {
   event.shop_address
 }
