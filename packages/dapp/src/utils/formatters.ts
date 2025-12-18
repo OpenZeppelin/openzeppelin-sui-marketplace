@@ -24,7 +24,10 @@ export const formatVectorBytesAsHex = (value: unknown): string => {
   const byteArray = asNumberArray(value)
   if (!byteArray) return "Unknown"
 
-  const hexValue = Buffer.from(byteArray).toString("hex")
+  const hexValue =
+    typeof Buffer !== "undefined"
+      ? Buffer.from(byteArray).toString("hex")
+      : byteArray.map((byte) => byte.toString(16).padStart(2, "0")).join("")
   return `0x${hexValue}`
 }
 
