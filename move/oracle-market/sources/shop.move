@@ -2636,6 +2636,16 @@ public fun test_discount_claim_exists(
 }
 
 #[test_only]
+public fun test_abort_invalid_owner_cap() {
+  abort EInvalidOwnerCap
+}
+
+#[test_only]
+public fun test_abort_accepted_currency_missing() {
+  abort EAcceptedCurrencyMissing
+}
+
+#[test_only]
 public fun test_claim_discount_ticket(
   shop: &Shop,
   template: &mut DiscountTemplate,
