@@ -2,6 +2,7 @@ import { SuiClient } from "@mysten/sui/client"
 import { normalizeSuiObjectId } from "@mysten/sui/utils"
 import yargs from "yargs"
 
+import { getItemListingSummary } from "../../models/item-listing.ts"
 import { resolveLatestShopIdentifiers } from "../../models/shop.ts"
 import { fetchObjectWithDynamicFieldFallback } from "../../tooling/dynamic-fields.ts"
 import { loadKeypair } from "../../tooling/keypair.ts"
@@ -13,6 +14,7 @@ import {
 import { runSuiScript } from "../../tooling/process.ts"
 import { getSuiSharedObject } from "../../tooling/shared-object.ts"
 import { newTransaction, signAndExecute } from "../../tooling/transactions.ts"
+import { logItemListingSummary } from "../../utils/log-summaries.ts"
 
 type ClearDiscountTemplateArguments = {
   shopPackageId?: string
@@ -64,10 +66,15 @@ runSuiScript(
       suiClient
     )
 
-    logClearResult({
-      itemListingId: resolvedListingId,
-      digest: transactionResult.digest
-    })
+    const listingSummary = await getItemListingSummary(
+      inputs.shopId,
+      resolvedListingId,
+      suiClient
+    )
+
+    logItemListingSummary(listingSummary)
+    if (transactionResult.digest)
+      logKeyValueGreen("digest")(transactionResult.digest)
   },
   yargs()
     .option("itemListingId", {
@@ -174,15 +181,4 @@ const buildClearDiscountTemplateTransaction = ({
   })
 
   return transaction
-}
-
-const logClearResult = ({
-  itemListingId,
-  digest
-}: {
-  itemListingId: string
-  digest?: string
-}) => {
-  logKeyValueGreen("item id")(itemListingId)
-  if (digest) logKeyValueGreen("digest")(digest)
 }

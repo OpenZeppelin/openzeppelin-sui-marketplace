@@ -2,17 +2,21 @@ import { SuiClient } from "@mysten/sui/client"
 import { normalizeSuiObjectId } from "@mysten/sui/utils"
 import yargs from "yargs"
 
+import { getItemListingSummary } from "../../models/item-listing.ts"
 import {
   parseUsdToCents,
   resolveLatestShopIdentifiers
 } from "../../models/shop.ts"
 import { loadKeypair } from "../../tooling/keypair.ts"
 import { logKeyValueGreen } from "../../tooling/log.ts"
-import type { ObjectArtifact } from "../../tooling/object.ts"
-import { normalizeOptionalId } from "../../tooling/object.ts"
-import { getSuiSharedObject } from "../../tooling/shared-object.ts"
+import {
+  normalizeIdOrThrow,
+  normalizeOptionalId
+} from "../../tooling/object.ts"
 import { runSuiScript } from "../../tooling/process.ts"
+import { getSuiSharedObject } from "../../tooling/shared-object.ts"
 import { newTransaction, signAndExecute } from "../../tooling/transactions.ts"
+import { logItemListingSummary } from "../../utils/log-summaries.ts"
 import { tryParseBigInt } from "../../utils/utility.ts"
 
 type AddItemArguments = {
@@ -62,7 +66,19 @@ runSuiScript(
       suiClient
     )
 
-    logListingCreation(createdItemListing)
+    const listingId = normalizeIdOrThrow(
+      createdItemListing?.objectId,
+      "Expected an ItemListing to be created."
+    )
+    const listingSummary = await getItemListingSummary(
+      inputs.shopId,
+      listingId,
+      suiClient
+    )
+
+    logItemListingSummary(listingSummary)
+    if (createdItemListing?.digest)
+      logKeyValueGreen("digest")(createdItemListing.digest)
   },
   yargs()
     .option("shopPackageId", {
@@ -206,9 +222,4 @@ const parsePositiveU64 = (rawValue: string, label: string): bigint => {
   const value = tryParseBigInt(rawValue)
   if (value <= 0n) throw new Error(`${label} must be greater than zero.`)
   return value
-}
-
-const logListingCreation = (listing?: ObjectArtifact) => {
-  logKeyValueGreen("item id")(listing?.objectId)
-  if (listing?.digest) logKeyValueGreen("digest")(listing?.digest)
 }

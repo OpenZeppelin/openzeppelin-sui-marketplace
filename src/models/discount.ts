@@ -1,6 +1,9 @@
 import type { SuiClient, SuiObjectData } from "@mysten/sui/client"
 import { normalizeSuiObjectId } from "@mysten/sui/utils"
-import { fetchAllDynamicFields } from "../tooling/dynamic-fields.ts"
+import {
+  fetchAllDynamicFields,
+  getSuiDynamicFieldObject
+} from "../tooling/dynamic-fields.ts"
 import {
   getSuiObject,
   normalizeIdOrThrow,
@@ -316,6 +319,30 @@ export const fetchDiscountTemplateSummaries = async (
       discountTemplateIds[index],
       discountTemplateMarkers[index].objectId
     )
+  )
+}
+
+export const getDiscountTemplateSummary = async (
+  shopId: string,
+  discountTemplateId: string,
+  suiClient: SuiClient
+): Promise<DiscountTemplateSummary> => {
+  const { object } = await getSuiObject(
+    {
+      objectId: discountTemplateId,
+      options: { showContent: true, showType: true }
+    },
+    suiClient
+  )
+  const marker = await getSuiDynamicFieldObject(
+    { parentObjectId: shopId, childObjectId: discountTemplateId },
+    suiClient
+  )
+
+  return buildDiscountTemplateSummary(
+    object,
+    discountTemplateId,
+    marker.dynamicFieldId
   )
 }
 

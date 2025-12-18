@@ -1,15 +1,14 @@
 import { SuiClient } from "@mysten/sui/client"
 import yargs from "yargs"
 
-import type { ItemListingSummary } from "../../models/item-listing.ts"
 import { fetchItemListingSummaries } from "../../models/item-listing.ts"
 import { resolveLatestArtifactShopId } from "../../models/shop.ts"
-import {
-  logKeyValueBlue,
-  logKeyValueGreen,
-  logKeyValueYellow
-} from "../../tooling/log.ts"
+import { logKeyValueBlue } from "../../tooling/log.ts"
 import { runSuiScript } from "../../tooling/process.ts"
+import {
+  logEmptyList,
+  logItemListingSummary
+} from "../../utils/log-summaries.ts"
 
 type ListItemListingsArguments = {
   shopId?: string
@@ -33,12 +32,12 @@ runSuiScript(
     })
 
     const itemListings = await fetchItemListingSummaries(shopId, suiClient)
-    if (itemListings.length === 0) {
-      logKeyValueYellow("Item-listings")("No listings found.")
-      return
-    }
+    if (itemListings.length === 0)
+      return logEmptyList("Item-listings", "No listings found.")
 
-    itemListings.forEach(logItemListing)
+    itemListings.forEach((listing, index) =>
+      logItemListingSummary(listing, index + 1)
+    )
   },
   yargs()
     .option("shopId", {
@@ -63,20 +62,5 @@ const logListContext = ({
   logKeyValueBlue("Network")(networkName)
   logKeyValueBlue("RPC")(rpcUrl)
   logKeyValueBlue("Shop")(shopId)
-  console.log("")
-}
-
-const logItemListing = (itemListing: ItemListingSummary, index: number) => {
-  logKeyValueGreen("Item")(index + 1)
-  logKeyValueGreen("Object")(itemListing.itemListingId)
-  logKeyValueGreen("Name")(itemListing.name ?? "Unknown")
-  logKeyValueGreen("Item-type")(itemListing.itemType)
-  logKeyValueGreen("USD-cents")(
-    itemListing.basePriceUsdCents ?? "Unknown price"
-  )
-  logKeyValueGreen("Stock")(itemListing.stock ?? "Unknown stock")
-  if (itemListing.spotlightTemplateId)
-    logKeyValueGreen("Spotlight")(itemListing.spotlightTemplateId)
-  logKeyValueGreen("Marker-id")(itemListing.markerObjectId)
   console.log("")
 }

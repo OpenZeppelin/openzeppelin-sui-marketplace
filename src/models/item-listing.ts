@@ -1,5 +1,8 @@
 import type { SuiClient, SuiObjectData } from "@mysten/sui/client"
-import { fetchAllDynamicFields } from "../tooling/dynamic-fields.ts"
+import {
+  fetchAllDynamicFields,
+  getSuiDynamicFieldObject
+} from "../tooling/dynamic-fields.ts"
 import {
   getSuiObject,
   normalizeIdOrThrow,
@@ -64,6 +67,26 @@ export const fetchItemListingSummaries = async (
       itemListingFields[index].objectId
     )
   )
+}
+
+export const getItemListingSummary = async (
+  shopId: string,
+  itemListingId: string,
+  suiClient: SuiClient
+): Promise<ItemListingSummary> => {
+  const { object } = await getSuiObject(
+    {
+      objectId: itemListingId,
+      options: { showContent: true, showType: true }
+    },
+    suiClient
+  )
+  const marker = await getSuiDynamicFieldObject(
+    { parentObjectId: shopId, childObjectId: itemListingId },
+    suiClient
+  )
+
+  return buildItemListingSummary(object, itemListingId, marker.dynamicFieldId)
 }
 
 const buildItemListingSummary = (

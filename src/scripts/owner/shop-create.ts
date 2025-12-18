@@ -2,11 +2,11 @@ import { SuiClient } from "@mysten/sui/client"
 import { normalizeSuiObjectId } from "@mysten/sui/utils"
 import yargs from "yargs"
 
+import { fetchShopOverview } from "../../models/shop.ts"
 import { loadKeypair } from "../../tooling/keypair.ts"
-import { logKeyValueGreen } from "../../tooling/log.ts"
-import { type ObjectArtifact } from "../../tooling/object.ts"
 import { runSuiScript } from "../../tooling/process.ts"
 import { newTransaction, signAndExecute } from "../../tooling/transactions.ts"
+import { logShopOverview } from "../../utils/log-summaries.ts"
 
 runSuiScript(
   async ({ network }, { shopPackageId, publisherCapId }) => {
@@ -22,7 +22,7 @@ runSuiScript(
 
     const {
       objectArtifacts: {
-        created: [createdShop, createdOwnerCap]
+        created: [createdShop]
       }
     } = await signAndExecute(
       {
@@ -33,7 +33,11 @@ runSuiScript(
       suiClient
     )
 
-    logShopCreation({ createdShop, createdOwnerCap })
+    const shopOverview = await fetchShopOverview(
+      createdShop.objectId,
+      suiClient
+    )
+    logShopOverview(shopOverview)
   },
   yargs()
     .option("shopPackageId", {
@@ -51,15 +55,3 @@ runSuiScript(
     })
     .strict()
 )
-
-const logShopCreation = ({
-  createdOwnerCap,
-  createdShop
-}: {
-  createdShop: ObjectArtifact
-  createdOwnerCap: ObjectArtifact
-}) => {
-  logKeyValueGreen("shop")(createdShop?.objectId)
-  logKeyValueGreen("owner cap")(createdOwnerCap.objectId)
-  if (createdShop?.digest) logKeyValueGreen("digest")(createdShop?.digest)
-}

@@ -4,9 +4,8 @@ import yargs from "yargs"
 
 import {
   defaultStartTimestampSeconds,
-  describeRuleKind,
   discountRuleChoices,
-  formatRuleValue,
+  getDiscountTemplateSummary,
   parseDiscountRuleKind,
   parseDiscountRuleValue,
   validateDiscountSchedule,
@@ -20,6 +19,7 @@ import { logKeyValueGreen } from "../../tooling/log.ts"
 import { runSuiScript } from "../../tooling/process.ts"
 import { getSuiSharedObject } from "../../tooling/shared-object.ts"
 import { newTransaction, signAndExecute } from "../../tooling/transactions.ts"
+import { logDiscountTemplateSummary } from "../../utils/log-summaries.ts"
 import { parseNonNegativeU64, parseOptionalU64 } from "../../utils/utility.ts"
 
 type UpdateDiscountTemplateArguments = {
@@ -88,15 +88,15 @@ runSuiScript(
       suiClient
     )
 
-    logDiscountTemplateUpdate({
-      discountTemplateId: inputs.discountTemplateId,
-      ruleKind: inputs.ruleKind,
-      ruleValue: inputs.ruleValue,
-      startsAt: inputs.startsAt,
-      expiresAt: inputs.expiresAt,
-      maxRedemptions: inputs.maxRedemptions,
-      digest: transactionResult.digest
-    })
+    const discountTemplateSummary = await getDiscountTemplateSummary(
+      inputs.shopId,
+      inputs.discountTemplateId,
+      suiClient
+    )
+
+    logDiscountTemplateSummary(discountTemplateSummary)
+    if (transactionResult.digest)
+      logKeyValueGreen("digest")(transactionResult.digest)
   },
   yargs()
     .option("discountTemplateId", {
@@ -243,32 +243,4 @@ const buildUpdateDiscountTemplateTransaction = ({
   })
 
   return transaction
-}
-
-const logDiscountTemplateUpdate = ({
-  discountTemplateId,
-  ruleKind,
-  ruleValue,
-  startsAt,
-  expiresAt,
-  maxRedemptions,
-  digest
-}: {
-  discountTemplateId: string
-  ruleKind: NormalizedRuleKind
-  ruleValue: bigint
-  startsAt: bigint
-  expiresAt?: bigint
-  maxRedemptions?: bigint
-  digest?: string
-}) => {
-  logKeyValueGreen("discount template")(discountTemplateId)
-  logKeyValueGreen("rule kind")(describeRuleKind(ruleKind))
-  logKeyValueGreen("rule value")(formatRuleValue(ruleKind, ruleValue))
-  logKeyValueGreen("starts at")(startsAt.toString())
-  if (expiresAt !== undefined)
-    logKeyValueGreen("expires at")(expiresAt.toString())
-  if (maxRedemptions !== undefined)
-    logKeyValueGreen("max redemptions")(maxRedemptions.toString())
-  if (digest) logKeyValueGreen("digest")(digest)
 }

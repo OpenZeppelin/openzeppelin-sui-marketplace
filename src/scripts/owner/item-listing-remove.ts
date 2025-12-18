@@ -5,8 +5,8 @@ import yargs from "yargs"
 import { resolveLatestShopIdentifiers } from "../../models/shop.ts"
 import { loadKeypair } from "../../tooling/keypair.ts"
 import { logKeyValueGreen } from "../../tooling/log.ts"
-import { getSuiSharedObject } from "../../tooling/shared-object.ts"
 import { runSuiScript } from "../../tooling/process.ts"
+import { getSuiSharedObject } from "../../tooling/shared-object.ts"
 import { newTransaction, signAndExecute } from "../../tooling/transactions.ts"
 
 type RemoveItemArguments = {
@@ -43,10 +43,9 @@ runSuiScript(
       suiClient
     )
 
-    logRemovalResult({
-      itemListingId: inputs.itemListingId,
-      digest: transactionResult.digest
-    })
+    logKeyValueGreen("deleted")(inputs.itemListingId)
+    if (transactionResult.digest)
+      logKeyValueGreen("digest")(transactionResult.digest)
   },
   yargs()
     .option("itemListingId", {
@@ -129,15 +128,4 @@ const buildRemoveItemTransaction = ({
   })
 
   return transaction
-}
-
-const logRemovalResult = ({
-  itemListingId,
-  digest
-}: {
-  itemListingId: string
-  digest?: string
-}) => {
-  logKeyValueGreen("removed")(itemListingId)
-  if (digest) logKeyValueGreen("digest")(digest)
 }

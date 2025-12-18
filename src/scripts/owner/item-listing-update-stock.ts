@@ -2,12 +2,14 @@ import { SuiClient } from "@mysten/sui/client"
 import { normalizeSuiObjectId } from "@mysten/sui/utils"
 import yargs from "yargs"
 
+import { getItemListingSummary } from "../../models/item-listing.ts"
 import { resolveLatestShopIdentifiers } from "../../models/shop.ts"
 import { loadKeypair } from "../../tooling/keypair.ts"
 import { logKeyValueGreen } from "../../tooling/log.ts"
-import { getSuiSharedObject } from "../../tooling/shared-object.ts"
 import { runSuiScript } from "../../tooling/process.ts"
+import { getSuiSharedObject } from "../../tooling/shared-object.ts"
 import { newTransaction, signAndExecute } from "../../tooling/transactions.ts"
+import { logItemListingSummary } from "../../utils/log-summaries.ts"
 import { parseNonNegativeU64 } from "../../utils/utility.ts"
 
 type UpdateStockArguments = {
@@ -27,7 +29,7 @@ type NormalizedInputs = {
 }
 
 runSuiScript(
-  async ({ network }, cliArguments) => {
+  async ({ network }, cliArguments: UpdateStockArguments) => {
     const inputs = await normalizeInputs(cliArguments, network.networkName)
     const suiClient = new SuiClient({ url: network.url })
     const signer = await loadKeypair(network.account)
@@ -57,11 +59,15 @@ runSuiScript(
       suiClient
     )
 
-    logStockUpdate({
-      itemListingId: inputs.itemListingId,
-      newStock: inputs.newStock,
-      digest: transactionResult.digest
-    })
+    const listingSummary = await getItemListingSummary(
+      inputs.shopId,
+      inputs.itemListingId,
+      suiClient
+    )
+
+    logItemListingSummary(listingSummary)
+    if (transactionResult.digest)
+      logKeyValueGreen("digest")(transactionResult.digest)
   },
   yargs()
     .option("itemListingId", {
@@ -149,18 +155,4 @@ const buildUpdateStockTransaction = ({
   })
 
   return transaction
-}
-
-const logStockUpdate = ({
-  itemListingId,
-  newStock,
-  digest
-}: {
-  itemListingId: string
-  newStock: bigint
-  digest?: string
-}) => {
-  logKeyValueGreen("item id")(itemListingId)
-  logKeyValueGreen("new stock")(newStock.toString())
-  if (digest) logKeyValueGreen("digest")(digest)
 }

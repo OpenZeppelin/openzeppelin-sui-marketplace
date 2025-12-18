@@ -442,13 +442,20 @@ const decodeViewResults = (
       `Unexpected dev inspect response length ${results.length}; expected ${viewPlan.length}.`
     )
 
-  return viewPlan.reduce<Partial<CurrencyViewValues>>((acc, plan, index) => {
+  const decoded: Partial<
+    Record<
+      keyof CurrencyViewValues,
+      CurrencyViewValues[keyof CurrencyViewValues]
+    >
+  > = {}
+  viewPlan.forEach((plan, index) => {
     const value = results[index]?.returnValues?.[0]
-    acc[plan.key] = plan.decode(
+    decoded[plan.key] = plan.decode(
       value
     ) as CurrencyViewValues[keyof CurrencyViewValues]
-    return acc
-  }, {}) as CurrencyViewValues
+  })
+
+  return decoded as CurrencyViewValues
 }
 
 const decodeBool =

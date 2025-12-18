@@ -5,6 +5,7 @@ import yargs from "yargs"
 import {
   defaultStartTimestampSeconds,
   discountRuleChoices,
+  getDiscountTemplateSummary,
   parseDiscountRuleKind,
   parseDiscountRuleValue,
   validateDiscountSchedule,
@@ -14,11 +15,11 @@ import {
 import { resolveLatestShopIdentifiers } from "../../models/shop.ts"
 import { loadKeypair } from "../../tooling/keypair.ts"
 import { logKeyValueGreen } from "../../tooling/log.ts"
-import type { ObjectArtifact } from "../../tooling/object.ts"
 import { normalizeOptionalId } from "../../tooling/object.ts"
-import { getSuiSharedObject } from "../../tooling/shared-object.ts"
 import { runSuiScript } from "../../tooling/process.ts"
+import { getSuiSharedObject } from "../../tooling/shared-object.ts"
 import { newTransaction, signAndExecute } from "../../tooling/transactions.ts"
+import { logDiscountTemplateSummary } from "../../utils/log-summaries.ts"
 import { parseNonNegativeU64, parseOptionalU64 } from "../../utils/utility.ts"
 
 type CreateDiscountTemplateArguments = {
@@ -84,10 +85,19 @@ runSuiScript(
       suiClient
     )
 
-    logDiscountTemplateCreation({
-      applyToListingId: cliArguments.listingId,
-      createdDiscountTemplate
-    })
+    const discountTemplateId = createdDiscountTemplate?.objectId
+    if (!discountTemplateId)
+      throw new Error("Expected a DiscountTemplate object to be created.")
+
+    const discountTemplateSummary = await getDiscountTemplateSummary(
+      inputs.shopId,
+      discountTemplateId,
+      suiClient
+    )
+
+    logDiscountTemplateSummary(discountTemplateSummary)
+    if (createdDiscountTemplate.digest)
+      logKeyValueGreen("digest")(createdDiscountTemplate.digest)
   },
   yargs()
     .option("ruleKind", {
@@ -236,17 +246,4 @@ const buildCreateDiscountTemplateTransaction = ({
   })
 
   return transaction
-}
-
-const logDiscountTemplateCreation = ({
-  createdDiscountTemplate,
-  applyToListingId
-}: {
-  createdDiscountTemplate: ObjectArtifact
-  applyToListingId?: string
-}) => {
-  logKeyValueGreen("discount template")(createdDiscountTemplate.objectId)
-  if (applyToListingId) logKeyValueGreen("applies to listing")(applyToListingId)
-  if (createdDiscountTemplate.digest)
-    logKeyValueGreen("digest")(createdDiscountTemplate.digest)
 }

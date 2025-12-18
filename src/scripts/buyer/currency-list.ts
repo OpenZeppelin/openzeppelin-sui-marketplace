@@ -1,15 +1,14 @@
 import { SuiClient } from "@mysten/sui/client"
 import yargs from "yargs"
 
-import type { AcceptedCurrencySummary } from "../../models/currency.ts"
 import { fetchAcceptedCurrencySummaries } from "../../models/currency.ts"
 import { resolveLatestArtifactShopId } from "../../models/shop.ts"
-import {
-  logKeyValueBlue,
-  logKeyValueGreen,
-  logKeyValueYellow
-} from "../../tooling/log.ts"
+import { logKeyValueBlue } from "../../tooling/log.ts"
 import { runSuiScript } from "../../tooling/process.ts"
+import {
+  logAcceptedCurrencySummary,
+  logEmptyList
+} from "../../utils/log-summaries.ts"
 
 type ListCurrenciesArguments = {
   shopId?: string
@@ -37,12 +36,10 @@ runSuiScript(
       suiClient
     )
     if (acceptedCurrencies.length === 0)
-      return logKeyValueYellow("Accepted-currencies")(
-        "No currencies registered."
-      )
+      return logEmptyList("Accepted-currencies", "No currencies registered.")
 
     acceptedCurrencies.forEach((currency, index) =>
-      logAcceptedCurrency(currency, index + 1)
+      logAcceptedCurrencySummary(currency, index + 1)
     )
   },
   yargs()
@@ -68,32 +65,5 @@ const logListContext = ({
   logKeyValueBlue("Network")(networkName)
   logKeyValueBlue("RPC")(rpcUrl)
   logKeyValueBlue("Shop")(shopId)
-  console.log("")
-}
-
-const logAcceptedCurrency = (
-  acceptedCurrency: AcceptedCurrencySummary,
-  index: number
-) => {
-  logKeyValueGreen("Currency")(index)
-  logKeyValueGreen("Object")(acceptedCurrency.acceptedCurrencyId)
-  logKeyValueGreen("Coin-type")(acceptedCurrency.coinType)
-  if (acceptedCurrency.symbol)
-    logKeyValueGreen("Symbol")(acceptedCurrency.symbol)
-  if (acceptedCurrency.decimals !== undefined)
-    logKeyValueGreen("Decimals")(acceptedCurrency.decimals)
-  logKeyValueGreen("Feed-id")(acceptedCurrency.feedIdHex)
-  if (acceptedCurrency.pythObjectId)
-    logKeyValueGreen("Pyth-object")(acceptedCurrency.pythObjectId)
-  logKeyValueGreen("Max-age-secs")(
-    acceptedCurrency.maxPriceAgeSecsCap ?? "module default"
-  )
-  logKeyValueGreen("Max-conf-bps")(
-    acceptedCurrency.maxConfidenceRatioBpsCap ?? "module default"
-  )
-  logKeyValueGreen("Max-status-lag")(
-    acceptedCurrency.maxPriceStatusLagSecsCap ?? "module default"
-  )
-  logKeyValueGreen("Marker-id")(acceptedCurrency.markerObjectId)
   console.log("")
 }

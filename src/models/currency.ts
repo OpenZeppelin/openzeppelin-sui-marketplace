@@ -1,6 +1,9 @@
 import type { SuiClient, SuiObjectData } from "@mysten/sui/client"
 
-import { fetchAllDynamicFields } from "../tooling/dynamic-fields.ts"
+import {
+  fetchAllDynamicFields,
+  getSuiDynamicFieldObject
+} from "../tooling/dynamic-fields.ts"
 import {
   getSuiObject,
   normalizeIdOrThrow,
@@ -168,6 +171,31 @@ export const fetchAcceptedCurrencySummaries = async (
       acceptedCurrencyIds[index],
       acceptedCurrencyMarkers[index].objectId
     )
+  )
+}
+
+export const getAcceptedCurrencySummary = async (
+  shopId: string,
+  acceptedCurrencyId: string,
+  suiClient: SuiClient
+): Promise<AcceptedCurrencySummary> => {
+  const { object } = await getSuiObject(
+    {
+      objectId: acceptedCurrencyId,
+      options: { showContent: true, showType: true }
+    },
+    suiClient
+  )
+
+  const marker = await getSuiDynamicFieldObject(
+    { parentObjectId: shopId, childObjectId: acceptedCurrencyId },
+    suiClient
+  )
+
+  return buildAcceptedCurrencySummary(
+    object,
+    acceptedCurrencyId,
+    marker.dynamicFieldId
   )
 }
 

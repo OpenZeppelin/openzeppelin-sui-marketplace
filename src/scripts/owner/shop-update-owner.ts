@@ -2,13 +2,17 @@ import { SuiClient, type SuiObjectData } from "@mysten/sui/client"
 import { normalizeSuiAddress } from "@mysten/sui/utils"
 import yargs from "yargs"
 
-import { resolveLatestShopIdentifiers } from "../../models/shop.ts"
+import {
+  fetchShopOverview,
+  resolveLatestShopIdentifiers
+} from "../../models/shop.ts"
 import { loadKeypair } from "../../tooling/keypair.ts"
 import { logKeyValueGreen } from "../../tooling/log.ts"
 import { unwrapMoveObjectFields } from "../../tooling/object.ts"
-import { getSuiSharedObject } from "../../tooling/shared-object.ts"
 import { runSuiScript } from "../../tooling/process.ts"
+import { getSuiSharedObject } from "../../tooling/shared-object.ts"
 import { newTransaction, signAndExecute } from "../../tooling/transactions.ts"
+import { logShopOverview } from "../../utils/log-summaries.ts"
 
 type UpdateShopOwnerArguments = {
   shopPackageId?: string
@@ -52,8 +56,12 @@ runSuiScript(
       suiClient
     )
 
+    const updatedShopOverview = await fetchShopOverview(
+      inputs.shopId,
+      suiClient
+    )
+    logShopOverview(updatedShopOverview)
     logOwnerRotation({
-      shopId: inputs.shopId,
       ownerCapId: inputs.ownerCapId,
       previousOwner,
       newOwner: inputs.newOwner,
@@ -146,19 +154,16 @@ const buildUpdateShopOwnerTransaction = ({
 }
 
 const logOwnerRotation = ({
-  shopId,
   ownerCapId,
   previousOwner,
   newOwner,
   digest
 }: {
-  shopId: string
   ownerCapId: string
   previousOwner: string
   newOwner: string
   digest?: string
 }) => {
-  logKeyValueGreen("shop")(shopId)
   logKeyValueGreen("owner cap")(ownerCapId)
   logKeyValueGreen("previous owner")(previousOwner)
   logKeyValueGreen("new owner")(newOwner)

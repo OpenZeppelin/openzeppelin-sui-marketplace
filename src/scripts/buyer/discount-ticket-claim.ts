@@ -186,14 +186,3 @@ const logClaimResult = ({
     )
   if (digest) logKeyValueGreen("digest")(digest)
 }
-
-const resolvePackageId = async (networkName: string): Promise<string> => {
-  const shopArtifact = await getLatestObjectFromArtifact(
-    "shop::Shop",
-    networkName
-  )
-  return normalizeIdOrThrow(
-    shopArtifact?.packageId,
-    "A shop package id is required; publish the package first or provide --shop-id."
-  )
-}

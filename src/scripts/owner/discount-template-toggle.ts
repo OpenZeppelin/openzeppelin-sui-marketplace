@@ -2,12 +2,14 @@ import { SuiClient } from "@mysten/sui/client"
 import { normalizeSuiObjectId } from "@mysten/sui/utils"
 import yargs from "yargs"
 
+import { getDiscountTemplateSummary } from "../../models/discount.ts"
 import { resolveLatestShopIdentifiers } from "../../models/shop.ts"
 import { loadKeypair } from "../../tooling/keypair.ts"
 import { logKeyValueGreen } from "../../tooling/log.ts"
 import { runSuiScript } from "../../tooling/process.ts"
 import { getSuiSharedObject } from "../../tooling/shared-object.ts"
 import { newTransaction, signAndExecute } from "../../tooling/transactions.ts"
+import { logDiscountTemplateSummary } from "../../utils/log-summaries.ts"
 
 type ToggleDiscountTemplateArguments = {
   shopPackageId?: string
@@ -57,11 +59,15 @@ runSuiScript(
       suiClient
     )
 
-    logToggleResult({
-      discountTemplateId: inputs.discountTemplateId,
-      active: inputs.active,
-      digest: transactionResult.digest
-    })
+    const discountTemplateSummary = await getDiscountTemplateSummary(
+      inputs.shopId,
+      inputs.discountTemplateId,
+      suiClient
+    )
+
+    logDiscountTemplateSummary(discountTemplateSummary)
+    if (transactionResult.digest)
+      logKeyValueGreen("digest")(transactionResult.digest)
   },
   yargs()
     .option("discountTemplateId", {
@@ -149,18 +155,4 @@ const buildToggleDiscountTemplateTransaction = ({
   })
 
   return transaction
-}
-
-const logToggleResult = ({
-  discountTemplateId,
-  active,
-  digest
-}: {
-  discountTemplateId: string
-  active: boolean
-  digest?: string
-}) => {
-  logKeyValueGreen("discount template")(discountTemplateId)
-  logKeyValueGreen("set active")(String(active))
-  if (digest) logKeyValueGreen("digest")(digest)
 }

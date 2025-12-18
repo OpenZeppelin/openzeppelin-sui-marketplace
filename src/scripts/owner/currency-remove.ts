@@ -10,8 +10,8 @@ import { resolveLatestShopIdentifiers } from "../../models/shop.ts"
 import { loadKeypair } from "../../tooling/keypair.ts"
 import { logKeyValueGreen } from "../../tooling/log.ts"
 import { normalizeOptionalId } from "../../tooling/object.ts"
-import { getSuiSharedObject } from "../../tooling/shared-object.ts"
 import { runSuiScript } from "../../tooling/process.ts"
+import { getSuiSharedObject } from "../../tooling/shared-object.ts"
 import { newTransaction, signAndExecute } from "../../tooling/transactions.ts"
 
 type RemoveCurrencyArguments = {
@@ -36,6 +36,7 @@ runSuiScript(
     const inputs = await normalizeInputs(cliArguments, network.networkName)
 
     const acceptedCurrency = await resolveAcceptedCurrency(inputs, suiClient)
+
     const shop = await fetchMutableShop(inputs.shopId, suiClient)
     const acceptedCurrencyShared = await getSuiSharedObject(
       { objectId: acceptedCurrency.acceptedCurrencyId, mutable: false },
@@ -57,13 +58,9 @@ runSuiScript(
       networkName: network.networkName
     })
 
-    logRemovalOutcome({
-      coinType: acceptedCurrency.coinType,
-      acceptedCurrencyId: acceptedCurrency.acceptedCurrencyId,
-      typeIndexFieldId: acceptedCurrency.typeIndexFieldId,
-      acceptedCurrencyFieldId: acceptedCurrency.acceptedCurrencyFieldId,
-      digest: transactionResult.digest
-    })
+    logKeyValueGreen("deleted")(acceptedCurrency.acceptedCurrencyId)
+    if (transactionResult.digest)
+      logKeyValueGreen("digest")(transactionResult.digest)
   },
   yargs()
     .option("acceptedCurrencyId", {
@@ -199,24 +196,3 @@ const executeRemovalTransaction = async ({
     },
     suiClient
   )
-
-const logRemovalOutcome = ({
-  coinType,
-  acceptedCurrencyId,
-  typeIndexFieldId,
-  acceptedCurrencyFieldId,
-  digest
-}: {
-  coinType?: string
-  acceptedCurrencyId: string
-  typeIndexFieldId?: string
-  acceptedCurrencyFieldId?: string
-  digest?: string
-}) => {
-  logKeyValueGreen("accepted currency")(acceptedCurrencyId)
-  if (coinType) logKeyValueGreen("coin type")(coinType)
-  if (typeIndexFieldId) logKeyValueGreen("type index field")(typeIndexFieldId)
-  if (acceptedCurrencyFieldId)
-    logKeyValueGreen("currency field")(acceptedCurrencyFieldId)
-  if (digest) logKeyValueGreen("digest")(digest)
-}

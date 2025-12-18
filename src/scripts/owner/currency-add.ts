@@ -3,9 +3,11 @@ import { deriveObjectID, normalizeSuiObjectId } from "@mysten/sui/utils"
 import yargs from "yargs"
 
 import {
-  type AcceptedCurrencyMatch,
   findAcceptedCurrencyByCoinType,
-  normalizeCoinType
+  getAcceptedCurrencySummary,
+  normalizeCoinType,
+  requireAcceptedCurrencyByCoinType,
+  type AcceptedCurrencyMatch
 } from "../../models/currency.ts"
 import { resolveLatestShopIdentifiers } from "../../models/shop.ts"
 import { SUI_COIN_REGISTRY_ID } from "../../tooling/constants.ts"
@@ -13,9 +15,10 @@ import { assertBytesLength, hexToBytes } from "../../tooling/hex.ts"
 import { loadKeypair } from "../../tooling/keypair.ts"
 import { logKeyValueGreen } from "../../tooling/log.ts"
 import type { ObjectArtifact } from "../../tooling/object.ts"
-import { getSuiSharedObject } from "../../tooling/shared-object.ts"
 import { runSuiScript } from "../../tooling/process.ts"
+import { getSuiSharedObject } from "../../tooling/shared-object.ts"
 import { newTransaction, signAndExecute } from "../../tooling/transactions.ts"
+import { logAcceptedCurrencySummary } from "../../utils/log-summaries.ts"
 import { parseOptionalU64 } from "../../utils/utility.ts"
 
 type AddCurrencyArguments = {
@@ -100,11 +103,25 @@ runSuiScript(
       suiClient
     )
 
-    logAcceptedCurrencyCreation({
-      createdAcceptedCurrency: findAcceptedCurrency(created),
-      coinType: inputs.coinType,
-      feedId: cliArguments.feedId
-    })
+    const createdAcceptedCurrency = findAcceptedCurrency(created)
+    const acceptedCurrencyId =
+      createdAcceptedCurrency?.objectId ||
+      (await requireAcceptedCurrencyId({
+        shopId: inputs.shopId,
+        coinType: inputs.coinType,
+        suiClient
+      }))
+
+    const acceptedCurrencySummary = await getAcceptedCurrencySummary(
+      inputs.shopId,
+      acceptedCurrencyId,
+      suiClient
+    )
+
+    logAcceptedCurrencySummary(acceptedCurrencySummary)
+    logKeyValueGreen("feed id")(cliArguments.feedId)
+    if (createdAcceptedCurrency?.digest)
+      logKeyValueGreen("digest")(createdAcceptedCurrency.digest)
   },
   yargs()
     .option("shopPackageId", {
@@ -322,19 +339,19 @@ const findAcceptedCurrency = (createdArtifacts?: ObjectArtifact[]) =>
     artifact.objectType?.endsWith("::shop::AcceptedCurrency")
   )
 
-const logAcceptedCurrencyCreation = ({
-  createdAcceptedCurrency,
+const requireAcceptedCurrencyId = async ({
+  shopId,
   coinType,
-  feedId
+  suiClient
 }: {
-  createdAcceptedCurrency?: ObjectArtifact
+  shopId: string
   coinType: string
-  feedId: string
-}) => {
-  if (createdAcceptedCurrency?.objectId)
-    logKeyValueGreen("accepted currency id")(createdAcceptedCurrency.objectId)
-  logKeyValueGreen("coin type")(coinType)
-  logKeyValueGreen("feed id")(feedId)
-  if (createdAcceptedCurrency?.digest)
-    logKeyValueGreen("digest")(createdAcceptedCurrency.digest)
+  suiClient: SuiClient
+}): Promise<string> => {
+  const match = await requireAcceptedCurrencyByCoinType({
+    coinType,
+    shopId,
+    suiClient
+  })
+  return match.acceptedCurrencyId
 }

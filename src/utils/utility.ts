@@ -71,9 +71,9 @@ const makeDelay = () => (ms: number) => {
     return () => clearTimeout(id)
   }
 
-  let cancelFn = () => {}
+  let cancelFn: () => void = () => {}
 
-  const promise = new Promise((resolve) => {
+  const promise = new Promise<void>((resolve) => {
     cancelFn = startTimer(resolve)
   })
 
