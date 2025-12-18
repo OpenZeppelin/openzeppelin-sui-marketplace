@@ -21,6 +21,6 @@ export default typescriptEslint.config(
     }
   },
   {
-    ignores: ["node_modules/"]
+    ignores: ["*/node_modules/"]
   }
 )

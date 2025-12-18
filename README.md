@@ -53,6 +53,19 @@ If you hit errors, keep reading—every step is explained in detail with trouble
 - `src/scripts/chain/*`: Automation scripts for localnet, seeding mocks, and publishing.
 - `deployments/`: Generated artifacts (package IDs, mock coin/feed objects) after running scripts.
 
+## Frontend UI
+
+- `packages/ui` contains a Next.js 16 + Tailwind UI that exercises the oracle-market shop and buyer flows. It installs against the same workspace dependencies so the UI stays in sync with the backend scripts.
+- Run the UI commands from the repo root (thanks to the pnpm workspace) with the `frontend-greeting-next` filter:
+  ```bash
+  pnpm --filter frontend-greeting-next dev     # run the dev server (local mock shop)
+  pnpm --filter frontend-greeting-next build   # build the production bundles
+  pnpm --filter frontend-greeting-next start   # serve the production build
+  pnpm --filter frontend-greeting-next lint    # run ESLint on the UI
+  pnpm --filter frontend-greeting-next format  # format source files with Prettier
+  ```
+  The workspace ensures a single `pnpm-lock.yaml`, so `pnpm install` from the repo root installs dependencies for both the scripts and the UI.
+
 ---
 
 ## Sui Concepts for EVM Developers
@@ -323,6 +336,13 @@ Owner scripts default `--shop-package-id`, `--shop-id`, and `--owner-cap-id` fro
 - Flags:
   - `--discount-template-id <id>`: template object ID (required).
   - `--active` / `--no-active`: desired activation state (required boolean flag).
+  - `--shop-package-id <id>` / `--shop-id <id>` / `--owner-cap-id <id>`: override artifact defaults.
+
+#### `pnpm owner:discount-template:prune-claims`
+- Removes per-wallet claim markers for a finalized template (expired or maxed), reducing storage without deleting the template.
+- Flags:
+  - `--discount-template-id <id>`: template object ID (required).
+  - `--claimers <addr,addr,...>` / `--claimer <addr>`: claimer addresses to prune (required).
   - `--shop-package-id <id>` / `--shop-id <id>` / `--owner-cap-id <id>`: override artifact defaults.
 
 #### `pnpm owner:discount-template:attach-to-listing`

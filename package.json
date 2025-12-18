@@ -1,59 +1,17 @@
 {
-  "name": "sui-oracle-market",
+  "name": "dapp",
   "version": "0.0.0",
   "type": "module",
   "private": true,
-  "description": "Scripts and tooling for deploying the Sui Oracle Market Move package.",
+  "description": "Oracle Market",
   "scripts": {
-    "chain:localnet:start": "NODE_OPTIONS=\"--no-warnings\" ts-node-esm --transpile-only src/scripts/chain/localnet-start.ts",
-    "chain:localnet:stop": "NODE_OPTIONS=\"--no-warnings\" ts-node-esm --transpile-only src/scripts/chain/localnet-stop.ts",
-    "chain:publish-package": "NODE_OPTIONS=\"--no-warnings\" ts-node-esm --transpile-only src/scripts/chain/publish-package.ts",
-    "chain:mock:setup": "NODE_OPTIONS=\"--no-warnings\" ts-node-esm --transpile-only src/scripts/chain/mock-setup.ts",
-    "chain:mock:get-currency": "NODE_OPTIONS=\"--no-warnings\" ts-node-esm --transpile-only src/scripts/chain/mock-get-currency.ts",
-    "chain:mock:update-prices": "NODE_OPTIONS=\"--no-warnings\" ts-node-esm --transpile-only src/scripts/chain/mock-update-prices.ts",
-    "chain:describe-address": "NODE_OPTIONS=\"--no-warnings\" ts-node-esm --transpile-only src/scripts/chain/describe-address.ts",
-    "chain:describe-object": "NODE_OPTIONS=\"--no-warnings\" ts-node-esm --transpile-only src/scripts/chain/describe-object.ts",
-    "chain:describe-dynamic-field-object": "NODE_OPTIONS=\"--no-warnings\" ts-node-esm --transpile-only src/scripts/chain/describe-dynamic-field-object.ts",
-    "owner:shop:create": "NODE_OPTIONS=\"--no-warnings\" ts-node-esm --transpile-only src/scripts/owner/shop-create.ts",
-    "owner:shop:update-owner": "NODE_OPTIONS=\"--no-warnings\" ts-node-esm --transpile-only src/scripts/owner/shop-update-owner.ts",
-    "owner:discount-template:create": "NODE_OPTIONS=\"--no-warnings\" ts-node-esm --transpile-only src/scripts/owner/discount-template-create.ts",
-    "owner:discount-template:update": "NODE_OPTIONS=\"--no-warnings\" ts-node-esm --transpile-only src/scripts/owner/discount-template-update.ts",
-    "owner:discount-template:toggle": "NODE_OPTIONS=\"--no-warnings\" ts-node-esm --transpile-only src/scripts/owner/discount-template-toggle.ts",
-    "owner:item-listing:attach-discount-template": "NODE_OPTIONS=\"--no-warnings\" ts-node-esm --transpile-only src/scripts/owner/item-listing-attach-discount-template.ts",
-    "owner:item-listing:clear-discount-template": "NODE_OPTIONS=\"--no-warnings\" ts-node-esm --transpile-only src/scripts/owner/item-listing-clear-discount-template.ts",
-    "owner:item-listing:add": "NODE_OPTIONS=\"--no-warnings\" ts-node-esm --transpile-only src/scripts/owner/item-listing-add.ts",
-    "owner:item-listing:remove": "NODE_OPTIONS=\"--no-warnings\" ts-node-esm --transpile-only src/scripts/owner/item-listing-remove.ts",
-    "owner:item-listing:update-stock": "NODE_OPTIONS=\"--no-warnings\" ts-node-esm --transpile-only src/scripts/owner/item-listing-update-stock.ts",
-    "owner:currency:add": "NODE_OPTIONS=\"--no-warnings\" ts-node-esm --transpile-only src/scripts/owner/currency-add.ts",
-    "owner:currency:remove": "NODE_OPTIONS=\"--no-warnings\" ts-node-esm --transpile-only src/scripts/owner/currency-remove.ts",
-    "buyer:currency:list": "NODE_OPTIONS=\"--no-warnings\" ts-node-esm --transpile-only src/scripts/buyer/currency-list.ts",
-    "buyer:item-listing:list": "NODE_OPTIONS=\"--no-warnings\" ts-node-esm --transpile-only src/scripts/buyer/item-listing-list.ts",
-    "buyer:discount-template:list": "NODE_OPTIONS=\"--no-warnings\" ts-node-esm --transpile-only src/scripts/buyer/discount-template-list.ts",
-    "buyer:discount-ticket:list": "NODE_OPTIONS=\"--no-warnings\" ts-node-esm --transpile-only src/scripts/buyer/discount-ticket-list.ts",
-    "buyer:discount-ticket:claim": "NODE_OPTIONS=\"--no-warnings\" ts-node-esm --transpile-only src/scripts/buyer/discount-ticket-claim.ts",
-    "buyer:buy": "NODE_OPTIONS=\"--no-warnings\" ts-node-esm --transpile-only src/scripts/buyer/buy.ts",
-    "buyer:shop:view": "NODE_OPTIONS=\"--no-warnings\" ts-node-esm --transpile-only src/scripts/buyer/shop-view.ts",
-    "lint": "pnpm exec eslint .",
-    "lint:fix": "pnpm exec eslint . --fix"
+    "ui": "pnpm --filter ui",
+    "script": "pnpm --filter dapp"
   },
-  "dependencies": {
-    "@mysten/sui": "^1.45.2",
-    "@pythnetwork/pyth-sui-js": "^2.4.0",
-    "chalk": "^5.3.0",
-    "dotenv": "^17.2.3",
-    "yargs": "^18.0.0"
+  "engines": {
+    "node": ">=22"
   },
-  "devDependencies": {
-    "@types/node": "^22.19.2",
-    "@types/yargs": "^17.0.35",
-    "@eslint/js": "^9.39.1",
-    "eslint": "^9.39.1",
-    "eslint-config-prettier": "^10.1.8",
-    "eslint-plugin-prettier": "^5.5.4",
-    "eslint-plugin-unicorn": "^62.0.0",
-    "prettier": "^3.7.4",
-    "ts-node": "^10.9.2",
-    "typescript": "^5.9.3",
-    "typescript-eslint": "^8.49.0"
-  }
+  "workspaces": [
+    "packages/*"
+  ]
 }

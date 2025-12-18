@@ -1,22 +1,11 @@
 {
-  "compilerOptions": {
-    "target": "ES2020",
-    "module": "NodeNext",
-    "moduleResolution": "NodeNext",
-    "resolveJsonModule": true,
-    "esModuleInterop": true,
-    "skipLibCheck": true,
-    "allowImportingTsExtensions": true,
-    "strict": true,
-    "outDir": "dist",
-    "types": [
-      "node"
-    ]
-  },
-  "ts-node": {
-    "esm": true
-  },
-  "include": [
-    "**/*.ts"
+  "files": [],
+  "references": [
+    {
+      "path": "./packages/dapp"
+    },
+    {
+      "path": "./packages/ui"
+    }
   ]
 }
