@@ -1,5 +1,6 @@
 import { createNetworkConfig } from '@mysten/dapp-kit'
 import { getFullnodeUrl } from '@mysten/sui/client'
+import { ENetwork } from 'dapp/tooling/types'
 import {
   CONTRACT_PACKAGE_VARIABLE_NAME,
   DEVNET_CONTRACT_PACKAGE_ID,
@@ -12,7 +13,6 @@ import {
   TESTNET_CONTRACT_PACKAGE_ID,
   TESTNET_EXPLORER_URL,
 } from '../config/network'
-import { ENetwork } from '../types/ENetwork'
 
 const useNetworkConfig = () => {
   return createNetworkConfig({

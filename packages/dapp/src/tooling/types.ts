@@ -5,6 +5,13 @@ export type NetworkName =
   | "localnet"
   | "custom"
 
+export enum ENetwork {
+  LOCALNET = "localnet",
+  DEVNET = "devnet",
+  TESTNET = "testnet",
+  MAINNET = "mainnet"
+}
+
 export type BuildOutput = {
   modules: string[]
   dependencies: string[]
