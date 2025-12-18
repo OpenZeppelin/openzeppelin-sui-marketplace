@@ -215,6 +215,11 @@ All scripts run from the repo root and honor `sui.config.ts` (or `--network <nam
   - `--registry-id <id>`: coin registry shared object (default Sui registry).
   - `--coin-type <type>`: coin type(s) to inspect (repeatable; defaults to the artifact coins).
 
+#### `pnpm chain:mock:update-prices`
+- Localnet-only refresh of existing mock Pyth `PriceInfoObject`s. Reads feed definitions from `deployments/mock.localnet.json`, then updates each price object in-place using `pyth::price_info::update_price_feed` with the on-chain clock so `check_price_is_fresh` passes without re-running full mock setup.
+- Flags:
+  - `--pyth-package-id <id>`: override the Pyth mock package ID; defaults to the value recorded in `deployments/mock.localnet.json`.
+
 #### `pnpm chain:describe-address`
 - Summarizes an address: SUI balance, all coin balances (with locked totals), stake totals, and a truncated owned-object sample (first 10 of up to 200 fetched). CLI requires the flag even though the script can derive the configured account.
 - Flags:
@@ -363,6 +368,20 @@ Owner scripts default `--shop-package-id`, `--shop-id`, and `--owner-cap-id` fro
   - `--discount-template-id <id>`: `DiscountTemplate` object ID to claim from (required).
   - `--shop-id <id>`: parent Shop object ID for resolving dynamic fields; defaults to the latest Shop artifact.
 
+#### `pnpm buyer:buy`
+- Executes a full checkout against the shared `Shop`, pricing an `ItemListing` in USD cents and settling with any registered `AcceptedCurrency` while enforcing Pyth oracle guardrails and optional discounts. On localnet, you must run `pnpm chain:mock:update-prices` periodically beforehand so mock `PriceInfoObject`s stay fresh enough for `check_price_is_fresh`.
+- Flags:
+  - `--shop-id <id>`: shared Shop object ID; defaults to the latest Shop artifact.
+  - `--item-listing-id <id>`: ItemListing object ID to purchase (required).
+  - `--coin-type <0x...::Coin>`: coin type to pay with (must be registered as an AcceptedCurrency, e.g., mock USD or SUI) (required).
+  - `--payment-coin-object-id <id>`: optional specific Coin object ID to use as payment; otherwise the script selects the richest coin of that type owned by the signer.
+  - `--mint-to <0x...>`: address that receives the purchased ShopItem receipt (defaults to the signer address).
+  - `--refund-to <0x...>`: address that receives any refunded change (defaults to the signer address).
+  - `--discount-ticket-id <id>`: optional DiscountTicket object ID to redeem during checkout.
+  - `--discount-template-id <id>` / `--claim-discount`: template ID and flag to claim+redeem a discount ticket atomically in one PTB.
+  - `--max-price-age-secs <u64>` / `--max-confidence-ratio-bps <u64>`: optional tighter oracle freshness and confidence guardrails (cannot exceed the per-currency caps).
+  - `--skip-price-update` / `--hermes-url <url>`: mainnet/testnet-only controls for pulling fresh Pyth prices via Hermes.
+ 
 Utilities (TS helpers):
 - `src/utils/publish.ts`: Builds Move packages, handles CLI/SDK publish, manages `Move.lock` dependency addresses.
 - `src/utils/mock.ts`: Reads/writes mock artifacts for reuse across runs.
