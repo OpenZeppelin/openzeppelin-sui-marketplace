@@ -39,7 +39,11 @@ runSuiScript(
     })
     const signer = await loadKeypair(network.account)
     const shopSharedObject = await getSuiSharedObject(
-      { objectId: inputs.shopId, mutable: true },
+      { objectId: inputs.shopId, mutable: false },
+      suiClient
+    )
+    const itemListingSharedObject = await getSuiSharedObject(
+      { objectId: resolvedListingId, mutable: true },
       suiClient
     )
 
@@ -47,7 +51,7 @@ runSuiScript(
       buildClearDiscountTemplateTransaction({
         packageId: inputs.packageId,
         shop: shopSharedObject,
-        itemListingId: resolvedListingId,
+        itemListing: itemListingSharedObject,
         ownerCapId: inputs.ownerCapId
       })
 
@@ -152,22 +156,25 @@ const resolveListingId = async ({
 const buildClearDiscountTemplateTransaction = ({
   packageId,
   shop,
-  itemListingId,
+  itemListing,
   ownerCapId
 }: {
   packageId: string
   shop: Awaited<ReturnType<typeof getSuiSharedObject>>
-  itemListingId: string
+  itemListing: Awaited<ReturnType<typeof getSuiSharedObject>>
   ownerCapId: string
 }) => {
   const transaction = newTransaction()
   const shopArgument = transaction.sharedObjectRef(shop.sharedRef)
+  const listingArgument = transaction.sharedObjectRef(
+    itemListing.sharedRef
+  )
 
   transaction.moveCall({
     target: `${packageId}::shop::clear_template_from_listing`,
     arguments: [
       shopArgument,
-      transaction.pure.id(itemListingId),
+      listingArgument,
       transaction.object(ownerCapId)
     ]
   })

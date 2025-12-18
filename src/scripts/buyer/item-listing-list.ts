@@ -36,7 +36,7 @@ type ItemListingSummary = {
   spotlightTemplateId?: string
 }
 
-const ITEM_LISTING_TYPE_FRAGMENT = "::shop::ItemListing"
+const ITEM_LISTING_MARKER_TYPE_FRAGMENT = "::shop::ItemListingMarker"
 
 runSuiScript(
   async ({ network, currentNetwork }, cliArguments) => {
@@ -91,16 +91,23 @@ const fetchItemListings = async (
 ): Promise<ItemListingSummary[]> => {
   const dynamicFields = await fetchAllDynamicFields(shopId, suiClient)
   const itemListingFields = dynamicFields.filter((dynamicField) =>
-    dynamicField.objectType?.includes(ITEM_LISTING_TYPE_FRAGMENT)
+    dynamicField.objectType?.includes(ITEM_LISTING_MARKER_TYPE_FRAGMENT)
   )
 
   if (itemListingFields.length === 0) return []
 
+  const listingIds = itemListingFields.map((field) =>
+    normalizeIdOrThrow(
+      (field.name as { value: string })?.value,
+      `Missing listing id for marker ${field.objectId}.`
+    )
+  )
+
   const itemListingObjects = await Promise.all(
-    itemListingFields.map((field) =>
+    listingIds.map((listingId) =>
       getSuiObject(
         {
-          objectId: field.objectId,
+          objectId: listingId,
           options: { showContent: true, showType: true }
         },
         suiClient
@@ -109,25 +116,25 @@ const fetchItemListings = async (
   )
 
   return itemListingObjects.map((response, index) =>
-    buildItemListingSummary(response.object, itemListingFields[index].objectId)
+    buildItemListingSummary(
+      response.object,
+      listingIds[index],
+      itemListingFields[index].objectId
+    )
   )
 }
 
 const buildItemListingSummary = (
-  dynamicFieldObject: SuiObjectData,
+  listingObject: SuiObjectData,
+  listingId: string,
   dynamicFieldObjectId: string
 ): ItemListingSummary => {
-  const itemListingFields = unwrapMoveObjectFields(dynamicFieldObject)
-
-  const itemListingId = normalizeOptionalIdFromValue(itemListingFields.id)
+  const itemListingFields = unwrapMoveObjectFields(listingObject)
   const itemType =
     formatTypeNameFromFieldValue(itemListingFields.item_type) || "Unknown"
 
   return {
-    itemListingId: normalizeIdOrThrow(
-      itemListingId,
-      `Missing ItemListing id for dynamic field ${dynamicFieldObjectId}.`
-    ),
+    itemListingId: listingId,
     dynamicFieldObjectId,
     name: decodeUtf8Vector(itemListingFields.name),
     itemType,

@@ -31,7 +31,7 @@ runSuiScript(
     const suiClient = new SuiClient({ url: network.url })
     const signer = await loadKeypair(network.account)
     const shopSharedObject = await getSuiSharedObject(
-      { objectId: inputs.shopId, mutable: true },
+      { objectId: inputs.shopId, mutable: false },
       suiClient
     )
     const discountTemplateShared = await getSuiSharedObject(

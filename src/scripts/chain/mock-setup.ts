@@ -36,14 +36,13 @@ import {
   logWarning
 } from "../../tooling/log.ts"
 import { assertLocalnetNetwork, resolveRpcUrl } from "../../tooling/network.ts"
+import { runSuiScript } from "../../tooling/process.ts"
+import { publishPackageWithLog } from "../../tooling/publish.ts"
 import {
   getSuiSharedObject,
   type WrappedSuiSharedObject
 } from "../../tooling/shared-object.ts"
-import { runSuiScript } from "../../tooling/process.ts"
-import { publishPackageWithLog } from "../../tooling/publish.ts"
 import {
-  assertTransactionSuccess,
   findCreatedObjectIds,
   newTransaction,
   signAndExecute
@@ -433,7 +432,7 @@ const ensureCoin = async (
     ]
   })
 
-  const result = await withTestnetFaucetRetry(
+  const { transactionResult } = await withTestnetFaucetRetry(
     {
       signerAddress: signer.toSuiAddress(),
       network: "localnet",
@@ -450,11 +449,10 @@ const ensureCoin = async (
       ),
     suiClient
   )
-  assertTransactionSuccess(result)
 
   // Parse created objects from the transaction (currency, treasury cap, metadata, minted coin).
   const created = coinArtifactsFromResult({
-    result,
+    transactionResult,
     seed,
     derivedCurrencyId: currencyObjectId
   })
@@ -468,18 +466,20 @@ const ensureCoin = async (
 }
 
 const coinArtifactsFromResult = ({
-  result,
+  transactionResult,
   seed,
   derivedCurrencyId
 }: {
-  result: Awaited<ReturnType<typeof signAndExecute>>
+  transactionResult: Awaited<
+    ReturnType<typeof signAndExecute>
+  >["transactionResult"]
   seed: CoinSeed
   derivedCurrencyId: string
 }): CoinArtifact => {
   const coinTypeSuffix = `<${seed.coinType}>`
   const currencyObjectId =
     firstCreatedBySuffix(
-      result,
+      transactionResult,
       `::coin_registry::Currency${coinTypeSuffix}`
     ) ?? derivedCurrencyId
 
@@ -488,15 +488,15 @@ const coinArtifactsFromResult = ({
     coinType: seed.coinType,
     currencyObjectId,
     treasuryCapId: firstCreatedBySuffix(
-      result,
+      transactionResult,
       `::coin::TreasuryCap${coinTypeSuffix}`
     ),
     metadataObjectId: firstCreatedBySuffix(
-      result,
+      transactionResult,
       `::coin::CoinMetadata${coinTypeSuffix}`
     ),
     mintedCoinObjectId: firstCreatedBySuffix(
-      result,
+      transactionResult,
       `::coin::Coin${coinTypeSuffix}`
     )
   }
@@ -576,7 +576,7 @@ const publishPriceFeed = async ({
     publishPriceFeedTransaction.sharedObjectRef(clockObject.sharedRef)
   )
 
-  const result = await withTestnetFaucetRetry(
+  const { transactionResult } = await withTestnetFaucetRetry(
     {
       signerAddress: signer.toSuiAddress(),
       network: "localnet",
@@ -593,10 +593,9 @@ const publishPriceFeed = async ({
       ),
     suiClient
   )
-  assertTransactionSuccess(result)
 
   const [priceInfoObjectId] = findCreatedObjectIds(
-    result,
+    transactionResult,
     "::price_info::PriceInfoObject"
   )
 

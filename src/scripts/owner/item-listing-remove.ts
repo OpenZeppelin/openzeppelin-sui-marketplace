@@ -5,7 +5,6 @@ import yargs from "yargs"
 import { resolveLatestShopIdentifiers } from "../../models/shop.ts"
 import { loadKeypair } from "../../tooling/keypair.ts"
 import { logKeyValueGreen } from "../../tooling/log.ts"
-import type { ObjectArtifact } from "../../tooling/object.ts"
 import { getSuiSharedObject } from "../../tooling/shared-object.ts"
 import { runSuiScript } from "../../tooling/process.ts"
 import { newTransaction, signAndExecute } from "../../tooling/transactions.ts"
@@ -24,16 +23,18 @@ runSuiScript(
     const signer = await loadKeypair(network.account)
 
     const shopSharedObject = await fetchMutableShop(inputs.shopId, suiClient)
+    const itemListingSharedObject = await getSuiSharedObject(
+      { objectId: inputs.itemListingId, mutable: false },
+      suiClient
+    )
     const removeItemTransaction = buildRemoveItemTransaction({
       packageId: inputs.packageId,
       shop: shopSharedObject,
       ownerCapId: inputs.ownerCapId,
-      itemListingId: cliArguments.itemListingId
+      itemListing: itemListingSharedObject
     })
 
-    const {
-      objectArtifacts: { deleted }
-    } = await signAndExecute(
+    const { transactionResult } = await signAndExecute(
       {
         transaction: removeItemTransaction,
         signer,
@@ -42,9 +43,10 @@ runSuiScript(
       suiClient
     )
 
-    console.log(deleted)
-
-    logRemovalResult(deleted[0])
+    logRemovalResult({
+      itemListingId: inputs.itemListingId,
+      digest: transactionResult.digest
+    })
   },
   yargs()
     .option("itemListingId", {
@@ -110,21 +112,24 @@ const buildRemoveItemTransaction = ({
   packageId,
   shop,
   ownerCapId,
-  itemListingId
+  itemListing
 }: {
   packageId: string
   shop: Awaited<ReturnType<typeof getSuiSharedObject>>
   ownerCapId: string
-  itemListingId: string
+  itemListing: Awaited<ReturnType<typeof getSuiSharedObject>>
 }) => {
   const transaction = newTransaction()
   const shopArgument = transaction.sharedObjectRef(shop.sharedRef)
+  const listingArgument = transaction.sharedObjectRef(
+    itemListing.sharedRef
+  )
 
   transaction.moveCall({
     target: `${packageId}::shop::remove_item_listing`,
     arguments: [
       shopArgument,
-      transaction.pure.id(itemListingId),
+      listingArgument,
       transaction.object(ownerCapId)
     ]
   })
@@ -132,8 +137,13 @@ const buildRemoveItemTransaction = ({
   return transaction
 }
 
-const logRemovalResult = (deletedItemListing: ObjectArtifact) => {
-  logKeyValueGreen("removed")(deletedItemListing.objectId)
-  if (deletedItemListing.digest)
-    logKeyValueGreen("digest")(deletedItemListing.digest)
+const logRemovalResult = ({
+  itemListingId,
+  digest
+}: {
+  itemListingId: string
+  digest?: string
+}) => {
+  logKeyValueGreen("removed")(itemListingId)
+  if (digest) logKeyValueGreen("digest")(digest)
 }

@@ -1324,7 +1324,7 @@ fun add_item_listing_stores_metadata() {
   let mut ctx: tx::TxContext = tx::dummy();
   let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
 
-  shop::add_item_listing<TestItem>(
+  let (listing, listing_id) = shop::test_add_item_listing_local<TestItem>(
     &mut shop,
     b"Cool Bike",
     125_00,
@@ -1333,8 +1333,6 @@ fun add_item_listing_stores_metadata() {
     &owner_cap,
     &mut ctx,
   );
-
-  let listing_id = shop::test_last_created_id(&ctx);
   assert!(shop::test_listing_exists(&shop, listing_id), E_ASSERT_FAILURE);
   let (
     name,
@@ -1344,7 +1342,7 @@ fun add_item_listing_stores_metadata() {
     spotlight_template_id,
   ) = shop::test_listing_values(
     &shop,
-    listing_id,
+    &listing,
   );
   let added_events = event::events_by_type<shop::ItemListingAdded>();
   assert!(vec::length(&added_events) == 1, E_ASSERT_FAILURE);
@@ -1356,7 +1354,7 @@ fun add_item_listing_stores_metadata() {
   assert!(shop_id == shop::test_shop_id(&shop), E_ASSERT_FAILURE);
   assert!(opt::is_none(&spotlight_template_id), E_ASSERT_FAILURE);
   let shop_address = shop::test_shop_id(&shop);
-  let listing_address = obj::id_to_address(&listing_id);
+  let listing_address = shop::test_listing_address(&listing);
   assert!(
     shop::test_item_listing_added_shop(added_event) == shop_address,
     E_ASSERT_FAILURE,
@@ -1385,6 +1383,7 @@ fun add_item_listing_stores_metadata() {
   );
 
   shop::test_remove_listing(&mut shop, listing_id);
+  shop::test_destroy_item_listing(listing);
   shop::test_destroy_owner_cap(owner_cap);
   shop::test_destroy_shop(shop);
 }
@@ -1393,9 +1392,13 @@ fun add_item_listing_stores_metadata() {
 fun add_item_listing_links_spotlight_template() {
   let mut ctx = tx::new_from_hint(TEST_OWNER, 44, 0, 0, 0);
   let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
-  let (template, template_id) = create_discount_template(&mut shop, &owner_cap, &mut ctx);
+  let (template, template_id) = create_discount_template(
+    &mut shop,
+    &owner_cap,
+    &mut ctx,
+  );
 
-  shop::add_item_listing<TestItem>(
+  let (listing, listing_id) = shop::test_add_item_listing_local<TestItem>(
     &mut shop,
     b"Limited Tire Set",
     200_00,
@@ -1404,17 +1407,15 @@ fun add_item_listing_links_spotlight_template() {
     &owner_cap,
     &mut ctx,
   );
-
-  let listing_id = shop::test_last_created_id(&ctx);
   let (_, _, _, _, spotlight_template_id) = shop::test_listing_values(
     &shop,
-    listing_id,
+    &listing,
   );
   let added_events = event::events_by_type<shop::ItemListingAdded>();
   assert!(vec::length(&added_events) == 1, E_ASSERT_FAILURE);
   let added_event = vec::borrow(&added_events, 0);
   let shop_address = shop::test_shop_id(&shop);
-  let listing_address = obj::id_to_address(&listing_id);
+  let listing_address = shop::test_listing_address(&listing);
 
   assert!(opt::is_some(&spotlight_template_id), E_ASSERT_FAILURE);
   assert!(opt::borrow(&spotlight_template_id) == template_id, E_ASSERT_FAILURE);
@@ -1450,6 +1451,7 @@ fun add_item_listing_links_spotlight_template() {
   shop::test_remove_listing(&mut shop, listing_id);
   shop::test_remove_template(&mut shop, template_id);
   shop::test_destroy_discount_template(template);
+  shop::test_destroy_item_listing(listing);
   shop::test_destroy_owner_cap(owner_cap);
   shop::test_destroy_shop(shop);
 }
@@ -1583,7 +1585,7 @@ fun update_item_listing_stock_updates_listing_and_emits_events() {
   let mut ctx = tx::dummy();
   let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
 
-  shop::add_item_listing<TestItem>(
+  let (mut listing, listing_id) = shop::test_add_item_listing_local<TestItem>(
     &mut shop,
     b"Helmet",
     48_00,
@@ -1592,13 +1594,11 @@ fun update_item_listing_stock_updates_listing_and_emits_events() {
     &owner_cap,
     &mut ctx,
   );
-
-  let listing_id = shop::test_last_created_id(&ctx);
-  let listing_address = obj::id_to_address(&listing_id);
+  let listing_address = shop::test_listing_address(&listing);
 
   shop::update_item_listing_stock(
-    &mut shop,
-    listing_id,
+    &shop,
+    &mut listing,
     11,
     &owner_cap,
     &mut ctx,
@@ -1612,7 +1612,7 @@ fun update_item_listing_stock_updates_listing_and_emits_events() {
     spotlight_template,
   ) = shop::test_listing_values(
     &shop,
-    listing_id,
+    &listing,
   );
   assert!(name == b"Helmet", E_ASSERT_FAILURE);
   assert!(base_price_usd_cents == 48_00, E_ASSERT_FAILURE);
@@ -1636,6 +1636,7 @@ fun update_item_listing_stock_updates_listing_and_emits_events() {
   );
 
   shop::test_remove_listing(&mut shop, listing_id);
+  shop::test_destroy_item_listing(listing);
   shop::test_destroy_owner_cap(owner_cap);
   shop::test_destroy_shop(shop);
 }
@@ -1654,7 +1655,7 @@ fun update_item_listing_stock_rejects_foreign_owner_cap() {
     &mut ctx,
   );
 
-  shop::add_item_listing<TestItem>(
+  let (mut listing, listing_id) = shop::test_add_item_listing_local<TestItem>(
     &mut shop,
     b"Borrowed Listing",
     18_00,
@@ -1664,16 +1665,16 @@ fun update_item_listing_stock_rejects_foreign_owner_cap() {
     &mut ctx,
   );
 
-  let listing_id = shop::test_last_created_id(&ctx);
-
   shop::update_item_listing_stock(
-    &mut shop,
-    listing_id,
+    &shop,
+    &mut listing,
     7,
     &foreign_cap,
     &mut ctx,
   );
 
+  shop::test_remove_listing(&mut shop, listing_id);
+  shop::test_destroy_item_listing(listing);
   shop::test_destroy_owner_cap(owner_cap);
   shop::test_destroy_shop(shop);
   shop::test_destroy_owner_cap(foreign_cap);
@@ -1681,16 +1682,21 @@ fun update_item_listing_stock_rejects_foreign_owner_cap() {
   abort E_ASSERT_FAILURE
 }
 
-#[test, expected_failure(abort_code = 0x2::dynamic_field::EFieldDoesNotExist)]
+#[
+  test,
+  expected_failure(
+    abort_code = ::sui_oracle_market::shop::EListingShopMismatch,
+  ),
+]
 fun update_item_listing_stock_rejects_unknown_listing() {
   let mut ctx = tx::dummy();
-  let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
+  let (shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
   let (mut other_shop, other_cap) = shop::test_setup_shop(
     OTHER_OWNER,
     &mut ctx,
   );
 
-  shop::add_item_listing<TestItem>(
+  let (mut foreign_listing, foreign_listing_id) = shop::test_add_item_listing_local<TestItem>(
     &mut other_shop,
     b"Foreign Listing",
     10_00,
@@ -1700,11 +1706,9 @@ fun update_item_listing_stock_rejects_unknown_listing() {
     &mut ctx,
   );
 
-  let foreign_listing_id = shop::test_last_created_id(&ctx);
-
   shop::update_item_listing_stock(
-    &mut shop,
-    foreign_listing_id,
+    &shop,
+    &mut foreign_listing,
     3,
     &owner_cap,
     &mut ctx,
@@ -1713,6 +1717,7 @@ fun update_item_listing_stock_rejects_unknown_listing() {
   shop::test_destroy_owner_cap(owner_cap);
   shop::test_destroy_shop(shop);
   shop::test_remove_listing(&mut other_shop, foreign_listing_id);
+  shop::test_destroy_item_listing(foreign_listing);
   shop::test_destroy_owner_cap(other_cap);
   shop::test_destroy_shop(other_shop);
   abort E_ASSERT_FAILURE
@@ -1723,7 +1728,7 @@ fun update_item_listing_stock_handles_multiple_updates_and_events() {
   let mut ctx = tx::dummy();
   let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
 
-  shop::add_item_listing<TestItem>(
+  let (mut listing, listing_id) = shop::test_add_item_listing_local<TestItem>(
     &mut shop,
     b"Pads",
     22_00,
@@ -1732,26 +1737,24 @@ fun update_item_listing_stock_handles_multiple_updates_and_events() {
     &owner_cap,
     &mut ctx,
   );
-
-  let listing_id = shop::test_last_created_id(&ctx);
-  let listing_address = obj::id_to_address(&listing_id);
+  let listing_address = shop::test_listing_address(&listing);
 
   shop::update_item_listing_stock(
-    &mut shop,
-    listing_id,
+    &shop,
+    &mut listing,
     8,
     &owner_cap,
     &mut ctx,
   );
   shop::update_item_listing_stock(
-    &mut shop,
-    listing_id,
+    &shop,
+    &mut listing,
     3,
     &owner_cap,
     &mut ctx,
   );
 
-  let (_, _, stock, _, _) = shop::test_listing_values(&shop, listing_id);
+  let (_, _, stock, _, _) = shop::test_listing_values(&shop, &listing);
   assert!(stock == 3, E_ASSERT_FAILURE);
 
   let stock_events = event::events_by_type<shop::ItemListingStockUpdated>();
@@ -1776,6 +1779,7 @@ fun update_item_listing_stock_handles_multiple_updates_and_events() {
   );
 
   shop::test_remove_listing(&mut shop, listing_id);
+  shop::test_destroy_item_listing(listing);
   shop::test_destroy_owner_cap(owner_cap);
   shop::test_destroy_shop(shop);
 }
@@ -1785,7 +1789,7 @@ fun remove_item_listing_removes_listing_and_emits_event() {
   let mut ctx = tx::dummy();
   let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
 
-  shop::add_item_listing<TestItem>(
+  let (removed_listing, removed_listing_id) = shop::test_add_item_listing_local<TestItem>(
     &mut shop,
     b"Chain Grease",
     12_00,
@@ -1794,11 +1798,9 @@ fun remove_item_listing_removes_listing_and_emits_event() {
     &owner_cap,
     &mut ctx,
   );
+  let removed_listing_address = shop::test_listing_address(&removed_listing);
 
-  let removed_listing_id = shop::test_last_created_id(&ctx);
-  let removed_listing_address = obj::id_to_address(&removed_listing_id);
-
-  shop::add_item_listing<TestItem>(
+  let (remaining_listing, remaining_listing_id) = shop::test_add_item_listing_local<TestItem>(
     &mut shop,
     b"Repair Kit",
     42_00,
@@ -1807,13 +1809,11 @@ fun remove_item_listing_removes_listing_and_emits_event() {
     &owner_cap,
     &mut ctx,
   );
-
-  let remaining_listing_id = shop::test_last_created_id(&ctx);
   let shop_address = shop::test_shop_id(&shop);
 
   shop::remove_item_listing(
     &mut shop,
-    removed_listing_id,
+    &removed_listing,
     &owner_cap,
     &mut ctx,
   );
@@ -1846,7 +1846,7 @@ fun remove_item_listing_removes_listing_and_emits_event() {
     spotlight,
   ) = shop::test_listing_values(
     &shop,
-    remaining_listing_id,
+    &remaining_listing,
   );
   assert!(name == b"Repair Kit", E_ASSERT_FAILURE);
   assert!(price == 42_00, E_ASSERT_FAILURE);
@@ -1855,6 +1855,8 @@ fun remove_item_listing_removes_listing_and_emits_event() {
   assert!(listing_shop_address == shop_address, E_ASSERT_FAILURE);
 
   shop::test_remove_listing(&mut shop, remaining_listing_id);
+  shop::test_destroy_item_listing(remaining_listing);
+  shop::test_destroy_item_listing(removed_listing);
   shop::test_destroy_owner_cap(owner_cap);
   shop::test_destroy_shop(shop);
 }
@@ -1873,7 +1875,7 @@ fun remove_item_listing_rejects_foreign_owner_cap() {
     &mut ctx,
   );
 
-  shop::add_item_listing<TestItem>(
+  let (listing, listing_id) = shop::test_add_item_listing_local<TestItem>(
     &mut shop,
     b"Borrowed Owner",
     30_00,
@@ -1883,10 +1885,15 @@ fun remove_item_listing_rejects_foreign_owner_cap() {
     &mut ctx,
   );
 
-  let listing_id = shop::test_last_created_id(&ctx);
+  shop::remove_item_listing(
+    &mut shop,
+    &listing,
+    &foreign_cap,
+    &mut ctx,
+  );
 
-  shop::remove_item_listing(&mut shop, listing_id, &foreign_cap, &mut ctx);
-
+  shop::test_remove_listing(&mut shop, listing_id);
+  shop::test_destroy_item_listing(listing);
   shop::test_destroy_owner_cap(owner_cap);
   shop::test_destroy_shop(shop);
   shop::test_destroy_owner_cap(foreign_cap);
@@ -1894,7 +1901,12 @@ fun remove_item_listing_rejects_foreign_owner_cap() {
   abort E_ASSERT_FAILURE
 }
 
-#[test, expected_failure(abort_code = 0x2::dynamic_field::EFieldDoesNotExist)]
+#[
+  test,
+  expected_failure(
+    abort_code = ::sui_oracle_market::shop::EListingShopMismatch,
+  ),
+]
 fun remove_item_listing_rejects_unknown_listing() {
   let mut ctx = tx::dummy();
   let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
@@ -1903,7 +1915,7 @@ fun remove_item_listing_rejects_unknown_listing() {
     &mut ctx,
   );
 
-  shop::add_item_listing<TestItem>(
+  let (foreign_listing, foreign_listing_id) = shop::test_add_item_listing_local<TestItem>(
     &mut other_shop,
     b"Foreign Stock",
     55_00,
@@ -1913,11 +1925,9 @@ fun remove_item_listing_rejects_unknown_listing() {
     &mut ctx,
   );
 
-  let foreign_listing_id = shop::test_last_created_id(&ctx);
-
   shop::remove_item_listing(
     &mut shop,
-    foreign_listing_id,
+    &foreign_listing,
     &owner_cap,
     &mut ctx,
   );
@@ -1925,6 +1935,7 @@ fun remove_item_listing_rejects_unknown_listing() {
   shop::test_destroy_owner_cap(owner_cap);
   shop::test_destroy_shop(shop);
   shop::test_remove_listing(&mut other_shop, foreign_listing_id);
+  shop::test_destroy_item_listing(foreign_listing);
   shop::test_destroy_owner_cap(other_cap);
   shop::test_destroy_shop(other_shop);
   abort E_ASSERT_FAILURE
@@ -1935,7 +1946,7 @@ fun update_item_listing_stock_accept_zero_stock() {
   let mut ctx = tx::dummy();
   let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
 
-  shop::add_item_listing<TestItem>(
+  let (mut listing, listing_id) = shop::test_add_item_listing_local<TestItem>(
     &mut shop,
     b"Maintenance Kit",
     32_00,
@@ -1945,17 +1956,16 @@ fun update_item_listing_stock_accept_zero_stock() {
     &mut ctx,
   );
 
-  let listing_id = shop::test_last_created_id(&ctx);
-
   shop::update_item_listing_stock(
-    &mut shop,
-    listing_id,
+    &shop,
+    &mut listing,
     0,
     &owner_cap,
     &mut ctx,
   );
 
   shop::test_remove_listing(&mut shop, listing_id);
+  shop::test_destroy_item_listing(listing);
   shop::test_destroy_owner_cap(owner_cap);
   shop::test_destroy_shop(shop);
 }
@@ -2886,7 +2896,13 @@ fun toggle_discount_template_rejects_foreign_owner_cap() {
     &mut ctx,
   );
 
-  shop::toggle_discount_template(&shop, &mut template, false, &other_cap, &mut ctx);
+  shop::toggle_discount_template(
+    &shop,
+    &mut template,
+    false,
+    &other_cap,
+    &mut ctx,
+  );
 
   shop::test_destroy_discount_template(template);
   shop::test_remove_template(&mut shop, template_id);
@@ -2910,7 +2926,10 @@ fun toggle_discount_template_rejects_foreign_template() {
     OTHER_OWNER,
     &mut ctx,
   );
-  let (mut foreign_template, foreign_template_id) = shop::test_create_discount_template_local(
+  let (
+    mut foreign_template,
+    foreign_template_id,
+  ) = shop::test_create_discount_template_local(
     &mut other_shop,
     opt::none(),
     0,
@@ -2981,7 +3000,7 @@ fun toggle_template_on_listing_sets_and_clears_spotlight() {
   let mut ctx = tx::dummy();
   let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
 
-  shop::add_item_listing<TestItem>(
+  let (mut listing, listing_id) = shop::test_add_item_listing_local<TestItem>(
     &mut shop,
     b"Promo Jacket",
     180_00,
@@ -2990,7 +3009,6 @@ fun toggle_template_on_listing_sets_and_clears_spotlight() {
     &owner_cap,
     &mut ctx,
   );
-  let listing_id = shop::test_last_created_id(&ctx);
   let (template, template_id) = shop::test_create_discount_template_local(
     &mut shop,
     opt::none(),
@@ -3005,7 +3023,7 @@ fun toggle_template_on_listing_sets_and_clears_spotlight() {
 
   let (_, _, _, _, spotlight_before) = shop::test_listing_values(
     &shop,
-    listing_id,
+    &listing,
   );
   assert!(opt::is_none(&spotlight_before), E_ASSERT_FAILURE);
   assert!(
@@ -3014,8 +3032,8 @@ fun toggle_template_on_listing_sets_and_clears_spotlight() {
   );
 
   shop::attach_template_to_listing(
-    &mut shop,
-    listing_id,
+    &shop,
+    &mut listing,
     &template,
     &owner_cap,
     &mut ctx,
@@ -3023,7 +3041,7 @@ fun toggle_template_on_listing_sets_and_clears_spotlight() {
 
   let (_, _, _, _, spotlight_after_set) = shop::test_listing_values(
     &shop,
-    listing_id,
+    &listing,
   );
   assert!(opt::is_some(&spotlight_after_set), E_ASSERT_FAILURE);
   assert!(opt::borrow(&spotlight_after_set) == template_id, E_ASSERT_FAILURE);
@@ -3034,15 +3052,15 @@ fun toggle_template_on_listing_sets_and_clears_spotlight() {
   );
 
   shop::clear_template_from_listing(
-    &mut shop,
-    listing_id,
+    &shop,
+    &mut listing,
     &owner_cap,
     &mut ctx,
   );
 
   let (_, _, _, _, spotlight_after_clear) = shop::test_listing_values(
     &shop,
-    listing_id,
+    &listing,
   );
   assert!(opt::is_none(&spotlight_after_clear), E_ASSERT_FAILURE);
   assert!(tx::get_ids_created(&ctx) == ids_before_toggle, E_ASSERT_FAILURE);
@@ -3054,6 +3072,7 @@ fun toggle_template_on_listing_sets_and_clears_spotlight() {
   shop::test_remove_template(&mut shop, template_id);
   shop::test_remove_listing(&mut shop, listing_id);
   shop::test_destroy_discount_template(template);
+  shop::test_destroy_item_listing(listing);
   shop::test_destroy_owner_cap(owner_cap);
   shop::test_destroy_shop(shop);
 }
@@ -3069,7 +3088,7 @@ fun toggle_template_on_listing_rejects_foreign_owner_cap() {
   let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
   let (other_shop, other_cap) = shop::test_setup_shop(OTHER_OWNER, &mut ctx);
 
-  shop::add_item_listing<TestItem>(
+  let (mut listing, listing_id) = shop::test_add_item_listing_local<TestItem>(
     &mut shop,
     b"Chain Lube",
     12_00,
@@ -3078,7 +3097,6 @@ fun toggle_template_on_listing_rejects_foreign_owner_cap() {
     &owner_cap,
     &mut ctx,
   );
-  let listing_id = shop::test_last_created_id(&ctx);
   let (template, template_id) = shop::test_create_discount_template_local(
     &mut shop,
     opt::none(),
@@ -3091,8 +3109,8 @@ fun toggle_template_on_listing_rejects_foreign_owner_cap() {
   );
 
   shop::attach_template_to_listing(
-    &mut shop,
-    listing_id,
+    &shop,
+    &mut listing,
     &template,
     &other_cap,
     &mut ctx,
@@ -3101,6 +3119,7 @@ fun toggle_template_on_listing_rejects_foreign_owner_cap() {
   shop::test_remove_template(&mut shop, template_id);
   shop::test_remove_listing(&mut shop, listing_id);
   shop::test_destroy_discount_template(template);
+  shop::test_destroy_item_listing(listing);
   shop::test_destroy_owner_cap(owner_cap);
   shop::test_destroy_shop(shop);
   shop::test_destroy_owner_cap(other_cap);
@@ -3122,7 +3141,7 @@ fun toggle_template_on_listing_rejects_foreign_listing() {
     &mut ctx,
   );
 
-  shop::add_item_listing<TestItem>(
+  let (mut foreign_listing, foreign_listing_id) = shop::test_add_item_listing_local<TestItem>(
     &mut other_shop,
     b"Spare Tube",
     8_00,
@@ -3131,7 +3150,6 @@ fun toggle_template_on_listing_rejects_foreign_listing() {
     &other_cap,
     &mut ctx,
   );
-  let foreign_listing_id = shop::test_last_created_id(&ctx);
   let (template, template_id) = shop::test_create_discount_template_local(
     &mut shop,
     opt::none(),
@@ -3144,8 +3162,8 @@ fun toggle_template_on_listing_rejects_foreign_listing() {
   );
 
   shop::attach_template_to_listing(
-    &mut shop,
-    foreign_listing_id,
+    &shop,
+    &mut foreign_listing,
     &template,
     &owner_cap,
     &mut ctx,
@@ -3156,6 +3174,7 @@ fun toggle_template_on_listing_rejects_foreign_listing() {
   shop::test_destroy_owner_cap(owner_cap);
   shop::test_destroy_shop(shop);
   shop::test_remove_listing(&mut other_shop, foreign_listing_id);
+  shop::test_destroy_item_listing(foreign_listing);
   shop::test_destroy_owner_cap(other_cap);
   shop::test_destroy_shop(other_shop);
   abort E_ASSERT_FAILURE
@@ -3175,7 +3194,7 @@ fun toggle_template_on_listing_rejects_foreign_template() {
     &mut ctx,
   );
 
-  shop::add_item_listing<TestItem>(
+  let (mut listing, listing_id) = shop::test_add_item_listing_local<TestItem>(
     &mut shop,
     b"Bike Pump",
     35_00,
@@ -3184,8 +3203,10 @@ fun toggle_template_on_listing_rejects_foreign_template() {
     &owner_cap,
     &mut ctx,
   );
-  let listing_id = shop::test_last_created_id(&ctx);
-  let (foreign_template, foreign_template_id) = shop::test_create_discount_template_local(
+  let (
+    foreign_template,
+    foreign_template_id,
+  ) = shop::test_create_discount_template_local(
     &mut other_shop,
     opt::none(),
     0,
@@ -3197,13 +3218,15 @@ fun toggle_template_on_listing_rejects_foreign_template() {
   );
 
   shop::attach_template_to_listing(
-    &mut shop,
-    listing_id,
+    &shop,
+    &mut listing,
     &foreign_template,
     &owner_cap,
     &mut ctx,
   );
 
+  shop::test_remove_listing(&mut shop, listing_id);
+  shop::test_destroy_item_listing(listing);
   shop::test_destroy_owner_cap(owner_cap);
   shop::test_destroy_shop(shop);
   shop::test_destroy_discount_template(foreign_template);
@@ -3223,7 +3246,7 @@ fun toggle_template_on_listing_rejects_unknown_template() {
   let mut ctx = tx::dummy();
   let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
 
-  shop::add_item_listing<TestItem>(
+  let (mut listing, listing_id) = shop::test_add_item_listing_local<TestItem>(
     &mut shop,
     b"Frame Protector",
     22_00,
@@ -3232,7 +3255,6 @@ fun toggle_template_on_listing_rejects_unknown_template() {
     &owner_cap,
     &mut ctx,
   );
-  let listing_id = shop::test_last_created_id(&ctx);
   let (
     stray_template,
     stray_template_id,
@@ -3249,8 +3271,8 @@ fun toggle_template_on_listing_rejects_unknown_template() {
   shop::test_remove_template(&mut shop, stray_template_id);
 
   shop::attach_template_to_listing(
-    &mut shop,
-    listing_id,
+    &shop,
+    &mut listing,
     &stray_template,
     &owner_cap,
     &mut ctx,
@@ -3260,6 +3282,7 @@ fun toggle_template_on_listing_rejects_unknown_template() {
   shop::test_destroy_owner_cap(owner_cap);
   shop::test_destroy_shop(shop);
   shop::test_destroy_discount_template(stray_template);
+  shop::test_destroy_item_listing(listing);
   abort E_ASSERT_FAILURE
 }
 
@@ -3268,7 +3291,7 @@ fun attach_template_to_listing_sets_spotlight_without_emitting_events() {
   let mut ctx = tx::dummy();
   let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
 
-  shop::add_item_listing<TestItem>(
+  let (mut listing, listing_id) = shop::test_add_item_listing_local<TestItem>(
     &mut shop,
     b"Promo Bag",
     95_00,
@@ -3277,16 +3300,19 @@ fun attach_template_to_listing_sets_spotlight_without_emitting_events() {
     &owner_cap,
     &mut ctx,
   );
-  let listing_id = shop::test_last_created_id(&ctx);
-  let (template, template_id) = create_discount_template(&mut shop, &owner_cap, &mut ctx);
+  let (template, template_id) = create_discount_template(
+    &mut shop,
+    &owner_cap,
+    &mut ctx,
+  );
   let ids_before = tx::get_ids_created(&ctx);
   let toggled_before = vec::length(
     &event::events_by_type<shop::DiscountTemplateToggled>(),
   );
 
   shop::attach_template_to_listing(
-    &mut shop,
-    listing_id,
+    &shop,
+    &mut listing,
     &template,
     &owner_cap,
     &mut ctx,
@@ -3294,7 +3320,7 @@ fun attach_template_to_listing_sets_spotlight_without_emitting_events() {
 
   let (_, _, _, shop_id, spotlight) = shop::test_listing_values(
     &shop,
-    listing_id,
+    &listing,
   );
   assert!(shop_id == shop::test_shop_id(&shop), E_ASSERT_FAILURE);
   assert!(opt::is_some(&spotlight), E_ASSERT_FAILURE);
@@ -3312,6 +3338,7 @@ fun attach_template_to_listing_sets_spotlight_without_emitting_events() {
   shop::test_remove_template(&mut shop, template_id);
   shop::test_remove_listing(&mut shop, listing_id);
   shop::test_destroy_discount_template(template);
+  shop::test_destroy_item_listing(listing);
   shop::test_destroy_owner_cap(owner_cap);
   shop::test_destroy_shop(shop);
 }
@@ -3326,7 +3353,7 @@ fun attach_template_to_listing_overwrites_existing_spotlight() {
     &owner_cap,
     &mut ctx,
   );
-  shop::add_item_listing<TestItem>(
+  let (mut listing, listing_id) = shop::test_add_item_listing_local<TestItem>(
     &mut shop,
     b"Bundle",
     140_00,
@@ -3335,7 +3362,6 @@ fun attach_template_to_listing_overwrites_existing_spotlight() {
     &owner_cap,
     &mut ctx,
   );
-  let listing_id = shop::test_last_created_id(&ctx);
   let (second_template_obj, second_template) = create_discount_template(
     &mut shop,
     &owner_cap,
@@ -3345,13 +3371,13 @@ fun attach_template_to_listing_overwrites_existing_spotlight() {
 
   let (_, _, _, _, spotlight_before) = shop::test_listing_values(
     &shop,
-    listing_id,
+    &listing,
   );
   assert!(opt::borrow(&spotlight_before) == first_template, E_ASSERT_FAILURE);
 
   shop::attach_template_to_listing(
-    &mut shop,
-    listing_id,
+    &shop,
+    &mut listing,
     &second_template_obj,
     &owner_cap,
     &mut ctx,
@@ -3359,7 +3385,7 @@ fun attach_template_to_listing_overwrites_existing_spotlight() {
 
   let (_, _, _, _, spotlight_after) = shop::test_listing_values(
     &shop,
-    listing_id,
+    &listing,
   );
   assert!(opt::borrow(&spotlight_after) == second_template, E_ASSERT_FAILURE);
   assert!(tx::get_ids_created(&ctx) == ids_before, E_ASSERT_FAILURE);
@@ -3381,6 +3407,7 @@ fun attach_template_to_listing_overwrites_existing_spotlight() {
   shop::test_remove_listing(&mut shop, listing_id);
   shop::test_destroy_discount_template(second_template_obj);
   shop::test_destroy_discount_template(first_template_obj);
+  shop::test_destroy_item_listing(listing);
   shop::test_destroy_owner_cap(owner_cap);
   shop::test_destroy_shop(shop);
 }
@@ -3396,7 +3423,7 @@ fun attach_template_to_listing_rejects_foreign_owner_cap() {
   let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
   let (other_shop, other_cap) = shop::test_setup_shop(OTHER_OWNER, &mut ctx);
 
-  shop::add_item_listing<TestItem>(
+  let (mut listing, listing_id) = shop::test_add_item_listing_local<TestItem>(
     &mut shop,
     b"Helmet Stickers",
     9_00,
@@ -3405,19 +3432,24 @@ fun attach_template_to_listing_rejects_foreign_owner_cap() {
     &owner_cap,
     &mut ctx,
   );
-  let listing_id = shop::test_last_created_id(&ctx);
-  let (template, template_id) = create_discount_template(&mut shop, &owner_cap, &mut ctx);
+  let (template, template_id) = create_discount_template(
+    &mut shop,
+    &owner_cap,
+    &mut ctx,
+  );
 
   shop::attach_template_to_listing(
-    &mut shop,
-    listing_id,
+    &shop,
+    &mut listing,
     &template,
     &other_cap,
     &mut ctx,
   );
 
   shop::test_remove_template(&mut shop, template_id);
+  shop::test_remove_listing(&mut shop, listing_id);
   shop::test_destroy_discount_template(template);
+  shop::test_destroy_item_listing(listing);
   shop::test_destroy_owner_cap(owner_cap);
   shop::test_destroy_shop(shop);
   shop::test_destroy_owner_cap(other_cap);
@@ -3439,7 +3471,7 @@ fun attach_template_to_listing_rejects_foreign_listing() {
     &mut ctx,
   );
 
-  shop::add_item_listing<TestItem>(
+  let (mut foreign_listing, foreign_listing_id) = shop::test_add_item_listing_local<TestItem>(
     &mut other_shop,
     b"Brake Pads",
     18_00,
@@ -3448,12 +3480,15 @@ fun attach_template_to_listing_rejects_foreign_listing() {
     &other_cap,
     &mut ctx,
   );
-  let foreign_listing = shop::test_last_created_id(&ctx);
-  let (template, template_id) = create_discount_template(&mut shop, &owner_cap, &mut ctx);
+  let (template, template_id) = create_discount_template(
+    &mut shop,
+    &owner_cap,
+    &mut ctx,
+  );
 
   shop::attach_template_to_listing(
-    &mut shop,
-    foreign_listing,
+    &shop,
+    &mut foreign_listing,
     &template,
     &owner_cap,
     &mut ctx,
@@ -3463,7 +3498,8 @@ fun attach_template_to_listing_rejects_foreign_listing() {
   shop::test_destroy_discount_template(template);
   shop::test_destroy_owner_cap(owner_cap);
   shop::test_destroy_shop(shop);
-  shop::test_remove_listing(&mut other_shop, foreign_listing);
+  shop::test_remove_listing(&mut other_shop, foreign_listing_id);
+  shop::test_destroy_item_listing(foreign_listing);
   shop::test_destroy_owner_cap(other_cap);
   shop::test_destroy_shop(other_shop);
   abort E_ASSERT_FAILURE
@@ -3483,7 +3519,7 @@ fun attach_template_to_listing_rejects_foreign_template() {
     &mut ctx,
   );
 
-  shop::add_item_listing<TestItem>(
+  let (mut listing, listing_id) = shop::test_add_item_listing_local<TestItem>(
     &mut shop,
     b"Chain Whip",
     27_00,
@@ -3492,7 +3528,6 @@ fun attach_template_to_listing_rejects_foreign_template() {
     &owner_cap,
     &mut ctx,
   );
-  let listing_id = shop::test_last_created_id(&ctx);
   let (foreign_template, foreign_template_id) = create_discount_template(
     &mut other_shop,
     &other_cap,
@@ -3500,13 +3535,15 @@ fun attach_template_to_listing_rejects_foreign_template() {
   );
 
   shop::attach_template_to_listing(
-    &mut shop,
-    listing_id,
+    &shop,
+    &mut listing,
     &foreign_template,
     &owner_cap,
     &mut ctx,
   );
 
+  shop::test_remove_listing(&mut shop, listing_id);
+  shop::test_destroy_item_listing(listing);
   shop::test_destroy_owner_cap(owner_cap);
   shop::test_destroy_shop(shop);
   shop::test_destroy_discount_template(foreign_template);
@@ -3526,7 +3563,7 @@ fun attach_template_to_listing_rejects_unknown_template() {
   let mut ctx = tx::dummy();
   let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
 
-  shop::add_item_listing<TestItem>(
+  let (mut listing, listing_id) = shop::test_add_item_listing_local<TestItem>(
     &mut shop,
     b"Pedals",
     51_00,
@@ -3535,7 +3572,6 @@ fun attach_template_to_listing_rejects_unknown_template() {
     &owner_cap,
     &mut ctx,
   );
-  let listing_id = shop::test_last_created_id(&ctx);
   let (
     stray_template,
     stray_template_id,
@@ -3552,8 +3588,8 @@ fun attach_template_to_listing_rejects_unknown_template() {
   shop::test_remove_template(&mut shop, stray_template_id);
 
   shop::attach_template_to_listing(
-    &mut shop,
-    listing_id,
+    &shop,
+    &mut listing,
     &stray_template,
     &owner_cap,
     &mut ctx,
@@ -3563,6 +3599,7 @@ fun attach_template_to_listing_rejects_unknown_template() {
   shop::test_destroy_owner_cap(owner_cap);
   shop::test_destroy_shop(shop);
   shop::test_destroy_discount_template(stray_template);
+  shop::test_destroy_item_listing(listing);
   abort E_ASSERT_FAILURE
 }
 
@@ -3571,7 +3608,7 @@ fun clear_template_from_listing_removes_spotlight_without_side_effects() {
   let mut ctx = tx::dummy();
   let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
 
-  shop::add_item_listing<TestItem>(
+  let (mut listing, listing_id) = shop::test_add_item_listing_local<TestItem>(
     &mut shop,
     b"Rain Jacket",
     120_00,
@@ -3580,11 +3617,14 @@ fun clear_template_from_listing_removes_spotlight_without_side_effects() {
     &owner_cap,
     &mut ctx,
   );
-  let listing_id = shop::test_last_created_id(&ctx);
-  let (template, template_id) = create_discount_template(&mut shop, &owner_cap, &mut ctx);
-  shop::attach_template_to_listing(
+  let (template, template_id) = create_discount_template(
     &mut shop,
-    listing_id,
+    &owner_cap,
+    &mut ctx,
+  );
+  shop::attach_template_to_listing(
+    &shop,
+    &mut listing,
     &template,
     &owner_cap,
     &mut ctx,
@@ -3592,7 +3632,7 @@ fun clear_template_from_listing_removes_spotlight_without_side_effects() {
 
   let (_, _, _, _, spotlight_before) = shop::test_listing_values(
     &shop,
-    listing_id,
+    &listing,
   );
   let created_before = tx::get_ids_created(&ctx);
   let toggled_before = vec::length(
@@ -3601,15 +3641,15 @@ fun clear_template_from_listing_removes_spotlight_without_side_effects() {
   assert!(opt::borrow(&spotlight_before) == template_id, E_ASSERT_FAILURE);
 
   shop::clear_template_from_listing(
-    &mut shop,
-    listing_id,
+    &shop,
+    &mut listing,
     &owner_cap,
     &mut ctx,
   );
 
   let (_, _, _, _, spotlight_after) = shop::test_listing_values(
     &shop,
-    listing_id,
+    &listing,
   );
   assert!(opt::is_none(&spotlight_after), E_ASSERT_FAILURE);
   assert!(tx::get_ids_created(&ctx) == created_before, E_ASSERT_FAILURE);
@@ -3625,6 +3665,7 @@ fun clear_template_from_listing_removes_spotlight_without_side_effects() {
   shop::test_remove_template(&mut shop, template_id);
   shop::test_remove_listing(&mut shop, listing_id);
   shop::test_destroy_discount_template(template);
+  shop::test_destroy_item_listing(listing);
   shop::test_destroy_owner_cap(owner_cap);
   shop::test_destroy_shop(shop);
 }
@@ -3634,7 +3675,7 @@ fun clear_template_from_listing_is_noop_when_no_spotlight_set() {
   let mut ctx = tx::dummy();
   let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
 
-  shop::add_item_listing<TestItem>(
+  let (mut listing, listing_id) = shop::test_add_item_listing_local<TestItem>(
     &mut shop,
     b"Bar Tape",
     19_00,
@@ -3643,22 +3684,21 @@ fun clear_template_from_listing_is_noop_when_no_spotlight_set() {
     &owner_cap,
     &mut ctx,
   );
-  let listing_id = shop::test_last_created_id(&ctx);
   let created_before = tx::get_ids_created(&ctx);
   let toggled_before = vec::length(
     &event::events_by_type<shop::DiscountTemplateToggled>(),
   );
 
   shop::clear_template_from_listing(
-    &mut shop,
-    listing_id,
+    &shop,
+    &mut listing,
     &owner_cap,
     &mut ctx,
   );
 
   let (_, _, _, _, spotlight_after) = shop::test_listing_values(
     &shop,
-    listing_id,
+    &listing,
   );
   assert!(opt::is_none(&spotlight_after), E_ASSERT_FAILURE);
   assert!(tx::get_ids_created(&ctx) == created_before, E_ASSERT_FAILURE);
@@ -3668,6 +3708,7 @@ fun clear_template_from_listing_is_noop_when_no_spotlight_set() {
   );
 
   shop::test_remove_listing(&mut shop, listing_id);
+  shop::test_destroy_item_listing(listing);
   shop::test_destroy_owner_cap(owner_cap);
   shop::test_destroy_shop(shop);
 }
@@ -3683,7 +3724,7 @@ fun clear_template_from_listing_rejects_foreign_owner_cap() {
   let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
   let (other_shop, other_cap) = shop::test_setup_shop(OTHER_OWNER, &mut ctx);
 
-  shop::add_item_listing<TestItem>(
+  let (mut listing, listing_id) = shop::test_add_item_listing_local<TestItem>(
     &mut shop,
     b"Valve Stem",
     11_00,
@@ -3692,15 +3733,16 @@ fun clear_template_from_listing_rejects_foreign_owner_cap() {
     &owner_cap,
     &mut ctx,
   );
-  let listing_id = shop::test_last_created_id(&ctx);
 
   shop::clear_template_from_listing(
-    &mut shop,
-    listing_id,
+    &shop,
+    &mut listing,
     &other_cap,
     &mut ctx,
   );
 
+  shop::test_remove_listing(&mut shop, listing_id);
+  shop::test_destroy_item_listing(listing);
   shop::test_destroy_owner_cap(owner_cap);
   shop::test_destroy_shop(shop);
   shop::test_destroy_owner_cap(other_cap);
@@ -3716,13 +3758,13 @@ fun clear_template_from_listing_rejects_foreign_owner_cap() {
 ]
 fun clear_template_from_listing_rejects_foreign_listing() {
   let mut ctx = tx::dummy();
-  let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
+  let (shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
   let (mut other_shop, other_cap) = shop::test_setup_shop(
     OTHER_OWNER,
     &mut ctx,
   );
 
-  shop::add_item_listing<TestItem>(
+  let (mut foreign_listing, foreign_listing_id) = shop::test_add_item_listing_local<TestItem>(
     &mut other_shop,
     b"Cassette",
     85_00,
@@ -3731,11 +3773,10 @@ fun clear_template_from_listing_rejects_foreign_listing() {
     &other_cap,
     &mut ctx,
   );
-  let foreign_listing_id = shop::test_last_created_id(&ctx);
 
   shop::clear_template_from_listing(
-    &mut shop,
-    foreign_listing_id,
+    &shop,
+    &mut foreign_listing,
     &owner_cap,
     &mut ctx,
   );
@@ -3743,6 +3784,7 @@ fun clear_template_from_listing_rejects_foreign_listing() {
   shop::test_destroy_owner_cap(owner_cap);
   shop::test_destroy_shop(shop);
   shop::test_remove_listing(&mut other_shop, foreign_listing_id);
+  shop::test_destroy_item_listing(foreign_listing);
   shop::test_destroy_owner_cap(other_cap);
   shop::test_destroy_shop(other_shop);
   abort E_ASSERT_FAILURE
@@ -3805,8 +3847,10 @@ fun claim_discount_ticket_mints_transfers_and_records_claim() {
   let shared_shop = scenario::take_shared_by_id(&scn, shop_id);
   let mut clock_obj = clock::create_for_testing(scenario::ctx(&mut scn));
   clock::set_for_testing(&mut clock_obj, 10_000);
-  let mut template_obj =
-    scenario::take_shared_by_id<shop::DiscountTemplate>(&scn, template_id);
+  let mut template_obj = scenario::take_shared_by_id<shop::DiscountTemplate>(
+    &scn,
+    template_id,
+  );
   let (
     _,
     _,
@@ -4273,12 +4317,18 @@ fun claim_and_buy_rejects_second_claim_after_redeem() {
   clock::set_for_testing(&mut clock_obj, 10);
 
   let payment = coin::mint_for_testing<TestCoin>(1, scenario::ctx(&mut scn));
-  let mut template_obj =
-    scenario::take_shared_by_id<shop::DiscountTemplate>(&scn, template_id);
+  let mut template_obj = scenario::take_shared_by_id<shop::DiscountTemplate>(
+    &scn,
+    template_id,
+  );
+  let mut listing_obj = scenario::take_shared_by_id<shop::ItemListing>(
+    &scn,
+    listing_id,
+  );
 
   shop::test_claim_and_buy_with_ids<TestItem, TestCoin>(
     &mut shared_shop,
-    listing_id,
+    &mut listing_obj,
     accepted_currency_id,
     &mut template_obj,
     &price_info_obj,
@@ -4306,6 +4356,10 @@ fun claim_and_buy_rejects_second_claim_after_redeem() {
     scenario::ctx(&mut scn),
   );
 
+  scenario::return_shared(listing_obj);
+  scenario::return_shared(shared_shop);
+  scenario::return_shared(price_info_obj);
+  scenario::return_shared(clock_obj);
   scenario::return_shared(template_obj);
   abort E_ASSERT_FAILURE
 }

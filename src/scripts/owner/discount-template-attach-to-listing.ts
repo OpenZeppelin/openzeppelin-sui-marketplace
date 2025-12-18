@@ -44,7 +44,15 @@ runSuiScript(
 
     const signer = await loadKeypair(network.account)
     const shopSharedObject = await getSuiSharedObject(
-      { objectId: inputs.shopId, mutable: true },
+      { objectId: inputs.shopId, mutable: false },
+      suiClient
+    )
+    const itemListingSharedObject = await getSuiSharedObject(
+      { objectId: resolvedIds.itemListingId, mutable: true },
+      suiClient
+    )
+    const discountTemplateSharedObject = await getSuiSharedObject(
+      { objectId: resolvedIds.discountTemplateId, mutable: false },
       suiClient
     )
 
@@ -52,8 +60,8 @@ runSuiScript(
       buildAttachDiscountTemplateTransaction({
         packageId: inputs.packageId,
         shop: shopSharedObject,
-        itemListingId: resolvedIds.itemListingId,
-        discountTemplateId: resolvedIds.discountTemplateId,
+        itemListing: itemListingSharedObject,
+        discountTemplate: discountTemplateSharedObject,
         ownerCapId: inputs.ownerCapId
       })
 
@@ -225,25 +233,31 @@ const validateTemplateAndListing = async ({
 const buildAttachDiscountTemplateTransaction = ({
   packageId,
   shop,
-  itemListingId,
-  discountTemplateId,
+  itemListing,
+  discountTemplate,
   ownerCapId
 }: {
   packageId: string
   shop: Awaited<ReturnType<typeof getSuiSharedObject>>
-  itemListingId: string
-  discountTemplateId: string
+  itemListing: Awaited<ReturnType<typeof getSuiSharedObject>>
+  discountTemplate: Awaited<ReturnType<typeof getSuiSharedObject>>
   ownerCapId: string
 }) => {
   const transaction = newTransaction()
   const shopArgument = transaction.sharedObjectRef(shop.sharedRef)
+  const listingArgument = transaction.sharedObjectRef(
+    itemListing.sharedRef
+  )
+  const templateArgument = transaction.sharedObjectRef(
+    discountTemplate.sharedRef
+  )
 
   transaction.moveCall({
     target: `${packageId}::shop::attach_template_to_listing`,
     arguments: [
       shopArgument,
-      transaction.pure.id(itemListingId),
-      transaction.pure.id(discountTemplateId),
+      listingArgument,
+      templateArgument,
       transaction.object(ownerCapId)
     ]
   })

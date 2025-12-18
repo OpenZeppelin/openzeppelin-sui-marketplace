@@ -32,15 +32,19 @@ runSuiScript(
     const suiClient = new SuiClient({ url: network.url })
     const signer = await loadKeypair(network.account)
     const shopSharedObject = await getSuiSharedObject(
-      { objectId: inputs.shopId, mutable: true },
+      { objectId: inputs.shopId, mutable: false },
+      suiClient
+    )
+    const itemListingSharedObject = await getSuiSharedObject(
+      { objectId: inputs.itemListingId, mutable: true },
       suiClient
     )
 
     const updateStockTransaction = buildUpdateStockTransaction({
       packageId: inputs.packageId,
       shop: shopSharedObject,
+      itemListing: itemListingSharedObject,
       ownerCapId: inputs.ownerCapId,
-      itemListingId: inputs.itemListingId,
       newStock: inputs.newStock
     })
 
@@ -120,24 +124,27 @@ const normalizeInputs = async (
 const buildUpdateStockTransaction = ({
   packageId,
   shop,
+  itemListing,
   ownerCapId,
-  itemListingId,
   newStock
 }: {
   packageId: string
   shop: Awaited<ReturnType<typeof getSuiSharedObject>>
+  itemListing: Awaited<ReturnType<typeof getSuiSharedObject>>
   ownerCapId: string
-  itemListingId: string
   newStock: bigint
 }) => {
   const transaction = newTransaction()
   const shopArgument = transaction.sharedObjectRef(shop.sharedRef)
+  const listingArgument = transaction.sharedObjectRef(
+    itemListing.sharedRef
+  )
 
   transaction.moveCall({
     target: `${packageId}::shop::update_item_listing_stock`,
     arguments: [
       shopArgument,
-      transaction.pure.id(itemListingId),
+      listingArgument,
       transaction.pure.u64(newStock),
       transaction.object(ownerCapId)
     ]
