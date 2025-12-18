@@ -4,19 +4,19 @@ import yargs from "yargs"
 
 import {
   deriveTemplateStatus,
-  DISCOUNT_TEMPLATE_TYPE_FRAGMENT,
   formatOnChainDiscountRule,
   normalizeOptionalU64FromValue,
   parseDiscountRuleFromField
 } from "../../models/discount.ts"
 import { getLatestObjectFromArtifact } from "../../tooling/artifacts.ts"
-import { fetchAllDynamicFieldObjects } from "../../tooling/dynamic-fields.ts"
+import { fetchAllDynamicFields } from "../../tooling/dynamic-fields.ts"
 import {
   logKeyValueBlue,
   logKeyValueGreen,
   logKeyValueYellow
 } from "../../tooling/log.ts"
 import {
+  getSuiObject,
   normalizeIdOrThrow,
   normalizeOptionalIdFromValue,
   unwrapMoveObjectFields
@@ -30,7 +30,7 @@ type ListDiscountTemplatesArguments = {
 
 type DiscountTemplateSummary = {
   discountTemplateId: string
-  dynamicFieldObjectId: string
+  markerObjectId: string
   shopAddress: string
   appliesToListingId?: string
   ruleDescription: string
@@ -42,6 +42,8 @@ type DiscountTemplateSummary = {
   activeFlag: boolean
   status: string
 }
+
+const DISCOUNT_TEMPLATE_MARKER_TYPE_FRAGMENT = "::shop::DiscountTemplateMarker"
 
 runSuiScript(
   async ({ network, currentNetwork }, cliArguments) => {
@@ -96,28 +98,50 @@ const fetchDiscountTemplates = async (
   shopId: string,
   suiClient: SuiClient
 ): Promise<DiscountTemplateSummary[]> => {
-  const discountTemplateObjects = await fetchAllDynamicFieldObjects(
-    {
-      parentObjectId: shopId,
-      objectTypeFilter: DISCOUNT_TEMPLATE_TYPE_FRAGMENT
-    },
+  const dynamicFields = await fetchAllDynamicFields(
+    { parentObjectId: shopId },
     suiClient
   )
+  const discountTemplateMarkers = dynamicFields.filter((dynamicField) =>
+    dynamicField.objectType?.includes(DISCOUNT_TEMPLATE_MARKER_TYPE_FRAGMENT)
+  )
 
-  return discountTemplateObjects.map((response) =>
-    buildDiscountTemplateSummary(response.object, response.dynamicFieldId)
+  if (discountTemplateMarkers.length === 0) return []
+
+  const discountTemplateIds = discountTemplateMarkers.map((marker) =>
+    normalizeIdOrThrow(
+      normalizeOptionalIdFromValue((marker.name as { value: string })?.value),
+      `Missing DiscountTemplate id for dynamic field ${marker.objectId}.`
+    )
+  )
+
+  const discountTemplateObjects = await Promise.all(
+    discountTemplateIds.map((discountTemplateId) =>
+      getSuiObject(
+        {
+          objectId: discountTemplateId,
+          options: { showContent: true, showType: true }
+        },
+        suiClient
+      )
+    )
+  )
+
+  return discountTemplateObjects.map((response, index) =>
+    buildDiscountTemplateSummary(
+      response.object,
+      discountTemplateIds[index],
+      discountTemplateMarkers[index].objectId
+    )
   )
 }
 
 const buildDiscountTemplateSummary = (
-  dynamicFieldObject: SuiObjectData,
-  dynamicFieldObjectId: string
+  discountTemplateObject: SuiObjectData,
+  discountTemplateId: string,
+  markerObjectId: string
 ): DiscountTemplateSummary => {
-  const discountTemplateFields = unwrapMoveObjectFields(dynamicFieldObject)
-
-  const discountTemplateId = normalizeOptionalIdFromValue(
-    discountTemplateFields.id
-  )
+  const discountTemplateFields = unwrapMoveObjectFields(discountTemplateObject)
   const shopAddress = normalizeOptionalIdFromValue(
     discountTemplateFields.shop_address
   )
@@ -144,11 +168,8 @@ const buildDiscountTemplateSummary = (
   const activeFlag = Boolean(discountTemplateFields.active)
 
   return {
-    discountTemplateId: normalizeIdOrThrow(
-      discountTemplateId,
-      `Missing DiscountTemplate id for dynamic field ${dynamicFieldObjectId}.`
-    ),
-    dynamicFieldObjectId,
+    discountTemplateId,
+    markerObjectId,
     shopAddress: normalizeIdOrThrow(
       shopAddress,
       `Missing shop_address for DiscountTemplate ${discountTemplateId}.`
@@ -211,6 +232,6 @@ const logDiscountTemplate = (
   else logKeyValueGreen("Max-redemptions")("Unlimited")
   logKeyValueGreen("Claims")(discountTemplate.claimsIssued ?? "Unknown")
   logKeyValueGreen("Redeemed")(discountTemplate.redemptions ?? "Unknown")
-  logKeyValueGreen("Field-id")(discountTemplate.dynamicFieldObjectId)
+  logKeyValueGreen("Marker-id")(discountTemplate.markerObjectId)
   console.log("")
 }
