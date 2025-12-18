@@ -121,17 +121,11 @@ const buildRemoveItemTransaction = ({
 }) => {
   const transaction = newTransaction()
   const shopArgument = transaction.sharedObjectRef(shop.sharedRef)
-  const listingArgument = transaction.sharedObjectRef(
-    itemListing.sharedRef
-  )
+  const listingArgument = transaction.sharedObjectRef(itemListing.sharedRef)
 
   transaction.moveCall({
     target: `${packageId}::shop::remove_item_listing`,
-    arguments: [
-      shopArgument,
-      listingArgument,
-      transaction.object(ownerCapId)
-    ]
+    arguments: [shopArgument, listingArgument, transaction.object(ownerCapId)]
   })
 
   return transaction

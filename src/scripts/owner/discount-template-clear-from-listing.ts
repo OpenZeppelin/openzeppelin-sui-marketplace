@@ -3,15 +3,15 @@ import { normalizeSuiObjectId } from "@mysten/sui/utils"
 import yargs from "yargs"
 
 import { resolveLatestShopIdentifiers } from "../../models/shop.ts"
+import { fetchObjectWithDynamicFieldFallback } from "../../tooling/dynamic-fields.ts"
 import { loadKeypair } from "../../tooling/keypair.ts"
 import { logKeyValueGreen } from "../../tooling/log.ts"
 import {
   normalizeOptionalIdFromValue,
   unwrapMoveObjectFields
 } from "../../tooling/object.ts"
-import { fetchObjectWithDynamicFieldFallback } from "../../tooling/dynamic-fields.ts"
-import { getSuiSharedObject } from "../../tooling/shared-object.ts"
 import { runSuiScript } from "../../tooling/process.ts"
+import { getSuiSharedObject } from "../../tooling/shared-object.ts"
 import { newTransaction, signAndExecute } from "../../tooling/transactions.ts"
 
 type ClearDiscountTemplateArguments = {
@@ -166,17 +166,11 @@ const buildClearDiscountTemplateTransaction = ({
 }) => {
   const transaction = newTransaction()
   const shopArgument = transaction.sharedObjectRef(shop.sharedRef)
-  const listingArgument = transaction.sharedObjectRef(
-    itemListing.sharedRef
-  )
+  const listingArgument = transaction.sharedObjectRef(itemListing.sharedRef)
 
   transaction.moveCall({
     target: `${packageId}::shop::clear_template_from_listing`,
-    arguments: [
-      shopArgument,
-      listingArgument,
-      transaction.object(ownerCapId)
-    ]
+    arguments: [shopArgument, listingArgument, transaction.object(ownerCapId)]
   })
 
   return transaction

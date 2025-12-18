@@ -245,9 +245,7 @@ const buildAttachDiscountTemplateTransaction = ({
 }) => {
   const transaction = newTransaction()
   const shopArgument = transaction.sharedObjectRef(shop.sharedRef)
-  const listingArgument = transaction.sharedObjectRef(
-    itemListing.sharedRef
-  )
+  const listingArgument = transaction.sharedObjectRef(itemListing.sharedRef)
   const templateArgument = transaction.sharedObjectRef(
     discountTemplate.sharedRef
   )

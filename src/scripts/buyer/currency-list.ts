@@ -136,9 +136,7 @@ const buildAcceptedCurrencySummary = (
   acceptedCurrencyId: string,
   markerObjectId: string
 ): AcceptedCurrencySummary => {
-  const acceptedCurrencyFields = unwrapMoveObjectFields(
-    acceptedCurrencyObject
-  )
+  const acceptedCurrencyFields = unwrapMoveObjectFields(acceptedCurrencyObject)
   const coinType =
     formatTypeNameFromFieldValue(acceptedCurrencyFields.coin_type) || "Unknown"
 

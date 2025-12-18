@@ -66,13 +66,13 @@ export const findAcceptedCurrencyByCoinType = async ({
         acceptedCurrencyId
   )
 
-    return {
-      coinType: normalizedCoinType,
-      acceptedCurrencyId,
-      typeIndexFieldId: typeIndexField.objectId,
-      acceptedCurrencyFieldId: acceptedCurrencyMarker?.objectId
-    }
+  return {
+    coinType: normalizedCoinType,
+    acceptedCurrencyId,
+    typeIndexFieldId: typeIndexField.objectId,
+    acceptedCurrencyFieldId: acceptedCurrencyMarker?.objectId
   }
+}
 
 export const requireAcceptedCurrencyByCoinType = async (args: {
   coinType: string

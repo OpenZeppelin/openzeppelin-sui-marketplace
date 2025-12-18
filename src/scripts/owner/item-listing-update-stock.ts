@@ -136,9 +136,7 @@ const buildUpdateStockTransaction = ({
 }) => {
   const transaction = newTransaction()
   const shopArgument = transaction.sharedObjectRef(shop.sharedRef)
-  const listingArgument = transaction.sharedObjectRef(
-    itemListing.sharedRef
-  )
+  const listingArgument = transaction.sharedObjectRef(itemListing.sharedRef)
 
   transaction.moveCall({
     target: `${packageId}::shop::update_item_listing_stock`,

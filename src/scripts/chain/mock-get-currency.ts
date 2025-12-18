@@ -19,8 +19,8 @@ import {
   logKeyValueRed,
   logWarning
 } from "../../tooling/log.ts"
-import { getSuiSharedObject } from "../../tooling/shared-object.ts"
 import { runSuiScript } from "../../tooling/process.ts"
+import { getSuiSharedObject } from "../../tooling/shared-object.ts"
 
 type CliArgs = {
   registryId: string
@@ -115,6 +115,7 @@ runSuiScript(async ({ network, currentNetwork }) => {
           error instanceof Error ? error.message : String(error)
         }`
       )
+      console.log("")
     }
   }
 })

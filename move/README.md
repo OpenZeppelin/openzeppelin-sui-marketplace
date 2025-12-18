@@ -49,6 +49,22 @@ Discount Lifecycle Notes
 - Claim limits are enforced via per-claimer `DiscountClaim` children; `prune_discount_claims` only works after a template is irrevocably finished.
 - Tickets are owned resources bound to the claimer and are burned on redemption to guarantee single-use semantics.
 
+Shared Object + Marker Pattern (deep dive)
+------------------------------------------
+- What it is: the shop is a shared root. Each listing, accepted currency, and discount template is its own shared object. Under the shop, we store lightweight dynamic-field “markers” keyed by child IDs (plus a `coin_type -> accepted_currency_id` index for currencies). Claims stay as dynamic-field children under each template.
+- How it works:
+  - Discovery: UIs enumerate the shop’s dynamic fields to get child IDs, then fetch those shared objects directly by ID. The marker proves membership without storing full child data under the shop.
+  - Auth: entry functions assert both marker presence and that the child’s embedded `shop_address` matches. Forged or foreign objects are rejected even if someone passes an arbitrary shared object.
+  - Writes: admin ops mutate only the marker (add/remove) and the specific child object. Buyer flows read the shop (for markers) but mutate only the listing/template/currency involved. The coin-type index lets lookups skip scans.
+  - Delisting: removing a marker unregisters the child; the shared child object remains addressable for history and analytics.
+  - Claims: per-claimer `DiscountClaim` children live under the template, keeping “one claim per address” localized to the template without locking the shop.
+- Why it helps:
+  - Low contention: PTBs lock only the touched listing/template/currency (and marker when mutated), not a monolithic shop map. Different listings/currencies can update in parallel.
+  - Stable addresses: listings/templates/currencies are first-class shared objects with stable IDs, so indexers/UIs can link to them even after delisting.
+  - Lightweight discovery: dynamic-field enumeration is cheap; no need to borrow globals or scan large maps. The coin-type index avoids linear scans for currencies.
+  - Cleaner auth and safety: marker + address checks enforce membership on-chain; no trusted off-chain registry is needed.
+  - Composable cleanup: delisting/removal stops future use via the marker while preserving the object for audit/history.
+
 Sui Move Principles, Applied
 ----------------------------
 - Resource-first design: coins, tickets, receipts, and capabilities are owned objects moved in/out of entry functions instead of balances in contract storage.
