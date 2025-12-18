@@ -11,7 +11,7 @@ import {
   parseTypeNameFromString
 } from "../utils/type-name.ts"
 
-export const ACCEPTED_CURRENCY_TYPE_FRAGMENT = "::shop::AcceptedCurrency"
+export const ACCEPTED_CURRENCY_TYPE_FRAGMENT = "::shop::AcceptedCurrencyMarker"
 export const TYPE_NAME_STRUCT = "0x1::type_name::TypeName"
 
 export type AcceptedCurrencyMatch = {
@@ -59,20 +59,20 @@ export const findAcceptedCurrencyByCoinType = async ({
 
   if (!acceptedCurrencyId) return undefined
 
-  const acceptedCurrencyField = dynamicFields.find(
+  const acceptedCurrencyMarker = dynamicFields.find(
     (dynamicField) =>
       dynamicField.objectType?.includes(ACCEPTED_CURRENCY_TYPE_FRAGMENT) &&
       normalizeOptionalIdFromValue(dynamicField.name.value) ===
         acceptedCurrencyId
   )
 
-  return {
-    coinType: normalizedCoinType,
-    acceptedCurrencyId,
-    typeIndexFieldId: typeIndexField.objectId,
-    acceptedCurrencyFieldId: acceptedCurrencyField?.objectId
+    return {
+      coinType: normalizedCoinType,
+      acceptedCurrencyId,
+      typeIndexFieldId: typeIndexField.objectId,
+      acceptedCurrencyFieldId: acceptedCurrencyMarker?.objectId
+    }
   }
-}
 
 export const requireAcceptedCurrencyByCoinType = async (args: {
   coinType: string

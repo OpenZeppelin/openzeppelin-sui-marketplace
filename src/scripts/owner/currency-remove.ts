@@ -8,8 +8,7 @@ import {
 } from "../../models/currency.ts"
 import { resolveLatestShopIdentifiers } from "../../models/shop.ts"
 import { loadKeypair } from "../../tooling/keypair.ts"
-import { logKeyValueGreen, logKeyValueYellow } from "../../tooling/log.ts"
-import type { ObjectArtifact } from "../../tooling/object.ts"
+import { logKeyValueGreen } from "../../tooling/log.ts"
 import { normalizeOptionalId } from "../../tooling/object.ts"
 import { getSuiSharedObject } from "../../tooling/shared-object.ts"
 import { runSuiScript } from "../../tooling/process.ts"
@@ -38,19 +37,20 @@ runSuiScript(
 
     const acceptedCurrency = await resolveAcceptedCurrency(inputs, suiClient)
     const shop = await fetchMutableShop(inputs.shopId, suiClient)
+    const acceptedCurrencyShared = await getSuiSharedObject(
+      { objectId: acceptedCurrency.acceptedCurrencyId, mutable: false },
+      suiClient
+    )
     const signer = await loadKeypair(network.account)
 
     const removeCurrencyTransaction = buildRemoveCurrencyTransaction({
       packageId: inputs.packageId,
       shop,
       ownerCapId: inputs.ownerCapId,
-      acceptedCurrencyId: acceptedCurrency.acceptedCurrencyId
+      acceptedCurrency: acceptedCurrencyShared
     })
 
-    const {
-      objectArtifacts: { deleted },
-      transactionResult
-    } = await executeRemovalTransaction({
+    const { transactionResult } = await executeRemovalTransaction({
       transaction: removeCurrencyTransaction,
       signer,
       suiClient,
@@ -62,7 +62,6 @@ runSuiScript(
       acceptedCurrencyId: acceptedCurrency.acceptedCurrencyId,
       typeIndexFieldId: acceptedCurrency.typeIndexFieldId,
       acceptedCurrencyFieldId: acceptedCurrency.acceptedCurrencyFieldId,
-      deletionArtifacts: deleted,
       digest: transactionResult.digest
     })
   },
@@ -156,21 +155,24 @@ const buildRemoveCurrencyTransaction = ({
   packageId,
   shop,
   ownerCapId,
-  acceptedCurrencyId
+  acceptedCurrency
 }: {
   packageId: string
   shop: Awaited<ReturnType<typeof getSuiSharedObject>>
   ownerCapId: string
-  acceptedCurrencyId: string
+  acceptedCurrency: Awaited<ReturnType<typeof getSuiSharedObject>>
 }) => {
   const transaction = newTransaction()
   const shopArgument = transaction.sharedObjectRef(shop.sharedRef)
+  const acceptedCurrencyArgument = transaction.sharedObjectRef(
+    acceptedCurrency.sharedRef
+  )
 
   transaction.moveCall({
     target: `${packageId}::shop::remove_accepted_currency`,
     arguments: [
       shopArgument,
-      transaction.pure.id(acceptedCurrencyId),
+      acceptedCurrencyArgument,
       transaction.object(ownerCapId)
     ]
   })
@@ -203,14 +205,12 @@ const logRemovalOutcome = ({
   acceptedCurrencyId,
   typeIndexFieldId,
   acceptedCurrencyFieldId,
-  deletionArtifacts,
   digest
 }: {
   coinType?: string
   acceptedCurrencyId: string
   typeIndexFieldId?: string
   acceptedCurrencyFieldId?: string
-  deletionArtifacts?: ObjectArtifact[]
   digest?: string
 }) => {
   logKeyValueGreen("accepted currency")(acceptedCurrencyId)
@@ -218,18 +218,5 @@ const logRemovalOutcome = ({
   if (typeIndexFieldId) logKeyValueGreen("type index field")(typeIndexFieldId)
   if (acceptedCurrencyFieldId)
     logKeyValueGreen("currency field")(acceptedCurrencyFieldId)
-
-  const deletedAcceptedCurrency = deletionArtifacts?.find(
-    (artifact) => artifact.objectId === acceptedCurrencyId
-  )
-
-  if (deletedAcceptedCurrency?.deletedAt)
-    logKeyValueGreen("deleted at")(deletedAcceptedCurrency.deletedAt)
-
   if (digest) logKeyValueGreen("digest")(digest)
-
-  if (!deletedAcceptedCurrency && deletionArtifacts?.length === 0)
-    logKeyValueYellow("warning")(
-      "Removal succeeded but no deletion artifact was recorded; ensure artifacts are up to date."
-    )
 }

@@ -204,6 +204,12 @@ public struct AcceptedCurrency has key, store {
   max_price_status_lag_secs_cap: u64,
 }
 
+/// Marker stored under the shop to record accepted currency membership.
+public struct AcceptedCurrencyMarker has copy, drop, store {
+  accepted_currency_id: obj::ID,
+  coin_type: TypeInfo,
+}
+
 /// Discount rules mirror the spec: fixed (USD cents) or percentage basis points off.
 public enum DiscountRule has copy, drop, store {
   Fixed { amount_cents: u64 },
@@ -375,10 +381,10 @@ public struct MintingCompleted has copy, drop {
 /// - Capability > `msg.sender`: ownership lives in a first-class `ShopOwnerCap`. Entry functions
 ///   require the cap, so authority follows the object holder rather than whichever address signs
 ///   the PTB. Solidity relies on `msg.sender` and modifiers; here, capabilities are explicit inputs.
-/// - Shared object composition: the shop is a shared object with dynamic-field children (listings,
-///   currencies, templates) instead of a monolithic storage map. State is sharded into objects that
-///   can be fetched directly (e.g., checkout only needs the listing object) instead of iterating a
-///   giant mapping like in Solidity.
+/// - Shared object composition: the shop is shared, and listings/templates/currencies are shared
+///   siblings indexed by lightweight markers under the shop (plus a coin-type index for currencies).
+///   State is sharded into per-object locks so PTBs only touch the listing/template/currency they
+///   mutate instead of contending on a monolithic storage map as in Solidity.
 /// - Publisher gate: consuming `pkg::Publisher` enforces that only the package publisher can create
 ///   curated shops. In EVM you would gate on `onlyOwner` or a factory contract; on Sui the publisher
 ///   object is the canonical, on-chain proof of authorship.
@@ -587,9 +593,9 @@ public entry fun remove_item_listing(
 ///   ERC-20 land.
 /// - Operators prove authority with `ShopOwnerCap`; buyers never touch this path. The cap pattern is
 ///   the Sui-native replacement for `onlyOwner`.
-/// - Each accepted currency is its own dynamic-field child plus a reverse lookup keyed by coin
-///   `TypeInfo`, so checkout can grab the exact currency object instead of scanning a global map as
-///   you would in Solidity.
+/// - Each accepted currency is a shared object registered via a marker plus a `coin_type -> ID`
+///   dynamic-field index, so checkout can grab the exact currency object without touching other
+///   currencies. Only the marker and the currency itself lock during PTBs, keeping contention low.
 /// - Callers must supply the `PriceInfoObject` they fetched off-chain; the module re-validates feed
 ///   bytes and Pyth object ID on-chain so no RPC trust is required. This mirrors best practice of
 ///   passing calldata plus proofs instead of depending on global storage.
@@ -652,17 +658,10 @@ public entry fun add_accepted_currency<T: store>(
   );
   let feed_for_event: vector<u8> = clone_bytes(&accepted_currency.feed_id);
 
-  dynamic_field::add(
-    &mut shop.id,
-    obj::id_from_address(accepted_currency_address),
-    accepted_currency,
-  );
-
-  dynamic_field::add(
-    &mut shop.id,
-    coin_type,
-    obj::id_from_address(accepted_currency_address),
-  );
+  let accepted_currency_id = obj::id_from_address(accepted_currency_address);
+  add_currency_marker(shop, accepted_currency_id, coin_type);
+  dynamic_field::add(&mut shop.id, coin_type, accepted_currency_id);
+  txf::share_object(accepted_currency);
 
   event::emit(AcceptedCoinAdded {
     shop_address,
@@ -676,26 +675,40 @@ public entry fun add_accepted_currency<T: store>(
 /// Deregister an accepted coin type and clean up its lookup index.
 public entry fun remove_accepted_currency(
   shop: &mut Shop,
-  accepted_currency_id: obj::ID,
+  accepted_currency: &AcceptedCurrency,
   owner_cap: &ShopOwnerCap,
   _ctx: &mut tx::TxContext,
 ) {
   assert_owner_cap(shop, owner_cap);
-  assert_accepted_currency_exists(shop, accepted_currency_id);
-
-  let accepted_currency: AcceptedCurrency = dynamic_field::remove(
-    &mut shop.id,
-    accepted_currency_id,
+  assert_currency_matches_shop(shop, accepted_currency);
+  let accepted_currency_id = accepted_currency_id(accepted_currency);
+  let mapped_id_opt = accepted_currency_id_for_type(
+    shop,
+    accepted_currency.coin_type,
   );
-
+  if (opt::is_some(&mapped_id_opt)) {
+    assert!(
+      *opt::borrow(&mapped_id_opt) == accepted_currency_id,
+      EAcceptedCurrencyMissing,
+    );
+  };
   remove_currency_field(shop, accepted_currency.coin_type);
+  if (
+    dynamic_field::exists_with_type<obj::ID, AcceptedCurrencyMarker>(
+      &shop.id,
+      accepted_currency_id,
+    )
+  ) {
+    let _marker: AcceptedCurrencyMarker = dynamic_field::remove(
+      &mut shop.id,
+      accepted_currency_id,
+    );
+  };
 
   event::emit(AcceptedCoinRemoved {
     shop_address: accepted_currency.shop_address,
     coin_type: accepted_currency.coin_type,
   });
-
-  destroy_accepted_currency(accepted_currency);
 }
 
 /// * Discount * ///
@@ -745,11 +758,12 @@ fun create_discount_template_core(
 
 /// Create a discount template anchored under the shop.
 ///
-/// Templates are configuration objects stored as dynamic-field children, so they automatically
-/// inherit the shop’s access control and remain addressable by `obj::ID` for UIs. Callers send
-/// primitive args (`rule_kind` of `0 = fixed` or `1 = percent`), but we immediately convert them
-/// into the strongly typed `DiscountRule` before persisting. For `Fixed` rules the `rule_value` is
-/// denominated in USD cents to match listing prices.
+/// Templates are shared configuration objects indexed by a marker under the shop, so they inherit
+/// the shop’s access control and remain addressable by `obj::ID` for UIs. Claims remain dynamic
+/// fields under each template to enforce one-claim-per-address. Callers send primitive args
+/// (`rule_kind` of `0 = fixed` or `1 = percent`), but we immediately convert them into the strongly
+/// typed `DiscountRule` before persisting. For `Fixed` rules the `rule_value` is denominated in USD
+/// cents to match listing prices.
 /// Sui mindset:
 /// - Discounts live as objects attached to the shared shop instead of rows in contract storage,
 ///   making them easy to compose or read without privileged endpoints. Each template can be fetched
@@ -1172,22 +1186,6 @@ public entry fun claim_and_buy_item_with_discount<TItem: store, TCoin>(
 // Data //
 // ==== //
 
-fun destroy_accepted_currency(accepted_currency: AcceptedCurrency) {
-  let AcceptedCurrency {
-    id,
-    shop_address: _,
-    coin_type: _,
-    feed_id: _,
-    pyth_object_id: _,
-    decimals: _,
-    symbol: _,
-    max_price_age_secs_cap: _,
-    max_confidence_ratio_bps_cap: _,
-    max_price_status_lag_secs_cap: _,
-  } = accepted_currency;
-  id.delete();
-}
-
 fun new_accepted_currency(
   shop_address: address,
   coin_type: TypeInfo,
@@ -1372,6 +1370,10 @@ fun listing_id(listing: &ItemListing): obj::ID {
   obj::id_from_address(obj::uid_to_address(&listing.id))
 }
 
+fun accepted_currency_id(accepted_currency: &AcceptedCurrency): obj::ID {
+  obj::id_from_address(obj::uid_to_address(&accepted_currency.id))
+}
+
 fun template_id(template: &DiscountTemplate): obj::ID {
   obj::id_from_address(template_address(template))
 }
@@ -1401,6 +1403,21 @@ fun add_template_marker(
   );
 }
 
+fun add_currency_marker(
+  shop: &mut Shop,
+  accepted_currency_id: obj::ID,
+  coin_type: TypeInfo,
+) {
+  dynamic_field::add(
+    &mut shop.id,
+    accepted_currency_id,
+    AcceptedCurrencyMarker {
+      accepted_currency_id,
+      coin_type,
+    },
+  );
+}
+
 fun assert_template_registered(shop: &Shop, template_id: obj::ID) {
   assert!(
     dynamic_field::exists_with_type<obj::ID, DiscountTemplateMarker>(
@@ -1408,6 +1425,16 @@ fun assert_template_registered(shop: &Shop, template_id: obj::ID) {
       template_id,
     ),
     ETemplateShopMismatch,
+  );
+}
+
+fun assert_currency_registered(shop: &Shop, accepted_currency_id: obj::ID) {
+  assert!(
+    dynamic_field::exists_with_type<obj::ID, AcceptedCurrencyMarker>(
+      &shop.id,
+      accepted_currency_id,
+    ),
+    EAcceptedCurrencyMissing,
   );
 }
 
@@ -1424,6 +1451,17 @@ fun assert_listing_registered(shop: &Shop, listing_id: obj::ID) {
 fun assert_template_matches_shop(shop: &Shop, template: &DiscountTemplate) {
   assert_template_registered(shop, template_id(template));
   assert!(template.shop_address == shop_address(shop), ETemplateShopMismatch);
+}
+
+fun assert_currency_matches_shop(
+  shop: &Shop,
+  accepted_currency: &AcceptedCurrency,
+) {
+  assert_currency_registered(shop, accepted_currency_id(accepted_currency));
+  assert!(
+    accepted_currency.shop_address == shop_address(shop),
+    EAcceptedCurrencyMissing,
+  );
 }
 
 fun assert_listing_matches_shop(shop: &Shop, listing: &ItemListing) {
@@ -1483,24 +1521,13 @@ fun resolve_effective_guardrails(
   (effective_max_age, effective_confidence_ratio)
 }
 
-fun accepted_currency_id(accepted_currency: &AcceptedCurrency): obj::ID {
-  obj::id_from_address(obj::uid_to_address(&accepted_currency.id))
-}
-
 /// Ensure checkout uses the currency object stored under the shop, not a forged caller value.
 fun borrow_registered_accepted_currency(
   shop: &Shop,
   accepted_currency: &AcceptedCurrency,
 ): &AcceptedCurrency {
-  let accepted_currency_id = accepted_currency_id(accepted_currency);
-  assert!(
-    dynamic_field::exists_with_type<obj::ID, AcceptedCurrency>(
-      &shop.id,
-      accepted_currency_id,
-    ),
-    EAcceptedCurrencyMissing,
-  );
-  dynamic_field::borrow(&shop.id, accepted_currency_id)
+  assert_currency_matches_shop(shop, accepted_currency);
+  accepted_currency
 }
 
 fun quote_amount_with_guardrails(
@@ -2102,19 +2129,6 @@ fun assert_supported_decimals(decimals: u8) {
   );
 }
 
-fun assert_accepted_currency_exists(
-  shop: &Shop,
-  accepted_currency_id: obj::ID,
-) {
-  assert!(
-    dynamic_field::exists_with_type<obj::ID, AcceptedCurrency>(
-      &shop.id,
-      accepted_currency_id,
-    ),
-    EAcceptedCurrencyMissing,
-  );
-}
-
 fun assert_listing_currency_match(
   shop: &Shop,
   item_listing: &ItemListing,
@@ -2271,7 +2285,7 @@ public fun accepted_currency_exists(
   shop: &Shop,
   accepted_currency_id: obj::ID,
 ): bool {
-  dynamic_field::exists_with_type<obj::ID, AcceptedCurrency>(
+  dynamic_field::exists_with_type<obj::ID, AcceptedCurrencyMarker>(
     &shop.id,
     accepted_currency_id,
   )
@@ -2320,7 +2334,6 @@ public fun listing_values(
   shop: &Shop,
   listing: &ItemListing,
 ): (vector<u8>, u64, u64, address, opt::Option<obj::ID>) {
-  assert_listing_belongs_to_shop(shop, listing_id(listing));
   assert_listing_matches_shop(shop, listing);
   (
     clone_bytes(&listing.name),
@@ -2334,13 +2347,9 @@ public fun listing_values(
 #[ext(view)]
 public fun accepted_currency_values(
   shop: &Shop,
-  accepted_currency_id: obj::ID,
+  accepted_currency: &AcceptedCurrency,
 ): (address, TypeInfo, vector<u8>, obj::ID, u8, vector<u8>, u64, u64, u64) {
-  assert_accepted_currency_exists(shop, accepted_currency_id);
-  let accepted_currency: &AcceptedCurrency = dynamic_field::borrow(
-    &shop.id,
-    accepted_currency_id,
-  );
+  assert_currency_matches_shop(shop, accepted_currency);
   (
     accepted_currency.shop_address,
     accepted_currency.coin_type,
@@ -2386,18 +2395,14 @@ public fun discount_template_values(
 #[ext(view)]
 public fun quote_amount_for_price_info_object(
   shop: &Shop,
-  accepted_currency_id: obj::ID,
+  accepted_currency: &AcceptedCurrency,
   price_info_object: &pyth_price_info::PriceInfoObject,
   price_usd_cents: u64,
   max_price_age_secs: opt::Option<u64>,
   max_confidence_ratio_bps: opt::Option<u64>,
   clock: &clock::Clock,
 ): u64 {
-  assert_accepted_currency_exists(shop, accepted_currency_id);
-  let accepted_currency: &AcceptedCurrency = dynamic_field::borrow(
-    &shop.id,
-    accepted_currency_id,
-  );
+  assert_currency_matches_shop(shop, accepted_currency);
   ensure_price_info_matches_currency(accepted_currency, price_info_object);
   assert_price_status_trading(
     price_info_object,
@@ -2583,9 +2588,9 @@ public fun test_accepted_currency_exists(
 #[test_only]
 public fun test_accepted_currency_values(
   shop: &Shop,
-  accepted_currency_id: obj::ID,
+  accepted_currency: &AcceptedCurrency,
 ): (address, TypeInfo, vector<u8>, obj::ID, u8, vector<u8>, u64, u64, u64) {
-  accepted_currency_values(shop, accepted_currency_id)
+  accepted_currency_values(shop, accepted_currency)
 }
 
 #[test_only]
@@ -2655,7 +2660,7 @@ public fun test_claim_discount_ticket_inline(
 public fun test_claim_and_buy_with_ids<TItem: store, TCoin>(
   shop: &mut Shop,
   item_listing: &mut ItemListing,
-  accepted_currency_id: obj::ID,
+  accepted_currency: &AcceptedCurrency,
   discount_template: &mut DiscountTemplate,
   price_info_object: &pyth_price_info::PriceInfoObject,
   payment: coin::Coin<TCoin>,
@@ -2669,10 +2674,7 @@ public fun test_claim_and_buy_with_ids<TItem: store, TCoin>(
   let shop_owner = shop.owner;
   let shop_address = shop_address(shop);
   assert_listing_matches_shop(shop, item_listing);
-  let accepted_currency: &AcceptedCurrency = dynamic_field::borrow(
-    &shop.id,
-    accepted_currency_id,
-  );
+  assert_currency_matches_shop(shop, accepted_currency);
   assert_template_matches_shop(shop, discount_template);
 
   let now = now_secs(clock);
@@ -2882,6 +2884,19 @@ public fun test_add_item_listing_local<T: store>(
     ctx,
   );
   (listing, listing_id)
+}
+
+#[test_only]
+public fun test_listing_values_local(
+  listing: &ItemListing,
+): (vector<u8>, u64, u64, address, opt::Option<obj::ID>) {
+  (
+    clone_bytes(&listing.name),
+    listing.base_price_usd_cents,
+    listing.stock,
+    listing.shop_address,
+    listing.spotlight_discount_template_id,
+  )
 }
 
 #[test_only]

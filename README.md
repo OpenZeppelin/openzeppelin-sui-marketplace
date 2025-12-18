@@ -12,10 +12,10 @@ git clone <your fork url> && cd sui-oracle-market
 pnpm install
 
 # 2) Start localnet (new terminal)
-pnpm chain:localnet-start --with-faucet
+pnpm chain:localnet:start --with-faucet
 
 # 3) Seed mocks (coins + Pyth stub + price feeds)
-pnpm chain:mock-setup
+pnpm chain:mock:setup
 
 # 4) Publish oracle-market with dev dependencies (local mocks)
 pnpm chain:publish-package --package-path oracle-market --dev
@@ -103,7 +103,7 @@ How it’s used:
 
 ### 3) Start localnet
 ```
-pnpm chain:localnet-start --with-faucet
+pnpm chain:localnet:start --with-faucet
 ```
 - Spawns `sui start --with-faucet`.
 - Waits for RPC readiness at `http://127.0.0.1:9000`.
@@ -115,7 +115,7 @@ pnpm chain:localnet-start --with-faucet
 
 ### 4) Seed mocks (coins + Pyth)
 ```
-pnpm chain:mock-setup
+pnpm chain:mock:setup
 ```
 What it does:
 - Publishes `move/pyth-mock` (Pyth stub) and `move/coin-mock` if not already recorded in `deployments/mock.localnet.json`.
@@ -175,7 +175,7 @@ All scripts run from the repo root and honor `sui.config.ts` (or `--network <nam
 
 ### Chain + Localnet Scripts (infra + inspection)
 
-#### `pnpm chain:localnet-start`
+#### `pnpm chain:localnet:start`
 - Boots `sui start`, streams stdout/stderr, waits for RPC health, and logs a snapshot (epoch, checkpoint, gas price, validator count). If a node is already up it logs the snapshot and exits cleanly. After a regenesis with a running faucet it will faucet the configured signer.
 - Flags:
   - `--check-only`: probe the RPC and exit without starting a new node; fails if unreachable.
@@ -183,10 +183,10 @@ All scripts run from the repo root and honor `sui.config.ts` (or `--network <nam
   - `--with-faucet`: start `sui start --with-faucet` (default true); also controls whether post-regenesis auto-funding is attempted.
   - `--force-regenesis`: pass `--force-regenesis` to `sui start` **and** delete `deployments/*.localnet*` artifacts before booting.
 
-#### `pnpm chain:localnet-stop`
+#### `pnpm chain:localnet:stop`
 - Scans `ps` output for detached `sui start` processes (TTY `?` / `-`) and SIGTERMs them so you don’t accumulate background local nodes. No flags.
 
-#### `pnpm chain:mock-setup`
+#### `pnpm chain:mock:setup`
 - Localnet-only seeding. Publishes (or reuses) `move/pyth-mock` and `move/coin-mock`, ensures mock coins are registered + minted to the signer, and creates two mock Pyth `PriceInfoObject`s with fresh timestamps via the on-chain clock. Artifacts are written to/reused from `deployments/mock.localnet.json`.
 - Flags:
   - `--coin-package-id <id>` / `--pyth-package-id <id>`: reuse existing mock package IDs instead of publishing.
@@ -201,7 +201,7 @@ All scripts run from the repo root and honor `sui.config.ts` (or `--network <nam
   - `--with-unpublished-dependencies`: allow unpublished deps (defaults to true on localnet; rejected on shared networks).
   - `--re-publish`: publish even if a deployment artifact already exists.
 
-#### `pnpm chain:mock-get-currency`
+#### `pnpm chain:mock:get-currency`
 - Localnet-only coin/registry inspection. If `--coin-type` is omitted it pulls the mock coin types from `deployments/mock.localnet.json`. Performs `devInspect` view calls on the coin registry to print metadata (name/symbol/decimals/icon), treasury/deny caps, supply state, regulation flags, and any minted sample coin objects.
 - Flags:
   - `--registry-id <id>`: coin registry shared object (default Sui registry).
@@ -383,7 +383,7 @@ Artifacts land in `deployments/` after running scripts. Use them to reuse packag
   - `suiCliVersion`: Sui CLI version used during publish (useful for reproducibility).
 
 ### `deployments/mock.<network>.json`
-- Captures local-only mocks produced by `chain:mock-setup`.
+- Captures local-only mocks produced by `chain:mock:setup`.
 - Key fields:
   - `pythPackageId` / `coinPackageId`: package IDs for the mock Pyth and mock coin Move packages.
   - `coins`: array of minted mock coins:
@@ -444,8 +444,8 @@ Docs links:
 
 ## Workflow Cheat Sheet
 
-- **Full local demo**: `pnpm chain:localnet-start` → `pnpm chain:mock-setup` → `pnpm chain:publish-package --package-path oracle-market --dev`
-- **Re-seed mocks**: `pnpm chain:mock-setup --re-publish`
+- **Full local demo**: `pnpm chain:localnet:start` → `pnpm chain:mock:setup` → `pnpm chain:publish-package --package-path oracle-market --dev`
+- **Re-seed mocks**: `pnpm chain:mock:setup --re-publish`
 - **Publish to testnet** (after pinning real deps): `pnpm chain:publish-package --package-path oracle-market --network testnet`
 
 ---

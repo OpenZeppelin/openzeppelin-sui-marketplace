@@ -30,7 +30,7 @@ type ListCurrenciesArguments = {
 
 type AcceptedCurrencySummary = {
   acceptedCurrencyId: string
-  dynamicFieldObjectId: string
+  markerObjectId: string
   coinType: string
   symbol?: string
   decimals?: number
@@ -41,7 +41,7 @@ type AcceptedCurrencySummary = {
   maxPriceStatusLagSecsCap?: string
 }
 
-const ACCEPTED_CURRENCY_TYPE_FRAGMENT = "::shop::AcceptedCurrency"
+const ACCEPTED_CURRENCY_TYPE_FRAGMENT = "::shop::AcceptedCurrencyMarker"
 
 runSuiScript(
   async ({ network, currentNetwork }, cliArguments) => {
@@ -97,17 +97,24 @@ const fetchAcceptedCurrencies = async (
   suiClient: SuiClient
 ): Promise<AcceptedCurrencySummary[]> => {
   const dynamicFields = await fetchAllDynamicFields(shopId, suiClient)
-  const acceptedCurrencyFields = dynamicFields.filter((dynamicField) =>
+  const acceptedCurrencyMarkers = dynamicFields.filter((dynamicField) =>
     dynamicField.objectType?.includes(ACCEPTED_CURRENCY_TYPE_FRAGMENT)
   )
 
-  if (acceptedCurrencyFields.length === 0) return []
+  if (acceptedCurrencyMarkers.length === 0) return []
+
+  const acceptedCurrencyIds = acceptedCurrencyMarkers.map((marker) =>
+    normalizeIdOrThrow(
+      normalizeOptionalIdFromValue((marker.name as { value: string })?.value),
+      `Missing AcceptedCurrency id for dynamic field ${marker.objectId}.`
+    )
+  )
 
   const acceptedCurrencyObjects = await Promise.all(
-    acceptedCurrencyFields.map((field) =>
+    acceptedCurrencyIds.map((currencyId) =>
       getSuiObject(
         {
-          objectId: field.objectId,
+          objectId: currencyId,
           options: { showContent: true, showType: true }
         },
         suiClient
@@ -118,29 +125,26 @@ const fetchAcceptedCurrencies = async (
   return acceptedCurrencyObjects.map((response, index) =>
     buildAcceptedCurrencySummary(
       response.object,
-      acceptedCurrencyFields[index].objectId
+      acceptedCurrencyIds[index],
+      acceptedCurrencyMarkers[index].objectId
     )
   )
 }
 
 const buildAcceptedCurrencySummary = (
-  dynamicFieldObject: SuiObjectData,
-  dynamicFieldObjectId: string
+  acceptedCurrencyObject: SuiObjectData,
+  acceptedCurrencyId: string,
+  markerObjectId: string
 ): AcceptedCurrencySummary => {
-  const acceptedCurrencyFields = unwrapMoveObjectFields(dynamicFieldObject)
-
-  const acceptedCurrencyId = normalizeOptionalIdFromValue(
-    acceptedCurrencyFields.id
+  const acceptedCurrencyFields = unwrapMoveObjectFields(
+    acceptedCurrencyObject
   )
   const coinType =
     formatTypeNameFromFieldValue(acceptedCurrencyFields.coin_type) || "Unknown"
 
   return {
-    acceptedCurrencyId: normalizeIdOrThrow(
-      acceptedCurrencyId,
-      `Missing AcceptedCurrency id for dynamic field ${dynamicFieldObjectId}.`
-    ),
-    dynamicFieldObjectId,
+    acceptedCurrencyId,
+    markerObjectId,
     coinType,
     symbol: decodeUtf8Vector(acceptedCurrencyFields.symbol),
     decimals: parseOptionalNumber(acceptedCurrencyFields.decimals),
@@ -198,6 +202,6 @@ const logAcceptedCurrency = (
   logKeyValueGreen("Max-status-lag")(
     acceptedCurrency.maxPriceStatusLagSecsCap ?? "module default"
   )
-  logKeyValueGreen("Field-id")(acceptedCurrency.dynamicFieldObjectId)
+  logKeyValueGreen("Marker-id")(acceptedCurrency.markerObjectId)
   console.log("")
 }

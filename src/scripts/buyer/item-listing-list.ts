@@ -28,7 +28,7 @@ type ListItemListingsArguments = {
 
 type ItemListingSummary = {
   itemListingId: string
-  dynamicFieldObjectId: string
+  markerObjectId: string
   name?: string
   itemType: string
   basePriceUsdCents?: string
@@ -89,7 +89,10 @@ const fetchItemListings = async (
   shopId: string,
   suiClient: SuiClient
 ): Promise<ItemListingSummary[]> => {
-  const dynamicFields = await fetchAllDynamicFields(shopId, suiClient)
+  const dynamicFields = await fetchAllDynamicFields(
+    { parentObjectId: shopId },
+    suiClient
+  )
   const itemListingFields = dynamicFields.filter((dynamicField) =>
     dynamicField.objectType?.includes(ITEM_LISTING_MARKER_TYPE_FRAGMENT)
   )
@@ -127,7 +130,7 @@ const fetchItemListings = async (
 const buildItemListingSummary = (
   listingObject: SuiObjectData,
   listingId: string,
-  dynamicFieldObjectId: string
+  markerObjectId: string
 ): ItemListingSummary => {
   const itemListingFields = unwrapMoveObjectFields(listingObject)
   const itemType =
@@ -135,7 +138,7 @@ const buildItemListingSummary = (
 
   return {
     itemListingId: listingId,
-    dynamicFieldObjectId,
+    markerObjectId,
     name: decodeUtf8Vector(itemListingFields.name),
     itemType,
     basePriceUsdCents: formatOptionalNumericValue(
@@ -174,6 +177,6 @@ const logItemListing = (itemListing: ItemListingSummary, index: number) => {
   logKeyValueGreen("Stock")(itemListing.stock ?? "Unknown stock")
   if (itemListing.spotlightTemplateId)
     logKeyValueGreen("Spotlight")(itemListing.spotlightTemplateId)
-  logKeyValueGreen("Field-id")(itemListing.dynamicFieldObjectId)
+  logKeyValueGreen("Marker-id")(itemListing.markerObjectId)
   console.log("")
 }
