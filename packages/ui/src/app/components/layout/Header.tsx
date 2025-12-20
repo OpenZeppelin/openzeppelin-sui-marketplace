@@ -1,12 +1,12 @@
-'use client'
+"use client"
 
-import { ConnectButton } from '@mysten/dapp-kit'
-import { Link } from '@radix-ui/themes'
-import Balance from '@suiware/kit/Balance'
-import NetworkType from '@suiware/kit/NetworkType'
-import { APP_NAME } from '../../config/main'
-import Image from 'next/image'
-import Logo from '../../assets/logo.svg'
+import { ConnectButton } from "@mysten/dapp-kit"
+import { Link } from "@radix-ui/themes"
+import Balance from "@suiware/kit/Balance"
+import NetworkType from "@suiware/kit/NetworkType"
+import { APP_NAME } from "../../config/main"
+import Image from "next/image"
+import Logo from "../../assets/logo.svg"
 
 const Header = () => {
   return (

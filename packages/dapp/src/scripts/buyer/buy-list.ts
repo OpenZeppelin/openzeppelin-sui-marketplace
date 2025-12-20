@@ -1,18 +1,22 @@
-import { SuiClient } from "@mysten/sui/client"
+import type { SuiClient } from "@mysten/sui/client"
 import yargs from "yargs"
 
-import { getItemListingDetails } from "../../models/item-listing.ts"
-import { fetchShopItemReceiptSummaries } from "../../models/shop-item.ts"
-import { resolveOwnerAddress } from "../../tooling/account.ts"
-import { getLatestObjectFromArtifact } from "../../tooling/artifacts.ts"
-import { type SuiNetworkConfig } from "../../tooling/config.ts"
-import { logKeyValueBlue, logWarning } from "../../tooling/log.ts"
-import { normalizeIdOrThrow } from "../../tooling/object.ts"
-import { runSuiScript } from "../../tooling/process.ts"
+import { getItemListingDetails } from "@sui-oracle-market/domain-core/models/item-listing"
+import { fetchShopItemReceiptSummaries } from "@sui-oracle-market/domain-core/models/shop-item"
+import { normalizeIdOrThrow } from "@sui-oracle-market/tooling-core/object"
+import { resolveOwnerAddress } from "@sui-oracle-market/tooling-node/account"
+import { getLatestObjectFromArtifact } from "@sui-oracle-market/tooling-node/artifacts"
+import { type SuiNetworkConfig } from "@sui-oracle-market/tooling-node/config"
+import { createSuiClient } from "@sui-oracle-market/tooling-node/describe-object"
+import {
+  logKeyValueBlue,
+  logWarning
+} from "@sui-oracle-market/tooling-node/log"
+import { runSuiScript } from "@sui-oracle-market/tooling-node/process"
 import {
   logEmptyList,
   logShopItemReceiptSummary
-} from "../../utils/log-summaries.ts"
+} from "../../utils/log-summaries.js"
 
 type ListPurchasesArguments = {
   address?: string
@@ -27,16 +31,13 @@ type NormalizedInputs = {
 }
 
 runSuiScript(
-  async (
-    { network, currentNetwork },
-    cliArguments: ListPurchasesArguments
-  ) => {
+  async ({ network, currentNetwork }, cliArguments: ListPurchasesArguments) => {
     const inputs = await resolveInputs(
       cliArguments,
       network.networkName,
       network
     )
-    const suiClient = new SuiClient({ url: network.url })
+    const suiClient = createSuiClient(network.url)
 
     logListContext({
       ownerAddress: inputs.ownerAddress,
@@ -62,11 +63,7 @@ runSuiScript(
     )
 
     shopItemReceipts.forEach((shopItem, index) =>
-      logShopItemReceiptSummary(
-        shopItem,
-        index + 1,
-        listingDetails[index]
-      )
+      logShopItemReceiptSummary(shopItem, index + 1, listingDetails[index])
     )
   },
   yargs()
@@ -87,7 +84,8 @@ runSuiScript(
     .option("shopId", {
       alias: "shop-id",
       type: "string",
-      description: "Optional Shop object ID to filter receipts by shop address.",
+      description:
+        "Optional Shop object ID to filter receipts by shop address.",
       demandOption: false
     })
     .strict()

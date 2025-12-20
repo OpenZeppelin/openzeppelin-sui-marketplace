@@ -1,8 +1,8 @@
-'use client'
+"use client"
 
-import { useCurrentAccount } from '@mysten/dapp-kit'
-import useNetworkType from '@suiware/kit/useNetworkType'
-import { isNetworkSupported, supportedNetworks } from '../helpers/network'
+import { useCurrentAccount } from "@mysten/dapp-kit"
+import useNetworkType from "@suiware/kit/useNetworkType"
+import { isNetworkSupported, supportedNetworks } from "../helpers/network"
 
 const NetworkSupportChecker = () => {
   const { networkType } = useNetworkType()
@@ -27,7 +27,7 @@ const NetworkSupportChecker = () => {
         supported by the app.
         <br />
         Please switch to a supported network [
-        <span className="font-bold">{okNetworks.join(', ')}</span>] in your
+        <span className="font-bold">{okNetworks.join(", ")}</span>] in your
         wallet settings.
       </div>
     </div>

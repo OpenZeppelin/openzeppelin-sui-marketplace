@@ -1,15 +1,16 @@
-import { SuiClient } from "@mysten/sui/client"
 import { normalizeSuiObjectId } from "@mysten/sui/utils"
 import yargs from "yargs"
 
-import { getDiscountTemplateSummary } from "../../models/discount.ts"
-import { resolveLatestShopIdentifiers } from "../../models/shop.ts"
-import { loadKeypair } from "../../tooling/keypair.ts"
-import { logKeyValueGreen } from "../../tooling/log.ts"
-import { runSuiScript } from "../../tooling/process.ts"
-import { getSuiSharedObject } from "../../tooling/shared-object.ts"
-import { newTransaction, signAndExecute } from "../../tooling/transactions.ts"
-import { logDiscountTemplateSummary } from "../../utils/log-summaries.ts"
+import { getDiscountTemplateSummary } from "@sui-oracle-market/domain-core/models/discount"
+import { buildToggleDiscountTemplateTransaction } from "@sui-oracle-market/domain-core/ptb/discount-template"
+import { resolveLatestShopIdentifiers } from "@sui-oracle-market/domain-node/shop-identifiers"
+import { getSuiSharedObject } from "@sui-oracle-market/tooling-core/shared-object"
+import { createSuiClient } from "@sui-oracle-market/tooling-node/describe-object"
+import { loadKeypair } from "@sui-oracle-market/tooling-node/keypair"
+import { logKeyValueGreen } from "@sui-oracle-market/tooling-node/log"
+import { runSuiScript } from "@sui-oracle-market/tooling-node/process"
+import { signAndExecute } from "@sui-oracle-market/tooling-node/transactions"
+import { logDiscountTemplateSummary } from "../../utils/log-summaries.js"
 
 type ToggleDiscountTemplateArguments = {
   shopPackageId?: string
@@ -30,7 +31,7 @@ type NormalizedInputs = {
 runSuiScript(
   async ({ network }, cliArguments) => {
     const inputs = await normalizeInputs(cliArguments, network.networkName)
-    const suiClient = new SuiClient({ url: network.url })
+    const suiClient = createSuiClient(network.url)
     const signer = await loadKeypair(network.account)
     const shopSharedObject = await getSuiSharedObject(
       { objectId: inputs.shopId, mutable: false },
@@ -123,36 +124,4 @@ const normalizeInputs = async (
     discountTemplateId: normalizeSuiObjectId(cliArguments.discountTemplateId),
     active: cliArguments.active
   }
-}
-
-const buildToggleDiscountTemplateTransaction = ({
-  packageId,
-  shop,
-  discountTemplate,
-  active,
-  ownerCapId
-}: {
-  packageId: string
-  shop: Awaited<ReturnType<typeof getSuiSharedObject>>
-  discountTemplate: Awaited<ReturnType<typeof getSuiSharedObject>>
-  active: boolean
-  ownerCapId: string
-}) => {
-  const transaction = newTransaction()
-  const shopArgument = transaction.sharedObjectRef(shop.sharedRef)
-  const discountTemplateArgument = transaction.sharedObjectRef(
-    discountTemplate.sharedRef
-  )
-
-  transaction.moveCall({
-    target: `${packageId}::shop::toggle_discount_template`,
-    arguments: [
-      shopArgument,
-      discountTemplateArgument,
-      transaction.pure.bool(active),
-      transaction.object(ownerCapId)
-    ]
-  })
-
-  return transaction
 }

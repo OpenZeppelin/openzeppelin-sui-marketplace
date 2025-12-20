@@ -1,4 +1,4 @@
-import type { NextConfig } from "next";
+import type { NextConfig } from "next"
 
 const nextConfig: NextConfig = {
   output: "export",
@@ -12,22 +12,16 @@ const nextConfig: NextConfig = {
     "@radix-ui/themes",
     "@radix-ui/react-select",
     "@radix-ui/react-toggle",
+    "@sui-oracle-market/tooling-core",
+    "@sui-oracle-market/domain-core"
   ],
   turbopack: {
-    resolveExtensions: [
-      ".mdx",
-      ".tsx",
-      ".ts",
-      ".jsx",
-      ".js",
-      ".mjs",
-      ".json",
-    ],
+    resolveExtensions: [".mdx", ".tsx", ".ts", ".jsx", ".js", ".mjs", ".json"]
   },
   webpack: (config) => {
-    config.externals = [...(config.externals || []), "encoding"];
-    return config;
-  },
-};
+    config.externals = [...(config.externals || []), "encoding"]
+    return config
+  }
+}
 
-export default nextConfig;
+export default nextConfig

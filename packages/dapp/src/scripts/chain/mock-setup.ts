@@ -1,53 +1,59 @@
 import path from "node:path"
 
-import {
-  SuiClient,
-  type SuiObjectDataOptions,
-  type SuiObjectResponse,
-  type SuiTransactionBlockResponse
-} from "@mysten/sui/client"
+import type { SuiClient, SuiTransactionBlockResponse } from "@mysten/sui/client"
 import type { Ed25519Keypair } from "@mysten/sui/keypairs/ed25519"
 import { deriveObjectID, normalizeSuiObjectId } from "@mysten/sui/utils"
 import yargs from "yargs"
 
-import type { MockArtifact } from "../../models/mock.ts"
-import { mockArtifactPath, writeMockArtifact } from "../../models/mock.ts"
 import {
   getPythPriceInfoType,
   publishMockPriceFeed,
   SUI_CLOCK_ID,
   type MockPriceFeedConfig
-} from "../../models/pyth.ts"
+} from "@sui-oracle-market/domain-core/models/pyth"
+import { normalizeHex } from "@sui-oracle-market/tooling-core/hex"
+import { assertLocalnetNetwork } from "@sui-oracle-market/tooling-core/network"
+import {
+  getObjectSafe,
+  objectTypeMatches
+} from "@sui-oracle-market/tooling-core/object"
+import {
+  getSuiSharedObject,
+  type WrappedSuiSharedObject
+} from "@sui-oracle-market/tooling-core/shared-object"
+import type {
+  MockArtifact,
+  PublishArtifact
+} from "@sui-oracle-market/tooling-core/types"
 import {
   ensureFoundedAddress,
   withTestnetFaucetRetry
-} from "../../tooling/address.ts"
-import { readArtifact } from "../../tooling/artifacts.ts"
-import type { SuiNetworkConfig } from "../../tooling/config.ts"
-import { getAccountConfig } from "../../tooling/config.ts"
+} from "@sui-oracle-market/tooling-node/address"
+import {
+  mockArtifactPath,
+  readArtifact,
+  writeMockArtifact
+} from "@sui-oracle-market/tooling-node/artifacts"
+import type { SuiNetworkConfig } from "@sui-oracle-market/tooling-node/config"
+import { getAccountConfig } from "@sui-oracle-market/tooling-node/config"
 import {
   DEFAULT_TX_GAS_BUDGET,
   SUI_COIN_REGISTRY_ID
-} from "../../tooling/constants.ts"
-import { loadKeypair } from "../../tooling/keypair.ts"
+} from "@sui-oracle-market/tooling-node/constants"
+import { createSuiClient } from "@sui-oracle-market/tooling-node/describe-object"
+import { loadKeypair } from "@sui-oracle-market/tooling-node/keypair"
 import {
   logKeyValueBlue,
   logKeyValueGreen,
   logWarning
-} from "../../tooling/log.ts"
-import { assertLocalnetNetwork, resolveRpcUrl } from "../../tooling/network.ts"
-import { runSuiScript } from "../../tooling/process.ts"
-import { publishPackageWithLog } from "../../tooling/publish.ts"
-import {
-  getSuiSharedObject,
-  type WrappedSuiSharedObject
-} from "../../tooling/shared-object.ts"
+} from "@sui-oracle-market/tooling-node/log"
+import { runSuiScript } from "@sui-oracle-market/tooling-node/process"
+import { publishPackageWithLog } from "@sui-oracle-market/tooling-node/publish"
 import {
   findCreatedObjectIds,
   newTransaction,
   signAndExecute
-} from "../../tooling/transactions.ts"
-import type { PublishArtifact } from "../../tooling/types.ts"
+} from "@sui-oracle-market/tooling-node/transactions"
 
 type SetupLocalCliArgs = {
   coinPackageId?: string
@@ -137,15 +143,14 @@ runSuiScript(
     // Load prior artifacts unless --re-publish was passed (idempotent runs).
     const existingState = await extendCliArguments(cliArguments)
 
-    // Resolve RPC URL (defaults to localnet if not overridden).
-    const fullNodeUrl = resolveRpcUrl(network.networkName, network.url)
+    const fullNodeUrl = network.url
 
     // Load signer (env/keystore) and derive address; Sui requires explicit key material for PTBs.
     const keypair = await loadKeypair(getAccountConfig(network))
     const signerAddress = keypair.toSuiAddress()
 
     // Instantiate Sui client for RPC interactions.
-    const suiClient = new SuiClient({ url: fullNodeUrl })
+    const suiClient = createSuiClient(fullNodeUrl)
 
     // Ensure the account has gas coins (auto-faucet on localnet) to avoid funding errors downstream.
     await ensureFoundedAddress(
@@ -644,35 +649,6 @@ const findMatchingFeed = (
       feed.label === feedConfig.label
   )
 
-const getObjectSafe = async (
-  suiClient: SuiClient,
-  objectId: string,
-  options: SuiObjectDataOptions = { showType: true, showBcs: true }
-): Promise<SuiObjectResponse | undefined> => {
-  try {
-    const normalizedId = normalizeSuiObjectId(objectId)
-    return await suiClient.getObject({
-      id: normalizedId,
-      options: { showType: true, showBcs: true, ...options }
-    })
-  } catch {
-    return undefined
-  }
-}
-
-const extractObjectType = (object: SuiObjectResponse | undefined) =>
-  object?.data?.type ||
-  // Some RPC responses only return the type inside BCS or content.
-  //@ts-expect-error assuming type is present
-  object?.data?.bcs?.type ||
-  //@ts-expect-error assuming type is present
-  object?.data?.content?.type
-
-const objectTypeMatches = (
-  object: SuiObjectResponse | undefined,
-  expectedType: string
-) => extractObjectType(object)?.toLowerCase() === expectedType.toLowerCase()
-
 const findOwnedCoinObjectId = async ({
   suiClient,
   owner,
@@ -694,5 +670,3 @@ const firstCreatedBySuffix = (
   result: SuiTransactionBlockResponse,
   suffix: string
 ) => findCreatedObjectIds(result, suffix)[0]
-
-const normalizeHex = (value: string) => value.toLowerCase().replace(/^0x/, "")

@@ -1,12 +1,15 @@
-import type { AcceptedCurrencySummary } from "../models/currency.ts"
-import type { DiscountTemplateSummary } from "../models/discount.ts"
+import type { AcceptedCurrencySummary } from "@sui-oracle-market/domain-core/models/currency"
+import type { DiscountTemplateSummary } from "@sui-oracle-market/domain-core/models/discount"
 import type {
   ItemListingDetails,
   ItemListingSummary
-} from "../models/item-listing.ts"
-import type { ShopItemReceiptSummary } from "../models/shop-item.ts"
-import type { ShopOverview } from "../models/shop.ts"
-import { logKeyValueGreen, logKeyValueYellow } from "../tooling/log.ts"
+} from "@sui-oracle-market/domain-core/models/item-listing"
+import type { ShopOverview } from "@sui-oracle-market/domain-core/models/shop"
+import type { ShopItemReceiptSummary } from "@sui-oracle-market/domain-core/models/shop-item"
+import {
+  logKeyValueGreen,
+  logKeyValueYellow
+} from "@sui-oracle-market/tooling-node/log"
 
 export const logShopOverview = ({ shopId, ownerAddress }: ShopOverview) => {
   logKeyValueGreen("Shop")(shopId)
@@ -102,13 +105,9 @@ export const logShopItemReceiptSummary = (
     logKeyValueGreen("Listing-price")(
       listingDetails.basePriceUsdCents ?? "Unknown price"
     )
-    logKeyValueGreen("Listing-stock")(
-      listingDetails.stock ?? "Unknown stock"
-    )
+    logKeyValueGreen("Listing-stock")(listingDetails.stock ?? "Unknown stock")
     if (listingDetails.spotlightTemplateId)
-      logKeyValueGreen("Listing-spotlight")(
-        listingDetails.spotlightTemplateId
-      )
+      logKeyValueGreen("Listing-spotlight")(listingDetails.spotlightTemplateId)
     logKeyValueGreen("Listing-marker")(
       listingDetails.markerObjectId ?? "Not listed"
     )

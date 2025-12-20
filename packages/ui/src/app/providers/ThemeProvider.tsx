@@ -1,5 +1,5 @@
-import { Theme } from '@radix-ui/themes'
-import { FC, PropsWithChildren } from 'react'
+import { Theme } from "@radix-ui/themes"
+import type { FC, PropsWithChildren } from "react"
 
 const ThemeProvider: FC<PropsWithChildren> = ({ children }) => {
   return (

@@ -1,5 +1,5 @@
-import NetworkSupportChecker from './components/NetworkSupportChecker'
-import StoreDashboard from './components/StoreDashboard'
+import NetworkSupportChecker from "./components/NetworkSupportChecker"
+import StoreDashboard from "./components/StoreDashboard"
 
 export default function Home() {
   return (

@@ -1,26 +1,29 @@
-import { SuiClient } from "@mysten/sui/client"
-import path from "path"
+import path from "node:path"
 import yargs from "yargs"
 
-import { withTestnetFaucetRetry } from "../../tooling/address.ts"
-import { loadDeploymentArtifacts } from "../../tooling/artifacts.ts"
+import type { PublishArtifact } from "@sui-oracle-market/tooling-core/types"
+import { withTestnetFaucetRetry } from "@sui-oracle-market/tooling-node/address"
+import { loadDeploymentArtifacts } from "@sui-oracle-market/tooling-node/artifacts"
 import {
   getAccountConfig,
   type SuiNetworkConfig
-} from "../../tooling/config.ts"
+} from "@sui-oracle-market/tooling-node/config"
 import {
   DEFAULT_PUBLISH_GAS_BUDGET,
   MINIMUM_GAS_COIN_OBJECTS
-} from "../../tooling/constants.ts"
-import { loadKeypair } from "../../tooling/keypair.ts"
-import { logKeyValueBlue, logWarning } from "../../tooling/log.ts"
+} from "@sui-oracle-market/tooling-node/constants"
+import { createSuiClient } from "@sui-oracle-market/tooling-node/describe-object"
+import { loadKeypair } from "@sui-oracle-market/tooling-node/keypair"
+import {
+  logKeyValueBlue,
+  logWarning
+} from "@sui-oracle-market/tooling-node/log"
 import {
   hasDeploymentForPackage,
   resolveFullPackagePath
-} from "../../tooling/move.ts"
-import { runSuiScript } from "../../tooling/process.ts"
-import { publishPackageWithLog } from "../../tooling/publish.ts"
-import type { PublishArtifact } from "../../tooling/types.ts"
+} from "@sui-oracle-market/tooling-node/move"
+import { runSuiScript } from "@sui-oracle-market/tooling-node/process"
+import { publishPackageWithLog } from "@sui-oracle-market/tooling-node/publish"
 
 type PublishScriptArguments = {
   packagePath: string
@@ -68,7 +71,7 @@ const publishPackageToNetwork = async (
     buildFundingRequirements(gasBudget)
 
   const keypair = await loadKeypair(getAccountConfig(network))
-  const suiClient = new SuiClient({ url: network.url })
+  const suiClient = createSuiClient(network.url)
 
   await withTestnetFaucetRetry(
     {
@@ -80,7 +83,7 @@ const publishPackageToNetwork = async (
       minimumGasCoinBalance
     },
     async () =>
-      await publishPackageWithLog(
+      publishPackageWithLog(
         {
           network,
           packagePath,

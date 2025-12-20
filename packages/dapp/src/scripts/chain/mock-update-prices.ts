@@ -1,25 +1,35 @@
-import { SuiClient } from "@mysten/sui/client"
 import type { TransactionArgument } from "@mysten/sui/transactions"
 import { normalizeSuiObjectId } from "@mysten/sui/utils"
 import yargs from "yargs"
 
-import type { MockArtifact } from "../../models/mock.ts"
-import { mockArtifactPath, writeMockArtifact } from "../../models/mock.ts"
-import { SUI_CLOCK_ID, type MockPriceFeedConfig } from "../../models/pyth.ts"
-import { ensureFoundedAddress } from "../../tooling/address.ts"
-import { readArtifact } from "../../tooling/artifacts.ts"
-import { getAccountConfig } from "../../tooling/config.ts"
-import { DEFAULT_TX_GAS_BUDGET } from "../../tooling/constants.ts"
-import { loadKeypair } from "../../tooling/keypair.ts"
+import {
+  SUI_CLOCK_ID,
+  type MockPriceFeedConfig
+} from "@sui-oracle-market/domain-core/models/pyth"
+import { normalizeHex } from "@sui-oracle-market/tooling-core/hex"
+import { assertLocalnetNetwork } from "@sui-oracle-market/tooling-core/network"
+import { getSuiSharedObject } from "@sui-oracle-market/tooling-core/shared-object"
+import type { MockArtifact } from "@sui-oracle-market/tooling-core/types"
+import { ensureFoundedAddress } from "@sui-oracle-market/tooling-node/address"
+import {
+  mockArtifactPath,
+  readArtifact,
+  writeMockArtifact
+} from "@sui-oracle-market/tooling-node/artifacts"
+import { getAccountConfig } from "@sui-oracle-market/tooling-node/config"
+import { DEFAULT_TX_GAS_BUDGET } from "@sui-oracle-market/tooling-node/constants"
+import { createSuiClient } from "@sui-oracle-market/tooling-node/describe-object"
+import { loadKeypair } from "@sui-oracle-market/tooling-node/keypair"
 import {
   logKeyValueBlue,
   logKeyValueGreen,
   logKeyValueYellow
-} from "../../tooling/log.ts"
-import { assertLocalnetNetwork, resolveRpcUrl } from "../../tooling/network.ts"
-import { runSuiScript } from "../../tooling/process.ts"
-import { getSuiSharedObject } from "../../tooling/shared-object.ts"
-import { newTransaction, signAndExecute } from "../../tooling/transactions.ts"
+} from "@sui-oracle-market/tooling-node/log"
+import { runSuiScript } from "@sui-oracle-market/tooling-node/process"
+import {
+  newTransaction,
+  signAndExecute
+} from "@sui-oracle-market/tooling-node/transactions"
 
 /**
  * Localnet-only helper to refresh mock Pyth PriceInfoObject timestamps.
@@ -72,11 +82,11 @@ runSuiScript(
   async ({ network }, cliArguments: UpdatePricesCliArguments) => {
     assertLocalnetNetwork(network.networkName)
 
-    const fullNodeUrl = resolveRpcUrl(network.networkName, network.url)
+    const fullNodeUrl = network.url
     const keypair = await loadKeypair(getAccountConfig(network))
     const signerAddress = keypair.toSuiAddress()
 
-    const suiClient = new SuiClient({ url: fullNodeUrl })
+    const suiClient = createSuiClient(fullNodeUrl)
 
     await ensureFoundedAddress({ signerAddress, signer: keypair }, suiClient)
 
@@ -240,5 +250,3 @@ const enqueuePriceUpdate = async ({
     `${priceFeedArtifact.label} ${priceFeedArtifact.priceInfoObjectId}`
   )
 }
-
-const normalizeHex = (value: string) => value.toLowerCase().replace(/^0x/, "")

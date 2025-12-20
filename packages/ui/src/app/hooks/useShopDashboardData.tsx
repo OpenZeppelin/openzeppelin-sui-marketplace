@@ -1,28 +1,26 @@
-'use client'
+"use client"
 
-import { useSuiClient } from '@mysten/dapp-kit'
-import type { SuiClient } from '@mysten/sui/client'
-import type {
-  AcceptedCurrencySummary,
-} from 'dapp/models/currency'
-import { fetchAcceptedCurrencySummaries } from 'dapp/models/currency'
+import { useSuiClient } from "@mysten/dapp-kit"
+import type { SuiClient } from "@mysten/sui/client"
+import type { AcceptedCurrencySummary } from "@sui-oracle-market/domain-core/models/currency"
+import { fetchAcceptedCurrencySummaries } from "@sui-oracle-market/domain-core/models/currency"
 import type {
   DiscountTemplateSummary,
-  DiscountTicketDetails,
-} from 'dapp/models/discount'
+  DiscountTicketDetails
+} from "@sui-oracle-market/domain-core/models/discount"
 import {
   fetchDiscountTemplateSummaries,
   formatDiscountTicketStructType,
-  parseDiscountTicketFromObject,
-} from 'dapp/models/discount'
-import type { ItemListingSummary } from 'dapp/models/item-listing'
-import { fetchItemListingSummaries } from 'dapp/models/item-listing'
-import type { ShopItemReceiptSummary } from 'dapp/models/shop-item'
-import { fetchShopItemReceiptSummaries } from 'dapp/models/shop-item'
-import { fetchAllOwnedObjectsByType } from 'dapp/tooling/object'
-import { useEffect, useMemo, useState } from 'react'
+  parseDiscountTicketFromObject
+} from "@sui-oracle-market/domain-core/models/discount"
+import type { ItemListingSummary } from "@sui-oracle-market/domain-core/models/item-listing"
+import { fetchItemListingSummaries } from "@sui-oracle-market/domain-core/models/item-listing"
+import type { ShopItemReceiptSummary } from "@sui-oracle-market/domain-core/models/shop-item"
+import { fetchShopItemReceiptSummaries } from "@sui-oracle-market/domain-core/models/shop-item"
+import { fetchAllOwnedObjectsByFilter } from "@sui-oracle-market/tooling-core/object"
+import { useEffect, useMemo, useState } from "react"
 
-type RemoteStatus = 'idle' | 'loading' | 'success' | 'error'
+type RemoteStatus = "idle" | "loading" | "success" | "error"
 
 type StorefrontState = {
   status: RemoteStatus
@@ -40,21 +38,21 @@ type WalletState = {
 }
 
 const emptyStorefrontState = (): StorefrontState => ({
-  status: 'idle',
+  status: "idle",
   acceptedCurrencies: [],
   itemListings: [],
-  discountTemplates: [],
+  discountTemplates: []
 })
 
 const emptyWalletState = (): WalletState => ({
-  status: 'idle',
+  status: "idle",
   purchasedItems: [],
-  discountTickets: [],
+  discountTickets: []
 })
 
 const fetchStorefrontData = async ({
   shopId,
-  suiClient,
+  suiClient
 }: {
   shopId: string
   suiClient: SuiClient
@@ -63,7 +61,7 @@ const fetchStorefrontData = async ({
     await Promise.all([
       fetchItemListingSummaries(shopId, suiClient),
       fetchAcceptedCurrencySummaries(shopId, suiClient),
-      fetchDiscountTemplateSummaries(shopId, suiClient),
+      fetchDiscountTemplateSummaries(shopId, suiClient)
     ])
 
   return { itemListings, acceptedCurrencies, discountTemplates }
@@ -73,7 +71,7 @@ const fetchWalletData = async ({
   ownerAddress,
   packageId,
   shopId,
-  suiClient,
+  suiClient
 }: {
   ownerAddress: string
   packageId: string
@@ -85,15 +83,15 @@ const fetchWalletData = async ({
       ownerAddress,
       shopPackageId: packageId,
       shopFilterId: shopId,
-      suiClient,
+      suiClient
     }),
-    fetchAllOwnedObjectsByType(
+    fetchAllOwnedObjectsByFilter(
       {
         ownerAddress,
-        structType: formatDiscountTicketStructType(packageId),
+        filter: { StructType: formatDiscountTicketStructType(packageId) }
       },
       suiClient
-    ),
+    )
   ])
 
   const discountTickets = discountTicketObjects
@@ -106,7 +104,7 @@ const fetchWalletData = async ({
 export const useShopDashboardData = ({
   shopId,
   packageId,
-  ownerAddress,
+  ownerAddress
 }: {
   shopId?: string
   packageId?: string
@@ -116,9 +114,8 @@ export const useShopDashboardData = ({
   const [storefrontState, setStorefrontState] = useState<StorefrontState>(
     emptyStorefrontState()
   )
-  const [walletState, setWalletState] = useState<WalletState>(
-    emptyWalletState()
-  )
+  const [walletState, setWalletState] =
+    useState<WalletState>(emptyWalletState())
 
   const hasStorefrontConfig = useMemo(() => Boolean(shopId), [shopId])
   const hasWalletConfig = useMemo(
@@ -127,36 +124,40 @@ export const useShopDashboardData = ({
   )
 
   useEffect(() => {
-    if (!hasStorefrontConfig) {
+    if (!hasStorefrontConfig || !shopId) {
       setStorefrontState(emptyStorefrontState())
       return
     }
 
     let isSubscribed = true
+    const currentShopId = shopId
     const loadStorefrontData = async () => {
       setStorefrontState((previous) => ({
         ...previous,
-        status: 'loading',
-        error: undefined,
+        status: "loading",
+        error: undefined
       }))
 
       try {
-        const data = await fetchStorefrontData({ shopId: shopId!, suiClient })
+        const data = await fetchStorefrontData({
+          shopId: currentShopId,
+          suiClient
+        })
         if (!isSubscribed) return
 
         setStorefrontState({
-          status: 'success',
+          status: "success",
           error: undefined,
           acceptedCurrencies: data.acceptedCurrencies,
           itemListings: data.itemListings,
-          discountTemplates: data.discountTemplates,
+          discountTemplates: data.discountTemplates
         })
       } catch (error) {
         if (!isSubscribed) return
         setStorefrontState((previous) => ({
           ...previous,
-          status: 'error',
-          error: error instanceof Error ? error.message : String(error),
+          status: "error",
+          error: error instanceof Error ? error.message : String(error)
         }))
       }
     }
@@ -169,41 +170,43 @@ export const useShopDashboardData = ({
   }, [hasStorefrontConfig, shopId, suiClient])
 
   useEffect(() => {
-    if (!hasWalletConfig) {
+    if (!hasWalletConfig || !ownerAddress || !packageId) {
       setWalletState(emptyWalletState())
       return
     }
 
     let isSubscribed = true
+    const currentOwnerAddress = ownerAddress
+    const currentPackageId = packageId
     const loadWalletData = async () => {
       setWalletState((previous) => ({
         ...previous,
-        status: 'loading',
-        error: undefined,
+        status: "loading",
+        error: undefined
       }))
 
       try {
         const data = await fetchWalletData({
-          ownerAddress: ownerAddress!,
-          packageId: packageId!,
+          ownerAddress: currentOwnerAddress,
+          packageId: currentPackageId,
           shopId,
-          suiClient,
+          suiClient
         })
 
         if (!isSubscribed) return
 
         setWalletState({
-          status: 'success',
+          status: "success",
           error: undefined,
           purchasedItems: data.purchasedItems,
-          discountTickets: data.discountTickets,
+          discountTickets: data.discountTickets
         })
       } catch (error) {
         if (!isSubscribed) return
         setWalletState((previous) => ({
           ...previous,
-          status: 'error',
-          error: error instanceof Error ? error.message : String(error),
+          status: "error",
+          error: error instanceof Error ? error.message : String(error)
         }))
       }
     }
@@ -217,6 +220,6 @@ export const useShopDashboardData = ({
 
   return {
     storefront: storefrontState,
-    wallet: walletState,
+    wallet: walletState
   }
 }

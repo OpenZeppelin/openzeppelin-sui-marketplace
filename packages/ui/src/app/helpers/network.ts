@@ -1,8 +1,10 @@
-import { SuiObjectResponse } from '@mysten/sui/client'
-import { isValidSuiObjectId } from '@mysten/sui/utils'
-import { ENetwork } from 'dapp/tooling/types'
-import { CONTRACT_PACKAGE_ID_NOT_DEFINED } from '~~/config/network'
-import { CONTRACT_MODULE_NAME } from '~~/dapp/config/network'
+import type { SuiObjectResponse } from "@mysten/sui/client"
+import { isValidSuiObjectId } from "@mysten/sui/utils"
+import { ENetwork } from "@sui-oracle-market/tooling-core/types"
+import {
+  CONTRACT_MODULE_NAME,
+  CONTRACT_PACKAGE_ID_NOT_DEFINED
+} from "~~/config/network"
 
 export const transactionUrl = (baseExplorerUrl: string, txDigest: string) => {
   return `${baseExplorerUrl}/txblock/${txDigest}`
@@ -10,13 +12,13 @@ export const transactionUrl = (baseExplorerUrl: string, txDigest: string) => {
 export const packageUrl = (baseExplorerUrl: string, packageId: string) => {
   // Local explorer doesn't have a package view, so we stick with object view instead.
   const subpath =
-    baseExplorerUrl.search('localhost') === -1 ? 'package' : 'object'
+    baseExplorerUrl.search("localhost") === -1 ? "package" : "object"
 
   return `${baseExplorerUrl}/${subpath}/${packageId}`
 }
 
 export const formatNetworkType = (machineName: string) => {
-  if (machineName.startsWith('sui:')) {
+  if (machineName.startsWith("sui:")) {
     return machineName.substring(4)
   }
   return machineName
@@ -33,11 +35,11 @@ export const supportedNetworks = () => {
         process.env[`NEXT_PUBLIC_${key.toUpperCase()}_CONTRACT_PACKAGE_ID`] !==
           CONTRACT_PACKAGE_ID_NOT_DEFINED
     )
-    .map((key: string) => ENetwork[key as ENetwork])
+    .map((key: string) => ENetwork[key as keyof typeof ENetwork])
 }
 
 export const isNetworkSupported = (network: ENetwork | undefined) => {
-  return supportedNetworks().includes(network)
+  return network != null && supportedNetworks().includes(network)
 }
 
 export const fullFunctionName = (
@@ -70,7 +72,7 @@ export const getResponseContentField = (
     return null
   }
 
-  if (response.data.content?.dataType !== 'moveObject') {
+  if (response.data.content?.dataType !== "moveObject") {
     return null
   }
 

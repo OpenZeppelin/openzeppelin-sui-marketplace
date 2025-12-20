@@ -1,13 +1,14 @@
-import { SuiClient } from "@mysten/sui/client"
 import { normalizeSuiObjectId } from "@mysten/sui/utils"
 import yargs from "yargs"
 
-import { resolveLatestShopIdentifiers } from "../../models/shop.ts"
-import { loadKeypair } from "../../tooling/keypair.ts"
-import { logKeyValueGreen } from "../../tooling/log.ts"
-import { runSuiScript } from "../../tooling/process.ts"
-import { getSuiSharedObject } from "../../tooling/shared-object.ts"
-import { newTransaction, signAndExecute } from "../../tooling/transactions.ts"
+import { buildRemoveItemListingTransaction } from "@sui-oracle-market/domain-core/ptb/item-listing"
+import { resolveLatestShopIdentifiers } from "@sui-oracle-market/domain-node/shop-identifiers"
+import { getSuiSharedObject } from "@sui-oracle-market/tooling-core/shared-object"
+import { createSuiClient } from "@sui-oracle-market/tooling-node/describe-object"
+import { loadKeypair } from "@sui-oracle-market/tooling-node/keypair"
+import { logKeyValueGreen } from "@sui-oracle-market/tooling-node/log"
+import { runSuiScript } from "@sui-oracle-market/tooling-node/process"
+import { signAndExecute } from "@sui-oracle-market/tooling-node/transactions"
 
 type RemoveItemArguments = {
   shopPackageId?: string
@@ -19,15 +20,18 @@ type RemoveItemArguments = {
 runSuiScript(
   async ({ network }, cliArguments) => {
     const inputs = await normalizeInputs(cliArguments, network.networkName)
-    const suiClient = new SuiClient({ url: network.url })
+    const suiClient = createSuiClient(network.url)
     const signer = await loadKeypair(network.account)
 
-    const shopSharedObject = await fetchMutableShop(inputs.shopId, suiClient)
+    const shopSharedObject = await getSuiSharedObject(
+      { objectId: inputs.shopId, mutable: true },
+      suiClient
+    )
     const itemListingSharedObject = await getSuiSharedObject(
       { objectId: inputs.itemListingId, mutable: false },
       suiClient
     )
-    const removeItemTransaction = buildRemoveItemTransaction({
+    const removeItemTransaction = buildRemoveItemListingTransaction({
       packageId: inputs.packageId,
       shop: shopSharedObject,
       ownerCapId: inputs.ownerCapId,
@@ -102,30 +106,4 @@ const normalizeInputs = async (
     ownerCapId,
     itemListingId: normalizeSuiObjectId(cliArguments.itemListingId)
   }
-}
-
-const fetchMutableShop = async (shopId: string, client: SuiClient) =>
-  getSuiSharedObject({ objectId: shopId, mutable: true }, client)
-
-const buildRemoveItemTransaction = ({
-  packageId,
-  shop,
-  ownerCapId,
-  itemListing
-}: {
-  packageId: string
-  shop: Awaited<ReturnType<typeof getSuiSharedObject>>
-  ownerCapId: string
-  itemListing: Awaited<ReturnType<typeof getSuiSharedObject>>
-}) => {
-  const transaction = newTransaction()
-  const shopArgument = transaction.sharedObjectRef(shop.sharedRef)
-  const listingArgument = transaction.sharedObjectRef(itemListing.sharedRef)
-
-  transaction.moveCall({
-    target: `${packageId}::shop::remove_item_listing`,
-    arguments: [shopArgument, listingArgument, transaction.object(ownerCapId)]
-  })
-
-  return transaction
 }

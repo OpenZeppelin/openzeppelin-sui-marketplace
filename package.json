@@ -6,12 +6,28 @@
   "description": "Oracle Market",
   "scripts": {
     "ui": "pnpm --filter ui",
-    "script": "pnpm --filter dapp"
+    "script": "pnpm --filter dapp",
+    "lint": "eslint \"packages/**/*.{js,jsx,ts,tsx,mjs,cjs,mts,cts}\"",
+    "lint:fix": "eslint --fix \"packages/**/*.{js,jsx,ts,tsx,mjs,cjs,mts,cts}\""
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.2",
+    "@types/node": "^22.19.2",
+    "eslint": "^9.39.2",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-prettier": "^5.5.4",
+    "eslint-plugin-unicorn": "^62.0.0",
+    "prettier": "^3.7.4",
+    "prettier-plugin-tailwindcss": "^0.7.2",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.50.0"
   },
   "engines": {
     "node": ">=22"
   },
   "workspaces": [
-    "packages/*"
+    "packages/*",
+    "packages/*/*"
   ]
 }

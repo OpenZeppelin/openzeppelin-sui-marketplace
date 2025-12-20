@@ -5,7 +5,7 @@ import {
   logKeyValueGreen,
   logKeyValueYellow,
   logWarning
-} from "../../tooling/log.ts"
+} from "@sui-oracle-market/tooling-node/log"
 
 const execFile = promisify(execFileCallback)
 

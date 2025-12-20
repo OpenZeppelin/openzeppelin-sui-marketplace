@@ -1,23 +1,22 @@
-import { SuiClient } from "@mysten/sui/client"
 import { normalizeSuiObjectId } from "@mysten/sui/utils"
 import yargs from "yargs"
 
-import { getItemListingSummary } from "../../models/item-listing.ts"
-import {
-  parseUsdToCents,
-  resolveLatestShopIdentifiers
-} from "../../models/shop.ts"
-import { loadKeypair } from "../../tooling/keypair.ts"
-import { logKeyValueGreen } from "../../tooling/log.ts"
+import { getItemListingSummary } from "@sui-oracle-market/domain-core/models/item-listing"
+import { parseUsdToCents } from "@sui-oracle-market/domain-core/models/shop"
+import { buildAddItemListingTransaction } from "@sui-oracle-market/domain-core/ptb/item-listing"
+import { resolveLatestShopIdentifiers } from "@sui-oracle-market/domain-node/shop-identifiers"
 import {
   normalizeIdOrThrow,
   normalizeOptionalId
-} from "../../tooling/object.ts"
-import { runSuiScript } from "../../tooling/process.ts"
-import { getSuiSharedObject } from "../../tooling/shared-object.ts"
-import { newTransaction, signAndExecute } from "../../tooling/transactions.ts"
-import { logItemListingSummary } from "../../utils/log-summaries.ts"
-import { tryParseBigInt } from "../../utils/utility.ts"
+} from "@sui-oracle-market/tooling-core/object"
+import { getSuiSharedObject } from "@sui-oracle-market/tooling-core/shared-object"
+import { parsePositiveU64 } from "@sui-oracle-market/tooling-core/utils/utility"
+import { createSuiClient } from "@sui-oracle-market/tooling-node/describe-object"
+import { loadKeypair } from "@sui-oracle-market/tooling-node/keypair"
+import { logKeyValueGreen } from "@sui-oracle-market/tooling-node/log"
+import { runSuiScript } from "@sui-oracle-market/tooling-node/process"
+import { signAndExecute } from "@sui-oracle-market/tooling-node/transactions"
+import { logItemListingSummary } from "../../utils/log-summaries.js"
 
 type AddItemArguments = {
   shopPackageId?: string
@@ -34,7 +33,7 @@ type AddItemArguments = {
 runSuiScript(
   async ({ network }, cliArguments) => {
     const inputs = await normalizeInputs(cliArguments, network.networkName)
-    const suiClient = new SuiClient({ url: network.url })
+    const suiClient = createSuiClient(network.url)
     const signer = await loadKeypair(network.account)
 
     const shopSharedObject = await getSuiSharedObject(
@@ -42,7 +41,7 @@ runSuiScript(
       suiClient
     )
 
-    const addItemTransaction = buildAddItemTransaction({
+    const addItemTransaction = buildAddItemListingTransaction({
       packageId: inputs.packageId,
       itemType: inputs.itemType,
       shop: shopSharedObject,
@@ -139,49 +138,6 @@ runSuiScript(
     .strict()
 )
 
-const buildAddItemTransaction = ({
-  packageId,
-  itemType,
-  shop,
-  ownerCapId,
-  itemName,
-  basePriceUsdCents,
-  stock,
-  spotlightDiscountId
-}: {
-  packageId: string
-  itemType: string
-  shop: Awaited<ReturnType<typeof getSuiSharedObject>>
-  ownerCapId: string
-  itemName: string
-  basePriceUsdCents: bigint
-  stock: bigint
-  spotlightDiscountId?: string
-}) => {
-  const transaction = newTransaction()
-  const shopArgument = transaction.sharedObjectRef(shop.sharedRef)
-
-  transaction.moveCall({
-    target: `${packageId}::shop::add_item_listing`,
-    typeArguments: [itemType],
-    arguments: [
-      shopArgument,
-      transaction.pure.vector("u8", encodeItemName(itemName)),
-      transaction.pure.u64(basePriceUsdCents),
-      transaction.pure.u64(stock),
-      transaction.pure.option("address", spotlightDiscountId ?? null),
-      transaction.object(ownerCapId)
-    ]
-  })
-
-  return transaction
-}
-
-const encodeItemName = (name: string): Uint8Array => {
-  if (!name.trim()) throw new Error("Item name cannot be empty.")
-  return new TextEncoder().encode(name)
-}
-
 const normalizeInputs = async (
   cliArguments: AddItemArguments,
   networkName: string
@@ -216,10 +172,4 @@ const normalizeInputs = async (
       ? normalizeSuiObjectId(cliArguments.publisherId)
       : undefined
   }
-}
-
-const parsePositiveU64 = (rawValue: string, label: string): bigint => {
-  const value = tryParseBigInt(rawValue)
-  if (value <= 0n) throw new Error(`${label} must be greater than zero.`)
-  return value
 }

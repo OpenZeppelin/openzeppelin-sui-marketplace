@@ -1,18 +1,19 @@
-import { SuiClient } from "@mysten/sui/client"
 import yargs from "yargs"
 
 import {
   type AcceptedCurrencyMatch,
   normalizeOptionalCoinType,
   requireAcceptedCurrencyByCoinType
-} from "../../models/currency.ts"
-import { resolveLatestShopIdentifiers } from "../../models/shop.ts"
-import { loadKeypair } from "../../tooling/keypair.ts"
-import { logKeyValueGreen } from "../../tooling/log.ts"
-import { normalizeOptionalId } from "../../tooling/object.ts"
-import { runSuiScript } from "../../tooling/process.ts"
-import { getSuiSharedObject } from "../../tooling/shared-object.ts"
-import { newTransaction, signAndExecute } from "../../tooling/transactions.ts"
+} from "@sui-oracle-market/domain-core/models/currency"
+import { buildRemoveAcceptedCurrencyTransaction } from "@sui-oracle-market/domain-core/ptb/currency"
+import { resolveLatestShopIdentifiers } from "@sui-oracle-market/domain-node/shop-identifiers"
+import { normalizeOptionalId } from "@sui-oracle-market/tooling-core/object"
+import { getSuiSharedObject } from "@sui-oracle-market/tooling-core/shared-object"
+import { createSuiClient } from "@sui-oracle-market/tooling-node/describe-object"
+import { loadKeypair } from "@sui-oracle-market/tooling-node/keypair"
+import { logKeyValueGreen } from "@sui-oracle-market/tooling-node/log"
+import { runSuiScript } from "@sui-oracle-market/tooling-node/process"
+import { signAndExecute } from "@sui-oracle-market/tooling-node/transactions"
 
 type RemoveCurrencyArguments = {
   shopPackageId?: string
@@ -32,19 +33,22 @@ type NormalizedInputs = {
 
 runSuiScript(
   async ({ network }, cliArguments) => {
-    const suiClient = new SuiClient({ url: network.url })
+    const suiClient = createSuiClient(network.url)
     const inputs = await normalizeInputs(cliArguments, network.networkName)
 
     const acceptedCurrency = await resolveAcceptedCurrency(inputs, suiClient)
 
-    const shop = await fetchMutableShop(inputs.shopId, suiClient)
+    const shop = await getSuiSharedObject(
+      { objectId: inputs.shopId, mutable: true },
+      suiClient
+    )
     const acceptedCurrencyShared = await getSuiSharedObject(
       { objectId: acceptedCurrency.acceptedCurrencyId, mutable: false },
       suiClient
     )
     const signer = await loadKeypair(network.account)
 
-    const removeCurrencyTransaction = buildRemoveCurrencyTransaction({
+    const removeCurrencyTransaction = buildRemoveAcceptedCurrencyTransaction({
       packageId: inputs.packageId,
       shop,
       ownerCapId: inputs.ownerCapId,
@@ -145,45 +149,13 @@ const resolveAcceptedCurrency = async (
   })
 }
 
-const fetchMutableShop = (shopId: string, suiClient: SuiClient) =>
-  getSuiSharedObject({ objectId: shopId, mutable: true }, suiClient)
-
-const buildRemoveCurrencyTransaction = ({
-  packageId,
-  shop,
-  ownerCapId,
-  acceptedCurrency
-}: {
-  packageId: string
-  shop: Awaited<ReturnType<typeof getSuiSharedObject>>
-  ownerCapId: string
-  acceptedCurrency: Awaited<ReturnType<typeof getSuiSharedObject>>
-}) => {
-  const transaction = newTransaction()
-  const shopArgument = transaction.sharedObjectRef(shop.sharedRef)
-  const acceptedCurrencyArgument = transaction.sharedObjectRef(
-    acceptedCurrency.sharedRef
-  )
-
-  transaction.moveCall({
-    target: `${packageId}::shop::remove_accepted_currency`,
-    arguments: [
-      shopArgument,
-      acceptedCurrencyArgument,
-      transaction.object(ownerCapId)
-    ]
-  })
-
-  return transaction
-}
-
 const executeRemovalTransaction = async ({
   transaction,
   signer,
   suiClient,
   networkName
 }: {
-  transaction: ReturnType<typeof newTransaction>
+  transaction: ReturnType<typeof buildRemoveAcceptedCurrencyTransaction>
   signer: Awaited<ReturnType<typeof loadKeypair>>
   suiClient: SuiClient
   networkName: string

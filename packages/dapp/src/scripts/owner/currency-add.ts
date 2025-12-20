@@ -1,5 +1,4 @@
-import { SuiClient } from "@mysten/sui/client"
-import { deriveObjectID, normalizeSuiObjectId } from "@mysten/sui/utils"
+import { normalizeSuiObjectId } from "@mysten/sui/utils"
 import yargs from "yargs"
 
 import {
@@ -8,18 +7,26 @@ import {
   normalizeCoinType,
   requireAcceptedCurrencyByCoinType,
   type AcceptedCurrencyMatch
-} from "../../models/currency.ts"
-import { resolveLatestShopIdentifiers } from "../../models/shop.ts"
-import { SUI_COIN_REGISTRY_ID } from "../../tooling/constants.ts"
-import { assertBytesLength, hexToBytes } from "../../tooling/hex.ts"
-import { loadKeypair } from "../../tooling/keypair.ts"
-import { logKeyValueGreen } from "../../tooling/log.ts"
-import type { ObjectArtifact } from "../../tooling/object.ts"
-import { runSuiScript } from "../../tooling/process.ts"
-import { getSuiSharedObject } from "../../tooling/shared-object.ts"
-import { newTransaction, signAndExecute } from "../../tooling/transactions.ts"
-import { logAcceptedCurrencySummary } from "../../utils/log-summaries.ts"
-import { parseOptionalU64 } from "../../utils/utility.ts"
+} from "@sui-oracle-market/domain-core/models/currency"
+import {
+  buildAddAcceptedCurrencyTransaction,
+  deriveCurrencyObjectId
+} from "@sui-oracle-market/domain-core/ptb/currency"
+import { resolveLatestShopIdentifiers } from "@sui-oracle-market/domain-node/shop-identifiers"
+import {
+  assertBytesLength,
+  hexToBytes
+} from "@sui-oracle-market/tooling-core/hex"
+import type { ObjectArtifact } from "@sui-oracle-market/tooling-core/object"
+import { getSuiSharedObject } from "@sui-oracle-market/tooling-core/shared-object"
+import { parseOptionalPositiveU64 } from "@sui-oracle-market/tooling-core/utils/utility"
+import { SUI_COIN_REGISTRY_ID } from "@sui-oracle-market/tooling-node/constants"
+import { createSuiClient } from "@sui-oracle-market/tooling-node/describe-object"
+import { loadKeypair } from "@sui-oracle-market/tooling-node/keypair"
+import { logKeyValueGreen } from "@sui-oracle-market/tooling-node/log"
+import { runSuiScript } from "@sui-oracle-market/tooling-node/process"
+import { signAndExecute } from "@sui-oracle-market/tooling-node/transactions"
+import { logAcceptedCurrencySummary } from "../../utils/log-summaries.js"
 
 type AddCurrencyArguments = {
   shopPackageId?: string
@@ -50,7 +57,7 @@ type NormalizedInputs = {
 runSuiScript(
   async ({ network }, cliArguments) => {
     const inputs = await normalizeInputs(cliArguments, network.networkName)
-    const suiClient = new SuiClient({ url: network.url })
+    const suiClient = createSuiClient(network.url)
     const existingAcceptedCurrency = await findAcceptedCurrencyByCoinType({
       coinType: inputs.coinType,
       shopId: inputs.shopId,
@@ -78,7 +85,7 @@ runSuiScript(
       suiClient
     )
 
-    const addCurrencyTransaction = buildAddCurrencyTransaction({
+    const addCurrencyTransaction = buildAddAcceptedCurrencyTransaction({
       packageId: inputs.packageId,
       coinType: inputs.coinType,
       shop: shopSharedObject,
@@ -235,78 +242,6 @@ const normalizeInputs = async (
       "maxPriceStatusLagSecsCap"
     )
   }
-}
-
-const parseOptionalPositiveU64 = (
-  rawValue: string | undefined,
-  label: string
-): bigint | undefined => {
-  const parsedValue = parseOptionalU64(rawValue, label)
-  if (parsedValue === undefined) return undefined
-  if (parsedValue <= 0n)
-    throw new Error(`${label} must be greater than zero when provided.`)
-  return parsedValue
-}
-
-const deriveCurrencyObjectId = (coinType: string, registryId: string) =>
-  normalizeSuiObjectId(
-    deriveObjectID(
-      registryId,
-      `0x2::coin_registry::CurrencyKey<${coinType}>`,
-      new Uint8Array()
-    )
-  )
-
-const buildAddCurrencyTransaction = ({
-  packageId,
-  coinType,
-  shop,
-  currency,
-  feedIdBytes,
-  pythObjectId,
-  priceInfoObject,
-  ownerCapId,
-  maxPriceAgeSecsCap,
-  maxConfidenceRatioBpsCap,
-  maxPriceStatusLagSecsCap
-}: {
-  packageId: string
-  coinType: string
-  shop: Awaited<ReturnType<typeof getSuiSharedObject>>
-  currency: Awaited<ReturnType<typeof getSuiSharedObject>>
-  feedIdBytes: number[]
-  pythObjectId: string
-  priceInfoObject: Awaited<ReturnType<typeof getSuiSharedObject>>
-  ownerCapId: string
-  maxPriceAgeSecsCap?: bigint
-  maxConfidenceRatioBpsCap?: bigint
-  maxPriceStatusLagSecsCap?: bigint
-}) => {
-  const transaction = newTransaction()
-
-  const shopArgument = transaction.sharedObjectRef(shop.sharedRef)
-  const currencyArgument = transaction.sharedObjectRef(currency.sharedRef)
-  const priceInfoArgument = transaction.sharedObjectRef(
-    priceInfoObject.sharedRef
-  )
-
-  transaction.moveCall({
-    target: `${packageId}::shop::add_accepted_currency`,
-    typeArguments: [coinType],
-    arguments: [
-      shopArgument,
-      currencyArgument,
-      transaction.pure.vector("u8", feedIdBytes),
-      transaction.pure.id(pythObjectId),
-      priceInfoArgument,
-      transaction.pure.option("u64", maxPriceAgeSecsCap ?? null),
-      transaction.pure.option("u64", maxConfidenceRatioBpsCap ?? null),
-      transaction.pure.option("u64", maxPriceStatusLagSecsCap ?? null),
-      transaction.object(ownerCapId)
-    ]
-  })
-
-  return transaction
 }
 
 const logExistingAcceptedCurrency = ({

@@ -1,22 +1,23 @@
-import { SuiClient } from "@mysten/sui/client"
 import yargs from "yargs"
 
-import { getLatestObjectFromArtifact } from "../../tooling/artifacts.ts"
-import { SUI_CLOCK_ID } from "../../tooling/constants.ts"
-import { loadKeypair } from "../../tooling/keypair.ts"
+import { buildClaimDiscountTicketTransaction } from "@sui-oracle-market/domain-core/ptb/discount-ticket"
+import type { ObjectArtifact } from "@sui-oracle-market/tooling-core/object"
+import {
+  deriveRelevantPackageId,
+  normalizeIdOrThrow
+} from "@sui-oracle-market/tooling-core/object"
+import { getSuiSharedObject } from "@sui-oracle-market/tooling-core/shared-object"
+import { getLatestObjectFromArtifact } from "@sui-oracle-market/tooling-node/artifacts"
+import { SUI_CLOCK_ID } from "@sui-oracle-market/tooling-node/constants"
+import { createSuiClient } from "@sui-oracle-market/tooling-node/describe-object"
+import { loadKeypair } from "@sui-oracle-market/tooling-node/keypair"
 import {
   logKeyValueBlue,
   logKeyValueGreen,
   logKeyValueYellow
-} from "../../tooling/log.ts"
-import type { ObjectArtifact } from "../../tooling/object.ts"
-import {
-  deriveRelevantPackageId,
-  normalizeIdOrThrow
-} from "../../tooling/object.ts"
-import { runSuiScript } from "../../tooling/process.ts"
-import { getSuiSharedObject } from "../../tooling/shared-object.ts"
-import { newTransaction, signAndExecute } from "../../tooling/transactions.ts"
+} from "@sui-oracle-market/tooling-node/log"
+import { runSuiScript } from "@sui-oracle-market/tooling-node/process"
+import { signAndExecute } from "@sui-oracle-market/tooling-node/transactions"
 
 type ClaimDiscountTicketArguments = {
   discountTemplateId: string
@@ -29,7 +30,7 @@ runSuiScript(
       cliArguments,
       network.networkName
     )
-    const suiClient = new SuiClient({ url: network.url })
+    const suiClient = createSuiClient(network.url)
     const signer = await loadKeypair(network.account)
 
     const shopShared = await getSuiSharedObject(
@@ -114,31 +115,6 @@ const resolveInputs = async (
       "A discount template id is required; provide --discount-template-id."
     )
   }
-}
-
-const buildClaimDiscountTicketTransaction = ({
-  packageId,
-  shopShared,
-  discountTemplateShared,
-  sharedClockObject
-}: {
-  packageId: string
-  shopShared: Awaited<ReturnType<typeof getSuiSharedObject>>
-  discountTemplateShared: Awaited<ReturnType<typeof getSuiSharedObject>>
-  sharedClockObject: Awaited<ReturnType<typeof getSuiSharedObject>>
-}) => {
-  const transaction = newTransaction()
-
-  transaction.moveCall({
-    target: `${packageId}::shop::claim_discount_ticket`,
-    arguments: [
-      transaction.sharedObjectRef(shopShared.sharedRef),
-      transaction.sharedObjectRef(discountTemplateShared.sharedRef),
-      transaction.sharedObjectRef(sharedClockObject.sharedRef)
-    ]
-  })
-
-  return transaction
 }
 
 const findDiscountTicket = (

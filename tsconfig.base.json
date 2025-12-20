@@ -7,11 +7,10 @@
     "esModuleInterop": true,
     "skipLibCheck": true,
     "allowImportingTsExtensions": true,
+    "noEmit": true,
     "strict": true,
     "forceConsistentCasingInFileNames": true,
     "incremental": true,
-    "types": [
-      "node"
-    ]
+    "types": []
   }
 }

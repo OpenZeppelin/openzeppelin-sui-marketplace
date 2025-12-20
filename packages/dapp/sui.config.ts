@@ -1,5 +1,5 @@
-import { defineSuiConfig } from "./src/tooling/config.ts"
-import { DEFAULT_PUBLISH_GAS_BUDGET } from "./src/tooling/constants.ts"
+import { defineSuiConfig } from "@sui-oracle-market/tooling-node/config"
+import { DEFAULT_PUBLISH_GAS_BUDGET } from "@sui-oracle-market/tooling-node/constants"
 
 export default defineSuiConfig({
   defaultNetwork: "localnet",

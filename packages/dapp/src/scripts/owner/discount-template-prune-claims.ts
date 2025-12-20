@@ -1,17 +1,18 @@
-import { SuiClient } from "@mysten/sui/client"
 import { normalizeSuiObjectId } from "@mysten/sui/utils"
 import yargs from "yargs"
 
-import { getDiscountTemplateSummary } from "../../models/discount.ts"
-import { SUI_CLOCK_ID } from "../../models/pyth.ts"
-import { resolveLatestShopIdentifiers } from "../../models/shop.ts"
-import { parseAddressList } from "../../tooling/address.ts"
-import { loadKeypair } from "../../tooling/keypair.ts"
-import { logKeyValueGreen } from "../../tooling/log.ts"
-import { runSuiScript } from "../../tooling/process.ts"
-import { getSuiSharedObject } from "../../tooling/shared-object.ts"
-import { newTransaction, signAndExecute } from "../../tooling/transactions.ts"
-import { logDiscountTemplateSummary } from "../../utils/log-summaries.ts"
+import { getDiscountTemplateSummary } from "@sui-oracle-market/domain-core/models/discount"
+import { SUI_CLOCK_ID } from "@sui-oracle-market/domain-core/models/pyth"
+import { buildPruneDiscountClaimsTransaction } from "@sui-oracle-market/domain-core/ptb/discount-template"
+import { resolveLatestShopIdentifiers } from "@sui-oracle-market/domain-node/shop-identifiers"
+import { parseAddressList } from "@sui-oracle-market/tooling-core/address"
+import { getSuiSharedObject } from "@sui-oracle-market/tooling-core/shared-object"
+import { createSuiClient } from "@sui-oracle-market/tooling-node/describe-object"
+import { loadKeypair } from "@sui-oracle-market/tooling-node/keypair"
+import { logKeyValueGreen } from "@sui-oracle-market/tooling-node/log"
+import { runSuiScript } from "@sui-oracle-market/tooling-node/process"
+import { signAndExecute } from "@sui-oracle-market/tooling-node/transactions"
+import { logDiscountTemplateSummary } from "../../utils/log-summaries.js"
 
 type PruneDiscountClaimsArguments = {
   shopPackageId?: string
@@ -32,7 +33,7 @@ type NormalizedInputs = {
 runSuiScript(
   async ({ network }, cliArguments) => {
     const inputs = await normalizeInputs(cliArguments, network.networkName)
-    const suiClient = new SuiClient({ url: network.url })
+    const suiClient = createSuiClient(network.url)
     const signer = await loadKeypair(network.account)
 
     const shopSharedObject = await getSuiSharedObject(
@@ -48,15 +49,14 @@ runSuiScript(
       suiClient
     )
 
-    const pruneDiscountClaimsTransaction =
-      buildPruneDiscountClaimsTransaction({
-        packageId: inputs.packageId,
-        shop: shopSharedObject,
-        discountTemplate: discountTemplateShared,
-        claimers: inputs.claimers,
-        ownerCapId: inputs.ownerCapId,
-        sharedClockObject
-      })
+    const pruneDiscountClaimsTransaction = buildPruneDiscountClaimsTransaction({
+      packageId: inputs.packageId,
+      shop: shopSharedObject,
+      discountTemplate: discountTemplateShared,
+      claimers: inputs.claimers,
+      ownerCapId: inputs.ownerCapId,
+      sharedClockObject
+    })
 
     const { transactionResult } = await signAndExecute(
       {
@@ -134,40 +134,4 @@ const normalizeInputs = async (
     discountTemplateId: normalizeSuiObjectId(cliArguments.discountTemplateId),
     claimers: parseAddressList(cliArguments.claimers, "claimers")
   }
-}
-
-const buildPruneDiscountClaimsTransaction = ({
-  packageId,
-  shop,
-  discountTemplate,
-  claimers,
-  ownerCapId,
-  sharedClockObject
-}: {
-  packageId: string
-  shop: Awaited<ReturnType<typeof getSuiSharedObject>>
-  discountTemplate: Awaited<ReturnType<typeof getSuiSharedObject>>
-  claimers: string[]
-  ownerCapId: string
-  sharedClockObject: Awaited<ReturnType<typeof getSuiSharedObject>>
-}) => {
-  const transaction = newTransaction()
-  const shopArgument = transaction.sharedObjectRef(shop.sharedRef)
-  const discountTemplateArgument = transaction.sharedObjectRef(
-    discountTemplate.sharedRef
-  )
-  const clockArgument = transaction.sharedObjectRef(sharedClockObject.sharedRef)
-
-  transaction.moveCall({
-    target: `${packageId}::shop::prune_discount_claims`,
-    arguments: [
-      shopArgument,
-      discountTemplateArgument,
-      transaction.pure.vector("address", claimers),
-      transaction.object(ownerCapId),
-      clockArgument
-    ]
-  })
-
-  return transaction
 }

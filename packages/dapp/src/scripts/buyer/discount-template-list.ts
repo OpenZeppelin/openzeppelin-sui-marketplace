@@ -1,14 +1,14 @@
-import { SuiClient } from "@mysten/sui/client"
 import yargs from "yargs"
 
-import { fetchDiscountTemplateSummaries } from "../../models/discount.ts"
-import { resolveLatestArtifactShopId } from "../../models/shop.ts"
-import { logKeyValueBlue } from "../../tooling/log.ts"
-import { runSuiScript } from "../../tooling/process.ts"
+import { fetchDiscountTemplateSummaries } from "@sui-oracle-market/domain-core/models/discount"
+import { resolveLatestArtifactShopId } from "@sui-oracle-market/domain-node/shop-identifiers"
+import { createSuiClient } from "@sui-oracle-market/tooling-node/describe-object"
+import { logKeyValueBlue } from "@sui-oracle-market/tooling-node/log"
+import { runSuiScript } from "@sui-oracle-market/tooling-node/process"
 import {
   logDiscountTemplateSummary,
   logEmptyList
-} from "../../utils/log-summaries.ts"
+} from "../../utils/log-summaries.js"
 
 type ListDiscountTemplatesArguments = {
   shopId?: string
@@ -23,7 +23,7 @@ runSuiScript(
       cliArguments.shopId,
       network.networkName
     )
-    const suiClient = new SuiClient({ url: network.url })
+    const suiClient = createSuiClient(network.url)
 
     logListContext({
       shopId,

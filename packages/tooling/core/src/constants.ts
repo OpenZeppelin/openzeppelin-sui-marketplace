@@ -1,0 +1,17 @@
+import { normalizeSuiObjectId } from "@mysten/sui/utils"
+
+export const ONE_SUI = 1_000_000_000n
+export const MINIMUM_GAS_COIN_BALANCE = ONE_SUI
+export const MINIMUM_GAS_COIN_OBJECTS = 3
+export const MINIMUM_ACCOUNT_BALANCE = MINIMUM_GAS_COIN_BALANCE * 5n
+export const DEFAULT_TX_GAS_BUDGET = 100_000_000
+export const DEFAULT_PUBLISH_GAS_BUDGET = 2_000_000_000
+
+export const SUI_CLOCK_ID = normalizeSuiObjectId(
+  "0x0000000000000000000000000000000000000000000000000000000000000006"
+)
+
+// ID of the shared CoinRegistry object.
+export const SUI_COIN_REGISTRY_ID = normalizeSuiObjectId(
+  "0x000000000000000000000000000000000000000000000000000000000000000c"
+)

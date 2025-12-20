@@ -1,15 +1,18 @@
 import yargs from "yargs"
 
-import { logKeyValueBlue, logKeyValueGreen } from "../../tooling/log.ts"
-import { getSuiDynamicFieldObject } from "../../tooling/dynamic-fields.ts"
-import { runSuiScript } from "../../tooling/process.ts"
+import { getSuiDynamicFieldObject } from "@sui-oracle-market/tooling-core/dynamic-fields"
 import {
   buildObjectInformation,
   createSuiClient,
   logInspectionContext,
   logObjectInformation,
   normalizeTargetObjectId
-} from "../../utils/describe-object.ts"
+} from "@sui-oracle-market/tooling-node/describe-object"
+import {
+  logKeyValueBlue,
+  logKeyValueGreen
+} from "@sui-oracle-market/tooling-node/log"
+import { runSuiScript } from "@sui-oracle-market/tooling-node/process"
 
 runSuiScript(
   async ({ network, currentNetwork }, cliArguments) => {

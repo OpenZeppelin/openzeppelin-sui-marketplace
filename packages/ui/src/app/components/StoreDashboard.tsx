@@ -1,28 +1,28 @@
-'use client'
+"use client"
 
-import { useCurrentAccount } from '@mysten/dapp-kit'
-import clsx from 'clsx'
-import type { AcceptedCurrencySummary } from 'dapp/models/currency'
+import { useCurrentAccount } from "@mysten/dapp-kit"
+import type { AcceptedCurrencySummary } from "@sui-oracle-market/domain-core/models/currency"
 import type {
   DiscountTemplateSummary,
-  DiscountTicketDetails,
-} from 'dapp/models/discount'
-import type { ItemListingSummary } from 'dapp/models/item-listing'
-import type { ShopItemReceiptSummary } from 'dapp/models/shop-item'
-import type { ReactNode } from 'react'
-import { useMemo } from 'react'
+  DiscountTicketDetails
+} from "@sui-oracle-market/domain-core/models/discount"
+import type { ItemListingSummary } from "@sui-oracle-market/domain-core/models/item-listing"
+import type { ShopItemReceiptSummary } from "@sui-oracle-market/domain-core/models/shop-item"
+import clsx from "clsx"
+import type { ReactNode } from "react"
+import { useMemo } from "react"
 import {
   CONTRACT_PACKAGE_ID_NOT_DEFINED,
   CONTRACT_PACKAGE_VARIABLE_NAME,
   SHOP_ID_NOT_DEFINED,
-  SHOP_ID_VARIABLE_NAME,
-} from '../config/network'
-import useNetworkConfig from '../hooks/useNetworkConfig'
-import { useShopDashboardData } from '../hooks/useShopDashboardData'
-import Loading from './Loading'
+  SHOP_ID_VARIABLE_NAME
+} from "../config/network"
+import useNetworkConfig from "../hooks/useNetworkConfig"
+import { useShopDashboardData } from "../hooks/useShopDashboardData"
+import Loading from "./Loading"
 
 type PanelStatus = {
-  status: 'idle' | 'loading' | 'success' | 'error'
+  status: "idle" | "loading" | "success" | "error"
   error?: string
 }
 
@@ -35,25 +35,25 @@ const resolveConfiguredId = (
 }
 
 const formatUsdFromCents = (rawCents?: string) => {
-  if (!rawCents) return 'Unknown'
+  if (!rawCents) return "Unknown"
   try {
     const cents = BigInt(rawCents)
     const dollars = cents / 100n
-    const remainder = (cents % 100n).toString().padStart(2, '0')
+    const remainder = (cents % 100n).toString().padStart(2, "0")
     return `$${dollars.toString()}.${remainder}`
   } catch {
-    return 'Unknown'
+    return "Unknown"
   }
 }
 
 const formatEpochSeconds = (rawSeconds?: string) => {
-  if (!rawSeconds) return 'Unknown'
+  if (!rawSeconds) return "Unknown"
   const timestamp = Number(rawSeconds) * 1000
-  if (!Number.isFinite(timestamp)) return 'Unknown'
-  return new Intl.DateTimeFormat('en-US', {
-    month: 'short',
-    day: '2-digit',
-    year: 'numeric',
+  if (!Number.isFinite(timestamp)) return "Unknown"
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "2-digit",
+    year: "numeric"
   }).format(new Date(timestamp))
 }
 
@@ -63,18 +63,16 @@ const shortenId = (value: string, start = 6, end = 4) => {
 }
 
 const getStructLabel = (typeName?: string) => {
-  if (!typeName) return 'Unknown'
-  const fragments = typeName.split('::')
+  if (!typeName) return "Unknown"
+  const fragments = typeName.split("::")
   return fragments[fragments.length - 1] || typeName
 }
 
-const buildTemplateLookup = (
-  templates: DiscountTemplateSummary[]
-) =>
+const buildTemplateLookup = (templates: DiscountTemplateSummary[]) =>
   templates.reduce<Record<string, DiscountTemplateSummary>>(
     (accumulator, template) => ({
       ...accumulator,
-      [template.discountTemplateId]: template,
+      [template.discountTemplateId]: template
     }),
     {}
   )
@@ -84,19 +82,19 @@ const renderPanelBody = ({
   error,
   isEmpty,
   emptyMessage,
-  children,
+  children
 }: {
-  status: PanelStatus['status']
+  status: PanelStatus["status"]
   error?: string
   isEmpty: boolean
   emptyMessage: string
   children: ReactNode
 }) => {
-  if (status === 'loading') return <Loading />
-  if (status === 'error')
+  if (status === "loading") return <Loading />
+  if (status === "error")
     return (
       <div className="rounded-xl border border-rose-200/70 bg-rose-50/60 p-4 text-sm text-rose-600 dark:border-rose-500/30 dark:bg-rose-500/10">
-        {error || 'Unable to load data.'}
+        {error || "Unable to load data."}
       </div>
     )
   if (isEmpty)
@@ -112,7 +110,7 @@ const Panel = ({
   title,
   subtitle,
   className,
-  children,
+  children
 }: {
   title: string
   subtitle?: string
@@ -121,7 +119,7 @@ const Panel = ({
 }) => (
   <section
     className={clsx(
-      'rounded-2xl border border-slate-200/70 bg-white/80 shadow-[0_18px_60px_-45px_rgba(1,22,49,0.35)] backdrop-blur-sm transition dark:border-slate-50/10 dark:bg-sds-dark/70',
+      "dark:bg-sds-dark/70 rounded-2xl border border-slate-200/70 bg-white/80 shadow-[0_18px_60px_-45px_rgba(1,22,49,0.35)] backdrop-blur-sm transition dark:border-slate-50/10",
       className
     )}
   >
@@ -143,18 +141,19 @@ const SelectedCurrencyPanel = ({
   acceptedCurrencies,
   status,
   error,
-  shopConfigured,
+  shopConfigured
 }: {
   acceptedCurrencies: AcceptedCurrencySummary[]
-  status: PanelStatus['status']
+  status: PanelStatus["status"]
   error?: string
   shopConfigured: boolean
 }) => {
   const selectedCurrency = acceptedCurrencies[0]
-  const title = selectedCurrency?.symbol || getStructLabel(selectedCurrency?.coinType)
+  const title =
+    selectedCurrency?.symbol || getStructLabel(selectedCurrency?.coinType)
   const subtitle = selectedCurrency?.coinType
     ? getStructLabel(selectedCurrency.coinType)
-    : 'No currency configured'
+    : "No currency configured"
 
   return (
     <Panel
@@ -171,7 +170,7 @@ const SelectedCurrencyPanel = ({
           status,
           error,
           isEmpty: acceptedCurrencies.length === 0,
-          emptyMessage: 'No accepted currencies configured yet.',
+          emptyMessage: "No accepted currencies configured yet.",
           children: (
             <div className="flex flex-col gap-2">
               <div className="text-2xl font-semibold text-sds-dark dark:text-sds-light">
@@ -182,10 +181,10 @@ const SelectedCurrencyPanel = ({
               </div>
               <div className="text-xs uppercase tracking-[0.16em] text-slate-400 dark:text-slate-200/40">
                 {acceptedCurrencies.length} currency
-                {acceptedCurrencies.length === 1 ? '' : 'ies'} accepted
+                {acceptedCurrencies.length === 1 ? "" : "ies"} accepted
               </div>
             </div>
-          ),
+          )
         })
       )}
     </Panel>
@@ -197,11 +196,11 @@ const ItemListingsPanel = ({
   discountTemplates,
   status,
   error,
-  shopConfigured,
+  shopConfigured
 }: {
   itemListings: ItemListingSummary[]
   discountTemplates: DiscountTemplateSummary[]
-  status: PanelStatus['status']
+  status: PanelStatus["status"]
   error?: string
   shopConfigured: boolean
 }) => {
@@ -221,7 +220,7 @@ const ItemListingsPanel = ({
           status,
           error,
           isEmpty: itemListings.length === 0,
-          emptyMessage: 'No item listings are available yet.',
+          emptyMessage: "No item listings are available yet.",
           children: (
             <div className="grid gap-4 lg:grid-cols-2">
               {itemListings.map((listing) => {
@@ -246,21 +245,21 @@ const ItemListingsPanel = ({
                           {shortenId(listing.itemListingId)}
                         </div>
                       </div>
-                      <span className="rounded-full bg-sds-blue/15 px-3 py-1 text-xs font-semibold uppercase tracking-[0.12em] text-sds-dark dark:text-sds-light">
+                      <span className="bg-sds-blue/15 rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.12em] text-sds-dark dark:text-sds-light">
                         {formatUsdFromCents(listing.basePriceUsdCents)}
                       </span>
                     </div>
                     <div className="mt-4 flex flex-wrap items-center gap-3 text-xs uppercase tracking-[0.12em] text-slate-500 dark:text-slate-200/60">
                       <span>
-                        Stock:{' '}
+                        Stock:{" "}
                         <span className="text-slate-800 dark:text-slate-100">
-                          {listing.stock ?? 'Unknown'}
+                          {listing.stock ?? "Unknown"}
                         </span>
                       </span>
                       <span>
-                        Discount:{' '}
+                        Discount:{" "}
                         <span className="text-slate-800 dark:text-slate-100">
-                          {spotlightLabel || 'None'}
+                          {spotlightLabel || "None"}
                         </span>
                       </span>
                     </div>
@@ -268,7 +267,7 @@ const ItemListingsPanel = ({
                 )
               })}
             </div>
-          ),
+          )
         })
       )}
     </Panel>
@@ -279,10 +278,10 @@ const AcceptedCurrenciesPanel = ({
   acceptedCurrencies,
   status,
   error,
-  shopConfigured,
+  shopConfigured
 }: {
   acceptedCurrencies: AcceptedCurrencySummary[]
-  status: PanelStatus['status']
+  status: PanelStatus["status"]
   error?: string
   shopConfigured: boolean
 }) => (
@@ -296,7 +295,7 @@ const AcceptedCurrenciesPanel = ({
         status,
         error,
         isEmpty: acceptedCurrencies.length === 0,
-        emptyMessage: 'No accepted currencies registered.',
+        emptyMessage: "No accepted currencies registered.",
         children: (
           <div className="flex flex-col gap-3">
             {acceptedCurrencies.map((currency) => (
@@ -313,12 +312,12 @@ const AcceptedCurrenciesPanel = ({
                   </span>
                 </div>
                 <span className="text-xs uppercase tracking-[0.12em] text-slate-500 dark:text-slate-200/60">
-                  {currency.decimals ?? '--'} decimals
+                  {currency.decimals ?? "--"} decimals
                 </span>
               </div>
             ))}
           </div>
-        ),
+        )
       })
     )}
   </Panel>
@@ -328,10 +327,10 @@ const PurchasedItemsPanel = ({
   purchasedItems,
   status,
   error,
-  walletConfigured,
+  walletConfigured
 }: {
   purchasedItems: ShopItemReceiptSummary[]
-  status: PanelStatus['status']
+  status: PanelStatus["status"]
   error?: string
   walletConfigured: boolean
 }) => (
@@ -345,7 +344,7 @@ const PurchasedItemsPanel = ({
         status,
         error,
         isEmpty: purchasedItems.length === 0,
-        emptyMessage: 'No purchases found for this wallet.',
+        emptyMessage: "No purchases found for this wallet.",
         children: (
           <div className="space-y-3">
             {purchasedItems.map((item) => (
@@ -369,7 +368,7 @@ const PurchasedItemsPanel = ({
               </div>
             ))}
           </div>
-        ),
+        )
       })
     )}
   </Panel>
@@ -380,11 +379,11 @@ const DiscountsPanel = ({
   discountTemplates,
   status,
   error,
-  walletConfigured,
+  walletConfigured
 }: {
   discountTickets: DiscountTicketDetails[]
   discountTemplates: DiscountTemplateSummary[]
-  status: PanelStatus['status']
+  status: PanelStatus["status"]
   error?: string
   walletConfigured: boolean
 }) => {
@@ -404,7 +403,7 @@ const DiscountsPanel = ({
           status,
           error,
           isEmpty: discountTickets.length === 0,
-          emptyMessage: 'No discount tickets held by this wallet.',
+          emptyMessage: "No discount tickets held by this wallet.",
           children: (
             <div className="space-y-3">
               {discountTickets.map((ticket) => {
@@ -417,23 +416,23 @@ const DiscountsPanel = ({
                     <div className="flex flex-col gap-2">
                       <div className="flex items-center justify-between">
                         <span className="font-semibold text-sds-dark dark:text-sds-light">
-                          {template?.ruleDescription || 'Discount ticket'}
+                          {template?.ruleDescription || "Discount ticket"}
                         </span>
                         <span className="text-xs uppercase tracking-[0.12em] text-slate-500 dark:text-slate-200/60">
-                          {template?.status || 'active'}
+                          {template?.status || "active"}
                         </span>
                       </div>
                       <div className="text-xs text-slate-500 dark:text-slate-200/60">
                         {ticket.listingId
                           ? `Listing ${shortenId(ticket.listingId)}`
-                          : 'Applies to any listing'}
+                          : "Applies to any listing"}
                       </div>
                     </div>
                   </div>
                 )
               })}
             </div>
-          ),
+          )
         })
       )}
     </Panel>
@@ -450,15 +449,14 @@ const StoreDashboard = () => {
     [rawShopId]
   )
   const packageId = useMemo(
-    () =>
-      resolveConfiguredId(rawPackageId, CONTRACT_PACKAGE_ID_NOT_DEFINED),
+    () => resolveConfiguredId(rawPackageId, CONTRACT_PACKAGE_ID_NOT_DEFINED),
     [rawPackageId]
   )
 
   const { storefront, wallet } = useShopDashboardData({
     shopId,
     packageId,
-    ownerAddress: currentAccount?.address,
+    ownerAddress: currentAccount?.address
   })
 
   const hasShopConfig = Boolean(shopId)

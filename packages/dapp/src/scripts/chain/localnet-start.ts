@@ -1,24 +1,29 @@
 import { spawn, type ChildProcess } from "node:child_process"
 import { once } from "node:events"
-import { readdir, unlink } from "node:fs/promises"
+import { readdir, stat, unlink } from "node:fs/promises"
 import path from "node:path"
 import { setTimeout as delay } from "node:timers/promises"
 
-import { SuiClient } from "@mysten/sui/client"
-import { getFaucetHost } from "@mysten/sui/faucet"
 import yargs from "yargs"
 
-import { ensureFoundedAddress } from "../../tooling/address.ts"
-import type { SuiNetworkConfig } from "../../tooling/config.ts"
-import { loadKeypair } from "../../tooling/keypair.ts"
+import { ensureFoundedAddress } from "@sui-oracle-market/tooling-node/address"
+import type { SuiNetworkConfig } from "@sui-oracle-market/tooling-node/config"
+import { createSuiClient } from "@sui-oracle-market/tooling-node/describe-object"
+import { loadKeypair } from "@sui-oracle-market/tooling-node/keypair"
+import {
+  deriveFaucetUrl,
+  isFaucetSupportedNetwork,
+  resolveLocalnetConfigDir
+} from "@sui-oracle-market/tooling-node/localnet"
 import {
   logKeyValueBlue,
   logKeyValueGreen,
   logKeyValueYellow,
   logSimpleGreen,
   logWarning
-} from "../../tooling/log.ts"
-import { runSuiScript } from "../../tooling/process.ts"
+} from "@sui-oracle-market/tooling-node/log"
+import { runSuiScript } from "@sui-oracle-market/tooling-node/process"
+import { runSuiCli } from "@sui-oracle-market/tooling-node/suiCli"
 
 type RpcSnapshot = {
   rpcUrl: string
@@ -39,19 +44,21 @@ type StartLocalnetCliArgs = {
   waitSeconds: number
   withFaucet: boolean
   forceRegenesis: boolean
+  configDir: string
 }
 
 runSuiScript<StartLocalnetCliArgs>(
   async (
     { network, paths },
-    { withFaucet, checkOnly, waitSeconds, forceRegenesis }
+    { withFaucet, checkOnly, waitSeconds, forceRegenesis, configDir }
   ) => {
+    const localnetConfigDir = resolveLocalnetConfigDir(configDir)
     const rpcUrl = network.url
     const probeResult = await probeRpcHealth(rpcUrl)
 
     if (checkOnly) {
       if (probeResult.status === "running") {
-        logSimpleGreen("Localnet running 🚀")
+        logSimpleGreen("Localnet running")
         logRpcSnapshot(probeResult.snapshot, withFaucet)
         return
       }
@@ -75,9 +82,12 @@ runSuiScript<StartLocalnetCliArgs>(
       return
     }
 
+    await ensureLocalnetConfig({ configDir: localnetConfigDir, withFaucet })
+
     const localnetProcess = startLocalnetProcess({
-      withFaucet: withFaucet,
-      forceRegenesis
+      withFaucet,
+      forceRegenesis,
+      configDir: localnetConfigDir
     })
 
     const readySnapshot = await waitForRpcReadiness({
@@ -121,6 +131,13 @@ runSuiScript<StartLocalnetCliArgs>(
       description:
         "Force localnet regenesis (clears localnet deployments and passes --force-regenesis to sui start)",
       default: false
+    })
+    .option("configDir", {
+      alias: ["config-dir", "network-config"],
+      type: "string",
+      description:
+        "Localnet config directory for sui start --network.config (persists state across restarts)",
+      default: resolveLocalnetConfigDir()
     })
     .strict()
 )
@@ -188,12 +205,14 @@ const waitForRpcReadiness = async ({
 
 const startLocalnetProcess = ({
   withFaucet,
-  forceRegenesis
+  forceRegenesis,
+  configDir
 }: {
   withFaucet: boolean
   forceRegenesis: boolean
+  configDir: string
 }): ChildProcess => {
-  const args = buildStartArguments(withFaucet, forceRegenesis)
+  const args = buildStartArguments(withFaucet, forceRegenesis, configDir)
   const processHandle = spawn("sui", args, {
     stdio: ["inherit", "pipe", "pipe"]
   })
@@ -211,8 +230,12 @@ const startLocalnetProcess = ({
   return processHandle
 }
 
-const buildStartArguments = (withFaucet: boolean, forceRegenesis: boolean) => {
-  const args = ["start"]
+const buildStartArguments = (
+  withFaucet: boolean,
+  forceRegenesis: boolean,
+  configDir: string
+) => {
+  const args = ["start", "--network.config", configDir]
   if (withFaucet) args.push("--with-faucet")
   if (forceRegenesis) args.push("--force-regenesis")
   return args
@@ -252,20 +275,7 @@ const logProcessExit = async (processHandle: ChildProcess) => {
   logKeyValueYellow("Localnet")(description)
 }
 
-const buildSuiClient = (rpcUrl: string) => new SuiClient({ url: rpcUrl })
-
-const deriveFaucetUrl = (rpcUrl: string) => {
-  try {
-    const faucetHost = getFaucetHost("localnet")
-    const faucetUrl = new URL(faucetHost)
-    const rpcHost = new URL(rpcUrl)
-    faucetUrl.hostname = rpcHost.hostname
-    faucetUrl.pathname = "/v2/gas"
-    return faucetUrl.toString()
-  } catch {
-    return "http://127.0.0.1:9123/v2/gas"
-  }
-}
+const buildSuiClient = createSuiClient
 
 const maybeFundAfterRegenesis = async ({
   forceRegenesis,
@@ -293,11 +303,6 @@ type FundingTarget = {
   signerAddress: string
   signer?: Awaited<ReturnType<typeof loadKeypair>>
 }
-
-const isFaucetSupportedNetwork = (
-  networkName: string
-): networkName is "localnet" | "devnet" | "testnet" =>
-  ["localnet", "devnet", "testnet"].includes(networkName)
 
 const deriveFundingTarget = async (
   network: SuiNetworkConfig
@@ -374,6 +379,39 @@ const formatSui = (mist: bigint) => {
 
 const formatTimestamp = (timestampMs: number) =>
   new Date(timestampMs).toISOString()
+
+const pathExists = async (targetPath: string) => {
+  try {
+    await stat(targetPath)
+    return true
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return false
+    throw error
+  }
+}
+
+const ensureLocalnetConfig = async ({
+  configDir,
+  withFaucet
+}: {
+  configDir: string
+  withFaucet: boolean
+}) => {
+  if (await pathExists(configDir)) return
+
+  logKeyValueYellow("Localnet config")(
+    `Missing; creating via sui genesis at ${configDir}`
+  )
+
+  const args = ["--working-dir", configDir]
+  if (withFaucet) args.push("--with-faucet")
+
+  const { exitCode, stderr, stdout } = await runSuiCli(["genesis"])(args)
+  if (exitCode === 0) return
+
+  const details = (stderr || stdout || "unknown error").trim()
+  throw new Error(`sui genesis failed for ${configDir}: ${details}`)
+}
 
 const deleteLocalnetDeployments = async (deploymentsPath: string) => {
   try {

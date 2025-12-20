@@ -1,7 +1,6 @@
 import yargs from "yargs"
 
-import { getSuiObject } from "../../tooling/object.ts"
-import { runSuiScript } from "../../tooling/process.ts"
+import { getSuiObject } from "@sui-oracle-market/tooling-core/object"
 import {
   OBJECT_REQUEST_OPTIONS,
   buildObjectInformation,
@@ -9,7 +8,8 @@ import {
   logInspectionContext,
   logObjectInformation,
   normalizeTargetObjectId
-} from "../../utils/describe-object.ts"
+} from "@sui-oracle-market/tooling-node/describe-object"
+import { runSuiScript } from "@sui-oracle-market/tooling-node/process"
 
 runSuiScript(
   async ({ network, currentNetwork }, cliArguments) => {

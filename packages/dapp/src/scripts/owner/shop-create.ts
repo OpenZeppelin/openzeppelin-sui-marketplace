@@ -1,23 +1,23 @@
-import { SuiClient } from "@mysten/sui/client"
 import { normalizeSuiObjectId } from "@mysten/sui/utils"
 import yargs from "yargs"
 
-import { fetchShopOverview } from "../../models/shop.ts"
-import { loadKeypair } from "../../tooling/keypair.ts"
-import { runSuiScript } from "../../tooling/process.ts"
-import { newTransaction, signAndExecute } from "../../tooling/transactions.ts"
-import { logShopOverview } from "../../utils/log-summaries.ts"
+import { fetchShopOverview } from "@sui-oracle-market/domain-core/models/shop"
+import { buildCreateShopTransaction } from "@sui-oracle-market/domain-core/ptb/shop"
+import { createSuiClient } from "@sui-oracle-market/tooling-node/describe-object"
+import { loadKeypair } from "@sui-oracle-market/tooling-node/keypair"
+import { runSuiScript } from "@sui-oracle-market/tooling-node/process"
+import { signAndExecute } from "@sui-oracle-market/tooling-node/transactions"
+import { logShopOverview } from "../../utils/log-summaries.js"
 
 runSuiScript(
   async ({ network }, { shopPackageId, publisherCapId }) => {
-    const suiClient = new SuiClient({ url: network.url })
+    const suiClient = createSuiClient(network.url)
     const signer = await loadKeypair(network.account)
     const packageId = normalizeSuiObjectId(shopPackageId)
 
-    const createShopTransaction = newTransaction()
-    createShopTransaction.moveCall({
-      target: `${packageId}::shop::create_shop`,
-      arguments: [createShopTransaction.object(publisherCapId)]
+    const createShopTransaction = buildCreateShopTransaction({
+      packageId,
+      publisherCapId
     })
 
     const {

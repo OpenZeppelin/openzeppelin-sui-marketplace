@@ -1,17 +1,17 @@
-'use client'
+"use client"
 
-import { useCurrentAccount } from '@mysten/dapp-kit'
-import { Link } from '@radix-ui/themes'
-import Faucet from '@suiware/kit/Faucet'
-import { HeartIcon, SearchIcon } from 'lucide-react'
+import { useCurrentAccount } from "@mysten/dapp-kit"
+import { Link } from "@radix-ui/themes"
+import Faucet from "@suiware/kit/Faucet"
+import { HeartIcon, SearchIcon } from "lucide-react"
 import {
   CONTRACT_PACKAGE_VARIABLE_NAME,
-  EXPLORER_URL_VARIABLE_NAME,
-} from '../../config/network'
-import { packageUrl } from '../../helpers/network'
-import { notification } from '../../helpers/notification'
-import useNetworkConfig from '../../hooks/useNetworkConfig'
-import ThemeSwitcher from '../ThemeSwitcher'
+  EXPLORER_URL_VARIABLE_NAME
+} from "../../config/network"
+import { packageUrl } from "../../helpers/network"
+import { notification } from "../../helpers/notification"
+import useNetworkConfig from "../../hooks/useNetworkConfig"
+import ThemeSwitcher from "../ThemeSwitcher"
 
 const Footer = () => {
   const { useNetworkVariables } = useNetworkConfig()
@@ -67,7 +67,7 @@ const Footer = () => {
           </Link>
         </div>
         <div className="text-center text-sm opacity-70">
-          SVG graphics, used in NFTs, have been borrowed from{' '}
+          SVG graphics, used in NFTs, have been borrowed from{" "}
           <Link
             href="https://github.com/twitter/twemoji"
             target="_blank"
@@ -77,7 +77,7 @@ const Footer = () => {
             twitter/twemoji
           </Link>
           <br />
-          and licensed under{' '}
+          and licensed under{" "}
           <Link
             href="https://creativecommons.org/licenses/by/4.0/"
             target="_blank"

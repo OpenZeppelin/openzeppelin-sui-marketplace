@@ -1,18 +1,19 @@
-import { SuiClient, type SuiObjectData } from "@mysten/sui/client"
 import { normalizeSuiAddress } from "@mysten/sui/utils"
 import yargs from "yargs"
 
 import {
   fetchShopOverview,
-  resolveLatestShopIdentifiers
-} from "../../models/shop.ts"
-import { loadKeypair } from "../../tooling/keypair.ts"
-import { logKeyValueGreen } from "../../tooling/log.ts"
-import { unwrapMoveObjectFields } from "../../tooling/object.ts"
-import { runSuiScript } from "../../tooling/process.ts"
-import { getSuiSharedObject } from "../../tooling/shared-object.ts"
-import { newTransaction, signAndExecute } from "../../tooling/transactions.ts"
-import { logShopOverview } from "../../utils/log-summaries.ts"
+  getShopOwnerAddressFromObject
+} from "@sui-oracle-market/domain-core/models/shop"
+import { buildUpdateShopOwnerTransaction } from "@sui-oracle-market/domain-core/ptb/shop"
+import { resolveLatestShopIdentifiers } from "@sui-oracle-market/domain-node/shop-identifiers"
+import { getSuiSharedObject } from "@sui-oracle-market/tooling-core/shared-object"
+import { createSuiClient } from "@sui-oracle-market/tooling-node/describe-object"
+import { loadKeypair } from "@sui-oracle-market/tooling-node/keypair"
+import { logKeyValueGreen } from "@sui-oracle-market/tooling-node/log"
+import { runSuiScript } from "@sui-oracle-market/tooling-node/process"
+import { signAndExecute } from "@sui-oracle-market/tooling-node/transactions"
+import { logShopOverview } from "../../utils/log-summaries.js"
 
 type UpdateShopOwnerArguments = {
   shopPackageId?: string
@@ -31,14 +32,14 @@ type NormalizedInputs = {
 runSuiScript(
   async ({ network }, cliArguments) => {
     const inputs = await normalizeInputs(cliArguments, network.networkName)
-    const suiClient = new SuiClient({ url: network.url })
+    const suiClient = createSuiClient(network.url)
     const signer = await loadKeypair(network.account)
 
     const shopSharedObject = await getSuiSharedObject(
       { objectId: inputs.shopId, mutable: true },
       suiClient
     )
-    const previousOwner = readShopOwnerAddress(shopSharedObject.object)
+    const previousOwner = getShopOwnerAddressFromObject(shopSharedObject.object)
 
     const updateShopOwnerTransaction = buildUpdateShopOwnerTransaction({
       packageId: inputs.packageId,
@@ -116,41 +117,6 @@ const normalizeInputs = async (
     ownerCapId,
     newOwner: normalizeSuiAddress(cliArguments.newOwner)
   }
-}
-
-const readShopOwnerAddress = (shopObject: SuiObjectData): string => {
-  const fields = unwrapMoveObjectFields(shopObject)
-  const rawOwner = fields.owner
-  if (typeof rawOwner !== "string")
-    throw new Error("Shop object is missing an owner address field.")
-
-  return normalizeSuiAddress(rawOwner)
-}
-
-const buildUpdateShopOwnerTransaction = ({
-  packageId,
-  shop,
-  ownerCapId,
-  newOwner
-}: {
-  packageId: string
-  shop: Awaited<ReturnType<typeof getSuiSharedObject>>
-  ownerCapId: string
-  newOwner: string
-}) => {
-  const transaction = newTransaction()
-  const shopArgument = transaction.sharedObjectRef(shop.sharedRef)
-
-  transaction.moveCall({
-    target: `${packageId}::shop::update_shop_owner`,
-    arguments: [
-      shopArgument,
-      transaction.object(ownerCapId),
-      transaction.pure.address(newOwner)
-    ]
-  })
-
-  return transaction
 }
 
 const logOwnerRotation = ({

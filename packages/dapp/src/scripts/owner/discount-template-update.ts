@@ -1,4 +1,3 @@
-import { SuiClient } from "@mysten/sui/client"
 import { normalizeSuiObjectId } from "@mysten/sui/utils"
 import yargs from "yargs"
 
@@ -11,16 +10,21 @@ import {
   validateDiscountSchedule,
   type DiscountRuleKindLabel,
   type NormalizedRuleKind
-} from "../../models/discount.ts"
-import { SUI_CLOCK_ID } from "../../models/pyth.ts"
-import { resolveLatestShopIdentifiers } from "../../models/shop.ts"
-import { loadKeypair } from "../../tooling/keypair.ts"
-import { logKeyValueGreen } from "../../tooling/log.ts"
-import { runSuiScript } from "../../tooling/process.ts"
-import { getSuiSharedObject } from "../../tooling/shared-object.ts"
-import { newTransaction, signAndExecute } from "../../tooling/transactions.ts"
-import { logDiscountTemplateSummary } from "../../utils/log-summaries.ts"
-import { parseNonNegativeU64, parseOptionalU64 } from "../../utils/utility.ts"
+} from "@sui-oracle-market/domain-core/models/discount"
+import { SUI_CLOCK_ID } from "@sui-oracle-market/domain-core/models/pyth"
+import { buildUpdateDiscountTemplateTransaction } from "@sui-oracle-market/domain-core/ptb/discount-template"
+import { resolveLatestShopIdentifiers } from "@sui-oracle-market/domain-node/shop-identifiers"
+import { getSuiSharedObject } from "@sui-oracle-market/tooling-core/shared-object"
+import {
+  parseNonNegativeU64,
+  parseOptionalU64
+} from "@sui-oracle-market/tooling-core/utils/utility"
+import { createSuiClient } from "@sui-oracle-market/tooling-node/describe-object"
+import { loadKeypair } from "@sui-oracle-market/tooling-node/keypair"
+import { logKeyValueGreen } from "@sui-oracle-market/tooling-node/log"
+import { runSuiScript } from "@sui-oracle-market/tooling-node/process"
+import { signAndExecute } from "@sui-oracle-market/tooling-node/transactions"
+import { logDiscountTemplateSummary } from "../../utils/log-summaries.js"
 
 type UpdateDiscountTemplateArguments = {
   shopPackageId?: string
@@ -49,7 +53,7 @@ type NormalizedInputs = {
 runSuiScript(
   async ({ network }, cliArguments) => {
     const inputs = await normalizeInputs(cliArguments, network.networkName)
-    const suiClient = new SuiClient({ url: network.url })
+    const suiClient = createSuiClient(network.url)
     const signer = await loadKeypair(network.account)
 
     const shopSharedObject = await getSuiSharedObject(
@@ -195,52 +199,4 @@ const normalizeInputs = async (
       "maxRedemptions"
     )
   }
-}
-
-const buildUpdateDiscountTemplateTransaction = ({
-  packageId,
-  shop,
-  discountTemplate,
-  ruleKind,
-  ruleValue,
-  startsAt,
-  expiresAt,
-  maxRedemptions,
-  ownerCapId,
-  sharedClockObject
-}: {
-  packageId: string
-  shop: Awaited<ReturnType<typeof getSuiSharedObject>>
-  discountTemplate: Awaited<ReturnType<typeof getSuiSharedObject>>
-  ruleKind: NormalizedRuleKind
-  ruleValue: bigint
-  startsAt: bigint
-  expiresAt?: bigint
-  maxRedemptions?: bigint
-  ownerCapId: string
-  sharedClockObject: Awaited<ReturnType<typeof getSuiSharedObject>>
-}) => {
-  const transaction = newTransaction()
-  const shopArgument = transaction.sharedObjectRef(shop.sharedRef)
-  const discountTemplateArgument = transaction.sharedObjectRef(
-    discountTemplate.sharedRef
-  )
-  const clockArgument = transaction.sharedObjectRef(sharedClockObject.sharedRef)
-
-  transaction.moveCall({
-    target: `${packageId}::shop::update_discount_template`,
-    arguments: [
-      shopArgument,
-      discountTemplateArgument,
-      transaction.pure.u8(ruleKind),
-      transaction.pure.u64(ruleValue),
-      transaction.pure.u64(startsAt),
-      transaction.pure.option("u64", expiresAt ?? null),
-      transaction.pure.option("u64", maxRedemptions ?? null),
-      transaction.object(ownerCapId),
-      clockArgument
-    ]
-  })
-
-  return transaction
 }

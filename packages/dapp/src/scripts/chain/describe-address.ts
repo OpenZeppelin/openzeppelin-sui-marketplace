@@ -1,25 +1,22 @@
-import { SuiClient } from "@mysten/sui/client"
+import type { SuiClient } from "@mysten/sui/client"
 import { normalizeSuiAddress } from "@mysten/sui/utils"
 import yargs from "yargs"
 
-import {
-  getAccountConfig,
-  type SuiNetworkConfig
-} from "../../tooling/config.ts"
-import { loadKeypair } from "../../tooling/keypair.ts"
-import {
-  logEachGreen,
-  logKeyValueBlue,
-  logKeyValueGreen,
-  logKeyValueYellow
-} from "../../tooling/log.ts"
 import {
   buildOwnedObjectLogFields,
   countUniqueObjectTypes,
   mapOwnerToLabel,
   type OwnedObjectSummary
-} from "../../tooling/object-info.ts"
-import { runSuiScript } from "../../tooling/process.ts"
+} from "@sui-oracle-market/tooling-core/object-info"
+import { resolveOwnerAddress } from "@sui-oracle-market/tooling-node/account"
+import { createSuiClient } from "@sui-oracle-market/tooling-node/describe-object"
+import {
+  logEachGreen,
+  logKeyValueBlue,
+  logKeyValueGreen,
+  logKeyValueYellow
+} from "@sui-oracle-market/tooling-node/log"
+import { runSuiScript } from "@sui-oracle-market/tooling-node/process"
 
 type GetAddressInfoCliArgs = {
   address?: string
@@ -56,10 +53,10 @@ const OWNED_OBJECTS_LOG_LIMIT = 10
 runSuiScript<GetAddressInfoCliArgs>(
   async ({ network, currentNetwork }, cliArguments) => {
     const suiClient = createSuiClient(network.url)
-    const addressToInspect = await resolveTargetAddress({
-      providedAddress: cliArguments.address,
-      networkConfig: network
-    })
+    const addressToInspect = await resolveOwnerAddress(
+      cliArguments.address,
+      network
+    )
 
     logInspectionContext({
       address: addressToInspect,
@@ -81,39 +78,6 @@ runSuiScript<GetAddressInfoCliArgs>(
     demandOption: true
   })
 )
-
-/**
- * Creates a Sui JSON-RPC client for the provided RPC URL.
- */
-const createSuiClient = (rpcUrl: string) => new SuiClient({ url: rpcUrl })
-
-/**
- * Resolves the address to inspect by preferring CLI input, falling back to the configured account.
- */
-const resolveTargetAddress = async ({
-  providedAddress,
-  networkConfig
-}: {
-  providedAddress?: string
-  networkConfig: SuiNetworkConfig
-}) => {
-  if (providedAddress) return normalizeSuiAddress(providedAddress)
-
-  return resolveConfiguredAddress(networkConfig)
-}
-
-/**
- * Reads the configured account or derives it from the keystore when no explicit address is set.
- */
-const resolveConfiguredAddress = async (networkConfig: SuiNetworkConfig) => {
-  const accountConfig = getAccountConfig(networkConfig)
-
-  if (accountConfig.accountAddress)
-    return normalizeSuiAddress(accountConfig.accountAddress)
-
-  const keypair = await loadKeypair(accountConfig)
-  return normalizeSuiAddress(keypair.toSuiAddress())
-}
 
 /**
  * Collects balance, stake, and object information for a Sui address.

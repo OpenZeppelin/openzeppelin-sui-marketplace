@@ -1,21 +1,19 @@
-import { SuiClient } from "@mysten/sui/client"
+import { fetchAcceptedCurrencySummaries } from "@sui-oracle-market/domain-core/models/currency"
+import { fetchDiscountTemplateSummaries } from "@sui-oracle-market/domain-core/models/discount"
+import { fetchItemListingSummaries } from "@sui-oracle-market/domain-core/models/item-listing"
+import { fetchShopOverview } from "@sui-oracle-market/domain-core/models/shop"
+import { resolveLatestArtifactShopId } from "@sui-oracle-market/domain-node/shop-identifiers"
+import { createSuiClient } from "@sui-oracle-market/tooling-node/describe-object"
+import { logKeyValueBlue } from "@sui-oracle-market/tooling-node/log"
+import { runSuiScript } from "@sui-oracle-market/tooling-node/process"
 import yargs from "yargs"
-import { fetchAcceptedCurrencySummaries } from "../../models/currency.ts"
-import { fetchDiscountTemplateSummaries } from "../../models/discount.ts"
-import { fetchItemListingSummaries } from "../../models/item-listing.ts"
-import {
-  fetchShopOverview,
-  resolveLatestArtifactShopId
-} from "../../models/shop.ts"
-import { logKeyValueBlue } from "../../tooling/log.ts"
-import { runSuiScript } from "../../tooling/process.ts"
 import {
   logAcceptedCurrencySummary,
   logDiscountTemplateSummary,
   logEmptyList,
   logItemListingSummary,
   logShopOverview
-} from "../../utils/log-summaries.ts"
+} from "../../utils/log-summaries.js"
 
 type ShowShopArguments = {
   shopId?: string
@@ -27,7 +25,7 @@ runSuiScript(
       cliArguments.shopId,
       network.networkName
     )
-    const suiClient = new SuiClient({ url: network.url })
+    const suiClient = createSuiClient(network.url)
 
     logContext({
       shopId,

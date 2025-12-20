@@ -1,24 +1,25 @@
-import { SuiClient } from "@mysten/sui/client"
+import type { SuiClient } from "@mysten/sui/client"
 import yargs from "yargs"
 
-import type { DiscountTicketDetails } from "../../models/discount.ts"
+import type { DiscountTicketDetails } from "@sui-oracle-market/domain-core/models/discount"
 import {
   formatDiscountTicketStructType,
   parseDiscountTicketFromObject
-} from "../../models/discount.ts"
-import { resolveOwnerAddress } from "../../tooling/account.ts"
-import { getLatestObjectFromArtifact } from "../../tooling/artifacts.ts"
-import { type SuiNetworkConfig } from "../../tooling/config.ts"
+} from "@sui-oracle-market/domain-core/models/discount"
+import {
+  fetchAllOwnedObjectsByFilter,
+  normalizeIdOrThrow
+} from "@sui-oracle-market/tooling-core/object"
+import { resolveOwnerAddress } from "@sui-oracle-market/tooling-node/account"
+import { getLatestObjectFromArtifact } from "@sui-oracle-market/tooling-node/artifacts"
+import { type SuiNetworkConfig } from "@sui-oracle-market/tooling-node/config"
+import { createSuiClient } from "@sui-oracle-market/tooling-node/describe-object"
 import {
   logKeyValueBlue,
   logKeyValueGreen,
   logKeyValueYellow
-} from "../../tooling/log.ts"
-import {
-  fetchAllOwnedObjectsByType,
-  normalizeIdOrThrow
-} from "../../tooling/object.ts"
-import { runSuiScript } from "../../tooling/process.ts"
+} from "@sui-oracle-market/tooling-node/log"
+import { runSuiScript } from "@sui-oracle-market/tooling-node/process"
 
 type ListDiscountTicketsArguments = {
   address?: string
@@ -42,7 +43,7 @@ runSuiScript(
       network.networkName,
       network
     )
-    const suiClient = new SuiClient({ url: network.url })
+    const suiClient = createSuiClient(network.url)
 
     logListContext({
       ownerAddress: inputs.ownerAddress,
@@ -110,7 +111,10 @@ const resolveInputs = async (
     )
 
   return {
-    ownerAddress: await resolveOwnerAddress(cliArguments.address, networkConfig),
+    ownerAddress: await resolveOwnerAddress(
+      cliArguments.address,
+      networkConfig
+    ),
     shopPackageId,
     discountTicketStructType: formatDiscountTicketStructType(shopPackageId),
     shopId: cliArguments.shopId
@@ -130,10 +134,10 @@ const fetchDiscountTickets = async ({
   shopFilterId?: string
   suiClient: SuiClient
 }): Promise<DiscountTicketSummary[]> => {
-  const discountTicketObjects = await fetchAllOwnedObjectsByType(
+  const discountTicketObjects = await fetchAllOwnedObjectsByFilter(
     {
       ownerAddress,
-      structType: discountTicketStructType
+      filter: { StructType: discountTicketStructType }
     },
     suiClient
   )

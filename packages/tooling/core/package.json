@@ -1,0 +1,25 @@
+{
+  "name": "@sui-oracle-market/tooling-core",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./address": "./src/address.ts",
+    "./constants": "./src/constants.ts",
+    "./dynamic-fields": "./src/dynamic-fields.ts",
+    "./hex": "./src/hex.ts",
+    "./network": "./src/network.ts",
+    "./object": "./src/object.ts",
+    "./object-info": "./src/object-info.ts",
+    "./shared-object": "./src/shared-object.ts",
+    "./transactions": "./src/transactions.ts",
+    "./type-utils": "./src/type-utils.ts",
+    "./types": "./src/types.ts",
+    "./utils/formatters": "./src/utils/formatters.ts",
+    "./utils/type-name": "./src/utils/type-name.ts",
+    "./utils/utility": "./src/utils/utility.ts"
+  },
+  "dependencies": {
+    "@mysten/sui": "^1.45.2"
+  }
+}

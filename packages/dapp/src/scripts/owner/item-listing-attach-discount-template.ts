@@ -1,24 +1,23 @@
-import { SuiClient } from "@mysten/sui/client"
 import { normalizeSuiObjectId } from "@mysten/sui/utils"
 import yargs from "yargs"
 
-import { getDiscountTemplateSummary } from "../../models/discount.ts"
-import { getItemListingSummary } from "../../models/item-listing.ts"
-import { resolveLatestShopIdentifiers } from "../../models/shop.ts"
-import { fetchObjectWithDynamicFieldFallback } from "../../tooling/dynamic-fields.ts"
-import { loadKeypair } from "../../tooling/keypair.ts"
-import { logKeyValueGreen } from "../../tooling/log.ts"
+import { getDiscountTemplateSummary } from "@sui-oracle-market/domain-core/models/discount"
+import { getItemListingSummary } from "@sui-oracle-market/domain-core/models/item-listing"
 import {
-  normalizeOptionalIdFromValue,
-  unwrapMoveObjectFields
-} from "../../tooling/object.ts"
-import { runSuiScript } from "../../tooling/process.ts"
-import { getSuiSharedObject } from "../../tooling/shared-object.ts"
-import { newTransaction, signAndExecute } from "../../tooling/transactions.ts"
+  buildAttachDiscountTemplateTransaction,
+  validateTemplateAndListing
+} from "@sui-oracle-market/domain-core/ptb/item-listing"
+import { resolveLatestShopIdentifiers } from "@sui-oracle-market/domain-node/shop-identifiers"
+import { getSuiSharedObject } from "@sui-oracle-market/tooling-core/shared-object"
+import { createSuiClient } from "@sui-oracle-market/tooling-node/describe-object"
+import { loadKeypair } from "@sui-oracle-market/tooling-node/keypair"
+import { logKeyValueGreen } from "@sui-oracle-market/tooling-node/log"
+import { runSuiScript } from "@sui-oracle-market/tooling-node/process"
+import { signAndExecute } from "@sui-oracle-market/tooling-node/transactions"
 import {
   logDiscountTemplateSummary,
   logItemListingSummary
-} from "../../utils/log-summaries.ts"
+} from "../../utils/log-summaries.js"
 
 type AttachDiscountTemplateArguments = {
   shopPackageId?: string
@@ -39,7 +38,7 @@ type NormalizedInputs = {
 runSuiScript(
   async ({ network }, cliArguments) => {
     const inputs = await normalizeInputs(cliArguments, network.networkName)
-    const suiClient = new SuiClient({ url: network.url })
+    const suiClient = createSuiClient(network.url)
 
     const resolvedIds = await validateTemplateAndListing({
       shopId: inputs.shopId,
@@ -154,129 +153,4 @@ const normalizeInputs = async (
     itemListingId: normalizeSuiObjectId(cliArguments.itemListingId),
     discountTemplateId: normalizeSuiObjectId(cliArguments.discountTemplateId)
   }
-}
-
-const fetchItemListingMetadata = async (
-  listingId: string,
-  shopId: string,
-  suiClient: SuiClient
-) => {
-  const object = await fetchObjectWithDynamicFieldFallback(
-    { objectId: listingId, parentObjectId: shopId },
-    suiClient
-  )
-
-  const fields = unwrapMoveObjectFields(object)
-  const rawShopAddress = fields.shop_address
-  if (typeof rawShopAddress !== "string")
-    throw new Error(
-      `Item listing ${listingId} is missing a shop_address field.`
-    )
-  const shopAddress = normalizeSuiObjectId(rawShopAddress)
-  const normalizedListingId =
-    normalizeOptionalIdFromValue(fields.id) ?? normalizeSuiObjectId(listingId)
-
-  return {
-    id: normalizedListingId,
-    shopAddress
-  }
-}
-
-const fetchDiscountTemplateMetadata = async (
-  templateId: string,
-  shopId: string,
-  suiClient: SuiClient
-) => {
-  const object = await fetchObjectWithDynamicFieldFallback(
-    { objectId: templateId, parentObjectId: shopId },
-    suiClient
-  )
-
-  const fields = unwrapMoveObjectFields(object)
-  const rawShopAddress = fields.shop_address
-  if (typeof rawShopAddress !== "string")
-    throw new Error(
-      `Discount template ${templateId} is missing a shop_address field.`
-    )
-  const shopAddress = normalizeSuiObjectId(rawShopAddress)
-
-  return {
-    id:
-      normalizeOptionalIdFromValue(fields.id) ??
-      normalizeSuiObjectId(templateId),
-    shopAddress,
-    appliesToListing: normalizeOptionalIdFromValue(fields.applies_to_listing)
-  }
-}
-
-const validateTemplateAndListing = async ({
-  shopId,
-  itemListingId,
-  discountTemplateId,
-  suiClient
-}: {
-  shopId: string
-  itemListingId: string
-  discountTemplateId: string
-  suiClient: SuiClient
-}): Promise<{ itemListingId: string; discountTemplateId: string }> => {
-  const [listing, template] = await Promise.all([
-    fetchItemListingMetadata(itemListingId, shopId, suiClient),
-    fetchDiscountTemplateMetadata(discountTemplateId, shopId, suiClient)
-  ])
-
-  const normalizedShopId = normalizeSuiObjectId(shopId)
-
-  if (listing.shopAddress !== normalizedShopId)
-    throw new Error(
-      `Item listing ${listing.id} belongs to shop ${listing.shopAddress}, not ${normalizedShopId}.`
-    )
-
-  if (template.shopAddress !== normalizedShopId)
-    throw new Error(
-      `Discount template ${template.id} belongs to shop ${template.shopAddress}, not ${normalizedShopId}.`
-    )
-
-  if (template.appliesToListing && template.appliesToListing !== listing.id)
-    throw new Error(
-      `Discount template ${template.id} is pinned to listing ${template.appliesToListing} and cannot be attached to ${listing.id}. Create a template for this listing or use the pinned listing.`
-    )
-
-  return {
-    itemListingId: listing.id,
-    discountTemplateId: template.id
-  }
-}
-
-const buildAttachDiscountTemplateTransaction = ({
-  packageId,
-  shop,
-  itemListing,
-  discountTemplate,
-  ownerCapId
-}: {
-  packageId: string
-  shop: Awaited<ReturnType<typeof getSuiSharedObject>>
-  itemListing: Awaited<ReturnType<typeof getSuiSharedObject>>
-  discountTemplate: Awaited<ReturnType<typeof getSuiSharedObject>>
-  ownerCapId: string
-}) => {
-  const transaction = newTransaction()
-  const shopArgument = transaction.sharedObjectRef(shop.sharedRef)
-  const listingArgument = transaction.sharedObjectRef(itemListing.sharedRef)
-  const templateArgument = transaction.sharedObjectRef(
-    discountTemplate.sharedRef
-  )
-
-  transaction.moveCall({
-    target: `${packageId}::shop::attach_template_to_listing`,
-    arguments: [
-      shopArgument,
-      listingArgument,
-      templateArgument,
-      transaction.object(ownerCapId)
-    ]
-  })
-
-  return transaction
 }

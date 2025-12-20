@@ -1,10 +1,11 @@
-'use client'
+"use client"
 
-import { Button } from '@radix-ui/themes'
-import c from 'clsx'
-import { XIcon } from 'lucide-react'
-import { FC, PropsWithChildren } from 'react'
-import toast, { ToastType } from 'react-hot-toast'
+import { Button } from "@radix-ui/themes"
+import c from "clsx"
+import { XIcon } from "lucide-react"
+import type { FC, PropsWithChildren } from "react"
+import type { ToastType } from "react-hot-toast"
+import toast from "react-hot-toast"
 
 interface INotification {
   id?: string
@@ -13,19 +14,19 @@ interface INotification {
 const Notification: FC<PropsWithChildren<INotification>> = ({
   children,
   id,
-  type,
+  type
 }) => {
-  const isCloseButtonVisible = id !== null && type !== 'loading'
+  const isCloseButtonVisible = id !== null && type !== "loading"
 
   return (
     <div className="flex w-full flex-row items-center justify-between gap-2">
       <div
-        className={c('text-pretty', {
-          'mr-2': isCloseButtonVisible,
+        className={c("text-pretty", {
+          "mr-2": isCloseButtonVisible
         })}
         style={{
-          wordBreak: 'break-word',
-          overflowWrap: 'break-word',
+          wordBreak: "break-word",
+          overflowWrap: "break-word"
         }}
       >
         {children}

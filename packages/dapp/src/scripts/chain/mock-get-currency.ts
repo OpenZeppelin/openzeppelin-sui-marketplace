@@ -1,5 +1,5 @@
-import { SuiClient } from "@mysten/sui/client"
-import { Transaction } from "@mysten/sui/transactions"
+import type { SuiClient } from "@mysten/sui/client"
+import type { Transaction } from "@mysten/sui/transactions"
 import {
   deriveObjectID,
   normalizeSuiAddress,
@@ -8,19 +8,24 @@ import {
 import yargs from "yargs"
 import { hideBin } from "yargs/helpers"
 
-import type { MockArtifact } from "../../models/mock.ts"
-import { mockArtifactPath } from "../../models/mock.ts"
-import { readArtifact } from "../../tooling/artifacts.ts"
-import { SUI_COIN_REGISTRY_ID } from "../../tooling/constants.ts"
-import { loadKeypair } from "../../tooling/keypair.ts"
+import { assertLocalnetNetwork } from "@sui-oracle-market/tooling-core/network"
+import { getSuiSharedObject } from "@sui-oracle-market/tooling-core/shared-object"
+import { newTransaction } from "@sui-oracle-market/tooling-core/transactions"
+import type { MockArtifact } from "@sui-oracle-market/tooling-core/types"
+import {
+  mockArtifactPath,
+  readArtifact
+} from "@sui-oracle-market/tooling-node/artifacts"
+import { SUI_COIN_REGISTRY_ID } from "@sui-oracle-market/tooling-node/constants"
+import { createSuiClient } from "@sui-oracle-market/tooling-node/describe-object"
+import { loadKeypair } from "@sui-oracle-market/tooling-node/keypair"
 import {
   logKeyValueBlue,
   logKeyValueGreen,
   logKeyValueRed,
   logWarning
-} from "../../tooling/log.ts"
-import { runSuiScript } from "../../tooling/process.ts"
-import { getSuiSharedObject } from "../../tooling/shared-object.ts"
+} from "@sui-oracle-market/tooling-node/log"
+import { runSuiScript } from "@sui-oracle-market/tooling-node/process"
 
 type CliArgs = {
   registryId: string
@@ -85,9 +90,9 @@ type ResolvedSupply = {
 runSuiScript(async ({ network, currentNetwork }) => {
   const cliArgs = await parseCliArgs()
 
-  ensureLocalnet(currentNetwork)
+  assertLocalnetNetwork(currentNetwork)
 
-  const suiClient = new SuiClient({ url: network.url })
+  const suiClient = createSuiClient(network.url)
 
   const keypair = await loadKeypair(network.account)
 
@@ -143,11 +148,6 @@ const parseCliArgs = async (): Promise<CliArgs> => {
     registryId: normalizeSuiObjectId(providedArgs.registryId),
     coinTypes: (providedArgs.coinType as string[]).map((coinType) => coinType)
   }
-}
-
-const ensureLocalnet = (network: string) => {
-  if (network !== "localnet")
-    throw new Error("get-mock-currency is intended for localnet only.")
 }
 
 const resolveCoinInputs = (
@@ -250,7 +250,7 @@ const runCoinRegistryViews = async ({
   currencySharedObject: Awaited<ReturnType<typeof getSuiSharedObject>>
   sender: string
 }): Promise<CurrencyViewValues> => {
-  const tx = new Transaction()
+  const tx = newTransaction()
 
   const registryArg = tx.sharedObjectRef(registrySharedObject.sharedRef)
   const currencyArg = tx.sharedObjectRef(currencySharedObject.sharedRef)

@@ -1,20 +1,19 @@
-import { SuiClient } from "@mysten/sui/client"
 import { normalizeSuiObjectId } from "@mysten/sui/utils"
 import yargs from "yargs"
 
-import { getItemListingSummary } from "../../models/item-listing.ts"
-import { resolveLatestShopIdentifiers } from "../../models/shop.ts"
-import { fetchObjectWithDynamicFieldFallback } from "../../tooling/dynamic-fields.ts"
-import { loadKeypair } from "../../tooling/keypair.ts"
-import { logKeyValueGreen } from "../../tooling/log.ts"
+import { getItemListingSummary } from "@sui-oracle-market/domain-core/models/item-listing"
 import {
-  normalizeOptionalIdFromValue,
-  unwrapMoveObjectFields
-} from "../../tooling/object.ts"
-import { runSuiScript } from "../../tooling/process.ts"
-import { getSuiSharedObject } from "../../tooling/shared-object.ts"
-import { newTransaction, signAndExecute } from "../../tooling/transactions.ts"
-import { logItemListingSummary } from "../../utils/log-summaries.ts"
+  buildClearDiscountTemplateTransaction,
+  resolveListingIdForShop
+} from "@sui-oracle-market/domain-core/ptb/item-listing"
+import { resolveLatestShopIdentifiers } from "@sui-oracle-market/domain-node/shop-identifiers"
+import { getSuiSharedObject } from "@sui-oracle-market/tooling-core/shared-object"
+import { createSuiClient } from "@sui-oracle-market/tooling-node/describe-object"
+import { loadKeypair } from "@sui-oracle-market/tooling-node/keypair"
+import { logKeyValueGreen } from "@sui-oracle-market/tooling-node/log"
+import { runSuiScript } from "@sui-oracle-market/tooling-node/process"
+import { signAndExecute } from "@sui-oracle-market/tooling-node/transactions"
+import { logItemListingSummary } from "../../utils/log-summaries.js"
 
 type ClearDiscountTemplateArguments = {
   shopPackageId?: string
@@ -33,8 +32,8 @@ type NormalizedInputs = {
 runSuiScript(
   async ({ network }, cliArguments) => {
     const inputs = await normalizeInputs(cliArguments, network.networkName)
-    const suiClient = new SuiClient({ url: network.url })
-    const resolvedListingId = await resolveListingId({
+    const suiClient = createSuiClient(network.url)
+    const resolvedListingId = await resolveListingIdForShop({
       shopId: inputs.shopId,
       itemListingId: inputs.itemListingId,
       suiClient
@@ -124,61 +123,4 @@ const normalizeInputs = async (
     ownerCapId,
     itemListingId: normalizeSuiObjectId(cliArguments.itemListingId)
   }
-}
-
-const resolveListingId = async ({
-  shopId,
-  itemListingId,
-  suiClient
-}: {
-  shopId: string
-  itemListingId: string
-  suiClient: SuiClient
-}): Promise<string> => {
-  const normalizedShopId = normalizeSuiObjectId(shopId)
-  const listingObject = await fetchObjectWithDynamicFieldFallback(
-    { objectId: itemListingId, parentObjectId: normalizedShopId },
-    suiClient
-  )
-  const fields = unwrapMoveObjectFields(listingObject)
-
-  const rawShopAddress = fields.shop_address
-  if (typeof rawShopAddress !== "string")
-    throw new Error(
-      `Item listing ${itemListingId} is missing a shop_address field.`
-    )
-
-  const listingShop = normalizeSuiObjectId(rawShopAddress)
-  if (listingShop !== normalizedShopId)
-    throw new Error(
-      `Item listing ${itemListingId} belongs to shop ${listingShop}, not ${normalizedShopId}.`
-    )
-
-  return (
-    normalizeOptionalIdFromValue(fields.id) ??
-    normalizeSuiObjectId(itemListingId)
-  )
-}
-
-const buildClearDiscountTemplateTransaction = ({
-  packageId,
-  shop,
-  itemListing,
-  ownerCapId
-}: {
-  packageId: string
-  shop: Awaited<ReturnType<typeof getSuiSharedObject>>
-  itemListing: Awaited<ReturnType<typeof getSuiSharedObject>>
-  ownerCapId: string
-}) => {
-  const transaction = newTransaction()
-  const shopArgument = transaction.sharedObjectRef(shop.sharedRef)
-  const listingArgument = transaction.sharedObjectRef(itemListing.sharedRef)
-
-  transaction.moveCall({
-    target: `${packageId}::shop::clear_template_from_listing`,
-    arguments: [shopArgument, listingArgument, transaction.object(ownerCapId)]
-  })
-
-  return transaction
 }

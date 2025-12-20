@@ -1,0 +1,30 @@
+import {
+  DEFAULT_PUBLISH_GAS_BUDGET,
+  DEFAULT_TX_GAS_BUDGET,
+  MINIMUM_ACCOUNT_BALANCE,
+  MINIMUM_GAS_COIN_BALANCE,
+  MINIMUM_GAS_COIN_OBJECTS,
+  ONE_SUI,
+  SUI_CLOCK_ID,
+  SUI_COIN_REGISTRY_ID
+} from "@sui-oracle-market/tooling-core/constants"
+import os from "node:os"
+import path from "node:path"
+
+export const DEFAULT_KEYSTORE_PATH = path.join(
+  os.homedir(),
+  ".sui",
+  "sui_config",
+  "sui.keystore"
+)
+
+export {
+  DEFAULT_PUBLISH_GAS_BUDGET,
+  DEFAULT_TX_GAS_BUDGET,
+  MINIMUM_ACCOUNT_BALANCE,
+  MINIMUM_GAS_COIN_BALANCE,
+  MINIMUM_GAS_COIN_OBJECTS,
+  ONE_SUI,
+  SUI_CLOCK_ID,
+  SUI_COIN_REGISTRY_ID
+}

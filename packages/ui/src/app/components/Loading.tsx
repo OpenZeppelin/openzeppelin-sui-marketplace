@@ -1,7 +1,7 @@
-'use client'
+"use client"
 
-import { Spinner } from '@radix-ui/themes'
-import { FC } from 'react'
+import { Spinner } from "@radix-ui/themes"
+import type { FC } from "react"
 
 const Loading: FC = () => {
   return (

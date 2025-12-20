@@ -1,0 +1,14 @@
+{
+  "name": "@sui-oracle-market/domain-node",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./*": "./src/*.ts"
+  },
+  "dependencies": {
+    "@sui-oracle-market/domain-core": "workspace:*",
+    "@sui-oracle-market/tooling-core": "workspace:*",
+    "@sui-oracle-market/tooling-node": "workspace:*"
+  }
+}

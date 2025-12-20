@@ -1,6 +1,6 @@
-'use client'
+"use client"
 
-import './index.css'
+import "./index.css"
 
 /**
  * Animated background component.

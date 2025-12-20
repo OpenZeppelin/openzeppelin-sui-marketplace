@@ -1,6 +1,7 @@
-import { Link } from '@radix-ui/themes'
-import toast, { Renderable } from 'react-hot-toast'
-import Notification from '../components/Notification'
+import { Link } from "@radix-ui/themes"
+import type { Renderable } from "react-hot-toast"
+import toast from "react-hot-toast"
+import Notification from "../components/Notification"
 
 const reportLoading = (message: Renderable) => {
   const content = <Notification type="loading">{message}</Notification>
@@ -18,7 +19,7 @@ const reportError = (
   }
 
   const message =
-    userFriendlyMessage || error?.message || 'An error has occurred'
+    userFriendlyMessage || error?.message || "An error has occurred"
 
   if (id == null) {
     id = Date.now().toString()
@@ -48,7 +49,7 @@ const reportSuccess = (message: Renderable, id?: string) => {
 }
 
 const reportTxLoading = () => {
-  return reportLoading('Confirm this transaction in your wallet')
+  return reportLoading("Confirm this transaction in your wallet")
 }
 
 const reportTxError = (
@@ -62,7 +63,7 @@ const reportTxError = (
 const reportTxSuccess = (transactionUrl: string, id?: string) => {
   return reportSuccess(
     <>
-      Transaction submitted{' '}
+      Transaction submitted{" "}
       <Link target="_blank" rel="noopener noreferrer" href={transactionUrl}>
         (view)
       </Link>
@@ -77,5 +78,5 @@ export const notification = {
   error: reportError,
   txLoading: reportTxLoading,
   txSuccess: reportTxSuccess,
-  txError: reportTxError,
+  txError: reportTxError
 }
