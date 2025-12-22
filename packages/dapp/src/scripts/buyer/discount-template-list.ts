@@ -1,39 +1,34 @@
 import yargs from "yargs"
 
-import { fetchDiscountTemplateSummaries } from "@sui-oracle-market/domain-core/models/discount"
+import { getDiscountTemplateSummaries } from "@sui-oracle-market/domain-core/models/discount"
 import { resolveLatestArtifactShopId } from "@sui-oracle-market/domain-node/shop-identifiers"
-import { createSuiClient } from "@sui-oracle-market/tooling-node/describe-object"
 import { logKeyValueBlue } from "@sui-oracle-market/tooling-node/log"
 import { runSuiScript } from "@sui-oracle-market/tooling-node/process"
 import {
   logDiscountTemplateSummary,
   logEmptyList
-} from "../../utils/log-summaries.js"
+} from "../../utils/log-summaries.ts"
 
 type ListDiscountTemplatesArguments = {
   shopId?: string
 }
 
 runSuiScript(
-  async (
-    { network, currentNetwork },
-    cliArguments: ListDiscountTemplatesArguments
-  ) => {
+  async (tooling, cliArguments: ListDiscountTemplatesArguments) => {
     const shopId = await resolveLatestArtifactShopId(
       cliArguments.shopId,
-      network.networkName
+      tooling.network.networkName
     )
-    const suiClient = createSuiClient(network.url)
 
     logListContext({
       shopId,
-      rpcUrl: network.url,
-      networkName: currentNetwork
+      rpcUrl: tooling.network.url,
+      networkName: tooling.network.networkName
     })
 
-    const discountTemplates = await fetchDiscountTemplateSummaries(
+    const discountTemplates = await getDiscountTemplateSummaries(
       shopId,
-      suiClient
+      tooling.suiClient
     )
     if (discountTemplates.length === 0)
       return logEmptyList("Discount-templates", "No templates found.")

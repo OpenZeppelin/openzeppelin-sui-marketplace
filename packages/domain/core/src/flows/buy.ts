@@ -32,7 +32,7 @@ export type DiscountContext =
 const isSuiCoinType = (coinType: string) =>
   normalizeCoinType(coinType) === "0x2::sui::SUI"
 
-const fetchObjectRef = async (objectId: string, suiClient: SuiClient) => {
+const getObjectRef = async (objectId: string, suiClient: SuiClient) => {
   const response = await suiClient.getObject({
     id: normalizeSuiObjectId(objectId),
     options: { showContent: false, showOwner: false, showType: false }
@@ -74,7 +74,7 @@ const maybeSetDedicatedGasForSuiPayments = async ({
       "Paying with SUI requires at least two SUI coin objects (one for gas, one for payment). Create an extra coin object (e.g., by splitting coins) or provide --payment-coin-object-id for a non-gas coin."
     )
 
-  const gasRef = await fetchObjectRef(gasCandidate.coinObjectId, suiClient)
+  const gasRef = await getObjectRef(gasCandidate.coinObjectId, suiClient)
   transaction.setGasOwner(signerAddress)
   transaction.setGasPayment([gasRef])
 }
@@ -147,7 +147,7 @@ export const resolveDiscountContext = async ({
       objectId: discountTicketId,
       options: { showContent: true, showType: true }
     },
-    suiClient
+    { suiClient }
   )
 
   const ticketDetails = parseDiscountTicketFromObject(ticketObject)
@@ -247,6 +247,7 @@ export const buildBuyTransaction = async (
   },
   suiClient: SuiClient
 ) => {
+  const toolingCoreContext = { suiClient }
   const transaction = newTransaction()
   transaction.setSender(signerAddress)
 
@@ -286,7 +287,7 @@ export const buildBuyTransaction = async (
       objectId: SUI_CLOCK_ID,
       mutable: false
     },
-    suiClient
+    toolingCoreContext
   )
 
   const clockArgument = transaction.sharedObjectRef(clockShared.sharedRef)
@@ -297,7 +298,7 @@ export const buildBuyTransaction = async (
   if (discountContext.mode === "claim") {
     const discountTemplateShared = await getSuiSharedObject(
       { objectId: discountContext.discountTemplateId, mutable: true },
-      suiClient
+      toolingCoreContext
     )
 
     transaction.moveCall({
@@ -324,7 +325,7 @@ export const buildBuyTransaction = async (
   if (discountContext.mode === "ticket") {
     const discountTemplateShared = await getSuiSharedObject(
       { objectId: discountContext.discountTemplateId, mutable: true },
-      suiClient
+      toolingCoreContext
     )
 
     transaction.moveCall({

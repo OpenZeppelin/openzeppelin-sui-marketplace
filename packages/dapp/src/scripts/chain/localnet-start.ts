@@ -1,15 +1,14 @@
 import { spawn, type ChildProcess } from "node:child_process"
 import { once } from "node:events"
-import { readdir, stat, unlink } from "node:fs/promises"
+import { mkdir, readdir, stat, unlink } from "node:fs/promises"
 import path from "node:path"
 import { setTimeout as delay } from "node:timers/promises"
 
 import yargs from "yargs"
 
-import { ensureFoundedAddress } from "@sui-oracle-market/tooling-node/address"
-import type { SuiNetworkConfig } from "@sui-oracle-market/tooling-node/config"
+import type { Ed25519Keypair } from "@mysten/sui/keypairs/ed25519"
 import { createSuiClient } from "@sui-oracle-market/tooling-node/describe-object"
-import { loadKeypair } from "@sui-oracle-market/tooling-node/keypair"
+import type { Tooling } from "@sui-oracle-market/tooling-node/factory"
 import {
   deriveFaucetUrl,
   isFaucetSupportedNetwork,
@@ -49,11 +48,12 @@ type StartLocalnetCliArgs = {
 
 runSuiScript<StartLocalnetCliArgs>(
   async (
-    { network, paths },
+    tooling,
     { withFaucet, checkOnly, waitSeconds, forceRegenesis, configDir }
   ) => {
+    const paths = tooling.suiConfig.paths
     const localnetConfigDir = resolveLocalnetConfigDir(configDir)
-    const rpcUrl = network.url
+    const rpcUrl = tooling.network.url
     const probeResult = await probeRpcHealth(rpcUrl)
 
     if (checkOnly) {
@@ -76,8 +76,7 @@ runSuiScript<StartLocalnetCliArgs>(
       await maybeFundAfterRegenesis({
         forceRegenesis,
         withFaucet,
-        network,
-        rpcUrl
+        tooling
       })
       return
     }
@@ -100,8 +99,7 @@ runSuiScript<StartLocalnetCliArgs>(
     await maybeFundAfterRegenesis({
       forceRegenesis,
       withFaucet,
-      network,
-      rpcUrl
+      tooling
     })
 
     await logProcessExit(localnetProcess)
@@ -144,7 +142,7 @@ runSuiScript<StartLocalnetCliArgs>(
 
 const probeRpcHealth = async (rpcUrl: string): Promise<ProbeResult> => {
   try {
-    return { status: "running", snapshot: await fetchRpcSnapshot(rpcUrl) }
+    return { status: "running", snapshot: await getRpcSnapshot(rpcUrl) }
   } catch (error) {
     return {
       status: "offline",
@@ -154,8 +152,8 @@ const probeRpcHealth = async (rpcUrl: string): Promise<ProbeResult> => {
   }
 }
 
-const fetchRpcSnapshot = async (rpcUrl: string): Promise<RpcSnapshot> => {
-  const client = buildSuiClient(rpcUrl)
+const getRpcSnapshot = async (rpcUrl: string): Promise<RpcSnapshot> => {
+  const client = createSuiClient(rpcUrl)
 
   const [systemState, latestCheckpoint, referenceGasPrice] = await Promise.all([
     client.getLatestSuiSystemState(),
@@ -275,18 +273,14 @@ const logProcessExit = async (processHandle: ChildProcess) => {
   logKeyValueYellow("Localnet")(description)
 }
 
-const buildSuiClient = createSuiClient
-
 const maybeFundAfterRegenesis = async ({
   forceRegenesis,
   withFaucet,
-  network,
-  rpcUrl
+  tooling
 }: {
   forceRegenesis: boolean
   withFaucet: boolean
-  network: SuiNetworkConfig
-  rpcUrl: string
+  tooling: Tooling
 }) => {
   if (!forceRegenesis) return
   if (!withFaucet) {
@@ -296,23 +290,23 @@ const maybeFundAfterRegenesis = async ({
     return
   }
 
-  await fundConfiguredAddressIfPossible({ network, rpcUrl })
+  await fundConfiguredAddressIfPossible(tooling)
 }
 
 type FundingTarget = {
   signerAddress: string
-  signer?: Awaited<ReturnType<typeof loadKeypair>>
+  signer?: Ed25519Keypair
 }
 
 const deriveFundingTarget = async (
-  network: SuiNetworkConfig
+  tooling: Tooling
 ): Promise<FundingTarget | null> => {
   try {
-    const signer = await loadKeypair(network.account)
+    const signer = tooling.loadedEd25519KeyPair
     return { signerAddress: signer.toSuiAddress(), signer }
   } catch (error) {
-    if (network.account.accountAddress)
-      return { signerAddress: network.account.accountAddress }
+    if (tooling.network.account.accountAddress)
+      return { signerAddress: tooling.network.account.accountAddress }
 
     logWarning(
       `Skipping faucet funding; unable to derive signer address: ${
@@ -323,32 +317,22 @@ const deriveFundingTarget = async (
   }
 }
 
-const fundConfiguredAddressIfPossible = async ({
-  network,
-  rpcUrl
-}: {
-  network: SuiNetworkConfig
-  rpcUrl: string
-}) => {
-  if (!isFaucetSupportedNetwork(network.networkName)) {
+const fundConfiguredAddressIfPossible = async (tooling: Tooling) => {
+  if (!isFaucetSupportedNetwork(tooling.network.networkName)) {
     logWarning(
-      `Skipping faucet funding; faucet unsupported for ${network.networkName}`
+      `Skipping faucet funding; faucet unsupported for ${tooling.network.networkName}`
     )
     return
   }
 
-  const fundingTarget = await deriveFundingTarget(network)
+  const fundingTarget = await deriveFundingTarget(tooling)
   if (!fundingTarget) return
 
   try {
-    await ensureFoundedAddress(
-      {
-        network: network.networkName,
-        signerAddress: fundingTarget.signerAddress,
-        signer: fundingTarget.signer
-      },
-      buildSuiClient(rpcUrl)
-    )
+    await tooling.ensureFoundedAddress({
+      signerAddress: fundingTarget.signerAddress,
+      signer: fundingTarget.signer
+    })
 
     logKeyValueGreen("Faucet")(
       `Funded ${fundingTarget.signerAddress} after regenesis`
@@ -397,11 +381,22 @@ const ensureLocalnetConfig = async ({
   configDir: string
   withFaucet: boolean
 }) => {
-  if (await pathExists(configDir)) return
+  if (await pathExists(configDir)) {
+    const existing = await stat(configDir)
+    if (!existing.isDirectory()) {
+      throw new Error(
+        `Localnet config path exists but is not a directory: ${configDir}`
+      )
+    }
+
+    return
+  }
 
   logKeyValueYellow("Localnet config")(
     `Missing; creating via sui genesis at ${configDir}`
   )
+
+  await mkdir(configDir, { recursive: true })
 
   const args = ["--working-dir", configDir]
   if (withFaucet) args.push("--with-faucet")
@@ -409,7 +404,7 @@ const ensureLocalnetConfig = async ({
   const { exitCode, stderr, stdout } = await runSuiCli(["genesis"])(args)
   if (exitCode === 0) return
 
-  const details = (stderr || stdout || "unknown error").trim()
+  const details = String(stderr || stdout || "unknown error").trim()
   throw new Error(`sui genesis failed for ${configDir}: ${details}`)
 }
 

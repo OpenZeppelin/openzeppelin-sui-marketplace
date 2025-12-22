@@ -1,37 +1,35 @@
 import yargs from "yargs"
 
-import { fetchItemListingSummaries } from "@sui-oracle-market/domain-core/models/item-listing"
+import { getItemListingSummaries } from "@sui-oracle-market/domain-core/models/item-listing"
 import { resolveLatestArtifactShopId } from "@sui-oracle-market/domain-node/shop-identifiers"
-import { createSuiClient } from "@sui-oracle-market/tooling-node/describe-object"
 import { logKeyValueBlue } from "@sui-oracle-market/tooling-node/log"
 import { runSuiScript } from "@sui-oracle-market/tooling-node/process"
 import {
   logEmptyList,
   logItemListingSummary
-} from "../../utils/log-summaries.js"
+} from "../../utils/log-summaries.ts"
 
 type ListItemListingsArguments = {
   shopId?: string
 }
 
 runSuiScript(
-  async (
-    { network, currentNetwork },
-    cliArguments: ListItemListingsArguments
-  ) => {
+  async (tooling, cliArguments: ListItemListingsArguments) => {
     const shopId = await resolveLatestArtifactShopId(
       cliArguments.shopId,
-      network.networkName
+      tooling.network.networkName
     )
-    const suiClient = createSuiClient(network.url)
 
     logListContext({
       shopId,
-      rpcUrl: network.url,
-      networkName: currentNetwork
+      rpcUrl: tooling.network.url,
+      networkName: tooling.network.networkName
     })
 
-    const itemListings = await fetchItemListingSummaries(shopId, suiClient)
+    const itemListings = await getItemListingSummaries(
+      shopId,
+      tooling.suiClient
+    )
     if (itemListings.length === 0)
       return logEmptyList("Item-listings", "No listings found.")
 

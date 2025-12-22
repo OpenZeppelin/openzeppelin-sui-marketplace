@@ -4,14 +4,10 @@ import yargs from "yargs"
 import { getItemListingSummary } from "@sui-oracle-market/domain-core/models/item-listing"
 import { buildUpdateItemListingStockTransaction } from "@sui-oracle-market/domain-core/ptb/item-listing"
 import { resolveLatestShopIdentifiers } from "@sui-oracle-market/domain-node/shop-identifiers"
-import { getSuiSharedObject } from "@sui-oracle-market/tooling-core/shared-object"
 import { parseNonNegativeU64 } from "@sui-oracle-market/tooling-core/utils/utility"
-import { createSuiClient } from "@sui-oracle-market/tooling-node/describe-object"
-import { loadKeypair } from "@sui-oracle-market/tooling-node/keypair"
 import { logKeyValueGreen } from "@sui-oracle-market/tooling-node/log"
 import { runSuiScript } from "@sui-oracle-market/tooling-node/process"
-import { signAndExecute } from "@sui-oracle-market/tooling-node/transactions"
-import { logItemListingSummary } from "../../utils/log-summaries.js"
+import { logItemListingSummary } from "../../utils/log-summaries.ts"
 
 type UpdateStockArguments = {
   shopPackageId?: string
@@ -30,18 +26,20 @@ type NormalizedInputs = {
 }
 
 runSuiScript(
-  async ({ network }, cliArguments: UpdateStockArguments) => {
-    const inputs = await normalizeInputs(cliArguments, network.networkName)
-    const suiClient = createSuiClient(network.url)
-    const signer = await loadKeypair(network.account)
-    const shopSharedObject = await getSuiSharedObject(
-      { objectId: inputs.shopId, mutable: false },
-      suiClient
+  async (tooling, cliArguments: UpdateStockArguments) => {
+    const inputs = await normalizeInputs(
+      cliArguments,
+      tooling.network.networkName
     )
-    const itemListingSharedObject = await getSuiSharedObject(
-      { objectId: inputs.itemListingId, mutable: true },
-      suiClient
-    )
+    const suiClient = tooling.suiClient
+    const shopSharedObject = await tooling.getSuiSharedObject({
+      objectId: inputs.shopId,
+      mutable: false
+    })
+    const itemListingSharedObject = await tooling.getSuiSharedObject({
+      objectId: inputs.itemListingId,
+      mutable: true
+    })
 
     const updateStockTransaction = buildUpdateItemListingStockTransaction({
       packageId: inputs.packageId,
@@ -51,14 +49,10 @@ runSuiScript(
       newStock: inputs.newStock
     })
 
-    const { transactionResult } = await signAndExecute(
-      {
-        transaction: updateStockTransaction,
-        signer,
-        networkName: network.networkName
-      },
-      suiClient
-    )
+    const { transactionResult } = await tooling.signAndExecute({
+      transaction: updateStockTransaction,
+      signer: tooling.loadedEd25519KeyPair
+    })
 
     const listingSummary = await getItemListingSummary(
       inputs.shopId,

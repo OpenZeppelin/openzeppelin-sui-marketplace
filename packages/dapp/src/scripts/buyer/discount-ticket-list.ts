@@ -1,4 +1,3 @@
-import type { SuiClient } from "@mysten/sui/client"
 import yargs from "yargs"
 
 import type { DiscountTicketDetails } from "@sui-oracle-market/domain-core/models/discount"
@@ -6,14 +5,11 @@ import {
   formatDiscountTicketStructType,
   parseDiscountTicketFromObject
 } from "@sui-oracle-market/domain-core/models/discount"
-import {
-  fetchAllOwnedObjectsByFilter,
-  normalizeIdOrThrow
-} from "@sui-oracle-market/tooling-core/object"
+import { normalizeIdOrThrow } from "@sui-oracle-market/tooling-core/object"
 import { resolveOwnerAddress } from "@sui-oracle-market/tooling-node/account"
 import { getLatestObjectFromArtifact } from "@sui-oracle-market/tooling-node/artifacts"
 import { type SuiNetworkConfig } from "@sui-oracle-market/tooling-node/config"
-import { createSuiClient } from "@sui-oracle-market/tooling-node/describe-object"
+import type { Tooling } from "@sui-oracle-market/tooling-node/factory"
 import {
   logKeyValueBlue,
   logKeyValueGreen,
@@ -37,13 +33,15 @@ type NormalizedInputs = {
 type DiscountTicketSummary = DiscountTicketDetails
 
 runSuiScript(
-  async ({ network, currentNetwork }, cliArguments) => {
+  async (tooling, cliArguments) => {
+    const {
+      suiConfig: { network, currentNetwork }
+    } = tooling
     const inputs = await resolveInputs(
       cliArguments,
       network.networkName,
       network
     )
-    const suiClient = createSuiClient(network.url)
 
     logListContext({
       ownerAddress: inputs.ownerAddress,
@@ -53,11 +51,11 @@ runSuiScript(
       networkName: currentNetwork
     })
 
-    const discountTickets = await fetchDiscountTickets({
+    const discountTickets = await getDiscountTickets({
       ownerAddress: inputs.ownerAddress,
       discountTicketStructType: inputs.discountTicketStructType,
       shopFilterId: inputs.shopId,
-      suiClient
+      tooling
     })
 
     if (discountTickets.length === 0)
@@ -123,24 +121,21 @@ const resolveInputs = async (
   }
 }
 
-const fetchDiscountTickets = async ({
+const getDiscountTickets = async ({
   ownerAddress,
   discountTicketStructType,
   shopFilterId,
-  suiClient
+  tooling
 }: {
   ownerAddress: string
   discountTicketStructType: string
   shopFilterId?: string
-  suiClient: SuiClient
+  tooling: Pick<Tooling, "getAllOwnedObjectsByFilter">
 }): Promise<DiscountTicketSummary[]> => {
-  const discountTicketObjects = await fetchAllOwnedObjectsByFilter(
-    {
-      ownerAddress,
-      filter: { StructType: discountTicketStructType }
-    },
-    suiClient
-  )
+  const discountTicketObjects = await tooling.getAllOwnedObjectsByFilter({
+    ownerAddress,
+    filter: { StructType: discountTicketStructType }
+  })
 
   const discountTickets = discountTicketObjects.map(
     parseDiscountTicketFromObject

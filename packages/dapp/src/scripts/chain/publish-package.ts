@@ -2,18 +2,12 @@ import path from "node:path"
 import yargs from "yargs"
 
 import type { PublishArtifact } from "@sui-oracle-market/tooling-core/types"
-import { withTestnetFaucetRetry } from "@sui-oracle-market/tooling-node/address"
 import { loadDeploymentArtifacts } from "@sui-oracle-market/tooling-node/artifacts"
-import {
-  getAccountConfig,
-  type SuiNetworkConfig
-} from "@sui-oracle-market/tooling-node/config"
 import {
   DEFAULT_PUBLISH_GAS_BUDGET,
   MINIMUM_GAS_COIN_OBJECTS
 } from "@sui-oracle-market/tooling-node/constants"
-import { createSuiClient } from "@sui-oracle-market/tooling-node/describe-object"
-import { loadKeypair } from "@sui-oracle-market/tooling-node/keypair"
+import type { Tooling } from "@sui-oracle-market/tooling-node/factory"
 import {
   logKeyValueBlue,
   logWarning
@@ -23,7 +17,6 @@ import {
   resolveFullPackagePath
 } from "@sui-oracle-market/tooling-node/move"
 import { runSuiScript } from "@sui-oracle-market/tooling-node/process"
-import { publishPackageWithLog } from "@sui-oracle-market/tooling-node/publish"
 
 type PublishScriptArguments = {
   packagePath: string
@@ -62,44 +55,37 @@ const buildFundingRequirements = (gasBudget: number) => {
 }
 
 const publishPackageToNetwork = async (
-  network: SuiNetworkConfig,
+  tooling: Tooling,
   packagePath: string,
   publishOptions: ResolvedPublishOptions
 ) => {
+  const {
+    suiConfig: { network },
+    loadedEd25519KeyPair: keypair
+  } = tooling
   const gasBudget = network.gasBudget ?? DEFAULT_PUBLISH_GAS_BUDGET
   const { minimumGasCoinBalance, minimumBalance } =
     buildFundingRequirements(gasBudget)
 
-  const keypair = await loadKeypair(getAccountConfig(network))
-  const suiClient = createSuiClient(network.url)
-
-  await withTestnetFaucetRetry(
+  await tooling.withTestnetFaucetRetry(
     {
       signerAddress: keypair.toSuiAddress(),
-      network: network.networkName,
       signer: keypair,
       minimumBalance,
       minimumCoinObjects: MINIMUM_GAS_COIN_OBJECTS,
       minimumGasCoinBalance
     },
     async () =>
-      publishPackageWithLog(
-        {
-          network,
-          packagePath,
-          fullNodeUrl: network.url,
-          keypair,
-          gasBudget,
-          withUnpublishedDependencies:
-            publishOptions.withUnpublishedDependencies,
-          useDevBuild: publishOptions.useDevBuild,
-          useCliPublish: true,
-          allowAutoUnpublishedDependencies:
-            publishOptions.allowAutoUnpublishedDependencies
-        },
-        suiClient
-      ),
-    suiClient
+      tooling.publishPackageWithLog({
+        packagePath,
+        keypair,
+        gasBudget,
+        withUnpublishedDependencies: publishOptions.withUnpublishedDependencies,
+        useDevBuild: publishOptions.useDevBuild,
+        useCliPublish: true,
+        allowAutoUnpublishedDependencies:
+          publishOptions.allowAutoUnpublishedDependencies
+      })
   )
 }
 
@@ -129,7 +115,8 @@ const derivePublishOptions = (
 }
 
 runSuiScript(
-  async ({ network, paths }, cliArguments) => {
+  async (tooling, cliArguments) => {
+    const { network, paths } = tooling.suiConfig
     // Resolve the absolute Move package path (relative to repo root or move/).
     const fullPackagePath = resolveFullPackagePath(
       path.resolve(paths.move),
@@ -154,7 +141,7 @@ runSuiScript(
 
     // Publish with network-aware options (dev builds localnet-only, published deps on shared nets).
     await publishPackageToNetwork(
-      network,
+      tooling,
       fullPackagePath,
       derivePublishOptions(network.networkName, cliArguments)
     )

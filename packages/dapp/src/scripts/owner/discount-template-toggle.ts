@@ -4,13 +4,9 @@ import yargs from "yargs"
 import { getDiscountTemplateSummary } from "@sui-oracle-market/domain-core/models/discount"
 import { buildToggleDiscountTemplateTransaction } from "@sui-oracle-market/domain-core/ptb/discount-template"
 import { resolveLatestShopIdentifiers } from "@sui-oracle-market/domain-node/shop-identifiers"
-import { getSuiSharedObject } from "@sui-oracle-market/tooling-core/shared-object"
-import { createSuiClient } from "@sui-oracle-market/tooling-node/describe-object"
-import { loadKeypair } from "@sui-oracle-market/tooling-node/keypair"
 import { logKeyValueGreen } from "@sui-oracle-market/tooling-node/log"
 import { runSuiScript } from "@sui-oracle-market/tooling-node/process"
-import { signAndExecute } from "@sui-oracle-market/tooling-node/transactions"
-import { logDiscountTemplateSummary } from "../../utils/log-summaries.js"
+import { logDiscountTemplateSummary } from "../../utils/log-summaries.ts"
 
 type ToggleDiscountTemplateArguments = {
   shopPackageId?: string
@@ -29,18 +25,20 @@ type NormalizedInputs = {
 }
 
 runSuiScript(
-  async ({ network }, cliArguments) => {
-    const inputs = await normalizeInputs(cliArguments, network.networkName)
-    const suiClient = createSuiClient(network.url)
-    const signer = await loadKeypair(network.account)
-    const shopSharedObject = await getSuiSharedObject(
-      { objectId: inputs.shopId, mutable: false },
-      suiClient
+  async (tooling, cliArguments) => {
+    const inputs = await normalizeInputs(
+      cliArguments,
+      tooling.network.networkName
     )
-    const discountTemplateShared = await getSuiSharedObject(
-      { objectId: inputs.discountTemplateId, mutable: true },
-      suiClient
-    )
+    const suiClient = tooling.suiClient
+    const shopSharedObject = await tooling.getSuiSharedObject({
+      objectId: inputs.shopId,
+      mutable: false
+    })
+    const discountTemplateShared = await tooling.getSuiSharedObject({
+      objectId: inputs.discountTemplateId,
+      mutable: true
+    })
 
     const toggleDiscountTemplateTransaction =
       buildToggleDiscountTemplateTransaction({
@@ -51,14 +49,10 @@ runSuiScript(
         ownerCapId: inputs.ownerCapId
       })
 
-    const { transactionResult } = await signAndExecute(
-      {
-        transaction: toggleDiscountTemplateTransaction,
-        signer,
-        networkName: network.networkName
-      },
-      suiClient
-    )
+    const { transactionResult } = await tooling.signAndExecute({
+      transaction: toggleDiscountTemplateTransaction,
+      signer: tooling.loadedEd25519KeyPair
+    })
 
     const discountTemplateSummary = await getDiscountTemplateSummary(
       inputs.shopId,

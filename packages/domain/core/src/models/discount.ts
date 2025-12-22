@@ -1,7 +1,7 @@
 import type { SuiClient, SuiObjectData } from "@mysten/sui/client"
 import { normalizeSuiObjectId } from "@mysten/sui/utils"
 import {
-  fetchAllDynamicFields,
+  getAllDynamicFields,
   getSuiDynamicFieldObject
 } from "@sui-oracle-market/tooling-core/dynamic-fields"
 import {
@@ -285,16 +285,16 @@ export type DiscountTemplateSummary = {
   status: string
 }
 
-export const fetchDiscountTemplateSummaries = async (
+export const getDiscountTemplateSummaries = async (
   shopId: string,
   suiClient: SuiClient
 ): Promise<DiscountTemplateSummary[]> => {
-  const discountTemplateMarkers = await fetchAllDynamicFields(
+  const discountTemplateMarkers = await getAllDynamicFields(
     {
       parentObjectId: shopId,
       objectTypeFilter: DISCOUNT_TEMPLATE_MARKER_TYPE_FRAGMENT
     },
-    suiClient
+    { suiClient }
   )
 
   if (discountTemplateMarkers.length === 0) return []
@@ -313,7 +313,7 @@ export const fetchDiscountTemplateSummaries = async (
           objectId: discountTemplateId,
           options: { showContent: true, showType: true }
         },
-        suiClient
+        { suiClient }
       )
     )
   )
@@ -337,11 +337,11 @@ export const getDiscountTemplateSummary = async (
       objectId: discountTemplateId,
       options: { showContent: true, showType: true }
     },
-    suiClient
+    { suiClient }
   )
   const marker = await getSuiDynamicFieldObject(
     { parentObjectId: shopId, childObjectId: discountTemplateId },
-    suiClient
+    { suiClient }
   )
 
   return buildDiscountTemplateSummary(

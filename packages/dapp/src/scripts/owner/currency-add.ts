@@ -1,3 +1,4 @@
+import type { SuiClient } from "@mysten/sui/client"
 import { normalizeSuiObjectId } from "@mysten/sui/utils"
 import yargs from "yargs"
 
@@ -18,15 +19,11 @@ import {
   hexToBytes
 } from "@sui-oracle-market/tooling-core/hex"
 import type { ObjectArtifact } from "@sui-oracle-market/tooling-core/object"
-import { getSuiSharedObject } from "@sui-oracle-market/tooling-core/shared-object"
 import { parseOptionalPositiveU64 } from "@sui-oracle-market/tooling-core/utils/utility"
 import { SUI_COIN_REGISTRY_ID } from "@sui-oracle-market/tooling-node/constants"
-import { createSuiClient } from "@sui-oracle-market/tooling-node/describe-object"
-import { loadKeypair } from "@sui-oracle-market/tooling-node/keypair"
 import { logKeyValueGreen } from "@sui-oracle-market/tooling-node/log"
 import { runSuiScript } from "@sui-oracle-market/tooling-node/process"
-import { signAndExecute } from "@sui-oracle-market/tooling-node/transactions"
-import { logAcceptedCurrencySummary } from "../../utils/log-summaries.js"
+import { logAcceptedCurrencySummary } from "../../utils/log-summaries.ts"
 
 type AddCurrencyArguments = {
   shopPackageId?: string
@@ -55,9 +52,12 @@ type NormalizedInputs = {
 }
 
 runSuiScript(
-  async ({ network }, cliArguments) => {
-    const inputs = await normalizeInputs(cliArguments, network.networkName)
-    const suiClient = createSuiClient(network.url)
+  async (tooling, cliArguments) => {
+    const inputs = await normalizeInputs(
+      cliArguments,
+      tooling.network.networkName
+    )
+    const suiClient = tooling.suiClient
     const existingAcceptedCurrency = await findAcceptedCurrencyByCoinType({
       coinType: inputs.coinType,
       shopId: inputs.shopId,
@@ -70,20 +70,19 @@ runSuiScript(
       })
       return
     }
-    const signer = await loadKeypair(network.account)
 
-    const shopSharedObject = await getSuiSharedObject(
-      { objectId: inputs.shopId, mutable: true },
-      suiClient
-    )
-    const currencySharedObject = await getSuiSharedObject(
-      { objectId: inputs.currencyId, mutable: false },
-      suiClient
-    )
-    const priceInfoSharedObject = await getSuiSharedObject(
-      { objectId: inputs.priceInfoObjectId, mutable: false },
-      suiClient
-    )
+    const shopSharedObject = await tooling.getSuiSharedObject({
+      objectId: inputs.shopId,
+      mutable: true
+    })
+    const currencySharedObject = await tooling.getSuiSharedObject({
+      objectId: inputs.currencyId,
+      mutable: false
+    })
+    const priceInfoSharedObject = await tooling.getSuiSharedObject({
+      objectId: inputs.priceInfoObjectId,
+      mutable: false
+    })
 
     const addCurrencyTransaction = buildAddAcceptedCurrencyTransaction({
       packageId: inputs.packageId,
@@ -101,14 +100,10 @@ runSuiScript(
 
     const {
       objectArtifacts: { created }
-    } = await signAndExecute(
-      {
-        transaction: addCurrencyTransaction,
-        signer,
-        networkName: network.networkName
-      },
-      suiClient
-    )
+    } = await tooling.signAndExecute({
+      transaction: addCurrencyTransaction,
+      signer: tooling.loadedEd25519KeyPair
+    })
 
     const createdAcceptedCurrency = findAcceptedCurrency(created)
     const acceptedCurrencyId =

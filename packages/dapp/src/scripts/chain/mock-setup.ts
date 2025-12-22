@@ -13,46 +13,31 @@ import {
 } from "@sui-oracle-market/domain-core/models/pyth"
 import { normalizeHex } from "@sui-oracle-market/tooling-core/hex"
 import { assertLocalnetNetwork } from "@sui-oracle-market/tooling-core/network"
-import {
-  getObjectSafe,
-  objectTypeMatches
-} from "@sui-oracle-market/tooling-core/object"
-import {
-  getSuiSharedObject,
-  type WrappedSuiSharedObject
-} from "@sui-oracle-market/tooling-core/shared-object"
+import { objectTypeMatches } from "@sui-oracle-market/tooling-core/object"
+import type { WrappedSuiSharedObject } from "@sui-oracle-market/tooling-core/shared-object"
 import type {
   MockArtifact,
   PublishArtifact
 } from "@sui-oracle-market/tooling-core/types"
 import {
-  ensureFoundedAddress,
-  withTestnetFaucetRetry
-} from "@sui-oracle-market/tooling-node/address"
-import {
   mockArtifactPath,
   readArtifact,
   writeMockArtifact
 } from "@sui-oracle-market/tooling-node/artifacts"
-import type { SuiNetworkConfig } from "@sui-oracle-market/tooling-node/config"
-import { getAccountConfig } from "@sui-oracle-market/tooling-node/config"
 import {
   DEFAULT_TX_GAS_BUDGET,
   SUI_COIN_REGISTRY_ID
 } from "@sui-oracle-market/tooling-node/constants"
-import { createSuiClient } from "@sui-oracle-market/tooling-node/describe-object"
-import { loadKeypair } from "@sui-oracle-market/tooling-node/keypair"
+import type { Tooling } from "@sui-oracle-market/tooling-node/factory"
 import {
   logKeyValueBlue,
   logKeyValueGreen,
   logWarning
 } from "@sui-oracle-market/tooling-node/log"
 import { runSuiScript } from "@sui-oracle-market/tooling-node/process"
-import { publishPackageWithLog } from "@sui-oracle-market/tooling-node/publish"
 import {
   findCreatedObjectIds,
-  newTransaction,
-  signAndExecute
+  newTransaction
 } from "@sui-oracle-market/tooling-node/transactions"
 
 type SetupLocalCliArgs = {
@@ -136,7 +121,10 @@ const extendCliArguments = async (
 }
 
 runSuiScript(
-  async ({ network }, cliArguments) => {
+  async (tooling, cliArguments) => {
+    const {
+      suiConfig: { network }
+    } = tooling
     // Guard: mock seeding must be localnet-only to avoid leaking dev packages to shared networks.
     assertLocalnetNetwork(network.networkName)
 
@@ -146,36 +134,29 @@ runSuiScript(
     const fullNodeUrl = network.url
 
     // Load signer (env/keystore) and derive address; Sui requires explicit key material for PTBs.
-    const keypair = await loadKeypair(getAccountConfig(network))
+    const keypair = tooling.loadedEd25519KeyPair
     const signerAddress = keypair.toSuiAddress()
 
-    // Instantiate Sui client for RPC interactions.
-    const suiClient = createSuiClient(fullNodeUrl)
-
     // Ensure the account has gas coins (auto-faucet on localnet) to avoid funding errors downstream.
-    await ensureFoundedAddress(
-      {
-        signerAddress,
-        signer: keypair
-      },
-      suiClient
-    )
+    await tooling.ensureFoundedAddress({
+      signerAddress,
+      signer: keypair
+    })
 
     // Publish or reuse mock Pyth + mock coin packages; record package IDs for later steps.
     const { coinPackageId, pythPackageId } = await publishMockPackages(
       {
-        network,
         fullNodeUrl,
         keypair,
         existingState,
         cliArguments
       },
-      suiClient
+      tooling
     )
 
     // Fetch shared Coin Registry and Clock objects; required for minting coins and timestamp price feeds.
     const { coinRegistryObject, clockObject } =
-      await resolveRegistryAndClockRefs(suiClient)
+      await resolveRegistryAndClockRefs(tooling)
 
     // Ensure mock coins exist (mint + register in coin registry if missing); reuse if already minted.
     const coins =
@@ -184,11 +165,10 @@ runSuiScript(
         {
           coinPackageId,
           owner: signerAddress,
-          networkName: network.networkName,
           signer: keypair,
           coinRegistryObject
         },
-        suiClient
+        tooling
       ))
 
     // Persist coin artifacts for reuse in later runs/scripts.
@@ -199,14 +179,15 @@ runSuiScript(
     // Ensure mock price feeds exist with fresh timestamps; reuse if valid objects already present.
     const priceFeeds =
       existingState.existingPriceFeeds ||
-      (await ensurePriceFeeds({
-        pythPackageId,
-        suiClient,
-        signer: keypair,
-        clockObject,
-        networkName: network.networkName,
-        existingPriceFeeds: existingState.existingPriceFeeds || []
-      }))
+      (await ensurePriceFeeds(
+        {
+          pythPackageId,
+          signer: keypair,
+          clockObject,
+          existingPriceFeeds: existingState.existingPriceFeeds || []
+        },
+        tooling
+      ))
 
     // Persist price feed artifacts for reuse.
     await writeMockArtifact(mockArtifactPath, {
@@ -254,43 +235,34 @@ runSuiScript(
 
 const publishMockPackages = async (
   {
-    network,
-    fullNodeUrl,
+    fullNodeUrl: _fullNodeUrl,
     keypair,
     cliArguments,
     existingState
   }: {
-    network: SuiNetworkConfig
     fullNodeUrl: string
     keypair: Ed25519Keypair
     cliArguments: SetupLocalCliArgs
     existingState: ExistingState
   },
-  suiClient: SuiClient
+  tooling: Tooling
 ) => {
   // Publish or reuse the local Pyth stub. We allow unpublished deps here because this is localnet-only.
   const pythPackageId =
     existingState.existingPythPackageId ||
     pickRootArtifact(
-      await withTestnetFaucetRetry(
+      await tooling.withTestnetFaucetRetry(
         {
           signerAddress: keypair.toSuiAddress(),
-          network: "localnet",
           signer: keypair
         },
         async () =>
-          await publishPackageWithLog(
-            {
-              network,
-              fullNodeUrl,
-              packagePath: path.resolve(cliArguments.pythContractPath),
-              keypair,
-              withUnpublishedDependencies: true,
-              useCliPublish: true
-            },
-            suiClient
-          ),
-        suiClient
+          await tooling.publishPackageWithLog({
+            packagePath: path.resolve(cliArguments.pythContractPath),
+            keypair,
+            withUnpublishedDependencies: true,
+            useCliPublish: true
+          })
       )
     ).packageId
 
@@ -303,24 +275,17 @@ const publishMockPackages = async (
   const coinPackageId =
     existingState.existingCoinPackageId ||
     pickRootArtifact(
-      await withTestnetFaucetRetry(
+      await tooling.withTestnetFaucetRetry(
         {
           signerAddress: keypair.toSuiAddress(),
-          network: "localnet",
           signer: keypair
         },
         async () =>
-          await publishPackageWithLog(
-            {
-              network,
-              fullNodeUrl,
-              packagePath: path.resolve(cliArguments.coinContractPath),
-              keypair,
-              useCliPublish: true
-            },
-            suiClient
-          ),
-        suiClient
+          await tooling.publishPackageWithLog({
+            packagePath: path.resolve(cliArguments.coinContractPath),
+            keypair,
+            useCliPublish: true
+          })
       )
     ).packageId
 
@@ -335,14 +300,16 @@ const publishMockPackages = async (
   }
 }
 
-const resolveRegistryAndClockRefs = async (suiClient: SuiClient) => {
+const resolveRegistryAndClockRefs = async (
+  tooling: Pick<Tooling, "getSuiSharedObject">
+) => {
   // Coin registry is a shared object; clock is used to timestamp price feeds for freshness checks.
   const [coinRegistryObject, clockObject] = await Promise.all([
-    getSuiSharedObject(
-      { objectId: SUI_COIN_REGISTRY_ID, mutable: true },
-      suiClient
-    ),
-    getSuiSharedObject({ objectId: SUI_CLOCK_ID }, suiClient)
+    tooling.getSuiSharedObject({
+      objectId: SUI_COIN_REGISTRY_ID,
+      mutable: true
+    }),
+    tooling.getSuiSharedObject({ objectId: SUI_CLOCK_ID })
   ])
   return { coinRegistryObject, clockObject }
 }
@@ -351,17 +318,15 @@ const ensureMockCoins = async (
   {
     coinPackageId,
     owner,
-    networkName,
     signer,
     coinRegistryObject
   }: {
     coinPackageId: string
     owner: string
-    networkName: string
     signer: Ed25519Keypair
     coinRegistryObject: WrappedSuiSharedObject
   },
-  suiClient: SuiClient
+  tooling: Tooling
 ): Promise<CoinArtifact[]> =>
   await Promise.all(
     buildCoinSeeds(coinPackageId).map(async (seed) => {
@@ -370,11 +335,10 @@ const ensureMockCoins = async (
         {
           seed,
           owner,
-          networkName,
           signer,
           coinRegistryObject
         },
-        suiClient
+        tooling
       )
     })
   )
@@ -383,26 +347,28 @@ const ensureCoin = async (
   {
     seed,
     owner,
-    networkName,
     signer,
     coinRegistryObject
   }: {
     seed: CoinSeed
     owner: string
-    networkName: string
     signer: Ed25519Keypair
     coinRegistryObject: WrappedSuiSharedObject
   },
-  suiClient: SuiClient
+  tooling: Tooling
 ): Promise<CoinArtifact> => {
+  const { suiClient } = tooling
   const currencyObjectId = deriveCurrencyId(seed.coinType)
 
   // Read any existing coin metadata/currency object and any minted coin for the owner.
   const [metadata, currencyObject, mintedCoinObjectId] = await Promise.all([
     suiClient.getCoinMetadata({ coinType: seed.coinType }),
-    getObjectSafe(suiClient, currencyObjectId, {
-      showType: true,
-      showBcs: true
+    tooling.getObjectSafe({
+      objectId: currencyObjectId,
+      options: {
+        showType: true,
+        showBcs: true
+      }
     }),
     findOwnedCoinObjectId({ suiClient, owner, coinType: seed.coinType })
   ])
@@ -437,22 +403,16 @@ const ensureCoin = async (
     ]
   })
 
-  const { transactionResult } = await withTestnetFaucetRetry(
+  const { transactionResult } = await tooling.withTestnetFaucetRetry(
     {
       signerAddress: signer.toSuiAddress(),
-      network: "localnet",
       signer
     },
     async () =>
-      await signAndExecute(
-        {
-          transaction: initTransaction,
-          signer,
-          networkName
-        },
-        suiClient
-      ),
-    suiClient
+      await tooling.signAndExecute({
+        transaction: initTransaction,
+        signer
+      })
   )
 
   // Parse created objects from the transaction (currency, treasury cap, metadata, minted coin).
@@ -475,9 +435,7 @@ const coinArtifactsFromResult = ({
   seed,
   derivedCurrencyId
 }: {
-  transactionResult: Awaited<
-    ReturnType<typeof signAndExecute>
-  >["transactionResult"]
+  transactionResult: SuiTransactionBlockResponse
   seed: CoinSeed
   derivedCurrencyId: string
 }): CoinArtifact => {
@@ -507,21 +465,20 @@ const coinArtifactsFromResult = ({
   }
 }
 
-const ensurePriceFeeds = async ({
-  pythPackageId,
-  suiClient,
-  signer,
-  networkName,
-  existingPriceFeeds,
-  clockObject
-}: {
-  pythPackageId: string
-  suiClient: SuiClient
-  signer: Ed25519Keypair
-  networkName: string
-  existingPriceFeeds: PriceFeedArtifact[]
-  clockObject: WrappedSuiSharedObject
-}): Promise<PriceFeedArtifact[]> => {
+const ensurePriceFeeds = async (
+  {
+    pythPackageId,
+    signer,
+    existingPriceFeeds,
+    clockObject
+  }: {
+    pythPackageId: string
+    signer: Ed25519Keypair
+    existingPriceFeeds: PriceFeedArtifact[]
+    clockObject: WrappedSuiSharedObject
+  },
+  tooling: Tooling
+): Promise<PriceFeedArtifact[]> => {
   const priceInfoType = getPythPriceInfoType(pythPackageId)
   const feeds: PriceFeedArtifact[] = []
 
@@ -529,7 +486,9 @@ const ensurePriceFeeds = async ({
     // If a matching feed exists and the object type matches, reuse it.
     const matchingExisting = findMatchingFeed(existingPriceFeeds, feedConfig)
     const existingObject = matchingExisting
-      ? await getObjectSafe(suiClient, matchingExisting.priceInfoObjectId)
+      ? await tooling.getObjectSafe({
+          objectId: matchingExisting.priceInfoObjectId
+        })
       : undefined
 
     if (matchingExisting && objectTypeMatches(existingObject, priceInfoType)) {
@@ -544,35 +503,35 @@ const ensurePriceFeeds = async ({
     }
 
     // Publish a fresh price feed object with current timestamps via the mock Pyth package.
-    const createdFeed = await publishPriceFeed({
-      feedConfig,
-      pythPackageId,
-      suiClient,
-      signer,
-      networkName,
-      clockObject
-    })
+    const createdFeed = await publishPriceFeed(
+      {
+        feedConfig,
+        pythPackageId,
+        signer,
+        clockObject
+      },
+      tooling
+    )
     feeds.push(createdFeed)
   }
 
   return feeds
 }
 
-const publishPriceFeed = async ({
-  feedConfig,
-  pythPackageId,
-  suiClient,
-  signer,
-  networkName,
-  clockObject
-}: {
-  feedConfig: LabeledPriceFeedConfig
-  pythPackageId: string
-  suiClient: SuiClient
-  signer: Ed25519Keypair
-  networkName: string
-  clockObject: WrappedSuiSharedObject
-}): Promise<PriceFeedArtifact> => {
+const publishPriceFeed = async (
+  {
+    feedConfig,
+    pythPackageId,
+    signer,
+    clockObject
+  }: {
+    feedConfig: LabeledPriceFeedConfig
+    pythPackageId: string
+    signer: Ed25519Keypair
+    clockObject: WrappedSuiSharedObject
+  },
+  tooling: Tooling
+): Promise<PriceFeedArtifact> => {
   const publishPriceFeedTransaction = newTransaction(DEFAULT_TX_GAS_BUDGET)
   publishMockPriceFeed(
     publishPriceFeedTransaction,
@@ -581,22 +540,16 @@ const publishPriceFeed = async ({
     publishPriceFeedTransaction.sharedObjectRef(clockObject.sharedRef)
   )
 
-  const { transactionResult } = await withTestnetFaucetRetry(
+  const { transactionResult } = await tooling.withTestnetFaucetRetry(
     {
       signerAddress: signer.toSuiAddress(),
-      network: "localnet",
       signer
     },
     async () =>
-      await signAndExecute(
-        {
-          transaction: publishPriceFeedTransaction,
-          signer,
-          networkName
-        },
-        suiClient
-      ),
-    suiClient
+      await tooling.signAndExecute({
+        transaction: publishPriceFeedTransaction,
+        signer
+      })
   )
 
   const [priceInfoObjectId] = findCreatedObjectIds(

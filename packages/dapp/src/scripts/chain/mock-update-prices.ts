@@ -8,28 +8,21 @@ import {
 } from "@sui-oracle-market/domain-core/models/pyth"
 import { normalizeHex } from "@sui-oracle-market/tooling-core/hex"
 import { assertLocalnetNetwork } from "@sui-oracle-market/tooling-core/network"
-import { getSuiSharedObject } from "@sui-oracle-market/tooling-core/shared-object"
+import type { WrappedSuiSharedObject } from "@sui-oracle-market/tooling-core/shared-object"
 import type { MockArtifact } from "@sui-oracle-market/tooling-core/types"
-import { ensureFoundedAddress } from "@sui-oracle-market/tooling-node/address"
 import {
   mockArtifactPath,
   readArtifact,
   writeMockArtifact
 } from "@sui-oracle-market/tooling-node/artifacts"
-import { getAccountConfig } from "@sui-oracle-market/tooling-node/config"
 import { DEFAULT_TX_GAS_BUDGET } from "@sui-oracle-market/tooling-node/constants"
-import { createSuiClient } from "@sui-oracle-market/tooling-node/describe-object"
-import { loadKeypair } from "@sui-oracle-market/tooling-node/keypair"
 import {
   logKeyValueBlue,
   logKeyValueGreen,
   logKeyValueYellow
 } from "@sui-oracle-market/tooling-node/log"
 import { runSuiScript } from "@sui-oracle-market/tooling-node/process"
-import {
-  newTransaction,
-  signAndExecute
-} from "@sui-oracle-market/tooling-node/transactions"
+import { newTransaction } from "@sui-oracle-market/tooling-node/transactions"
 
 /**
  * Localnet-only helper to refresh mock Pyth PriceInfoObject timestamps.
@@ -79,16 +72,18 @@ const DEFAULT_FEEDS: LabeledPriceFeedConfig[] = [
 ]
 
 runSuiScript(
-  async ({ network }, cliArguments: UpdatePricesCliArguments) => {
+  async (tooling, cliArguments: UpdatePricesCliArguments) => {
+    const {
+      loadedEd25519KeyPair: keypair,
+      suiConfig: { network }
+    } = tooling
+
     assertLocalnetNetwork(network.networkName)
 
     const fullNodeUrl = network.url
-    const keypair = await loadKeypair(getAccountConfig(network))
     const signerAddress = keypair.toSuiAddress()
 
-    const suiClient = createSuiClient(fullNodeUrl)
-
-    await ensureFoundedAddress({ signerAddress, signer: keypair }, suiClient)
+    await tooling.ensureFoundedAddress({ signerAddress, signer: keypair })
 
     const mockArtifact = await readArtifact<MockArtifact>(mockArtifactPath, {})
     const pythPackageId = resolvePythPackageId(cliArguments, mockArtifact)
@@ -111,10 +106,10 @@ runSuiScript(
     logKeyValueBlue("RPC")(fullNodeUrl)
     logKeyValueBlue("Pyth package")(pythPackageId)
 
-    const clockSharedObject = await getSuiSharedObject(
-      { objectId: SUI_CLOCK_ID, mutable: false },
-      suiClient
-    )
+    const clockSharedObject = await tooling.getSuiSharedObject({
+      objectId: SUI_CLOCK_ID,
+      mutable: false
+    })
 
     const updateTransaction = newTransaction(DEFAULT_TX_GAS_BUDGET)
     const clockArgument = updateTransaction.sharedObjectRef(
@@ -139,7 +134,7 @@ runSuiScript(
         priceFeedArtifact,
         priceFeedConfig: matchingConfig,
         clockArgument,
-        suiClient
+        getSuiSharedObject: tooling.getSuiSharedObject
       })
 
       updatedCount += 1
@@ -152,14 +147,10 @@ runSuiScript(
       return
     }
 
-    const { transactionResult } = await signAndExecute(
-      {
-        transaction: updateTransaction,
-        signer: keypair,
-        networkName: network.networkName
-      },
-      suiClient
-    )
+    const { transactionResult } = await tooling.signAndExecute({
+      transaction: updateTransaction,
+      signer: keypair
+    })
 
     if (transactionResult.digest)
       logKeyValueGreen("digest")(transactionResult.digest)
@@ -208,19 +199,22 @@ const enqueuePriceUpdate = async ({
   priceFeedArtifact,
   priceFeedConfig,
   clockArgument,
-  suiClient
+  getSuiSharedObject
 }: {
   updateTransaction: ReturnType<typeof newTransaction>
   pythPackageId: string
   priceFeedArtifact: PriceFeedArtifact
   priceFeedConfig: MockPriceFeedConfig
   clockArgument: TransactionArgument
-  suiClient: SuiClient
+  getSuiSharedObject: (args: {
+    objectId: string
+    mutable?: boolean
+  }) => Promise<WrappedSuiSharedObject>
 }) => {
-  const priceInfoSharedObject = await getSuiSharedObject(
-    { objectId: priceFeedArtifact.priceInfoObjectId, mutable: true },
-    suiClient
-  )
+  const priceInfoSharedObject = await getSuiSharedObject({
+    objectId: priceFeedArtifact.priceInfoObjectId,
+    mutable: true
+  })
 
   const priceInfoArgument = updateTransaction.sharedObjectRef(
     priceInfoSharedObject.sharedRef

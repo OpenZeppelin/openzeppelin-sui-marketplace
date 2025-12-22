@@ -1,39 +1,34 @@
 import yargs from "yargs"
 
-import { fetchAcceptedCurrencySummaries } from "@sui-oracle-market/domain-core/models/currency"
+import { getAcceptedCurrencySummaries } from "@sui-oracle-market/domain-core/models/currency"
 import { resolveLatestArtifactShopId } from "@sui-oracle-market/domain-node/shop-identifiers"
-import { createSuiClient } from "@sui-oracle-market/tooling-node/describe-object"
 import { logKeyValueBlue } from "@sui-oracle-market/tooling-node/log"
 import { runSuiScript } from "@sui-oracle-market/tooling-node/process"
 import {
   logAcceptedCurrencySummary,
   logEmptyList
-} from "../../utils/log-summaries.js"
+} from "../../utils/log-summaries.ts"
 
 type ListCurrenciesArguments = {
   shopId?: string
 }
 
 runSuiScript(
-  async (
-    { network, currentNetwork },
-    cliArguments: ListCurrenciesArguments
-  ) => {
+  async (tooling, cliArguments: ListCurrenciesArguments) => {
     const shopId = await resolveLatestArtifactShopId(
       cliArguments.shopId,
-      network.networkName
+      tooling.network.networkName
     )
-    const suiClient = createSuiClient(network.url)
 
     logListContext({
       shopId,
-      rpcUrl: network.url,
-      networkName: currentNetwork
+      rpcUrl: tooling.network.url,
+      networkName: tooling.network.networkName
     })
 
-    const acceptedCurrencies = await fetchAcceptedCurrencySummaries(
+    const acceptedCurrencies = await getAcceptedCurrencySummaries(
       shopId,
-      suiClient
+      tooling.suiClient
     )
     if (acceptedCurrencies.length === 0)
       return logEmptyList("Accepted-currencies", "No currencies registered.")

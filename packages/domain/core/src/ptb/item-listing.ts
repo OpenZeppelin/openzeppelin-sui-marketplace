@@ -1,7 +1,7 @@
 import type { SuiClient } from "@mysten/sui/client"
 import { normalizeSuiObjectId } from "@mysten/sui/utils"
 
-import { fetchObjectWithDynamicFieldFallback } from "@sui-oracle-market/tooling-core/dynamic-fields"
+import { getObjectWithDynamicFieldFallback } from "@sui-oracle-market/tooling-core/dynamic-fields"
 import {
   normalizeOptionalIdFromValue,
   unwrapMoveObjectFields
@@ -25,14 +25,14 @@ export const encodeItemName = (name: string): Uint8Array => {
   return new TextEncoder().encode(name)
 }
 
-export const fetchItemListingMetadata = async (
+export const getItemListingMetadata = async (
   listingId: string,
   shopId: string,
   suiClient: SuiClient
 ): Promise<ListingMetadata> => {
-  const object = await fetchObjectWithDynamicFieldFallback(
+  const object = await getObjectWithDynamicFieldFallback(
     { objectId: listingId, parentObjectId: shopId },
-    suiClient
+    { suiClient }
   )
 
   const fields = unwrapMoveObjectFields(object)
@@ -52,14 +52,14 @@ export const fetchItemListingMetadata = async (
   }
 }
 
-export const fetchDiscountTemplateMetadata = async (
+export const getDiscountTemplateMetadata = async (
   templateId: string,
   shopId: string,
   suiClient: SuiClient
 ): Promise<DiscountTemplateMetadata> => {
-  const object = await fetchObjectWithDynamicFieldFallback(
+  const object = await getObjectWithDynamicFieldFallback(
     { objectId: templateId, parentObjectId: shopId },
-    suiClient
+    { suiClient }
   )
 
   const fields = unwrapMoveObjectFields(object)
@@ -90,8 +90,8 @@ export const validateTemplateAndListing = async ({
   suiClient: SuiClient
 }): Promise<{ itemListingId: string; discountTemplateId: string }> => {
   const [listing, template] = await Promise.all([
-    fetchItemListingMetadata(itemListingId, shopId, suiClient),
-    fetchDiscountTemplateMetadata(discountTemplateId, shopId, suiClient)
+    getItemListingMetadata(itemListingId, shopId, suiClient),
+    getDiscountTemplateMetadata(discountTemplateId, shopId, suiClient)
   ])
 
   const normalizedShopId = normalizeSuiObjectId(shopId)
@@ -126,11 +126,7 @@ export const resolveListingIdForShop = async ({
   itemListingId: string
   suiClient: SuiClient
 }): Promise<string> => {
-  const listing = await fetchItemListingMetadata(
-    itemListingId,
-    shopId,
-    suiClient
-  )
+  const listing = await getItemListingMetadata(itemListingId, shopId, suiClient)
   const normalizedShopId = normalizeSuiObjectId(shopId)
 
   if (listing.shopAddress !== normalizedShopId)

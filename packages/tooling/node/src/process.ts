@@ -6,11 +6,10 @@ import { fileURLToPath } from "node:url"
 
 import { type Argv } from "yargs"
 import { hideBin } from "yargs/helpers"
-import {
-  getNetworkConfig,
-  loadSuiConfig,
-  type SuiResolvedConfig
-} from "./config.ts"
+import { getNetworkConfig, loadSuiConfig } from "./config.ts"
+import { createSuiClient } from "./describe-object.ts"
+import type { Tooling } from "./factory.ts"
+import { createTooling } from "./factory.ts"
 import { logEachBlue, logError, logKeyValueBlue, logSimpleBlue } from "./log.ts"
 import { ensureSuiCli } from "./suiCli.ts"
 
@@ -19,7 +18,7 @@ export type CommonCliArgs = {
 }
 
 type ScriptExecutor<TCliArgument> = (
-  config: SuiResolvedConfig,
+  tooling: Tooling,
   cliArguments: TCliArgument & CommonCliArgs
 ) => Promise<void> | void
 
@@ -121,33 +120,42 @@ export const runSuiScript = <TCliArgument>(
     try {
       await ensureSuiCli()
 
-      const suiConfig = await loadSuiConfig()
+      const suiConfigFromFile = await loadSuiConfig()
       const scriptName = currentScriptName()
 
       const cliArguments = cliOptions
         ? await addBaseOptions<TCliArgument>(scriptName, cliOptions)
         : undefined
 
-      const networkToLoad = cliArguments?.network || suiConfig.currentNetwork
+      const networkNameToLoad =
+        cliArguments?.network || suiConfigFromFile.currentNetwork
       const cliArgumentsToLog = sanitizeCliArgumentsForLogging(
         cliArguments,
         cliOptions
       )
 
+      const networkToLoad = getNetworkConfig(
+        cliArguments?.network || suiConfigFromFile.currentNetwork,
+        suiConfigFromFile
+      )
+
       logSimpleBlue("Starting script 🤖")
       logKeyValueBlue("Script")(scriptName)
-      logKeyValueBlue("Network")(networkToLoad)
+      logKeyValueBlue("Network")(networkNameToLoad)
       logEachBlue(cliArgumentsToLog)
       console.log("")
 
+      const suiConfig = {
+        ...suiConfigFromFile,
+        currentNetwork: networkNameToLoad,
+        network: networkToLoad
+      }
+
       await scriptToExecute(
-        {
-          ...suiConfig,
-          network: getNetworkConfig(
-            cliArguments?.network || suiConfig.currentNetwork,
-            suiConfig
-          )
-        },
+        await createTooling({
+          suiClient: createSuiClient(networkToLoad.url),
+          suiConfig
+        }),
         cliArguments as CommonCliArgs & TCliArgument
       )
       process.exit(0)

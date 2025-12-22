@@ -9,7 +9,6 @@ import {
   type OwnedObjectSummary
 } from "@sui-oracle-market/tooling-core/object-info"
 import { resolveOwnerAddress } from "@sui-oracle-market/tooling-node/account"
-import { createSuiClient } from "@sui-oracle-market/tooling-node/describe-object"
 import {
   logEachGreen,
   logKeyValueBlue,
@@ -51,22 +50,21 @@ const OWNED_OBJECTS_HARD_LIMIT = 200
 const OWNED_OBJECTS_LOG_LIMIT = 10
 
 runSuiScript<GetAddressInfoCliArgs>(
-  async ({ network, currentNetwork }, cliArguments) => {
-    const suiClient = createSuiClient(network.url)
+  async (tooling, cliArguments) => {
     const addressToInspect = await resolveOwnerAddress(
       cliArguments.address,
-      network
+      tooling.network
     )
 
     logInspectionContext({
       address: addressToInspect,
-      rpcUrl: network.url,
-      networkName: currentNetwork
+      rpcUrl: tooling.network.url,
+      networkName: tooling.network.networkName
     })
 
     const addressInformation = await collectAddressInformation({
       address: addressToInspect,
-      suiClient
+      suiClient: tooling.suiClient
     })
 
     logAddressInformation(addressInformation)
@@ -93,10 +91,10 @@ const collectAddressInformation = async ({
 
   const [suiBalance, coinBalances, ownedObjectsResult, stakeSummary] =
     await Promise.all([
-      fetchSuiBalance(normalizedAddress, suiClient),
-      fetchCoinBalances(normalizedAddress, suiClient),
-      fetchOwnedObjectSummaries(normalizedAddress, suiClient),
-      fetchStakeSummary(normalizedAddress, suiClient)
+      getSuiBalance(normalizedAddress, suiClient),
+      getCoinBalances(normalizedAddress, suiClient),
+      getOwnedObjectSummaries(normalizedAddress, suiClient),
+      getStakeSummary(normalizedAddress, suiClient)
     ])
 
   return {
@@ -110,9 +108,9 @@ const collectAddressInformation = async ({
 }
 
 /**
- * Fetches the SUI balance (both amount and object count) for the address.
+ * Gets the SUI balance (both amount and object count) for the address.
  */
-const fetchSuiBalance = async (
+const getSuiBalance = async (
   address: string,
   suiClient: SuiClient
 ): Promise<CoinBalanceSummary> => {
@@ -132,7 +130,7 @@ const fetchSuiBalance = async (
 /**
  * Returns the balances for every coin type owned by the address.
  */
-const fetchCoinBalances = async (
+const getCoinBalances = async (
   address: string,
   suiClient: SuiClient
 ): Promise<CoinBalanceSummary[]> => {
@@ -149,7 +147,7 @@ const fetchCoinBalances = async (
 /**
  * Iterates through owned objects and returns a truncated list of summaries to avoid excessive output.
  */
-const fetchOwnedObjectSummaries = async (
+const getOwnedObjectSummaries = async (
   address: string,
   suiClient: SuiClient
 ): Promise<{
@@ -213,7 +211,7 @@ const formatOwnedObject = ({
 /**
  * Aggregates stake amounts by their status.
  */
-const fetchStakeSummary = async (
+const getStakeSummary = async (
   address: string,
   suiClient: SuiClient
 ): Promise<StakeSummary> => {

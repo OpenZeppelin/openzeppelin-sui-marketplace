@@ -5,6 +5,7 @@ import type {
 } from "@mysten/sui/client"
 import { normalizeSuiObjectId } from "@mysten/sui/utils"
 
+import type { ToolingCoreContext } from "./context.ts"
 import type { WrappedSuiObject } from "./object.ts"
 import { getSuiObject } from "./object.ts"
 
@@ -18,12 +19,12 @@ type DynamicFieldInfo = Awaited<
   ReturnType<SuiClient["getDynamicFields"]>
 >["data"][number]
 
-export const fetchAllDynamicFields = async (
+export const getAllDynamicFields = async (
   {
     parentObjectId,
     objectTypeFilter
   }: { parentObjectId: string; objectTypeFilter?: string },
-  suiClient: SuiClient
+  { suiClient }: ToolingCoreContext
 ): Promise<DynamicFieldInfo[]> => {
   const dynamicFields: DynamicFieldInfo[] = []
   let cursor: string | null | undefined
@@ -45,19 +46,19 @@ export const fetchAllDynamicFields = async (
     : dynamicFields
 }
 
-export const fetchAllDynamicFieldObjects = async (
+export const getAllDynamicFieldObjects = async (
   {
     parentObjectId,
     objectTypeFilter
   }: { parentObjectId: string; objectTypeFilter?: string },
-  suiClient: SuiClient
+  context: ToolingCoreContext
 ): Promise<WrappedSuiDynamicFieldObject[]> => {
-  const allDynamicFields = await fetchAllDynamicFields(
+  const allDynamicFields = await getAllDynamicFields(
     {
       parentObjectId,
       objectTypeFilter
     },
-    suiClient
+    context
   )
 
   return await Promise.all(
@@ -67,7 +68,7 @@ export const fetchAllDynamicFieldObjects = async (
           childObjectId: name.value as string,
           parentObjectId
         },
-        suiClient
+        context
       )
     )
   )
@@ -130,10 +131,10 @@ export const getSuiDynamicFieldObject = async (
     childObjectId: string
     parentObjectId: string
   },
-  suClient: SuiClient
+  { suiClient }: ToolingCoreContext
 ): Promise<WrappedSuiDynamicFieldObject> => {
   const { data: dynamicFieldObject, error } =
-    await suClient.getDynamicFieldObject({
+    await suiClient.getDynamicFieldObject({
       parentId: normalizeSuiObjectId(parentObjectId),
       name: {
         type: "0x2::object::ID",
@@ -153,7 +154,7 @@ export const getSuiDynamicFieldObject = async (
   }
 }
 
-export const fetchObjectWithDynamicFieldFallback = async (
+export const getObjectWithDynamicFieldFallback = async (
   {
     objectId,
     parentObjectId,
@@ -163,16 +164,16 @@ export const fetchObjectWithDynamicFieldFallback = async (
     parentObjectId: string
     options?: SuiObjectDataOptions
   },
-  suiClient: SuiClient
+  context: ToolingCoreContext
 ): Promise<SuiObjectData> => {
   try {
-    const { object } = await getSuiObject({ objectId, options }, suiClient)
+    const { object } = await getSuiObject({ objectId, options }, context)
     return object
   } catch (error) {
     try {
       const { object } = await getSuiDynamicFieldObject(
         { childObjectId: objectId, parentObjectId },
-        suiClient
+        context
       )
       return object
     } catch {

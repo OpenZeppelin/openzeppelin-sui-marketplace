@@ -3,12 +3,8 @@ import yargs from "yargs"
 
 import { buildRemoveItemListingTransaction } from "@sui-oracle-market/domain-core/ptb/item-listing"
 import { resolveLatestShopIdentifiers } from "@sui-oracle-market/domain-node/shop-identifiers"
-import { getSuiSharedObject } from "@sui-oracle-market/tooling-core/shared-object"
-import { createSuiClient } from "@sui-oracle-market/tooling-node/describe-object"
-import { loadKeypair } from "@sui-oracle-market/tooling-node/keypair"
 import { logKeyValueGreen } from "@sui-oracle-market/tooling-node/log"
 import { runSuiScript } from "@sui-oracle-market/tooling-node/process"
-import { signAndExecute } from "@sui-oracle-market/tooling-node/transactions"
 
 type RemoveItemArguments = {
   shopPackageId?: string
@@ -18,19 +14,20 @@ type RemoveItemArguments = {
 }
 
 runSuiScript(
-  async ({ network }, cliArguments) => {
-    const inputs = await normalizeInputs(cliArguments, network.networkName)
-    const suiClient = createSuiClient(network.url)
-    const signer = await loadKeypair(network.account)
+  async (tooling, cliArguments) => {
+    const inputs = await normalizeInputs(
+      cliArguments,
+      tooling.network.networkName
+    )
 
-    const shopSharedObject = await getSuiSharedObject(
-      { objectId: inputs.shopId, mutable: true },
-      suiClient
-    )
-    const itemListingSharedObject = await getSuiSharedObject(
-      { objectId: inputs.itemListingId, mutable: false },
-      suiClient
-    )
+    const shopSharedObject = await tooling.getSuiSharedObject({
+      objectId: inputs.shopId,
+      mutable: true
+    })
+    const itemListingSharedObject = await tooling.getSuiSharedObject({
+      objectId: inputs.itemListingId,
+      mutable: false
+    })
     const removeItemTransaction = buildRemoveItemListingTransaction({
       packageId: inputs.packageId,
       shop: shopSharedObject,
@@ -38,14 +35,10 @@ runSuiScript(
       itemListing: itemListingSharedObject
     })
 
-    const { transactionResult } = await signAndExecute(
-      {
-        transaction: removeItemTransaction,
-        signer,
-        networkName: network.networkName
-      },
-      suiClient
-    )
+    const { transactionResult } = await tooling.signAndExecute({
+      transaction: removeItemTransaction,
+      signer: tooling.loadedEd25519KeyPair
+    })
 
     logKeyValueGreen("deleted")(inputs.itemListingId)
     if (transactionResult.digest)

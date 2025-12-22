@@ -3,6 +3,7 @@ import yargs from "yargs"
 
 import {
   defaultStartTimestampSeconds,
+  DISCOUNT_TEMPLATE_TYPE_FRAGMENT,
   discountRuleChoices,
   getDiscountTemplateSummary,
   parseDiscountRuleKind,
@@ -14,17 +15,13 @@ import {
 import { buildCreateDiscountTemplateTransaction } from "@sui-oracle-market/domain-core/ptb/discount-template"
 import { resolveLatestShopIdentifiers } from "@sui-oracle-market/domain-node/shop-identifiers"
 import { normalizeOptionalId } from "@sui-oracle-market/tooling-core/object"
-import { getSuiSharedObject } from "@sui-oracle-market/tooling-core/shared-object"
 import {
   parseNonNegativeU64,
   parseOptionalU64
 } from "@sui-oracle-market/tooling-core/utils/utility"
-import { createSuiClient } from "@sui-oracle-market/tooling-node/describe-object"
-import { loadKeypair } from "@sui-oracle-market/tooling-node/keypair"
 import { logKeyValueGreen } from "@sui-oracle-market/tooling-node/log"
 import { runSuiScript } from "@sui-oracle-market/tooling-node/process"
-import { signAndExecute } from "@sui-oracle-market/tooling-node/transactions"
-import { logDiscountTemplateSummary } from "../../utils/log-summaries.js"
+import { logDiscountTemplateSummary } from "../../utils/log-summaries.ts"
 
 type CreateDiscountTemplateArguments = {
   shopPackageId?: string
@@ -53,15 +50,17 @@ type NormalizedInputs = {
 }
 
 runSuiScript(
-  async ({ network }, cliArguments) => {
-    const inputs = await normalizeInputs(cliArguments, network.networkName)
-    const suiClient = createSuiClient(network.url)
-    const signer = await loadKeypair(network.account)
-
-    const shopSharedObject = await getSuiSharedObject(
-      { objectId: inputs.shopId, mutable: true },
-      suiClient
+  async (tooling, cliArguments) => {
+    const inputs = await normalizeInputs(
+      cliArguments,
+      tooling.network.networkName
     )
+    const suiClient = tooling.suiClient
+
+    const shopSharedObject = await tooling.getSuiSharedObject({
+      objectId: inputs.shopId,
+      mutable: true
+    })
 
     const createDiscountTemplateTransaction =
       buildCreateDiscountTemplateTransaction({
@@ -77,21 +76,21 @@ runSuiScript(
       })
 
     const {
-      objectArtifacts: {
-        created: [createdDiscountTemplate]
-      }
-    } = await signAndExecute(
-      {
-        transaction: createDiscountTemplateTransaction,
-        signer,
-        networkName: network.networkName
-      },
-      suiClient
-    )
+      objectArtifacts: { created: createdObjects }
+    } = await tooling.signAndExecute({
+      transaction: createDiscountTemplateTransaction,
+      signer: tooling.loadedEd25519KeyPair
+    })
 
-    const discountTemplateId = createdDiscountTemplate?.objectId
-    if (!discountTemplateId)
-      throw new Error("Expected a DiscountTemplate object to be created.")
+    const createdDiscountTemplate = createdObjects.find((artifact) =>
+      artifact.objectType.endsWith(DISCOUNT_TEMPLATE_TYPE_FRAGMENT)
+    )
+    if (!createdDiscountTemplate)
+      throw new Error(
+        "Expected a DiscountTemplate object to be created, but it was not found in transaction artifacts."
+      )
+
+    const discountTemplateId = createdDiscountTemplate.objectId
 
     const discountTemplateSummary = await getDiscountTemplateSummary(
       inputs.shopId,

@@ -1,3 +1,5 @@
+import type { SuiClient } from "@mysten/sui/client"
+import type { Ed25519Keypair } from "@mysten/sui/keypairs/ed25519"
 import yargs from "yargs"
 
 import {
@@ -8,12 +10,9 @@ import {
 import { buildRemoveAcceptedCurrencyTransaction } from "@sui-oracle-market/domain-core/ptb/currency"
 import { resolveLatestShopIdentifiers } from "@sui-oracle-market/domain-node/shop-identifiers"
 import { normalizeOptionalId } from "@sui-oracle-market/tooling-core/object"
-import { getSuiSharedObject } from "@sui-oracle-market/tooling-core/shared-object"
-import { createSuiClient } from "@sui-oracle-market/tooling-node/describe-object"
-import { loadKeypair } from "@sui-oracle-market/tooling-node/keypair"
+import type { Tooling } from "@sui-oracle-market/tooling-node/factory"
 import { logKeyValueGreen } from "@sui-oracle-market/tooling-node/log"
 import { runSuiScript } from "@sui-oracle-market/tooling-node/process"
-import { signAndExecute } from "@sui-oracle-market/tooling-node/transactions"
 
 type RemoveCurrencyArguments = {
   shopPackageId?: string
@@ -32,21 +31,23 @@ type NormalizedInputs = {
 }
 
 runSuiScript(
-  async ({ network }, cliArguments) => {
-    const suiClient = createSuiClient(network.url)
-    const inputs = await normalizeInputs(cliArguments, network.networkName)
+  async (tooling, cliArguments) => {
+    const suiClient = tooling.suiClient
+    const inputs = await normalizeInputs(
+      cliArguments,
+      tooling.network.networkName
+    )
 
     const acceptedCurrency = await resolveAcceptedCurrency(inputs, suiClient)
 
-    const shop = await getSuiSharedObject(
-      { objectId: inputs.shopId, mutable: true },
-      suiClient
-    )
-    const acceptedCurrencyShared = await getSuiSharedObject(
-      { objectId: acceptedCurrency.acceptedCurrencyId, mutable: false },
-      suiClient
-    )
-    const signer = await loadKeypair(network.account)
+    const shop = await tooling.getSuiSharedObject({
+      objectId: inputs.shopId,
+      mutable: true
+    })
+    const acceptedCurrencyShared = await tooling.getSuiSharedObject({
+      objectId: acceptedCurrency.acceptedCurrencyId,
+      mutable: false
+    })
 
     const removeCurrencyTransaction = buildRemoveAcceptedCurrencyTransaction({
       packageId: inputs.packageId,
@@ -55,12 +56,13 @@ runSuiScript(
       acceptedCurrency: acceptedCurrencyShared
     })
 
-    const { transactionResult } = await executeRemovalTransaction({
-      transaction: removeCurrencyTransaction,
-      signer,
-      suiClient,
-      networkName: network.networkName
-    })
+    const { transactionResult } = await executeRemovalTransaction(
+      {
+        transaction: removeCurrencyTransaction,
+        signer: tooling.loadedEd25519KeyPair
+      },
+      tooling
+    )
 
     logKeyValueGreen("deleted")(acceptedCurrency.acceptedCurrencyId)
     if (transactionResult.digest)
@@ -149,22 +151,17 @@ const resolveAcceptedCurrency = async (
   })
 }
 
-const executeRemovalTransaction = async ({
-  transaction,
-  signer,
-  suiClient,
-  networkName
-}: {
-  transaction: ReturnType<typeof buildRemoveAcceptedCurrencyTransaction>
-  signer: Awaited<ReturnType<typeof loadKeypair>>
-  suiClient: SuiClient
-  networkName: string
-}) =>
-  signAndExecute(
-    {
-      transaction,
-      signer,
-      networkName
-    },
-    suiClient
-  )
+const executeRemovalTransaction = async (
+  {
+    transaction,
+    signer
+  }: {
+    transaction: ReturnType<typeof buildRemoveAcceptedCurrencyTransaction>
+    signer: Ed25519Keypair
+  },
+  tooling: Tooling
+) =>
+  tooling.signAndExecute({
+    transaction,
+    signer
+  })

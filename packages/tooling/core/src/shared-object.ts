@@ -1,9 +1,6 @@
-import type {
-  SuiClient,
-  SuiObjectChangeCreated,
-  SuiObjectData
-} from "@mysten/sui/client"
+import type { SuiObjectChangeCreated, SuiObjectData } from "@mysten/sui/client"
 
+import type { ToolingCoreContext } from "./context.ts"
 import type { WrappedSuiObject } from "./object.ts"
 import { getSuiObject, normalizeVersion } from "./object.ts"
 
@@ -41,9 +38,9 @@ export type WrappedSuiSharedObject = WrappedSuiObject & {
  */
 export const getSuiSharedObject = async (
   { objectId, mutable = false }: { objectId: string; mutable?: boolean },
-  suiClient: SuiClient
+  context: ToolingCoreContext
 ): Promise<WrappedSuiSharedObject> => {
-  const suiObject = await getSuiObject({ objectId }, suiClient)
+  const suiObject = await getSuiObject({ objectId }, context)
 
   //@ts-expect-error Shared do exist on owner if a shared object
   const sharedProperty = suiObject.owner?.Shared as {

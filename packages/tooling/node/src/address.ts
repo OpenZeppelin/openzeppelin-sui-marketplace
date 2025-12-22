@@ -11,6 +11,8 @@ import { asMinimumBalanceOf } from "@sui-oracle-market/tooling-core/address"
 import { newTransaction } from "@sui-oracle-market/tooling-core/transactions"
 import { wait } from "@sui-oracle-market/tooling-core/utils/utility"
 
+import type { ToolingContext } from "./factory.ts"
+
 type CoinBalance = NonNullable<
   Awaited<ReturnType<SuiClient["getCoins"]>>["data"]
 >[number]
@@ -24,7 +26,6 @@ type FundingSnapshot = {
 }
 
 export type EnsureFoundedAddressOptions = {
-  network?: "localnet" | "devnet" | "testnet"
   signerAddress: string
   signer?: Ed25519Keypair
   minimumBalance?: bigint
@@ -59,6 +60,15 @@ const DEFAULT_MINIMUM_BALANCE =
   DEFAULT_MINIMUM_GAS_COIN_BALANCE * BigInt(DEFAULT_MINIMUM_COIN_OBJECTS)
 const DEFAULT_SPLIT_GAS_BUDGET = 10_000_000
 
+type FaucetNetworkName = "localnet" | "devnet" | "testnet"
+
+const asFaucetNetwork = (networkName: string): FaucetNetworkName | undefined =>
+  networkName === "localnet" ||
+  networkName === "devnet" ||
+  networkName === "testnet"
+    ? networkName
+    : undefined
+
 const getAddressesCoins = async (ownerAddress: string, suiClient: SuiClient) =>
   (
     await suiClient.getCoins({
@@ -84,8 +94,8 @@ const deriveEffectiveMinimumBalance = ({
     : minimumBalanceTarget
 }
 
-const isFaucetSupported = (network: EnsureFoundedAddressOptions["network"]) =>
-  ["localnet", "devnet", "testnet"].includes(network ?? "")
+const isFaucetSupported = (networkName: string) =>
+  Boolean(asFaucetNetwork(networkName))
 
 const fundingSnapshot = async (
   {
@@ -108,7 +118,7 @@ const fundingSnapshot = async (
       address: signerAddress,
       minimumBalance
     },
-    client
+    { suiClient: client }
   )
   const hasSufficientGasCoin =
     minimumGasCoinBalance <= 0n ||
@@ -181,11 +191,11 @@ const requestFunding = async ({
   signerAddress,
   attempt
 }: {
-  network: EnsureFoundedAddressOptions["network"]
+  network: FaucetNetworkName
   signerAddress: string
   attempt: number
 }) => {
-  const faucetHost = getFaucetHost(network ?? "localnet")
+  const faucetHost = getFaucetHost(network)
 
   try {
     await requestSuiFromFaucetV2({
@@ -218,7 +228,6 @@ const fundingFailure = (address: string, network: string, lastError: unknown) =>
  */
 export const ensureFoundedAddress = async (
   {
-    network = "localnet",
     signerAddress,
     signer,
     minimumBalance = DEFAULT_MINIMUM_BALANCE,
@@ -226,9 +235,13 @@ export const ensureFoundedAddress = async (
     minimumGasCoinBalance = DEFAULT_MINIMUM_GAS_COIN_BALANCE,
     splitGasBudget = DEFAULT_SPLIT_GAS_BUDGET
   }: EnsureFoundedAddressOptions,
-  client: SuiClient
+  toolingContext: ToolingContext
 ) => {
-  const faucetSupported = isFaucetSupported(network)
+  const { suiClient, suiConfig } = toolingContext
+  const network = suiConfig.network
+  const networkName = network.networkName
+  const faucetSupported = isFaucetSupported(networkName)
+  const faucetNetwork = asFaucetNetwork(networkName)
   const normalizedAddress = normalizeSuiAddress(signerAddress)
 
   const effectiveMinimumBalance = deriveEffectiveMinimumBalance({
@@ -248,7 +261,7 @@ export const ensureFoundedAddress = async (
         minimumCoinObjects,
         minimumGasCoinBalance
       },
-      client
+      suiClient
     )
 
     if (snapshot.ready) return
@@ -257,7 +270,7 @@ export const ensureFoundedAddress = async (
       snapshot,
       signer,
       signerAddress: normalizedAddress,
-      client,
+      client: suiClient,
       minimumCoinObjects,
       minimumGasCoinBalance,
       splitGasBudget
@@ -269,12 +282,15 @@ export const ensureFoundedAddress = async (
 
     if (!faucetSupported) {
       if (!snapshot.hasEnoughBalance)
-        throw new Error(`faucet is unavailable for network ${network}`)
+        throw new Error(`faucet is unavailable for network ${networkName}`)
       return
     }
 
+    if (!faucetNetwork)
+      throw new Error(`faucet is unavailable for network ${networkName}`)
+
     const faucetResult = await requestFunding({
-      network,
+      network: faucetNetwork,
       signerAddress,
       attempt: attempts
     })
@@ -282,7 +298,7 @@ export const ensureFoundedAddress = async (
     if (!faucetResult.success) lastError = faucetResult.error
   }
 
-  throw fundingFailure(normalizedAddress, network, lastError)
+  throw fundingFailure(normalizedAddress, networkName, lastError)
 }
 
 const calculateMissingCoins = (
@@ -418,14 +434,12 @@ export const withTestnetFaucetRetry = async <T>(
   {
     signerAddress,
     signer,
-    network,
     minimumBalance = DEFAULT_MINIMUM_BALANCE,
     minimumCoinObjects = DEFAULT_MINIMUM_COIN_OBJECTS,
     minimumGasCoinBalance = DEFAULT_MINIMUM_GAS_COIN_BALANCE,
     onWarning
   }: {
     signerAddress: string
-    network: string
     signer?: Ed25519Keypair
     minimumBalance?: bigint
     minimumCoinObjects?: number
@@ -433,14 +447,11 @@ export const withTestnetFaucetRetry = async <T>(
     onWarning?: (message: string) => void
   },
   transactionRun: () => Promise<T>,
-  suiClient: SuiClient
+  toolingContext: ToolingContext
 ): Promise<T> => {
-  const networkName = (network || "localnet").toLowerCase()
-  const faucetSupported = ["localnet", "devnet", "testnet"].includes(
-    networkName
-  )
+  const networkName = toolingContext.suiConfig.network.networkName
+  const faucetSupported = isFaucetSupported(networkName)
   const ensureOptions = {
-    network: networkName as EnsureFoundedAddressOptions["network"],
     signerAddress,
     signer,
     minimumBalance,
@@ -448,7 +459,7 @@ export const withTestnetFaucetRetry = async <T>(
     minimumGasCoinBalance
   }
 
-  if (faucetSupported) await ensureFoundedAddress(ensureOptions, suiClient)
+  if (faucetSupported) await ensureFoundedAddress(ensureOptions, toolingContext)
 
   try {
     return await transactionRun()
@@ -464,7 +475,7 @@ export const withTestnetFaucetRetry = async <T>(
         error instanceof Error ? error.message : String(error)
       }); requesting faucet and retrying.`
     )
-    await ensureFoundedAddress(ensureOptions, suiClient)
+    await ensureFoundedAddress(ensureOptions, toolingContext)
 
     return await transactionRun()
   }

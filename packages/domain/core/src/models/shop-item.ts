@@ -1,7 +1,7 @@
 import type { SuiClient, SuiObjectData } from "@mysten/sui/client"
 
 import {
-  fetchAllOwnedObjectsByFilter,
+  getAllOwnedObjectsByFilter,
   normalizeIdOrThrow,
   normalizeOptionalIdFromValue,
   unwrapMoveObjectFields
@@ -23,7 +23,7 @@ export type ShopItemReceiptSummary = {
   acquiredAt?: string
 }
 
-export const fetchShopItemReceiptSummaries = async ({
+export const getShopItemReceiptSummaries = async ({
   ownerAddress,
   shopPackageId,
   shopFilterId,
@@ -34,7 +34,7 @@ export const fetchShopItemReceiptSummaries = async ({
   shopFilterId?: string
   suiClient: SuiClient
 }): Promise<ShopItemReceiptSummary[]> => {
-  const ownedObjects = await fetchAllOwnedObjectsByFilter(
+  const ownedObjects = await getAllOwnedObjectsByFilter(
     {
       ownerAddress,
       filter: {
@@ -45,7 +45,7 @@ export const fetchShopItemReceiptSummaries = async ({
       },
       options: { showContent: true, showType: true }
     },
-    suiClient
+    { suiClient }
   )
 
   const shopItemReceipts = ownedObjects

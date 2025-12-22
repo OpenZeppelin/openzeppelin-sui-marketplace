@@ -1,7 +1,7 @@
 import type { SuiClient, SuiObjectData } from "@mysten/sui/client"
 
 import {
-  fetchAllDynamicFields,
+  getAllDynamicFields,
   getSuiDynamicFieldObject
 } from "@sui-oracle-market/tooling-core/dynamic-fields"
 import {
@@ -54,9 +54,9 @@ export const findAcceptedCurrencyByCoinType = async ({
 }): Promise<AcceptedCurrencyMatch | undefined> => {
   const normalizedCoinType = normalizeCoinType(coinType)
   const expectedTypeName = parseTypeNameFromString(normalizedCoinType)
-  const dynamicFields = await fetchAllDynamicFields(
+  const dynamicFields = await getAllDynamicFields(
     { parentObjectId: shopId },
-    suiClient
+    { suiClient }
   )
 
   const typeIndexField = dynamicFields.find(
@@ -113,7 +113,7 @@ const extractAcceptedCurrencyIdFromTypeIndexField = async (
       objectId: dynamicFieldObjectId,
       options: { showContent: true, showType: true }
     },
-    suiClient
+    { suiClient }
   )
 
   // Dynamic field values can be nested; normalizeOptionalIdFromValue handles common shapes.
@@ -134,16 +134,16 @@ export type AcceptedCurrencySummary = {
   maxPriceStatusLagSecsCap?: string
 }
 
-export const fetchAcceptedCurrencySummaries = async (
+export const getAcceptedCurrencySummaries = async (
   shopId: string,
   suiClient: SuiClient
 ): Promise<AcceptedCurrencySummary[]> => {
-  const acceptedCurrencyMarkers = await fetchAllDynamicFields(
+  const acceptedCurrencyMarkers = await getAllDynamicFields(
     {
       parentObjectId: shopId,
       objectTypeFilter: ACCEPTED_CURRENCY_TYPE_FRAGMENT
     },
-    suiClient
+    { suiClient }
   )
 
   if (acceptedCurrencyMarkers.length === 0) return []
@@ -162,7 +162,7 @@ export const fetchAcceptedCurrencySummaries = async (
           objectId: currencyId,
           options: { showContent: true, showType: true }
         },
-        suiClient
+        { suiClient }
       )
     )
   )
@@ -186,12 +186,12 @@ export const getAcceptedCurrencySummary = async (
       objectId: acceptedCurrencyId,
       options: { showContent: true, showType: true }
     },
-    suiClient
+    { suiClient }
   )
 
   const marker = await getSuiDynamicFieldObject(
     { parentObjectId: shopId, childObjectId: acceptedCurrencyId },
-    suiClient
+    { suiClient }
   )
 
   return buildAcceptedCurrencySummary(

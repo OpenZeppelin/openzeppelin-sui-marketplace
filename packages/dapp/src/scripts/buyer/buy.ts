@@ -19,17 +19,13 @@ import {
   deriveRelevantPackageId,
   normalizeIdOrThrow
 } from "@sui-oracle-market/tooling-core/object"
-import { getSuiSharedObject } from "@sui-oracle-market/tooling-core/shared-object"
 import { parseOptionalU64 } from "@sui-oracle-market/tooling-core/utils/utility"
-import { createSuiClient } from "@sui-oracle-market/tooling-node/describe-object"
-import { loadKeypair } from "@sui-oracle-market/tooling-node/keypair"
 import {
   logKeyValueBlue,
   logKeyValueGreen,
   logKeyValueYellow
 } from "@sui-oracle-market/tooling-node/log"
 import { runSuiScript } from "@sui-oracle-market/tooling-node/process"
-import { signAndExecute } from "@sui-oracle-market/tooling-node/transactions"
 
 type BuyArguments = {
   shopId?: string
@@ -64,36 +60,38 @@ type NormalizedBuyInputs = {
 }
 
 runSuiScript(
-  async ({ network, currentNetwork }, cliArguments: BuyArguments) => {
-    const inputs = await normalizeInputs(cliArguments, network.networkName)
-    const suiClient = createSuiClient(network.url)
-    const signer = await loadKeypair(network.account)
+  async (tooling, cliArguments: BuyArguments) => {
+    const inputs = await normalizeInputs(
+      cliArguments,
+      tooling.suiConfig.network.networkName
+    )
+    const signer = tooling.loadedEd25519KeyPair
 
     const signerAddress = signer.toSuiAddress()
     const mintTo = inputs.mintTo ?? signerAddress
     const refundTo = inputs.refundTo ?? signerAddress
 
-    const shopShared = await getSuiSharedObject(
-      { objectId: inputs.shopId, mutable: false },
-      suiClient
-    )
-    const itemListingShared = await getSuiSharedObject(
-      { objectId: inputs.itemListingId, mutable: true },
-      suiClient
-    )
+    const shopShared = await tooling.getSuiSharedObject({
+      objectId: inputs.shopId,
+      mutable: false
+    })
+    const itemListingShared = await tooling.getSuiSharedObject({
+      objectId: inputs.itemListingId,
+      mutable: true
+    })
 
     const shopPackageId = deriveRelevantPackageId(shopShared.object.type)
 
     const acceptedCurrencyMatch = await requireAcceptedCurrencyByCoinType({
       coinType: inputs.coinType,
       shopId: inputs.shopId,
-      suiClient
+      suiClient: tooling.suiClient
     })
 
     const acceptedCurrencySummary = await getAcceptedCurrencySummary(
       inputs.shopId,
       acceptedCurrencyMatch.acceptedCurrencyId,
-      suiClient
+      tooling.suiClient
     )
 
     const pythPriceInfoObjectId = normalizeIdOrThrow(
@@ -101,38 +99,38 @@ runSuiScript(
       `AcceptedCurrency ${acceptedCurrencySummary.acceptedCurrencyId} is missing a pyth_object_id.`
     )
 
-    const acceptedCurrencyShared = await getSuiSharedObject(
-      { objectId: acceptedCurrencySummary.acceptedCurrencyId, mutable: false },
-      suiClient
-    )
-    const pythPriceInfoShared = await getSuiSharedObject(
-      { objectId: pythPriceInfoObjectId, mutable: false },
-      suiClient
-    )
+    const acceptedCurrencyShared = await tooling.getSuiSharedObject({
+      objectId: acceptedCurrencySummary.acceptedCurrencyId,
+      mutable: false
+    })
+    const pythPriceInfoShared = await tooling.getSuiSharedObject({
+      objectId: pythPriceInfoObjectId,
+      mutable: false
+    })
 
     const listingSummary = await getItemListingSummary(
       inputs.shopId,
       inputs.itemListingId,
-      suiClient
+      tooling.suiClient
     )
 
     const paymentCoinObjectId = await resolvePaymentCoinObjectId({
       providedCoinObjectId: inputs.paymentCoinObjectId,
       coinType: inputs.coinType,
       signerAddress,
-      suiClient
+      suiClient: tooling.suiClient
     })
 
     const discountContext = await resolveDiscountContext({
       claimDiscount: inputs.claimDiscount,
       discountTicketId: inputs.discountTicketId,
       discountTemplateId: inputs.discountTemplateId,
-      suiClient
+      suiClient: tooling.suiClient
     })
 
     logBuyContext({
-      networkName: currentNetwork,
-      rpcUrl: network.url,
+      networkName: tooling.network.networkName,
+      rpcUrl: tooling.network.url,
       packageId: shopPackageId,
       shopId: inputs.shopId,
       listingId: inputs.itemListingId,
@@ -163,24 +161,20 @@ runSuiScript(
         discountContext,
         skipPriceUpdate: inputs.skipPriceUpdate,
         hermesUrlOverride: inputs.hermesUrl,
-        networkName: network.networkName,
+        networkName: tooling.suiConfig.network.networkName,
         signerAddress,
         onWarning: (message) => logKeyValueYellow("Oracle")(message)
       },
-      suiClient
+      tooling.suiClient
     )
 
     const {
       transactionResult,
       objectArtifacts: { created }
-    } = await signAndExecute(
-      {
-        transaction: buyTransaction,
-        signer,
-        networkName: network.networkName
-      },
-      suiClient
-    )
+    } = await tooling.signAndExecute({
+      transaction: buyTransaction,
+      signer
+    })
 
     logBuyResult({
       digest: transactionResult.digest,

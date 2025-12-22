@@ -4,15 +4,21 @@ import * as Toggle from "@radix-ui/react-toggle"
 import { Badge } from "@radix-ui/themes"
 import { MoonIcon, SunIcon } from "lucide-react"
 import { useTheme } from "next-themes"
+import { useEffect, useState } from "react"
 
 const ThemeSwitcher = () => {
+  const [mounted, setMounted] = useState(false)
   const { resolvedTheme, setTheme } = useTheme()
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
 
   const toggleTheme = () => {
     setTheme(resolvedTheme === "dark" ? "light" : "dark")
   }
 
-  if (!resolvedTheme) return null
+  if (!mounted || !resolvedTheme) return null
 
   return (
     <Toggle.Root aria-label="Toggle theme" onPressedChange={toggleTheme}>

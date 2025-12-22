@@ -1,7 +1,7 @@
 import fs from "node:fs/promises"
 import path from "node:path"
 
-import type { SuiClient, SuiTransactionBlockResponse } from "@mysten/sui/client"
+import type { SuiTransactionBlockResponse } from "@mysten/sui/client"
 import type { Ed25519Keypair } from "@mysten/sui/keypairs/ed25519"
 import { buildExplorerUrl } from "@sui-oracle-market/tooling-core/network"
 import { newTransaction } from "@sui-oracle-market/tooling-core/transactions"
@@ -12,13 +12,14 @@ import type {
   PublishedPackage,
   PublishResult
 } from "@sui-oracle-market/tooling-core/types"
+
 import {
   getDeploymentArtifactPath,
   writeDeploymentArtifact
 } from "./artifacts.ts"
 import type { SuiNetworkConfig } from "./config.ts"
 import { DEFAULT_PUBLISH_GAS_BUDGET } from "./constants.ts"
-import { createSuiClient } from "./describe-object.ts"
+import type { ToolingContext } from "./factory.ts"
 import {
   logKeyValueBlue,
   logKeyValueGreen,
@@ -58,8 +59,6 @@ type PublishPlan = {
  */
 export const publishPackageWithLog = async (
   {
-    network,
-    fullNodeUrl,
     packagePath,
     keypair,
     gasBudget = DEFAULT_PUBLISH_GAS_BUDGET,
@@ -68,9 +67,7 @@ export const publishPackageWithLog = async (
     useCliPublish = false,
     allowAutoUnpublishedDependencies = true
   }: {
-    network: SuiNetworkConfig
     packagePath: string
-    fullNodeUrl: string
     keypair: Ed25519Keypair
     gasBudget?: number
     withUnpublishedDependencies?: boolean
@@ -78,11 +75,16 @@ export const publishPackageWithLog = async (
     useCliPublish?: boolean
     allowAutoUnpublishedDependencies?: boolean
   },
-  initiatedSuiClient?: SuiClient
+  suiContext: ToolingContext
 ): Promise<PublishArtifact[]> => {
+  const resolvedFullNodeUrl = suiContext.suiConfig.network.url
+
+  if (!resolvedFullNodeUrl)
+    throw new Error("Missing network.url in ToolingContext.network.")
+
   const publishPlan = await buildPublishPlan({
-    network,
-    fullNodeUrl,
+    network: suiContext.suiConfig.network,
+    fullNodeUrl: resolvedFullNodeUrl,
     packagePath,
     keypair,
     gasBudget,
@@ -94,7 +96,7 @@ export const publishPackageWithLog = async (
 
   logPublishStart(publishPlan)
 
-  const artifacts = await publishPackage(publishPlan, initiatedSuiClient)
+  const artifacts = await publishPackage(publishPlan, suiContext)
 
   logPublishSuccess(artifacts)
 
@@ -106,7 +108,7 @@ export const publishPackageWithLog = async (
  */
 export const publishPackage = async (
   publishPlan: PublishPlan,
-  initiatedSuiClient?: SuiClient
+  suiContext: ToolingContext
 ): Promise<PublishArtifact[]> => {
   const shouldStripTestModules = !publishPlan.shouldUseUnpublishedDependencies
   const buildOutput = await buildMovePackage(
@@ -121,7 +123,7 @@ export const publishPackage = async (
   try {
     publishResult = publishPlan.useCliPublish
       ? await publishViaCli(publishPlan)
-      : await doPublishPackage(publishPlan, buildOutput, initiatedSuiClient)
+      : await doPublishPackage(publishPlan, buildOutput, suiContext)
   } catch (error) {
     if (shouldRetryWithCli(publishPlan, error)) {
       logWarning(
@@ -186,11 +188,8 @@ export const publishPackage = async (
 export const doPublishPackage = async (
   publishPlan: PublishPlan,
   buildOutput: BuildOutput,
-  initiatedSuiClient?: SuiClient
+  { suiClient }: ToolingContext
 ): Promise<PublishResult> => {
-  const suiClient =
-    initiatedSuiClient ?? createSuiClient(publishPlan.fullNodeUrl)
-
   const publishTransaction = createPublishTransaction(
     buildOutput,
     publishPlan.keypair,
@@ -329,7 +328,7 @@ const buildPublishPlan = async ({
     dependencyAddressesFromLock: await readDependencyAddresses(packagePath),
     useCliPublish: cliPublish,
     keystorePath: network.account?.keystorePath,
-    suiCliVersion: await fetchSuiCliVersion(),
+    suiCliVersion: await getSuiCliVersion(),
     packageNames: await resolvePackageNames(
       packagePath,
       unpublishedDependencies
@@ -902,7 +901,7 @@ const discoverLocalDependencyPackages = async (
   }
 }
 
-const fetchSuiCliVersion = async (): Promise<string | undefined> => {
+const getSuiCliVersion = async (): Promise<string | undefined> => {
   try {
     const { stdout, exitCode } = await runSuiCliVersion(["--version"])
     if (exitCode && exitCode !== 0) return undefined

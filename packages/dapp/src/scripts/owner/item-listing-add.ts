@@ -9,14 +9,11 @@ import {
   normalizeIdOrThrow,
   normalizeOptionalId
 } from "@sui-oracle-market/tooling-core/object"
-import { getSuiSharedObject } from "@sui-oracle-market/tooling-core/shared-object"
 import { parsePositiveU64 } from "@sui-oracle-market/tooling-core/utils/utility"
-import { createSuiClient } from "@sui-oracle-market/tooling-node/describe-object"
-import { loadKeypair } from "@sui-oracle-market/tooling-node/keypair"
 import { logKeyValueGreen } from "@sui-oracle-market/tooling-node/log"
 import { runSuiScript } from "@sui-oracle-market/tooling-node/process"
-import { signAndExecute } from "@sui-oracle-market/tooling-node/transactions"
-import { logItemListingSummary } from "../../utils/log-summaries.js"
+import { ensureCreatedObject } from "@sui-oracle-market/tooling-node/transactions"
+import { logItemListingSummary } from "../../utils/log-summaries.ts"
 
 type AddItemArguments = {
   shopPackageId?: string
@@ -31,15 +28,17 @@ type AddItemArguments = {
 }
 
 runSuiScript(
-  async ({ network }, cliArguments) => {
-    const inputs = await normalizeInputs(cliArguments, network.networkName)
-    const suiClient = createSuiClient(network.url)
-    const signer = await loadKeypair(network.account)
-
-    const shopSharedObject = await getSuiSharedObject(
-      { objectId: inputs.shopId, mutable: true },
-      suiClient
+  async (tooling, cliArguments) => {
+    const inputs = await normalizeInputs(
+      cliArguments,
+      tooling.network.networkName
     )
+    const suiClient = tooling.suiClient
+
+    const shopSharedObject = await tooling.getSuiSharedObject({
+      objectId: inputs.shopId,
+      mutable: true
+    })
 
     const addItemTransaction = buildAddItemListingTransaction({
       packageId: inputs.packageId,
@@ -52,21 +51,18 @@ runSuiScript(
       spotlightDiscountId: inputs.spotlightDiscountId
     })
 
-    const {
-      objectArtifacts: {
-        created: [createdItemListing]
-      }
-    } = await signAndExecute(
-      {
-        transaction: addItemTransaction,
-        signer,
-        networkName: network.networkName
-      },
-      suiClient
+    const { transactionResult } = await tooling.signAndExecute({
+      transaction: addItemTransaction,
+      signer: tooling.loadedEd25519KeyPair
+    })
+
+    const createdListingChange = ensureCreatedObject(
+      "::shop::ItemListing",
+      transactionResult
     )
 
     const listingId = normalizeIdOrThrow(
-      createdItemListing?.objectId,
+      createdListingChange.objectId,
       "Expected an ItemListing to be created."
     )
     const listingSummary = await getItemListingSummary(
@@ -76,8 +72,8 @@ runSuiScript(
     )
 
     logItemListingSummary(listingSummary)
-    if (createdItemListing?.digest)
-      logKeyValueGreen("digest")(createdItemListing.digest)
+    if (createdListingChange.digest)
+      logKeyValueGreen("digest")(createdListingChange.digest)
   },
   yargs()
     .option("shopPackageId", {

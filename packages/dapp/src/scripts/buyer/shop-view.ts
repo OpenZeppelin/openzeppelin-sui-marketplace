@@ -1,9 +1,8 @@
-import { fetchAcceptedCurrencySummaries } from "@sui-oracle-market/domain-core/models/currency"
-import { fetchDiscountTemplateSummaries } from "@sui-oracle-market/domain-core/models/discount"
-import { fetchItemListingSummaries } from "@sui-oracle-market/domain-core/models/item-listing"
-import { fetchShopOverview } from "@sui-oracle-market/domain-core/models/shop"
+import { getAcceptedCurrencySummaries } from "@sui-oracle-market/domain-core/models/currency"
+import { getDiscountTemplateSummaries } from "@sui-oracle-market/domain-core/models/discount"
+import { getItemListingSummaries } from "@sui-oracle-market/domain-core/models/item-listing"
+import { getShopOverview } from "@sui-oracle-market/domain-core/models/shop"
 import { resolveLatestArtifactShopId } from "@sui-oracle-market/domain-node/shop-identifiers"
-import { createSuiClient } from "@sui-oracle-market/tooling-node/describe-object"
 import { logKeyValueBlue } from "@sui-oracle-market/tooling-node/log"
 import { runSuiScript } from "@sui-oracle-market/tooling-node/process"
 import yargs from "yargs"
@@ -13,32 +12,32 @@ import {
   logEmptyList,
   logItemListingSummary,
   logShopOverview
-} from "../../utils/log-summaries.js"
+} from "../../utils/log-summaries.ts"
 
 type ShowShopArguments = {
   shopId?: string
 }
 
 runSuiScript(
-  async ({ network, currentNetwork }, cliArguments: ShowShopArguments) => {
+  async (tooling, cliArguments: ShowShopArguments) => {
     const shopId = await resolveLatestArtifactShopId(
       cliArguments.shopId,
-      network.networkName
+      tooling.network.networkName
     )
-    const suiClient = createSuiClient(network.url)
+    const suiClient = tooling.suiClient
 
     logContext({
       shopId,
-      rpcUrl: network.url,
-      networkName: currentNetwork
+      rpcUrl: tooling.network.url,
+      networkName: tooling.network.networkName
     })
 
     const [shopOverview, itemListings, acceptedCurrencies, discountTemplates] =
       await Promise.all([
-        fetchShopOverview(shopId, suiClient),
-        fetchItemListingSummaries(shopId, suiClient),
-        fetchAcceptedCurrencySummaries(shopId, suiClient),
-        fetchDiscountTemplateSummaries(shopId, suiClient)
+        getShopOverview(shopId, suiClient),
+        getItemListingSummaries(shopId, suiClient),
+        getAcceptedCurrencySummaries(shopId, suiClient),
+        getDiscountTemplateSummaries(shopId, suiClient)
       ])
 
     logShopOverview(shopOverview)

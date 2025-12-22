@@ -10,6 +10,7 @@
     "./config": "./src/config.ts",
     "./constants": "./src/constants.ts",
     "./describe-object": "./src/describe-object.ts",
+    "./factory": "./src/factory.ts",
     "./keypair": "./src/keypair.ts",
     "./log": "./src/log.ts",
     "./localnet": "./src/localnet.ts",

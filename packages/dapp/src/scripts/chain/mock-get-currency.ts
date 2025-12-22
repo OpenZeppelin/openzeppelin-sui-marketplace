@@ -9,7 +9,7 @@ import yargs from "yargs"
 import { hideBin } from "yargs/helpers"
 
 import { assertLocalnetNetwork } from "@sui-oracle-market/tooling-core/network"
-import { getSuiSharedObject } from "@sui-oracle-market/tooling-core/shared-object"
+import type { WrappedSuiSharedObject } from "@sui-oracle-market/tooling-core/shared-object"
 import { newTransaction } from "@sui-oracle-market/tooling-core/transactions"
 import type { MockArtifact } from "@sui-oracle-market/tooling-core/types"
 import {
@@ -17,8 +17,6 @@ import {
   readArtifact
 } from "@sui-oracle-market/tooling-node/artifacts"
 import { SUI_COIN_REGISTRY_ID } from "@sui-oracle-market/tooling-node/constants"
-import { createSuiClient } from "@sui-oracle-market/tooling-node/describe-object"
-import { loadKeypair } from "@sui-oracle-market/tooling-node/keypair"
 import {
   logKeyValueBlue,
   logKeyValueGreen,
@@ -87,19 +85,20 @@ type ResolvedSupply = {
   total?: bigint
 }
 
-runSuiScript(async ({ network, currentNetwork }) => {
+runSuiScript(async (tooling) => {
+  const {
+    suiClient,
+    loadedEd25519KeyPair: keypair,
+    suiConfig: { currentNetwork }
+  } = tooling
   const cliArgs = await parseCliArgs()
 
   assertLocalnetNetwork(currentNetwork)
 
-  const suiClient = createSuiClient(network.url)
-
-  const keypair = await loadKeypair(network.account)
-
-  const registrySharedObject = await getSuiSharedObject(
-    { objectId: cliArgs.registryId, mutable: false },
-    suiClient
-  )
+  const registrySharedObject = await tooling.getSuiSharedObject({
+    objectId: cliArgs.registryId,
+    mutable: false
+  })
 
   const mockArtifact = await readArtifact<MockArtifact>(mockArtifactPath, {})
   const coinInputs = resolveCoinInputs(cliArgs.coinTypes, mockArtifact)
@@ -108,6 +107,7 @@ runSuiScript(async ({ network, currentNetwork }) => {
     try {
       const currencyState = await inspectCurrency({
         coinInput,
+        getSuiSharedObject: tooling.getSuiSharedObject,
         suiClient,
         registrySharedObject,
         registryId: cliArgs.registryId,
@@ -120,7 +120,6 @@ runSuiScript(async ({ network, currentNetwork }) => {
           error instanceof Error ? error.message : String(error)
         }`
       )
-      console.log("")
     }
   }
 })
@@ -189,22 +188,27 @@ const normalizeType = (type: string) => type.toLowerCase()
 
 const inspectCurrency = async ({
   coinInput,
+  getSuiSharedObject,
   suiClient,
   registrySharedObject,
   registryId,
   sender
 }: {
   coinInput: CoinInput
+  getSuiSharedObject: (args: {
+    objectId: string
+    mutable?: boolean
+  }) => Promise<WrappedSuiSharedObject>
   suiClient: SuiClient
-  registrySharedObject: Awaited<ReturnType<typeof getSuiSharedObject>>
+  registrySharedObject: WrappedSuiSharedObject
   registryId: string
   sender: string
 }): Promise<CurrencyState> => {
   const currencyObjectId = deriveCurrencyId(coinInput, registryId)
-  const currencySharedObject = await getSuiSharedObject(
-    { objectId: currencyObjectId, mutable: false },
-    suiClient
-  )
+  const currencySharedObject = await getSuiSharedObject({
+    objectId: currencyObjectId,
+    mutable: false
+  })
 
   const viewValues = await runCoinRegistryViews({
     coinType: coinInput.coinType,
@@ -246,8 +250,8 @@ const runCoinRegistryViews = async ({
 }: {
   coinType: string
   suiClient: SuiClient
-  registrySharedObject: Awaited<ReturnType<typeof getSuiSharedObject>>
-  currencySharedObject: Awaited<ReturnType<typeof getSuiSharedObject>>
+  registrySharedObject: WrappedSuiSharedObject
+  currencySharedObject: WrappedSuiSharedObject
   sender: string
 }): Promise<CurrencyViewValues> => {
   const tx = newTransaction()
@@ -564,7 +568,7 @@ const resolveSupplyState = async ({
 
   const total =
     viewValues.totalSupply ??
-    (await fetchTreasuryCapSupply({
+    (await getTreasuryCapSupply({
       suiClient,
       treasuryCapId: viewValues.treasuryCapId
     }))
@@ -572,7 +576,7 @@ const resolveSupplyState = async ({
   return { kind, total }
 }
 
-const fetchTreasuryCapSupply = async ({
+const getTreasuryCapSupply = async ({
   suiClient,
   treasuryCapId
 }: {
@@ -681,4 +685,5 @@ const logCurrencyState = (state: CurrencyState) => {
   )
   logKeyValueBlue("Treasury")(state.treasuryCapId ?? "N/A")
   logKeyValueBlue("DenyCap")(state.denyCapId ?? "None")
+  console.log("")
 }

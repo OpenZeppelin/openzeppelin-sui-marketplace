@@ -2,18 +2,14 @@ import { normalizeSuiAddress } from "@mysten/sui/utils"
 import yargs from "yargs"
 
 import {
-  fetchShopOverview,
+  getShopOverview,
   getShopOwnerAddressFromObject
 } from "@sui-oracle-market/domain-core/models/shop"
 import { buildUpdateShopOwnerTransaction } from "@sui-oracle-market/domain-core/ptb/shop"
 import { resolveLatestShopIdentifiers } from "@sui-oracle-market/domain-node/shop-identifiers"
-import { getSuiSharedObject } from "@sui-oracle-market/tooling-core/shared-object"
-import { createSuiClient } from "@sui-oracle-market/tooling-node/describe-object"
-import { loadKeypair } from "@sui-oracle-market/tooling-node/keypair"
 import { logKeyValueGreen } from "@sui-oracle-market/tooling-node/log"
 import { runSuiScript } from "@sui-oracle-market/tooling-node/process"
-import { signAndExecute } from "@sui-oracle-market/tooling-node/transactions"
-import { logShopOverview } from "../../utils/log-summaries.js"
+import { logShopOverview } from "../../utils/log-summaries.ts"
 
 type UpdateShopOwnerArguments = {
   shopPackageId?: string
@@ -30,15 +26,16 @@ type NormalizedInputs = {
 }
 
 runSuiScript(
-  async ({ network }, cliArguments) => {
-    const inputs = await normalizeInputs(cliArguments, network.networkName)
-    const suiClient = createSuiClient(network.url)
-    const signer = await loadKeypair(network.account)
-
-    const shopSharedObject = await getSuiSharedObject(
-      { objectId: inputs.shopId, mutable: true },
-      suiClient
+  async (tooling, cliArguments) => {
+    const inputs = await normalizeInputs(
+      cliArguments,
+      tooling.network.networkName
     )
+
+    const shopSharedObject = await tooling.getSuiSharedObject({
+      objectId: inputs.shopId,
+      mutable: true
+    })
     const previousOwner = getShopOwnerAddressFromObject(shopSharedObject.object)
 
     const updateShopOwnerTransaction = buildUpdateShopOwnerTransaction({
@@ -48,18 +45,14 @@ runSuiScript(
       newOwner: inputs.newOwner
     })
 
-    const { transactionResult } = await signAndExecute(
-      {
-        transaction: updateShopOwnerTransaction,
-        signer,
-        networkName: network.networkName
-      },
-      suiClient
-    )
+    const { transactionResult } = await tooling.signAndExecute({
+      transaction: updateShopOwnerTransaction,
+      signer: tooling.loadedEd25519KeyPair
+    })
 
-    const updatedShopOverview = await fetchShopOverview(
+    const updatedShopOverview = await getShopOverview(
       inputs.shopId,
-      suiClient
+      tooling.suiClient
     )
     logShopOverview(updatedShopOverview)
     logOwnerRotation({

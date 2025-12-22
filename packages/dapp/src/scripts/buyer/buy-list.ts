@@ -2,12 +2,11 @@ import type { SuiClient } from "@mysten/sui/client"
 import yargs from "yargs"
 
 import { getItemListingDetails } from "@sui-oracle-market/domain-core/models/item-listing"
-import { fetchShopItemReceiptSummaries } from "@sui-oracle-market/domain-core/models/shop-item"
+import { getShopItemReceiptSummaries } from "@sui-oracle-market/domain-core/models/shop-item"
 import { normalizeIdOrThrow } from "@sui-oracle-market/tooling-core/object"
 import { resolveOwnerAddress } from "@sui-oracle-market/tooling-node/account"
 import { getLatestObjectFromArtifact } from "@sui-oracle-market/tooling-node/artifacts"
 import { type SuiNetworkConfig } from "@sui-oracle-market/tooling-node/config"
-import { createSuiClient } from "@sui-oracle-market/tooling-node/describe-object"
 import {
   logKeyValueBlue,
   logWarning
@@ -16,7 +15,7 @@ import { runSuiScript } from "@sui-oracle-market/tooling-node/process"
 import {
   logEmptyList,
   logShopItemReceiptSummary
-} from "../../utils/log-summaries.js"
+} from "../../utils/log-summaries.ts"
 
 type ListPurchasesArguments = {
   address?: string
@@ -31,23 +30,23 @@ type NormalizedInputs = {
 }
 
 runSuiScript(
-  async ({ network, currentNetwork }, cliArguments: ListPurchasesArguments) => {
+  async (tooling, cliArguments: ListPurchasesArguments) => {
     const inputs = await resolveInputs(
       cliArguments,
-      network.networkName,
-      network
+      tooling.network.networkName,
+      tooling.network
     )
-    const suiClient = createSuiClient(network.url)
+    const suiClient = tooling.suiClient
 
     logListContext({
       ownerAddress: inputs.ownerAddress,
       packageId: inputs.shopPackageId,
       shopId: inputs.shopId,
-      rpcUrl: network.url,
-      networkName: currentNetwork
+      rpcUrl: tooling.network.url,
+      networkName: tooling.network.networkName
     })
 
-    const shopItemReceipts = await fetchShopItemReceiptSummaries({
+    const shopItemReceipts = await getShopItemReceiptSummaries({
       ownerAddress: inputs.ownerAddress,
       shopPackageId: inputs.shopPackageId,
       shopFilterId: inputs.shopId,
@@ -57,7 +56,7 @@ runSuiScript(
     if (shopItemReceipts.length === 0)
       return logEmptyList("Purchased-items", "No ShopItem receipts found.")
 
-    const listingDetails = await fetchListingDetailsForReceipts(
+    const listingDetails = await getListingDetailsForReceipts(
       shopItemReceipts,
       suiClient
     )
@@ -118,8 +117,8 @@ const resolveInputs = async (
   }
 }
 
-const fetchListingDetailsForReceipts = async (
-  shopItemReceipts: Awaited<ReturnType<typeof fetchShopItemReceiptSummaries>>,
+const getListingDetailsForReceipts = async (
+  shopItemReceipts: Awaited<ReturnType<typeof getShopItemReceiptSummaries>>,
   suiClient: SuiClient
 ) => {
   const listingDetailResults = await Promise.allSettled(

@@ -6,18 +6,14 @@ import {
   deriveRelevantPackageId,
   normalizeIdOrThrow
 } from "@sui-oracle-market/tooling-core/object"
-import { getSuiSharedObject } from "@sui-oracle-market/tooling-core/shared-object"
 import { getLatestObjectFromArtifact } from "@sui-oracle-market/tooling-node/artifacts"
 import { SUI_CLOCK_ID } from "@sui-oracle-market/tooling-node/constants"
-import { createSuiClient } from "@sui-oracle-market/tooling-node/describe-object"
-import { loadKeypair } from "@sui-oracle-market/tooling-node/keypair"
 import {
   logKeyValueBlue,
   logKeyValueGreen,
   logKeyValueYellow
 } from "@sui-oracle-market/tooling-node/log"
 import { runSuiScript } from "@sui-oracle-market/tooling-node/process"
-import { signAndExecute } from "@sui-oracle-market/tooling-node/transactions"
 
 type ClaimDiscountTicketArguments = {
   discountTemplateId: string
@@ -25,22 +21,25 @@ type ClaimDiscountTicketArguments = {
 }
 
 runSuiScript(
-  async ({ network, currentNetwork }, cliArguments) => {
+  async (tooling, cliArguments) => {
+    //TODO review to avoid that many destructuration
+
+    const {
+      suiConfig: { network }
+    } = tooling
     const { shopId, discountTemplateId } = await resolveInputs(
       cliArguments,
       network.networkName
     )
-    const suiClient = createSuiClient(network.url)
-    const signer = await loadKeypair(network.account)
 
-    const shopShared = await getSuiSharedObject(
-      { objectId: shopId, mutable: true },
-      suiClient
-    )
-    const discountTemplateShared = await getSuiSharedObject(
-      { objectId: discountTemplateId, mutable: true },
-      suiClient
-    )
+    const shopShared = await tooling.getSuiSharedObject({
+      objectId: shopId,
+      mutable: true
+    })
+    const discountTemplateShared = await tooling.getSuiSharedObject({
+      objectId: discountTemplateId,
+      mutable: true
+    })
 
     const shopPackageId = deriveRelevantPackageId(shopShared.object.type)
 
@@ -49,30 +48,25 @@ runSuiScript(
       packageId: shopPackageId,
       shopAddress: shopId,
       rpcUrl: network.url,
-      networkName: currentNetwork
+      networkName: network.networkName
     })
 
     const claimDiscountTicketTransaction = buildClaimDiscountTicketTransaction({
       packageId: shopPackageId,
       shopShared,
       discountTemplateShared,
-      sharedClockObject: await getSuiSharedObject(
-        { objectId: SUI_CLOCK_ID },
-        suiClient
-      )
+      sharedClockObject: await tooling.getSuiSharedObject({
+        objectId: SUI_CLOCK_ID
+      })
     })
 
     const {
       transactionResult,
       objectArtifacts: { created }
-    } = await signAndExecute(
-      {
-        transaction: claimDiscountTicketTransaction,
-        signer,
-        networkName: network.networkName
-      },
-      suiClient
-    )
+    } = await tooling.signAndExecute({
+      transaction: claimDiscountTicketTransaction,
+      signer: tooling.loadedEd25519KeyPair
+    })
 
     logClaimResult({
       discountTemplateId,

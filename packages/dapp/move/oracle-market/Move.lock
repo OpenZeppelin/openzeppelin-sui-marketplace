@@ -2,18 +2,18 @@
 
 [move]
 version = 3
-manifest_digest = "90B6039F2460C81DD0A9095181BD24D562663E8BE2D15E86BE279B321BE04B17"
-deps_digest = "8227D341C0550A37580C10FA45FE148A465225149C69D179737E0FE454AD6AEC"
+manifest_digest = "8CAA7293F40A95ECC37ACC06738A02AD64ED6F18C8C58F7FDE3D6DEC01B9F354"
+deps_digest = "04732BFEF428F74DE262001DC455D76B909EBC394B034A9A15CC095E4BDD9CEF"
 dependencies = [
   { id = "Bridge", name = "Bridge" },
   { id = "MoveStdlib", name = "MoveStdlib" },
   { id = "Sui", name = "Sui" },
   { id = "SuiSystem", name = "SuiSystem" },
+  { id = "openzeppelin_math", name = "openzeppelin_math" },
 ]
 dev-dependencies = [
   { id = "Pyth", name = "Pyth" },
   { id = "mock_coin", name = "mock_coin" },
-  { id = "openzeppelin_math", name = "openzeppelin_math" },
 ]
 
 [[move.package]]
@@ -71,7 +71,7 @@ dependencies = [
 
 [[move.package]]
 id = "openzeppelin_math"
-source = { local = "../../../sui-contracts/math/core" }
+source = { git = "https://github.com/OpenZeppelin/contracts-sui.git", rev = "v0.1", subdir = "math/core" }
 
 dependencies = [
   { id = "Bridge", name = "Bridge" },
@@ -88,7 +88,7 @@ flavor = "sui"
 [env]
 
 [env.localnet]
-chain-id = "bdb30a7a"
-original-published-id = "0xa5e0b7009b7ac11b7fcc4f584c40fa2e9c120567aabd7d62870f5581b229fb35"
-latest-published-id = "0xa5e0b7009b7ac11b7fcc4f584c40fa2e9c120567aabd7d62870f5581b229fb35"
+chain-id = "6fbfdfce"
+original-published-id = "0xad96f6b143f08d9c995a04ef185b37ad18b6514ff46c2d2aa9ae8c9619a14146"
+latest-published-id = "0xad96f6b143f08d9c995a04ef185b37ad18b6514ff46c2d2aa9ae8c9619a14146"
 published-version = "1"

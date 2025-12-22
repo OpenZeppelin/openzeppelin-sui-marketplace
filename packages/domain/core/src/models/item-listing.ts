@@ -1,6 +1,6 @@
 import type { SuiClient, SuiObjectData } from "@mysten/sui/client"
 import {
-  fetchAllDynamicFields,
+  getAllDynamicFields,
   getSuiDynamicFieldObject
 } from "@sui-oracle-market/tooling-core/dynamic-fields"
 import {
@@ -31,16 +31,16 @@ export type ItemListingSummary = ItemListingDetails & {
   markerObjectId: string
 }
 
-export const fetchItemListingSummaries = async (
+export const getItemListingSummaries = async (
   shopId: string,
   suiClient: SuiClient
 ): Promise<ItemListingSummary[]> => {
-  const itemListingFields = await fetchAllDynamicFields(
+  const itemListingFields = await getAllDynamicFields(
     {
       parentObjectId: shopId,
       objectTypeFilter: ITEM_LISTING_MARKER_TYPE_FRAGMENT
     },
-    suiClient
+    { suiClient }
   )
 
   if (itemListingFields.length === 0) return []
@@ -59,7 +59,7 @@ export const fetchItemListingSummaries = async (
           objectId: listingId,
           options: { showContent: true, showType: true }
         },
-        suiClient
+        { suiClient }
       )
     )
   )
@@ -83,7 +83,7 @@ export const getItemListingDetails = async (
       objectId: itemListingId,
       options: { showContent: true, showType: true }
     },
-    suiClient
+    { suiClient }
   )
 
   let markerObjectId: string | undefined
@@ -91,7 +91,7 @@ export const getItemListingDetails = async (
   try {
     const marker = await getSuiDynamicFieldObject(
       { parentObjectId: shopId, childObjectId: itemListingId },
-      suiClient
+      { suiClient }
     )
     markerObjectId = marker.dynamicFieldId
   } catch {
@@ -111,11 +111,11 @@ export const getItemListingSummary = async (
       objectId: itemListingId,
       options: { showContent: true, showType: true }
     },
-    suiClient
+    { suiClient }
   )
   const marker = await getSuiDynamicFieldObject(
     { parentObjectId: shopId, childObjectId: itemListingId },
-    suiClient
+    { suiClient }
   )
 
   return buildItemListingSummary(object, itemListingId, marker.dynamicFieldId)

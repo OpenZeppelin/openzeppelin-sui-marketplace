@@ -1,10 +1,14 @@
-import type { SuiClient } from "@mysten/sui/client"
 import { normalizeSuiAddress } from "@mysten/sui/utils"
 
-export const parseAddressList = (
-  rawAddresses: string | string[] | undefined,
+import type { ToolingCoreContext } from "./context.ts"
+
+export const parseAddressList = ({
+  rawAddresses,
+  label
+}: {
+  rawAddresses: string | string[] | undefined
   label: string
-): string[] => {
+}): string[] => {
   const addressCandidates = (
     Array.isArray(rawAddresses)
       ? rawAddresses
@@ -26,9 +30,12 @@ export const parseAddressList = (
   return Array.from(new Set(normalizedAddresses))
 }
 
-export const getSuiBalance = async (address: string, client: SuiClient) => {
-  const balance = await client.getBalance({
-    owner: address,
+export const getSuiBalance = async (
+  { address }: { address: string },
+  { suiClient }: ToolingCoreContext
+) => {
+  const balance = await suiClient.getBalance({
+    owner: normalizeSuiAddress(address),
     coinType: "0x2::sui::SUI"
   })
   return BigInt(balance.totalBalance ?? 0n)
@@ -42,9 +49,9 @@ export const asMinimumBalanceOf = async (
     address: string
     minimumBalance: bigint
   },
-  client: SuiClient
+  context: ToolingCoreContext
 ) => {
-  const currentBalance = await getSuiBalance(address, client)
+  const currentBalance = await getSuiBalance({ address }, context)
 
   return currentBalance >= minimumBalance
 }

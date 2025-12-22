@@ -53,13 +53,13 @@ export const getShopOwnerAddressFromObject = (
   )
 }
 
-export const fetchShopOverview = async (
+export const getShopOverview = async (
   shopId: string,
   suiClient: SuiClient
 ): Promise<ShopOverview> => {
   const { object } = await getSuiObject(
     { objectId: shopId, options: { showContent: true, showType: true } },
-    suiClient
+    { suiClient }
   )
   const ownerAddress = getShopOwnerAddressFromObject(object)
 

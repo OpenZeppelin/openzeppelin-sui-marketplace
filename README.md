@@ -348,8 +348,8 @@ Owner scripts default `--shop-package-id`, `--shop-id`, and `--owner-cap-id` fro
 #### `pnpm script owner:shop:create`
 - Calls `shop::create_shop` using a `0x2::package::Publisher` to create the shared `Shop` plus `ShopOwnerCap`.
 - Flags:
-  - `--shop-package-id <id>`: published `sui_oracle_market` package ID (required).
-  - `--publisher-cap-id <id>`: `0x2::package::Publisher` object ID (required; alias `--publisher-id`).
+  - `--shop-package-id <id>`: published `sui_oracle_market` package ID (defaults to the latest `sui_oracle_market` entry in `packages/dapp/deployments/deployment.<network>.json`).
+  - `--publisher-cap-id <id>`: `0x2::package::Publisher` object ID (defaults to the same latest publish entry, with a fallback to `packages/dapp/deployments/objects.<network>.json` for older artifacts; alias `--publisher-id`).
 
 #### `pnpm script owner:shop:update-owner`
 - Rotates the shop owner/payout address via `shop::update_shop_owner`.

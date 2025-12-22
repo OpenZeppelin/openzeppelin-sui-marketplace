@@ -5,6 +5,7 @@
   "type": "module",
   "exports": {
     "./address": "./src/address.ts",
+    "./context": "./src/context.ts",
     "./constants": "./src/constants.ts",
     "./dynamic-fields": "./src/dynamic-fields.ts",
     "./hex": "./src/hex.ts",

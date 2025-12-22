@@ -3,21 +3,21 @@
 import { useSuiClient } from "@mysten/dapp-kit"
 import type { SuiClient } from "@mysten/sui/client"
 import type { AcceptedCurrencySummary } from "@sui-oracle-market/domain-core/models/currency"
-import { fetchAcceptedCurrencySummaries } from "@sui-oracle-market/domain-core/models/currency"
+import { getAcceptedCurrencySummaries } from "@sui-oracle-market/domain-core/models/currency"
 import type {
-  DiscountTemplateSummary,
-  DiscountTicketDetails
+    DiscountTemplateSummary,
+    DiscountTicketDetails
 } from "@sui-oracle-market/domain-core/models/discount"
 import {
-  fetchDiscountTemplateSummaries,
-  formatDiscountTicketStructType,
-  parseDiscountTicketFromObject
+    formatDiscountTicketStructType,
+    getDiscountTemplateSummaries,
+    parseDiscountTicketFromObject
 } from "@sui-oracle-market/domain-core/models/discount"
 import type { ItemListingSummary } from "@sui-oracle-market/domain-core/models/item-listing"
-import { fetchItemListingSummaries } from "@sui-oracle-market/domain-core/models/item-listing"
+import { getItemListingSummaries } from "@sui-oracle-market/domain-core/models/item-listing"
 import type { ShopItemReceiptSummary } from "@sui-oracle-market/domain-core/models/shop-item"
-import { fetchShopItemReceiptSummaries } from "@sui-oracle-market/domain-core/models/shop-item"
-import { fetchAllOwnedObjectsByFilter } from "@sui-oracle-market/tooling-core/object"
+import { getShopItemReceiptSummaries } from "@sui-oracle-market/domain-core/models/shop-item"
+import { getAllOwnedObjectsByFilter } from "@sui-oracle-market/tooling-core/object"
 import { useEffect, useMemo, useState } from "react"
 
 type RemoteStatus = "idle" | "loading" | "success" | "error"
@@ -50,7 +50,7 @@ const emptyWalletState = (): WalletState => ({
   discountTickets: []
 })
 
-const fetchStorefrontData = async ({
+const getStorefrontData = async ({
   shopId,
   suiClient
 }: {
@@ -59,15 +59,15 @@ const fetchStorefrontData = async ({
 }) => {
   const [itemListings, acceptedCurrencies, discountTemplates] =
     await Promise.all([
-      fetchItemListingSummaries(shopId, suiClient),
-      fetchAcceptedCurrencySummaries(shopId, suiClient),
-      fetchDiscountTemplateSummaries(shopId, suiClient)
+      getItemListingSummaries(shopId, suiClient),
+      getAcceptedCurrencySummaries(shopId, suiClient),
+      getDiscountTemplateSummaries(shopId, suiClient)
     ])
 
   return { itemListings, acceptedCurrencies, discountTemplates }
 }
 
-const fetchWalletData = async ({
+const getWalletData = async ({
   ownerAddress,
   packageId,
   shopId,
@@ -79,18 +79,18 @@ const fetchWalletData = async ({
   suiClient: SuiClient
 }) => {
   const [purchasedItems, discountTicketObjects] = await Promise.all([
-    fetchShopItemReceiptSummaries({
+    getShopItemReceiptSummaries({
       ownerAddress,
       shopPackageId: packageId,
       shopFilterId: shopId,
       suiClient
     }),
-    fetchAllOwnedObjectsByFilter(
+    getAllOwnedObjectsByFilter(
       {
         ownerAddress,
         filter: { StructType: formatDiscountTicketStructType(packageId) }
       },
-      suiClient
+      { suiClient }
     )
   ])
 
@@ -139,7 +139,7 @@ export const useShopDashboardData = ({
       }))
 
       try {
-        const data = await fetchStorefrontData({
+        const data = await getStorefrontData({
           shopId: currentShopId,
           suiClient
         })
@@ -186,7 +186,7 @@ export const useShopDashboardData = ({
       }))
 
       try {
-        const data = await fetchWalletData({
+        const data = await getWalletData({
           ownerAddress: currentOwnerAddress,
           packageId: currentPackageId,
           shopId,

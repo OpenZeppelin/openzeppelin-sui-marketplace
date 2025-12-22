@@ -36,13 +36,14 @@ import {
   writeObjectArtifact
 } from "./artifacts.ts"
 
+import type { ToolingContext } from "./factory.ts"
+
 type ExecuteParams = {
   transaction: Transaction
   signer: Ed25519Keypair
   requestType?: "WaitForEffectsCert" | "WaitForLocalExecution"
   retryOnGasStale?: boolean
   assertSuccess?: boolean
-  networkName: string
 }
 
 export {
@@ -90,20 +91,16 @@ const ensureGasPayment = async ({
 type ExecuteOnceArgs = {
   transaction: Transaction
   signer: Ed25519Keypair
-  suiClient: SuiClient
   requestType: ExecuteParams["requestType"]
   assertSuccess: boolean
-  networkName: string
 }
 
-export const executeTransactionOnce = async ({
-  transaction,
-  signer,
-  suiClient,
-  requestType,
-  assertSuccess,
-  networkName
-}: ExecuteOnceArgs) => {
+export const executeTransactionOnce = async (
+  { transaction, signer, requestType, assertSuccess }: ExecuteOnceArgs,
+  toolingContext: ToolingContext
+) => {
+  const { suiClient, suiConfig } = toolingContext
+  const networkName = suiConfig.network.networkName
   const transactionResult = await suiClient.signAndExecuteTransaction({
     transaction,
     signer,
@@ -167,14 +164,14 @@ export const signAndExecute = async (
     signer,
     requestType = "WaitForLocalExecution",
     retryOnGasStale = true,
-    assertSuccess = true,
-    networkName
+    assertSuccess = true
   }: ExecuteParams,
-  suiClient: SuiClient
+  toolingContext: ToolingContext
 ): Promise<{
   transactionResult: SuiTransactionBlockResponse
   objectArtifacts: PersistedObjectArtifacts
 }> => {
+  const { suiClient } = toolingContext
   const signerAddress = signer.toSuiAddress()
   const maximumAttempts = retryOnGasStale ? 2 : 1
 
@@ -183,14 +180,15 @@ export const signAndExecute = async (
 
   for (let attemptIndex = 0; attemptIndex < maximumAttempts; attemptIndex++) {
     try {
-      return await executeTransactionOnce({
-        transaction,
-        signer,
-        suiClient,
-        requestType,
-        assertSuccess,
-        networkName
-      })
+      return await executeTransactionOnce(
+        {
+          transaction,
+          signer,
+          requestType,
+          assertSuccess
+        },
+        toolingContext
+      )
     } catch (error) {
       const { shouldRetry, lockedObjectIds } = decideRetryForGasIssues(
         error,
@@ -331,7 +329,7 @@ const persistCreatedArtifacts = async (
 ): Promise<ObjectArtifact[]> => {
   if (!createdChanges.length) return []
 
-  const createdObjectsWithData = await fetchCreatedObjectsWithData(
+  const createdObjectsWithData = await getCreatedObjectsWithData(
     createdChanges,
     suiClient
   )
@@ -599,7 +597,7 @@ const persistWrappedArtifacts = async ({
     shouldTimestampArtifact: (artifact) => !artifact.wrappedAt
   })
 
-const fetchCreatedObjectsWithData = async (
+const getCreatedObjectsWithData = async (
   createdChanges: SuiObjectChangeCreated[],
   suiClient: SuiClient
 ): Promise<CreatedObjectWithData[]> =>
@@ -609,7 +607,7 @@ const fetchCreatedObjectsWithData = async (
         {
           objectId: change.objectId
         },
-        suiClient
+        { suiClient }
       )
 
       return {

@@ -1,10 +1,8 @@
 import yargs from "yargs"
 
-import { getSuiObject } from "@sui-oracle-market/tooling-core/object"
 import {
   OBJECT_REQUEST_OPTIONS,
   buildObjectInformation,
-  createSuiClient,
   logInspectionContext,
   logObjectInformation,
   normalizeTargetObjectId
@@ -12,8 +10,10 @@ import {
 import { runSuiScript } from "@sui-oracle-market/tooling-node/process"
 
 runSuiScript(
-  async ({ network, currentNetwork }, cliArguments) => {
-    const suiClient = createSuiClient(network.url)
+  async (tooling, cliArguments) => {
+    const {
+      suiConfig: { network, currentNetwork }
+    } = tooling
     const normalizedObjectId = normalizeTargetObjectId(cliArguments.objectId)
 
     logInspectionContext({
@@ -22,10 +22,10 @@ runSuiScript(
       networkName: currentNetwork
     })
 
-    const { object, error } = await getSuiObject(
-      { objectId: normalizedObjectId, options: OBJECT_REQUEST_OPTIONS },
-      suiClient
-    )
+    const { object, error } = await tooling.getSuiObject({
+      objectId: normalizedObjectId,
+      options: OBJECT_REQUEST_OPTIONS
+    })
 
     const objectInformation = buildObjectInformation({ object, error })
 

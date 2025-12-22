@@ -6,6 +6,7 @@ import {
   logKeyValueYellow,
   logWarning
 } from "@sui-oracle-market/tooling-node/log"
+import { runSuiScript } from "@sui-oracle-market/tooling-node/process"
 
 const execFile = promisify(execFileCallback)
 
@@ -102,20 +103,6 @@ const terminateBackgroundLocalnetProcesses = async () => {
   )
 }
 
-/**
- * Entrypoint for the stop-localnet script.
- */
-const main = async () => {
-  try {
-    await terminateBackgroundLocalnetProcesses()
-  } catch (error) {
-    logWarning(
-      `Unable to stop background localnet: ${
-        error instanceof Error ? error.message : String(error)
-      }`
-    )
-    process.exitCode = 1
-  }
-}
-
-main()
+runSuiScript(async () => {
+  await terminateBackgroundLocalnetProcesses()
+})

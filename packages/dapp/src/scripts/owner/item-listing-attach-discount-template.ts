@@ -8,16 +8,12 @@ import {
   validateTemplateAndListing
 } from "@sui-oracle-market/domain-core/ptb/item-listing"
 import { resolveLatestShopIdentifiers } from "@sui-oracle-market/domain-node/shop-identifiers"
-import { getSuiSharedObject } from "@sui-oracle-market/tooling-core/shared-object"
-import { createSuiClient } from "@sui-oracle-market/tooling-node/describe-object"
-import { loadKeypair } from "@sui-oracle-market/tooling-node/keypair"
 import { logKeyValueGreen } from "@sui-oracle-market/tooling-node/log"
 import { runSuiScript } from "@sui-oracle-market/tooling-node/process"
-import { signAndExecute } from "@sui-oracle-market/tooling-node/transactions"
 import {
   logDiscountTemplateSummary,
   logItemListingSummary
-} from "../../utils/log-summaries.js"
+} from "../../utils/log-summaries.ts"
 
 type AttachDiscountTemplateArguments = {
   shopPackageId?: string
@@ -36,9 +32,12 @@ type NormalizedInputs = {
 }
 
 runSuiScript(
-  async ({ network }, cliArguments) => {
-    const inputs = await normalizeInputs(cliArguments, network.networkName)
-    const suiClient = createSuiClient(network.url)
+  async (tooling, cliArguments) => {
+    const inputs = await normalizeInputs(
+      cliArguments,
+      tooling.network.networkName
+    )
+    const suiClient = tooling.suiClient
 
     const resolvedIds = await validateTemplateAndListing({
       shopId: inputs.shopId,
@@ -47,19 +46,18 @@ runSuiScript(
       suiClient
     })
 
-    const signer = await loadKeypair(network.account)
-    const shopSharedObject = await getSuiSharedObject(
-      { objectId: inputs.shopId, mutable: false },
-      suiClient
-    )
-    const itemListingSharedObject = await getSuiSharedObject(
-      { objectId: resolvedIds.itemListingId, mutable: true },
-      suiClient
-    )
-    const discountTemplateSharedObject = await getSuiSharedObject(
-      { objectId: resolvedIds.discountTemplateId, mutable: false },
-      suiClient
-    )
+    const shopSharedObject = await tooling.getSuiSharedObject({
+      objectId: inputs.shopId,
+      mutable: false
+    })
+    const itemListingSharedObject = await tooling.getSuiSharedObject({
+      objectId: resolvedIds.itemListingId,
+      mutable: true
+    })
+    const discountTemplateSharedObject = await tooling.getSuiSharedObject({
+      objectId: resolvedIds.discountTemplateId,
+      mutable: false
+    })
 
     const attachDiscountTemplateTransaction =
       buildAttachDiscountTemplateTransaction({
@@ -70,14 +68,10 @@ runSuiScript(
         ownerCapId: inputs.ownerCapId
       })
 
-    const { transactionResult } = await signAndExecute(
-      {
-        transaction: attachDiscountTemplateTransaction,
-        signer,
-        networkName: network.networkName
-      },
-      suiClient
-    )
+    const { transactionResult } = await tooling.signAndExecute({
+      transaction: attachDiscountTemplateTransaction,
+      signer: tooling.loadedEd25519KeyPair
+    })
 
     const [listingSummary, discountTemplateSummary] = await Promise.all([
       getItemListingSummary(

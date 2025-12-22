@@ -8,6 +8,7 @@ import type {
   SuiObjectResponse
 } from "@mysten/sui/client"
 import { normalizeSuiAddress, normalizeSuiObjectId } from "@mysten/sui/utils"
+import type { ToolingCoreContext } from "./context.ts"
 import { requireValue } from "./utils/utility.ts"
 
 type ObjectOwnerAddress =
@@ -136,7 +137,7 @@ export const getSuiObject = async (
     objectId,
     options = { showOwner: true, showContent: true, showType: true }
   }: { objectId: string; options?: SuiObjectDataOptions },
-  suiClient: SuiClient
+  { suiClient }: ToolingCoreContext
 ): Promise<{
   object: SuiObjectData
   owner?: ObjectOwner
@@ -248,7 +249,7 @@ export const normalizeIdOrThrow = (
   errorMessage: string
 ): string => normalizeSuiObjectId(requireValue(id, errorMessage))
 
-export const fetchAllOwnedObjectsByFilter = async (
+export const getAllOwnedObjectsByFilter = async (
   {
     ownerAddress,
     filter,
@@ -258,7 +259,7 @@ export const fetchAllOwnedObjectsByFilter = async (
     filter?: Parameters<SuiClient["getOwnedObjects"]>[0]["filter"]
     options?: SuiObjectDataOptions
   },
-  suiClient: SuiClient
+  { suiClient }: ToolingCoreContext
 ): Promise<SuiObjectData[]> => {
   const objects: SuiObjectData[] = []
   let cursor: string | null | undefined
@@ -283,9 +284,14 @@ export const fetchAllOwnedObjectsByFilter = async (
 }
 
 export const getObjectSafe = async (
-  suiClient: SuiClient,
-  objectId: string,
-  options: SuiObjectDataOptions = { showType: true, showBcs: true }
+  {
+    objectId,
+    options = { showType: true, showBcs: true }
+  }: {
+    objectId: string
+    options?: SuiObjectDataOptions
+  },
+  { suiClient }: ToolingCoreContext
 ): Promise<SuiObjectResponse | undefined> => {
   try {
     const normalizedId = normalizeSuiObjectId(objectId)

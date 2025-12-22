@@ -1,9 +1,7 @@
 import yargs from "yargs"
 
-import { getSuiDynamicFieldObject } from "@sui-oracle-market/tooling-core/dynamic-fields"
 import {
   buildObjectInformation,
-  createSuiClient,
   logInspectionContext,
   logObjectInformation,
   normalizeTargetObjectId
@@ -15,26 +13,25 @@ import {
 import { runSuiScript } from "@sui-oracle-market/tooling-node/process"
 
 runSuiScript(
-  async ({ network, currentNetwork }, cliArguments) => {
-    const normalizedParentId = normalizeTargetObjectId(cliArguments.parentId)
-    const normalizedChildId = normalizeTargetObjectId(cliArguments.childId)
-
-    const suiClient = createSuiClient(network.url)
+  async (
+    tooling,
+    { parentId, childId }: { parentId: string; childId: string }
+  ) => {
+    const normalizedParentId = normalizeTargetObjectId(parentId)
+    const normalizedChildId = normalizeTargetObjectId(childId)
 
     logDynamicFieldInspectionContext({
       childId: normalizedChildId,
       parentId: normalizedParentId,
-      networkName: currentNetwork,
-      rpcUrl: network.url
+      networkName: tooling.network.networkName,
+      rpcUrl: tooling.network.url
     })
 
-    const { object, dynamicFieldId, error } = await getSuiDynamicFieldObject(
-      {
+    const { object, dynamicFieldId, error } =
+      await tooling.getSuiDynamicFieldObject({
         parentObjectId: normalizedParentId,
         childObjectId: normalizedChildId
-      },
-      suiClient
-    )
+      })
 
     logKeyValueGreen("Field")(dynamicFieldId)
 
