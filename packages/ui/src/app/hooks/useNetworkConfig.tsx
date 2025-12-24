@@ -9,6 +9,7 @@ import {
   EXPLORER_URL_VARIABLE_NAME,
   LOCALNET_CONTRACT_PACKAGE_ID,
   LOCALNET_EXPLORER_URL,
+  LOCALNET_RPC_URL,
   LOCALNET_SHOP_ID,
   MAINNET_CONTRACT_PACKAGE_ID,
   MAINNET_EXPLORER_URL,
@@ -22,7 +23,7 @@ import {
 const useNetworkConfig = () => {
   return createNetworkConfig({
     [ENetwork.LOCALNET]: {
-      url: getFullnodeUrl(ENetwork.LOCALNET),
+      url: LOCALNET_RPC_URL,
       variables: {
         [CONTRACT_PACKAGE_VARIABLE_NAME]: LOCALNET_CONTRACT_PACKAGE_ID,
         [SHOP_ID_VARIABLE_NAME]: LOCALNET_SHOP_ID,

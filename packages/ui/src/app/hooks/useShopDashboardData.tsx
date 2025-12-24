@@ -5,19 +5,24 @@ import type { SuiClient } from "@mysten/sui/client"
 import type { AcceptedCurrencySummary } from "@sui-oracle-market/domain-core/models/currency"
 import { getAcceptedCurrencySummaries } from "@sui-oracle-market/domain-core/models/currency"
 import type {
-    DiscountTemplateSummary,
-    DiscountTicketDetails
+  DiscountTemplateSummary,
+  DiscountTicketDetails
 } from "@sui-oracle-market/domain-core/models/discount"
 import {
-    formatDiscountTicketStructType,
-    getDiscountTemplateSummaries,
-    parseDiscountTicketFromObject
+  formatDiscountTicketStructType,
+  getDiscountTemplateSummaries,
+  parseDiscountTicketFromObject
 } from "@sui-oracle-market/domain-core/models/discount"
 import type { ItemListingSummary } from "@sui-oracle-market/domain-core/models/item-listing"
 import { getItemListingSummaries } from "@sui-oracle-market/domain-core/models/item-listing"
 import type { ShopItemReceiptSummary } from "@sui-oracle-market/domain-core/models/shop-item"
 import { getShopItemReceiptSummaries } from "@sui-oracle-market/domain-core/models/shop-item"
-import { getAllOwnedObjectsByFilter } from "@sui-oracle-market/tooling-core/object"
+import {
+  deriveRelevantPackageId,
+  getAllOwnedObjectsByFilter,
+  getSuiObject,
+  normalizeOptionalId
+} from "@sui-oracle-market/tooling-core/object"
 import { useEffect, useMemo, useState } from "react"
 
 type RemoteStatus = "idle" | "loading" | "success" | "error"
@@ -35,6 +40,12 @@ type WalletState = {
   error?: string
   purchasedItems: ShopItemReceiptSummary[]
   discountTickets: DiscountTicketDetails[]
+}
+
+type WalletQueryConfig = {
+  ownerAddress: string
+  shopId: string
+  packageId?: string
 }
 
 const emptyStorefrontState = (): StorefrontState => ({
@@ -67,6 +78,29 @@ const getStorefrontData = async ({
   return { itemListings, acceptedCurrencies, discountTemplates }
 }
 
+const resolveShopPackageId = async ({
+  shopId,
+  packageId,
+  suiClient
+}: {
+  shopId: string
+  packageId?: string
+  suiClient: SuiClient
+}): Promise<string | undefined> => {
+  try {
+    const { object } = await getSuiObject(
+      { objectId: shopId, options: { showType: true } },
+      { suiClient }
+    )
+
+    if (object.type) return deriveRelevantPackageId(object.type)
+  } catch {
+    // Fall back to the configured package id when the shop lookup fails.
+  }
+
+  return normalizeOptionalId(packageId)
+}
+
 const getWalletData = async ({
   ownerAddress,
   packageId,
@@ -74,24 +108,34 @@ const getWalletData = async ({
   suiClient
 }: {
   ownerAddress: string
-  packageId: string
+  packageId?: string
   shopId?: string
   suiClient: SuiClient
 }) => {
+  const resolvedPackageId = shopId
+    ? await resolveShopPackageId({ shopId, packageId, suiClient })
+    : normalizeOptionalId(packageId)
+
   const [purchasedItems, discountTicketObjects] = await Promise.all([
-    getShopItemReceiptSummaries({
-      ownerAddress,
-      shopPackageId: packageId,
-      shopFilterId: shopId,
-      suiClient
-    }),
-    getAllOwnedObjectsByFilter(
-      {
-        ownerAddress,
-        filter: { StructType: formatDiscountTicketStructType(packageId) }
-      },
-      { suiClient }
-    )
+    resolvedPackageId
+      ? getShopItemReceiptSummaries({
+          ownerAddress,
+          shopPackageId: resolvedPackageId,
+          shopFilterId: shopId,
+          suiClient
+        })
+      : Promise.resolve([]),
+    resolvedPackageId
+      ? getAllOwnedObjectsByFilter(
+          {
+            ownerAddress,
+            filter: {
+              StructType: formatDiscountTicketStructType(resolvedPackageId)
+            }
+          },
+          { suiClient }
+        )
+      : Promise.resolve([])
   ])
 
   const discountTickets = discountTicketObjects
@@ -100,6 +144,17 @@ const getWalletData = async ({
 
   return { purchasedItems, discountTickets }
 }
+
+const getWalletQueryConfig = ({
+  ownerAddress,
+  shopId,
+  packageId
+}: {
+  ownerAddress?: string
+  shopId?: string
+  packageId?: string
+}): WalletQueryConfig | undefined =>
+  ownerAddress && shopId ? { ownerAddress, shopId, packageId } : undefined
 
 export const useShopDashboardData = ({
   shopId,
@@ -118,9 +173,9 @@ export const useShopDashboardData = ({
     useState<WalletState>(emptyWalletState())
 
   const hasStorefrontConfig = useMemo(() => Boolean(shopId), [shopId])
-  const hasWalletConfig = useMemo(
-    () => Boolean(shopId && packageId && ownerAddress),
-    [shopId, packageId, ownerAddress]
+  const walletQueryConfig = useMemo(
+    () => getWalletQueryConfig({ ownerAddress, shopId, packageId }),
+    [ownerAddress, shopId, packageId]
   )
 
   useEffect(() => {
@@ -170,14 +225,13 @@ export const useShopDashboardData = ({
   }, [hasStorefrontConfig, shopId, suiClient])
 
   useEffect(() => {
-    if (!hasWalletConfig || !ownerAddress || !packageId) {
+    if (!walletQueryConfig) {
       setWalletState(emptyWalletState())
       return
     }
 
     let isSubscribed = true
-    const currentOwnerAddress = ownerAddress
-    const currentPackageId = packageId
+    const currentWalletQueryConfig = walletQueryConfig
     const loadWalletData = async () => {
       setWalletState((previous) => ({
         ...previous,
@@ -187,9 +241,7 @@ export const useShopDashboardData = ({
 
       try {
         const data = await getWalletData({
-          ownerAddress: currentOwnerAddress,
-          packageId: currentPackageId,
-          shopId,
+          ...currentWalletQueryConfig,
           suiClient
         })
 
@@ -216,7 +268,7 @@ export const useShopDashboardData = ({
     return () => {
       isSubscribed = false
     }
-  }, [hasWalletConfig, ownerAddress, packageId, shopId, suiClient])
+  }, [walletQueryConfig, suiClient])
 
   return {
     storefront: storefrontState,

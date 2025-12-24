@@ -1,4 +1,4 @@
-import type { SuiClient } from "@mysten/sui/client"
+import type { SuiClient, SuiObjectData } from "@mysten/sui/client"
 import type { Transaction } from "@mysten/sui/transactions"
 import { normalizeSuiObjectId } from "@mysten/sui/utils"
 import {
@@ -8,12 +8,17 @@ import {
 
 import { SUI_CLOCK_ID } from "@sui-oracle-market/tooling-core/constants"
 import {
+  deriveRelevantPackageId,
   getSuiObject,
-  normalizeIdOrThrow
+  normalizeIdOrThrow,
+  unwrapMoveObjectFields
 } from "@sui-oracle-market/tooling-core/object"
 import { getSuiSharedObject } from "@sui-oracle-market/tooling-core/shared-object"
 import { newTransaction } from "@sui-oracle-market/tooling-core/transactions"
-import { requireValue } from "@sui-oracle-market/tooling-core/utils/utility"
+import {
+  requireValue,
+  tryParseBigInt
+} from "@sui-oracle-market/tooling-core/utils/utility"
 import { normalizeCoinType } from "../models/currency.ts"
 import type { DiscountTicketDetails } from "../models/discount.ts"
 import { parseDiscountTicketFromObject } from "../models/discount.ts"
@@ -45,6 +50,119 @@ const getObjectRef = async (objectId: string, suiClient: SuiClient) => {
     objectId: normalizeSuiObjectId(response.data.objectId),
     version: response.data.version,
     digest: response.data.digest
+  }
+}
+
+const unwrapFields = (value: unknown): Record<string, unknown> | undefined => {
+  if (!value || typeof value !== "object") return undefined
+  const record = value as Record<string, unknown>
+  if (record.fields && typeof record.fields === "object")
+    return record.fields as Record<string, unknown>
+  return record
+}
+
+const normalizeBigIntFromValue = (value: unknown): bigint | undefined => {
+  if (value === null || value === undefined) return undefined
+  if (typeof value === "bigint") return value
+  if (typeof value === "number") return BigInt(value)
+  if (typeof value === "string") {
+    try {
+      return tryParseBigInt(value)
+    } catch {
+      return undefined
+    }
+  }
+
+  const fields = unwrapFields(value)
+  if (!fields) return undefined
+  if ("value" in fields) return normalizeBigIntFromValue(fields.value)
+
+  const nestedValues = Object.values(fields)
+  if (nestedValues.length === 1)
+    return normalizeBigIntFromValue(nestedValues[0])
+
+  return undefined
+}
+
+const normalizeBooleanFromValue = (value: unknown): boolean | undefined => {
+  if (typeof value === "boolean") return value
+  if (typeof value === "string") {
+    if (value.toLowerCase() === "true") return true
+    if (value.toLowerCase() === "false") return false
+  }
+
+  const fields = unwrapFields(value)
+  if (!fields) return undefined
+  if ("value" in fields) return normalizeBooleanFromValue(fields.value)
+
+  const nestedValues = Object.values(fields)
+  if (nestedValues.length === 1)
+    return normalizeBooleanFromValue(nestedValues[0])
+
+  return undefined
+}
+
+const parseI64FromValue = (
+  value: unknown
+): { magnitude: bigint; negative: boolean } | undefined => {
+  const fields = unwrapFields(value)
+  if (!fields) return undefined
+
+  const magnitude = normalizeBigIntFromValue(fields.magnitude)
+  const negative = normalizeBooleanFromValue(fields.negative)
+
+  if (magnitude === undefined || negative === undefined) return undefined
+
+  return { magnitude, negative }
+}
+
+const extractFieldByKeys = (
+  container: Record<string, unknown> | undefined,
+  keys: string[]
+): unknown => {
+  if (!container) return undefined
+
+  for (const key of keys) {
+    if (key in container) return container[key]
+  }
+
+  return undefined
+}
+
+const parseMockPriceInfoUpdateFields = (
+  priceInfoObject: SuiObjectData
+):
+  | {
+      priceMagnitude: bigint
+      priceIsNegative: boolean
+      conf: bigint
+      expoMagnitude: bigint
+      expoIsNegative: boolean
+    }
+  | undefined => {
+  const topFields = unwrapMoveObjectFields(priceInfoObject)
+  const priceInfoFields = unwrapFields(
+    extractFieldByKeys(topFields, ["price_info", "priceInfo"])
+  )
+  const priceFeedFields = unwrapFields(
+    extractFieldByKeys(priceInfoFields, ["price_feed", "priceFeed"])
+  )
+  const priceFields = unwrapFields(extractFieldByKeys(priceFeedFields, ["price"]))
+
+  if (!priceFields) return undefined
+
+  const priceI64 = parseI64FromValue(priceFields.price)
+  const expoI64 = parseI64FromValue(priceFields.expo)
+  const conf = normalizeBigIntFromValue(priceFields.conf)
+
+  if (!priceI64 || !expoI64 || conf === undefined) return undefined
+
+  return {
+    priceMagnitude: priceI64.magnitude,
+    priceIsNegative: priceI64.negative,
+    conf,
+    expoMagnitude: expoI64.magnitude,
+    expoIsNegative: expoI64.negative
   }
 }
 
@@ -84,23 +202,16 @@ const maybeUpdatePythPriceFeed = async ({
   suiClient,
   networkName,
   feedIdHex,
-  hermesUrlOverride,
-  onWarning
+  hermesUrlOverride
 }: {
   transaction: Transaction
   suiClient: SuiClient
   networkName: string
   feedIdHex: string
   hermesUrlOverride?: string
-  onWarning?: (message: string) => void
-}) => {
+}): Promise<boolean> => {
   const config = getPythPullOracleConfig(networkName)
-  if (!config) {
-    onWarning?.(
-      `Skipping Pyth pull update: no config for network ${networkName}.`
-    )
-    return
-  }
+  if (!config) return false
 
   const hermesUrl = hermesUrlOverride ?? config.hermesUrl
 
@@ -115,6 +226,47 @@ const maybeUpdatePythPriceFeed = async ({
   )
 
   await pythClient.updatePriceFeeds(transaction, updateData, [feedIdHex])
+
+  return true
+}
+
+const maybeUpdateMockPriceFeed = ({
+  transaction,
+  priceInfoArgument,
+  priceInfoObject,
+  clockArgument,
+  onWarning
+}: {
+  transaction: Transaction
+  priceInfoArgument: ReturnType<Transaction["sharedObjectRef"]>
+  priceInfoObject: SuiObjectData
+  clockArgument: ReturnType<Transaction["sharedObjectRef"]>
+  onWarning?: (message: string) => void
+}): boolean => {
+  const updateFields = parseMockPriceInfoUpdateFields(priceInfoObject)
+  if (!updateFields) {
+    onWarning?.(
+      "Skipping localnet mock update: unable to parse PriceInfoObject fields."
+    )
+    return false
+  }
+
+  const pythPackageId = deriveRelevantPackageId(priceInfoObject.type)
+
+  transaction.moveCall({
+    target: `${pythPackageId}::price_info::update_price_feed`,
+    arguments: [
+      priceInfoArgument,
+      transaction.pure.u64(updateFields.priceMagnitude),
+      transaction.pure.bool(updateFields.priceIsNegative),
+      transaction.pure.u64(updateFields.conf),
+      transaction.pure.u64(updateFields.expoMagnitude),
+      transaction.pure.bool(updateFields.expoIsNegative),
+      clockArgument
+    ]
+  })
+
+  return true
 }
 
 export const resolveDiscountContext = async ({
@@ -260,26 +412,12 @@ export const buildBuyTransaction = async (
     })
   }
 
-  if (!skipPriceUpdate) {
-    await maybeUpdatePythPriceFeed({
-      transaction,
-      suiClient,
-      networkName,
-      feedIdHex: pythFeedIdHex,
-      hermesUrlOverride,
-      onWarning
-    })
-  }
-
   const shopArgument = transaction.sharedObjectRef(shopShared.sharedRef)
   const listingArgument = transaction.sharedObjectRef(
     itemListingShared.sharedRef
   )
   const acceptedCurrencyArgument = transaction.sharedObjectRef(
     acceptedCurrencyShared.sharedRef
-  )
-  const pythPriceInfoArgument = transaction.sharedObjectRef(
-    pythPriceInfoShared.sharedRef
   )
 
   const clockShared = await getSuiSharedObject(
@@ -291,6 +429,40 @@ export const buildBuyTransaction = async (
   )
 
   const clockArgument = transaction.sharedObjectRef(clockShared.sharedRef)
+  const usesMockUpdate = !skipPriceUpdate && networkName === "localnet"
+  const pythPriceInfoSharedRef = usesMockUpdate
+    ? { ...pythPriceInfoShared.sharedRef, mutable: true }
+    : pythPriceInfoShared.sharedRef
+  const pythPriceInfoArgument = transaction.sharedObjectRef(
+    pythPriceInfoSharedRef
+  )
+
+  if (!skipPriceUpdate) {
+    const didPullUpdate = await maybeUpdatePythPriceFeed({
+      transaction,
+      suiClient,
+      networkName,
+      feedIdHex: pythFeedIdHex,
+      hermesUrlOverride
+    })
+
+    if (!didPullUpdate) {
+      if (usesMockUpdate) {
+        maybeUpdateMockPriceFeed({
+          transaction,
+          priceInfoArgument: pythPriceInfoArgument,
+          priceInfoObject: pythPriceInfoShared.object,
+          clockArgument,
+          onWarning
+        })
+      } else {
+        onWarning?.(
+          `Skipping Pyth pull update: no config for network ${networkName}.`
+        )
+      }
+    }
+  }
+
   const paymentArgument = transaction.object(paymentCoinObjectId)
 
   const typeArguments = [itemType, coinType]

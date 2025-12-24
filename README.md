@@ -143,6 +143,22 @@ Configuration:
   ```
 - App name/description can be overridden via `NEXT_PUBLIC_APP_NAME` and `NEXT_PUBLIC_APP_DESCRIPTION`.
 
+Localnet signing + execution (UI):
+- The UI **always** signs on the wallet and **executes** via the app’s local RPC client when the app network is `localnet`. This avoids wallet execution on whatever network the wallet is configured for.
+- Detection is app-driven (not wallet-driven): `useSuiClientContext()` supplies `network`, and the buy flow checks `network === localnet` before choosing the execution path.
+- Localnet RPC is locked to `http://127.0.0.1:9000` and guarded so only `localhost/127.0.0.1` are accepted. See `packages/ui/src/app/config/network.ts` and `packages/ui/src/app/helpers/localnet.ts`.
+- The buy flow also refreshes local mock Pyth feeds in the same PTB, so UI purchases do not require running `pnpm script chain:mock:update-prices` first.
+
+Why this matters:
+- Wallet Standard distinguishes **sign-only** from **sign+execute**. Using `signTransaction` keeps the wallet from picking an RPC endpoint.
+- For localnet we must ensure **all reads + writes** go to the same local node; otherwise you can sign on localnet but accidentally execute on devnet/testnet.
+
+Implementation details:
+- Buy flow branch is in `packages/ui/src/app/components/BuyFlowModal.tsx`.
+  - Localnet uses `useSignTransaction` + `SuiClient.executeTransactionBlock`.
+  - Non-local networks keep `useSignAndExecuteTransaction`.
+- The local executor also dry-runs before signature and reports raw effects back to the wallet after execution.
+
 UI scripts (run from repo root with `pnpm ui ...`):
 
 - `pnpm ui dev`
@@ -322,8 +338,14 @@ Exceptions:
 
 #### `pnpm script chain:mock:update-prices`
 - Localnet-only refresh of mock Pyth `PriceInfoObject`s to keep freshness checks valid.
+- The UI buy flow now refreshes mock feeds automatically; use this script for CLI-driven buys or manual inspection flows.
 - Flags:
   - `--pyth-package-id <id>`: override the Pyth mock package ID (defaults to the artifact).
+
+#### `pnpm script chain:coin-balances`
+- Lists all coin types + balances for an address.
+- Flags:
+  - `--address <0x...>`: address to inspect (defaults to the configured account).
 
 #### `pnpm script chain:describe-address`
 - Summarizes an address: SUI balance, all coin balances, stake totals, and a truncated owned-object sample.
@@ -356,6 +378,17 @@ Owner scripts default `--shop-package-id`, `--shop-id`, and `--owner-cap-id` fro
 - Flags:
   - `--new-owner <0x...>`: address to become the new shop owner/payout recipient (required; aliases `--newOwner` / `--payout-address`).
   - `--shop-package-id <id>` / `--shop-id <id>` / `--owner-cap-id <id>`: override artifact defaults.
+
+#### `pnpm script owner:coin:transfer`
+- Splits a coin object and transfers the requested amount to a recipient address.
+- Flags:
+  - `--coin-id <id>`: coin object ID to transfer from (required).
+  - `--amount <u64>`: amount to split and transfer (required).
+  - `--recipient <0x...>`: address to receive the transfer (required; alias `--to`).
+- Example:
+  ```bash
+  pnpm script owner:coin:transfer -- --coin-id 0xCOIN_OBJECT_ID --amount 1000000 --recipient 0xd8e74f5ab0a34a05e45fb44bd54b323779b3208d599ae14d4c71b268a1de179f
+  ```
 
 #### `pnpm script owner:currency:add`
 - Registers an accepted currency by linking a coin type to a Pyth feed with optional guardrail caps.
@@ -484,13 +517,13 @@ Owner scripts default `--shop-package-id`, `--shop-id`, and `--owner-cap-id` fro
   - `--shop-id <id>`: shop object ID (optional; inferred from artifacts when omitted).
 
 #### `pnpm script buyer:buy`
-- Executes checkout with oracle guardrails and optional discounts. On localnet, run `pnpm script chain:mock:update-prices` periodically so mock Pyth feeds stay fresh.
+- Executes checkout with oracle guardrails and optional discounts. On localnet, run `pnpm script chain:mock:update-prices` periodically for CLI-driven buys (the UI buy flow refreshes mock feeds automatically).
 - Flags:
   - `--shop-id <id>`: shared Shop object ID; defaults to the latest Shop artifact.
   - `--item-listing-id <id>`: listing object ID to purchase (required).
   - `--coin-type <0x...::Coin>`: payment coin type (must be registered as an AcceptedCurrency) (required).
   - `--payment-coin-object-id <id>`: specific Coin object ID to use; otherwise the script picks the richest owned coin of that type.
-  - `--mint-to <0x...>`: address that receives the ShopItem receipt (defaults to signer).
+  - `--mint-to <0x...>`: address that receives the ShopItem receipt (defaults to signer); redeeming the receipt for the actual item happens in a separate flow.
   - `--refund-to <0x...>`: address that receives any refund change (defaults to signer).
   - `--discount-ticket-id <id>`: redeem an existing DiscountTicket during checkout.
   - `--discount-template-id <id>` / `--claim-discount`: claim + redeem a ticket atomically in one PTB.

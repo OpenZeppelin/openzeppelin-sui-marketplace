@@ -23,7 +23,7 @@ export default function ClientProviders({ children }: { children: ReactNode }) {
         <SuiProvider
           customNetworkConfig={networkConfig}
           defaultNetwork={ENetwork.LOCALNET}
-          walletAutoConnect={false}
+          walletAutoConnect={true}
           walletStashedName={APP_NAME}
           themeSettings={themeSettings}
         >

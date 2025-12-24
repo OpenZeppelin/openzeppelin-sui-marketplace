@@ -3,7 +3,8 @@ import { isValidSuiObjectId } from "@mysten/sui/utils"
 import { ENetwork } from "@sui-oracle-market/tooling-core/types"
 import {
   CONTRACT_MODULE_NAME,
-  CONTRACT_PACKAGE_ID_NOT_DEFINED
+  CONTRACT_PACKAGE_ID_NOT_DEFINED,
+  SHOP_ID_NOT_DEFINED
 } from "~~/config/network"
 
 export const transactionUrl = (baseExplorerUrl: string, txDigest: string) => {
@@ -24,17 +25,37 @@ export const formatNetworkType = (machineName: string) => {
   return machineName
 }
 
+export const resolveWalletNetworkType = (
+  chains?: string[]
+): string | undefined => {
+  const chainId = chains?.[0]
+  return chainId ? formatNetworkType(chainId) : undefined
+}
+
+export const resolveConfiguredId = (
+  value: string | undefined,
+  invalidValue: string
+): string | undefined => {
+  if (!value || value === invalidValue) return undefined
+  return value
+}
+
 export const supportedNetworks = () => {
   const keys = Object.keys(ENetwork)
 
   return keys
-    .filter(
-      (key: string) =>
-        process.env[`NEXT_PUBLIC_${key.toUpperCase()}_CONTRACT_PACKAGE_ID`] !=
-          null &&
-        process.env[`NEXT_PUBLIC_${key.toUpperCase()}_CONTRACT_PACKAGE_ID`] !==
-          CONTRACT_PACKAGE_ID_NOT_DEFINED
-    )
+    .filter((key: string) => {
+      const packageId = resolveConfiguredId(
+        process.env[`NEXT_PUBLIC_${key.toUpperCase()}_CONTRACT_PACKAGE_ID`],
+        CONTRACT_PACKAGE_ID_NOT_DEFINED
+      )
+      const shopId = resolveConfiguredId(
+        process.env[`NEXT_PUBLIC_${key.toUpperCase()}_SHOP_ID`],
+        SHOP_ID_NOT_DEFINED
+      )
+
+      return Boolean(packageId && shopId)
+    })
     .map((key: string) => ENetwork[key as keyof typeof ENetwork])
 }
 

@@ -9,12 +9,8 @@ import {
 import { normalizeHex } from "@sui-oracle-market/tooling-core/hex"
 import { assertLocalnetNetwork } from "@sui-oracle-market/tooling-core/network"
 import type { WrappedSuiSharedObject } from "@sui-oracle-market/tooling-core/shared-object"
-import type { MockArtifact } from "@sui-oracle-market/tooling-core/types"
-import {
-  mockArtifactPath,
-  readArtifact,
-  writeMockArtifact
-} from "@sui-oracle-market/tooling-node/artifacts"
+
+import { readArtifact } from "@sui-oracle-market/tooling-node/artifacts"
 import { DEFAULT_TX_GAS_BUDGET } from "@sui-oracle-market/tooling-node/constants"
 import {
   logKeyValueBlue,
@@ -23,6 +19,8 @@ import {
 } from "@sui-oracle-market/tooling-node/log"
 import { runSuiScript } from "@sui-oracle-market/tooling-node/process"
 import { newTransaction } from "@sui-oracle-market/tooling-node/transactions"
+import type { MockArtifact } from "../../utils/mocks.ts"
+import { mockArtifactPath, writeMockArtifact } from "../../utils/mocks.ts"
 
 /**
  * Localnet-only helper to refresh mock Pyth PriceInfoObject timestamps.

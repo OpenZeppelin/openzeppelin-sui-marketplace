@@ -1,0 +1,8 @@
+[package]
+name = "item_examples"
+edition = "2024.beta"
+
+[dependencies]
+
+[addresses]
+item_examples = "0x0"

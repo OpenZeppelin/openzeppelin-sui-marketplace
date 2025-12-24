@@ -8,7 +8,7 @@ Mental Model Shift
 - **Capabilities, not msg.sender:** Admin entry points require the owned `ShopOwnerCap`; buyers never handle capabilities during checkout. Payout rotation is explicit through `update_shop_owner`.
 - **Publisher-gated instantiation:** `create_shop` consumes the module `pkg::Publisher`, so only the package author can mint curated shops before handing off the owner cap.
 - **Objects over contract storage:** The shop is a shared object. Listings, accepted currencies, and discount templates are themselves shared objects indexed by lightweight dynamic-field markers under the shop (plus a coin-type index for currencies). Edits touch only the relevant object, keeping transactions parallel and minimizing contention.
-- **Typed coins and receipts:** Payment assets are `Coin<T>` resources with no approvals; receipts are `ShopItem<TItem>` whose type must match the listing to keep downstream logic strongly typed.
+- **Typed coins and receipts:** Payment assets are `Coin<T>` resources with no approvals; receipts are `ShopItem<TItem>` whose type must match the listing to keep downstream logic strongly typed. These receipts can be exchanged in a separate fulfillment or on-chain redemption flow for the actual `TItem`.
 - **Clocked, guarded pricing:** Callers pass a refreshed `PriceInfoObject`; the module checks identity, freshness, confidence, and price-status lag against the shared `Clock` before quoting.
 - **Events over historical arrays:** Lifecycle events (`PurchaseCompleted`, `DiscountRedeem`, etc.) are emitted for indexers/UIs instead of storing growing arrays on-chain.
 
@@ -33,7 +33,7 @@ Entry Points At A Glance
 - Listings: `add_item_listing<T>` shares a listing object and registers a marker with USD-cent price, stock, and optional `spotlight_discount_template_id`; `update_item_listing_stock` changes inventory through the listing object; `remove_item_listing` removes the marker (delists) while keeping the shared listing addressable for history.
 - Accepted currencies: `add_accepted_currency<T>` shares the `AcceptedCurrency` object, writes a marker under the shop, stores a `coin_type -> accepted_currency_id` index, and keeps feed metadata/guardrail caps; `remove_accepted_currency` removes the marker and type index (the shared currency object remains addressable for history).
 - Discounts: `create_discount_template`, `update_discount_template` (only before claims/redemptions), and `toggle_discount_template` manage templates; `attach_template_to_listing`/`clear_template_from_listing` surface a spotlight template on a listing; `claim_discount_ticket`, `buy_item_with_discount`, `claim_and_buy_item_with_discount`, and `prune_discount_claims` (once finished) govern lifecycle and cleanup.
-- Checkout: `buy_item<TItem, TCoin>` and `buy_item_with_discount<TItem, TCoin>` enforce listing/type matches, registered currency presence, oracle guardrails, and refund change in-line before minting a typed `ShopItem<TItem>`.
+- Checkout: `buy_item<TItem, TCoin>` and `buy_item_with_discount<TItem, TCoin>` enforce listing/type matches, registered currency presence, oracle guardrails, and refund change in-line before minting a typed `ShopItem<TItem>` receipt (redemption for the underlying item happens elsewhere).
 
 Oracle Guardrails
 -----------------

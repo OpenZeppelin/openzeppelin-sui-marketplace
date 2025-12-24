@@ -3,24 +3,25 @@ compiled_package_info:
   package_name: sui_oracle_market
   address_alias_instantiation:
     bridge: 000000000000000000000000000000000000000000000000000000000000000b
-    mock_coin: 5ada683a541ae454d14c20517972454552b4b1db66ed9d3ee9aa07b27a6c0fb0
+    item_examples: "0000000000000000000000000000000000000000000000000000000000000000"
+    mock_coin: "0000000000000000000000000000000000000000000000000000000000000000"
     openzeppelin_math: "0000000000000000000000000000000000000000000000000000000000000000"
-    pyth: 91bfce6d026ce40d44fb5008f760724601b866e9044b363021cca2fde52138ae
+    pyth: "0000000000000000000000000000000000000000000000000000000000000000"
     std: "0000000000000000000000000000000000000000000000000000000000000001"
     sui: "0000000000000000000000000000000000000000000000000000000000000002"
     sui_oracle_market: "0000000000000000000000000000000000000000000000000000000000000000"
     sui_system: "0000000000000000000000000000000000000000000000000000000000000003"
-  source_digest: BEE0A93BD0D604147846DC5B4F7DAC10966600C031AB8160A97E800F6FA00B4C
+  source_digest: 25CC152CC7A22C104075C8F8335D45DBD2F184AD83CCE033918FAA5EC614FAC0
   build_flags:
     dev_mode: true
-    test_mode: false
+    test_mode: true
     generate_docs: false
     save_disassembly: false
     install_dir: ~
     force_recompilation: false
-    lock_file: "./Move.lock"
+    lock_file: ~
     fetch_deps_only: false
-    skip_fetch_latest_git_deps: true
+    skip_fetch_latest_git_deps: false
     default_flavor: sui
     default_edition: ~
     deps_as_root: false
@@ -80,5 +81,6 @@ dependencies:
   - Pyth
   - Sui
   - SuiSystem
+  - item_examples
   - mock_coin
   - openzeppelin_math

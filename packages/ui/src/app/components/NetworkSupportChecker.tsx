@@ -1,34 +1,48 @@
 "use client"
 
-import { useCurrentAccount } from "@mysten/dapp-kit"
-import useNetworkType from "@suiware/kit/useNetworkType"
-import { isNetworkSupported, supportedNetworks } from "../helpers/network"
+import { useCurrentAccount, useCurrentWallet } from "@mysten/dapp-kit"
+import type { ENetwork } from "@sui-oracle-market/tooling-core/types"
+import { useMemo } from "react"
+import { resolveWalletNetworkType, supportedNetworks } from "../helpers/network"
 
 const NetworkSupportChecker = () => {
-  const { networkType } = useNetworkType()
   const currentAccount = useCurrentAccount()
+  const wallet = useCurrentWallet()
 
-  const okNetworks = supportedNetworks()
+  const configuredNetworks = useMemo(() => supportedNetworks(), [])
+  const walletNetworkType = useMemo(
+    () =>
+      wallet.isConnected
+        ? resolveWalletNetworkType(wallet.currentWallet?.accounts?.[0]?.chains)
+        : undefined,
+    [wallet]
+  )
+  const walletNetworkSupported = useMemo(
+    () =>
+      Boolean(
+        walletNetworkType &&
+        configuredNetworks.includes(walletNetworkType as ENetwork)
+      ),
+    [configuredNetworks, walletNetworkType]
+  )
 
-  if (currentAccount == null || okNetworks.length === 0) {
+  if (currentAccount == null || configuredNetworks.length === 0) {
     return <></>
   }
 
-  // @fixme: Find a better type for the networkType.
-  /* eslint-disable  @typescript-eslint/no-explicit-any */
-  if (networkType == null || isNetworkSupported(networkType as any)) {
+  if (!walletNetworkType || walletNetworkSupported) {
     return <></>
   }
 
   return (
     <div className="mx-auto w-full max-w-lg px-3 py-2">
       <div className="w-full rounded border border-red-400 px-3 py-2 text-center text-red-400">
-        The <span className="font-bold">{networkType}</span> is not currently
-        supported by the app.
+        The <span className="font-bold">{walletNetworkType}</span> is not
+        currently supported by the app.
         <br />
         Please switch to a supported network [
-        <span className="font-bold">{okNetworks.join(", ")}</span>] in your
-        wallet settings.
+        <span className="font-bold">{configuredNetworks.join(", ")}</span>] in
+        your wallet settings.
       </div>
     </div>
   )

@@ -44,6 +44,10 @@ override = true
 [dev-dependencies.mock_coin]
 # Local-only mock assets for localnet demos; ignored on shared networks.
 local = "../coin-mock"
+[dev-dependencies.item_examples]
+# Local-only example item types for typed listing tests.
+local = "../item-examples"
+override = true
 
 # [dev-addresses]
 # # The dev-addresses section allows overwriting named addresses for the `--test`

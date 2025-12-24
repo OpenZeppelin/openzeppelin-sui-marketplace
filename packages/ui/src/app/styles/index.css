@@ -39,4 +39,18 @@ body, #root {
     font-family: inherit !important;
   }
 }
+
+.sds-match-wallet-width {
+  width: var(--wallet-button-width, auto);
+}
+
+.sds-balance-wrapper {
+  width: var(--wallet-button-width, auto);
+  .sk-balance-badge {
+    display: inline-flex;
+    align-items: center;
+    width: 100%;
+    justify-content: center;
+  }
+}
 /* ~ Custom styles where it's not possible to use Tailwind classes. */

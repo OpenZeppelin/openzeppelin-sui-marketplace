@@ -10,62 +10,29 @@ import type { ItemListingSummary } from "@sui-oracle-market/domain-core/models/i
 import type { ShopItemReceiptSummary } from "@sui-oracle-market/domain-core/models/shop-item"
 import clsx from "clsx"
 import type { ReactNode } from "react"
-import { useMemo } from "react"
+import { useMemo, useState } from "react"
 import {
   CONTRACT_PACKAGE_ID_NOT_DEFINED,
   CONTRACT_PACKAGE_VARIABLE_NAME,
   SHOP_ID_NOT_DEFINED,
   SHOP_ID_VARIABLE_NAME
 } from "../config/network"
+import {
+  formatEpochSeconds,
+  formatUsdFromCents,
+  getStructLabel,
+  shortenId
+} from "../helpers/format"
+import { resolveConfiguredId } from "../helpers/network"
 import useNetworkConfig from "../hooks/useNetworkConfig"
 import { useShopDashboardData } from "../hooks/useShopDashboardData"
+import BuyFlowModal from "./BuyFlowModal"
+import CopyableId from "./CopyableId"
 import Loading from "./Loading"
 
 type PanelStatus = {
   status: "idle" | "loading" | "success" | "error"
   error?: string
-}
-
-const resolveConfiguredId = (
-  value: string | undefined,
-  invalidValue: string
-) => {
-  if (!value || value === invalidValue) return undefined
-  return value
-}
-
-const formatUsdFromCents = (rawCents?: string) => {
-  if (!rawCents) return "Unknown"
-  try {
-    const cents = BigInt(rawCents)
-    const dollars = cents / 100n
-    const remainder = (cents % 100n).toString().padStart(2, "0")
-    return `$${dollars.toString()}.${remainder}`
-  } catch {
-    return "Unknown"
-  }
-}
-
-const formatEpochSeconds = (rawSeconds?: string) => {
-  if (!rawSeconds) return "Unknown"
-  const timestamp = Number(rawSeconds) * 1000
-  if (!Number.isFinite(timestamp)) return "Unknown"
-  return new Intl.DateTimeFormat("en-US", {
-    month: "short",
-    day: "2-digit",
-    year: "numeric"
-  }).format(new Date(timestamp))
-}
-
-const shortenId = (value: string, start = 6, end = 4) => {
-  if (value.length <= start + end) return value
-  return `${value.slice(0, start)}...${value.slice(-end)}`
-}
-
-const getStructLabel = (typeName?: string) => {
-  if (!typeName) return "Unknown"
-  const fragments = typeName.split("::")
-  return fragments[fragments.length - 1] || typeName
 }
 
 const buildTemplateLookup = (templates: DiscountTemplateSummary[]) =>
@@ -119,11 +86,11 @@ const Panel = ({
 }) => (
   <section
     className={clsx(
-      "dark:bg-sds-dark/70 rounded-2xl border border-slate-200/70 bg-white/80 shadow-[0_18px_60px_-45px_rgba(1,22,49,0.35)] backdrop-blur-sm transition dark:border-slate-50/10",
+      "rounded-2xl border border-slate-300/80 bg-white/90 shadow-[0_22px_65px_-45px_rgba(15,23,42,0.45)] backdrop-blur-md transition dark:border-slate-50/30 dark:bg-slate-950/70",
       className
     )}
   >
-    <div className="flex flex-col gap-1 border-b border-slate-200/60 px-6 py-4 dark:border-slate-50/10">
+    <div className="flex flex-col gap-1 border-b border-slate-300/70 px-6 py-4 dark:border-slate-50/25">
       <h2 className="text-base font-semibold text-sds-dark dark:text-sds-light">
         {title}
       </h2>
@@ -137,72 +104,22 @@ const Panel = ({
   </section>
 )
 
-const SelectedCurrencyPanel = ({
-  acceptedCurrencies,
-  status,
-  error,
-  shopConfigured
-}: {
-  acceptedCurrencies: AcceptedCurrencySummary[]
-  status: PanelStatus["status"]
-  error?: string
-  shopConfigured: boolean
-}) => {
-  const selectedCurrency = acceptedCurrencies[0]
-  const title =
-    selectedCurrency?.symbol || getStructLabel(selectedCurrency?.coinType)
-  const subtitle = selectedCurrency?.coinType
-    ? getStructLabel(selectedCurrency.coinType)
-    : "No currency configured"
-
-  return (
-    <Panel
-      title="Accepted Currency"
-      subtitle="Primary view"
-      className="bg-sds-light/70 dark:bg-sds-dark/80"
-    >
-      {!shopConfigured ? (
-        <div className="text-sm text-slate-500 dark:text-slate-200/70">
-          Configure a shop to load currency data.
-        </div>
-      ) : (
-        renderPanelBody({
-          status,
-          error,
-          isEmpty: acceptedCurrencies.length === 0,
-          emptyMessage: "No accepted currencies configured yet.",
-          children: (
-            <div className="flex flex-col gap-2">
-              <div className="text-2xl font-semibold text-sds-dark dark:text-sds-light">
-                {title}
-              </div>
-              <div className="text-sm text-slate-500 dark:text-slate-200/60">
-                {subtitle}
-              </div>
-              <div className="text-xs uppercase tracking-[0.16em] text-slate-400 dark:text-slate-200/40">
-                {acceptedCurrencies.length} currency
-                {acceptedCurrencies.length === 1 ? "" : "ies"} accepted
-              </div>
-            </div>
-          )
-        })
-      )}
-    </Panel>
-  )
-}
-
 const ItemListingsPanel = ({
   itemListings,
   discountTemplates,
   status,
   error,
-  shopConfigured
+  shopConfigured,
+  canBuy,
+  onBuy
 }: {
   itemListings: ItemListingSummary[]
   discountTemplates: DiscountTemplateSummary[]
   status: PanelStatus["status"]
   error?: string
   shopConfigured: boolean
+  canBuy: boolean
+  onBuy?: (listing: ItemListingSummary) => void
 }) => {
   const templateLookup = useMemo(
     () => buildTemplateLookup(discountTemplates),
@@ -230,20 +147,24 @@ const ItemListingsPanel = ({
                 const spotlightLabel = spotlightTemplate
                   ? spotlightTemplate.ruleDescription
                   : undefined
+                const stockValue = listing.stock ? BigInt(listing.stock) : null
+                const isOutOfStock =
+                  stockValue !== null ? stockValue <= 0n : false
 
                 return (
                   <div
                     key={listing.itemListingId}
-                    className="rounded-xl border border-slate-200/70 bg-white/70 p-4 shadow-sm dark:border-slate-50/10 dark:bg-slate-900/40"
+                    className="rounded-xl border border-slate-300/80 bg-white/95 p-4 shadow-[0_12px_30px_-22px_rgba(15,23,42,0.35)] dark:border-slate-50/25 dark:bg-slate-950/60"
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div>
                         <div className="text-lg font-semibold text-sds-dark dark:text-sds-light">
                           {listing.name || getStructLabel(listing.itemType)}
                         </div>
-                        <div className="text-xs text-slate-500 dark:text-slate-200/60">
-                          {shortenId(listing.itemListingId)}
-                        </div>
+                        <CopyableId
+                          value={listing.itemListingId}
+                          label="Object ID"
+                        />
                       </div>
                       <span className="bg-sds-blue/15 rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.12em] text-sds-dark dark:text-sds-light">
                         {formatUsdFromCents(listing.basePriceUsdCents)}
@@ -263,6 +184,29 @@ const ItemListingsPanel = ({
                         </span>
                       </span>
                     </div>
+                    {canBuy ? (
+                      <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
+                        <div className="text-xs uppercase tracking-[0.14em] text-slate-500 dark:text-slate-200/60">
+                          {isOutOfStock ? "Sold out" : "Ready to buy"}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => onBuy?.(listing)}
+                          disabled={isOutOfStock}
+                          className={clsx(
+                            "border-sds-blue/40 from-sds-blue/20 to-sds-pink/30 focus-visible:ring-sds-blue/40 dark:from-sds-blue/20 dark:to-sds-pink/10 group inline-flex items-center gap-2 rounded-full border bg-gradient-to-r via-white/80 px-4 py-2 text-[0.65rem] font-semibold uppercase tracking-[0.2em] text-sds-dark shadow-[0_14px_36px_-26px_rgba(77,162,255,0.9)] transition focus-visible:outline-none focus-visible:ring-2 dark:via-slate-900/40 dark:text-sds-light",
+                            isOutOfStock
+                              ? "cursor-not-allowed opacity-50"
+                              : "hover:-translate-y-0.5 hover:shadow-[0_18px_45px_-25px_rgba(77,162,255,0.9)]"
+                          )}
+                        >
+                          <span>Buy</span>
+                          <span className="text-[0.55rem] text-slate-500 transition group-hover:text-slate-700 dark:text-slate-200/60 dark:group-hover:text-slate-100">
+                            {isOutOfStock ? "Unavailable" : "Now"}
+                          </span>
+                        </button>
+                      </div>
+                    ) : null}
                   </div>
                 )
               })}
@@ -301,7 +245,7 @@ const AcceptedCurrenciesPanel = ({
             {acceptedCurrencies.map((currency) => (
               <div
                 key={currency.acceptedCurrencyId}
-                className="flex items-center justify-between rounded-lg border border-slate-200/60 bg-white/60 px-4 py-3 text-sm dark:border-slate-50/10 dark:bg-slate-900/40"
+                className="flex items-center justify-between rounded-lg border border-slate-300/70 bg-white/90 px-4 py-3 text-sm shadow-[0_10px_24px_-20px_rgba(15,23,42,0.3)] dark:border-slate-50/25 dark:bg-slate-950/60"
               >
                 <div className="flex flex-col">
                   <span className="font-semibold text-sds-dark dark:text-sds-light">
@@ -337,7 +281,7 @@ const PurchasedItemsPanel = ({
   <Panel title="Purchased Items" subtitle="Wallet receipts">
     {!walletConfigured ? (
       <div className="text-sm text-slate-500 dark:text-slate-200/70">
-        Connect a wallet and configure the shop to view purchases.
+        Connect a wallet to view purchases.
       </div>
     ) : (
       renderPanelBody({
@@ -346,27 +290,38 @@ const PurchasedItemsPanel = ({
         isEmpty: purchasedItems.length === 0,
         emptyMessage: "No purchases found for this wallet.",
         children: (
-          <div className="space-y-3">
-            {purchasedItems.map((item) => (
-              <div
-                key={item.shopItemId}
-                className="rounded-xl border border-slate-200/70 bg-white/70 px-4 py-3 text-sm dark:border-slate-50/10 dark:bg-slate-900/40"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <div className="font-semibold text-sds-dark dark:text-sds-light">
-                      {item.name || getStructLabel(item.itemType)}
+          <div className="grid gap-4 lg:grid-cols-2">
+            {purchasedItems.map((item) => {
+              const itemTypeLabel = getStructLabel(item.itemType)
+              return (
+                <div
+                  key={item.shopItemId}
+                  className="rounded-xl border border-slate-300/80 bg-white/95 p-4 text-sm shadow-[0_12px_30px_-22px_rgba(15,23,42,0.35)] dark:border-slate-50/25 dark:bg-slate-950/60"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <div className="text-lg font-semibold text-sds-dark dark:text-sds-light">
+                        {item.name || itemTypeLabel}
+                      </div>
+                      <CopyableId value={item.shopItemId} label="Receipt ID" />
+                      <div className="mt-2 inline-flex items-center rounded-full bg-sds-blue/15 px-3 py-1 text-xs font-semibold uppercase tracking-[0.12em] text-sds-dark dark:text-sds-light">
+                        Type {itemTypeLabel}
+                      </div>
                     </div>
-                    <div className="text-xs text-slate-500 dark:text-slate-200/60">
-                      Listing {shortenId(item.itemListingAddress)}
+                    <div className="text-xs uppercase tracking-[0.12em] text-slate-500 dark:text-slate-200/60">
+                      Purchased {formatEpochSeconds(item.acquiredAt)}
                     </div>
                   </div>
-                  <div className="text-xs uppercase tracking-[0.12em] text-slate-500 dark:text-slate-200/60">
-                    {formatEpochSeconds(item.acquiredAt)}
+                  <div className="mt-4 flex flex-wrap items-center gap-4 text-xs">
+                    <CopyableId
+                      value={item.itemListingAddress}
+                      label="Listing ID"
+                    />
+                    <CopyableId value={item.shopAddress} label="Shop ID" />
                   </div>
                 </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
         )
       })
@@ -411,7 +366,7 @@ const DiscountsPanel = ({
                 return (
                   <div
                     key={ticket.discountTicketId}
-                    className="rounded-xl border border-slate-200/70 bg-white/70 px-4 py-3 text-sm dark:border-slate-50/10 dark:bg-slate-900/40"
+                    className="rounded-xl border border-slate-300/80 bg-white/95 px-4 py-3 text-sm shadow-[0_12px_30px_-22px_rgba(15,23,42,0.35)] dark:border-slate-50/25 dark:bg-slate-950/60"
                   >
                     <div className="flex flex-col gap-2">
                       <div className="flex items-center justify-between">
@@ -422,6 +377,10 @@ const DiscountsPanel = ({
                           {template?.status || "active"}
                         </span>
                       </div>
+                      <CopyableId
+                        value={ticket.discountTicketId}
+                        label="Object ID"
+                      />
                       <div className="text-xs text-slate-500 dark:text-slate-200/60">
                         {ticket.listingId
                           ? `Listing ${shortenId(ticket.listingId)}`
@@ -452,6 +411,10 @@ const StoreDashboard = () => {
     () => resolveConfiguredId(rawPackageId, CONTRACT_PACKAGE_ID_NOT_DEFINED),
     [rawPackageId]
   )
+  const [activeListing, setActiveListing] = useState<ItemListingSummary | null>(
+    null
+  )
+  const [isBuyModalOpen, setIsBuyModalOpen] = useState(false)
 
   const { storefront, wallet } = useShopDashboardData({
     shopId,
@@ -460,26 +423,30 @@ const StoreDashboard = () => {
   })
 
   const hasShopConfig = Boolean(shopId)
-  const hasWalletConfig = Boolean(
-    shopId && packageId && currentAccount?.address
-  )
+  const hasWalletConfig = Boolean(shopId && currentAccount?.address)
+
+  const openBuyModal = (listing: ItemListingSummary) => {
+    setActiveListing(listing)
+    setIsBuyModalOpen(true)
+  }
+
+  const closeBuyModal = () => {
+    setIsBuyModalOpen(false)
+    setActiveListing(null)
+  }
 
   return (
     <div className="w-full max-w-6xl space-y-6 px-4">
       <div className="grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
         <div className="flex flex-col gap-6">
-          <SelectedCurrencyPanel
-            acceptedCurrencies={storefront.acceptedCurrencies}
-            status={storefront.status}
-            error={storefront.error}
-            shopConfigured={hasShopConfig}
-          />
           <ItemListingsPanel
             itemListings={storefront.itemListings}
             discountTemplates={storefront.discountTemplates}
             status={storefront.status}
             error={storefront.error}
             shopConfigured={hasShopConfig}
+            canBuy={Boolean(currentAccount?.address)}
+            onBuy={openBuyModal}
           />
         </div>
         <AcceptedCurrenciesPanel
@@ -505,6 +472,16 @@ const StoreDashboard = () => {
           walletConfigured={hasWalletConfig}
         />
       </div>
+
+      <BuyFlowModal
+        open={isBuyModalOpen}
+        onClose={closeBuyModal}
+        shopId={shopId}
+        listing={activeListing ?? undefined}
+        acceptedCurrencies={storefront.acceptedCurrencies}
+        discountTemplates={storefront.discountTemplates}
+        discountTickets={wallet.discountTickets}
+      />
     </div>
   )
 }

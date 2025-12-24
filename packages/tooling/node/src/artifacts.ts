@@ -132,11 +132,3 @@ export const getLatestObjectFromArtifact = async (
     undefined
   )
 }
-
-/**
- * Persists mock deployment state (mock packages, coins, price feeds, shop objects) to disk.
- * This lets repeated localnet runs reuse published mocks instead of republishing every time.
- */
-export const writeMockArtifact = writeArtifact({})
-
-export const mockArtifactPath = getArtifactPath("mock")("localnet")

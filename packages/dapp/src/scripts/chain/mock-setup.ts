@@ -15,15 +15,8 @@ import { normalizeHex } from "@sui-oracle-market/tooling-core/hex"
 import { assertLocalnetNetwork } from "@sui-oracle-market/tooling-core/network"
 import { objectTypeMatches } from "@sui-oracle-market/tooling-core/object"
 import type { WrappedSuiSharedObject } from "@sui-oracle-market/tooling-core/shared-object"
-import type {
-  MockArtifact,
-  PublishArtifact
-} from "@sui-oracle-market/tooling-core/types"
-import {
-  mockArtifactPath,
-  readArtifact,
-  writeMockArtifact
-} from "@sui-oracle-market/tooling-node/artifacts"
+import type { PublishArtifact } from "@sui-oracle-market/tooling-core/types"
+import { readArtifact } from "@sui-oracle-market/tooling-node/artifacts"
 import {
   DEFAULT_TX_GAS_BUDGET,
   SUI_COIN_REGISTRY_ID
@@ -39,10 +32,14 @@ import {
   findCreatedObjectIds,
   newTransaction
 } from "@sui-oracle-market/tooling-node/transactions"
+import type { MockArtifact } from "../../utils/mocks.ts"
+import { mockArtifactPath, writeMockArtifact } from "../../utils/mocks.ts"
 
 type SetupLocalCliArgs = {
   coinPackageId?: string
   coinContractPath: string
+  itemPackageId?: string
+  itemContractPath: string
   pythPackageId?: string
   pythContractPath: string
   rePublish?: boolean
@@ -51,6 +48,8 @@ type SetupLocalCliArgs = {
 type ExistingState = {
   existingCoinPackageId?: string
   existingCoins?: CoinArtifact[]
+  existingItemPackageId?: string
+  existingItemTypes?: ItemTypeArtifact[]
   existingPythPackageId?: string
   existingPriceFeeds?: PriceFeedArtifact[]
 }
@@ -58,9 +57,15 @@ type ExistingState = {
 // Where the local Pyth stub lives.
 const DEFAULT_PYTH_CONTRACT_PATH = path.join(process.cwd(), "move", "pyth-mock")
 const DEFAULT_COIN_CONTRACT_PATH = path.join(process.cwd(), "move", "coin-mock")
+const DEFAULT_ITEM_EXAMPLES_CONTRACT_PATH = path.join(
+  process.cwd(),
+  "move",
+  "item-examples"
+)
 
 type LabeledPriceFeedConfig = MockPriceFeedConfig & { label: string }
 type CoinArtifact = NonNullable<MockArtifact["coins"]>[number]
+type ItemTypeArtifact = NonNullable<MockArtifact["itemTypes"]>[number]
 type PriceFeedArtifact = NonNullable<MockArtifact["priceFeeds"]>[number]
 
 type CoinSeed = {
@@ -111,12 +116,18 @@ const extendCliArguments = async (
     existingCoinPackageId: baseScriptArguments.rePublish
       ? undefined
       : baseScriptArguments.coinPackageId || mockArtifact.coinPackageId,
+    existingItemPackageId: baseScriptArguments.rePublish
+      ? undefined
+      : baseScriptArguments.itemPackageId || mockArtifact.itemPackageId,
     existingPriceFeeds: baseScriptArguments.rePublish
       ? undefined
       : mockArtifact.priceFeeds,
     existingCoins: baseScriptArguments.rePublish
       ? undefined
-      : mockArtifact.coins
+      : mockArtifact.coins,
+    existingItemTypes: baseScriptArguments.rePublish
+      ? undefined
+      : mockArtifact.itemTypes
   }
 }
 
@@ -144,15 +155,16 @@ runSuiScript(
     })
 
     // Publish or reuse mock Pyth + mock coin packages; record package IDs for later steps.
-    const { coinPackageId, pythPackageId } = await publishMockPackages(
-      {
-        fullNodeUrl,
-        keypair,
-        existingState,
-        cliArguments
-      },
-      tooling
-    )
+    const { coinPackageId, pythPackageId, itemPackageId } =
+      await publishMockPackages(
+        {
+          fullNodeUrl,
+          keypair,
+          existingState,
+          cliArguments
+        },
+        tooling
+      )
 
     // Fetch shared Coin Registry and Clock objects; required for minting coins and timestamp price feeds.
     const { coinRegistryObject, clockObject } =
@@ -194,10 +206,22 @@ runSuiScript(
       priceFeeds
     })
 
+    const itemTypes =
+      existingState.existingItemTypes &&
+      existingState.existingItemPackageId === itemPackageId
+        ? existingState.existingItemTypes
+        : buildItemTypeArtifacts(itemPackageId)
+
+    await writeMockArtifact(mockArtifactPath, {
+      itemTypes
+    })
+
     logKeyValueGreen("Pyth package")(pythPackageId)
     logKeyValueGreen("Coin package")(coinPackageId)
+    logKeyValueGreen("Item package")(itemPackageId)
     logKeyValueGreen("Feeds")(JSON.stringify(priceFeeds))
     logKeyValueGreen("Coins")(JSON.stringify(coins))
+    logKeyValueGreen("Item types")(JSON.stringify(itemTypes))
   },
   yargs()
     .option("coinPackageId", {
@@ -211,6 +235,18 @@ runSuiScript(
       type: "string",
       description: "Path to the local coin stub Move package to publish",
       default: DEFAULT_COIN_CONTRACT_PATH
+    })
+    .option("itemPackageId", {
+      alias: "item-package-id",
+      type: "string",
+      description:
+        "Package ID of the example item Move package on the local localNetwork"
+    })
+    .option("itemContractPath", {
+      alias: "item-contract-path",
+      type: "string",
+      description: "Path to the local example item Move package to publish",
+      default: DEFAULT_ITEM_EXAMPLES_CONTRACT_PATH
     })
     .option("pythPackageId", {
       alias: "pyth-package-id",
@@ -294,9 +330,32 @@ const publishMockPackages = async (
       coinPackageId
     })
 
+  const itemPackageId =
+    existingState.existingItemPackageId ||
+    pickRootArtifact(
+      await tooling.withTestnetFaucetRetry(
+        {
+          signerAddress: keypair.toSuiAddress(),
+          signer: keypair
+        },
+        async () =>
+          await tooling.publishPackageWithLog({
+            packagePath: path.resolve(cliArguments.itemContractPath),
+            keypair,
+            useCliPublish: true
+          })
+      )
+    ).packageId
+
+  if (itemPackageId !== existingState.existingItemPackageId)
+    await writeMockArtifact(mockArtifactPath, {
+      itemPackageId
+    })
+
   return {
     pythPackageId,
-    coinPackageId
+    coinPackageId,
+    itemPackageId
   }
 }
 
@@ -582,6 +641,20 @@ const buildCoinSeeds = (coinPackageId: string): CoinSeed[] => {
       coinType: `${normalizedPackageId}::mock_coin::LocalMockBtc`,
       initTarget: `${normalizedPackageId}::mock_coin::init_local_mock_btc`
     }
+  ]
+}
+
+const buildItemTypeArtifacts = (itemPackageId: string): ItemTypeArtifact[] => {
+  const normalizedPackageId = normalizeSuiObjectId(itemPackageId)
+  const module = "items"
+  const buildItemType = (structName: string) =>
+    `${normalizedPackageId}::${module}::${structName}`
+
+  return [
+    { label: "Car", itemType: buildItemType("Car") },
+    { label: "Bike", itemType: buildItemType("Bike") },
+    { label: "ConcertTicket", itemType: buildItemType("ConcertTicket") },
+    { label: "DigitalPass", itemType: buildItemType("DigitalPass") }
   ]
 }
 
