@@ -19,6 +19,11 @@ type DynamicFieldInfo = Awaited<
   ReturnType<SuiClient["getDynamicFields"]>
 >["data"][number]
 
+/**
+ * Lists all dynamic field entries under a parent object.
+ * Dynamic fields are Sui's on-chain key-value tables attached to an object,
+ * unlike EVM storage slots. Pagination is handled internally.
+ */
 export const getAllDynamicFields = async (
   {
     parentObjectId,
@@ -46,6 +51,11 @@ export const getAllDynamicFields = async (
     : dynamicFields
 }
 
+/**
+ * Fetches full object data for every dynamic field entry under a parent.
+ * Useful when the dynamic field value is itself an object ID and you want
+ * to inspect each child object in one pass.
+ */
 export const getAllDynamicFieldObjects = async (
   {
     parentObjectId,
@@ -74,6 +84,9 @@ export const getAllDynamicFieldObjects = async (
   )
 }
 
+/**
+ * Narrowing helper for plain object records.
+ */
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null
 
@@ -89,6 +102,10 @@ type DynamicFieldValueIdContent = {
   }
 }
 
+/**
+ * Checks whether a dynamic field's content structure contains a nested `id.id` string.
+ * Many dynamic field values wrap an object ID, which is stored deeper than the top-level fields.
+ */
 export const hasDynamicFieldValueId = (
   content: unknown
 ): content is DynamicFieldValueIdContent => {
@@ -109,6 +126,10 @@ export const hasDynamicFieldValueId = (
   return typeof id["id"] === "string"
 }
 
+/**
+ * Extracts a child object ID from a dynamic field object, if present.
+ * On Sui, dynamic fields often store object IDs instead of direct values.
+ */
 export const getObjectIdFromDynamicFieldObject = ({
   content
 }: SuiObjectData): string | undefined =>
@@ -116,13 +137,25 @@ export const getObjectIdFromDynamicFieldObject = ({
     ? content.fields.value.fields.id.id
     : undefined
 
+/**
+ * Returns true if the object type indicates a dynamic field object.
+ */
 export const isDynamicFieldObject = (objectType?: string) =>
   objectType?.includes("0x2::dynamic_field")
 
+/**
+ * Placeholder normalization hook for dynamic field objects.
+ * Intentionally a no-op today; kept for symmetry with other normalization utilities.
+ */
 export const dynamicFieldObjectNormalization = (suiObject: SuiObjectData) => ({
   ...suiObject
 })
 
+/**
+ * Fetches a single dynamic field object by parent/child IDs.
+ * Dynamic field lookups are keyed by (parent object, name), which is different
+ * from EVM storage where you compute a slot; this wraps the RPC call.
+ */
 export const getSuiDynamicFieldObject = async (
   {
     childObjectId,
@@ -154,6 +187,10 @@ export const getSuiDynamicFieldObject = async (
   }
 }
 
+/**
+ * Attempts to fetch an object directly, then falls back to dynamic field lookup.
+ * Handy when callers only know an ID that might be stored inside a dynamic field.
+ */
 export const getObjectWithDynamicFieldFallback = async (
   {
     objectId,

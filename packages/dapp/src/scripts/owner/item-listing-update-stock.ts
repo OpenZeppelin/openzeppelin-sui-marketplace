@@ -1,3 +1,9 @@
+/**
+ * Updates the stock quantity for an ItemListing.
+ * The listing is a mutable object; stock changes are object mutations guarded by ShopOwnerCap.
+ * If you come from EVM, this is like updating inventory in a mapping, but via object state changes.
+ * The script submits a transaction and then re-reads the listing summary.
+ */
 import { normalizeSuiObjectId } from "@mysten/sui/utils"
 import yargs from "yargs"
 

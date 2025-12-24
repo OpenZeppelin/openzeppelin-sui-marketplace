@@ -14,6 +14,9 @@ import { runSuiCli } from "./suiCli.ts"
 export const canonicalizePackagePath = (packagePath: string) =>
   path.normalize(path.resolve(packagePath))
 
+/**
+ * Resolves a package path relative to the Move root if it is not already under it.
+ */
 export const resolveFullPackagePath = (
   moveRootPath: string,
   providedPackagePath: string
@@ -30,6 +33,9 @@ export const resolveFullPackagePath = (
     : path.resolve(moveRootPath, providedPackagePath)
 }
 
+/**
+ * Checks whether a deployment artifact already exists for a package path.
+ */
 export const hasDeploymentForPackage = (
   deploymentArtifacts: PublishArtifact[],
   packagePath: string
@@ -79,8 +85,14 @@ export const buildMovePackage = async (
   return { modules, dependencies }
 }
 
+/**
+ * Returns a CLI runner for `sui move build`.
+ */
 export const runMoveBuild = runSuiCli(["move", "build"])
 
+/**
+ * Resolves build outputs from CLI JSON or the build/ artifacts on disk.
+ */
 const resolveBuildArtifacts = async (
   stdout: string,
   resolvedPackagePath: string,
@@ -200,6 +212,9 @@ const readBuildArtifacts = async (
   return { modules, dependencies }
 }
 
+/**
+ * Infers the Move package name from the build/ directory.
+ */
 const inferPackageName = async (buildDir: string): Promise<string> => {
   const buildEntries = await fs.readdir(buildDir, { withFileTypes: true })
   const candidateDirs = buildEntries
@@ -223,6 +238,9 @@ const inferPackageName = async (buildDir: string): Promise<string> => {
   )
 }
 
+/**
+ * Finds the BuildInfo.yaml file for a built Move package.
+ */
 const findBuildInfoPath = async (
   buildDir: string,
   packageName: string
@@ -257,6 +275,9 @@ const findBuildInfoPath = async (
   )
 }
 
+/**
+ * Reads compiled Move bytecode modules and returns base64-encoded strings.
+ */
 const readBytecodeModules = async (
   buildDir: string,
   packageName: string,
@@ -286,6 +307,9 @@ const readBytecodeModules = async (
   return modules
 }
 
+/**
+ * Extracts dependency addresses from BuildInfo.yaml.
+ */
 const extractDependencies = (
   buildInfoRaw: string,
   packageName: string
@@ -310,6 +334,9 @@ const extractDependencies = (
     .filter((address, index, all) => all.indexOf(address) === index)
 }
 
+/**
+ * Returns true if a bytecode filename is likely a test module.
+ */
 const isTestModuleFilename = (filename: string): boolean => {
   const lowered = filename.toLowerCase()
   return (
@@ -319,6 +346,9 @@ const isTestModuleFilename = (filename: string): boolean => {
   )
 }
 
+/**
+ * Heuristically detects test modules from decoded bytecode.
+ */
 const isTestModuleBytecode = (moduleB64: string): boolean => {
   try {
     const bytes = Buffer.from(moduleB64, "base64")

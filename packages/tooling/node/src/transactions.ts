@@ -65,11 +65,18 @@ type GasPaymentOptions = {
   excludedObjectIds?: Set<string>
 }
 
+/**
+ * Checks whether a transaction already has gas payment objects attached.
+ */
 const hasExistingGasPayment = (transaction: Transaction) => {
   const payment = transaction.getData().gasData.payment
   return Array.isArray(payment) && payment.length > 0
 }
 
+/**
+ * Ensures a fresh gas coin object is selected for the transaction.
+ * Sui gas is paid with coin objects (each with a version), unlike EVM balances.
+ */
 const ensureGasPayment = async ({
   transaction,
   signerAddress,
@@ -95,6 +102,9 @@ type ExecuteOnceArgs = {
   assertSuccess: boolean
 }
 
+/**
+ * Executes a signed transaction once and persists object artifacts if it succeeds.
+ */
 export const executeTransactionOnce = async (
   { transaction, signer, requestType, assertSuccess }: ExecuteOnceArgs,
   toolingContext: ToolingContext
@@ -132,6 +142,9 @@ type RetryDecision = {
   lockedObjectIds: Set<string>
 }
 
+/**
+ * Determines whether a retry is warranted based on gas-related error messages.
+ */
 const decideRetryForGasIssues = (
   error: unknown,
   allowRetryOnGasStale: boolean,
@@ -150,6 +163,9 @@ const decideRetryForGasIssues = (
   }
 }
 
+/**
+ * Normalizes unknown thrown values to Error instances for consistent handling.
+ */
 const normalizeUnknownError = (error: unknown) =>
   error instanceof Error ? error : new Error(String(error))
 
@@ -263,10 +279,17 @@ const EMPTY_OBJECT_ARTIFACTS: PersistedObjectArtifacts = {
   wrapped: []
 }
 
+/**
+ * Returns true when the transaction effects indicate success.
+ */
 const didTransactionSucceed = (
   transactionResult: SuiTransactionBlockResponse
 ) => transactionResult.effects?.status?.status === "success"
 
+/**
+ * Persists object artifacts derived from transaction object changes.
+ * This captures created, mutated, deleted, wrapped, and transferred objects.
+ */
 const persistObjectsIfAny = async ({
   transactionResult,
   suiClient,
@@ -315,6 +338,9 @@ const persistObjectsIfAny = async ({
   }
 }
 
+/**
+ * Builds and writes artifacts for created objects.
+ */
 const persistCreatedArtifacts = async (
   {
     createdChanges,
@@ -348,11 +374,17 @@ const persistCreatedArtifacts = async (
   return objectCreatedArtifacts
 }
 
+/**
+ * Chooses the correct ID to index artifacts, handling dynamic field objects.
+ */
 const deriveArtifactObjectId = (artifact: ObjectArtifact) =>
   isDynamicFieldObject(artifact.objectType)
     ? normalizeObjectIdSafe(artifact.dynamicFieldId ?? artifact.objectId)
     : normalizeObjectIdSafe(artifact.objectId)
 
+/**
+ * Indexes object changes by normalized object ID.
+ */
 const indexUpdatesByObjectId = (
   updatedChanges: ObjectChangeWithOwner[]
 ): Map<string, ObjectChangeWithOwner> =>
@@ -372,9 +404,15 @@ type ObjectChangeWithObjectId =
   | ObjectChangeWrapped
 type TimestampField = "deletedAt" | "wrappedAt"
 
+/**
+ * Extracts the owner field from mutation/transfer changes.
+ */
 const mapOwnerFromObjectChange = (change: ObjectChangeWithOwner) =>
   "recipient" in change ? change.recipient : change.owner
 
+/**
+ * Applies owner/version updates to existing artifacts based on object changes.
+ */
 const applyUpdatesToArtifacts = ({
   currentObjectArtifacts,
   updatesById
@@ -405,6 +443,9 @@ const applyUpdatesToArtifacts = ({
   return { updatedArtifacts, nextArtifacts }
 }
 
+/**
+ * Writes updated object artifacts for mutated or transferred objects.
+ */
 const persistUpdatedArtifacts = async ({
   updatedChanges,
   networkName
@@ -435,6 +476,9 @@ const persistUpdatedArtifacts = async ({
   return updatedArtifacts
 }
 
+/**
+ * Groups object changes by type for easier processing.
+ */
 const groupObjectChanges = (
   objectChanges: SuiTransactionBlockResponse["objectChanges"]
 ): ObjectChangesByType => ({
@@ -455,6 +499,9 @@ const groupObjectChanges = (
   )
 })
 
+/**
+ * Normalizes a candidate object ID, returning undefined if invalid.
+ */
 const normalizeObjectIdSafe = (
   candidate?: string | null
 ): string | undefined =>
@@ -468,6 +515,9 @@ const normalizeObjectIdSafe = (
       })()
     : undefined
 
+/**
+ * Builds a set of normalized object IDs for quick lookup.
+ */
 const buildNormalizedObjectIdSet = (
   changes: ObjectChangeWithObjectId[]
 ): Set<string> =>
@@ -477,6 +527,9 @@ const buildNormalizedObjectIdSet = (
     return objectIds
   }, new Set())
 
+/**
+ * Determines whether a timestamp field should be set on a given artifact.
+ */
 const shouldApplyTimestamp = ({
   artifact,
   targetObjectIds,
@@ -494,6 +547,9 @@ const shouldApplyTimestamp = ({
   )
 }
 
+/**
+ * Applies timestamp fields to matching artifacts and returns updated entries.
+ */
 const markArtifactsWithTimestamp = ({
   objectArtifacts,
   targetObjectIds,
@@ -532,6 +588,9 @@ const markArtifactsWithTimestamp = ({
   return { affectedArtifacts, nextArtifacts }
 }
 
+/**
+ * Marks artifacts with deletion/wrapping timestamps based on object changes.
+ */
 const timestampArtifactsForObjectChanges = async ({
   changes,
   networkName,
@@ -569,6 +628,9 @@ const timestampArtifactsForObjectChanges = async ({
   return affectedArtifacts
 }
 
+/**
+ * Marks artifacts as deleted when objects are deleted.
+ */
 const persistDeletedArtifacts = async ({
   deletedChanges,
   networkName
@@ -583,6 +645,9 @@ const persistDeletedArtifacts = async ({
     shouldTimestampArtifact: () => true
   })
 
+/**
+ * Marks artifacts as wrapped when objects are wrapped.
+ */
 const persistWrappedArtifacts = async ({
   wrappedChanges,
   networkName
@@ -597,6 +662,9 @@ const persistWrappedArtifacts = async ({
     shouldTimestampArtifact: (artifact) => !artifact.wrappedAt
   })
 
+/**
+ * Fetches full object data for each created object change.
+ */
 const getCreatedObjectsWithData = async (
   createdChanges: SuiObjectChangeCreated[],
   suiClient: SuiClient
@@ -617,6 +685,9 @@ const getCreatedObjectsWithData = async (
     })
   )
 
+/**
+ * Converts created objects into artifact records for persistence.
+ */
 const buildArtifactsForCreatedObjects = ({
   createdObjectsWithData,
   signerAddress
@@ -638,6 +709,9 @@ const buildArtifactsForCreatedObjects = ({
   return objectArtifacts
 }
 
+/**
+ * Builds a single object artifact from a created object change + fetched data.
+ */
 const buildObjectArtifactFromCreatedObject = ({
   createdObject,
   signerAddress
@@ -673,6 +747,9 @@ const buildObjectArtifactFromCreatedObject = ({
   }
 }
 
+/**
+ * Picks a fresh SUI gas coin, avoiding locked or stale object IDs.
+ */
 const pickFreshGasCoin = async (
   owner: string,
   client: SuiClient,
@@ -706,6 +783,9 @@ const pickFreshGasCoin = async (
   }
 }
 
+/**
+ * Attempts to parse a stale object ID from an error message.
+ */
 const parseStaleObjectId = (error: unknown): string | undefined => {
   const message =
     error instanceof Error
@@ -717,6 +797,9 @@ const parseStaleObjectId = (error: unknown): string | undefined => {
   return match?.[1]
 }
 
+/**
+ * Extracts locked object IDs from an error message.
+ */
 const parseLockedObjectIds = (error: unknown): Set<string> => {
   const message =
     error instanceof Error

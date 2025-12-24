@@ -54,6 +54,9 @@ export const loadKeypair = async ({
   )
 }
 
+/**
+ * Retrieves a specific entry from the Sui keystore by index.
+ */
 const getKeystoreEntry = (
   keystoreEntries: string[],
   accountIndex: number,
@@ -71,9 +74,15 @@ const getKeystoreEntry = (
   return accountEntry
 }
 
+/**
+ * Reads and parses the Sui keystore JSON file.
+ */
 const readKeystoreEntries = async (keystorePath: string): Promise<string[]> =>
   JSON.parse(await readFile(keystorePath, "utf8"))
 
+/**
+ * Finds a keystore entry matching a target Sui address.
+ */
 const getKeystoreKeypairByAddress = async (
   keystoreEntries: string[],
   accountAddress: string
@@ -89,6 +98,9 @@ const getKeystoreKeypairByAddress = async (
   return undefined
 }
 
+/**
+ * Lists available keystore addresses with their index.
+ */
 const listKeystoreAddresses = async (keystoreEntries: string[]) => {
   const entriesWithAddress = await Promise.all(
     keystoreEntries.map(async (entry, index) => {
@@ -100,9 +112,15 @@ const listKeystoreAddresses = async (keystoreEntries: string[]) => {
   return entriesWithAddress
 }
 
+/**
+ * Detects the bech32-encoded Sui private key format.
+ */
 const isBech32PrivateKey = (value: string): boolean =>
   value.startsWith("suiprivkey1")
 
+/**
+ * Builds an Ed25519 keypair from a bech32 Sui private key.
+ */
 const keypairFromBech32 = (bech32Key: string): Ed25519Keypair => {
   const decoded = decodeSuiPrivateKey(bech32Key.trim())
   if (decoded.schema !== "ED25519")
@@ -111,6 +129,9 @@ const keypairFromBech32 = (bech32Key: string): Ed25519Keypair => {
   return Ed25519Keypair.fromSecretKey(decoded.secretKey)
 }
 
+/**
+ * Builds an Ed25519 keypair from either bech32 or base64 secret key material.
+ */
 const keypairFromSecret = async (secret: string) => {
   const normalizedSecret = secret.trim()
 

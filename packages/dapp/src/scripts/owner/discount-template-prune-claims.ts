@@ -1,3 +1,9 @@
+/**
+ * Prunes specific claimer addresses from a DiscountTemplate's claim tracking.
+ * Templates track claims on chain to enforce redemption limits; this script removes entries.
+ * If you come from EVM, this resembles deleting keys from a mapping, but the mapping is modeled as objects.
+ * Uses the Sui Clock for time checks and requires the ShopOwnerCap capability.
+ */
 import { normalizeSuiObjectId } from "@mysten/sui/utils"
 import yargs from "yargs"
 

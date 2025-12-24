@@ -20,6 +20,13 @@ import {
   TESTNET_SHOP_ID
 } from "../config/network"
 
+/**
+ * Build the network map used by @mysten/dapp-kit.
+ * In Sui we configure more than just an RPC URL: each environment needs the
+ * published Move package ID plus the Shop object ID that holds shared state.
+ * EVM devs: think "contract address" split into a package ID + concrete objects,
+ * and we keep them in network variables so the UI always targets the right chain.
+ */
 const useNetworkConfig = () => {
   return createNetworkConfig({
     [ENetwork.LOCALNET]: {

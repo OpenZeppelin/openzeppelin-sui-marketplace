@@ -156,6 +156,14 @@ const getWalletQueryConfig = ({
 }): WalletQueryConfig | undefined =>
   ownerAddress && shopId ? { ownerAddress, shopId, packageId } : undefined
 
+/**
+ * Fetches storefront + wallet data from Sui for the dashboard.
+ * Sui state lives in objects, so we query object summaries and owned objects
+ * instead of reading contract storage or event logs. The hook separates:
+ * - storefront: shared objects like listings, currencies, discount templates
+ * - wallet: owned objects like ShopItem receipts and DiscountTicket objects
+ * Package ID is resolved from the shop object's type so upgrades stay aligned.
+ */
 export const useShopDashboardData = ({
   shopId,
   packageId,

@@ -43,9 +43,18 @@ export const writeArtifact =
     }
   }
 
+/**
+ * Writes/merges deployment artifacts.
+ */
 export const writeDeploymentArtifact = writeArtifact<PublishArtifact[]>([])
+/**
+ * Writes/merges object artifacts.
+ */
 export const writeObjectArtifact = writeArtifact<ObjectArtifact[]>([])
 
+/**
+ * Rewrites the full object artifact file after applying updates.
+ */
 export const rewriteUpdatedArtifacts = async <TArtifact>({
   objectArtifacts,
   networkName
@@ -99,19 +108,38 @@ export const readArtifact = async <TArtifact>(
   }
 }
 
+/**
+ * Builds a path resolver for artifact files by network name.
+ */
 export const getArtifactPath =
   (artifactType: ArtifactFile) => (network: string) =>
     path.join(process.cwd(), "deployments", `${artifactType}.${network}.json`)
 
+/**
+ * Returns the deployment artifact path for a network.
+ */
 export const getDeploymentArtifactPath = getArtifactPath("deployment")
+/**
+ * Returns the object artifact path for a network.
+ */
 export const getObjectArtifactPath = getArtifactPath("objects")
 
+/**
+ * Loads deployment artifacts for the given network.
+ */
 export const loadDeploymentArtifacts = (networkName: string) =>
   readArtifact<PublishArtifact[]>(getDeploymentArtifactPath(networkName), [])
 
+/**
+ * Loads object artifacts for the given network.
+ */
 export const loadObjectArtifacts = (networkName: string) =>
   readArtifact<ObjectArtifact[]>(getObjectArtifactPath(networkName), [])
 
+/**
+ * Returns the most recent object artifact that matches a type suffix.
+ * Useful when multiple instances of the same Move type are created across runs.
+ */
 export const getLatestObjectFromArtifact = async (
   objectTypeSuffix: string,
   networkName: string

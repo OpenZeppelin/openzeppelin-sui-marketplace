@@ -3,6 +3,10 @@ import { normalizeSuiAddress } from "@mysten/sui/utils"
 import { getAccountConfig, type SuiNetworkConfig } from "./config.ts"
 import { loadKeypair } from "./keypair.ts"
 
+/**
+ * Resolves the effective owner address from explicit input, config, or keystore.
+ * Mirrors EVM "deployer address" resolution but adapts to Sui's keystore formats.
+ */
 export const resolveOwnerAddress = async (
   providedAddress: string | undefined,
   networkConfig: SuiNetworkConfig

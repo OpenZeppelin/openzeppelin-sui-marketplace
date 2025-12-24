@@ -1,3 +1,9 @@
+/**
+ * Displays a full Shop overview: core metadata, listings, accepted currencies, and discount templates.
+ * In Sui, these pieces are separate objects referenced from a shared Shop object, not a single storage blob.
+ * If you come from EVM, you will see multiple object reads instead of one contract call, which maps to Sui's model.
+ * The script is read-only and combines results into a human-friendly snapshot.
+ */
 import { getAcceptedCurrencySummaries } from "@sui-oracle-market/domain-core/models/currency"
 import { getDiscountTemplateSummaries } from "@sui-oracle-market/domain-core/models/discount"
 import { getItemListingSummaries } from "@sui-oracle-market/domain-core/models/item-listing"

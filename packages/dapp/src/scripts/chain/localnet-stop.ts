@@ -1,3 +1,9 @@
+/**
+ * Stops a locally running `sui start` process by scanning the process table and terminating it.
+ * Sui localnet is a full validator + RPC stack, similar to running an EVM devnet like Anvil or Hardhat node.
+ * If you come from EVM, this is the equivalent of shutting down your local chain, not just one app process.
+ * No on-chain transaction is involved; it only manages your local OS process.
+ */
 import { execFile as execFileCallback } from "node:child_process"
 import { promisify } from "node:util"
 

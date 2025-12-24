@@ -1,3 +1,9 @@
+/**
+ * Localnet-only helper that refreshes mock Pyth PriceInfoObject timestamps for price feeds.
+ * Sui uses shared price objects plus the Clock object to enforce oracle freshness, so stale timestamps fail checks.
+ * If you come from EVM, instead of a central oracle contract updating a mapping, each feed is its own shared object.
+ * This script reuses the stored mock artifact to find feeds and submits a transaction to bump their timestamps.
+ */
 import type { TransactionArgument } from "@mysten/sui/transactions"
 import { normalizeSuiObjectId } from "@mysten/sui/utils"
 import yargs from "yargs"
@@ -21,11 +27,6 @@ import { runSuiScript } from "@sui-oracle-market/tooling-node/process"
 import { newTransaction } from "@sui-oracle-market/tooling-node/transactions"
 import type { MockArtifact } from "../../utils/mocks.ts"
 import { mockArtifactPath, writeMockArtifact } from "../../utils/mocks.ts"
-
-/**
- * Localnet-only helper to refresh mock Pyth PriceInfoObject timestamps.
- * Keeps oracle freshness checks honest while avoiding manual re-running of mock setup.
- */
 
 type UpdatePricesCliArguments = {
   pythPackageId?: string

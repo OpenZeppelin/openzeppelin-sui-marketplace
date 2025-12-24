@@ -1,3 +1,9 @@
+/**
+ * Registers a new AcceptedCurrency on a Shop, wiring it to a Pyth feed and price info object.
+ * Sui uses Move type tags to represent coin types, and pricing config is stored in a separate object.
+ * If you come from EVM, this is like adding a token to a registry plus setting oracle parameters, but via objects.
+ * Requires the ShopOwnerCap capability and references shared Pyth PriceInfo data for on-chain price checks.
+ */
 import type { SuiClient } from "@mysten/sui/client"
 import { normalizeSuiObjectId } from "@mysten/sui/utils"
 import yargs from "yargs"

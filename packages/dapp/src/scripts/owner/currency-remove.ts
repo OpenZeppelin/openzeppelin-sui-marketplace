@@ -1,3 +1,9 @@
+/**
+ * Removes an AcceptedCurrency entry from a Shop's registry.
+ * On Sui, accepted currencies are objects referenced by the shared Shop via dynamic fields.
+ * If you come from EVM, this is like deleting a mapping entry, but you are unlinking an object.
+ * Requires the ShopOwnerCap capability to authorize the mutation.
+ */
 import type { SuiClient } from "@mysten/sui/client"
 import type { Ed25519Keypair } from "@mysten/sui/keypairs/ed25519"
 import yargs from "yargs"

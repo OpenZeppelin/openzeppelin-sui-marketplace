@@ -1,6 +1,10 @@
 import { getFullnodeUrl } from "@mysten/sui/client"
 import type { NetworkName } from "./types.ts"
 
+/**
+ * Resolves a default fullnode RPC URL for known Sui networks.
+ * Unlike EVM, Sui has first-class network names with canonical RPC endpoints.
+ */
 export const resolveCommonRpcUrl = (
   network: NetworkName | string
 ): string | undefined => {
@@ -15,6 +19,10 @@ export const resolveCommonRpcUrl = (
   }
 }
 
+/**
+ * Returns an RPC URL for the given network, honoring an override when provided.
+ * Throws for custom networks to force explicit configuration.
+ */
 export const resolveRpcUrl = (
   network: NetworkName | string,
   rpcUrlOverride?: string

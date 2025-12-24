@@ -31,6 +31,9 @@ type ObjectChangeWithType = Extract<
   { type: "created" }
 > & { objectType: string; objectId: string }
 
+/**
+ * Type guard for created object changes that carry a Move type and object ID.
+ */
 const isCreatedWithType = (
   change: NonNullable<SuiTransactionBlockResponse["objectChanges"]>[number]
 ): change is ObjectChangeWithType =>
@@ -40,6 +43,10 @@ const isCreatedWithType = (
   "objectId" in change &&
   typeof change.objectId === "string"
 
+/**
+ * Collects created object IDs that match a predicate on the Move type.
+ * Sui transaction responses include object changes, which replace EVM-style logs for creation.
+ */
 const findCreatedByMatcher = (
   result: SuiTransactionBlockResponse,
   matcher: (objectType: string) => boolean
@@ -49,12 +56,19 @@ const findCreatedByMatcher = (
     .filter((change) => matcher(change.objectType))
     .map((change) => change.objectId)
 
+/**
+ * Returns all created object IDs whose types end with the provided suffix.
+ * Useful for `::StructName` lookups when the package ID is unknown.
+ */
 export const findCreatedObjectIds = (
   result: SuiTransactionBlockResponse,
   typeSuffix: string
 ): string[] =>
   findCreatedByMatcher(result, (objectType) => objectType.endsWith(typeSuffix))
 
+/**
+ * Returns all created object IDs matched by a caller-supplied predicate.
+ */
 export const findCreatedByType = (
   result: SuiTransactionBlockResponse,
   matcher: (objectType: string) => boolean
@@ -71,6 +85,9 @@ export const findObjectMatching = (
     (change) => isCreatedWithType(change) && matcher(change.objectType)
   )
 
+/**
+ * Ensures a created object change exists and narrows it to the created type.
+ */
 export const assertCreatedObject = (
   objectChange: SuiObjectChange | undefined,
   objectToFind: string
@@ -84,7 +101,7 @@ export const assertCreatedObject = (
 }
 
 /**
- * Convenience wrapper for `findCreatedObject` that matches on a type suffix.
+ * Convenience wrapper for `findObjectMatching` that matches on a type suffix.
  */
 export const findCreatedObjectBySuffix = (
   result: SuiTransactionBlockResponse,
@@ -92,6 +109,9 @@ export const findCreatedObjectBySuffix = (
 ): SuiObjectChange | undefined =>
   findObjectMatching(result, (objectType) => objectType.endsWith(typeSuffix))
 
+/**
+ * Finds and asserts a created object by type suffix in a transaction response.
+ */
 export const ensureCreatedObject = (
   objectToFind: string,
   transactionResult: SuiTransactionBlockResponse

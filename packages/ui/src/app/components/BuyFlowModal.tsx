@@ -892,6 +892,14 @@ const TransactionErrorNotice = ({
   </div>
 )
 
+/**
+ * Checkout flow for Sui.
+ * Builds a TransactionBlock with explicit object inputs (shared shop/listing/currency
+ * objects plus a coin object used for payment). This is the big mental shift for
+ * EVM devs: coins are objects, and writes happen to specific shared objects rather
+ * than a single contract address. We sign + execute, then pull the transaction
+ * block details (object changes, events, balance changes) for the receipt UI.
+ */
 const BuyFlowModal = ({
   open,
   onClose,

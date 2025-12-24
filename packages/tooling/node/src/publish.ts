@@ -224,6 +224,9 @@ export const doPublishPackage = async (
 /**
  * Builds the publish transaction payload with gas budget, publish command, and upgrade-cap transfer.
  */
+/**
+ * Builds the publish transaction with a publish command and upgrade cap transfer.
+ */
 const createPublishTransaction = (
   buildOutput: BuildOutput,
   keypair: Ed25519Keypair,
@@ -240,9 +243,18 @@ const createPublishTransaction = (
   return tx
 }
 
+/**
+ * CLI runner for `sui client publish`.
+ */
 export const runClientPublish = runSuiCli(["client", "publish"])
+/**
+ * CLI runner for `sui --version`.
+ */
 const runSuiCliVersion = runSuiCli([])
 
+/**
+ * Builds the full plan for a publish, including flags, dependency strategy, and package naming.
+ */
 /**
  * Builds the full plan for a publish, including flags, dependency strategy, and package naming.
  */
@@ -343,12 +355,18 @@ const buildPublishPlan = async ({
 
 const SKIP_FETCH_LATEST_GIT_DEPS_FLAG = "--skip-fetch-latest-git-deps"
 const DUMP_BYTECODE_AS_BASE64_FLAG = "--dump-bytecode-as-base64"
+/**
+ * Determines whether to skip framework revision checks for the given network/build mode.
+ */
 const shouldSkipFrameworkConsistency = (
   networkName: string,
   useDevBuild: boolean,
   allowAutoUnpublishedDependencies: boolean
 ) =>
   networkName === "localnet" || useDevBuild || allowAutoUnpublishedDependencies
+/**
+ * Determines whether to pass --ignore-chain for Move builds.
+ */
 const shouldIgnoreChain = (
   networkName: string,
   {
@@ -422,6 +440,9 @@ const logPublishSuccess = (artifacts: PublishArtifact[]) => {
   }
 }
 
+/**
+ * Derives a human-friendly label for a published package entry.
+ */
 const derivePackageLabel = (artifact: PublishArtifact, idx: number) =>
   artifact.packageName ??
   (artifact.isDependency ? `dependency #${idx}` : "root package")
@@ -444,6 +465,9 @@ const mergeDependencyAddresses = (
   return { ...lockAddresses, ...publishedDependencyAddresses }
 }
 
+/**
+ * Builds CLI arguments for `sui client publish`.
+ */
 const buildCliPublishArguments = (plan: PublishPlan): string[] => {
   const args = [
     plan.packagePath,
@@ -703,6 +727,9 @@ const resolveUnpublishedDependencyUsage = async (
   }
 }
 
+/**
+ * Builds a helpful error message for unpublished dependencies.
+ */
 const buildUnpublishedDependencyError = (
   packagePath: string,
   unpublishedDependencies: string[]
@@ -715,6 +742,9 @@ const buildUnpublishedDependencyError = (
     "Add published addresses to Move.lock (or pass --with-unpublished-dependencies only on localnet) before publishing."
   ].join("\n")
 
+/**
+ * Builds a helpful error message when Move.lock is missing.
+ */
 const buildMissingMoveLockError = (packagePath: string) =>
   [
     `Move.lock not found for ${packagePath}.`,
@@ -800,6 +830,9 @@ const assertFrameworkRevisionConsistency = async (packagePath: string) => {
   }
 }
 
+/**
+ * Collects mismatched framework revision messages across dependencies.
+ */
 const collectMismatchedFrameworkRevisions = (
   rootFrameworkRevision: string,
   dependencyPackages: Array<{
@@ -821,6 +854,9 @@ const collectMismatchedFrameworkRevisions = (
     })
     .filter(Boolean) as string[]
 
+/**
+ * Builds a human-readable error when framework revisions differ.
+ */
 const buildFrameworkMismatchMessage = (mismatches: string[]) =>
   [
     "Framework version mismatch detected across Move.lock files.",
@@ -828,6 +864,9 @@ const buildFrameworkMismatchMessage = (mismatches: string[]) =>
     "Align all packages to the same Sui framework commit (e.g., run `sui move update` in each package) before publishing."
   ].join("\n")
 
+/**
+ * Reads the Sui framework revision for a package from Move.lock.
+ */
 const readFrameworkRevisionForPackage = async (
   packagePath: string
 ): Promise<string | undefined> => {
@@ -840,6 +879,9 @@ const readFrameworkRevisionForPackage = async (
   }
 }
 
+/**
+ * Extracts the framework revision from a Move.lock file contents.
+ */
 const extractFrameworkRevisionFromLock = (
   lockContents: string
 ): string | undefined => {
@@ -856,6 +898,9 @@ const extractFrameworkRevisionFromLock = (
   return undefined
 }
 
+/**
+ * Finds local Move package dependencies defined via `local = "..."`
+ */
 const discoverLocalDependencyPackages = async (
   packagePath: string
 ): Promise<
@@ -901,6 +946,9 @@ const discoverLocalDependencyPackages = async (
   }
 }
 
+/**
+ * Returns the installed Sui CLI version, if available.
+ */
 const getSuiCliVersion = async (): Promise<string | undefined> => {
   try {
     const { stdout, exitCode } = await runSuiCliVersion(["--version"])
@@ -911,6 +959,9 @@ const getSuiCliVersion = async (): Promise<string | undefined> => {
   }
 }
 
+/**
+ * Parses `sui --version` output into a version string.
+ */
 const parseSuiCliVersionOutput = (stdout: string): string | undefined => {
   if (!stdout?.trim()) return undefined
   const firstLine = stdout.trim().split(/\r?\n/)[0] ?? ""
@@ -941,6 +992,9 @@ const parsePublishedAddresses = (
   return addresses
 }
 
+/**
+ * Detects publish errors caused by transaction size limits.
+ */
 const isSizeLimitError = (error: unknown) => {
   const message =
     error instanceof Error ? error.message : error ? String(error) : ""
@@ -950,5 +1004,8 @@ const isSizeLimitError = (error: unknown) => {
   )
 }
 
+/**
+ * Determines whether to retry publish via CLI when SDK payloads are too large.
+ */
 const shouldRetryWithCli = (plan: PublishPlan, error: unknown) =>
   !plan.useCliPublish && isSizeLimitError(error)

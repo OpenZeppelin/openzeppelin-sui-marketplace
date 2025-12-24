@@ -1,3 +1,10 @@
+/**
+ * Executes a purchase transaction for an ItemListing, optionally claiming and redeeming a discount in one PTB.
+ * Sui payments use coin objects, so you pass specific Coin objects instead of approving an allowance.
+ * If you come from EVM, this bundles multiple calls into a programmable transaction block and consumes shared objects
+ * (Shop, Listing, PriceInfo) explicitly while minting a receipt object to the buyer.
+ * Oracle freshness checks rely on shared Pyth price objects and the Sui Clock.
+ */
 import { normalizeSuiAddress, normalizeSuiObjectId } from "@mysten/sui/utils"
 import yargs from "yargs"
 

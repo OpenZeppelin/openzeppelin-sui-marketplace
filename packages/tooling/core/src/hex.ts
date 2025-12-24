@@ -1,3 +1,6 @@
+/**
+ * Ensures a 0x prefix on a hex string.
+ */
 export const ensureHexPrefix = (value: string) =>
   value.startsWith("0x") ? value : `0x${value}`
 
@@ -9,6 +12,9 @@ export const ensureHexPrefix = (value: string) =>
 export const normalizeHex = (value: string) =>
   value.toLowerCase().replace(/^0x/, "")
 
+/**
+ * Converts a hex string into a byte array.
+ */
 export const hexToBytes = (hex: string): number[] => {
   const normalized = ensureHexPrefix(hex).slice(2)
   if (normalized.length % 2 !== 0) {
@@ -22,6 +28,9 @@ export const hexToBytes = (hex: string): number[] => {
   return bytes
 }
 
+/**
+ * Asserts a byte array length for fixed-size fields (e.g., Sui object IDs or digests).
+ */
 export const assertBytesLength = (bytes: number[], expected: number) => {
   if (bytes.length !== expected)
     throw new Error(`Expected ${expected} bytes, got ${bytes.length}.`)

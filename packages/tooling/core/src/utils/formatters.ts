@@ -1,6 +1,6 @@
 /**
- * Helpers for decoding common Move data representations into friendlier formats.
- * Centralizes vector<u8> parsing and numeric normalization so scripts can stay lean.
+ * Parses a Move `vector<u8>` into a number array for downstream decoding.
+ * Centralizes vector<u8> parsing so scripts can stay lean.
  */
 export const asNumberArray = (value: unknown): number[] | undefined => {
   if (!Array.isArray(value)) return undefined
@@ -12,6 +12,9 @@ export const asNumberArray = (value: unknown): number[] | undefined => {
   })
 }
 
+/**
+ * Decodes a Move `vector<u8>` into a UTF-8 string when possible.
+ */
 export const decodeUtf8Vector = (value: unknown): string | undefined => {
   const byteArray = asNumberArray(value)
   if (!byteArray) return undefined
@@ -20,6 +23,9 @@ export const decodeUtf8Vector = (value: unknown): string | undefined => {
   return decoded || undefined
 }
 
+/**
+ * Attempts to load Node's Buffer API for hex encoding without a hard dependency.
+ */
 const tryGetBuffer = ():
   | { from: (data: number[]) => { toString: (enc: string) => string } }
   | undefined => {
@@ -33,6 +39,9 @@ const tryGetBuffer = ():
   }
 }
 
+/**
+ * Formats a Move `vector<u8>` as a hex string.
+ */
 export const formatVectorBytesAsHex = (value: unknown): string => {
   const byteArray = asNumberArray(value)
   if (!byteArray) return "Unknown"
@@ -45,6 +54,9 @@ export const formatVectorBytesAsHex = (value: unknown): string => {
   return `0x${hexValue}`
 }
 
+/**
+ * Formats numeric-like values as strings for display (supports bigint, number, string).
+ */
 export const formatOptionalNumericValue = (
   value: unknown
 ): string | undefined => {
@@ -56,6 +68,9 @@ export const formatOptionalNumericValue = (
   return undefined
 }
 
+/**
+ * Parses an optional number from user input or RPC output.
+ */
 export const parseOptionalNumber = (value: unknown): number | undefined => {
   if (typeof value === "number") return value
   if (typeof value === "string") {

@@ -24,6 +24,10 @@ export const parseTypeNameFromString = (typeName: string): TypeNameParts => {
   }
 }
 
+/**
+ * Normalizes Move type info from heterogeneous RPC field representations.
+ * Sui responses may embed type names as strings or nested structs.
+ */
 export const normalizeTypeNameFromFieldValue = (
   fieldValue: unknown
 ): TypeNameParts | undefined => {
@@ -79,6 +83,9 @@ export const normalizeTypeNameFromFieldValue = (
   return undefined
 }
 
+/**
+ * Checks whether a candidate field value matches an expected Move type.
+ */
 export const isMatchingTypeName = (
   expectedTypeName: TypeNameParts,
   candidateFieldValue: unknown
@@ -94,9 +101,15 @@ export const isMatchingTypeName = (
   )
 }
 
+/**
+ * Formats a fully qualified Move type name.
+ */
 export const formatTypeName = (typeName: TypeNameParts) =>
   `${typeName.packageId}::${typeName.moduleName}::${typeName.structName}`
 
+/**
+ * Formats a Move type name from a field value if it can be parsed.
+ */
 export const formatTypeNameFromFieldValue = (fieldValue: unknown) => {
   const typeName = normalizeTypeNameFromFieldValue(fieldValue)
   if (!typeName) return undefined

@@ -1,3 +1,9 @@
+/**
+ * Fetches DiscountTemplate objects for a Shop so buyers can see available offers.
+ * Sui keeps mutable shared state in shared objects, while templates are separate objects referenced by the Shop.
+ * If you come from EVM, this replaces reading a single contract storage map with querying objects by type/id.
+ * This script is read-only and does not submit a transaction.
+ */
 import yargs from "yargs"
 
 import { getDiscountTemplateSummaries } from "@sui-oracle-market/domain-core/models/discount"

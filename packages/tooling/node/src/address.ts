@@ -34,6 +34,9 @@ export type EnsureFoundedAddressOptions = {
   splitGasBudget?: number
 }
 
+/**
+ * Detects the common "no gas coin" error message from Sui RPC.
+ */
 const isNoGasError = (error: unknown) => {
   const message =
     error instanceof Error
@@ -44,6 +47,9 @@ const isNoGasError = (error: unknown) => {
   return message.includes("No usable SUI coins available for gas")
 }
 
+/**
+ * Detects "insufficient gas" errors, typically due to low SUI coin balance.
+ */
 const isInsufficientGasError = (error: unknown) => {
   const message =
     error instanceof Error
@@ -62,6 +68,9 @@ const DEFAULT_SPLIT_GAS_BUDGET = 10_000_000
 
 type FaucetNetworkName = "localnet" | "devnet" | "testnet"
 
+/**
+ * Narrows a network name to the faucet-supported subset.
+ */
 const asFaucetNetwork = (networkName: string): FaucetNetworkName | undefined =>
   networkName === "localnet" ||
   networkName === "devnet" ||
@@ -69,6 +78,10 @@ const asFaucetNetwork = (networkName: string): FaucetNetworkName | undefined =>
     ? networkName
     : undefined
 
+/**
+ * Fetches a list of SUI coin objects for an address.
+ * Sui balances are comprised of discrete coin objects, not an account balance.
+ */
 const getAddressesCoins = async (ownerAddress: string, suiClient: SuiClient) =>
   (
     await suiClient.getCoins({
@@ -78,6 +91,9 @@ const getAddressesCoins = async (ownerAddress: string, suiClient: SuiClient) =>
     })
   ).data || []
 
+/**
+ * Computes the effective minimum balance based on per-coin gas thresholds.
+ */
 const deriveEffectiveMinimumBalance = ({
   minimumBalance,
   minimumCoinObjects = DEFAULT_MINIMUM_COIN_OBJECTS,
@@ -94,9 +110,16 @@ const deriveEffectiveMinimumBalance = ({
     : minimumBalanceTarget
 }
 
+/**
+ * Returns true when the network supports the public Sui faucet.
+ */
 const isFaucetSupported = (networkName: string) =>
   Boolean(asFaucetNetwork(networkName))
 
+/**
+ * Captures coin counts and balance readiness for an address.
+ * This is useful because Sui requires a *coin object* for gas, not just total balance.
+ */
 const fundingSnapshot = async (
   {
     signerAddress,
@@ -136,6 +159,10 @@ const fundingSnapshot = async (
   }
 }
 
+/**
+ * Splits a gas coin into multiple coin objects when too few are available.
+ * Sui uses object-level coins, so multiple gas coins improve concurrency and avoid locks.
+ */
 const maybeSplitCoinObjects = async ({
   snapshot,
   signer,
@@ -186,6 +213,9 @@ const maybeSplitCoinObjects = async ({
   }
 }
 
+/**
+ * Requests SUI from the faucet with a simple retry-on-rate-limit backoff.
+ */
 const requestFunding = async ({
   network,
   signerAddress,
@@ -210,6 +240,9 @@ const requestFunding = async ({
   }
 }
 
+/**
+ * Builds a descriptive error for funding failures after repeated attempts.
+ */
 const fundingFailure = (address: string, network: string, lastError: unknown) =>
   new Error(
     `Failed to fund ${address} on ${network}: not enough SUI coin objects after funding attempts${
@@ -301,11 +334,17 @@ export const ensureFoundedAddress = async (
   throw fundingFailure(normalizedAddress, networkName, lastError)
 }
 
+/**
+ * Computes the number of additional coin objects needed.
+ */
 const calculateMissingCoins = (
   targetCoinObjects: number,
   coins: CoinBalance[]
 ) => Math.max(0, targetCoinObjects - coins.length)
 
+/**
+ * Picks the largest coin object by balance.
+ */
 const selectRichestCoin = (coins: CoinBalance[]) =>
   coins.reduce<CoinBalance | null>((richest, coin) => {
     if (!richest) return coin
@@ -313,6 +352,9 @@ const selectRichestCoin = (coins: CoinBalance[]) =>
     return difference > 0n ? coin : richest
   }, null)
 
+/**
+ * Checks whether the richest coin can be split into the missing number of coins.
+ */
 const canAffordSplit = ({
   richestCoin,
   missingCoins,
@@ -331,6 +373,9 @@ const canAffordSplit = ({
   return availableBalance > totalSplit + BigInt(gasBudget)
 }
 
+/**
+ * Builds a transaction to split the gas coin and transfer new coins back to the signer.
+ */
 const buildSplitTransaction = ({
   missingCoins,
   perCoinAmount,
@@ -365,6 +410,9 @@ const buildSplitTransaction = ({
   return transaction
 }
 
+/**
+ * Signs and executes the coin-splitting transaction.
+ */
 const executeSplitTransaction = async ({
   transaction,
   signer,
@@ -386,6 +434,9 @@ const executeSplitTransaction = async ({
   return response.effects?.status?.status === "success"
 }
 
+/**
+ * Ensures a minimum number of gas coin objects by splitting a larger coin.
+ */
 const topUpCoinObjects = async ({
   coins,
   signer,

@@ -1,3 +1,9 @@
+/**
+ * Updates the Shop's owner address (the payout recipient) using the ShopOwnerCap.
+ * Ownership is stored in the Shop shared object, and the capability proves authority to mutate it.
+ * If you come from EVM, this is like transferring contract ownership, but via an explicit capability object.
+ * The script logs the previous and new owner and shows the updated Shop overview.
+ */
 import { normalizeSuiAddress } from "@mysten/sui/utils"
 import yargs from "yargs"
 

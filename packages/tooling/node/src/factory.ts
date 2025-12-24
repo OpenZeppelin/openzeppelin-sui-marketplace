@@ -60,6 +60,10 @@ export type Tooling = ToolingContext & {
   ) => ReturnType<typeof publishPackage>
 }
 
+/**
+ * Creates a tooling façade that binds Sui client + config to helper methods.
+ * This gives EVM-style scripts a single entrypoint similar to a Hardhat Runtime Environment.
+ */
 export const createTooling = async ({
   suiClient,
   suiConfig

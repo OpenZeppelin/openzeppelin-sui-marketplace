@@ -1,3 +1,9 @@
+/**
+ * Publishes a Move package to the target network and records the deployment artifacts.
+ * Sui deployment creates on-chain package objects and capabilities, so publishing is just another transaction.
+ * If you come from EVM, this replaces "contract deploy" and can include unpublished dependencies in localnet.
+ * The script handles faucet funding, gas budgeting, and skips publishing if already deployed.
+ */
 import path from "node:path"
 import yargs from "yargs"
 

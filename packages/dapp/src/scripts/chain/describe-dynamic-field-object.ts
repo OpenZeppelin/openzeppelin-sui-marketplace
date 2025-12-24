@@ -1,3 +1,9 @@
+/**
+ * Looks up a dynamic field entry by parent object and field name, then prints the child object info.
+ * Dynamic fields are Sui's object-based map: the parent owns a table of child objects by key.
+ * If you come from EVM, think of a mapping where each entry is its own object with an ID and version.
+ * This script resolves the dynamic field ID and then inspects the stored child object.
+ */
 import yargs from "yargs"
 
 import {

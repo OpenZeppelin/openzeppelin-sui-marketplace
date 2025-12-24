@@ -1,3 +1,9 @@
+/**
+ * Creates a new Shop object from a published Move package and publisher capability.
+ * On Sui, publishing a package yields a Publisher object; creating a Shop uses that capability.
+ * If you come from EVM, this is closer to instantiating a contract with a factory plus a capability token.
+ * The result is a shared Shop object plus an owner capability stored in artifacts.
+ */
 import yargs from "yargs"
 
 import { getShopOverview } from "@sui-oracle-market/domain-core/models/shop"

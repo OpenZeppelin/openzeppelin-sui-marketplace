@@ -57,6 +57,9 @@ const DEFAULT_CONFIG_FILENAMES = [
   "sui.config.mjs"
 ]
 
+/**
+ * Resolves tooling paths relative to the workspace, with sensible defaults.
+ */
 const resolvePaths = (
   pathsConfig?: SuiPathsUserConfig
 ): Required<SuiPathsUserConfig> => ({
@@ -72,6 +75,9 @@ const resolvePaths = (
   )
 })
 
+/**
+ * Merges network config with environment defaults and RPC resolution.
+ */
 const withDefault = (
   networkName: string,
   networkConfig?: Partial<SuiNetworkConfig>
@@ -91,6 +97,9 @@ const withDefault = (
     networkConfig || {}
   )
 
+/**
+ * Resolves user config into a fully-populated config for a specific network.
+ */
 const resolveConfig = (userConfig: SuiUserConfig): SuiResolvedConfig => {
   const currentNetwork =
     userConfig.defaultNetwork ??
@@ -106,11 +115,17 @@ const resolveConfig = (userConfig: SuiUserConfig): SuiResolvedConfig => {
   }
 }
 
+/**
+ * Locates the first `sui.config.*` file in the current working directory.
+ */
 const findConfigPath = () =>
   DEFAULT_CONFIG_FILENAMES.map((filename) =>
     path.join(process.cwd(), filename)
   ).find((candidate) => existsSync(candidate))
 
+/**
+ * Helper for authoring typed Sui configs (similar to defineConfig in other tools).
+ */
 export const defineSuiConfig = (
   config: DeepPartial<SuiUserConfig>
 ): DeepPartial<SuiUserConfig> => config
@@ -142,6 +157,9 @@ export const loadSuiConfig = async (): Promise<SuiResolvedConfig> => {
   }
 }
 
+/**
+ * Returns the resolved network config for a given network name.
+ */
 export const getNetworkConfig = (
   networkName: string,
   config: SuiResolvedConfig
@@ -151,6 +169,9 @@ export const getNetworkConfig = (
     config.networks[networkName || config.currentNetwork]
   )
 
+/**
+ * Returns the account config for a specific account alias, or the default account.
+ */
 export const getAccountConfig = (
   networkConfig: SuiNetworkConfig,
   accountName?: string

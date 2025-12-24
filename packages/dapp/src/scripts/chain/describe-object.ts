@@ -1,3 +1,9 @@
+/**
+ * Inspects a single Sui object by ID and prints its type, owner, and contents.
+ * Sui is object-centric: state lives in objects, and each object has an owner and a version.
+ * If you come from EVM, this replaces "read storage at a slot" with "fetch the object itself."
+ * Use this to debug any on-chain object, including shared, owned, or immutable objects.
+ */
 import yargs from "yargs"
 
 import {

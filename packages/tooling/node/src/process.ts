@@ -22,8 +22,17 @@ type ScriptExecutor<TCliArgument> = (
   cliArguments: TCliArgument & CommonCliArgs
 ) => Promise<void> | void
 
+/**
+ * Removes a file extension from a filename.
+ */
 const stripExt = (name: string): string => name.replace(/\.[^/.]+$/, "")
+/**
+ * Returns a file name without its extension.
+ */
 const fileNameOnly = (fullPath: string): string => stripExt(basename(fullPath))
+/**
+ * Resolves the current script name for logging and yargs.
+ */
 const currentScriptName = () => {
   // Prefer the entrypoint passed to Node (so pnpm scripts show the actual script name)
   const invokedScript = process.argv?.[1]
@@ -34,6 +43,9 @@ const currentScriptName = () => {
 
 export type BaseYargs = Argv<CommonCliArgs>
 
+/**
+ * Adds the standard `--network` option and parses CLI arguments.
+ */
 export const addBaseOptions = async <TCliArguments>(
   scriptName: string,
   cliOptions: Argv<TCliArguments>
@@ -49,6 +61,9 @@ export const addBaseOptions = async <TCliArguments>(
     .help()
     .parseAsync(hideBin(process.argv))) as CommonCliArgs & TCliArguments
 
+/**
+ * Normalizes CLI argument keys for clean logging (dedupes aliases).
+ */
 const sanitizeCliArgumentsForLogging = <TCliArgument>(
   cliArguments: (TCliArgument & CommonCliArgs) | undefined,
   cliOptions?: Argv<TCliArgument>

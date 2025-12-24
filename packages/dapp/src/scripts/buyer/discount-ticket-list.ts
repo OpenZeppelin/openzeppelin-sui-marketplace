@@ -1,3 +1,9 @@
+/**
+ * Lists DiscountTicket objects owned by an address and prints their on-chain details.
+ * Tickets are owned objects in Sui, so "having a coupon" means holding an object, not a balance in a contract.
+ * If you come from EVM, this is closer to an NFT coupon than a mapping entry, and ownership is the source of truth.
+ * The script derives the ticket type from the package ID and can filter by an optional Shop ID.
+ */
 import yargs from "yargs"
 
 import type { DiscountTicketDetails } from "@sui-oracle-market/domain-core/models/discount"

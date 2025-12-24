@@ -4,6 +4,11 @@ import type { ToolingCoreContext } from "./context.ts"
 import type { WrappedSuiObject } from "./object.ts"
 import { getSuiObject, normalizeVersion } from "./object.ts"
 
+/**
+ * Extracts the initial shared version from a shared object or object change.
+ * Shared objects in Sui include an initial version that must be provided
+ * when building PTBs, unlike EVM global state that does not require versions.
+ */
 export const extractInitialSharedVersion = (
   created: SuiObjectChangeCreated | SuiObjectData
 ): string | undefined => {

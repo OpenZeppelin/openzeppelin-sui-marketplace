@@ -41,14 +41,17 @@ export type ObjectArtifactObjectInfo = {
 export type ObjectArtifact = ObjectArtifactPackageInfo &
   ObjectArtifactObjectInfo
 
+/**
+ * Checks if an owner artifact represents a direct address owner (vs object/shared/immutable).
+ */
 const isAddressTypeOwner = (
   owner?: ObjectOwnerArtifact
 ): owner is ObjectOwnerAddress => Boolean(owner?.ownerType.includes("address"))
 
 /**
  * Normalizes Sui owner metadata into an artifact-friendly structure.
- * Why: RPC owner responses vary by owner type; this helper gives callers
- * predictable owner fields they can persist or inspect.
+ * Why: Sui ownership can be address-owned, object-owned, shared, or immutable,
+ * which is a different model from EVM. This helper yields a stable shape for storage.
  */
 export const mapOwnerToArtifact = (
   owner?: ObjectOwner | SuiObjectChangeCreated["owner"]
@@ -88,6 +91,10 @@ export const mapOwnerToArtifact = (
   return undefined
 }
 
+/**
+ * Normalizes a full object artifact for persistence or comparison.
+ * Ensures object IDs and version fields are canonicalized to avoid false diffs.
+ */
 export const normalizeObjectArtifact = (
   artifact: ObjectArtifact
 ): ObjectArtifact => ({
@@ -99,6 +106,9 @@ export const normalizeObjectArtifact = (
     artifact.version === undefined ? artifact.version : String(artifact.version)
 })
 
+/**
+ * Normalizes owner-specific fields (addresses, object IDs, shared versions).
+ */
 export const normalizeOwner = (owner?: ObjectOwnerArtifact) => {
   if (!owner) return owner
 
@@ -120,12 +130,22 @@ export const normalizeOwner = (owner?: ObjectOwnerArtifact) => {
   return owner
 }
 
+/**
+ * Normalizes a Sui object ID if present.
+ */
 export const normalizeOptionalId = (value?: string) =>
   value ? normalizeSuiObjectId(value) : value
 
+/**
+ * Normalizes a Sui address if present.
+ */
 export const normalizeOptionalAddress = (value?: string) =>
   value ? normalizeSuiAddress(value) : value
 
+/**
+ * Normalizes a Sui object version to string for JSON-safe storage.
+ * Versions are u64 on chain; keeping them as strings avoids precision loss.
+ */
 export const normalizeVersion = (value?: number | string) => String(value)
 
 /**
@@ -165,6 +185,10 @@ export type WrappedSuiObject = {
   error?: ObjectResponseError
 }
 
+/**
+ * Attempts to extract and normalize a Sui object ID from Move-like values.
+ * Handles nested `fields`, `id`, or `bytes` structures and `Option`-style wrappers.
+ */
 export const normalizeOptionalIdFromValue = (
   value: unknown
 ): string | undefined => {
@@ -213,6 +237,10 @@ export const normalizeOptionalIdFromValue = (
   return attemptNormalize(value)
 }
 
+/**
+ * Extracts the Move `fields` payload from a Sui moveObject response.
+ * Some Move structs wrap the payload under a `value` field, so this peels it off.
+ */
 export const unwrapMoveObjectFields = <TFields = Record<string, unknown>>(
   object: SuiObjectData
 ): TFields => {
@@ -229,6 +257,10 @@ export const unwrapMoveObjectFields = <TFields = Record<string, unknown>>(
   return fields as TFields
 }
 
+/**
+ * Derives the package ID from a fully qualified Move type string.
+ * In Sui, types are scoped by package ID, similar to a contract address in EVM.
+ */
 export const deriveRelevantPackageId = (
   objectType: SuiObjectData["type"]
 ): string => {
@@ -244,11 +276,18 @@ export const deriveRelevantPackageId = (
   return normalizeSuiObjectId(packageIdCandidate)
 }
 
+/**
+ * Normalizes an ID or throws a caller-specified error when missing.
+ */
 export const normalizeIdOrThrow = (
   id: string | undefined,
   errorMessage: string
 ): string => normalizeSuiObjectId(requireValue(id, errorMessage))
 
+/**
+ * Fetches all objects owned by an address (optionally filtered) via pagination.
+ * Sui accounts own objects directly; there is no global account state like in EVM.
+ */
 export const getAllOwnedObjectsByFilter = async (
   {
     ownerAddress,
@@ -283,6 +322,9 @@ export const getAllOwnedObjectsByFilter = async (
   return objects
 }
 
+/**
+ * Best-effort object fetch that returns undefined on errors instead of throwing.
+ */
 export const getObjectSafe = async (
   {
     objectId,
@@ -304,6 +346,9 @@ export const getObjectSafe = async (
   }
 }
 
+/**
+ * Extracts a Move object type from any available response field (data, BCS, or content).
+ */
 export const extractObjectType = (object: SuiObjectResponse | undefined) =>
   object?.data?.type ||
   // Some RPC responses only return the type inside BCS or content.
@@ -312,6 +357,9 @@ export const extractObjectType = (object: SuiObjectResponse | undefined) =>
   //@ts-expect-error assuming type is present
   object?.data?.content?.type
 
+/**
+ * Case-insensitive type equality check for Move object types.
+ */
 export const objectTypeMatches = (
   object: SuiObjectResponse | undefined,
   expectedType: string

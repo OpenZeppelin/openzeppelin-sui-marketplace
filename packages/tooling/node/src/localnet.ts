@@ -30,11 +30,17 @@ export const resolveLocalnetConfigDir = (candidate?: string) => {
   return path.resolve(resolved)
 }
 
+/**
+ * Type guard for networks that expose the Sui faucet.
+ */
 export const isFaucetSupportedNetwork = (
   networkName: string
 ): networkName is "localnet" | "devnet" | "testnet" =>
   (FAUCET_SUPPORTED_NETWORKS as readonly string[]).includes(networkName)
 
+/**
+ * Derives a faucet URL that matches the provided localnet RPC host.
+ */
 export const deriveFaucetUrl = (rpcUrl: string) => {
   try {
     const faucetHost = getFaucetHost("localnet")

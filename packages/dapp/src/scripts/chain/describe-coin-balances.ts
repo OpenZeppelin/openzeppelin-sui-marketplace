@@ -1,3 +1,9 @@
+/**
+ * Lists coin balances for an address, including object count and total amounts per coin type.
+ * In Sui, coins are objects, so a balance is the sum across many Coin objects you own.
+ * If you come from EVM, this shows both the aggregate balance and how many coin objects back it.
+ * Helpful for understanding coin fragmentation and preparing inputs for transactions.
+ */
 import type { SuiClient } from "@mysten/sui/client"
 import yargs from "yargs"
 

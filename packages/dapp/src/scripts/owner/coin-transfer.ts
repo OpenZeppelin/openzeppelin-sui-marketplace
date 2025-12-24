@@ -1,3 +1,9 @@
+/**
+ * Splits a Coin object and transfers a specified amount to another address.
+ * On Sui, coins are objects, so transfers are object splits/merges rather than balance updates.
+ * If you come from EVM, there is no allowance or transferFrom here; the signer must own the Coin object.
+ * This script validates ownership, builds a PTB, and reports the transfer digest.
+ */
 import type { ObjectOwner } from "@mysten/sui/client"
 import type { TransactionArgument } from "@mysten/sui/transactions"
 import { normalizeSuiAddress, normalizeSuiObjectId } from "@mysten/sui/utils"

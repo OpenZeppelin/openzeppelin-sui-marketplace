@@ -4,6 +4,16 @@ A practical onboarding guide for Solidity/EVM developers building and deploying 
 
 ---
 
+## Prerequisites
+
+- **Node.js 22.19+** and **pnpm** for running scripts and the UI.
+- **Sui CLI** on your `PATH` (see https://docs.sui.io/build/install).
+- **Rust toolchain** (`rustup`) if you build Sui locally.
+- **Git** for cloning and managing patches.
+- A machine that can run a local Sui full node and faucet.
+
+---
+
 ## Quickstart (TL;DR)
 
 ```bash
@@ -12,7 +22,7 @@ A practical onboarding guide for Solidity/EVM developers building and deploying 
 git clone <your fork url> && cd sui-oracle-market
 pnpm install
 
-# 2) Create or reuse an address
+# 2) Create or reuse an address (this will be your shop owner address)
 sui client new-address ed25519
 sui client active-address   # ensure the desired address is active
 
@@ -26,177 +36,18 @@ pnpm script chain:localnet:start --with-faucet
 # 5) Seed mocks (coins + Pyth stub + price feeds)
 pnpm script chain:mock:setup
 
-# 6) Publish oracle-market with dev dependencies (local mocks)
+# 6) Publish oracle-market with dev dependencies (mock coin currencies, pyth price feeds)
 pnpm script chain:publish-package --package-path oracle-market --dev
+
+# 7) Continue setting up the shop look at the scripts section
 ```
 
-Optional UI (after publishing + creating a shop):
+Optional run the UI (after publishing + creating a shop):
 ```bash
 pnpm ui dev
 ```
 
-If you hit errors, keep reading—every step is explained in detail with troubleshooting tips.
-
 ---
-
-## Prerequisites
-
-- **Node.js 22.19+** and **pnpm** for running scripts and the UI.
-- **Sui CLI** on your `PATH` (see https://docs.sui.io/build/install).
-- **Rust toolchain** (`rustup`) if you build Sui locally.
-- **Git** for cloning and managing patches.
-- A machine that can run a local Sui full node and faucet.
-
----
-
-## Repository Layout
-
-```
-.
-├── packages/
-│   ├── dapp/
-│   │   ├── move/                     # Move packages (oracle-market + mocks)
-│   │   │   ├── oracle-market/         # Main Move package (sui_oracle_market)
-│   │   │   ├── pyth-mock/             # Local-only Pyth stub (dev/localnet)
-│   │   │   └── coin-mock/             # Local-only mock coins (dev/localnet)
-│   │   ├── src/
-│   │   │   ├── scripts/               # CLI scripts (chain, owner, buyer)
-│   │   │   └── utils/                 # Script-only helpers (e.g. CLI output formatting)
-│   │   ├── deployments/               # Generated artifacts from scripts
-│   │   ├── sui.config.ts              # Network + paths config for scripts
-│   │   └── package.json               # Script entry points
-│   ├── domain/
-│   │   ├── core/                      # Browser-safe domain models + queries
-│   │   └── node/                      # Node-only domain helpers (if needed)
-│   ├── tooling/
-│   │   ├── core/                      # Browser-safe utilities + types
-│   │   └── node/                      # Node-only script helpers (fs/process/yargs/etc)
-│   └── ui/
-│       ├── src/app/                   # Next.js app router UI
-│       ├── public/                    # Static assets
-│       ├── dist/                      # Static export output (from `pnpm ui build`)
-│       ├── firebase.json              # Firebase hosting config
-│       └── package.json               # UI scripts
-├── pnpm-workspace.yaml                # Workspace definition
-├── package.json                       # Root wrappers (`pnpm script`, `pnpm ui`)
-├── tsconfig.base.json                 # Shared TS config
-├── tsconfig.node.json                 # Shared TS config for Node-only packages
-└── eslint.config.mjs                  # Root lint config
-```
-
-What this means in practice:
-- **`packages/dapp`** is the backend automation package. It owns the Move packages, the CLI scripts, and the artifact output in `packages/dapp/deployments`.
-- **`packages/domain/*`** contains shared domain models and read/query helpers (split into browser-safe `core` and Node-only `node`).
-- **`packages/tooling/*`** contains shared infrastructure helpers (split into browser-safe `core` and Node-only `node`).
-- **`packages/ui`** is a static-exported Next.js UI that connects to the same Move package and shop objects created by the scripts.
-
-### Package intent and dependency rules
-
-This repo is structured as a strict layered workspace to keep **high cohesion** and **low coupling**, and to ensure the UI only consumes browser-safe code.
-
-- **Base layer: `tooling-*`**
-  - `@sui-oracle-market/tooling-core`: cross-environment utilities/types (browser-safe; no Node built-ins).
-  - `@sui-oracle-market/tooling-node`: Node-only utilities (fs/process/CLI helpers). Must not import from `domain-*`.
-- **Domain layer: `domain-*`**
-  - `@sui-oracle-market/domain-core`: domain models, queries, and transaction builders that can be used in both Node and the UI.
-  - `@sui-oracle-market/domain-node`: Node-only domain glue (e.g. artifact resolution, filesystem-backed helpers). May depend on `domain-core` and `tooling-*`.
-- **Application layers**
-  - `packages/dapp`: scripts/CLI orchestration. May depend on `tooling-*` and `domain-*`.
-  - `packages/ui`: browser-only app. Must depend only on `@sui-oracle-market/tooling-core` and `@sui-oracle-market/domain-core`.
-
-Enforcement:
-- ESLint is configured to block forbidden cross-layer imports.
-
----
-
-## How to Run Scripts in This Repo
-
-All commands are designed to run from the repo root.
-
-- **Backend scripts (Move + CLI tooling):**
-  - `pnpm script <script-name> [--flags]`
-  - This is a thin wrapper for `pnpm --filter dapp <script-name>` and runs inside `packages/dapp`.
-- **Frontend UI scripts:**
-  - `pnpm ui <script-name>`
-  - This is a wrapper for `pnpm --filter ui <script-name>`.
-
-Example:
-```bash
-pnpm script chain:localnet:start --with-faucet
-pnpm ui dev
-```
-
----
-
-## Frontend UI
-
-The UI lives in `packages/ui` and is a static-exported Next.js 16 app (`output: "export"`) that renders the shop, listings, discounts, and checkout flows.
-
-Configuration:
-- Network + contract IDs are read from `packages/ui/src/app/config/network.ts`.
-- Use `.env.local` inside `packages/ui` (or env vars) to set package + shop IDs per network:
-  ```bash
-  NEXT_PUBLIC_LOCALNET_CONTRACT_PACKAGE_ID=0x...
-  NEXT_PUBLIC_LOCALNET_SHOP_ID=0x...
-  NEXT_PUBLIC_TESTNET_CONTRACT_PACKAGE_ID=0x...
-  NEXT_PUBLIC_TESTNET_SHOP_ID=0x...
-  ```
-- App name/description can be overridden via `NEXT_PUBLIC_APP_NAME` and `NEXT_PUBLIC_APP_DESCRIPTION`.
-
-Localnet signing + execution (UI):
-- The UI **always** signs on the wallet and **executes** via the app’s local RPC client when the app network is `localnet`. This avoids wallet execution on whatever network the wallet is configured for.
-- Detection is app-driven (not wallet-driven): `useSuiClientContext()` supplies `network`, and the buy flow checks `network === localnet` before choosing the execution path.
-- Localnet RPC is locked to `http://127.0.0.1:9000` and guarded so only `localhost/127.0.0.1` are accepted. See `packages/ui/src/app/config/network.ts` and `packages/ui/src/app/helpers/localnet.ts`.
-- The buy flow also refreshes local mock Pyth feeds in the same PTB, so UI purchases do not require running `pnpm script chain:mock:update-prices` first.
-
-Why this matters:
-- Wallet Standard distinguishes **sign-only** from **sign+execute**. Using `signTransaction` keeps the wallet from picking an RPC endpoint.
-- For localnet we must ensure **all reads + writes** go to the same local node; otherwise you can sign on localnet but accidentally execute on devnet/testnet.
-
-Implementation details:
-- Buy flow branch is in `packages/ui/src/app/components/BuyFlowModal.tsx`.
-  - Localnet uses `useSignTransaction` + `SuiClient.executeTransactionBlock`.
-  - Non-local networks keep `useSignAndExecuteTransaction`.
-- The local executor also dry-runs before signature and reports raw effects back to the wallet after execution.
-
-UI scripts (run from repo root with `pnpm ui ...`):
-
-- `pnpm ui dev`
-  - Starts the Next.js dev server (default `http://localhost:3000`).
-  - Use this after localnet is running and you have set `NEXT_PUBLIC_*` IDs for the network you want to view.
-- `pnpm ui build`
-  - Creates a static export of the site into `packages/ui/dist`.
-  - Required before any of the deployment scripts.
-- `pnpm ui start`
-  - Runs `next start` for production-mode preview (useful for sanity checks before deploying).
-- `pnpm ui lint`
-  - Runs ESLint across the UI codebase.
-- `pnpm ui format`
-  - Formats `packages/ui/src` with Prettier (JS/TS/TSX).
-
-Deployment scripts:
-- `pnpm ui deploy:firebase:init`
-  - Logs into Firebase and runs `firebase use --add` to select the hosting project.
-- `pnpm ui deploy:firebase`
-  - Deploys the static `dist` export to Firebase Hosting using `firebase.json`.
-- `pnpm ui deploy:walrus:testnet`
-  - Builds the UI, then deploys the static export to Walrus testnet via `walrus-sites-deploy`.
-- `pnpm ui deploy:walrus:mainnet`
-  - Builds the UI, then deploys to Walrus mainnet via `walrus-sites-deploy`.
-- `pnpm ui deploy:arweave`
-  - Builds the UI with `ARWEAVE_DEPLOYMENT=true`, then deploys `packages/ui/dist` to Arweave using `arkb`.
-  - Expects an `arweave-keyfile.json` in `packages/ui`.
-
----
-
-## Sui Concepts for EVM Developers
-
-- **Packages are immutable objects**: Publishing creates a package object; upgrades publish a new package + `UpgradeCap`. No proxy pattern.
-- **Capabilities instead of `msg.sender`**: Auth is proved by owning capability objects (e.g., `ShopOwnerCap`).
-- **Objects, not contract storage**: State is stored as owned/shared objects and dynamic fields, improving parallelism.
-- **Typed coins**: `Coin<T>` types replace ERC-20 approvals; metadata comes from the Sui coin registry.
-- **Oracles as objects**: Pyth prices are delivered as `PriceInfoObject` + clock checks; no address lookups.
-- **Localnet vs testnet/mainnet**: Localnet is your sandbox with unpublished deps; shared networks require published package IDs in `Move.lock`.
 
 ---
 
@@ -273,17 +124,85 @@ What it does:
 
 ---
 
-## Moving to Testnet/Mainnet
+## Repository Layout
 
-1) Replace mocks with real published packages:
-   - Update `Move.lock` in `packages/dapp/move/oracle-market` to published Pyth/OpenZeppelin math IDs.
-   - Remove `--dev`/`--with-unpublished-dependencies` when publishing.
-2) Fund the publisher address with enough SUI.
-3) Publish:
-   ```bash
-   pnpm script chain:publish-package --package-path oracle-market --network testnet
-   ```
-4) Record the `packageId`, `UpgradeCap`, and `publisherId` from `packages/dapp/deployments/deployment.testnet.json`.
+```
+.
+├── packages/
+│   ├── dapp/
+│   │   ├── move/                     # Move packages (oracle-market + mocks + examples)
+│   │   │   ├── oracle-market/         # Main Move package (sui_oracle_market)
+│   │   │   ├── pyth-mock/             # Local-only Pyth stub (dev/localnet)
+│   │   │   ├── coin-mock/             # Local-only mock coins (dev/localnet)
+│   │   │   └── item-examples/         # Example item types for listings/receipts
+│   │   ├── src/
+│   │   │   ├── scripts/               # CLI scripts (chain, owner, buyer)
+│   │   │   └── utils/                 # Script-only helpers (e.g. CLI output formatting)
+│   │   ├── deployments/               # Generated artifacts from scripts
+│   │   ├── sui.config.ts              # Network + paths config for scripts
+│   │   └── package.json               # Script entry points
+│   ├── domain/
+│   │   ├── core/                      # Browser-safe domain models + queries
+│   │   └── node/                      # Node-only domain helpers (if needed)
+│   ├── tooling/
+│   │   ├── core/                      # Browser-safe utilities + types
+│   │   └── node/                      # Node-only script helpers (fs/process/yargs/etc)
+│   └── ui/
+│       ├── src/app/                   # Next.js app router UI
+│       ├── public/                    # Static assets
+│       ├── dist/                      # Static export output (from `pnpm ui build`)
+│       └── package.json               # UI scripts
+├── pnpm-workspace.yaml                # Workspace definition
+├── package.json                       # Root wrappers (`pnpm script`, `pnpm ui`)
+├── tsconfig.json                      # TS project references
+├── tsconfig.base.json                 # Shared TS config
+├── tsconfig.node.json                 # Shared TS config for Node-only packages
+└── eslint.config.mjs                  # Root lint config
+```
+
+What this means in practice:
+- **`packages/dapp`** is the backend automation package. It owns the Move packages, the CLI scripts, and the artifact output in `packages/dapp/deployments`.
+- **`packages/domain/*`** contains shared domain models and read/query helpers (split into browser-safe `core` and Node-only `node`).
+- **`packages/tooling/*`** contains shared infrastructure helpers (split into browser-safe `core` and Node-only `node`).
+- **`packages/ui`** is a static-exported Next.js UI that connects to the same Move package and shop objects created by the scripts.
+
+### Package intent and dependency rules
+
+This repo is structured as a strict layered workspace to keep **high cohesion** and **low coupling**, and to ensure the UI only consumes browser-safe code.
+
+- **Base layer: `tooling-*`**
+  - `@sui-oracle-market/tooling-core`: cross-environment utilities/types (browser-safe; no Node built-ins).
+  - `@sui-oracle-market/tooling-node`: Node-only utilities (fs/process/CLI helpers). Must not import from `domain-*`.
+- **Domain layer: `domain-*`**
+  - `@sui-oracle-market/domain-core`: domain models, queries, and transaction builders that can be used in both Node and the UI.
+  - `@sui-oracle-market/domain-node`: Node-only domain glue (e.g. artifact resolution, filesystem-backed helpers). May depend on `domain-core` and `tooling-*`.
+- **Application layers**
+  - `packages/dapp`: scripts/CLI orchestration. May depend on `tooling-*` and `domain-*`.
+  - `packages/ui`: browser-only app. Must depend only on `@sui-oracle-market/tooling-core` and `@sui-oracle-market/domain-core`.
+
+Enforcement:
+- ESLint is configured to block forbidden cross-layer imports.
+
+---
+
+## How to Run Scripts in This Repo
+
+All commands are designed to run from the repo root.
+
+- **Backend scripts (Move + CLI tooling):**
+  - `pnpm script <script-name> [--flags]`
+  - This is a thin wrapper for `pnpm --filter dapp <script-name>` and runs inside `packages/dapp`.
+- **Frontend UI scripts:**
+  - `pnpm ui <script-name>`
+  - This is a wrapper for `pnpm --filter ui <script-name>`.
+
+Example:
+```bash
+pnpm script chain:localnet:start --with-faucet
+pnpm ui dev
+```
+
+---
 
 ---
 
@@ -414,7 +333,7 @@ Owner scripts default `--shop-package-id`, `--shop-id`, and `--owner-cap-id` fro
   - `--name <string>`: item name (required; UTF-8 encoded).
   - `--price <usd-or-cents>`: USD string (`12.50`) or integer cents (`1250`) (required).
   - `--stock <u64>`: initial inventory (>0) (required).
-  - `--item-type <0x...::Type>`: fully qualified item type (required).
+  - `--item-type <0x...::Type>`: fully qualified item type (required). Can be any published struct (not just from the shop package); see `packages/dapp/move/item-examples/sources/items.move` and `packages/dapp/deployments/mock.localnet.json` `itemTypes` for sample values like `0x...::items::Car`.
   - `--spotlight-discount-id <id>`: optional discount template to spotlight on creation.
   - `--publisher-id <id>`: optional metadata-only field; not passed on-chain.
   - `--shop-package-id <id>` / `--shop-id <id>` / `--owner-cap-id <id>`: override artifact defaults.
@@ -549,6 +468,8 @@ Owner scripts default `--shop-package-id`, `--shop-id`, and `--owner-cap-id` fro
 
 ---
 
+---
+
 ## State Deployments
 
 Artifacts land in `packages/dapp/deployments` after running scripts. Use them to reuse package IDs, shared objects, and mock assets across runs.
@@ -589,6 +510,84 @@ Artifacts land in `packages/dapp/deployments` after running scripts. Use them to
 
 ---
 
+## Frontend UI
+
+### Prerequisite
+- Install [Slush Wallet](https://slush.app/) in your browser
+- Create a new key or import a key you have generated with SUI CLI (this will be your buyer address)
+
+The UI lives in `packages/ui` and is a static-exported Next.js 16 app (`output: "export"`) that renders the shop, listings, discounts, and checkout flows.
+
+Configuration:
+- Network + contract IDs are read from `packages/ui/src/app/config/network.ts`.
+- Use `.env.local` inside `packages/ui` (or env vars) to set package + shop IDs per network:
+  ```bash
+  NEXT_PUBLIC_LOCALNET_CONTRACT_PACKAGE_ID=0x...
+  NEXT_PUBLIC_LOCALNET_SHOP_ID=0x...
+  NEXT_PUBLIC_TESTNET_CONTRACT_PACKAGE_ID=0x...
+  NEXT_PUBLIC_TESTNET_SHOP_ID=0x...
+  ```
+- App name/description can be overridden via `NEXT_PUBLIC_APP_NAME` and `NEXT_PUBLIC_APP_DESCRIPTION`.
+
+Localnet signing + execution (UI):
+- The UI **always** signs on the wallet and **executes** via the app’s local RPC client when the app network is `localnet`. This avoids wallet execution on whatever network the wallet is configured for.
+- Detection is app-driven (not wallet-driven): `useSuiClientContext()` supplies `network`, and the buy flow checks `network === localnet` before choosing the execution path.
+- Localnet RPC is locked to `http://127.0.0.1:9000` and guarded so only `localhost/127.0.0.1` are accepted. See `packages/ui/src/app/config/network.ts` and `packages/ui/src/app/helpers/localnet.ts`.
+- The buy flow also refreshes local mock Pyth feeds in the same PTB, so UI purchases do not require running `pnpm script chain:mock:update-prices` first.
+
+Why this matters:
+- Wallet Standard distinguishes **sign-only** from **sign+execute**. Using `signTransaction` keeps the wallet from picking an RPC endpoint.
+- For localnet we must ensure **all reads + writes** go to the same local node; otherwise you can sign on localnet but accidentally execute on devnet/testnet.
+
+Implementation details:
+- Buy flow branch is in `packages/ui/src/app/components/BuyFlowModal.tsx`.
+  - Localnet uses `useSignTransaction` + `SuiClient.executeTransactionBlock`.
+  - Non-local networks keep `useSignAndExecuteTransaction`.
+- The local executor also dry-runs before signature and reports raw effects back to the wallet after execution.
+
+### UI scripts (run from repo root with `pnpm ui ...`):
+
+- `pnpm ui dev`
+  - Starts the Next.js dev server (default `http://localhost:3000`).
+  - Use this after localnet is running and you have set `NEXT_PUBLIC_*` IDs for the network you want to view.
+- `pnpm ui build`
+  - Creates a static export of the site into `packages/ui/dist`.
+  - Required before any of the deployment scripts.
+- `pnpm ui start`
+  - Runs `next start` for production-mode preview (useful for sanity checks before deploying).
+- `pnpm ui lint`
+  - Runs ESLint across the UI codebase.
+- `pnpm ui format`
+  - Formats `packages/ui/src` with Prettier (JS/TS/TSX).
+
+### Deployment scripts:
+- `pnpm ui deploy:walrus:testnet`
+  - Builds the UI, then deploys the static export to Walrus testnet via `walrus-sites-deploy`.
+- `pnpm ui deploy:walrus:mainnet`
+  - Builds the UI, then deploys to Walrus mainnet via `walrus-sites-deploy`.
+- `pnpm ui deploy:arweave`
+  - Builds the UI with `ARWEAVE_DEPLOYMENT=true`, then deploys `packages/ui/dist` to Arweave using `arkb`.
+  - Expects an `arweave-keyfile.json` in `packages/ui`.
+
+---
+
+## Sui Concepts for EVM Developers
+
+- **Packages are immutable objects**: Publishing creates a package object; upgrades publish a new package + `UpgradeCap`. No proxy pattern.
+- **Capabilities instead of `msg.sender`**: Auth is proved by owning capability objects (e.g., `ShopOwnerCap`).
+- **Objects, not contract storage**: State is stored as owned/shared objects and dynamic fields, improving parallelism.
+- **Typed coins**: `Coin<T>` types replace ERC-20 approvals; metadata comes from the Sui coin registry.
+- **Oracles as objects**: Pyth prices are delivered as `PriceInfoObject` + clock checks; no address lookups.
+- **Localnet vs testnet/mainnet**: Localnet is your sandbox with unpublished deps; shared networks require published package IDs in `Move.lock`.
+
+---
+
+## Moving to Testnet/Mainnet
+
+TODO
+
+---
+
 ## Deep Dive: How It Maps to EVM Mental Models
 
 | Topic | EVM | Sui |
@@ -612,14 +611,6 @@ Docs links:
 - Coin registry: https://docs.sui.io/concepts/token#coin-registry
 - Clock & oracles: https://docs.sui.io/guides/developer/app-examples/oracle
 - Move overview: https://docs.sui.io/concepts/sui-move-concepts
-
----
-
-## Workflow Cheat Sheet
-
-- **Full local demo**: `pnpm script chain:localnet:start` → `pnpm script chain:mock:setup` → `pnpm script chain:publish-package --package-path oracle-market --dev`
-- **Re-seed mocks**: `pnpm script chain:mock:setup --re-publish`
-- **Publish to testnet** (after pinning real deps): `pnpm script chain:publish-package --package-path oracle-market --network testnet`
 
 ---
 

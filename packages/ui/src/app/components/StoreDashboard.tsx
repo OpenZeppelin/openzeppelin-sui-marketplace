@@ -398,6 +398,12 @@ const DiscountsPanel = ({
   )
 }
 
+/**
+ * Main dashboard view that binds UI panels to on-chain Sui state.
+ * The shopId and packageId come from network variables, so switching networks
+ * swaps the object IDs the UI targets. For EVM devs: these are object IDs plus
+ * a Move package ID, not chain IDs or contract addresses.
+ */
 const StoreDashboard = () => {
   const currentAccount = useCurrentAccount()
   const { useNetworkVariable } = useNetworkConfig()

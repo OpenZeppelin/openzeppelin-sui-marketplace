@@ -4,6 +4,9 @@ import { promisify } from "node:util"
 
 const execFile = promisify(execFileCallback)
 
+/**
+ * Ensures the Sui CLI is installed and available on PATH.
+ */
 export const ensureSuiCli = async () => {
   try {
     await execFile("sui", ["--version"])
@@ -14,6 +17,9 @@ export const ensureSuiCli = async () => {
   }
 }
 
+/**
+ * Builds a CLI runner for `sui`, returning stdout/stderr/exitCode even on failure.
+ */
 export const runSuiCli =
   (baseCliArguments: string[]) =>
   async (

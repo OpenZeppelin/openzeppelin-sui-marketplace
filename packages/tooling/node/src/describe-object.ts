@@ -62,12 +62,21 @@ export const OBJECT_REQUEST_OPTIONS: SuiObjectDataOptions = {
   showType: true
 }
 
+/**
+ * Creates a Sui client bound to the provided RPC URL.
+ */
 export const createSuiClient = (rpcUrl: string) =>
   new SuiClient({ url: rpcUrl })
 
+/**
+ * Normalizes an object ID for consistent lookups.
+ */
 export const normalizeTargetObjectId = (objectId: string) =>
   normalizeSuiObjectId(objectId)
 
+/**
+ * Logs the network context before printing object details.
+ */
 export const logInspectionContext = ({
   objectId,
   rpcUrl,
@@ -83,6 +92,10 @@ export const logInspectionContext = ({
   console.log("")
 }
 
+/**
+ * Normalizes raw object data into a structured inspection summary.
+ * Includes owner type, storage rebate, and content summaries for Move objects.
+ */
 export const buildObjectInformation = ({
   object,
   error
@@ -104,6 +117,10 @@ export const buildObjectInformation = ({
   errorMessage: error ? buildObjectErrorMessage(error) : undefined
 })
 
+/**
+ * Logs a human-friendly view of object details.
+ * Useful for EVM developers to see how Sui objects replace account storage.
+ */
 export const logObjectInformation = (objectInformation: ObjectInformation) => {
   logKeyValueGreen("Object")(objectInformation.objectId)
   if (objectInformation.objectType)
@@ -134,6 +151,9 @@ export const logObjectInformation = (objectInformation: ObjectInformation) => {
   logBcsSummary(objectInformation.bcsSummary)
 }
 
+/**
+ * Extracts the `hasPublicTransfer` flag from Move objects.
+ */
 const extractHasPublicTransfer = (
   content: SuiObjectData["content"]
 ): boolean | undefined => {
@@ -142,6 +162,9 @@ const extractHasPublicTransfer = (
   return content.hasPublicTransfer
 }
 
+/**
+ * Summarizes either Move object fields or package module names.
+ */
 const extractContentSummary = (
   content: SuiObjectData["content"]
 ): ObjectContentSummary | undefined => {
@@ -163,6 +186,9 @@ const extractContentSummary = (
   return undefined
 }
 
+/**
+ * Logs a summarized view of object content (package or moveObject).
+ */
 const logObjectContent = (contentSummary: ObjectContentSummary | undefined) => {
   if (!contentSummary) {
     logKeyValueYellow("Content")("No content returned for this object.")
@@ -185,6 +211,10 @@ const logObjectContent = (contentSummary: ObjectContentSummary | undefined) => {
   logStructuredJson("Fields", contentSummary.fields)
 }
 
+/**
+ * Extracts display metadata from an object, if available.
+ * Display metadata is a Sui feature for user-friendly UI fields.
+ */
 const extractDisplayData = (
   display: SuiObjectData["display"]
 ): Record<string, string> | undefined => {
@@ -204,6 +234,9 @@ const extractDisplayData = (
   return Object.keys(displayData).length > 0 ? displayData : undefined
 }
 
+/**
+ * Logs display metadata entries.
+ */
 const logDisplayData = (displayData?: Record<string, string>) => {
   if (!displayData || Object.keys(displayData).length === 0) {
     logKeyValueYellow("Display")("No display data available.")
@@ -213,6 +246,9 @@ const logDisplayData = (displayData?: Record<string, string>) => {
   logEachGreen(displayData)
 }
 
+/**
+ * Extracts a summary of BCS-serialized object data for debugging.
+ */
 const extractBcsSummary = (
   bcs: SuiObjectData["bcs"]
 ): ObjectBcsSummary | undefined => {
@@ -234,6 +270,9 @@ const extractBcsSummary = (
   }
 }
 
+/**
+ * Logs BCS summary information for an object.
+ */
 const logBcsSummary = (bcsSummary?: ObjectBcsSummary) => {
   if (!bcsSummary) return logKeyValueYellow("Bcs")("No BCS bytes available.")
 
@@ -245,6 +284,9 @@ const logBcsSummary = (bcsSummary?: ObjectBcsSummary) => {
   })
 }
 
+/**
+ * Builds a readable error summary from RPC object fetch errors.
+ */
 const buildObjectErrorMessage = (error: ObjectResponseError) => {
   const parts = [
     "code" in error ? error.code : undefined,
@@ -255,6 +297,9 @@ const buildObjectErrorMessage = (error: ObjectResponseError) => {
   return message || "Unknown object fetch error"
 }
 
+/**
+ * Formats boolean values for console output.
+ */
 const formatBoolean = (value: boolean | undefined) =>
   value !== undefined ? (value ? "true" : "false") : undefined
 

@@ -1,22 +1,40 @@
 type SafeObject = Record<string, unknown>
 
+/**
+ * Guards against prototype-pollution keys when merging objects.
+ */
 const isDangerousKey = (key: string): boolean =>
   key === "__proto__" || key === "constructor" || key === "prototype"
 
+/**
+ * Allows only safe keys to be merged.
+ */
 const isAllowedKey = (key: string): boolean => !isDangerousKey(key)
 
+/**
+ * Checks for non-null, non-array objects for deep merge.
+ */
 const isMergeableObject = (value: unknown): value is SafeObject =>
   typeof value === "object" && value !== null && !Array.isArray(value)
 
+/**
+ * Builds a new object from key/value pairs.
+ */
 const buildObjectFromEntries = (entries: [string, unknown][]): SafeObject =>
   entries.reduce<SafeObject>(
     (result, [key, value]) => ({ ...result, [key]: value }),
     {}
   )
 
+/**
+ * Returns the union of keys across two objects.
+ */
 const getAllUniqueKeys = (left: SafeObject, right: SafeObject): string[] =>
   Array.from(new Set([...Object.keys(left), ...Object.keys(right)]))
 
+/**
+ * Merges two values, recursing on plain objects.
+ */
 const mergeValuesAtPath = (
   leftValue: unknown,
   rightValue: unknown
@@ -28,6 +46,9 @@ const mergeValuesAtPath = (
   return rightValue
 }
 
+/**
+ * Deeply merges two objects, guarding against prototype-pollution keys.
+ */
 export const mergeDeepObjects = <
   Left extends SafeObject,
   Right extends SafeObject
@@ -65,6 +86,9 @@ export const mergeDeepObjects = <
   return buildObjectFromEntries(mergedEntries) as Left & Right
 }
 
+/**
+ * Creates a cancelable delay helper.
+ */
 const makeDelay = () => (ms: number) => {
   const startTimer = (resolve: () => void) => {
     const id = setTimeout(resolve, ms)
@@ -80,9 +104,19 @@ const makeDelay = () => (ms: number) => {
   return { promise, cancel: cancelFn }
 }
 
+/**
+ * Returns a promise that resolves after `ms` milliseconds.
+ */
 export const wait = (ms: number) => makeDelay()(ms).promise
+
+/**
+ * Alias for wait.
+ */
 export const sleep = wait
 
+/**
+ * Parses a bigint or throws a descriptive error on failure.
+ */
 export const tryParseBigInt = (value: string): bigint => {
   try {
     return BigInt(value)
@@ -91,6 +125,10 @@ export const tryParseBigInt = (value: string): bigint => {
   }
 }
 
+/**
+ * Parses a non-negative u64 from user input.
+ * Sui uses u64 for many on-chain quantities; keep them as bigint in JS.
+ */
 export const parseNonNegativeU64 = (
   rawValue: string,
   label: string
@@ -105,24 +143,36 @@ export const parseNonNegativeU64 = (
   return value
 }
 
+/**
+ * Parses a positive (non-zero) u64 from user input.
+ */
 export const parsePositiveU64 = (rawValue: string, label: string): bigint => {
   const value = parseNonNegativeU64(rawValue, label)
   if (value <= 0n) throw new Error(`${label} must be greater than zero.`)
   return value
 }
 
+/**
+ * Parses an optional u64 from user input.
+ */
 export const parseOptionalU64 = (
   rawValue: string | undefined,
   label: string
 ): bigint | undefined =>
   rawValue === undefined ? undefined : parseNonNegativeU64(rawValue, label)
 
+/**
+ * Parses an optional positive u64 from user input.
+ */
 export const parseOptionalPositiveU64 = (
   rawValue: string | undefined,
   label: string
 ): bigint | undefined =>
   rawValue === undefined ? undefined : parsePositiveU64(rawValue, label)
 
+/**
+ * Asserts a value is present, otherwise throws with the provided message.
+ */
 export const requireValue = <T>(
   value: T | undefined,
   errorMessage: string
