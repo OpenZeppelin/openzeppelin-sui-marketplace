@@ -50,7 +50,13 @@ flavor = "sui"
 [env]
 
 [env.localnet]
+<<<<<<< HEAD:packages/dapp/move/pyth-mock/Move.lock
 chain-id = "6fbfdfce"
 original-published-id = "0x91bfce6d026ce40d44fb5008f760724601b866e9044b363021cca2fde52138ae"
 latest-published-id = "0x91bfce6d026ce40d44fb5008f760724601b866e9044b363021cca2fde52138ae"
+=======
+chain-id = "6a20fe60"
+original-published-id = "0xbd32eebead60542d3e3cf5bd92ad11794286146c9565b50ff513501dab28fcb1"
+latest-published-id = "0xbd32eebead60542d3e3cf5bd92ad11794286146c9565b50ff513501dab28fcb1"
+>>>>>>> 58cac64788f96a162988ff39df502e1057f2065f:move/pyth-mock/Move.lock
 published-version = "1"
