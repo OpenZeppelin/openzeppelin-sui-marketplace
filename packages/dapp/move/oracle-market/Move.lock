@@ -2,8 +2,8 @@
 
 [move]
 version = 3
-manifest_digest = "8CAA7293F40A95ECC37ACC06738A02AD64ED6F18C8C58F7FDE3D6DEC01B9F354"
-deps_digest = "04732BFEF428F74DE262001DC455D76B909EBC394B034A9A15CC095E4BDD9CEF"
+manifest_digest = "5920296004DF6F32D0002AFE573D912B98B24005835ABF079C6ABD10AA4C237D"
+deps_digest = "8227D341C0550A37580C10FA45FE148A465225149C69D179737E0FE454AD6AEC"
 dependencies = [
   { id = "Bridge", name = "Bridge" },
   { id = "MoveStdlib", name = "MoveStdlib" },
@@ -13,6 +13,7 @@ dependencies = [
 ]
 dev-dependencies = [
   { id = "Pyth", name = "Pyth" },
+  { id = "item_examples", name = "item_examples" },
   { id = "mock_coin", name = "mock_coin" },
 ]
 
@@ -59,6 +60,17 @@ dependencies = [
 ]
 
 [[move.package]]
+id = "item_examples"
+source = { local = "../item-examples" }
+
+dependencies = [
+  { id = "Bridge", name = "Bridge" },
+  { id = "MoveStdlib", name = "MoveStdlib" },
+  { id = "Sui", name = "Sui" },
+  { id = "SuiSystem", name = "SuiSystem" },
+]
+
+[[move.package]]
 id = "mock_coin"
 source = { local = "../coin-mock" }
 
@@ -88,7 +100,8 @@ flavor = "sui"
 [env]
 
 [env.localnet]
-chain-id = "6fbfdfce"
-original-published-id = "0xad96f6b143f08d9c995a04ef185b37ad18b6514ff46c2d2aa9ae8c9619a14146"
-latest-published-id = "0xad96f6b143f08d9c995a04ef185b37ad18b6514ff46c2d2aa9ae8c9619a14146"
+chain-id = "13aa3c59"
+original-published-id = "0xcf696bac6f468a2d4a686e08c056eef4d71c6335a7dcfb5677093ff8ed57193a"
+latest-published-id = "0xcf696bac6f468a2d4a686e08c056eef4d71c6335a7dcfb5677093ff8ed57193a"
 published-version = "1"
+

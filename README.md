@@ -7,10 +7,9 @@ A practical onboarding guide for Solidity/EVM developers building and deploying 
 ## Prerequisites
 
 - **Node.js 22.19+** and **pnpm** for running scripts and the UI.
-- **Sui CLI** on your `PATH` (see https://docs.sui.io/build/install).
-- **Rust toolchain** (`rustup`) if you build Sui locally.
-- **Git** for cloning and managing patches.
-- A machine that can run a local Sui full node and faucet.
+- **Rust toolchain** [`rustup`](https://rustup.rs/) on your `PATH`
+- **Sui CLI** [`sui`](https://docs.sui.io/build/install) on your `PATH`.
+- **Git** for version control.
 
 ---
 
@@ -30,7 +29,7 @@ sui client active-address   # ensure the desired address is active
 export SUI_ACCOUNT_ADDRESS=<0x...>
 export SUI_ACCOUNT_PRIVATE_KEY=<base64 or hex>
 
-# 4) Start localnet (new terminal)
+# 4) Start localnet (new terminal) (--with-faucet is recommended as some script auto fund address if fund is missing)
 pnpm script chain:localnet:start --with-faucet
 
 # 5) Seed mocks (coins + Pyth stub + price feeds)
@@ -42,7 +41,7 @@ pnpm script chain:publish-package --package-path oracle-market --dev
 # 7) Continue setting up the shop look at the scripts section
 ```
 
-Optional run the UI (after publishing + creating a shop):
+Optional run the UI (after publishing + creating a shop + updated UI environment variable config):
 ```bash
 pnpm ui dev
 ```
@@ -100,8 +99,11 @@ pnpm script chain:localnet:start --with-faucet
 - Uses the `localnet` RPC from `sui.config.ts` (or `--network localnet`).
 - Initializes/uses a persistent localnet config dir (default `~/.sui/localnet`) so state survives restarts.
 - If the config dir is missing, it runs `sui genesis --with-faucet --working-dir <dir>` once before starting.
+- Records the Sui CLI version in the config dir (`sui-cli-version-<version>.txt`) for mismatch detection.
+- If the CLI version changes and the config dir is the default (no `--config-dir` or env override), the script warns and recreates localnet state.
+- If you pin a config dir yourself, a version mismatch throws to avoid deleting user-managed state; use `--force-regenesis` or a new `--config-dir`.
 
-Note: running `sui start` without a stable config dir can regenesis and wipe local state; use `--config-dir` or delete the dir to reset intentionally.
+Note: running `sui start` without a stable config dir can regenesis and wipe local state; the script now deletes and recreates the config dir when you pass `--force-regenesis` or when a CLI version change is detected on the default config dir.
 
 ### 4) Seed mocks (coins + Pyth)
 ```bash
@@ -152,8 +154,9 @@ pnpm script chain:localnet:start --with-faucet
 ```
 What it does:
 - Starts `sui start` with a local config directory (default `~/.sui/localnet`) and waits for RPC readiness.
-- Runs a faucet locally and funds the configured signer if regenesis is forced.
-- Use `--force-regenesis` to reset the chain (this also clears `packages/dapp/deployments/*.localnet*`).
+- Runs a faucet locally and funds the configured signer after any regenesis.
+- Use `--force-regenesis` to reset the chain (clears `packages/dapp/deployments/*.localnet*` and recreates the localnet config dir before starting).
+- If the default config dir is used and the Sui CLI version changes, the script warns and recreates localnet state automatically.
 
 ### 2) Seed local mocks (coins, Pyth feeds, example item types)
 ```bash
@@ -406,11 +409,12 @@ Exceptions:
 
 #### `pnpm script chain:localnet:start`
 - Boots `sui start`, waits for RPC health, logs a network snapshot, and (if `--with-faucet`) funds the configured signer after regenesis.
+- Tracks the Sui CLI version in the config dir; default config dirs auto-regenesis on version changes, while explicit config dirs error to avoid deleting user-managed state.
 - Flags:
   - `--check-only`: probe the RPC and exit without starting a node; fails if unreachable.
   - `--wait-seconds <n>`: readiness timeout while waiting for RPC (default `25`).
   - `--with-faucet`: start `sui start --with-faucet` (default `true`).
-  - `--force-regenesis`: passes `--force-regenesis` to `sui start` and clears `packages/dapp/deployments/*.localnet*` first.
+  - `--force-regenesis`: clears `packages/dapp/deployments/*.localnet*`, deletes the localnet config dir, runs `sui genesis`, then starts `sui start --network.config` (no `--force-regenesis` flag).
   - `--config-dir <path>`: localnet config dir passed to `sui start --network.config` (default `~/.sui/localnet`).
 
 #### `pnpm script chain:localnet:stop`

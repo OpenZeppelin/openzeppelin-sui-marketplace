@@ -17,13 +17,14 @@ import type { ItemListingSummary } from "@sui-oracle-market/domain-core/models/i
 import { getItemListingSummaries } from "@sui-oracle-market/domain-core/models/item-listing"
 import type { ShopItemReceiptSummary } from "@sui-oracle-market/domain-core/models/shop-item"
 import { getShopItemReceiptSummaries } from "@sui-oracle-market/domain-core/models/shop-item"
+import { getShopOverview } from "@sui-oracle-market/domain-core/models/shop"
 import {
   deriveRelevantPackageId,
   getAllOwnedObjectsByFilter,
   getSuiObject,
   normalizeOptionalId
 } from "@sui-oracle-market/tooling-core/object"
-import { useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 
 type RemoteStatus = "idle" | "loading" | "success" | "error"
 
@@ -33,6 +34,7 @@ type StorefrontState = {
   acceptedCurrencies: AcceptedCurrencySummary[]
   itemListings: ItemListingSummary[]
   discountTemplates: DiscountTemplateSummary[]
+  shopOwnerAddress?: string
 }
 
 type WalletState = {
@@ -52,7 +54,8 @@ const emptyStorefrontState = (): StorefrontState => ({
   status: "idle",
   acceptedCurrencies: [],
   itemListings: [],
-  discountTemplates: []
+  discountTemplates: [],
+  shopOwnerAddress: undefined
 })
 
 const emptyWalletState = (): WalletState => ({
@@ -68,14 +71,24 @@ const getStorefrontData = async ({
   shopId: string
   suiClient: SuiClient
 }) => {
-  const [itemListings, acceptedCurrencies, discountTemplates] =
-    await Promise.all([
-      getItemListingSummaries(shopId, suiClient),
-      getAcceptedCurrencySummaries(shopId, suiClient),
-      getDiscountTemplateSummaries(shopId, suiClient)
-    ])
+  const [
+    itemListings,
+    acceptedCurrencies,
+    discountTemplates,
+    shopOverview
+  ] = await Promise.all([
+    getItemListingSummaries(shopId, suiClient),
+    getAcceptedCurrencySummaries(shopId, suiClient),
+    getDiscountTemplateSummaries(shopId, suiClient),
+    getShopOverview(shopId, suiClient)
+  ])
 
-  return { itemListings, acceptedCurrencies, discountTemplates }
+  return {
+    itemListings,
+    acceptedCurrencies,
+    discountTemplates,
+    shopOwnerAddress: shopOverview.ownerAddress
+  }
 }
 
 const resolveShopPackageId = async ({
@@ -179,6 +192,95 @@ export const useShopDashboardData = ({
   )
   const [walletState, setWalletState] =
     useState<WalletState>(emptyWalletState())
+  const [storefrontRefreshIndex, setStorefrontRefreshIndex] = useState(0)
+
+  const refreshStorefront = useCallback(() => {
+    setStorefrontRefreshIndex((current) => current + 1)
+  }, [])
+
+  const upsertAcceptedCurrency = useCallback(
+    (currency: AcceptedCurrencySummary) => {
+      setStorefrontState((previous) => {
+        const existingIndex = previous.acceptedCurrencies.findIndex(
+          (item) => item.acceptedCurrencyId === currency.acceptedCurrencyId
+        )
+
+        if (existingIndex === -1) {
+          return {
+            ...previous,
+            acceptedCurrencies: [currency, ...previous.acceptedCurrencies]
+          }
+        }
+
+        const nextCurrencies = [...previous.acceptedCurrencies]
+        nextCurrencies[existingIndex] = {
+          ...nextCurrencies[existingIndex],
+          ...currency
+        }
+
+        return {
+          ...previous,
+          acceptedCurrencies: nextCurrencies
+        }
+      })
+    },
+    []
+  )
+
+  const upsertItemListing = useCallback((listing: ItemListingSummary) => {
+    setStorefrontState((previous) => {
+      const existingIndex = previous.itemListings.findIndex(
+        (item) => item.itemListingId === listing.itemListingId
+      )
+
+      if (existingIndex === -1) {
+        return {
+          ...previous,
+          itemListings: [listing, ...previous.itemListings]
+        }
+      }
+
+      const nextListings = [...previous.itemListings]
+      nextListings[existingIndex] = {
+        ...nextListings[existingIndex],
+        ...listing
+      }
+
+      return {
+        ...previous,
+        itemListings: nextListings
+      }
+    })
+  }, [])
+
+  const upsertDiscountTemplate = useCallback(
+    (template: DiscountTemplateSummary) => {
+      setStorefrontState((previous) => {
+        const existingIndex = previous.discountTemplates.findIndex(
+          (item) => item.discountTemplateId === template.discountTemplateId
+        )
+
+        if (existingIndex === -1) {
+          return {
+            ...previous,
+            discountTemplates: [template, ...previous.discountTemplates]
+          }
+        }
+
+        const nextTemplates = [...previous.discountTemplates]
+        nextTemplates[existingIndex] = {
+          ...nextTemplates[existingIndex],
+          ...template
+        }
+
+        return {
+          ...previous,
+          discountTemplates: nextTemplates
+        }
+      })
+    },
+    []
+  )
 
   const hasStorefrontConfig = useMemo(() => Boolean(shopId), [shopId])
   const walletQueryConfig = useMemo(
@@ -213,7 +315,8 @@ export const useShopDashboardData = ({
           error: undefined,
           acceptedCurrencies: data.acceptedCurrencies,
           itemListings: data.itemListings,
-          discountTemplates: data.discountTemplates
+          discountTemplates: data.discountTemplates,
+          shopOwnerAddress: data.shopOwnerAddress
         })
       } catch (error) {
         if (!isSubscribed) return
@@ -230,7 +333,7 @@ export const useShopDashboardData = ({
     return () => {
       isSubscribed = false
     }
-  }, [hasStorefrontConfig, shopId, suiClient])
+  }, [hasStorefrontConfig, shopId, suiClient, storefrontRefreshIndex])
 
   useEffect(() => {
     if (!walletQueryConfig) {
@@ -280,6 +383,10 @@ export const useShopDashboardData = ({
 
   return {
     storefront: storefrontState,
-    wallet: walletState
+    wallet: walletState,
+    refreshStorefront,
+    upsertAcceptedCurrency,
+    upsertItemListing,
+    upsertDiscountTemplate
   }
 }

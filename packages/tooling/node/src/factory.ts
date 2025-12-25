@@ -60,6 +60,75 @@ export type Tooling = ToolingContext & {
   ) => ReturnType<typeof publishPackage>
 }
 
+type SanitizedAccount = {
+  accountIndex?: number
+  accountAddress?: string
+  keystorePath?: string
+}
+
+type SanitizedNetwork = {
+  networkName?: string
+  url?: string
+  faucetUrl?: string
+  gasBudget?: number
+  move?: SuiNetworkConfig["move"]
+  account?: SanitizedAccount
+  accounts?: Record<string, SanitizedAccount>
+}
+
+type SanitizedTooling = {
+  network?: SanitizedNetwork
+  suiConfig?: {
+    currentNetwork?: SuiResolvedConfig["currentNetwork"]
+    defaultNetwork?: SuiResolvedConfig["defaultNetwork"]
+    paths?: SuiResolvedConfig["paths"]
+    network?: SanitizedNetwork
+    networks?: Record<string, SanitizedNetwork>
+  }
+  hasSuiClient: boolean
+  hasKeypair: boolean
+}
+
+const sanitizeAccount = (
+  account: SuiNetworkConfig["account"]
+): SanitizedAccount => ({
+  accountIndex: account.accountIndex,
+  accountAddress: account.accountAddress,
+  keystorePath: account.keystorePath
+})
+
+const sanitizeNetwork = (
+  network: SuiNetworkConfig | undefined
+): SanitizedNetwork | undefined => {
+  if (!network) return undefined
+
+  return {
+    networkName: network.networkName,
+    url: network.url,
+    faucetUrl: network.faucetUrl,
+    gasBudget: network.gasBudget,
+    move: network.move,
+    account: sanitizeAccount(network.account),
+    accounts: network.accounts
+      ? Object.fromEntries(
+          Object.entries(network.accounts).map(([name, account]) => [
+            name,
+            sanitizeAccount(account)
+          ])
+        )
+      : undefined
+  }
+}
+
+const sanitizeNetworks = (
+  networks: SuiResolvedConfig["networks"]
+): Record<string, SanitizedNetwork> =>
+  Object.fromEntries(
+    Object.entries(networks).flatMap(([name, network]) =>
+      network ? [[name, sanitizeNetwork(network) ?? {}]] : []
+    )
+  )
+
 /**
  * Creates a tooling façade that binds Sui client + config to helper methods.
  * This gives EVM-style scripts a single entrypoint similar to a Hardhat Runtime Environment.
@@ -69,7 +138,7 @@ export const createTooling = async ({
   suiConfig
 }: ToolingContext): Promise<Tooling> => {
   const loadedEd25519KeyPair = await loadKeypair(suiConfig.network.account)
-  return {
+  const tooling: Tooling = {
     suiClient,
     suiConfig,
     loadedEd25519KeyPair,
@@ -94,4 +163,19 @@ export const createTooling = async ({
     publishPackage: async (publishPlan) =>
       publishPackage(publishPlan, { suiClient, suiConfig })
   }
+
+  return Object.assign(tooling, {
+    toJSON: (): SanitizedTooling => ({
+      network: sanitizeNetwork(suiConfig.network),
+      suiConfig: {
+        currentNetwork: suiConfig.currentNetwork,
+        defaultNetwork: suiConfig.defaultNetwork,
+        paths: suiConfig.paths,
+        network: sanitizeNetwork(suiConfig.network),
+        networks: sanitizeNetworks(suiConfig.networks)
+      },
+      hasSuiClient: Boolean(suiClient),
+      hasKeypair: Boolean(loadedEd25519KeyPair)
+    })
+  })
 }

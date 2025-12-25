@@ -35,13 +35,19 @@ runSuiScript(
     })
 
     const {
-      objectArtifacts: {
-        created: [createdShop]
-      }
+      objectArtifacts: { created: createdObjects }
     } = await tooling.signAndExecute({
       transaction: createShopTransaction,
       signer: tooling.loadedEd25519KeyPair
     })
+
+    const createdShop = createdObjects.find((artifact) =>
+      artifact.objectType.endsWith("::shop::Shop")
+    )
+    if (!createdShop)
+      throw new Error(
+        "Expected a Shop object to be created, but it was not found in transaction artifacts."
+      )
 
     const shopOverview = await getShopOverview(
       createdShop.objectId,

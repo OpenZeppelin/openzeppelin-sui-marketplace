@@ -1,6 +1,7 @@
 "use client"
 
 import { useCurrentAccount } from "@mysten/dapp-kit"
+import { normalizeSuiAddress } from "@mysten/sui/utils"
 import type { AcceptedCurrencySummary } from "@sui-oracle-market/domain-core/models/currency"
 import type {
   DiscountTemplateSummary,
@@ -8,6 +9,8 @@ import type {
 } from "@sui-oracle-market/domain-core/models/discount"
 import type { ItemListingSummary } from "@sui-oracle-market/domain-core/models/item-listing"
 import type { ShopItemReceiptSummary } from "@sui-oracle-market/domain-core/models/shop-item"
+import { deriveCurrencyObjectId } from "@sui-oracle-market/domain-core/ptb/currency"
+import { SUI_COIN_REGISTRY_ID } from "@sui-oracle-market/tooling-core/constants"
 import clsx from "clsx"
 import type { ReactNode } from "react"
 import { useMemo, useState } from "react"
@@ -26,6 +29,9 @@ import {
 import { resolveConfiguredId } from "../helpers/network"
 import useNetworkConfig from "../hooks/useNetworkConfig"
 import { useShopDashboardData } from "../hooks/useShopDashboardData"
+import AddCurrencyModal from "./AddCurrencyModal"
+import AddDiscountModal from "./AddDiscountModal"
+import AddItemModal from "./AddItemModal"
 import BuyFlowModal from "./BuyFlowModal"
 import CopyableId from "./CopyableId"
 import Loading from "./Loading"
@@ -43,6 +49,14 @@ const buildTemplateLookup = (templates: DiscountTemplateSummary[]) =>
     }),
     {}
   )
+
+const resolveCurrencyRegistryId = (coinType: string) => {
+  try {
+    return deriveCurrencyObjectId(coinType, SUI_COIN_REGISTRY_ID)
+  } catch {
+    return undefined
+  }
+}
 
 const renderPanelBody = ({
   status,
@@ -77,11 +91,13 @@ const Panel = ({
   title,
   subtitle,
   className,
+  headerAction,
   children
 }: {
   title: string
   subtitle?: string
   className?: string
+  headerAction?: ReactNode
   children: ReactNode
 }) => (
   <section
@@ -90,14 +106,19 @@ const Panel = ({
       className
     )}
   >
-    <div className="flex flex-col gap-1 border-b border-slate-300/70 px-6 py-4 dark:border-slate-50/25">
-      <h2 className="text-base font-semibold text-sds-dark dark:text-sds-light">
-        {title}
-      </h2>
-      {subtitle ? (
-        <p className="text-xs uppercase tracking-[0.16em] text-slate-500 dark:text-slate-200/60">
-          {subtitle}
-        </p>
+    <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-300/70 px-6 py-4 dark:border-slate-50/25">
+      <div className="flex flex-col gap-1">
+        <h2 className="text-base font-semibold text-sds-dark dark:text-sds-light">
+          {title}
+        </h2>
+        {subtitle ? (
+          <p className="text-xs uppercase tracking-[0.16em] text-slate-500 dark:text-slate-200/60">
+            {subtitle}
+          </p>
+        ) : null}
+      </div>
+      {headerAction ? (
+        <div className="flex items-center self-center">{headerAction}</div>
       ) : null}
     </div>
     <div className="px-6 py-5">{children}</div>
@@ -111,7 +132,9 @@ const ItemListingsPanel = ({
   error,
   shopConfigured,
   canBuy,
-  onBuy
+  onBuy,
+  canManageListings,
+  onAddItem
 }: {
   itemListings: ItemListingSummary[]
   discountTemplates: DiscountTemplateSummary[]
@@ -120,25 +143,46 @@ const ItemListingsPanel = ({
   shopConfigured: boolean
   canBuy: boolean
   onBuy?: (listing: ItemListingSummary) => void
+  canManageListings: boolean
+  onAddItem?: () => void
 }) => {
   const templateLookup = useMemo(
     () => buildTemplateLookup(discountTemplates),
     [discountTemplates]
   )
+  const headerAction = canManageListings ? (
+    <button
+      type="button"
+      onClick={onAddItem}
+      className="border-sds-blue/40 from-sds-blue/20 to-sds-pink/30 focus-visible:ring-sds-blue/40 group inline-flex items-center gap-2 rounded-full border bg-gradient-to-r via-white/80 px-4 py-2 text-[0.65rem] font-semibold uppercase tracking-[0.2em] text-sds-dark shadow-[0_14px_36px_-26px_rgba(77,162,255,0.9)] transition hover:-translate-y-0.5 hover:shadow-[0_18px_45px_-25px_rgba(77,162,255,0.9)] focus-visible:outline-none focus-visible:ring-2 dark:from-sds-blue/20 dark:to-sds-pink/10 dark:via-slate-900/40 dark:text-sds-light"
+    >
+      <span>Add Item</span>
+    </button>
+  ) : null
 
   return (
-    <Panel title="Item Listings" subtitle="Storefront inventory">
+    <Panel
+      title="Item Listings"
+      subtitle="Storefront inventory"
+      headerAction={headerAction}
+    >
       {!shopConfigured ? (
         <div className="text-sm text-slate-500 dark:text-slate-200/70">
           Provide a shop id to load listings from the chain.
         </div>
       ) : (
-        renderPanelBody({
-          status,
-          error,
-          isEmpty: itemListings.length === 0,
-          emptyMessage: "No item listings are available yet.",
-          children: (
+        <>
+          {status === "loading" ? (
+            <Loading />
+          ) : status === "error" ? (
+            <div className="rounded-xl border border-rose-200/70 bg-rose-50/60 p-4 text-sm text-rose-600 dark:border-rose-500/30 dark:bg-rose-500/10">
+              {error || "Unable to load data."}
+            </div>
+          ) : itemListings.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-slate-300/60 p-4 text-sm text-slate-500 dark:border-slate-100/20 dark:text-slate-200/70">
+              No item listings are available yet.
+            </div>
+          ) : (
             <div className="grid gap-4 lg:grid-cols-2">
               {itemListings.map((listing) => {
                 const spotlightTemplate = listing.spotlightTemplateId
@@ -211,8 +255,8 @@ const ItemListingsPanel = ({
                 )
               })}
             </div>
-          )
-        })
+          )}
+        </>
       )}
     </Panel>
   )
@@ -222,14 +266,32 @@ const AcceptedCurrenciesPanel = ({
   acceptedCurrencies,
   status,
   error,
-  shopConfigured
+  shopConfigured,
+  canManageCurrencies,
+  onAddCurrency
 }: {
   acceptedCurrencies: AcceptedCurrencySummary[]
   status: PanelStatus["status"]
   error?: string
   shopConfigured: boolean
+  canManageCurrencies: boolean
+  onAddCurrency?: () => void
 }) => (
-  <Panel title="Accepted Currencies" subtitle="On-chain registry">
+  <Panel
+    title="Accepted Currencies"
+    subtitle="On-chain registry"
+    headerAction={
+      canManageCurrencies ? (
+        <button
+          type="button"
+          onClick={onAddCurrency}
+          className="border-sds-blue/40 from-sds-blue/10 to-sds-pink/20 focus-visible:ring-sds-blue/40 group inline-flex items-center gap-1.5 rounded-full border bg-gradient-to-r via-white/90 px-3 py-1.5 text-[0.55rem] font-semibold uppercase tracking-[0.18em] text-sds-dark shadow-[0_10px_28px_-26px_rgba(77,162,255,0.7)] transition hover:-translate-y-0.5 hover:shadow-[0_14px_36px_-25px_rgba(77,162,255,0.7)] focus-visible:outline-none focus-visible:ring-2 dark:from-sds-blue/20 dark:to-sds-pink/10 dark:via-slate-900/40 dark:text-sds-light"
+        >
+          <span>Add Currency</span>
+        </button>
+      ) : null
+    }
+  >
     {!shopConfigured ? (
       <div className="text-sm text-slate-500 dark:text-slate-200/70">
         Add a shop id to load accepted currencies.
@@ -242,24 +304,65 @@ const AcceptedCurrenciesPanel = ({
         emptyMessage: "No accepted currencies registered.",
         children: (
           <div className="flex flex-col gap-3">
-            {acceptedCurrencies.map((currency) => (
-              <div
-                key={currency.acceptedCurrencyId}
-                className="flex items-center justify-between rounded-lg border border-slate-300/70 bg-white/90 px-4 py-3 text-sm shadow-[0_10px_24px_-20px_rgba(15,23,42,0.3)] dark:border-slate-50/25 dark:bg-slate-950/60"
-              >
-                <div className="flex flex-col">
-                  <span className="font-semibold text-sds-dark dark:text-sds-light">
-                    {currency.symbol || getStructLabel(currency.coinType)}
-                  </span>
-                  <span className="text-xs text-slate-500 dark:text-slate-200/60">
-                    {getStructLabel(currency.coinType)}
-                  </span>
+            {acceptedCurrencies.map((currency) => {
+              const registryId = resolveCurrencyRegistryId(currency.coinType)
+
+              return (
+                <div
+                  key={currency.acceptedCurrencyId}
+                  className="rounded-lg border border-slate-300/70 bg-white/90 px-4 py-3 text-sm shadow-[0_10px_24px_-20px_rgba(15,23,42,0.3)] dark:border-slate-50/25 dark:bg-slate-950/60"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex flex-col">
+                      <span className="font-semibold text-sds-dark dark:text-sds-light">
+                        {currency.symbol || getStructLabel(currency.coinType)}
+                      </span>
+                      <span className="text-xs text-slate-500 dark:text-slate-200/60">
+                        {currency.coinType}
+                      </span>
+                    </div>
+                    <span className="text-xs uppercase tracking-[0.12em] text-slate-500 dark:text-slate-200/60">
+                      {currency.decimals ?? "--"} decimals
+                    </span>
+                  </div>
+                  <div className="mt-3 grid gap-2 text-[0.65rem] text-slate-500 dark:text-slate-200/70 sm:grid-cols-2">
+                    <div>
+                      <div className="text-[0.55rem] uppercase tracking-[0.18em]">
+                        Feed id
+                      </div>
+                      <div
+                        className="mt-1 font-semibold text-sds-dark dark:text-sds-light"
+                        title={currency.feedIdHex}
+                      >
+                        {shortenId(currency.feedIdHex, 10, 8)}
+                      </div>
+                    </div>
+                    {currency.pythObjectId ? (
+                      <div>
+                        <div className="text-[0.55rem] uppercase tracking-[0.18em]">
+                          Price info
+                        </div>
+                        <div className="mt-1 font-semibold text-sds-dark dark:text-sds-light">
+                          {shortenId(currency.pythObjectId)}
+                        </div>
+                      </div>
+                    ) : null}
+                  </div>
+                  <div className="mt-3 flex flex-wrap items-center gap-3 text-[0.65rem]">
+                    <CopyableId
+                      value={currency.acceptedCurrencyId}
+                      label="Accepted"
+                    />
+                    {currency.pythObjectId ? (
+                      <CopyableId value={currency.pythObjectId} label="Pyth" />
+                    ) : null}
+                    {registryId ? (
+                      <CopyableId value={registryId} label="Registry" />
+                    ) : null}
+                  </div>
                 </div>
-                <span className="text-xs uppercase tracking-[0.12em] text-slate-500 dark:text-slate-200/60">
-                  {currency.decimals ?? "--"} decimals
-                </span>
-              </div>
-            ))}
+              )
+            })}
           </div>
         )
       })
@@ -332,15 +435,25 @@ const PurchasedItemsPanel = ({
 const DiscountsPanel = ({
   discountTickets,
   discountTemplates,
-  status,
-  error,
-  walletConfigured
+  storefrontStatus,
+  storefrontError,
+  walletStatus,
+  walletError,
+  shopConfigured,
+  walletConfigured,
+  canManageDiscounts,
+  onAddDiscount
 }: {
   discountTickets: DiscountTicketDetails[]
   discountTemplates: DiscountTemplateSummary[]
-  status: PanelStatus["status"]
-  error?: string
+  storefrontStatus: PanelStatus["status"]
+  storefrontError?: string
+  walletStatus: PanelStatus["status"]
+  walletError?: string
+  shopConfigured: boolean
   walletConfigured: boolean
+  canManageDiscounts: boolean
+  onAddDiscount?: () => void
 }) => {
   const templateLookup = useMemo(
     () => buildTemplateLookup(discountTemplates),
@@ -348,51 +461,138 @@ const DiscountsPanel = ({
   )
 
   return (
-    <Panel title="Discounts" subtitle="Available tickets">
-      {!walletConfigured ? (
+    <Panel
+      title="Discounts"
+      subtitle="Templates and tickets"
+      headerAction={
+        canManageDiscounts ? (
+          <button
+            type="button"
+            onClick={onAddDiscount}
+            className="border-sds-blue/40 from-sds-blue/10 to-emerald-100/70 focus-visible:ring-sds-blue/40 group inline-flex items-center gap-1.5 rounded-full border bg-gradient-to-r via-white/90 px-3 py-1.5 text-[0.55rem] font-semibold uppercase tracking-[0.18em] text-sds-dark shadow-[0_10px_28px_-26px_rgba(77,162,255,0.7)] transition hover:-translate-y-0.5 hover:shadow-[0_14px_36px_-25px_rgba(77,162,255,0.7)] focus-visible:outline-none focus-visible:ring-2 dark:from-sds-blue/20 dark:to-emerald-200/20 dark:via-slate-900/40 dark:text-sds-light"
+          >
+            <span>Add Discount</span>
+            
+          </button>
+        ) : null
+      }
+    >
+      {!shopConfigured ? (
         <div className="text-sm text-slate-500 dark:text-slate-200/70">
-          Connect a wallet to view owned discount tickets.
+          Provide a shop id to load discount templates.
         </div>
       ) : (
-        renderPanelBody({
-          status,
-          error,
-          isEmpty: discountTickets.length === 0,
-          emptyMessage: "No discount tickets held by this wallet.",
-          children: (
-            <div className="space-y-3">
-              {discountTickets.map((ticket) => {
-                const template = templateLookup[ticket.discountTemplateId]
-                return (
-                  <div
-                    key={ticket.discountTicketId}
-                    className="rounded-xl border border-slate-300/80 bg-white/95 px-4 py-3 text-sm shadow-[0_12px_30px_-22px_rgba(15,23,42,0.35)] dark:border-slate-50/25 dark:bg-slate-950/60"
-                  >
-                    <div className="flex flex-col gap-2">
-                      <div className="flex items-center justify-between">
-                        <span className="font-semibold text-sds-dark dark:text-sds-light">
-                          {template?.ruleDescription || "Discount ticket"}
-                        </span>
-                        <span className="text-xs uppercase tracking-[0.12em] text-slate-500 dark:text-slate-200/60">
-                          {template?.status || "active"}
-                        </span>
-                      </div>
-                      <CopyableId
-                        value={ticket.discountTicketId}
-                        label="Object ID"
-                      />
-                      <div className="text-xs text-slate-500 dark:text-slate-200/60">
-                        {ticket.listingId
-                          ? `Listing ${shortenId(ticket.listingId)}`
-                          : "Applies to any listing"}
+        <div className="space-y-6">
+          <div className="space-y-3">
+            <div className="text-[0.6rem] font-semibold uppercase tracking-[0.22em] text-slate-500 dark:text-slate-200/60">
+              Templates
+            </div>
+            {renderPanelBody({
+              status: storefrontStatus,
+              error: storefrontError,
+              isEmpty: discountTemplates.length === 0,
+              emptyMessage: "No discount templates available yet.",
+              children: (
+                <div className="space-y-3">
+                  {discountTemplates.map((template) => (
+                    <div
+                      key={template.discountTemplateId}
+                      className="rounded-xl border border-slate-300/80 bg-white/95 px-4 py-3 text-sm shadow-[0_12px_30px_-22px_rgba(15,23,42,0.35)] dark:border-slate-50/25 dark:bg-slate-950/60"
+                    >
+                      <div className="flex flex-col gap-2">
+                        <div className="flex items-center justify-between">
+                          <span className="font-semibold text-sds-dark dark:text-sds-light">
+                            {template.ruleDescription}
+                          </span>
+                          <span className="text-xs uppercase tracking-[0.12em] text-slate-500 dark:text-slate-200/60">
+                            {template.status}
+                          </span>
+                        </div>
+                        <div className="text-xs text-slate-500 dark:text-slate-200/60">
+                          {template.appliesToListingId
+                            ? `Listing ${shortenId(template.appliesToListingId)}`
+                            : "Applies to all listings"}
+                        </div>
+                        <div className="text-xs text-slate-500 dark:text-slate-200/60">
+                          Starts{" "}
+                          {template.startsAt
+                            ? formatEpochSeconds(template.startsAt)
+                            : "now"}{" "}
+                          · Expires{" "}
+                          {template.expiresAt
+                            ? formatEpochSeconds(template.expiresAt)
+                            : "never"}
+                        </div>
+                        <div className="mt-1 flex flex-wrap items-center gap-3 text-[0.65rem]">
+                          <CopyableId
+                            value={template.discountTemplateId}
+                            label="Template"
+                          />
+                          {template.appliesToListingId ? (
+                            <CopyableId
+                              value={template.appliesToListingId}
+                              label="Listing"
+                            />
+                          ) : null}
+                        </div>
                       </div>
                     </div>
+                  ))}
+                </div>
+              )
+            })}
+          </div>
+          <div className="space-y-3">
+            <div className="text-[0.6rem] font-semibold uppercase tracking-[0.22em] text-slate-500 dark:text-slate-200/60">
+              Tickets
+            </div>
+            {!walletConfigured ? (
+              <div className="text-sm text-slate-500 dark:text-slate-200/70">
+                Connect a wallet to view owned discount tickets.
+              </div>
+            ) : (
+              renderPanelBody({
+                status: walletStatus,
+                error: walletError,
+                isEmpty: discountTickets.length === 0,
+                emptyMessage: "No discount tickets held by this wallet.",
+                children: (
+                  <div className="space-y-3">
+                    {discountTickets.map((ticket) => {
+                      const template = templateLookup[ticket.discountTemplateId]
+                      return (
+                        <div
+                          key={ticket.discountTicketId}
+                          className="rounded-xl border border-slate-300/80 bg-white/95 px-4 py-3 text-sm shadow-[0_12px_30px_-22px_rgba(15,23,42,0.35)] dark:border-slate-50/25 dark:bg-slate-950/60"
+                        >
+                          <div className="flex flex-col gap-2">
+                            <div className="flex items-center justify-between">
+                              <span className="font-semibold text-sds-dark dark:text-sds-light">
+                                {template?.ruleDescription || "Discount ticket"}
+                              </span>
+                              <span className="text-xs uppercase tracking-[0.12em] text-slate-500 dark:text-slate-200/60">
+                                {template?.status || "active"}
+                              </span>
+                            </div>
+                            <CopyableId
+                              value={ticket.discountTicketId}
+                              label="Object ID"
+                            />
+                            <div className="text-xs text-slate-500 dark:text-slate-200/60">
+                              {ticket.listingId
+                                ? `Listing ${shortenId(ticket.listingId)}`
+                                : "Applies to any listing"}
+                            </div>
+                          </div>
+                        </div>
+                      )
+                    })}
                   </div>
                 )
-              })}
-            </div>
-          )
-        })
+              })
+            )}
+          </div>
+        </div>
       )}
     </Panel>
   )
@@ -421,8 +621,18 @@ const StoreDashboard = () => {
     null
   )
   const [isBuyModalOpen, setIsBuyModalOpen] = useState(false)
+  const [isAddItemModalOpen, setIsAddItemModalOpen] = useState(false)
+  const [isAddDiscountModalOpen, setIsAddDiscountModalOpen] = useState(false)
+  const [isAddCurrencyModalOpen, setIsAddCurrencyModalOpen] = useState(false)
 
-  const { storefront, wallet } = useShopDashboardData({
+  const {
+    storefront,
+    wallet,
+    refreshStorefront,
+    upsertAcceptedCurrency,
+    upsertItemListing,
+    upsertDiscountTemplate
+  } = useShopDashboardData({
     shopId,
     packageId,
     ownerAddress: currentAccount?.address
@@ -430,6 +640,17 @@ const StoreDashboard = () => {
 
   const hasShopConfig = Boolean(shopId)
   const hasWalletConfig = Boolean(shopId && currentAccount?.address)
+  const normalizedOwnerAddress = storefront.shopOwnerAddress
+    ? normalizeSuiAddress(storefront.shopOwnerAddress)
+    : undefined
+  const normalizedWalletAddress = currentAccount?.address
+    ? normalizeSuiAddress(currentAccount.address)
+    : undefined
+  const isShopOwner = Boolean(
+    normalizedOwnerAddress &&
+      normalizedWalletAddress &&
+      normalizedOwnerAddress === normalizedWalletAddress
+  )
 
   const openBuyModal = (listing: ItemListingSummary) => {
     setActiveListing(listing)
@@ -439,6 +660,57 @@ const StoreDashboard = () => {
   const closeBuyModal = () => {
     setIsBuyModalOpen(false)
     setActiveListing(null)
+  }
+
+  const openAddItemModal = () => {
+    setIsAddItemModalOpen(true)
+  }
+
+  const closeAddItemModal = () => {
+    setIsAddItemModalOpen(false)
+  }
+
+  const openAddDiscountModal = () => {
+    setIsAddDiscountModalOpen(true)
+  }
+
+  const closeAddDiscountModal = () => {
+    setIsAddDiscountModalOpen(false)
+  }
+
+  const openAddCurrencyModal = () => {
+    setIsAddCurrencyModalOpen(true)
+  }
+
+  const closeAddCurrencyModal = () => {
+    setIsAddCurrencyModalOpen(false)
+  }
+
+  const handleListingCreated = (listing?: ItemListingSummary) => {
+    if (listing) {
+      upsertItemListing(listing)
+      return
+    }
+
+    refreshStorefront()
+  }
+
+  const handleDiscountCreated = (template?: DiscountTemplateSummary) => {
+    if (template) {
+      upsertDiscountTemplate(template)
+      return
+    }
+
+    refreshStorefront()
+  }
+
+  const handleCurrencyCreated = (currency?: AcceptedCurrencySummary) => {
+    if (currency) {
+      upsertAcceptedCurrency(currency)
+      return
+    }
+
+    refreshStorefront()
   }
 
   return (
@@ -453,6 +725,8 @@ const StoreDashboard = () => {
             shopConfigured={hasShopConfig}
             canBuy={Boolean(currentAccount?.address)}
             onBuy={openBuyModal}
+            canManageListings={Boolean(hasShopConfig && isShopOwner)}
+            onAddItem={openAddItemModal}
           />
         </div>
         <AcceptedCurrenciesPanel
@@ -460,6 +734,8 @@ const StoreDashboard = () => {
           status={storefront.status}
           error={storefront.error}
           shopConfigured={hasShopConfig}
+          canManageCurrencies={Boolean(hasShopConfig && isShopOwner)}
+          onAddCurrency={openAddCurrencyModal}
         />
       </div>
 
@@ -470,13 +746,18 @@ const StoreDashboard = () => {
           error={wallet.error}
           walletConfigured={hasWalletConfig}
         />
-        <DiscountsPanel
-          discountTickets={wallet.discountTickets}
-          discountTemplates={storefront.discountTemplates}
-          status={wallet.status}
-          error={wallet.error}
-          walletConfigured={hasWalletConfig}
-        />
+      <DiscountsPanel
+        discountTickets={wallet.discountTickets}
+        discountTemplates={storefront.discountTemplates}
+        storefrontStatus={storefront.status}
+        storefrontError={storefront.error}
+        walletStatus={wallet.status}
+        walletError={wallet.error}
+        shopConfigured={hasShopConfig}
+        walletConfigured={hasWalletConfig}
+        canManageDiscounts={Boolean(hasShopConfig && isShopOwner)}
+        onAddDiscount={openAddDiscountModal}
+      />
       </div>
 
       <BuyFlowModal
@@ -487,6 +768,29 @@ const StoreDashboard = () => {
         acceptedCurrencies={storefront.acceptedCurrencies}
         discountTemplates={storefront.discountTemplates}
         discountTickets={wallet.discountTickets}
+      />
+
+      <AddItemModal
+        open={isAddItemModalOpen}
+        onClose={closeAddItemModal}
+        shopId={shopId}
+        onListingCreated={handleListingCreated}
+      />
+
+      <AddDiscountModal
+        open={isAddDiscountModalOpen}
+        onClose={closeAddDiscountModal}
+        shopId={shopId}
+        itemListings={storefront.itemListings}
+        onDiscountCreated={handleDiscountCreated}
+      />
+
+      <AddCurrencyModal
+        open={isAddCurrencyModalOpen}
+        onClose={closeAddCurrencyModal}
+        shopId={shopId}
+        acceptedCurrencies={storefront.acceptedCurrencies}
+        onCurrencyCreated={handleCurrencyCreated}
       />
     </div>
   )

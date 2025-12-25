@@ -11,7 +11,6 @@ import {
 import type { SuiTransactionBlockResponse } from "@mysten/sui/client"
 import { normalizeSuiAddress } from "@mysten/sui/utils"
 import clsx from "clsx"
-import type { ReactNode } from "react"
 import { useEffect, useMemo, useState } from "react"
 
 import {
@@ -33,17 +32,42 @@ import { getSuiSharedObject } from "@sui-oracle-market/tooling-core/shared-objec
 import { ENetwork } from "@sui-oracle-market/tooling-core/types"
 import { EXPLORER_URL_VARIABLE_NAME } from "../config/network"
 import {
+  ModalSection,
+  modalFieldDescriptionClassName,
+  modalFieldErrorTextClassName,
+  modalFieldInputErrorClassName,
+  modalFieldInputClassName,
+  modalFieldLabelClassName,
+  modalFieldTitleClassName,
+  modalCloseButtonClassName,
+  secondaryActionButtonClassName
+} from "./ModalPrimitives"
+import { copyToClipboard } from "../helpers/clipboard"
+import {
   formatCoinBalance,
   formatUsdFromCents,
   getStructLabel,
   shortenId
 } from "../helpers/format"
 import {
+  extractErrorDetails,
+  formatErrorMessage,
+  safeJsonStringify,
+  serializeForJson
+} from "../helpers/transactionErrors"
+import { validateOptionalSuiAddress } from "../helpers/inputValidation"
+import {
   getLocalnetClient,
   makeLocalnetExecutor,
   walletSupportsChain
 } from "../helpers/localnet"
+import {
+  extractCreatedObjects,
+  formatTimestamp,
+  summarizeObjectChanges
+} from "../helpers/transactionFormat"
 import useNetworkConfig from "../hooks/useNetworkConfig"
+import { useIdleFieldValidation } from "../hooks/useIdleFieldValidation"
 import CopyableId from "./CopyableId"
 
 type CurrencyBalance = AcceptedCurrencySummary & {
@@ -57,6 +81,43 @@ type DiscountOption = {
   status?: string
   disabled?: boolean
   selection: DiscountContext
+}
+
+type BuyFieldErrors = {
+  currency?: string
+  mintTo?: string
+  refundTo?: string
+}
+
+const buildBuyFieldErrors = ({
+  selectedCurrencyId,
+  availableCurrencyCount,
+  mintTo,
+  refundTo
+}: {
+  selectedCurrencyId?: string
+  availableCurrencyCount: number
+  mintTo: string
+  refundTo: string
+}): BuyFieldErrors => {
+  const errors: BuyFieldErrors = {}
+
+  if (availableCurrencyCount > 0 && !selectedCurrencyId)
+    errors.currency = "Select a payment currency."
+
+  const mintToError = validateOptionalSuiAddress(
+    mintTo,
+    "Receipt recipient"
+  )
+  if (mintToError) errors.mintTo = mintToError
+
+  const refundToError = validateOptionalSuiAddress(
+    refundTo,
+    "Refund address"
+  )
+  if (refundToError) errors.refundTo = refundToError
+
+  return errors
 }
 
 type TransactionSummary = {
@@ -98,120 +159,6 @@ const parseBalance = (value?: string | number | bigint) => {
   }
 }
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null
-
-const safeJsonStringify = (value: unknown, space?: number) => {
-  try {
-    return JSON.stringify(
-      value,
-      (_key, val) => (typeof val === "bigint" ? val.toString() : val),
-      space
-    )
-  } catch {
-    return undefined
-  }
-}
-
-const copyToClipboard = async (value: string) => {
-  if (!value) return
-  try {
-    if (navigator.clipboard?.writeText) {
-      await navigator.clipboard.writeText(value)
-      return
-    }
-  } catch {
-    // Fall through to legacy copy path.
-  }
-
-  const textarea = document.createElement("textarea")
-  textarea.value = value
-  textarea.setAttribute("readonly", "true")
-  textarea.style.position = "fixed"
-  textarea.style.opacity = "0"
-  document.body.appendChild(textarea)
-  textarea.select()
-  try {
-    document.execCommand("copy")
-  } finally {
-    document.body.removeChild(textarea)
-  }
-}
-
-const serializeForJson = (
-  value: unknown,
-  seen: WeakSet<object> = new WeakSet()
-): unknown => {
-  if (typeof value === "bigint") return value.toString()
-  if (!isRecord(value)) return value
-  if (seen.has(value)) return "[Circular]"
-  seen.add(value)
-
-  const output: Record<string, unknown> = {}
-  for (const key of Object.getOwnPropertyNames(value)) {
-    try {
-      output[key] = serializeForJson(
-        (value as Record<string, unknown>)[key],
-        seen
-      )
-    } catch (error) {
-      output[key] = `[Unreadable: ${String(error)}]`
-    }
-  }
-
-  if (output.name === undefined && "constructor" in value) {
-    const constructorName = (value as { constructor?: { name?: string } })
-      .constructor?.name
-    if (constructorName) output.name = constructorName
-  }
-
-  if (typeof (value as { toString?: () => string }).toString === "function") {
-    try {
-      output.toString = String(value)
-    } catch {
-      // Ignore toString errors.
-    }
-  }
-
-  return output
-}
-
-const extractErrorDetails = (error: unknown) => {
-  if (error instanceof Error) {
-    return {
-      name: error.name,
-      message: error.message,
-      stack: error.stack,
-      cause: error.cause
-    }
-  }
-
-  if (isRecord(error)) {
-    return {
-      name: typeof error.name === "string" ? error.name : undefined,
-      message: typeof error.message === "string" ? error.message : undefined,
-      code: typeof error.code === "string" ? error.code : undefined,
-      cause: error.cause
-    }
-  }
-
-  return { message: safeJsonStringify(error) }
-}
-
-const formatErrorMessage = (error: unknown) => {
-  if (error instanceof Error) return error.message
-  if (typeof error === "string") return error
-  if (isRecord(error)) {
-    if (typeof error.message === "string") return error.message
-    if (typeof error.name === "string") return error.name
-    const serialized = safeJsonStringify(serializeForJson(error))
-    if (serialized) return serialized
-  }
-  const fallback = String(error)
-  if (fallback && fallback !== "[object Object]") return fallback
-  return "Unexpected error. Check console for details."
-}
-
 const buildTemplateLookup = (templates: DiscountTemplateSummary[]) =>
   templates.reduce<Record<string, DiscountTemplateSummary>>(
     (accumulator, template) => ({
@@ -234,93 +181,10 @@ const resolveBalanceOwner = (owner: {
   return "Unknown"
 }
 
-const formatTimestamp = (timestampMs?: string | number | null) => {
-  if (!timestampMs) return "Unknown"
-  const timestamp = Number(timestampMs)
-  if (!Number.isFinite(timestamp)) return "Unknown"
-  return new Date(timestamp).toLocaleString()
-}
-
-const extractCreatedObjects = (transactionBlock: SuiTransactionBlockResponse) =>
-  (transactionBlock.objectChanges ?? []).filter(
-    (
-      change
-    ): change is { objectId: string; objectType: string; type: "created" } =>
-      change.type === "created" &&
-      "objectType" in change &&
-      typeof change.objectType === "string" &&
-      "objectId" in change &&
-      typeof change.objectId === "string"
-  )
-
 const extractReceiptIds = (transactionBlock: SuiTransactionBlockResponse) =>
   extractCreatedObjects(transactionBlock)
     .filter((change) => change.objectType.includes("::shop::ShopItem"))
     .map((change) => change.objectId)
-
-type ObjectTypeCount = {
-  objectType: string
-  label: string
-  count: number
-}
-
-type ObjectChangeDetail = {
-  label: string
-  count: number
-  types: ObjectTypeCount[]
-}
-
-const summarizeObjectChanges = (
-  objectChanges: SuiTransactionBlockResponse["objectChanges"]
-) => {
-  const changeTypeLabels = [
-    { type: "created", label: "Created" },
-    { type: "mutated", label: "Mutated" },
-    { type: "transferred", label: "Transferred" },
-    { type: "deleted", label: "Deleted" },
-    { type: "wrapped", label: "Wrapped" },
-    { type: "unwrapped", label: "Unwrapped" },
-    { type: "published", label: "Published" }
-  ] as const
-
-  if (!objectChanges) {
-    return changeTypeLabels.map((item) => ({
-      label: item.label,
-      count: 0,
-      types: []
-    }))
-  }
-
-  const countByType = new Map<string, number>()
-  const objectTypesByChange = new Map<string, Map<string, number>>()
-
-  for (const change of objectChanges) {
-    countByType.set(change.type, (countByType.get(change.type) ?? 0) + 1)
-
-    if ("objectType" in change && typeof change.objectType === "string") {
-      const typeMap = objectTypesByChange.get(change.type) ?? new Map()
-      typeMap.set(change.objectType, (typeMap.get(change.objectType) ?? 0) + 1)
-      objectTypesByChange.set(change.type, typeMap)
-    }
-  }
-
-  return changeTypeLabels.map((item) => {
-    const typeMap = objectTypesByChange.get(item.type) ?? new Map()
-    const types = Array.from(typeMap.entries())
-      .map(([objectType, count]) => ({
-        objectType,
-        label: getStructLabel(objectType),
-        count
-      }))
-      .sort((a, b) => b.count - a.count)
-
-    return {
-      label: item.label,
-      count: countByType.get(item.type) ?? 0,
-      types
-    }
-  })
-}
 
 type GasUsedSummary = NonNullable<
   SuiTransactionBlockResponse["effects"]
@@ -434,36 +298,6 @@ const buildDiscountOptions = ({
   ]
 }
 
-const modalCloseButtonClassName =
-  "rounded-full border border-slate-300/70 bg-white/80 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-slate-600 transition hover:border-slate-400 hover:text-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sds-blue/40 dark:border-slate-50/20 dark:bg-slate-950/60 dark:text-slate-200/70 dark:hover:text-slate-100"
-
-const secondaryActionButtonClassName =
-  "rounded-full border border-slate-300/70 bg-white/80 px-4 py-2 text-[0.65rem] font-semibold uppercase tracking-[0.2em] text-slate-600 transition hover:border-slate-400 hover:text-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sds-blue/40 dark:border-slate-50/20 dark:bg-slate-950/60 dark:text-slate-200/70"
-
-const Section = ({
-  title,
-  subtitle,
-  children
-}: {
-  title: string
-  subtitle?: string
-  children: ReactNode
-}) => (
-  <section className="rounded-2xl border border-slate-200/70 bg-white/90 p-4 shadow-[0_14px_35px_-30px_rgba(15,23,42,0.4)] dark:border-slate-50/15 dark:bg-slate-950/70">
-    <div className="mb-3 flex flex-col gap-1">
-      <h4 className="text-sm font-semibold text-sds-dark dark:text-sds-light">
-        {title}
-      </h4>
-      {subtitle ? (
-        <p className="text-xs text-slate-500 dark:text-slate-200/70">
-          {subtitle}
-        </p>
-      ) : null}
-    </div>
-    {children}
-  </section>
-)
-
 const TransactionRecap = ({
   summary,
   explorerUrl
@@ -485,7 +319,7 @@ const TransactionRecap = ({
     explorerUrl && digest ? `${explorerUrl}/txblock/${digest}` : undefined
 
   return (
-    <Section title="Transaction Recap" subtitle="On-chain checkout receipt">
+    <ModalSection title="Transaction Recap" subtitle="On-chain checkout receipt">
       <div className="space-y-4 text-xs text-slate-600 dark:text-slate-200/70">
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="rounded-xl border border-slate-200/70 bg-white/80 p-3 dark:border-slate-50/15 dark:bg-slate-950/60">
@@ -690,7 +524,7 @@ const TransactionRecap = ({
           </div>
         ) : null}
       </div>
-    </Section>
+    </ModalSection>
   )
 }
 
@@ -949,6 +783,13 @@ const BuyFlowModal = ({
   const [transactionState, setTransactionState] = useState<TransactionState>({
     status: "idle"
   })
+  const [hasAttemptedSubmit, setHasAttemptedSubmit] = useState(false)
+  const {
+    markFieldChange,
+    markFieldBlur,
+    resetFieldState,
+    shouldShowFieldFeedback
+  } = useIdleFieldValidation<keyof BuyFieldErrors>({ idleDelayMs: 600 })
   const [oracleWarning, setOracleWarning] = useState<string>()
   const [lastWalletContext, setLastWalletContext] =
     useState<Record<string, unknown>>()
@@ -999,13 +840,30 @@ const BuyFlowModal = ({
     [discountOptions, selectedDiscountId]
   )
 
+  const fieldErrors = useMemo(
+    () =>
+      buildBuyFieldErrors({
+        selectedCurrencyId,
+        availableCurrencyCount: availableCurrencies.length,
+        mintTo,
+        refundTo
+      }),
+    [availableCurrencies.length, mintTo, refundTo, selectedCurrencyId]
+  )
+  const hasFieldErrors = Object.values(fieldErrors).some(Boolean)
+
   const isSubmissionPending = isLocalnet
     ? signTransaction.isPending
     : signAndExecuteTransaction.isPending
 
   const canSubmit =
     Boolean(
-      walletAddress && shopId && listing && selectedCurrency && selectedDiscount
+      walletAddress &&
+        shopId &&
+        listing &&
+        selectedCurrency &&
+        selectedDiscount &&
+        !hasFieldErrors
     ) &&
     transactionState.status !== "processing" &&
     isSubmissionPending !== true
@@ -1027,6 +885,8 @@ const BuyFlowModal = ({
     setOracleWarning(undefined)
     setMintTo(walletAddress ?? "")
     setRefundTo(walletAddress ?? "")
+    setHasAttemptedSubmit(false)
+    resetFieldState()
   }, [open, listing?.itemListingId, walletAddress])
 
   useEffect(() => {
@@ -1116,12 +976,22 @@ const BuyFlowModal = ({
     return () => window.removeEventListener("keydown", handleKeyDown)
   }, [open, onClose])
 
+  const shouldShowFieldError = <K extends keyof BuyFieldErrors>(
+    key: K,
+    error?: string
+  ): error is string =>
+    Boolean(error && shouldShowFieldFeedback(key, hasAttemptedSubmit))
+
   const handlePurchase = async () => {
+    setHasAttemptedSubmit(true)
+
     if (!walletAddress || !shopId || !listing)
       return setTransactionState({
         status: "error",
         error: "Wallet and listing details are required to purchase."
       })
+
+    if (hasFieldErrors) return
 
     if (!selectedCurrency)
       return setTransactionState({
@@ -1386,7 +1256,7 @@ const BuyFlowModal = ({
             </div>
 
             <div className="max-h-[70vh] space-y-5 overflow-y-auto px-6 py-6">
-              <Section
+              <ModalSection
                 title="Payment currency"
                 subtitle="Select from accepted coins you hold in your wallet."
               >
@@ -1404,14 +1274,25 @@ const BuyFlowModal = ({
                   </div>
                 ) : (
                   <div className="space-y-3">
-                    <label className="flex flex-col gap-2 text-xs uppercase tracking-[0.18em] text-slate-500 dark:text-slate-200/60">
-                      Currency
+                    <label className={modalFieldLabelClassName}>
+                      <span className={modalFieldTitleClassName}>Currency</span>
+                      <span className={modalFieldDescriptionClassName}>
+                        Choose which accepted coin to spend for checkout.
+                      </span>
                       <select
                         value={selectedCurrencyId ?? ""}
-                        onChange={(event) =>
+                        onChange={(event) => {
+                          markFieldChange("currency")
                           setSelectedCurrencyId(event.target.value)
-                        }
-                        className="focus-visible:ring-sds-blue/40 rounded-xl border border-slate-200/80 bg-white/90 px-3 py-2 text-sm text-sds-dark shadow-[0_10px_25px_-20px_rgba(15,23,42,0.35)] focus-visible:outline-none focus-visible:ring-2 dark:border-slate-50/20 dark:bg-slate-950/60 dark:text-sds-light"
+                        }}
+                        onBlur={() => markFieldBlur("currency")}
+                        className={clsx(
+                          modalFieldInputClassName,
+                          shouldShowFieldError(
+                            "currency",
+                            fieldErrors.currency
+                          ) && modalFieldInputErrorClassName
+                        )}
                       >
                         {availableCurrencies.map((currency) => (
                           <option
@@ -1426,6 +1307,14 @@ const BuyFlowModal = ({
                           </option>
                         ))}
                       </select>
+                      {shouldShowFieldError(
+                        "currency",
+                        fieldErrors.currency
+                      ) ? (
+                        <span className={modalFieldErrorTextClassName}>
+                          {fieldErrors.currency}
+                        </span>
+                      ) : null}
                     </label>
 
                     {selectedCurrency ? (
@@ -1465,10 +1354,10 @@ const BuyFlowModal = ({
                     ) : null}
                   </div>
                 )}
-              </Section>
+              </ModalSection>
 
               {hasDiscountOptions ? (
-                <Section
+                <ModalSection
                   title="Discounts"
                   subtitle="Apply a ticket or claim a spotlighted discount when available."
                 >
@@ -1479,7 +1368,7 @@ const BuyFlowModal = ({
                         <label
                           key={option.id}
                           className={clsx(
-                            "flex cursor-pointer flex-col gap-2 rounded-xl border px-3 py-3 text-xs transition",
+                            "flex cursor-pointer flex-col gap-0 rounded-xl border px-3 py-3 text-xs transition",
                             isSelected
                               ? "border-sds-blue/60 bg-sds-blue/10"
                               : "border-slate-200/70 bg-white/80 hover:border-slate-300",
@@ -1519,48 +1408,82 @@ const BuyFlowModal = ({
                       )
                     })}
                   </div>
-                </Section>
+                </ModalSection>
               ) : null}
 
-              <Section
+              <ModalSection
                 title="Delivery details"
                 subtitle="Receipt minting and refund destinations."
               >
                 <div className="grid gap-4 md:grid-cols-2">
-                  <label className="flex flex-col gap-2 text-xs uppercase tracking-[0.18em] text-slate-500 dark:text-slate-200/60">
-                    Receipt recipient
-                    <span className="text-[0.65rem] font-normal normal-case tracking-normal text-slate-500/80 dark:text-slate-200/70">
+                  <label className={modalFieldLabelClassName}>
+                    <span className={modalFieldTitleClassName}>
+                      Receipt recipient
+                    </span>
+                    <span className={modalFieldDescriptionClassName}>
                       Receives the on-chain ShopItem object minted after
                       purchase.
                     </span>
                     <input
                       type="text"
                       value={mintTo}
-                      onChange={(event) => setMintTo(event.target.value)}
+                      onChange={(event) => {
+                        markFieldChange("mintTo")
+                        setMintTo(event.target.value)
+                      }}
+                      onBlur={() => markFieldBlur("mintTo")}
                       placeholder={walletAddress || "Wallet address"}
-                      className="focus-visible:ring-sds-blue/40 rounded-xl border border-slate-200/80 bg-white/90 px-3 py-2 text-sm text-sds-dark shadow-[0_10px_25px_-20px_rgba(15,23,42,0.35)] focus-visible:outline-none focus-visible:ring-2 dark:border-slate-50/20 dark:bg-slate-950/60 dark:text-sds-light"
+                      className={clsx(
+                        modalFieldInputClassName,
+                        shouldShowFieldError(
+                          "mintTo",
+                          fieldErrors.mintTo
+                        ) && modalFieldInputErrorClassName
+                      )}
                     />
+                    {shouldShowFieldError("mintTo", fieldErrors.mintTo) ? (
+                      <span className={modalFieldErrorTextClassName}>
+                        {fieldErrors.mintTo}
+                      </span>
+                    ) : null}
                   </label>
-                  <label className="flex flex-col gap-2 text-xs uppercase tracking-[0.18em] text-slate-500 dark:text-slate-200/60">
-                    Refund address
-                    <span className="text-[0.65rem] font-normal normal-case tracking-normal text-slate-500/80 dark:text-slate-200/70">
+                  <label className={modalFieldLabelClassName}>
+                    <span className={modalFieldTitleClassName}>
+                      Refund address
+                    </span>
+                    <span className={modalFieldDescriptionClassName}>
                       Receives any unused payment coins after final pricing.
                     </span>
                     <input
                       type="text"
                       value={refundTo}
-                      onChange={(event) => setRefundTo(event.target.value)}
+                      onChange={(event) => {
+                        markFieldChange("refundTo")
+                        setRefundTo(event.target.value)
+                      }}
+                      onBlur={() => markFieldBlur("refundTo")}
                       placeholder={walletAddress || "Wallet address"}
-                      className="focus-visible:ring-sds-blue/40 rounded-xl border border-slate-200/80 bg-white/90 px-3 py-2 text-sm text-sds-dark shadow-[0_10px_25px_-20px_rgba(15,23,42,0.35)] focus-visible:outline-none focus-visible:ring-2 dark:border-slate-50/20 dark:bg-slate-950/60 dark:text-sds-light"
+                      className={clsx(
+                        modalFieldInputClassName,
+                        shouldShowFieldError(
+                          "refundTo",
+                          fieldErrors.refundTo
+                        ) && modalFieldInputErrorClassName
+                      )}
                     />
+                    {shouldShowFieldError("refundTo", fieldErrors.refundTo) ? (
+                      <span className={modalFieldErrorTextClassName}>
+                        {fieldErrors.refundTo}
+                      </span>
+                    ) : null}
                   </label>
                 </div>
                 <div className="mt-3 text-[0.7rem] text-slate-500 dark:text-slate-200/60">
                   Leave empty to default both to your connected wallet.
                 </div>
-              </Section>
+              </ModalSection>
 
-              <Section
+              <ModalSection
                 title="Review"
                 subtitle="Double-check the checkout inputs before submitting."
               >
@@ -1619,7 +1542,7 @@ const BuyFlowModal = ({
                     </div>
                   </div>
                 </div>
-              </Section>
+              </ModalSection>
 
               {oracleWarning ? (
                 <div className="rounded-xl border border-amber-200/70 bg-amber-50/70 px-4 py-3 text-xs text-amber-700 dark:border-amber-400/30 dark:bg-amber-400/10 dark:text-amber-200">

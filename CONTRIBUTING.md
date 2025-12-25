@@ -25,6 +25,17 @@ Your contribution must meet these requirements:
 - **Move Conventions**: Follow [Sui Move conventions](https://docs.sui.io/concepts/sui-move-concepts/conventions)
 - **Documentation**: Add inline documentation for public functions and modules
 
+## Local hooks (recommended)
+
+To keep localnet-only Move.lock data out of commits, enable the repo hooks:
+
+```sh
+git config core.hooksPath .githooks
+```
+
+This installs a pre-commit hook that strips the `[env.localnet]` block from any staged `Move.lock`.
+Your working tree keeps the localnet block; only the staged content is cleaned.
+
 ## A typical workflow
 
 1. Make sure your fork is up to date with the main repository:
