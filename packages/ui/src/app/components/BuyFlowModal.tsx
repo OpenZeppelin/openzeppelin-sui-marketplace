@@ -37,6 +37,8 @@ import {
   formatTimestamp,
   summarizeObjectChanges
 } from "../helpers/transactionFormat"
+import { summarizeGasUsed } from "@sui-oracle-market/tooling-core/transactions"
+import { mapOwnerToLabel } from "@sui-oracle-market/tooling-core/object-info"
 import {
   useBuyFlowModalState,
   type TransactionSummary
@@ -49,42 +51,10 @@ const getCurrencyLabel = (currency: AcceptedCurrencySummary) =>
 const getListingLabel = (listing?: ItemListingSummary) =>
   listing?.name || getStructLabel(listing?.itemType)
 
-const resolveBalanceOwner = (owner: {
-  AddressOwner?: string
-  ObjectOwner?: string
-  Shared?: object
-  Immutable?: boolean
-}) => {
-  if ("AddressOwner" in owner) return owner.AddressOwner
-  if ("ObjectOwner" in owner) return owner.ObjectOwner
-  if ("Shared" in owner) return "Shared"
-  if ("Immutable" in owner) return "Immutable"
-  return "Unknown"
-}
-
 const extractReceiptIds = (transactionBlock: SuiTransactionBlockResponse) =>
   extractCreatedObjects(transactionBlock)
     .filter((change) => change.objectType.includes("::shop::ShopItem"))
     .map((change) => change.objectId)
-
-type GasUsedSummary = NonNullable<
-  SuiTransactionBlockResponse["effects"]
->["gasUsed"]
-
-const toGasSummary = (gasUsed?: GasUsedSummary) => {
-  if (!gasUsed) return undefined
-  const computation = parseBalance(gasUsed.computationCost)
-  const storage = parseBalance(gasUsed.storageCost)
-  const rebate = parseBalance(gasUsed.storageRebate)
-  const total = computation + storage - rebate
-
-  return {
-    computation,
-    storage,
-    rebate,
-    total
-  }
-}
 
 const TransactionRecap = ({
   summary,
@@ -96,7 +66,7 @@ const TransactionRecap = ({
   const { transactionBlock, digest, selectedCurrency } = summary
   const status = transactionBlock.effects?.status?.status ?? "unknown"
   const error = transactionBlock.effects?.status?.error
-  const gasSummary = toGasSummary(transactionBlock.effects?.gasUsed)
+  const gasSummary = summarizeGasUsed(transactionBlock.effects?.gasUsed)
   const receipts = extractReceiptIds(transactionBlock)
   const objectChanges = transactionBlock.objectChanges ?? []
   const objectChangeSummary = summarizeObjectChanges(objectChanges)
@@ -306,7 +276,7 @@ const TransactionRecap = ({
                       {formattedAmount} {getStructLabel(change.coinType)}
                     </span>
                     <span className="text-[0.65rem] uppercase tracking-[0.18em]">
-                      {resolveBalanceOwner(change.owner)}
+                      {mapOwnerToLabel(change.owner) ?? "Unknown"}
                     </span>
                   </div>
                 )

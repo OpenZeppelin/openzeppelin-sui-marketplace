@@ -1,4 +1,4 @@
-import { deriveCurrencyObjectId } from "@sui-oracle-market/domain-core/ptb/currency"
+import { deriveCurrencyObjectId } from "@sui-oracle-market/tooling-core/coin-registry"
 import { SUI_COIN_REGISTRY_ID } from "@sui-oracle-market/tooling-core/constants"
 
 export const resolveCurrencyRegistryId = (coinType: string) => {

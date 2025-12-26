@@ -1,7 +1,11 @@
 import type { SuiClient, SuiObjectData } from "@mysten/sui/client"
+import { normalizeSuiAddress } from "@mysten/sui/utils"
 import {
+  getAllOwnedObjectsByFilter,
   getSuiObject,
   normalizeOptionalAddress,
+  normalizeOptionalIdFromValue,
+  normalizeIdOrThrow,
   unwrapMoveObjectFields
 } from "@sui-oracle-market/tooling-core/object"
 import {
@@ -38,6 +42,21 @@ export const parseUsdToCents = (rawPrice: string): bigint => {
   return BigInt(dollars) * 100n + BigInt(fractional)
 }
 
+/**
+ * Formats a USD cents string into a displayable dollar amount.
+ */
+export const formatUsdFromCents = (rawCents?: string) => {
+  if (!rawCents) return "Unknown"
+  try {
+    const cents = BigInt(rawCents)
+    const dollars = cents / 100n
+    const remainder = (cents % 100n).toString().padStart(2, "0")
+    return `$${dollars.toString()}.${remainder}`
+  } catch {
+    return "Unknown"
+  }
+}
+
 export type ShopOverview = {
   shopId: string
   ownerAddress: string
@@ -67,4 +86,87 @@ export const getShopOverview = async (
     shopId,
     ownerAddress
   }
+}
+
+/**
+ * Resolves the ShopOwnerCap object ID owned by a specific address for a shop.
+ */
+export const resolveOwnerCapabilityId = async ({
+  shopId,
+  shopPackageId,
+  ownerAddress,
+  suiClient
+}: {
+  shopId: string
+  shopPackageId: string
+  ownerAddress: string
+  suiClient: SuiClient
+}): Promise<string> => {
+  const ownerCapabilityType = `${shopPackageId}::shop::ShopOwnerCap`
+  const normalizedShopId = normalizeIdOrThrow(shopId, "Shop ID is required.")
+  const normalizedOwnerAddress = normalizeSuiAddress(ownerAddress)
+
+  const ownerCapabilityObjects = await getAllOwnedObjectsByFilter(
+    {
+      ownerAddress: normalizedOwnerAddress,
+      filter: { StructType: ownerCapabilityType },
+      options: { showContent: true, showType: true }
+    },
+    { suiClient }
+  )
+
+  const ownedCapabilitySummaries = ownerCapabilityObjects.map((object) => {
+    try {
+      const fields = unwrapMoveObjectFields<{
+        shop_address?: unknown
+        shop_id?: unknown
+      }>(object)
+      const shopIdField = normalizeOptionalIdFromValue(
+        fields.shop_address ?? fields.shop_id
+      )
+      return {
+        objectId: object.objectId,
+        shopId: shopIdField
+      }
+    } catch (error) {
+      return {
+        objectId: object.objectId,
+        shopId: undefined,
+        parseError: error instanceof Error ? error.message : String(error)
+      }
+    }
+  })
+
+  const matchingCapability = ownerCapabilityObjects.find((object) => {
+    try {
+      const fields = unwrapMoveObjectFields<{
+        shop_address?: unknown
+        shop_id?: unknown
+      }>(object)
+      const shopIdField = normalizeOptionalIdFromValue(
+        fields.shop_address ?? fields.shop_id
+      )
+      return shopIdField === normalizedShopId
+    } catch {
+      return false
+    }
+  })
+
+  if (!matchingCapability) {
+    const error = new Error(
+      "No ShopOwnerCap found for this shop. Ensure the owner capability is in your wallet."
+    )
+    error.cause = {
+      ownerAddress: normalizedOwnerAddress,
+      shopId: normalizedShopId,
+      ownerCapabilityType,
+      ownedCapabilities: ownedCapabilitySummaries
+    }
+    throw error
+  }
+
+  return normalizeIdOrThrow(
+    matchingCapability.objectId,
+    "No ShopOwnerCap found for this shop. Ensure the owner capability is in your wallet."
+  )
 }

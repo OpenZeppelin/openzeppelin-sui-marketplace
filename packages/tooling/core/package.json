@@ -5,6 +5,7 @@
   "type": "module",
   "exports": {
     "./address": "./src/address.ts",
+    "./coin": "./src/coin.ts",
     "./coin-registry": "./src/coin-registry.ts",
     "./context": "./src/context.ts",
     "./constants": "./src/constants.ts",
@@ -18,8 +19,11 @@
     "./type-utils": "./src/type-utils.ts",
     "./types": "./src/types.ts",
     "./utils/formatters": "./src/utils/formatters.ts",
+    "./utils/move-values": "./src/utils/move-values.ts",
+    "./utils/errors": "./src/utils/errors.ts",
     "./utils/type-name": "./src/utils/type-name.ts",
-    "./utils/utility": "./src/utils/utility.ts"
+    "./utils/utility": "./src/utils/utility.ts",
+    "./utils/validation": "./src/utils/validation.ts"
   },
   "dependencies": {
     "@mysten/sui": "^1.45.2"

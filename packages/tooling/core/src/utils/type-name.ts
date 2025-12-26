@@ -11,7 +11,11 @@ export type TypeNameParts = {
  * Throws when the type is not well formed to keep caller validation explicit.
  */
 export const parseTypeNameFromString = (typeName: string): TypeNameParts => {
-  const [packageId, moduleName, structName] = typeName.split("::")
+  const trimmed = typeName.trim()
+  const genericIndex = trimmed.indexOf("<")
+  const normalizedType =
+    genericIndex >= 0 ? trimmed.slice(0, genericIndex) : trimmed
+  const [packageId, moduleName, structName] = normalizedType.split("::")
   if (!packageId || !moduleName || !structName)
     throw new Error(
       "Type must be fully qualified (e.g., 0x2::sui::SUI or 0x...::module::Type)."

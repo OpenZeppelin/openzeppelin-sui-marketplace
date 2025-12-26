@@ -5,15 +5,14 @@
  * This script validates ownership, builds a PTB, and reports the transfer digest.
  */
 import type { ObjectOwner } from "@mysten/sui/client"
-import type { TransactionArgument } from "@mysten/sui/transactions"
 import { normalizeSuiAddress, normalizeSuiObjectId } from "@mysten/sui/utils"
 import yargs from "yargs"
 
+import { buildCoinTransferTransaction } from "@sui-oracle-market/tooling-core/coin"
 import { parsePositiveU64 } from "@sui-oracle-market/tooling-core/utils/utility"
 import type { Tooling } from "@sui-oracle-market/tooling-node/factory"
 import { logKeyValueGreen } from "@sui-oracle-market/tooling-node/log"
 import { runSuiScript } from "@sui-oracle-market/tooling-node/process"
-import { newTransaction } from "@sui-oracle-market/tooling-node/transactions"
 
 type TransferCoinArguments = {
   coinId: string
@@ -155,34 +154,6 @@ const ensureSignerOwnsCoin = ({
       `Coin object ${coinObjectId} is owned by ${coinOwnerAddress}, not the signer ${signerAddress}.`
     )
 }
-
-const buildCoinTransferTransaction = ({
-  coinObjectId,
-  amount,
-  recipientAddress
-}: {
-  coinObjectId: string
-  amount: bigint
-  recipientAddress: string
-}) => {
-  const transaction = newTransaction()
-  const coinArgument = transaction.object(coinObjectId)
-  const splitResult = transaction.splitCoins(coinArgument, [
-    transaction.pure.u64(amount)
-  ])
-  const transferCoin = unwrapSplitCoin(splitResult)
-
-  transaction.transferObjects(
-    [transferCoin],
-    transaction.pure.address(recipientAddress)
-  )
-
-  return transaction
-}
-
-const unwrapSplitCoin = (
-  splitResult: TransactionArgument | TransactionArgument[]
-) => (Array.isArray(splitResult) ? splitResult[0] : splitResult)
 
 const logTransferSummary = ({
   coinObjectId,

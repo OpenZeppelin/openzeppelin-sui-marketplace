@@ -1,6 +1,7 @@
 import type { SuiClient, SuiObjectData } from "@mysten/sui/client"
+import { bcs } from "@mysten/sui/bcs"
 import type { Transaction } from "@mysten/sui/transactions"
-import { normalizeSuiObjectId } from "@mysten/sui/utils"
+import { fromB64, normalizeSuiObjectId } from "@mysten/sui/utils"
 import {
   SuiPriceServiceConnection,
   SuiPythClient
@@ -15,12 +16,18 @@ import {
 } from "@sui-oracle-market/tooling-core/object"
 import { getSuiSharedObject } from "@sui-oracle-market/tooling-core/shared-object"
 import { newTransaction } from "@sui-oracle-market/tooling-core/transactions"
+import { requireValue } from "@sui-oracle-market/tooling-core/utils/utility"
 import {
-  requireValue,
-  tryParseBigInt
-} from "@sui-oracle-market/tooling-core/utils/utility"
+  extractFieldValueByKeys,
+  normalizeBigIntFromMoveValue,
+  parseI64FromMoveValue,
+  unwrapMoveFields
+} from "@sui-oracle-market/tooling-core/utils/move-values"
 import { normalizeCoinType } from "../models/currency.ts"
-import type { DiscountTicketDetails } from "../models/discount.ts"
+import type {
+  DiscountTemplateSummary,
+  DiscountTicketDetails
+} from "../models/discount.ts"
 import { parseDiscountTicketFromObject } from "../models/discount.ts"
 import { getPythPullOracleConfig } from "../models/pyth.ts"
 
@@ -53,82 +60,6 @@ const getObjectRef = async (objectId: string, suiClient: SuiClient) => {
   }
 }
 
-const unwrapFields = (value: unknown): Record<string, unknown> | undefined => {
-  if (!value || typeof value !== "object") return undefined
-  const record = value as Record<string, unknown>
-  if (record.fields && typeof record.fields === "object")
-    return record.fields as Record<string, unknown>
-  return record
-}
-
-const normalizeBigIntFromValue = (value: unknown): bigint | undefined => {
-  if (value === null || value === undefined) return undefined
-  if (typeof value === "bigint") return value
-  if (typeof value === "number") return BigInt(value)
-  if (typeof value === "string") {
-    try {
-      return tryParseBigInt(value)
-    } catch {
-      return undefined
-    }
-  }
-
-  const fields = unwrapFields(value)
-  if (!fields) return undefined
-  if ("value" in fields) return normalizeBigIntFromValue(fields.value)
-
-  const nestedValues = Object.values(fields)
-  if (nestedValues.length === 1)
-    return normalizeBigIntFromValue(nestedValues[0])
-
-  return undefined
-}
-
-const normalizeBooleanFromValue = (value: unknown): boolean | undefined => {
-  if (typeof value === "boolean") return value
-  if (typeof value === "string") {
-    if (value.toLowerCase() === "true") return true
-    if (value.toLowerCase() === "false") return false
-  }
-
-  const fields = unwrapFields(value)
-  if (!fields) return undefined
-  if ("value" in fields) return normalizeBooleanFromValue(fields.value)
-
-  const nestedValues = Object.values(fields)
-  if (nestedValues.length === 1)
-    return normalizeBooleanFromValue(nestedValues[0])
-
-  return undefined
-}
-
-const parseI64FromValue = (
-  value: unknown
-): { magnitude: bigint; negative: boolean } | undefined => {
-  const fields = unwrapFields(value)
-  if (!fields) return undefined
-
-  const magnitude = normalizeBigIntFromValue(fields.magnitude)
-  const negative = normalizeBooleanFromValue(fields.negative)
-
-  if (magnitude === undefined || negative === undefined) return undefined
-
-  return { magnitude, negative }
-}
-
-const extractFieldByKeys = (
-  container: Record<string, unknown> | undefined,
-  keys: string[]
-): unknown => {
-  if (!container) return undefined
-
-  for (const key of keys) {
-    if (key in container) return container[key]
-  }
-
-  return undefined
-}
-
 const parseMockPriceInfoUpdateFields = (
   priceInfoObject: SuiObjectData
 ):
@@ -141,21 +72,21 @@ const parseMockPriceInfoUpdateFields = (
     }
   | undefined => {
   const topFields = unwrapMoveObjectFields(priceInfoObject)
-  const priceInfoFields = unwrapFields(
-    extractFieldByKeys(topFields, ["price_info", "priceInfo"])
+  const priceInfoFields = unwrapMoveFields(
+    extractFieldValueByKeys(topFields, ["price_info", "priceInfo"])
   )
-  const priceFeedFields = unwrapFields(
-    extractFieldByKeys(priceInfoFields, ["price_feed", "priceFeed"])
+  const priceFeedFields = unwrapMoveFields(
+    extractFieldValueByKeys(priceInfoFields, ["price_feed", "priceFeed"])
   )
-  const priceFields = unwrapFields(
-    extractFieldByKeys(priceFeedFields, ["price"])
+  const priceFields = unwrapMoveFields(
+    extractFieldValueByKeys(priceFeedFields, ["price"])
   )
 
   if (!priceFields) return undefined
 
-  const priceI64 = parseI64FromValue(priceFields.price)
-  const expoI64 = parseI64FromValue(priceFields.expo)
-  const conf = normalizeBigIntFromValue(priceFields.conf)
+  const priceI64 = parseI64FromMoveValue(priceFields.price)
+  const expoI64 = parseI64FromMoveValue(priceFields.expo)
+  const conf = normalizeBigIntFromMoveValue(priceFields.conf)
 
   if (!priceI64 || !expoI64 || conf === undefined) return undefined
 
@@ -166,6 +97,110 @@ const parseMockPriceInfoUpdateFields = (
     expoMagnitude: expoI64.magnitude,
     expoIsNegative: expoI64.negative
   }
+}
+
+const BASIS_POINT_DENOMINATOR = 10_000n
+
+/**
+ * Resolves a discounted USD price (in cents) based on a discount selection.
+ */
+export const resolveDiscountedPriceUsdCents = ({
+  basePriceUsdCents,
+  discountSelection,
+  discountTemplateLookup
+}: {
+  basePriceUsdCents?: string
+  discountSelection: DiscountContext
+  discountTemplateLookup: Record<string, DiscountTemplateSummary>
+}): bigint | undefined => {
+  if (!basePriceUsdCents) return undefined
+
+  const basePrice = BigInt(basePriceUsdCents)
+  if (discountSelection.mode === "none") return basePrice
+
+  const template = discountTemplateLookup[discountSelection.discountTemplateId]
+  if (!template) return basePrice
+
+  const ruleKind = template.ruleKind
+  const ruleValue = template.ruleValue ? BigInt(template.ruleValue) : undefined
+  if (!ruleKind || ruleKind === "unknown" || ruleValue === undefined)
+    return basePrice
+
+  if (ruleKind === "fixed") {
+    return ruleValue >= basePrice ? 0n : basePrice - ruleValue
+  }
+
+  if (ruleValue > BASIS_POINT_DENOMINATOR) return basePrice
+
+  const numerator = basePrice * (BASIS_POINT_DENOMINATOR - ruleValue)
+  return (numerator + BASIS_POINT_DENOMINATOR - 1n) / BASIS_POINT_DENOMINATOR
+}
+
+const parseU64ReturnValue = (
+  returnValues?: Array<[string, string]>
+): bigint | undefined => {
+  const firstReturn = returnValues?.[0]
+  if (!firstReturn) return undefined
+
+  const [bytes] = firstReturn
+  if (!bytes) return undefined
+
+  try {
+    const decoded = bcs.u64().parse(fromB64(bytes))
+    return typeof decoded === "bigint" ? decoded : BigInt(decoded)
+  } catch {
+    return undefined
+  }
+}
+
+/**
+ * Estimates the required payment amount for a USD price using the oracle quote.
+ */
+export const estimateRequiredAmount = async ({
+  shopPackageId,
+  shopShared,
+  acceptedCurrencyShared,
+  pythPriceInfoShared,
+  priceUsdCents,
+  maxPriceAgeSecs,
+  maxConfidenceRatioBps,
+  clockShared,
+  signerAddress,
+  suiClient
+}: {
+  shopPackageId: string
+  shopShared: Awaited<ReturnType<typeof getSuiSharedObject>>
+  acceptedCurrencyShared: Awaited<ReturnType<typeof getSuiSharedObject>>
+  pythPriceInfoShared: Awaited<ReturnType<typeof getSuiSharedObject>>
+  priceUsdCents: bigint
+  maxPriceAgeSecs?: bigint
+  maxConfidenceRatioBps?: bigint
+  clockShared: Awaited<ReturnType<typeof getSuiSharedObject>>
+  signerAddress: string
+  suiClient: SuiClient
+}): Promise<bigint | undefined> => {
+  const quoteTransaction = newTransaction()
+  quoteTransaction.setSender(signerAddress)
+
+  quoteTransaction.moveCall({
+    target: `${shopPackageId}::shop::quote_amount_for_price_info_object`,
+    arguments: [
+      quoteTransaction.sharedObjectRef(shopShared.sharedRef),
+      quoteTransaction.sharedObjectRef(acceptedCurrencyShared.sharedRef),
+      quoteTransaction.sharedObjectRef(pythPriceInfoShared.sharedRef),
+      quoteTransaction.pure.u64(priceUsdCents),
+      quoteTransaction.pure.option("u64", maxPriceAgeSecs ?? null),
+      quoteTransaction.pure.option("u64", maxConfidenceRatioBps ?? null),
+      quoteTransaction.sharedObjectRef(clockShared.sharedRef)
+    ]
+  })
+
+  const inspection = await suiClient.devInspectTransactionBlock({
+    sender: signerAddress,
+    transactionBlock: quoteTransaction
+  })
+
+  return parseU64ReturnValue(inspection.results?.[0]?.returnValues)
 }
 
 const maybeSetDedicatedGasForSuiPayments = async ({
@@ -332,22 +367,30 @@ export const resolvePaymentCoinObjectId = async ({
 }): Promise<string> => {
   if (providedCoinObjectId) return providedCoinObjectId
 
-  const coins = await suiClient.getCoins({
-    owner: signerAddress,
-    coinType,
-    limit: 50
-  })
+  let cursor: string | null | undefined = undefined
+  let richest: { coinObjectId: string; balance: bigint } | null = null
 
-  const richest = coins.data.reduce<{
-    coinObjectId: string
-    balance: bigint
-  } | null>((current, coin) => {
-    const balance = BigInt(coin.balance)
-    if (!current) return { coinObjectId: coin.coinObjectId, balance }
-    return balance > current.balance
-      ? { coinObjectId: coin.coinObjectId, balance }
-      : current
-  }, null)
+  do {
+    const page = await suiClient.getCoins({
+      owner: signerAddress,
+      coinType,
+      limit: 50,
+      cursor
+    })
+
+    richest = page.data.reduce<{
+      coinObjectId: string
+      balance: bigint
+    } | null>((current, coin) => {
+      const balance = BigInt(coin.balance)
+      if (!current) return { coinObjectId: coin.coinObjectId, balance }
+      return balance > current.balance
+        ? { coinObjectId: coin.coinObjectId, balance }
+        : current
+    }, richest)
+
+    cursor = page.hasNextPage ? page.nextCursor : undefined
+  } while (cursor)
 
   if (!richest)
     throw new Error(
@@ -450,16 +493,20 @@ export const buildBuyTransaction = async (
 
     if (!didPullUpdate) {
       if (usesMockUpdate) {
-        maybeUpdateMockPriceFeed({
+        const didMockUpdate = maybeUpdateMockPriceFeed({
           transaction,
           priceInfoArgument: pythPriceInfoArgument,
           priceInfoObject: pythPriceInfoShared.object,
           clockArgument,
           onWarning
         })
+        if (!didMockUpdate)
+          throw new Error(
+            "Failed to update localnet mock price feed; pass --skip-price-update to proceed with existing price info."
+          )
       } else {
-        onWarning?.(
-          `Skipping Pyth pull update: no config for network ${networkName}.`
+        throw new Error(
+          `No Pyth pull oracle config for network ${networkName}; pass --skip-price-update to proceed with existing price info.`
         )
       }
     }

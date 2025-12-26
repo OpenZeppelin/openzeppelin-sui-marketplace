@@ -1,9 +1,6 @@
 "use client"
 
-import {
-  useCurrentWallet,
-  useDisconnectWallet,
-} from "@mysten/dapp-kit"
+import { useCurrentWallet, useDisconnectWallet } from "@mysten/dapp-kit"
 import { normalizeSuiAddress } from "@mysten/sui/utils"
 import type { WalletAccount } from "@mysten/wallet-standard"
 import { useEffect, useMemo, useRef } from "react"
@@ -88,9 +85,5 @@ export const useWalletAccountChangeDisconnect = () => {
     }
 
     return () => unsubscribe?.remove?.()
-  }, [
-    disconnectWallet,
-    wallet.currentWallet,
-    wallet.isConnected
-  ])
+  }, [disconnectWallet, wallet.currentWallet, wallet.isConnected])
 }

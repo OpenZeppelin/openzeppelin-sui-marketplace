@@ -55,14 +55,18 @@ export const getSuiSharedObject = async (
   if (!sharedProperty)
     throw new Error(`Object ${objectId} is not shared or missing metadata`)
 
+  const initialSharedVersion = normalizeVersion(
+    sharedProperty.initial_shared_version
+  )
+  if (!initialSharedVersion)
+    throw new Error(`Shared object ${objectId} missing initial shared version.`)
+
   return {
     ...suiObject,
     sharedRef: {
       objectId: suiObject.object.objectId,
       mutable,
-      initialSharedVersion: normalizeVersion(
-        sharedProperty.initial_shared_version
-      )
+      initialSharedVersion
     }
   }
 }

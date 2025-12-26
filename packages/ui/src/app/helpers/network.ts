@@ -1,11 +1,15 @@
-import type { SuiObjectResponse } from "@mysten/sui/client"
-import { isValidSuiObjectId } from "@mysten/sui/utils"
 import { ENetwork } from "@sui-oracle-market/tooling-core/types"
 import {
   CONTRACT_MODULE_NAME,
   CONTRACT_PACKAGE_ID_NOT_DEFINED,
   SHOP_ID_NOT_DEFINED
 } from "~~/config/network"
+export {
+  getResponseContentField,
+  getResponseDisplayField,
+  getResponseObjectId
+} from "@sui-oracle-market/tooling-core/object-info"
+export { fromBytesToString } from "@sui-oracle-market/tooling-core/utils/formatters"
 
 export const transactionUrl = (baseExplorerUrl: string, txDigest: string) => {
   return `${baseExplorerUrl}/txblock/${txDigest}`
@@ -75,79 +79,6 @@ export const fullStructName = (
   structName: string
 ): `${string}::${string}::${string}` => {
   return `${fullModuleName(packageId)}::${structName}`
-}
-
-export const fromBytesToString = (bytes: number[]): string => {
-  return new TextDecoder().decode(new Uint8Array(bytes))
-}
-
-export const getResponseContentField = (
-  response: SuiObjectResponse | null | undefined,
-  field: string
-) => {
-  if (
-    response == null ||
-    response.data == null ||
-    response.data?.content == null
-  ) {
-    return null
-  }
-
-  if (response.data.content?.dataType !== "moveObject") {
-    return null
-  }
-
-  // @todo Find a better way to extract fields from SuiParsedData.
-  /* eslint-disable  @typescript-eslint/no-explicit-any */
-  const content = response.data.content as any
-
-  if (content.fields == null) {
-    return null
-  }
-
-  return content.fields[field]
-}
-
-export const getResponseDisplayField = (
-  response: SuiObjectResponse | null | undefined,
-  field: string
-) => {
-  if (
-    response == null ||
-    response.data == null ||
-    response.data?.display == null
-  ) {
-    return null
-  }
-
-  // @todo Find a better way to extract fields from SuiParsedData.
-  const display = response.data.display
-
-  if (display.data == null) {
-    return null
-  }
-
-  return display.data[field]
-}
-
-export const getResponseObjectId = (
-  response: SuiObjectResponse | null | undefined
-) => {
-  if (
-    response == null ||
-    response.data == null ||
-    response.data?.objectId == null
-  ) {
-    return null
-  }
-
-  const objectId = response.data.objectId
-
-  if (!isValidSuiObjectId(objectId)) {
-    return null
-  }
-
-  return objectId
 }
 
 const fullModuleName = (packageId: string): `${string}::${string}` => {

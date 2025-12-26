@@ -1,16 +1,5 @@
-import { deriveObjectID, normalizeSuiObjectId } from "@mysten/sui/utils"
-
 import type { WrappedSuiSharedObject } from "@sui-oracle-market/tooling-core/shared-object"
 import { newTransaction } from "@sui-oracle-market/tooling-core/transactions"
-
-export const deriveCurrencyObjectId = (coinType: string, registryId: string) =>
-  normalizeSuiObjectId(
-    deriveObjectID(
-      registryId,
-      `0x2::coin_registry::CurrencyKey<${coinType}>`,
-      new Uint8Array()
-    )
-  )
 
 export const buildAddAcceptedCurrencyTransaction = ({
   packageId,

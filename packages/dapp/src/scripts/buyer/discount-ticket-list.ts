@@ -6,16 +6,14 @@
  */
 import yargs from "yargs"
 
-import type { DiscountTicketDetails } from "@sui-oracle-market/domain-core/models/discount"
 import {
-  formatDiscountTicketStructType,
-  parseDiscountTicketFromObject
+  getDiscountTicketSummaries,
+  type DiscountTicketDetails
 } from "@sui-oracle-market/domain-core/models/discount"
 import { normalizeIdOrThrow } from "@sui-oracle-market/tooling-core/object"
 import { resolveOwnerAddress } from "@sui-oracle-market/tooling-node/account"
 import { getLatestObjectFromArtifact } from "@sui-oracle-market/tooling-node/artifacts"
 import { type SuiNetworkConfig } from "@sui-oracle-market/tooling-node/config"
-import type { Tooling } from "@sui-oracle-market/tooling-node/factory"
 import {
   logKeyValueBlue,
   logKeyValueGreen,
@@ -32,7 +30,6 @@ type ListDiscountTicketsArguments = {
 type NormalizedInputs = {
   ownerAddress: string
   shopPackageId: string
-  discountTicketStructType: string
   shopId?: string
 }
 
@@ -57,11 +54,11 @@ runSuiScript(
       networkName: currentNetwork
     })
 
-    const discountTickets = await getDiscountTickets({
+    const discountTickets = await getDiscountTicketSummaries({
       ownerAddress: inputs.ownerAddress,
-      discountTicketStructType: inputs.discountTicketStructType,
+      shopPackageId: inputs.shopPackageId,
       shopFilterId: inputs.shopId,
-      tooling
+      suiClient: tooling.suiClient
     })
 
     if (discountTickets.length === 0)
@@ -120,43 +117,10 @@ const resolveInputs = async (
       networkConfig
     ),
     shopPackageId,
-    discountTicketStructType: formatDiscountTicketStructType(shopPackageId),
     shopId: cliArguments.shopId
       ? normalizeIdOrThrow(cliArguments.shopId, "Invalid shop id provided.")
       : undefined
   }
-}
-
-const getDiscountTickets = async ({
-  ownerAddress,
-  discountTicketStructType,
-  shopFilterId,
-  tooling
-}: {
-  ownerAddress: string
-  discountTicketStructType: string
-  shopFilterId?: string
-  tooling: Pick<Tooling, "getAllOwnedObjectsByFilter">
-}): Promise<DiscountTicketSummary[]> => {
-  const discountTicketObjects = await tooling.getAllOwnedObjectsByFilter({
-    ownerAddress,
-    filter: { StructType: discountTicketStructType }
-  })
-
-  const discountTickets = discountTicketObjects.map(
-    parseDiscountTicketFromObject
-  )
-
-  if (!shopFilterId) return discountTickets
-
-  const normalizedShopFilterId = normalizeIdOrThrow(
-    shopFilterId,
-    "Invalid shop id provided for filtering."
-  )
-
-  return discountTickets.filter(
-    (discountTicket) => discountTicket.shopAddress === normalizedShopFilterId
-  )
 }
 
 const logListContext = ({

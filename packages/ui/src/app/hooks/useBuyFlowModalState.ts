@@ -8,11 +8,12 @@ import {
   useSuiClient,
   useSuiClientContext
 } from "@mysten/dapp-kit"
-import type { SuiClient, SuiTransactionBlockResponse } from "@mysten/sui/client"
-import { bcs } from "@mysten/sui/bcs"
-import { fromB64, normalizeSuiAddress } from "@mysten/sui/utils"
+import type { SuiTransactionBlockResponse } from "@mysten/sui/client"
+import { normalizeSuiAddress } from "@mysten/sui/utils"
 import {
   buildBuyTransaction,
+  estimateRequiredAmount,
+  resolveDiscountedPriceUsdCents,
   resolvePaymentCoinObjectId,
   type DiscountContext
 } from "@sui-oracle-market/domain-core/flows/buy"
@@ -23,7 +24,6 @@ import type {
 } from "@sui-oracle-market/domain-core/models/discount"
 import type { ItemListingSummary } from "@sui-oracle-market/domain-core/models/item-listing"
 import { SUI_CLOCK_ID } from "@sui-oracle-market/tooling-core/constants"
-import { newTransaction } from "@sui-oracle-market/tooling-core/transactions"
 import {
   deriveRelevantPackageId,
   normalizeIdOrThrow
@@ -92,104 +92,6 @@ const buildBuyFieldErrors = ({
   if (refundToError) errors.refundTo = refundToError
 
   return errors
-}
-
-const BASIS_POINT_DENOMINATOR = 10_000n
-
-const resolveDiscountedPriceUsdCents = ({
-  basePriceUsdCents,
-  discountSelection,
-  discountTemplateLookup
-}: {
-  basePriceUsdCents?: string
-  discountSelection: DiscountContext
-  discountTemplateLookup: Record<string, DiscountTemplateSummary>
-}): bigint | undefined => {
-  if (!basePriceUsdCents) return undefined
-
-  const basePrice = BigInt(basePriceUsdCents)
-  if (discountSelection.mode === "none") return basePrice
-
-  const template = discountTemplateLookup[discountSelection.discountTemplateId]
-  if (!template) return basePrice
-
-  const ruleKind = template.ruleKind
-  const ruleValue = template.ruleValue ? BigInt(template.ruleValue) : undefined
-  if (!ruleKind || ruleKind === "unknown" || ruleValue === undefined)
-    return basePrice
-
-  if (ruleKind === "fixed") {
-    return ruleValue >= basePrice ? 0n : basePrice - ruleValue
-  }
-
-  if (ruleValue > BASIS_POINT_DENOMINATOR) return basePrice
-
-  const numerator = basePrice * (BASIS_POINT_DENOMINATOR - ruleValue)
-  return (numerator + BASIS_POINT_DENOMINATOR - 1n) / BASIS_POINT_DENOMINATOR
-}
-
-const parseU64ReturnValue = (
-  returnValues?: Array<[string, string]>
-): bigint | undefined => {
-  const firstReturn = returnValues?.[0]
-  if (!firstReturn) return undefined
-
-  const [bytes] = firstReturn
-  if (!bytes) return undefined
-
-  try {
-    const decoded = bcs.u64().parse(fromB64(bytes))
-    return typeof decoded === "bigint" ? decoded : BigInt(decoded)
-  } catch {
-    return undefined
-  }
-}
-
-const estimateRequiredAmount = async ({
-  shopPackageId,
-  shopShared,
-  acceptedCurrencyShared,
-  pythPriceInfoShared,
-  priceUsdCents,
-  maxPriceAgeSecs,
-  maxConfidenceRatioBps,
-  clockShared,
-  signerAddress,
-  suiClient
-}: {
-  shopPackageId: string
-  shopShared: Awaited<ReturnType<typeof getSuiSharedObject>>
-  acceptedCurrencyShared: Awaited<ReturnType<typeof getSuiSharedObject>>
-  pythPriceInfoShared: Awaited<ReturnType<typeof getSuiSharedObject>>
-  priceUsdCents: bigint
-  maxPriceAgeSecs?: bigint
-  maxConfidenceRatioBps?: bigint
-  clockShared: Awaited<ReturnType<typeof getSuiSharedObject>>
-  signerAddress: string
-  suiClient: SuiClient
-}): Promise<bigint | undefined> => {
-  const quoteTransaction = newTransaction()
-  quoteTransaction.setSender(signerAddress)
-
-  quoteTransaction.moveCall({
-    target: `${shopPackageId}::shop::quote_amount_for_price_info_object`,
-    arguments: [
-      quoteTransaction.sharedObjectRef(shopShared.sharedRef),
-      quoteTransaction.sharedObjectRef(acceptedCurrencyShared.sharedRef),
-      quoteTransaction.sharedObjectRef(pythPriceInfoShared.sharedRef),
-      quoteTransaction.pure.u64(priceUsdCents),
-      quoteTransaction.pure.option("u64", maxPriceAgeSecs ?? null),
-      quoteTransaction.pure.option("u64", maxConfidenceRatioBps ?? null),
-      quoteTransaction.sharedObjectRef(clockShared.sharedRef)
-    ]
-  })
-
-  const inspection = await suiClient.devInspectTransactionBlock({
-    sender: signerAddress,
-    transactionBlock: quoteTransaction
-  })
-
-  return parseU64ReturnValue(inspection.results?.[0]?.returnValues)
 }
 
 export type TransactionSummary = {

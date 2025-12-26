@@ -9,9 +9,8 @@ import type {
   DiscountTicketDetails
 } from "@sui-oracle-market/domain-core/models/discount"
 import {
-  formatDiscountTicketStructType,
   getDiscountTemplateSummaries,
-  parseDiscountTicketFromObject
+  getDiscountTicketSummaries
 } from "@sui-oracle-market/domain-core/models/discount"
 import type { ItemListingSummary } from "@sui-oracle-market/domain-core/models/item-listing"
 import { getItemListingSummaries } from "@sui-oracle-market/domain-core/models/item-listing"
@@ -21,7 +20,6 @@ import { getShopOverview } from "@sui-oracle-market/domain-core/models/shop"
 import { SUI_CLOCK_ID } from "@sui-oracle-market/tooling-core/constants"
 import {
   deriveRelevantPackageId,
-  getAllOwnedObjectsByFilter,
   getSuiObject,
   normalizeOptionalId,
   unwrapMoveObjectFields
@@ -166,7 +164,7 @@ const getWalletData = async ({
     ? await resolveShopPackageId({ shopId, packageId, suiClient })
     : normalizeOptionalId(packageId)
 
-  const [purchasedItems, discountTicketObjects] = await Promise.all([
+  const [purchasedItems, discountTickets] = await Promise.all([
     resolvedPackageId
       ? getShopItemReceiptSummaries({
           ownerAddress,
@@ -176,21 +174,14 @@ const getWalletData = async ({
         })
       : Promise.resolve([]),
     resolvedPackageId
-      ? getAllOwnedObjectsByFilter(
-          {
-            ownerAddress,
-            filter: {
-              StructType: formatDiscountTicketStructType(resolvedPackageId)
-            }
-          },
-          { suiClient }
-        )
+      ? getDiscountTicketSummaries({
+          ownerAddress,
+          shopPackageId: resolvedPackageId,
+          shopFilterId: shopId,
+          suiClient
+        })
       : Promise.resolve([])
   ])
-
-  const discountTickets = discountTicketObjects
-    .map(parseDiscountTicketFromObject)
-    .filter((ticket) => (shopId ? ticket.shopAddress === shopId : true))
 
   return { purchasedItems, discountTickets }
 }

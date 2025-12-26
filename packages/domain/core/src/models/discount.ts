@@ -5,6 +5,7 @@ import {
   getSuiDynamicFieldObject
 } from "@sui-oracle-market/tooling-core/dynamic-fields"
 import {
+  getAllOwnedObjectsByFilter,
   getSuiObject,
   normalizeIdOrThrow,
   normalizeOptionalAddress,
@@ -12,10 +13,12 @@ import {
   unwrapMoveObjectFields
 } from "@sui-oracle-market/tooling-core/object"
 import { formatOptionalNumericValue } from "@sui-oracle-market/tooling-core/utils/formatters"
+import { requireValue } from "@sui-oracle-market/tooling-core/utils/utility"
 import {
-  requireValue,
-  tryParseBigInt
-} from "@sui-oracle-market/tooling-core/utils/utility"
+  extractFieldValueByKeys,
+  normalizeBigIntFromMoveValue,
+  unwrapMoveFields
+} from "@sui-oracle-market/tooling-core/utils/move-values"
 import { parseUsdToCents } from "./shop.ts"
 
 export const DISCOUNT_TEMPLATE_TYPE_FRAGMENT = "::shop::DiscountTemplate"
@@ -86,53 +89,9 @@ export const formatRuleValue = (
   return `${percentage.toFixed(2)}%`
 }
 
-const unwrapFields = (value: unknown): Record<string, unknown> | undefined => {
-  if (!value || typeof value !== "object") return undefined
-
-  const record = value as Record<string, unknown>
-  if (record.fields && typeof record.fields === "object")
-    return record.fields as Record<string, unknown>
-
-  return record
-}
-
-const unwrapOptionValue = (value: unknown): unknown => {
-  const record = unwrapFields(value)
-  if (!record) return value
-
-  if ("some" in record) return (record as { some: unknown }).some
-  if ("none" in record) return undefined
-
-  return value
-}
-
-const normalizeBigIntFromValue = (value: unknown): bigint | undefined => {
-  const unwrappedValue = unwrapOptionValue(value)
-  if (unwrappedValue === undefined || unwrappedValue === null) return undefined
-
-  if (typeof unwrappedValue === "bigint") return unwrappedValue
-  if (typeof unwrappedValue === "number") return BigInt(unwrappedValue)
-  if (typeof unwrappedValue === "string") {
-    try {
-      return tryParseBigInt(unwrappedValue)
-    } catch {
-      return undefined
-    }
-  }
-
-  const nestedFields = unwrapFields(unwrappedValue)
-  if (!nestedFields) return undefined
-
-  const nestedFieldValues = Object.values(nestedFields)
-  if (nestedFieldValues.length === 1)
-    return normalizeBigIntFromValue(nestedFieldValues[0])
-
-  return undefined
-}
-
 export const normalizeOptionalU64FromValue = (
   value: unknown
-): bigint | undefined => normalizeBigIntFromValue(value)
+): bigint | undefined => normalizeBigIntFromMoveValue(value)
 
 export type DiscountRuleOnChain =
   | { kind: "fixed"; amountCents?: bigint }
@@ -150,38 +109,31 @@ const pickVariantPayload = (
   return undefined
 }
 
-const extractFieldByKeys = (
-  container: Record<string, unknown>,
-  candidateKeys: string[]
-): unknown => {
-  for (const key of candidateKeys) {
-    if (key in container) return container[key]
-  }
-
-  return undefined
-}
-
 const parseFixedRule = (payload: unknown): DiscountRuleOnChain => {
-  const payloadFields = unwrapFields(payload)
+  const payloadFields = unwrapMoveFields(payload)
   const amountValue = payloadFields
-    ? extractFieldByKeys(payloadFields, ["amount_cents", "amount", "usd_cents"])
+    ? extractFieldValueByKeys(payloadFields, [
+        "amount_cents",
+        "amount",
+        "usd_cents"
+      ])
     : payload
 
   return {
     kind: "fixed",
-    amountCents: normalizeBigIntFromValue(amountValue)
+    amountCents: normalizeBigIntFromMoveValue(amountValue)
   }
 }
 
 const parsePercentRule = (payload: unknown): DiscountRuleOnChain => {
-  const payloadFields = unwrapFields(payload)
+  const payloadFields = unwrapMoveFields(payload)
   const bpsValue = payloadFields
-    ? extractFieldByKeys(payloadFields, ["bps", "basis_points"])
+    ? extractFieldValueByKeys(payloadFields, ["bps", "basis_points"])
     : payload
 
   return {
     kind: "percent",
-    basisPoints: normalizeBigIntFromValue(bpsValue)
+    basisPoints: normalizeBigIntFromMoveValue(bpsValue)
   }
 }
 
@@ -196,7 +148,7 @@ const extractRuleKindFromType = (ruleType?: string) => {
 export const parseDiscountRuleFromField = (
   ruleField: unknown
 ): DiscountRuleOnChain => {
-  const ruleRecord = unwrapFields(ruleField) ?? {}
+  const ruleRecord = unwrapMoveFields(ruleField) ?? {}
   const ruleType =
     typeof (ruleField as { type?: string })?.type === "string"
       ? (ruleField as { type?: string }).type
@@ -286,6 +238,20 @@ export type DiscountTemplateSummary = {
   activeFlag: boolean
   status: string
 }
+
+/**
+ * Builds a lookup map for discount templates by ID.
+ */
+export const buildDiscountTemplateLookup = (
+  templates: DiscountTemplateSummary[]
+) =>
+  templates.reduce<Record<string, DiscountTemplateSummary>>(
+    (accumulator, template) => ({
+      ...accumulator,
+      [template.discountTemplateId]: template
+    }),
+    {}
+  )
 
 export const getDiscountTemplateSummaries = async (
   shopId: string,
@@ -471,4 +437,44 @@ export const parseDiscountTicketFromObject = (
       `Missing claimer for DiscountTicket ${discountTicketId}.`
     )
   }
+}
+
+/**
+ * Lists DiscountTicket objects owned by an address with optional shop filtering.
+ */
+export const getDiscountTicketSummaries = async ({
+  ownerAddress,
+  shopPackageId,
+  shopFilterId,
+  suiClient
+}: {
+  ownerAddress: string
+  shopPackageId: string
+  shopFilterId?: string
+  suiClient: SuiClient
+}): Promise<DiscountTicketDetails[]> => {
+  const discountTicketStructType = formatDiscountTicketStructType(shopPackageId)
+
+  const discountTicketObjects = await getAllOwnedObjectsByFilter(
+    {
+      ownerAddress,
+      filter: { StructType: discountTicketStructType }
+    },
+    { suiClient }
+  )
+
+  const discountTickets = discountTicketObjects.map(
+    parseDiscountTicketFromObject
+  )
+
+  if (!shopFilterId) return discountTickets
+
+  const normalizedShopFilterId = normalizeIdOrThrow(
+    shopFilterId,
+    "Invalid shop id provided for filtering."
+  )
+
+  return discountTickets.filter(
+    (discountTicket) => discountTicket.shopAddress === normalizedShopFilterId
+  )
 }

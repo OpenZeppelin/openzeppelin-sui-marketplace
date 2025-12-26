@@ -60,6 +60,24 @@ export const getPythPriceInfoType = (pythPackageId: string) =>
   `${pythPackageId}::${PYTH_PRICE_INFO_TYPE}`
 
 /**
+ * Derives signed price components for mock price updates.
+ */
+export const deriveMockPriceComponents = (config: MockPriceFeedConfig) => {
+  const priceMagnitude = config.price >= 0n ? config.price : -config.price
+  const priceIsNegative = config.price < 0n
+  const exponentMagnitude =
+    config.exponent >= 0 ? config.exponent : -config.exponent
+  const exponentIsNegative = config.exponent < 0
+
+  return {
+    priceMagnitude,
+    priceIsNegative,
+    exponentMagnitude,
+    exponentIsNegative
+  }
+}
+
+/**
  * Adds a Move call to publish and share a mock price feed using the local Pyth stub.
  * Why: Localnet has no VAA/relayer pipeline; this helper materializes a PriceInfoObject
  * with fresh timestamps so oracle-dependent flows can run end-to-end.
@@ -71,11 +89,12 @@ export const publishMockPriceFeed = (
   clockObject?: TransactionArgument
 ): TransactionArgument => {
   const feedIdBytes = assertBytesLength(hexToBytes(config.feedIdHex), 32)
-  const priceMagnitude = config.price >= 0n ? config.price : -config.price
-  const priceIsNegative = config.price < 0n
-  const expoMagnitude =
-    config.exponent >= 0 ? config.exponent : -config.exponent
-  const expoIsNegative = config.exponent < 0
+  const {
+    priceMagnitude,
+    priceIsNegative,
+    exponentMagnitude,
+    exponentIsNegative
+  } = deriveMockPriceComponents(config)
 
   return transaction.moveCall({
     target: `${pythPackageId}::price_info::publish_price_feed`,
@@ -85,8 +104,8 @@ export const publishMockPriceFeed = (
       transaction.pure.u64(priceMagnitude),
       transaction.pure.bool(priceIsNegative),
       transaction.pure.u64(config.confidence),
-      transaction.pure.u64(expoMagnitude),
-      transaction.pure.bool(expoIsNegative),
+      transaction.pure.u64(exponentMagnitude),
+      transaction.pure.bool(exponentIsNegative),
       clockObject ?? transaction.object(SUI_CLOCK_ID)
     ]
   })

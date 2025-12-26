@@ -755,32 +755,34 @@ const pickFreshGasCoin = async (
   client: SuiClient,
   excludeObjectIds: Set<string> = new Set()
 ) => {
-  const coins = await client.getCoins({
-    owner,
-    coinType: "0x2::sui::SUI",
-    limit: 10
-  })
+  let cursor: string | null | undefined = undefined
 
-  const latestCoin = coins.data?.find(
-    (coin) => !excludeObjectIds.has(coin.coinObjectId.toLowerCase())
-  )
+  do {
+    const page = await client.getCoins({
+      owner,
+      coinType: "0x2::sui::SUI",
+      limit: 50,
+      cursor
+    })
 
-  if (!latestCoin) {
-    if (excludeObjectIds.size > 0 && (coins.data?.length ?? 0) > 0)
-      throw new Error(
-        "No usable SUI coins available for gas; fund the account or request faucet."
-      )
-
-    throw new Error(
-      "No usable SUI coins available for gas; fund the account or request faucet."
+    const latestCoin = page.data?.find(
+      (coin) => !excludeObjectIds.has(coin.coinObjectId.toLowerCase())
     )
-  }
 
-  return {
-    objectId: latestCoin.coinObjectId,
-    version: latestCoin.version,
-    digest: latestCoin.digest
-  }
+    if (latestCoin) {
+      return {
+        objectId: latestCoin.coinObjectId,
+        version: latestCoin.version,
+        digest: latestCoin.digest
+      }
+    }
+
+    cursor = page.hasNextPage ? page.nextCursor : undefined
+  } while (cursor)
+
+  throw new Error(
+    "No usable SUI coins available for gas; fund the account or request faucet."
+  )
 }
 
 /**

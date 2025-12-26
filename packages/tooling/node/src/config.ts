@@ -52,7 +52,7 @@ export type SuiResolvedConfig = {
 
 const DEFAULT_CONFIG_FILENAMES = [
   "sui.config.ts",
-  "sui.config.ts",
+  "sui.config.js",
   "sui.config.cjs",
   "sui.config.mjs"
 ]

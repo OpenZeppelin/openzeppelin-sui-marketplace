@@ -7,6 +7,31 @@ import path, { dirname } from "node:path"
 export const ARTIFACTS_FILES = ["mock", "deployment", "objects"] as const
 export type ArtifactFile = (typeof ARTIFACTS_FILES)[number]
 
+const resolveArtifactKey = (value: unknown): string | undefined => {
+  if (!value || typeof value !== "object") return undefined
+  const record = value as Record<string, unknown>
+  if (typeof record.objectId === "string") return `object:${record.objectId}`
+  if (typeof record.packageId === "string") return `package:${record.packageId}`
+  return undefined
+}
+
+const dedupeArtifacts = <TArtifact>(entries: TArtifact[]): TArtifact[] => {
+  const seen = new Set<string>()
+  const dedupedReversed: TArtifact[] = []
+
+  for (let index = entries.length - 1; index >= 0; index -= 1) {
+    const entry = entries[index]
+    const key = resolveArtifactKey(entry)
+    if (key) {
+      if (seen.has(key)) continue
+      seen.add(key)
+    }
+    dedupedReversed.push(entry)
+  }
+
+  return dedupedReversed.reverse()
+}
+
 /**
  * Curried writer that appends/merges JSON artifacts on disk.
  * Why: deployment/mock scripts share a consistent artifact format so other tools
@@ -25,7 +50,7 @@ export const writeArtifact =
 
       const updatedArtifacts =
         Array.isArray(currentArtifacts) && Array.isArray(newArtifact)
-          ? [...currentArtifacts, ...newArtifact]
+          ? dedupeArtifacts([...currentArtifacts, ...newArtifact])
           : {
               ...currentArtifacts,
               ...newArtifact

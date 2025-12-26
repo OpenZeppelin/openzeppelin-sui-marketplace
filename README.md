@@ -94,7 +94,7 @@ pnpm install
 
 How it’s used:
 - Scripts load `sui.config.ts` to decide RPC URL, account, and artifact paths.
-- `SUI_NETWORK` or `--network <name>` switches networks without editing files.
+- `SUI_NETWORK` or `--network <name>` switches networks without editing files (default to localnet of none specified).
 - Deploy artifacts are written under `packages/dapp/deployments`.
 
 ### 3) Start localnet

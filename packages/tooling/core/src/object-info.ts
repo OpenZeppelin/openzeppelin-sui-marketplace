@@ -1,6 +1,9 @@
 /**
  * Provides helpers for interpreting owned object metadata returned by the RPC.
  */
+import type { SuiObjectResponse } from "@mysten/sui/client"
+import { isValidSuiObjectId } from "@mysten/sui/utils"
+
 export type OwnedObjectSummary = {
   objectId: string
   objectType?: string
@@ -60,3 +63,81 @@ export const buildOwnedObjectLogFields = (object: OwnedObjectSummary) => ({
   owner: object.ownerLabel || "Unknown owner",
   transaction: object.previousTransaction || "N/A"
 })
+
+/**
+ * Extracts a field from a moveObject response content.
+ */
+export const getResponseContentField = (
+  response: SuiObjectResponse | null | undefined,
+  field: string
+) => {
+  if (
+    response == null ||
+    response.data == null ||
+    response.data?.content == null
+  ) {
+    return null
+  }
+
+  if (response.data.content?.dataType !== "moveObject") {
+    return null
+  }
+
+  // @todo Find a better way to extract fields from SuiParsedData.
+  /* eslint-disable  @typescript-eslint/no-explicit-any */
+  const content = response.data.content as any
+
+  if (content.fields == null) {
+    return null
+  }
+
+  return content.fields[field]
+}
+
+/**
+ * Extracts a field from a response display payload.
+ */
+export const getResponseDisplayField = (
+  response: SuiObjectResponse | null | undefined,
+  field: string
+) => {
+  if (
+    response == null ||
+    response.data == null ||
+    response.data?.display == null
+  ) {
+    return null
+  }
+
+  // @todo Find a better way to extract fields from SuiParsedData.
+  const display = response.data.display
+
+  if (display.data == null) {
+    return null
+  }
+
+  return display.data[field]
+}
+
+/**
+ * Normalizes the object ID from a response when valid.
+ */
+export const getResponseObjectId = (
+  response: SuiObjectResponse | null | undefined
+) => {
+  if (
+    response == null ||
+    response.data == null ||
+    response.data?.objectId == null
+  ) {
+    return null
+  }
+
+  const objectId = response.data.objectId
+
+  if (!isValidSuiObjectId(objectId)) {
+    return null
+  }
+
+  return objectId
+}

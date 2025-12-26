@@ -4,6 +4,8 @@ import type {
   SuiTransactionBlockResponse
 } from "@mysten/sui/client"
 import { Transaction } from "@mysten/sui/transactions"
+import { getStructLabel } from "./utils/formatters.ts"
+import { parseBalance } from "./utils/utility.ts"
 
 /**
  * Creates a Transaction and optionally seeds a gas budget.
@@ -120,3 +122,114 @@ export const ensureCreatedObject = (
     findCreatedObjectBySuffix(transactionResult, objectToFind),
     objectToFind
   )
+
+/**
+ * Extracts created object changes with type and ID metadata.
+ */
+export const extractCreatedObjects = (
+  transactionBlock: SuiTransactionBlockResponse
+) =>
+  (transactionBlock.objectChanges ?? []).filter(
+    (
+      change
+    ): change is { objectId: string; objectType: string; type: "created" } =>
+      change.type === "created" &&
+      "objectType" in change &&
+      typeof change.objectType === "string" &&
+      "objectId" in change &&
+      typeof change.objectId === "string"
+  )
+
+type ObjectTypeCount = {
+  objectType: string
+  label: string
+  count: number
+}
+
+export type ObjectChangeDetail = {
+  label: string
+  count: number
+  types: ObjectTypeCount[]
+}
+
+/**
+ * Summarizes transaction object changes by change type and object type.
+ */
+export const summarizeObjectChanges = (
+  objectChanges: SuiTransactionBlockResponse["objectChanges"]
+): ObjectChangeDetail[] => {
+  const changeTypeLabels = [
+    { type: "created", label: "Created" },
+    { type: "mutated", label: "Mutated" },
+    { type: "transferred", label: "Transferred" },
+    { type: "deleted", label: "Deleted" },
+    { type: "wrapped", label: "Wrapped" },
+    { type: "unwrapped", label: "Unwrapped" },
+    { type: "published", label: "Published" }
+  ] as const
+
+  if (!objectChanges) {
+    return changeTypeLabels.map((item) => ({
+      label: item.label,
+      count: 0,
+      types: []
+    }))
+  }
+
+  const countByType = new Map<string, number>()
+  const objectTypesByChange = new Map<string, Map<string, number>>()
+
+  for (const change of objectChanges) {
+    countByType.set(change.type, (countByType.get(change.type) ?? 0) + 1)
+
+    if ("objectType" in change && typeof change.objectType === "string") {
+      const typeMap = objectTypesByChange.get(change.type) ?? new Map()
+      typeMap.set(change.objectType, (typeMap.get(change.objectType) ?? 0) + 1)
+      objectTypesByChange.set(change.type, typeMap)
+    }
+  }
+
+  return changeTypeLabels.map((item) => {
+    const typeMap = objectTypesByChange.get(item.type) ?? new Map()
+    const types = Array.from(typeMap.entries())
+      .map(([objectType, count]) => ({
+        objectType,
+        label: getStructLabel(objectType),
+        count
+      }))
+      .sort((a, b) => b.count - a.count)
+
+    return {
+      label: item.label,
+      count: countByType.get(item.type) ?? 0,
+      types
+    }
+  })
+}
+
+export type GasSummary = {
+  computation: bigint
+  storage: bigint
+  rebate: bigint
+  total: bigint
+}
+
+/**
+ * Summarizes gas usage totals from a transaction response.
+ */
+export const summarizeGasUsed = (
+  gasUsed?: NonNullable<SuiTransactionBlockResponse["effects"]>["gasUsed"]
+): GasSummary | undefined => {
+  if (!gasUsed) return undefined
+  const computation = parseBalance(gasUsed.computationCost)
+  const storage = parseBalance(gasUsed.storageCost)
+  const rebate = parseBalance(gasUsed.storageRebate)
+  const total = computation + storage - rebate
+
+  return {
+    computation,
+    storage,
+    rebate,
+    total
+  }
+}

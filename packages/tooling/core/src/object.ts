@@ -146,7 +146,9 @@ export const normalizeOptionalAddress = (value?: string) =>
  * Normalizes a Sui object version to string for JSON-safe storage.
  * Versions are u64 on chain; keeping them as strings avoids precision loss.
  */
-export const normalizeVersion = (value?: number | string) => String(value)
+export const normalizeVersion = (
+  value?: number | string | null
+): string | undefined => (value == null ? undefined : String(value))
 
 /**
  * Fetches an object with owner metadata, normalizing the ID.

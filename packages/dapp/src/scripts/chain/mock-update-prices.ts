@@ -10,6 +10,7 @@ import yargs from "yargs"
 
 import {
   SUI_CLOCK_ID,
+  deriveMockPriceComponents,
   type MockPriceFeedConfig
 } from "@sui-oracle-market/domain-core/models/pyth"
 import { normalizeHex } from "@sui-oracle-market/tooling-core/hex"
@@ -35,21 +36,6 @@ type UpdatePricesCliArguments = {
 type PriceFeedArtifact = NonNullable<MockArtifact["priceFeeds"]>[number]
 
 type LabeledPriceFeedConfig = MockPriceFeedConfig & { label: string }
-
-const deriveMockPriceComponents = (config: MockPriceFeedConfig) => {
-  const priceMagnitude = config.price >= 0n ? config.price : -config.price
-  const priceIsNegative = config.price < 0n
-  const exponentMagnitude =
-    config.exponent >= 0 ? config.exponent : -config.exponent
-  const exponentIsNegative = config.exponent < 0
-
-  return {
-    priceMagnitude,
-    priceIsNegative,
-    exponentMagnitude,
-    exponentIsNegative
-  }
-}
 
 const DEFAULT_FEEDS: LabeledPriceFeedConfig[] = [
   {

@@ -24,6 +24,12 @@ export const decodeUtf8Vector = (value: unknown): string | undefined => {
 }
 
 /**
+ * Decodes a byte array to a UTF-8 string.
+ */
+export const fromBytesToString = (bytes: number[]): string =>
+  new TextDecoder().decode(new Uint8Array(bytes))
+
+/**
  * Attempts to load Node's Buffer API for hex encoding without a hard dependency.
  */
 const tryGetBuffer = ():
@@ -66,6 +72,86 @@ export const formatOptionalNumericValue = (
   if (typeof value === "string") return value
 
   return undefined
+}
+
+/**
+ * Formats epoch seconds into a locale date string.
+ */
+export const formatEpochSeconds = (rawSeconds?: string | number): string => {
+  if (rawSeconds === undefined || rawSeconds === null) return "Unknown"
+  const seconds =
+    typeof rawSeconds === "string" ? Number(rawSeconds) : rawSeconds
+  if (!Number.isFinite(seconds)) return "Unknown"
+
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "2-digit",
+    year: "numeric"
+  }).format(new Date(seconds * 1000))
+}
+
+/**
+ * Formats a timestamp (ms) into a locale datetime string.
+ */
+export const formatTimestamp = (
+  timestampMs?: string | number | null
+): string => {
+  if (!timestampMs) return "Unknown"
+  const timestamp = Number(timestampMs)
+  if (!Number.isFinite(timestamp)) return "Unknown"
+  return new Date(timestamp).toLocaleString()
+}
+
+/**
+ * Shortens a long identifier for display.
+ */
+export const shortenId = (value: string, start = 6, end = 4) => {
+  if (value.length <= start + end) return value
+  return `${value.slice(0, start)}...${value.slice(-end)}`
+}
+
+const normalizeBigInt = (value: bigint | number | string) => {
+  if (typeof value === "bigint") return value
+  if (typeof value === "number") return BigInt(Math.trunc(value))
+  return BigInt(value)
+}
+
+/**
+ * Formats a coin balance using its decimal scale.
+ */
+export const formatCoinBalance = ({
+  balance,
+  decimals = 9,
+  maxFractionDigits = 6
+}: {
+  balance: bigint | number | string
+  decimals?: number
+  maxFractionDigits?: number
+}) => {
+  const normalized = normalizeBigInt(balance)
+  if (decimals <= 0) return normalized.toString()
+
+  const divisor = 10n ** BigInt(decimals)
+  const whole = normalized / divisor
+  const fraction = normalized % divisor
+  const fractionValue = fraction
+    .toString()
+    .padStart(decimals, "0")
+    .slice(0, maxFractionDigits)
+    .replace(/0+$/, "")
+
+  return fractionValue
+    ? `${whole.toString()}.${fractionValue}`
+    : whole.toString()
+}
+
+/**
+ * Formats a Move struct type into its terminal label.
+ */
+export const getStructLabel = (typeName?: string) => {
+  if (!typeName) return "Unknown"
+  const fragments = typeName.split("::")
+  return fragments[fragments.length - 1] || typeName
 }
 
 /**

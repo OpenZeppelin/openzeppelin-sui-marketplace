@@ -31,7 +31,7 @@ import {
 import { resolveOwnerCapabilityId } from "../helpers/ownerCapabilities"
 import {
   resolveValidationMessage,
-  validateMoveType,
+  validateItemType,
   validateOptionalSuiObjectId
 } from "../helpers/inputValidation"
 import {
@@ -92,7 +92,7 @@ const buildListingFieldErrors = (
 
   if (!itemName) errors.itemName = "Item name is required."
 
-  const itemTypeError = validateMoveType(formState.itemType, "Item type")
+  const itemTypeError = validateItemType(formState.itemType, "Item type")
   if (itemTypeError) errors.itemType = itemTypeError
 
   if (!basePrice) {

@@ -21,7 +21,10 @@ const extractClaimedObjectId = (fieldName: DynamicFieldName) => {
   }
 }
 
-const deriveCurrencyObjectId = (coinType: string, registryId: string) =>
+/**
+ * Derives the shared Currency object ID for a coin type and registry.
+ */
+export const deriveCurrencyObjectId = (coinType: string, registryId: string) =>
   normalizeSuiObjectId(
     deriveObjectID(
       registryId,

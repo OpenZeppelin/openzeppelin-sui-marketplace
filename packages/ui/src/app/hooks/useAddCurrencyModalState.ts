@@ -37,7 +37,8 @@ import {
 import { resolveOwnerCapabilityId } from "../helpers/ownerCapabilities"
 import {
   resolveValidationMessage,
-  validateMoveType,
+  resolveCoinTypeInput,
+  validateCoinType,
   validateOptionalSuiObjectId,
   validateRequiredHexBytes,
   validateRequiredSuiObjectId
@@ -125,7 +126,7 @@ const buildCurrencyFieldErrors = (
 ): CurrencyFieldErrors => {
   const errors: CurrencyFieldErrors = {}
 
-  const coinTypeError = validateMoveType(formState.coinType, "Coin type")
+  const coinTypeError = validateCoinType(formState.coinType, "Coin type")
   if (coinTypeError) errors.coinType = coinTypeError
 
   const currencyObjectIdError = validateOptionalSuiObjectId(
@@ -217,7 +218,7 @@ const trimToOptional = (value: string) => {
 }
 
 const parseCurrencyInputs = (formState: CurrencyFormState): CurrencyInputs => {
-  const coinType = normalizeCoinType(formState.coinType)
+  const coinType = normalizeCoinType(resolveCoinTypeInput(formState.coinType))
   const feedIdHex = ensureHexPrefix(formState.feedId.trim())
   const feedIdBytes = assertBytesLength(hexToBytes(feedIdHex), 32)
   const priceInfoObjectId = normalizeSuiObjectId(

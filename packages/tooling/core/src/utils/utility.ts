@@ -171,6 +171,20 @@ export const parseOptionalPositiveU64 = (
   rawValue === undefined ? undefined : parsePositiveU64(rawValue, label)
 
 /**
+ * Parses a bigint-like value and falls back to 0 on invalid input.
+ */
+export const parseBalance = (value?: string | number | bigint | null) => {
+  if (value === undefined || value === null) return 0n
+  if (typeof value === "bigint") return value
+  if (typeof value === "number") return BigInt(Math.trunc(value))
+  try {
+    return BigInt(value)
+  } catch {
+    return 0n
+  }
+}
+
+/**
  * Asserts a value is present, otherwise throws with the provided message.
  */
 export const requireValue = <T>(
