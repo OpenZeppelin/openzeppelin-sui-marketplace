@@ -7,8 +7,11 @@ dist
 
 deployments/
 
-move/**/build/
-move/**/.trace
-move/**/.coverage*
+**/move/**/build/
+**/move/**/.trace
+**/move/**/.coverage*
+**/Move.lock
 
 patches/pyth-crosschain/
+
+tmp.json

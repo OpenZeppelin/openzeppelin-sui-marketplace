@@ -17,11 +17,7 @@ import { hideBin } from "yargs/helpers"
 import { assertLocalnetNetwork } from "@sui-oracle-market/tooling-core/network"
 import type { WrappedSuiSharedObject } from "@sui-oracle-market/tooling-core/shared-object"
 import { newTransaction } from "@sui-oracle-market/tooling-core/transactions"
-import type { MockArtifact } from "@sui-oracle-market/tooling-core/types"
-import {
-  mockArtifactPath,
-  readArtifact
-} from "@sui-oracle-market/tooling-node/artifacts"
+import { readArtifact } from "@sui-oracle-market/tooling-node/artifacts"
 import { SUI_COIN_REGISTRY_ID } from "@sui-oracle-market/tooling-node/constants"
 import {
   logKeyValueBlue,
@@ -30,6 +26,8 @@ import {
   logWarning
 } from "@sui-oracle-market/tooling-node/log"
 import { runSuiScript } from "@sui-oracle-market/tooling-node/process"
+import type { MockArtifact } from "../../utils/mocks.ts"
+import { mockArtifactPath } from "../../utils/mocks.ts"
 
 type CliArgs = {
   registryId: string

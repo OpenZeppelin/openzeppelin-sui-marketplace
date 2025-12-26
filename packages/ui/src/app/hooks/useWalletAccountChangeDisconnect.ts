@@ -1,7 +1,6 @@
 "use client"
 
 import {
-  useCurrentAccount,
   useCurrentWallet,
   useDisconnectWallet
 } from "@mysten/dapp-kit"
@@ -9,38 +8,34 @@ import { normalizeSuiAddress } from "@mysten/sui/utils"
 import type { WalletAccount } from "@mysten/wallet-standard"
 import { useEffect, useMemo, useRef } from "react"
 
-const ACCOUNT_POLL_INTERVAL_MS = 1000
-
 const normalizeAddress = (address?: string) =>
   address ? normalizeSuiAddress(address) : undefined
 
-const isSuiChain = (chain: string) => chain.split(":")[0] === "sui"
+const DEBUG_WALLET =
+  process.env.NEXT_PUBLIC_WALLET_DEBUG === "true"
+const WALLET_STORAGE_KEY = "sui-dapp-kit:wallet-connection-info"
 
-const filterSuiAccounts = (accounts: readonly WalletAccount[]) =>
-  accounts.filter((account) => account.chains.some(isSuiChain))
+const debugLog = (...args: unknown[]) => {
+  if (DEBUG_WALLET) {
+    console.log("[wallet-debug]", ...args)
+  }
+}
+
+const readWalletStorage = () => {
+  if (typeof window === "undefined") return null
+  try {
+    const raw = window.localStorage.getItem(WALLET_STORAGE_KEY)
+    return raw ? JSON.parse(raw) : null
+  } catch {
+    return null
+  }
+}
 
 const resolveWalletIdentifier = (wallet?: { id?: string; name?: string }) =>
   wallet?.id ?? wallet?.name
 
-type WalletConnectResult = {
-  accounts?: readonly WalletAccount[]
-}
-
-type WalletWithConnectFeature = {
-  features?: {
-    ["standard:connect"]?: {
-      connect?: (input: { silent?: boolean }) => Promise<WalletConnectResult>
-    }
-  }
-}
-
-const fetchSuiAccountsFromWallet = async (wallet?: WalletWithConnectFeature) => {
-  const connectFeature = wallet?.features?.["standard:connect"]
-  if (!connectFeature?.connect) return null
-
-  const result = await connectFeature.connect({ silent: true })
-  return filterSuiAccounts(result?.accounts ?? [])
-}
+const getPrimaryAddress = (accounts?: readonly WalletAccount[]) =>
+  normalizeAddress(accounts?.[0]?.address)
 
 const shouldDisconnectForAccounts = (
   normalizedAddress: string | undefined,
@@ -49,7 +44,10 @@ const shouldDisconnectForAccounts = (
   if (!normalizedAddress || accounts.length === 0) return false
 
   const normalizedPrimaryAddress = normalizeAddress(accounts[0]?.address)
-  if (normalizedPrimaryAddress && normalizedPrimaryAddress !== normalizedAddress) {
+  if (
+    normalizedPrimaryAddress &&
+    normalizedPrimaryAddress !== normalizedAddress
+  ) {
     return true
   }
 
@@ -59,46 +57,84 @@ const shouldDisconnectForAccounts = (
 }
 
 export const useWalletAccountChangeDisconnect = () => {
-  const currentAccount = useCurrentAccount()
   const wallet = useCurrentWallet()
   const { mutate: disconnectWallet } = useDisconnectWallet()
-  const lastVerifiedKeyRef = useRef<string | null>(null)
+  const lastKnownAddressRef = useRef<string | null>(null)
+  const lastWalletIdentifierRef = useRef<string | null>(null)
 
-  const normalizedCurrentAddress = useMemo(
-    () => normalizeAddress(currentAccount?.address),
-    [currentAccount?.address]
-  )
   const walletIdentifier = useMemo(
     () => resolveWalletIdentifier(wallet.currentWallet ?? undefined),
     [wallet.currentWallet]
   )
 
   useEffect(() => {
-    if (!wallet.isConnected || !normalizedCurrentAddress) return
-    if (
-      shouldDisconnectForAccounts(
-        normalizedCurrentAddress,
-        wallet.currentWallet?.accounts ?? []
-      )
-    ) {
-      disconnectWallet()
-    }
+    debugLog("hook mounted")
+  }, [])
+
+  useEffect(() => {
+    if (!DEBUG_WALLET) return
+    debugLog("state snapshot", {
+      connectionStatus: wallet.connectionStatus,
+      walletIdentifier,
+      accounts: wallet.currentWallet?.accounts?.map((account) => account.address),
+      storage: readWalletStorage()
+    })
   }, [
-    disconnectWallet,
-    normalizedCurrentAddress,
-    wallet.isConnected,
+    wallet.connectionStatus,
+    walletIdentifier,
     wallet.currentWallet?.accounts
   ])
 
   useEffect(() => {
-    if (!wallet.isConnected || !normalizedCurrentAddress) return
+    if (!wallet.isConnected) {
+      debugLog("disconnected; clearing cached address")
+      lastKnownAddressRef.current = null
+      lastWalletIdentifierRef.current = null
+      return
+    }
+
+    if (walletIdentifier !== lastWalletIdentifierRef.current) {
+      debugLog("wallet identifier changed", {
+        from: lastWalletIdentifierRef.current,
+        to: walletIdentifier
+      })
+      lastKnownAddressRef.current = null
+      lastWalletIdentifierRef.current = walletIdentifier ?? null
+    }
+
+    if (!lastKnownAddressRef.current) {
+      const primaryAddress = getPrimaryAddress(wallet.currentWallet?.accounts)
+      if (primaryAddress) {
+        debugLog("cached baseline address", primaryAddress)
+        lastKnownAddressRef.current = primaryAddress
+      }
+    }
+  }, [wallet.isConnected, walletIdentifier, wallet.currentWallet?.accounts])
+
+  useEffect(() => {
+    if (!wallet.isConnected) return
     const eventsFeature = wallet.currentWallet?.features?.["standard:events"]
-    if (!eventsFeature?.on) return
+    if (!eventsFeature?.on) {
+      debugLog("standard:events unavailable")
+      return
+    }
 
     const unsubscribe = eventsFeature.on("change", ({ accounts }) => {
       if (!accounts || accounts.length === 0) return
-      if (shouldDisconnectForAccounts(normalizedCurrentAddress, accounts)) {
+      debugLog("wallet change event", {
+        accounts: accounts.map((account) => account.address),
+        baseline: lastKnownAddressRef.current
+      })
+      if (!lastKnownAddressRef.current) {
+        lastKnownAddressRef.current = getPrimaryAddress(accounts) ?? null
+        debugLog("set baseline from change event", lastKnownAddressRef.current)
+        return
+      }
+      if (shouldDisconnectForAccounts(lastKnownAddressRef.current, accounts)) {
+        debugLog("disconnecting; address change detected")
         disconnectWallet()
+      } else {
+        debugLog("no disconnect; address unchanged")
       }
     })
 
@@ -109,77 +145,6 @@ export const useWalletAccountChangeDisconnect = () => {
     return () => unsubscribe?.remove?.()
   }, [
     disconnectWallet,
-    normalizedCurrentAddress,
-    wallet.currentWallet,
-    wallet.isConnected
-  ])
-
-  useEffect(() => {
-    if (!wallet.isConnected || !wallet.currentWallet || !normalizedCurrentAddress)
-      return
-    const verificationKey = `${walletIdentifier ?? "wallet"}:${normalizedCurrentAddress}`
-    if (lastVerifiedKeyRef.current === verificationKey) return
-    lastVerifiedKeyRef.current = verificationKey
-
-    const connectFeature = wallet.currentWallet.features?.["standard:connect"]
-    if (!connectFeature?.connect) return
-
-    let isActive = true
-    const verifyAccounts = async () => {
-      try {
-        const result = await connectFeature.connect({ silent: true })
-        if (!isActive) return
-        const suiAccounts = filterSuiAccounts(result.accounts ?? [])
-        if (shouldDisconnectForAccounts(normalizedCurrentAddress, suiAccounts)) {
-          disconnectWallet()
-        }
-      } catch {
-        // Ignore silent connect errors to avoid prompting users on load.
-      }
-    }
-
-    verifyAccounts()
-
-    return () => {
-      isActive = false
-    }
-  }, [
-    disconnectWallet,
-    normalizedCurrentAddress,
-    wallet.currentWallet,
-    wallet.isConnected,
-    walletIdentifier
-  ])
-
-  useEffect(() => {
-    if (!wallet.isConnected || !wallet.currentWallet) return
-    let isPolling = false
-    const pollOnce = async () => {
-      if (isPolling) return
-      isPolling = true
-      try {
-        const accounts =
-          (await fetchSuiAccountsFromWallet(wallet.currentWallet)) ??
-          wallet.currentWallet?.accounts ??
-          []
-        if (shouldDisconnectForAccounts(normalizedCurrentAddress, accounts)) {
-          disconnectWallet()
-        }
-      } catch {
-        // Ignore polling failures to avoid disconnecting on transient wallet errors.
-      } finally {
-        isPolling = false
-      }
-    }
-
-    const pollIntervalId = window.setInterval(() => {
-      void pollOnce()
-    }, ACCOUNT_POLL_INTERVAL_MS)
-
-    return () => window.clearInterval(pollIntervalId)
-  }, [
-    disconnectWallet,
-    normalizedCurrentAddress,
     wallet.currentWallet,
     wallet.isConnected
   ])

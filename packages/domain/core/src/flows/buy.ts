@@ -466,7 +466,6 @@ export const buildBuyTransaction = async (
   }
 
   const paymentArgument = transaction.object(paymentCoinObjectId)
-
   const typeArguments = [itemType, coinType]
 
   if (discountContext.mode === "claim") {

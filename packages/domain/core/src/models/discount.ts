@@ -276,6 +276,8 @@ export type DiscountTemplateSummary = {
   shopAddress: string
   appliesToListingId?: string
   ruleDescription: string
+  ruleKind?: DiscountRuleOnChain["kind"]
+  ruleValue?: string
   startsAt?: string
   expiresAt?: string
   maxRedemptions?: string
@@ -391,6 +393,13 @@ const buildDiscountTemplateSummary = (
     ),
     appliesToListingId,
     ruleDescription: formatOnChainDiscountRule(rule),
+    ruleKind: rule.kind,
+    ruleValue:
+      rule.kind === "fixed"
+        ? formatOptionalNumericValue(rule.amountCents)
+        : rule.kind === "percent"
+          ? formatOptionalNumericValue(rule.basisPoints)
+          : undefined,
     startsAt: formatOptionalNumericValue(startsAt),
     expiresAt: formatOptionalNumericValue(expiresAt),
     maxRedemptions:

@@ -31,16 +31,19 @@ sui client active-address   # ensure the desired address is active
 export SUI_ACCOUNT_ADDRESS=<0x...>
 export SUI_ACCOUNT_PRIVATE_KEY=<base64 or hex>
 
-# 4) Start localnet (new terminal) (--with-faucet is recommended as some script auto fund address if fund is missing)
+# 4) Fund your created address
+sui client faucet --address <0x...>
+
+# 5) Start localnet (new terminal) (--with-faucet is recommended as some script auto fund address if fund is missing)
 pnpm script chain:localnet:start --with-faucet
 
-# 5) Seed mocks (coins + Pyth stub + price feeds)
+# 6) Seed mocks (coins + Pyth stub + price feeds)
 pnpm script chain:mock:setup
 
-# 6) Publish oracle-market with dev dependencies (mock coin currencies, pyth price feeds)
+# 7) Publish oracle-market with dev dependencies (mock coin currencies, pyth price feeds)
 pnpm script chain:publish-package --package-path oracle-market --dev
 
-# 7) To continue setting up the shop, listings, discounts, accepted currencies look at the scripts section
+# 8) To continue setting up the shop, listings, discounts, accepted currencies look at the scripts section
 ```
 
 Optional run the UI (after publishing + creating a shop + updated UI environment variable config):
@@ -66,6 +69,7 @@ pnpm install
   ```bash
   sui client new-address ed25519
   sui client active-address   # ensure the desired address is active
+  sui client faucet --address <0x...> # ensure your address as some fund
   ```
 - Optional: export keys as env vars (used by scripts):
   ```bash
@@ -146,6 +150,9 @@ sui client new-address ed25519
 
 # Check which one is active (the active address is the signer for scripts).
 sui client active-address
+
+# Fun the 2 addresses
+sui client faucet --address <0x...>
 ```
 
 If you want to run buyer scripts as the buyer account, switch your active address or update sui.config file before running buyer scripts.

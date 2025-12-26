@@ -279,12 +279,12 @@ const ItemListingsPanel = ({
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
-                        <div className="text-lg font-semibold text-sds-dark dark:text-sds-light">
-                          {listing.name || itemTypeLabel}
-                        </div>
-                        <div className="bg-sds-blue/15 mt-2 inline-flex items-center rounded-full px-3 py-1 text-[0.6rem] font-semibold uppercase tracking-[0.18em] text-sds-dark dark:text-sds-light">
-                          Type {itemTypeLabel}
-                        </div>
+                      <div className="text-lg font-semibold text-sds-dark dark:text-sds-light">
+                        {listing.name || itemTypeLabel}
+                      </div>
+                      <div className="mt-1 text-sm font-semibold text-slate-500 dark:text-slate-200/70">
+                        {itemTypeLabel}
+                      </div>
                       </div>
                       <span className="bg-sds-blue/15 rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.12em] text-sds-dark dark:text-sds-light">
                         {formatUsdFromCents(listing.basePriceUsdCents)}
@@ -559,9 +559,15 @@ const PurchasedItemsPanel = ({
                       <div className="text-lg font-semibold text-sds-dark dark:text-sds-light">
                         {item.name || itemTypeLabel}
                       </div>
-                      <CopyableId value={item.shopItemId} label="Receipt ID" />
-                      <div className="bg-sds-blue/15 mt-2 inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.12em] text-sds-dark dark:text-sds-light">
-                        Type {itemTypeLabel}
+                      <div className="mt-1 text-sm font-semibold text-slate-500 dark:text-slate-200/70">
+                        {itemTypeLabel}
+                      </div>
+                      <div className="mt-2">
+                        <CopyableId
+                          value={item.shopItemId}
+                          label="Receipt ID"
+                          className="whitespace-nowrap"
+                        />
                       </div>
                     </div>
                     <div className="text-xs uppercase tracking-[0.12em] text-slate-500 dark:text-slate-200/60">

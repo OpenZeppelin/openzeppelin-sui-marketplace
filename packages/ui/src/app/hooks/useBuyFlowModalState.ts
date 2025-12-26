@@ -8,8 +8,9 @@ import {
   useSuiClient,
   useSuiClientContext
 } from "@mysten/dapp-kit"
-import type { SuiTransactionBlockResponse } from "@mysten/sui/client"
-import { normalizeSuiAddress } from "@mysten/sui/utils"
+import type { SuiClient, SuiTransactionBlockResponse } from "@mysten/sui/client"
+import { bcs } from "@mysten/sui/bcs"
+import { fromB64, normalizeSuiAddress } from "@mysten/sui/utils"
 import {
   buildBuyTransaction,
   resolvePaymentCoinObjectId,
@@ -21,6 +22,8 @@ import type {
   DiscountTicketDetails
 } from "@sui-oracle-market/domain-core/models/discount"
 import type { ItemListingSummary } from "@sui-oracle-market/domain-core/models/item-listing"
+import { SUI_CLOCK_ID } from "@sui-oracle-market/tooling-core/constants"
+import { newTransaction } from "@sui-oracle-market/tooling-core/transactions"
 import {
   deriveRelevantPackageId,
   normalizeIdOrThrow
@@ -31,7 +34,7 @@ import { useCallback, useEffect, useMemo, useState } from "react"
 import { EXPLORER_URL_VARIABLE_NAME } from "../config/network"
 import { parseBalance } from "../helpers/balance"
 import { buildDiscountTemplateLookup } from "../helpers/discountTemplates"
-import { shortenId } from "../helpers/format"
+import { formatCoinBalance, getStructLabel, shortenId } from "../helpers/format"
 import {
   getLocalnetClient,
   makeLocalnetExecutor,
@@ -89,6 +92,104 @@ const buildBuyFieldErrors = ({
   if (refundToError) errors.refundTo = refundToError
 
   return errors
+}
+
+const BASIS_POINT_DENOMINATOR = 10_000n
+
+const resolveDiscountedPriceUsdCents = ({
+  basePriceUsdCents,
+  discountSelection,
+  discountTemplateLookup
+}: {
+  basePriceUsdCents?: string
+  discountSelection: DiscountContext
+  discountTemplateLookup: Record<string, DiscountTemplateSummary>
+}): bigint | undefined => {
+  if (!basePriceUsdCents) return undefined
+
+  const basePrice = BigInt(basePriceUsdCents)
+  if (discountSelection.mode === "none") return basePrice
+
+  const template = discountTemplateLookup[discountSelection.discountTemplateId]
+  if (!template) return basePrice
+
+  const ruleKind = template.ruleKind
+  const ruleValue = template.ruleValue ? BigInt(template.ruleValue) : undefined
+  if (!ruleKind || ruleKind === "unknown" || ruleValue === undefined)
+    return basePrice
+
+  if (ruleKind === "fixed") {
+    return ruleValue >= basePrice ? 0n : basePrice - ruleValue
+  }
+
+  if (ruleValue > BASIS_POINT_DENOMINATOR) return basePrice
+
+  const numerator = basePrice * (BASIS_POINT_DENOMINATOR - ruleValue)
+  return (numerator + BASIS_POINT_DENOMINATOR - 1n) / BASIS_POINT_DENOMINATOR
+}
+
+const parseU64ReturnValue = (
+  returnValues?: Array<[string, string]>
+): bigint | undefined => {
+  const firstReturn = returnValues?.[0]
+  if (!firstReturn) return undefined
+
+  const [bytes] = firstReturn
+  if (!bytes) return undefined
+
+  try {
+    const decoded = bcs.u64().parse(fromB64(bytes))
+    return typeof decoded === "bigint" ? decoded : BigInt(decoded)
+  } catch {
+    return undefined
+  }
+}
+
+const estimateRequiredAmount = async ({
+  shopPackageId,
+  shopShared,
+  acceptedCurrencyShared,
+  pythPriceInfoShared,
+  priceUsdCents,
+  maxPriceAgeSecs,
+  maxConfidenceRatioBps,
+  clockShared,
+  signerAddress,
+  suiClient
+}: {
+  shopPackageId: string
+  shopShared: Awaited<ReturnType<typeof getSuiSharedObject>>
+  acceptedCurrencyShared: Awaited<ReturnType<typeof getSuiSharedObject>>
+  pythPriceInfoShared: Awaited<ReturnType<typeof getSuiSharedObject>>
+  priceUsdCents: bigint
+  maxPriceAgeSecs?: bigint
+  maxConfidenceRatioBps?: bigint
+  clockShared: Awaited<ReturnType<typeof getSuiSharedObject>>
+  signerAddress: string
+  suiClient: SuiClient
+}): Promise<bigint | undefined> => {
+  const quoteTransaction = newTransaction()
+  quoteTransaction.setSender(signerAddress)
+
+  quoteTransaction.moveCall({
+    target: `${shopPackageId}::shop::quote_amount_for_price_info_object`,
+    arguments: [
+      quoteTransaction.sharedObjectRef(shopShared.sharedRef),
+      quoteTransaction.sharedObjectRef(acceptedCurrencyShared.sharedRef),
+      quoteTransaction.sharedObjectRef(pythPriceInfoShared.sharedRef),
+      quoteTransaction.pure.u64(priceUsdCents),
+      quoteTransaction.pure.option("u64", maxPriceAgeSecs ?? null),
+      quoteTransaction.pure.option("u64", maxConfidenceRatioBps ?? null),
+      quoteTransaction.sharedObjectRef(clockShared.sharedRef)
+    ]
+  })
+
+  const inspection = await suiClient.devInspectTransactionBlock({
+    sender: signerAddress,
+    transactionBlock: quoteTransaction
+  })
+
+  return parseU64ReturnValue(inspection.results?.[0]?.returnValues)
 }
 
 export type TransactionSummary = {
@@ -314,6 +415,11 @@ export const useBuyFlowModalState = ({
   const availableCurrencies = useMemo(
     () => currencyBalances.filter((currency) => currency.balance > 0n),
     [currencyBalances]
+  )
+
+  const discountTemplateLookup = useMemo(
+    () => buildDiscountTemplateLookup(discountTemplates),
+    [discountTemplates]
   )
 
   const discountOptions = useMemo(
@@ -599,6 +705,62 @@ export const useBuyFlowModalState = ({
       )
 
       const shopPackageId = deriveRelevantPackageId(shopShared.object.type)
+      const clockShared = await getSuiSharedObject(
+        { objectId: SUI_CLOCK_ID, mutable: false },
+        { suiClient }
+      )
+
+      const discountedPriceUsdCents = resolveDiscountedPriceUsdCents({
+        basePriceUsdCents: listingSnapshot.basePriceUsdCents,
+        discountSelection,
+        discountTemplateLookup
+      })
+
+      if (discountedPriceUsdCents !== undefined) {
+        try {
+          const requiredAmount = await estimateRequiredAmount({
+            shopPackageId,
+            shopShared,
+            acceptedCurrencyShared,
+            pythPriceInfoShared,
+            priceUsdCents: discountedPriceUsdCents,
+            maxPriceAgeSecs: undefined,
+            maxConfidenceRatioBps: undefined,
+            clockShared,
+            signerAddress: walletAddress,
+            suiClient
+          })
+
+          if (requiredAmount !== undefined) {
+            const balance = selectedCurrency.balance
+            if (balance < requiredAmount) {
+              const shortfall = requiredAmount - balance
+              const symbolLabel =
+                selectedCurrency.symbol ??
+                getStructLabel(selectedCurrency.coinType)
+              const suffix = symbolLabel ? ` ${symbolLabel}` : ""
+              const formatAmount = (value: bigint) =>
+                formatCoinBalance({
+                  balance: value,
+                  decimals: selectedCurrency.decimals
+                })
+
+              setTransactionState({
+                status: "error",
+                error: `Insufficient ${symbolLabel || "balance"} to complete purchase. Balance: ${formatAmount(
+                  balance
+                )}${suffix}. Required: ${formatAmount(
+                  requiredAmount
+                )}${suffix}. Short by: ${formatAmount(shortfall)}${suffix}.`
+              })
+              return
+            }
+          }
+        } catch {
+          // Best-effort preflight; fall back to execution on inspection failure.
+        }
+      }
+
       const paymentCoinObjectId = await resolvePaymentCoinObjectId({
         providedCoinObjectId: undefined,
         coinType: currencySnapshot.coinType,
@@ -704,6 +866,7 @@ export const useBuyFlowModalState = ({
     acceptedCurrencies,
     currentAccount,
     currentWallet,
+    discountTemplateLookup,
     discountOptions,
     discountTickets,
     hasFieldErrors,

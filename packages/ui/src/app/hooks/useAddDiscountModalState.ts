@@ -36,15 +36,15 @@ import { useCallback, useEffect, useMemo, useState } from "react"
 import { EXPLORER_URL_VARIABLE_NAME } from "../config/network"
 import { formatDiscountRulePreview } from "../helpers/discountPreview"
 import {
+  resolveValidationMessage,
+  validateOptionalSuiObjectId
+} from "../helpers/inputValidation"
+import {
   getLocalnetClient,
   makeLocalnetExecutor,
   walletSupportsChain
 } from "../helpers/localnet"
 import { resolveOwnerCapabilityId } from "../helpers/ownerCapabilities"
-import {
-  resolveValidationMessage,
-  validateOptionalSuiObjectId
-} from "../helpers/inputValidation"
 import {
   extractErrorDetails,
   formatErrorMessage,
@@ -52,8 +52,8 @@ import {
   serializeForJson
 } from "../helpers/transactionErrors"
 import { extractCreatedObjects } from "../helpers/transactionFormat"
-import useNetworkConfig from "./useNetworkConfig"
 import { useIdleFieldValidation } from "./useIdleFieldValidation"
+import useNetworkConfig from "./useNetworkConfig"
 
 type DiscountFormState = {
   ruleKind: DiscountRuleKindLabel

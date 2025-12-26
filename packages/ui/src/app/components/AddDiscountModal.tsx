@@ -4,27 +4,29 @@ import clsx from "clsx"
 import { useMemo } from "react"
 
 import {
+  defaultStartTimestampSeconds,
   describeRuleKind,
   discountRuleChoices,
   type DiscountRuleKindLabel,
   type DiscountTemplateSummary
 } from "@sui-oracle-market/domain-core/models/discount"
 import type { ItemListingSummary } from "@sui-oracle-market/domain-core/models/item-listing"
+import { parseNonNegativeU64 } from "@sui-oracle-market/tooling-core/utils/utility"
+import {
+  formatDiscountRulePreview,
+  resolveRuleValuePreview
+} from "../helpers/discountPreview"
 import {
   formatEpochSeconds,
   getStructLabel,
   shortenId
 } from "../helpers/format"
 import {
-  formatDiscountRulePreview,
-  resolveRuleValuePreview
-} from "../helpers/discountPreview"
-import {
   useAddDiscountModalState,
   type DiscountTransactionSummary
 } from "../hooks/useAddDiscountModalState"
+import Button from "./Button"
 import CopyableId from "./CopyableId"
-import TransactionRecap from "./TransactionRecap"
 import {
   ModalBody,
   ModalErrorFooter,
@@ -34,14 +36,14 @@ import {
   ModalSection,
   ModalStatusHeader,
   ModalSuccessFooter,
-  modalFieldErrorTextClassName,
-  modalFieldInputErrorClassName,
   modalFieldDescriptionClassName,
+  modalFieldErrorTextClassName,
   modalFieldInputClassName,
+  modalFieldInputErrorClassName,
   modalFieldLabelClassName,
   modalFieldTitleClassName
 } from "./ModalPrimitives"
-import Button from "./Button"
+import TransactionRecap from "./TransactionRecap"
 
 const buildListingLookup = (itemListings: ItemListingSummary[]) =>
   itemListings.reduce<Record<string, ItemListingSummary>>(
@@ -250,6 +252,39 @@ const AddDiscountModal = ({
     formState.ruleKind,
     formState.ruleValue
   )
+  const ruleValuePreview = rulePreview
+
+  const startsAtPreview = (() => {
+    const startsAt = formState.startsAt.trim()
+    if (!startsAt) return "Enter start time"
+    try {
+      return formatEpochSeconds(
+        parseNonNegativeU64(startsAt, "startsAt").toString()
+      )
+    } catch {
+      return "Invalid start time"
+    }
+  })()
+
+  const expiresAtPreview = (() => {
+    const expiresAt = formState.expiresAt.trim()
+    if (!expiresAt) return "No expiry"
+    try {
+      return formatEpochSeconds(
+        parseNonNegativeU64(expiresAt, "expiresAt").toString()
+      )
+    } catch {
+      return "Invalid expiry"
+    }
+  })()
+
+  const listingPreviewLabel = (() => {
+    const listingId = formState.appliesToListingId.trim()
+    if (!listingId) return "All listings"
+    const listing = listingLookup[listingId]
+    const label = listing ? resolveListingLabel(listing) : undefined
+    return label ?? shortenId(listingId)
+  })()
 
   const listingLabel =
     transactionSummary?.appliesToListingId &&

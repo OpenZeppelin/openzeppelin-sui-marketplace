@@ -16,29 +16,31 @@ import {
 type ButtonVariant = "primary" | "secondary" | "danger" | "ghost" | "text"
 type ButtonSize = "default" | "compact"
 
-const buttonVariantClassNameMap: Record<ButtonVariant, Record<ButtonSize, string>> =
-  {
-    primary: {
-      default: primaryActionButtonClassName,
-      compact: primaryCompactActionButtonClassName
-    },
-    secondary: {
-      default: secondaryActionButtonClassName,
-      compact: secondaryCompactActionButtonClassName
-    },
-    danger: {
-      default: dangerActionButtonClassName,
-      compact: dangerCompactActionButtonClassName
-    },
-    ghost: {
-      default: ghostActionButtonClassName,
-      compact: ghostActionButtonClassName
-    },
-    text: {
-      default: textActionButtonClassName,
-      compact: textActionButtonClassName
-    }
+const buttonVariantClassNameMap: Record<
+  ButtonVariant,
+  Record<ButtonSize, string>
+> = {
+  primary: {
+    default: primaryActionButtonClassName,
+    compact: primaryCompactActionButtonClassName
+  },
+  secondary: {
+    default: secondaryActionButtonClassName,
+    compact: secondaryCompactActionButtonClassName
+  },
+  danger: {
+    default: dangerActionButtonClassName,
+    compact: dangerCompactActionButtonClassName
+  },
+  ghost: {
+    default: ghostActionButtonClassName,
+    compact: ghostActionButtonClassName
+  },
+  text: {
+    default: textActionButtonClassName,
+    compact: textActionButtonClassName
   }
+}
 
 type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
   variant?: ButtonVariant

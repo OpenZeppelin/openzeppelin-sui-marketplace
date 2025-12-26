@@ -182,8 +182,7 @@ export const useClaimDiscountTicketAction = ({
         }
 
         const createdTicketId = extractCreatedObjects(transactionBlock).find(
-          (change) =>
-            change.objectType.endsWith(DISCOUNT_TICKET_TYPE_FRAGMENT)
+          (change) => change.objectType.endsWith(DISCOUNT_TICKET_TYPE_FRAGMENT)
         )?.objectId
 
         let claimedTicket: DiscountTicketDetails | undefined

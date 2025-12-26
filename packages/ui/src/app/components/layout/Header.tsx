@@ -43,7 +43,9 @@ const Header = () => {
   const indicatorStyle =
     buttonWidth || buttonHeight
       ? ({
-          ...(buttonWidth ? { "--wallet-button-width": `${buttonWidth}px` } : {}),
+          ...(buttonWidth
+            ? { "--wallet-button-width": `${buttonWidth}px` }
+            : {}),
           ...(buttonHeight
             ? { "--wallet-button-height": `${buttonHeight}px` }
             : {})

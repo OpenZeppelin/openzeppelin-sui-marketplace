@@ -114,14 +114,11 @@ export const useStoreDashboardViewModel = () => {
     [refreshStorefront, refreshWallet, upsertDiscountTicket]
   )
 
-  const {
-    claimingTemplateId,
-    isClaiming,
-    handleClaimDiscount
-  } = useClaimDiscountTicketAction({
-    shopId,
-    onClaimed: handleDiscountTicketClaimed
-  })
+  const { claimingTemplateId, isClaiming, handleClaimDiscount } =
+    useClaimDiscountTicketAction({
+      shopId,
+      onClaimed: handleDiscountTicketClaimed
+    })
 
   const openBuyModal = useCallback((listing: ItemListingSummary) => {
     setModalState((previous) => ({

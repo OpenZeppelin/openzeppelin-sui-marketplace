@@ -111,7 +111,7 @@ const resolveCoinOwnershipSnapshot = async ({
     options: { showOwner: true, showType: true }
   })
 
-  const coinType = extractCoinType(object.type)
+  const coinType = extractCoinType(object.type || undefined)
   const ownerAddress = extractOwnerAddress(owner)
 
   return {

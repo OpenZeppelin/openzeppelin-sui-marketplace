@@ -531,11 +531,7 @@ const BuyFlowModal = ({
                           key={currency.acceptedCurrencyId}
                           value={currency.acceptedCurrencyId}
                         >
-                          {getCurrencyLabel(currency)} ·{" "}
-                          {formatCoinBalance({
-                            balance: currency.balance,
-                            decimals: currency.decimals ?? 9
-                          })}
+                          {getCurrencyLabel(currency)}
                         </option>
                       ))}
                     </select>
