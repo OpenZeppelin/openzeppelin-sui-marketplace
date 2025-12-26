@@ -19,10 +19,7 @@ export const resolveOwnerCapabilityId = async ({
   suiClient: SuiClient
 }): Promise<string> => {
   const ownerCapabilityType = `${shopPackageId}::shop::ShopOwnerCap`
-  const normalizedShopId = normalizeIdOrThrow(
-    shopId,
-    "Shop ID is required."
-  )
+  const normalizedShopId = normalizeIdOrThrow(shopId, "Shop ID is required.")
   const normalizedOwnerAddress = normalizeSuiAddress(ownerAddress)
 
   const ownerCapabilityObjects = await getAllOwnedObjectsByFilter(

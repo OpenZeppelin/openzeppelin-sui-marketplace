@@ -4,32 +4,39 @@ import clsx from "clsx"
 
 import { copyToClipboard } from "../helpers/clipboard"
 import { shortenId } from "../helpers/format"
+import Button from "./Button"
 
 const CopyableId = ({
   value,
   label,
-  className
+  className,
+  displayValue,
+  title,
+  valueClassName
 }: {
   value: string
   label?: string
   className?: string
+  displayValue?: string
+  title?: string
+  valueClassName?: string
 }) => (
-  <button
-    type="button"
+  <Button
+    variant="text"
     onClick={() => copyToClipboard(value)}
-    title="Copy object id"
-    className={clsx(
-      "focus-visible:ring-sds-blue/40 inline-flex items-center gap-2 text-xs text-slate-500 transition hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 dark:text-slate-200/60 dark:hover:text-slate-100",
-      className
-    )}
+    title={title ?? "Copy object id"}
+    className={clsx("min-w-0 justify-start", className)}
   >
-    {label ? (
-      <span className="uppercase tracking-[0.12em]">{label}</span>
-    ) : null}
-    <span className="font-medium text-slate-700 dark:text-slate-100">
-      {shortenId(value)}
+    {label ? <span className="uppercase tracking-[0.12em]">{label}</span> : null}
+    <span
+      className={clsx(
+        "font-medium text-slate-700 dark:text-slate-100",
+        valueClassName
+      )}
+    >
+      {displayValue ?? shortenId(value)}
     </span>
-  </button>
+  </Button>
 )
 
 export default CopyableId

@@ -1,5 +1,8 @@
 import { normalizeSuiAddress, normalizeSuiObjectId } from "@mysten/sui/utils"
-import { ensureHexPrefix, hexToBytes } from "@sui-oracle-market/tooling-core/hex"
+import {
+  ensureHexPrefix,
+  hexToBytes
+} from "@sui-oracle-market/tooling-core/hex"
 import { parseTypeNameFromString } from "@sui-oracle-market/tooling-core/utils/type-name"
 
 export const resolveValidationMessage = (

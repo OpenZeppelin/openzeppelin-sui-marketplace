@@ -28,14 +28,9 @@ type ClaimDiscountTicketArguments = {
 
 runSuiScript(
   async (tooling, cliArguments) => {
-    //TODO review to avoid that many destructuration
-
-    const {
-      suiConfig: { network }
-    } = tooling
     const { shopId, discountTemplateId } = await resolveInputs(
       cliArguments,
-      network.networkName
+      tooling.network.networkName
     )
 
     const shopShared = await tooling.getSuiSharedObject({
@@ -53,8 +48,8 @@ runSuiScript(
       discountTemplateId,
       packageId: shopPackageId,
       shopAddress: shopId,
-      rpcUrl: network.url,
-      networkName: network.networkName
+      rpcUrl: tooling.network.url,
+      networkName: tooling.network.networkName
     })
 
     const claimDiscountTicketTransaction = buildClaimDiscountTicketTransaction({

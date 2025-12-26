@@ -18,11 +18,13 @@ import { getItemListingSummaries } from "@sui-oracle-market/domain-core/models/i
 import type { ShopItemReceiptSummary } from "@sui-oracle-market/domain-core/models/shop-item"
 import { getShopItemReceiptSummaries } from "@sui-oracle-market/domain-core/models/shop-item"
 import { getShopOverview } from "@sui-oracle-market/domain-core/models/shop"
+import { SUI_CLOCK_ID } from "@sui-oracle-market/tooling-core/constants"
 import {
   deriveRelevantPackageId,
   getAllOwnedObjectsByFilter,
   getSuiObject,
-  normalizeOptionalId
+  normalizeOptionalId,
+  unwrapMoveObjectFields
 } from "@sui-oracle-market/tooling-core/object"
 import { useCallback, useEffect, useMemo, useState } from "react"
 
@@ -35,6 +37,7 @@ type StorefrontState = {
   itemListings: ItemListingSummary[]
   discountTemplates: DiscountTemplateSummary[]
   shopOwnerAddress?: string
+  clockTimestampMs?: number
 }
 
 type WalletState = {
@@ -55,7 +58,8 @@ const emptyStorefrontState = (): StorefrontState => ({
   acceptedCurrencies: [],
   itemListings: [],
   discountTemplates: [],
-  shopOwnerAddress: undefined
+  shopOwnerAddress: undefined,
+  clockTimestampMs: undefined
 })
 
 const emptyWalletState = (): WalletState => ({
@@ -63,6 +67,36 @@ const emptyWalletState = (): WalletState => ({
   purchasedItems: [],
   discountTickets: []
 })
+
+const getClockTimestampMs = async (
+  suiClient: SuiClient
+): Promise<number | undefined> => {
+  try {
+    const { object } = await getSuiObject(
+      { objectId: SUI_CLOCK_ID, options: { showContent: true } },
+      { suiClient }
+    )
+    const clockFields = unwrapMoveObjectFields<{
+      timestamp_ms?: string | number | bigint
+    }>(object)
+    const rawTimestamp = clockFields.timestamp_ms
+
+    if (typeof rawTimestamp === "number" && Number.isFinite(rawTimestamp))
+      return rawTimestamp
+    if (typeof rawTimestamp === "bigint") {
+      const parsed = Number(rawTimestamp)
+      return Number.isFinite(parsed) ? parsed : undefined
+    }
+    if (typeof rawTimestamp === "string") {
+      const parsed = Number(rawTimestamp)
+      return Number.isFinite(parsed) ? parsed : undefined
+    }
+  } catch {
+    return undefined
+  }
+
+  return undefined
+}
 
 const getStorefrontData = async ({
   shopId,
@@ -75,19 +109,22 @@ const getStorefrontData = async ({
     itemListings,
     acceptedCurrencies,
     discountTemplates,
-    shopOverview
+    shopOverview,
+    clockTimestampMs
   ] = await Promise.all([
     getItemListingSummaries(shopId, suiClient),
     getAcceptedCurrencySummaries(shopId, suiClient),
     getDiscountTemplateSummaries(shopId, suiClient),
-    getShopOverview(shopId, suiClient)
+    getShopOverview(shopId, suiClient),
+    getClockTimestampMs(suiClient)
   ])
 
   return {
     itemListings,
     acceptedCurrencies,
     discountTemplates,
-    shopOwnerAddress: shopOverview.ownerAddress
+    shopOwnerAddress: shopOverview.ownerAddress,
+    clockTimestampMs
   }
 }
 
@@ -193,9 +230,14 @@ export const useShopDashboardData = ({
   const [walletState, setWalletState] =
     useState<WalletState>(emptyWalletState())
   const [storefrontRefreshIndex, setStorefrontRefreshIndex] = useState(0)
+  const [walletRefreshIndex, setWalletRefreshIndex] = useState(0)
 
   const refreshStorefront = useCallback(() => {
     setStorefrontRefreshIndex((current) => current + 1)
+  }, [])
+
+  const refreshWallet = useCallback(() => {
+    setWalletRefreshIndex((current) => current + 1)
   }, [])
 
   const upsertAcceptedCurrency = useCallback(
@@ -253,6 +295,24 @@ export const useShopDashboardData = ({
     })
   }, [])
 
+  const removeItemListing = useCallback((itemListingId: string) => {
+    setStorefrontState((previous) => ({
+      ...previous,
+      itemListings: previous.itemListings.filter(
+        (item) => item.itemListingId !== itemListingId
+      )
+    }))
+  }, [])
+
+  const removeAcceptedCurrency = useCallback((acceptedCurrencyId: string) => {
+    setStorefrontState((previous) => ({
+      ...previous,
+      acceptedCurrencies: previous.acceptedCurrencies.filter(
+        (currency) => currency.acceptedCurrencyId !== acceptedCurrencyId
+      )
+    }))
+  }, [])
+
   const upsertDiscountTemplate = useCallback(
     (template: DiscountTemplateSummary) => {
       setStorefrontState((previous) => {
@@ -281,6 +341,32 @@ export const useShopDashboardData = ({
     },
     []
   )
+
+  const upsertDiscountTicket = useCallback((ticket: DiscountTicketDetails) => {
+    setWalletState((previous) => {
+      const existingIndex = previous.discountTickets.findIndex(
+        (item) => item.discountTicketId === ticket.discountTicketId
+      )
+
+      if (existingIndex === -1) {
+        return {
+          ...previous,
+          discountTickets: [ticket, ...previous.discountTickets]
+        }
+      }
+
+      const nextTickets = [...previous.discountTickets]
+      nextTickets[existingIndex] = {
+        ...nextTickets[existingIndex],
+        ...ticket
+      }
+
+      return {
+        ...previous,
+        discountTickets: nextTickets
+      }
+    })
+  }, [])
 
   const hasStorefrontConfig = useMemo(() => Boolean(shopId), [shopId])
   const walletQueryConfig = useMemo(
@@ -316,7 +402,8 @@ export const useShopDashboardData = ({
           acceptedCurrencies: data.acceptedCurrencies,
           itemListings: data.itemListings,
           discountTemplates: data.discountTemplates,
-          shopOwnerAddress: data.shopOwnerAddress
+          shopOwnerAddress: data.shopOwnerAddress,
+          clockTimestampMs: data.clockTimestampMs
         })
       } catch (error) {
         if (!isSubscribed) return
@@ -344,11 +431,11 @@ export const useShopDashboardData = ({
     let isSubscribed = true
     const currentWalletQueryConfig = walletQueryConfig
     const loadWalletData = async () => {
-      setWalletState((previous) => ({
-        ...previous,
+      setWalletState({
+        ...emptyWalletState(),
         status: "loading",
         error: undefined
-      }))
+      })
 
       try {
         const data = await getWalletData({
@@ -379,14 +466,18 @@ export const useShopDashboardData = ({
     return () => {
       isSubscribed = false
     }
-  }, [walletQueryConfig, suiClient])
+  }, [walletQueryConfig, suiClient, walletRefreshIndex])
 
   return {
     storefront: storefrontState,
     wallet: walletState,
     refreshStorefront,
+    refreshWallet,
     upsertAcceptedCurrency,
     upsertItemListing,
-    upsertDiscountTemplate
+    upsertDiscountTemplate,
+    upsertDiscountTicket,
+    removeItemListing,
+    removeAcceptedCurrency
   }
 }

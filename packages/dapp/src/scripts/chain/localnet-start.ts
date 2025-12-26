@@ -290,10 +290,7 @@ const startLocalnetProcess = ({
   return processHandle
 }
 
-const buildStartArguments = (
-  withFaucet: boolean,
-  configDir: string
-) => {
+const buildStartArguments = (withFaucet: boolean, configDir: string) => {
   const args = ["start", "--network.config", configDir]
   if (withFaucet) args.push("--with-faucet")
   return args

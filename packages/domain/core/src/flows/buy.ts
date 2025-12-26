@@ -147,7 +147,9 @@ const parseMockPriceInfoUpdateFields = (
   const priceFeedFields = unwrapFields(
     extractFieldByKeys(priceInfoFields, ["price_feed", "priceFeed"])
   )
-  const priceFields = unwrapFields(extractFieldByKeys(priceFeedFields, ["price"]))
+  const priceFields = unwrapFields(
+    extractFieldByKeys(priceFeedFields, ["price"])
+  )
 
   if (!priceFields) return undefined
 

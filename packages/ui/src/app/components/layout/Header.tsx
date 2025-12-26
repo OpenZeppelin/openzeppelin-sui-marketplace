@@ -13,32 +13,42 @@ import WalletNetworkLabel from "../WalletNetworkLabel"
 const Header = () => {
   const buttonRef = useRef<HTMLDivElement | null>(null)
   const [buttonWidth, setButtonWidth] = useState<number | null>(null)
+  const [buttonHeight, setButtonHeight] = useState<number | null>(null)
 
   useEffect(() => {
     const element = buttonRef.current
     if (!element) return
 
-    const updateWidth = () => {
-      const nextWidth = Math.round(element.getBoundingClientRect().width)
+    const updateSize = () => {
+      const rect = element.getBoundingClientRect()
+      const nextWidth = Math.round(rect.width)
+      const nextHeight = Math.round(rect.height)
       setButtonWidth((prev) => (prev === nextWidth ? prev : nextWidth))
+      setButtonHeight((prev) => (prev === nextHeight ? prev : nextHeight))
     }
 
-    updateWidth()
+    updateSize()
 
     if (typeof ResizeObserver === "undefined") {
-      window.addEventListener("resize", updateWidth)
-      return () => window.removeEventListener("resize", updateWidth)
+      window.addEventListener("resize", updateSize)
+      return () => window.removeEventListener("resize", updateSize)
     }
 
-    const observer = new ResizeObserver(() => updateWidth())
+    const observer = new ResizeObserver(() => updateSize())
     observer.observe(element)
 
     return () => observer.disconnect()
   }, [])
 
-  const indicatorStyle = buttonWidth
-    ? ({ "--wallet-button-width": `${buttonWidth}px` } as CSSProperties)
-    : undefined
+  const indicatorStyle =
+    buttonWidth || buttonHeight
+      ? ({
+          ...(buttonWidth ? { "--wallet-button-width": `${buttonWidth}px` } : {}),
+          ...(buttonHeight
+            ? { "--wallet-button-height": `${buttonHeight}px` }
+            : {})
+        } as CSSProperties)
+      : undefined
 
   return (
     <header className="supports-backdrop-blur:bg-white/60 dark:border-slate-50/1 sticky top-0 z-40 flex w-full flex-row flex-wrap items-center justify-center gap-4 bg-white/95 px-3 py-3 backdrop-blur transition-colors duration-500 sm:justify-between sm:gap-3 lg:z-50 lg:border-b lg:border-slate-900/10 dark:bg-transparent">
@@ -61,7 +71,7 @@ const Header = () => {
           className="flex flex-col items-center justify-center gap-3 sm:flex-row sm:items-end"
           style={indicatorStyle}
         >
-          <div className="sds-balance-wrapper flex justify-center">
+          <div className="sds-balance-wrapper sds-match-wallet-height flex justify-center">
             <Balance />
           </div>
           <WalletNetworkLabel />

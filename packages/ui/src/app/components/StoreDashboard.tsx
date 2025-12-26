@@ -1,7 +1,5 @@
 "use client"
 
-import { useCurrentAccount } from "@mysten/dapp-kit"
-import { normalizeSuiAddress } from "@mysten/sui/utils"
 import type { AcceptedCurrencySummary } from "@sui-oracle-market/domain-core/models/currency"
 import type {
   DiscountTemplateSummary,
@@ -9,53 +7,92 @@ import type {
 } from "@sui-oracle-market/domain-core/models/discount"
 import type { ItemListingSummary } from "@sui-oracle-market/domain-core/models/item-listing"
 import type { ShopItemReceiptSummary } from "@sui-oracle-market/domain-core/models/shop-item"
-import { deriveCurrencyObjectId } from "@sui-oracle-market/domain-core/ptb/currency"
-import { SUI_COIN_REGISTRY_ID } from "@sui-oracle-market/tooling-core/constants"
 import clsx from "clsx"
 import type { ReactNode } from "react"
-import { useMemo, useState } from "react"
-import {
-  CONTRACT_PACKAGE_ID_NOT_DEFINED,
-  CONTRACT_PACKAGE_VARIABLE_NAME,
-  SHOP_ID_NOT_DEFINED,
-  SHOP_ID_VARIABLE_NAME
-} from "../config/network"
+import { resolveCurrencyRegistryId } from "../helpers/currencyRegistry"
 import {
   formatEpochSeconds,
   formatUsdFromCents,
   getStructLabel,
   shortenId
 } from "../helpers/format"
-import { resolveConfiguredId } from "../helpers/network"
-import useNetworkConfig from "../hooks/useNetworkConfig"
-import { useShopDashboardData } from "../hooks/useShopDashboardData"
+import { useStoreDashboardViewModel } from "../hooks/useStoreDashboardViewModel"
 import AddCurrencyModal from "./AddCurrencyModal"
 import AddDiscountModal from "./AddDiscountModal"
 import AddItemModal from "./AddItemModal"
+import Button from "./Button"
 import BuyFlowModal from "./BuyFlowModal"
 import CopyableId from "./CopyableId"
 import Loading from "./Loading"
+import RemoveCurrencyModal from "./RemoveCurrencyModal"
+import RemoveDiscountModal from "./RemoveDiscountModal"
+import RemoveItemModal from "./RemoveItemModal"
 
 type PanelStatus = {
   status: "idle" | "loading" | "success" | "error"
   error?: string
 }
 
-const buildTemplateLookup = (templates: DiscountTemplateSummary[]) =>
-  templates.reduce<Record<string, DiscountTemplateSummary>>(
-    (accumulator, template) => ({
-      ...accumulator,
-      [template.discountTemplateId]: template
-    }),
-    {}
-  )
-
-const resolveCurrencyRegistryId = (coinType: string) => {
+const parseOptionalBigInt = (value?: string) => {
+  if (!value) return undefined
   try {
-    return deriveCurrencyObjectId(coinType, SUI_COIN_REGISTRY_ID)
+    return BigInt(value)
   } catch {
     return undefined
   }
+}
+
+const resolveClockNowSeconds = (clockTimestampMs?: number) => {
+  if (clockTimestampMs === undefined) return undefined
+  const seconds = Math.floor(clockTimestampMs / 1000)
+  if (!Number.isFinite(seconds)) return undefined
+  return BigInt(seconds)
+}
+
+const deriveTemplateStatusFromClock = ({
+  template,
+  nowSeconds
+}: {
+  template: DiscountTemplateSummary
+  nowSeconds?: bigint
+}): string => {
+  if (!nowSeconds) return template.status
+  if (!template.activeFlag) return "disabled"
+
+  const startsAt = parseOptionalBigInt(template.startsAt)
+  const expiresAt = parseOptionalBigInt(template.expiresAt)
+  const maxRedemptions = parseOptionalBigInt(template.maxRedemptions)
+  const claimsIssued = parseOptionalBigInt(template.claimsIssued) ?? 0n
+  const redemptions = parseOptionalBigInt(template.redemptions) ?? 0n
+
+  if (expiresAt !== undefined && nowSeconds >= expiresAt) return "expired"
+
+  if (
+    maxRedemptions !== undefined &&
+    maxRedemptions > 0n &&
+    (claimsIssued >= maxRedemptions || redemptions >= maxRedemptions)
+  ) {
+    return "maxed"
+  }
+
+  if (startsAt !== undefined && nowSeconds < startsAt) return "scheduled"
+
+  return "active"
+}
+
+const resolveTemplateStartLabel = ({
+  startsAt,
+  nowSeconds
+}: {
+  startsAt?: string
+  nowSeconds?: bigint
+}) => {
+  if (!startsAt) return "now"
+  const startsAtSeconds = parseOptionalBigInt(startsAt)
+  if (nowSeconds !== undefined && startsAtSeconds !== undefined) {
+    if (nowSeconds >= startsAtSeconds) return "now"
+  }
+  return formatEpochSeconds(startsAt)
 }
 
 const renderPanelBody = ({
@@ -106,7 +143,7 @@ const Panel = ({
       className
     )}
   >
-    <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-300/70 px-6 py-4 dark:border-slate-50/25">
+    <div className="flex flex-wrap items-start gap-3 border-b border-slate-300/70 px-6 py-4 dark:border-slate-50/25">
       <div className="flex flex-col gap-1">
         <h2 className="text-base font-semibold text-sds-dark dark:text-sds-light">
           {title}
@@ -118,26 +155,50 @@ const Panel = ({
         ) : null}
       </div>
       {headerAction ? (
-        <div className="flex items-center self-center">{headerAction}</div>
+        <div className="ml-auto flex items-center">{headerAction}</div>
       ) : null}
     </div>
     <div className="px-6 py-5">{children}</div>
   </section>
 )
 
+const resolveListingActionLabel = ({
+  canBuy,
+  isOutOfStock
+}: {
+  canBuy: boolean
+  isOutOfStock: boolean
+}) => {
+  if (!canBuy) return "Manage listing"
+  return isOutOfStock ? "Sold out" : ""
+}
+
+const resolveListingActionAlignment = ({
+  showRemove,
+  showBuy
+}: {
+  showRemove: boolean
+  showBuy: boolean
+}) => {
+  if (showRemove && showBuy) return "justify-between"
+  if (showBuy) return "justify-end"
+  return "justify-start"
+}
+
 const ItemListingsPanel = ({
   itemListings,
-  discountTemplates,
+  templateLookup,
   status,
   error,
   shopConfigured,
   canBuy,
   onBuy,
   canManageListings,
-  onAddItem
+  onAddItem,
+  onRemoveItem
 }: {
   itemListings: ItemListingSummary[]
-  discountTemplates: DiscountTemplateSummary[]
+  templateLookup: Record<string, DiscountTemplateSummary>
   status: PanelStatus["status"]
   error?: string
   shopConfigured: boolean
@@ -145,19 +206,12 @@ const ItemListingsPanel = ({
   onBuy?: (listing: ItemListingSummary) => void
   canManageListings: boolean
   onAddItem?: () => void
+  onRemoveItem?: (listing: ItemListingSummary) => void
 }) => {
-  const templateLookup = useMemo(
-    () => buildTemplateLookup(discountTemplates),
-    [discountTemplates]
-  )
   const headerAction = canManageListings ? (
-    <button
-      type="button"
-      onClick={onAddItem}
-      className="border-sds-blue/40 from-sds-blue/20 to-sds-pink/30 focus-visible:ring-sds-blue/40 group inline-flex items-center gap-2 rounded-full border bg-gradient-to-r via-white/80 px-4 py-2 text-[0.65rem] font-semibold uppercase tracking-[0.2em] text-sds-dark shadow-[0_14px_36px_-26px_rgba(77,162,255,0.9)] transition hover:-translate-y-0.5 hover:shadow-[0_18px_45px_-25px_rgba(77,162,255,0.9)] focus-visible:outline-none focus-visible:ring-2 dark:from-sds-blue/20 dark:to-sds-pink/10 dark:via-slate-900/40 dark:text-sds-light"
-    >
+    <Button variant="primary" size="compact" onClick={onAddItem}>
       <span>Add Item</span>
-    </button>
+    </Button>
   ) : null
 
   return (
@@ -194,6 +248,29 @@ const ItemListingsPanel = ({
                 const stockValue = listing.stock ? BigInt(listing.stock) : null
                 const isOutOfStock =
                   stockValue !== null ? stockValue <= 0n : false
+                const itemTypeLabel = getStructLabel(listing.itemType)
+                const availabilityLabel =
+                  stockValue === null
+                    ? "Availability unknown"
+                    : isOutOfStock
+                      ? "Sold out"
+                      : "In stock"
+                const availabilityTone =
+                  stockValue === null
+                    ? "text-slate-600 dark:text-slate-200/70"
+                    : isOutOfStock
+                      ? "text-rose-600 dark:text-rose-200"
+                      : "text-emerald-700 dark:text-emerald-100"
+                const showRemove = canManageListings
+                const showBuy = canBuy
+                const actionLabel = resolveListingActionLabel({
+                  canBuy,
+                  isOutOfStock
+                })
+                const actionAlignment = resolveListingActionAlignment({
+                  showRemove,
+                  showBuy
+                })
 
                 return (
                   <div
@@ -201,54 +278,115 @@ const ItemListingsPanel = ({
                     className="rounded-xl border border-slate-300/80 bg-white/95 p-4 shadow-[0_12px_30px_-22px_rgba(15,23,42,0.35)] dark:border-slate-50/25 dark:bg-slate-950/60"
                   >
                     <div className="flex items-start justify-between gap-3">
-                      <div>
+                      <div className="min-w-0">
                         <div className="text-lg font-semibold text-sds-dark dark:text-sds-light">
-                          {listing.name || getStructLabel(listing.itemType)}
+                          {listing.name || itemTypeLabel}
                         </div>
-                        <CopyableId
-                          value={listing.itemListingId}
-                          label="Object ID"
-                        />
+                        <div className="bg-sds-blue/15 mt-2 inline-flex items-center rounded-full px-3 py-1 text-[0.6rem] font-semibold uppercase tracking-[0.18em] text-sds-dark dark:text-sds-light">
+                          Type {itemTypeLabel}
+                        </div>
                       </div>
                       <span className="bg-sds-blue/15 rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.12em] text-sds-dark dark:text-sds-light">
                         {formatUsdFromCents(listing.basePriceUsdCents)}
                       </span>
                     </div>
-                    <div className="mt-4 flex flex-wrap items-center gap-3 text-xs uppercase tracking-[0.12em] text-slate-500 dark:text-slate-200/60">
-                      <span>
-                        Stock:{" "}
-                        <span className="text-slate-800 dark:text-slate-100">
-                          {listing.stock ?? "Unknown"}
-                        </span>
-                      </span>
-                      <span>
-                        Discount:{" "}
-                        <span className="text-slate-800 dark:text-slate-100">
-                          {spotlightLabel || "None"}
-                        </span>
-                      </span>
-                    </div>
-                    {canBuy ? (
-                      <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
-                        <div className="text-xs uppercase tracking-[0.14em] text-slate-500 dark:text-slate-200/60">
-                          {isOutOfStock ? "Sold out" : "Ready to buy"}
+                    <div className="mt-4 grid gap-3 text-[0.65rem] text-slate-500 sm:grid-cols-2 dark:text-slate-200/70">
+                      <div>
+                        <div className="text-[0.55rem] uppercase tracking-[0.18em]">
+                          Item type
                         </div>
-                        <button
-                          type="button"
-                          onClick={() => onBuy?.(listing)}
-                          disabled={isOutOfStock}
+                        <CopyableId
+                          value={listing.itemType}
+                          displayValue={listing.itemType}
+                          title="Copy item type"
+                          className="mt-1 w-full justify-start text-[0.65rem] text-slate-500 dark:text-slate-200/70"
+                          valueClassName="truncate font-semibold text-sds-dark dark:text-sds-light"
+                        />
+                      </div>
+                      <div>
+                        <div className="text-[0.55rem] uppercase tracking-[0.18em]">
+                          Availability
+                        </div>
+                        <div
                           className={clsx(
-                            "border-sds-blue/40 from-sds-blue/20 to-sds-pink/30 focus-visible:ring-sds-blue/40 dark:from-sds-blue/20 dark:to-sds-pink/10 group inline-flex items-center gap-2 rounded-full border bg-gradient-to-r via-white/80 px-4 py-2 text-[0.65rem] font-semibold uppercase tracking-[0.2em] text-sds-dark shadow-[0_14px_36px_-26px_rgba(77,162,255,0.9)] transition focus-visible:outline-none focus-visible:ring-2 dark:via-slate-900/40 dark:text-sds-light",
-                            isOutOfStock
-                              ? "cursor-not-allowed opacity-50"
-                              : "hover:-translate-y-0.5 hover:shadow-[0_18px_45px_-25px_rgba(77,162,255,0.9)]"
+                            "mt-1 text-sm font-semibold",
+                            availabilityTone
                           )}
                         >
-                          <span>Buy</span>
-                          <span className="text-[0.55rem] text-slate-500 transition group-hover:text-slate-700 dark:text-slate-200/60 dark:group-hover:text-slate-100">
-                            {isOutOfStock ? "Unavailable" : "Now"}
-                          </span>
-                        </button>
+                          {availabilityLabel}
+                        </div>
+                      </div>
+                      <div>
+                        <div className="text-[0.55rem] uppercase tracking-[0.18em]">
+                          Stock
+                        </div>
+                        <div className="mt-1 text-sm font-semibold text-sds-dark dark:text-sds-light">
+                          {listing.stock ?? "Unknown"}
+                        </div>
+                      </div>
+                      <div>
+                        <div className="text-[0.55rem] uppercase tracking-[0.18em]">
+                          Discount
+                        </div>
+                        <div className="mt-1 text-sm font-semibold text-sds-dark dark:text-sds-light">
+                          {spotlightLabel || "None"}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="mt-4 flex flex-col gap-2 text-[0.65rem]">
+                      <CopyableId
+                        value={listing.itemListingId}
+                        label="Listing"
+                        className="w-full justify-start"
+                      />
+                      <CopyableId
+                        value={listing.markerObjectId}
+                        label="Marker"
+                        className="w-full justify-start"
+                      />
+                      {listing.spotlightTemplateId ? (
+                        <CopyableId
+                          value={listing.spotlightTemplateId}
+                          label="Template"
+                          className="w-full justify-start"
+                        />
+                      ) : null}
+                    </div>
+                    {canBuy || canManageListings ? (
+                      <div className="mt-5 space-y-3">
+                        <div className="text-xs uppercase tracking-[0.14em] text-slate-500 dark:text-slate-200/60">
+                          {actionLabel}
+                        </div>
+                        <div
+                          className={clsx(
+                            "flex flex-wrap items-center gap-3",
+                            actionAlignment
+                          )}
+                        >
+                          {showRemove ? (
+                            <Button
+                              variant="danger"
+                              size="compact"
+                              onClick={() => onRemoveItem?.(listing)}
+                            >
+                              Remove
+                            </Button>
+                          ) : null}
+                          {showBuy ? (
+                            <Button
+                              variant="primary"
+                              size="compact"
+                              onClick={() => onBuy?.(listing)}
+                              disabled={isOutOfStock}
+                              className="group"
+                            >
+                              <span>Buy</span>
+                              <span className="text-[0.55rem] text-slate-500 transition group-hover:text-slate-700 dark:text-slate-200/60 dark:group-hover:text-slate-100">
+                                {isOutOfStock ? "Unavailable" : "Now"}
+                              </span>
+                            </Button>
+                          ) : null}
+                        </div>
                       </div>
                     ) : null}
                   </div>
@@ -268,7 +406,8 @@ const AcceptedCurrenciesPanel = ({
   error,
   shopConfigured,
   canManageCurrencies,
-  onAddCurrency
+  onAddCurrency,
+  onRemoveCurrency
 }: {
   acceptedCurrencies: AcceptedCurrencySummary[]
   status: PanelStatus["status"]
@@ -276,19 +415,16 @@ const AcceptedCurrenciesPanel = ({
   shopConfigured: boolean
   canManageCurrencies: boolean
   onAddCurrency?: () => void
+  onRemoveCurrency?: (currency: AcceptedCurrencySummary) => void
 }) => (
   <Panel
     title="Accepted Currencies"
-    subtitle="On-chain registry"
+    subtitle="Coins / Pyth Feed"
     headerAction={
       canManageCurrencies ? (
-        <button
-          type="button"
-          onClick={onAddCurrency}
-          className="border-sds-blue/40 from-sds-blue/10 to-sds-pink/20 focus-visible:ring-sds-blue/40 group inline-flex items-center gap-1.5 rounded-full border bg-gradient-to-r via-white/90 px-3 py-1.5 text-[0.55rem] font-semibold uppercase tracking-[0.18em] text-sds-dark shadow-[0_10px_28px_-26px_rgba(77,162,255,0.7)] transition hover:-translate-y-0.5 hover:shadow-[0_14px_36px_-25px_rgba(77,162,255,0.7)] focus-visible:outline-none focus-visible:ring-2 dark:from-sds-blue/20 dark:to-sds-pink/10 dark:via-slate-900/40 dark:text-sds-light"
-        >
+        <Button variant="primary" size="compact" onClick={onAddCurrency}>
           <span>Add Currency</span>
-        </button>
+        </Button>
       ) : null
     }
   >
@@ -313,38 +449,44 @@ const AcceptedCurrenciesPanel = ({
                   className="rounded-lg border border-slate-300/70 bg-white/90 px-4 py-3 text-sm shadow-[0_10px_24px_-20px_rgba(15,23,42,0.3)] dark:border-slate-50/25 dark:bg-slate-950/60"
                 >
                   <div className="flex items-start justify-between gap-3">
-                    <div className="flex flex-col">
+                    <div className="flex min-w-0 flex-col">
                       <span className="font-semibold text-sds-dark dark:text-sds-light">
                         {currency.symbol || getStructLabel(currency.coinType)}
                       </span>
-                      <span className="text-xs text-slate-500 dark:text-slate-200/60">
-                        {currency.coinType}
-                      </span>
+                      <CopyableId
+                        value={currency.coinType}
+                        displayValue={currency.coinType}
+                        title="Copy coin type"
+                        className="mt-0.5 w-full justify-start text-xs text-slate-500 dark:text-slate-200/60"
+                        valueClassName="truncate font-normal text-slate-500 dark:text-slate-200/60"
+                      />
                     </div>
-                    <span className="text-xs uppercase tracking-[0.12em] text-slate-500 dark:text-slate-200/60">
-                      {currency.decimals ?? "--"} decimals
-                    </span>
                   </div>
-                  <div className="mt-3 grid gap-2 text-[0.65rem] text-slate-500 dark:text-slate-200/70 sm:grid-cols-2">
+                  <div className="mt-3 grid gap-3 text-[0.65rem] text-slate-500 sm:grid-cols-2 sm:gap-x-6 dark:text-slate-200/70">
                     <div>
                       <div className="text-[0.55rem] uppercase tracking-[0.18em]">
                         Feed id
                       </div>
-                      <div
-                        className="mt-1 font-semibold text-sds-dark dark:text-sds-light"
-                        title={currency.feedIdHex}
-                      >
-                        {shortenId(currency.feedIdHex, 10, 8)}
-                      </div>
+                      <CopyableId
+                        value={currency.feedIdHex}
+                        displayValue={shortenId(currency.feedIdHex, 10, 8)}
+                        title="Copy feed id"
+                        className="mt-1 w-full justify-start text-[0.65rem] text-slate-500 dark:text-slate-200/70"
+                        valueClassName="truncate font-semibold text-sds-dark dark:text-sds-light"
+                      />
                     </div>
                     {currency.pythObjectId ? (
                       <div>
                         <div className="text-[0.55rem] uppercase tracking-[0.18em]">
                           Price info
                         </div>
-                        <div className="mt-1 font-semibold text-sds-dark dark:text-sds-light">
-                          {shortenId(currency.pythObjectId)}
-                        </div>
+                        <CopyableId
+                          value={currency.pythObjectId}
+                          displayValue={shortenId(currency.pythObjectId)}
+                          title="Copy price info id"
+                          className="mt-1 w-full justify-start text-[0.65rem] text-slate-500 dark:text-slate-200/70"
+                          valueClassName="truncate font-semibold text-sds-dark dark:text-sds-light"
+                        />
                       </div>
                     ) : null}
                   </div>
@@ -360,6 +502,17 @@ const AcceptedCurrenciesPanel = ({
                       <CopyableId value={registryId} label="Registry" />
                     ) : null}
                   </div>
+                  {canManageCurrencies ? (
+                    <div className="mt-5 flex items-center">
+                      <Button
+                        variant="danger"
+                        size="compact"
+                        onClick={() => onRemoveCurrency?.(currency)}
+                      >
+                        Remove
+                      </Button>
+                    </div>
+                  ) : null}
                 </div>
               )
             })}
@@ -407,7 +560,7 @@ const PurchasedItemsPanel = ({
                         {item.name || itemTypeLabel}
                       </div>
                       <CopyableId value={item.shopItemId} label="Receipt ID" />
-                      <div className="mt-2 inline-flex items-center rounded-full bg-sds-blue/15 px-3 py-1 text-xs font-semibold uppercase tracking-[0.12em] text-sds-dark dark:text-sds-light">
+                      <div className="bg-sds-blue/15 mt-2 inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.12em] text-sds-dark dark:text-sds-light">
                         Type {itemTypeLabel}
                       </div>
                     </div>
@@ -435,45 +588,49 @@ const PurchasedItemsPanel = ({
 const DiscountsPanel = ({
   discountTickets,
   discountTemplates,
+  templateLookup,
   storefrontStatus,
   storefrontError,
+  clockTimestampMs,
   walletStatus,
   walletError,
   shopConfigured,
   walletConfigured,
   canManageDiscounts,
-  onAddDiscount
+  onClaimDiscount,
+  claimingTemplateId,
+  isClaiming,
+  onAddDiscount,
+  onRemoveDiscount
 }: {
   discountTickets: DiscountTicketDetails[]
   discountTemplates: DiscountTemplateSummary[]
+  templateLookup: Record<string, DiscountTemplateSummary>
   storefrontStatus: PanelStatus["status"]
   storefrontError?: string
+  clockTimestampMs?: number
   walletStatus: PanelStatus["status"]
   walletError?: string
   shopConfigured: boolean
   walletConfigured: boolean
   canManageDiscounts: boolean
+  onClaimDiscount?: (template: DiscountTemplateSummary) => void
+  claimingTemplateId?: string
+  isClaiming?: boolean
   onAddDiscount?: () => void
+  onRemoveDiscount?: (template: DiscountTemplateSummary) => void
 }) => {
-  const templateLookup = useMemo(
-    () => buildTemplateLookup(discountTemplates),
-    [discountTemplates]
-  )
+  const nowSeconds = resolveClockNowSeconds(clockTimestampMs)
 
   return (
     <Panel
       title="Discounts"
-      subtitle="Templates and tickets"
+      subtitle="Templates / Tickets"
       headerAction={
         canManageDiscounts ? (
-          <button
-            type="button"
-            onClick={onAddDiscount}
-            className="border-sds-blue/40 from-sds-blue/10 to-emerald-100/70 focus-visible:ring-sds-blue/40 group inline-flex items-center gap-1.5 rounded-full border bg-gradient-to-r via-white/90 px-3 py-1.5 text-[0.55rem] font-semibold uppercase tracking-[0.18em] text-sds-dark shadow-[0_10px_28px_-26px_rgba(77,162,255,0.7)] transition hover:-translate-y-0.5 hover:shadow-[0_14px_36px_-25px_rgba(77,162,255,0.7)] focus-visible:outline-none focus-visible:ring-2 dark:from-sds-blue/20 dark:to-emerald-200/20 dark:via-slate-900/40 dark:text-sds-light"
-          >
+          <Button variant="primary" size="compact" onClick={onAddDiscount}>
             <span>Add Discount</span>
-            
-          </button>
+          </Button>
         ) : null
       }
     >
@@ -494,50 +651,138 @@ const DiscountsPanel = ({
               emptyMessage: "No discount templates available yet.",
               children: (
                 <div className="space-y-3">
-                  {discountTemplates.map((template) => (
-                    <div
-                      key={template.discountTemplateId}
-                      className="rounded-xl border border-slate-300/80 bg-white/95 px-4 py-3 text-sm shadow-[0_12px_30px_-22px_rgba(15,23,42,0.35)] dark:border-slate-50/25 dark:bg-slate-950/60"
-                    >
-                      <div className="flex flex-col gap-2">
-                        <div className="flex items-center justify-between">
-                          <span className="font-semibold text-sds-dark dark:text-sds-light">
-                            {template.ruleDescription}
-                          </span>
-                          <span className="text-xs uppercase tracking-[0.12em] text-slate-500 dark:text-slate-200/60">
-                            {template.status}
-                          </span>
-                        </div>
-                        <div className="text-xs text-slate-500 dark:text-slate-200/60">
-                          {template.appliesToListingId
-                            ? `Listing ${shortenId(template.appliesToListingId)}`
-                            : "Applies to all listings"}
-                        </div>
-                        <div className="text-xs text-slate-500 dark:text-slate-200/60">
-                          Starts{" "}
-                          {template.startsAt
-                            ? formatEpochSeconds(template.startsAt)
-                            : "now"}{" "}
-                          · Expires{" "}
-                          {template.expiresAt
-                            ? formatEpochSeconds(template.expiresAt)
-                            : "never"}
-                        </div>
-                        <div className="mt-1 flex flex-wrap items-center gap-3 text-[0.65rem]">
-                          <CopyableId
-                            value={template.discountTemplateId}
-                            label="Template"
-                          />
-                          {template.appliesToListingId ? (
+                  {discountTemplates.map((template) => {
+                    const templateStatus = deriveTemplateStatusFromClock({
+                      template,
+                      nowSeconds
+                    })
+                    const hasTicket = discountTickets.some(
+                      (ticket) =>
+                        ticket.discountTemplateId ===
+                        template.discountTemplateId
+                    )
+                    const isTemplateActive = templateStatus === "active"
+                    const isClaimingTemplate =
+                      isClaiming === true &&
+                      claimingTemplateId === template.discountTemplateId
+                    const showDisable = canManageDiscounts
+                    const claimBlockingReason = !walletConfigured
+                      ? "Connect a wallet to claim."
+                      : !onClaimDiscount
+                        ? "Claim action unavailable."
+                        : isClaimingTemplate
+                          ? "Claiming in progress."
+                          : isClaiming === true
+                            ? "Another claim is already in progress."
+                            : !isTemplateActive
+                              ? `Template is ${templateStatus}.`
+                              : hasTicket
+                                ? "This wallet already claimed the discount."
+                                : undefined
+                    const isClaimDisabled = Boolean(claimBlockingReason)
+                    const actionAlignment = showDisable
+                      ? "justify-between"
+                      : "justify-end"
+                    const claimLabel = isClaimingTemplate
+                      ? "Claiming..."
+                      : hasTicket
+                        ? "Claimed"
+                        : "Claim"
+                    const claimTitle = claimBlockingReason
+                    const isClaimable = !isClaimDisabled
+
+                    return (
+                      <div
+                        key={template.discountTemplateId}
+                        className={clsx(
+                          "rounded-xl border border-slate-300/80 bg-white/95 px-4 py-3 text-sm shadow-[0_12px_30px_-22px_rgba(15,23,42,0.35)] transition dark:border-slate-50/25 dark:bg-slate-950/60",
+                          isClaimable ? "" : "opacity-60"
+                        )}
+                        title={claimBlockingReason}
+                      >
+                        <div className="flex flex-col gap-3">
+                          <div className="flex items-center justify-between gap-3">
+                            <span className="font-semibold text-sds-dark dark:text-sds-light">
+                              {template.ruleDescription}
+                            </span>
+                            <div className="flex items-center gap-3">
+                              {!canManageDiscounts ? (
+                                <span className="text-xs uppercase tracking-[0.12em] text-slate-500 dark:text-slate-200/60">
+                                  {templateStatus}
+                                </span>
+                              ) : null}
+                            </div>
+                          </div>
+                          <div className="text-xs text-slate-500 dark:text-slate-200/60">
+                            {template.appliesToListingId
+                              ? `Listing ${shortenId(template.appliesToListingId)}`
+                              : "Applies to all listings"}
+                          </div>
+                          <div className="mt-2 grid gap-3 text-[0.65rem] text-slate-500 sm:grid-cols-2 dark:text-slate-200/70">
+                            <div>
+                              <div className="text-[0.55rem] uppercase tracking-[0.18em]">
+                                Starts
+                              </div>
+                              <div className="mt-1 text-sm font-semibold text-sds-dark dark:text-sds-light">
+                                {resolveTemplateStartLabel({
+                                  startsAt: template.startsAt,
+                                  nowSeconds
+                                })}
+                              </div>
+                            </div>
+                            <div>
+                              <div className="text-[0.55rem] uppercase tracking-[0.18em]">
+                                Expires
+                              </div>
+                              <div className="mt-1 text-sm font-semibold text-sds-dark dark:text-sds-light">
+                                {template.expiresAt
+                                  ? formatEpochSeconds(template.expiresAt)
+                                  : "never"}
+                              </div>
+                            </div>
+                          </div>
+                          <div className="mt-1 flex flex-wrap items-center gap-3 text-[0.65rem]">
                             <CopyableId
-                              value={template.appliesToListingId}
-                              label="Listing"
+                              value={template.discountTemplateId}
+                              label="Template"
                             />
-                          ) : null}
+                            {template.appliesToListingId ? (
+                              <CopyableId
+                                value={template.appliesToListingId}
+                                label="Listing"
+                              />
+                            ) : null}
+                          </div>
+                          <div
+                            className={clsx(
+                              "mt-5 flex items-center",
+                              actionAlignment
+                            )}
+                          >
+                            {showDisable ? (
+                              <Button
+                                variant="danger"
+                                size="compact"
+                                onClick={() => onRemoveDiscount?.(template)}
+                                disabled={!template.activeFlag}
+                              >
+                                {template.activeFlag ? "Disable" : "Disabled"}
+                              </Button>
+                            ) : null}
+                            <Button
+                              variant="primary"
+                              size="compact"
+                              onClick={() => onClaimDiscount?.(template)}
+                              disabled={isClaimDisabled}
+                              title={claimTitle}
+                            >
+                              {claimLabel}
+                            </Button>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
+                    )
+                  })}
                 </div>
               )
             })}
@@ -565,14 +810,16 @@ const DiscountsPanel = ({
                           key={ticket.discountTicketId}
                           className="rounded-xl border border-slate-300/80 bg-white/95 px-4 py-3 text-sm shadow-[0_12px_30px_-22px_rgba(15,23,42,0.35)] dark:border-slate-50/25 dark:bg-slate-950/60"
                         >
-                          <div className="flex flex-col gap-2">
+                          <div className="flex flex-col gap-3">
                             <div className="flex items-center justify-between">
                               <span className="font-semibold text-sds-dark dark:text-sds-light">
                                 {template?.ruleDescription || "Discount ticket"}
                               </span>
-                              <span className="text-xs uppercase tracking-[0.12em] text-slate-500 dark:text-slate-200/60">
-                                {template?.status || "active"}
-                              </span>
+                              {!canManageDiscounts ? (
+                                <span className="text-xs uppercase tracking-[0.12em] text-slate-500 dark:text-slate-200/60">
+                                  {template?.status || "active"}
+                                </span>
+                              ) : null}
                             </div>
                             <CopyableId
                               value={ticket.discountTicketId}
@@ -605,128 +852,58 @@ const DiscountsPanel = ({
  * a Move package ID, not chain IDs or contract addresses.
  */
 const StoreDashboard = () => {
-  const currentAccount = useCurrentAccount()
-  const { useNetworkVariable } = useNetworkConfig()
-  const rawShopId = useNetworkVariable(SHOP_ID_VARIABLE_NAME)
-  const rawPackageId = useNetworkVariable(CONTRACT_PACKAGE_VARIABLE_NAME)
-  const shopId = useMemo(
-    () => resolveConfiguredId(rawShopId, SHOP_ID_NOT_DEFINED),
-    [rawShopId]
-  )
-  const packageId = useMemo(
-    () => resolveConfiguredId(rawPackageId, CONTRACT_PACKAGE_ID_NOT_DEFINED),
-    [rawPackageId]
-  )
-  const [activeListing, setActiveListing] = useState<ItemListingSummary | null>(
-    null
-  )
-  const [isBuyModalOpen, setIsBuyModalOpen] = useState(false)
-  const [isAddItemModalOpen, setIsAddItemModalOpen] = useState(false)
-  const [isAddDiscountModalOpen, setIsAddDiscountModalOpen] = useState(false)
-  const [isAddCurrencyModalOpen, setIsAddCurrencyModalOpen] = useState(false)
-
   const {
+    shopId,
     storefront,
     wallet,
-    refreshStorefront,
-    upsertAcceptedCurrency,
-    upsertItemListing,
-    upsertDiscountTemplate
-  } = useShopDashboardData({
-    shopId,
-    packageId,
-    ownerAddress: currentAccount?.address
-  })
-
-  const hasShopConfig = Boolean(shopId)
-  const hasWalletConfig = Boolean(shopId && currentAccount?.address)
-  const normalizedOwnerAddress = storefront.shopOwnerAddress
-    ? normalizeSuiAddress(storefront.shopOwnerAddress)
-    : undefined
-  const normalizedWalletAddress = currentAccount?.address
-    ? normalizeSuiAddress(currentAccount.address)
-    : undefined
-  const isShopOwner = Boolean(
-    normalizedOwnerAddress &&
-      normalizedWalletAddress &&
-      normalizedOwnerAddress === normalizedWalletAddress
-  )
-
-  const openBuyModal = (listing: ItemListingSummary) => {
-    setActiveListing(listing)
-    setIsBuyModalOpen(true)
-  }
-
-  const closeBuyModal = () => {
-    setIsBuyModalOpen(false)
-    setActiveListing(null)
-  }
-
-  const openAddItemModal = () => {
-    setIsAddItemModalOpen(true)
-  }
-
-  const closeAddItemModal = () => {
-    setIsAddItemModalOpen(false)
-  }
-
-  const openAddDiscountModal = () => {
-    setIsAddDiscountModalOpen(true)
-  }
-
-  const closeAddDiscountModal = () => {
-    setIsAddDiscountModalOpen(false)
-  }
-
-  const openAddCurrencyModal = () => {
-    setIsAddCurrencyModalOpen(true)
-  }
-
-  const closeAddCurrencyModal = () => {
-    setIsAddCurrencyModalOpen(false)
-  }
-
-  const handleListingCreated = (listing?: ItemListingSummary) => {
-    if (listing) {
-      upsertItemListing(listing)
-      return
-    }
-
-    refreshStorefront()
-  }
-
-  const handleDiscountCreated = (template?: DiscountTemplateSummary) => {
-    if (template) {
-      upsertDiscountTemplate(template)
-      return
-    }
-
-    refreshStorefront()
-  }
-
-  const handleCurrencyCreated = (currency?: AcceptedCurrencySummary) => {
-    if (currency) {
-      upsertAcceptedCurrency(currency)
-      return
-    }
-
-    refreshStorefront()
-  }
+    hasShopConfig,
+    hasWalletConfig,
+    canBuy,
+    canManageListings,
+    canManageCurrencies,
+    canManageDiscounts,
+    claimDiscountTicket,
+    claimingTemplateId,
+    isClaiming,
+    discountTemplateLookup,
+    modalState,
+    openBuyModal,
+    closeBuyModal,
+    openAddItemModal,
+    closeAddItemModal,
+    openAddDiscountModal,
+    closeAddDiscountModal,
+    openAddCurrencyModal,
+    closeAddCurrencyModal,
+    openRemoveItemModal,
+    closeRemoveItemModal,
+    openRemoveCurrencyModal,
+    closeRemoveCurrencyModal,
+    openRemoveDiscountModal,
+    closeRemoveDiscountModal,
+    handleListingCreated,
+    handleDiscountCreated,
+    handleCurrencyCreated,
+    handleListingRemoved,
+    handleCurrencyRemoved,
+    handleDiscountUpdated
+  } = useStoreDashboardViewModel()
 
   return (
     <div className="w-full max-w-6xl space-y-6 px-4">
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+      <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
         <div className="flex flex-col gap-6">
           <ItemListingsPanel
             itemListings={storefront.itemListings}
-            discountTemplates={storefront.discountTemplates}
+            templateLookup={discountTemplateLookup}
             status={storefront.status}
             error={storefront.error}
             shopConfigured={hasShopConfig}
-            canBuy={Boolean(currentAccount?.address)}
+            canBuy={canBuy}
             onBuy={openBuyModal}
-            canManageListings={Boolean(hasShopConfig && isShopOwner)}
+            canManageListings={canManageListings}
             onAddItem={openAddItemModal}
+            onRemoveItem={openRemoveItemModal}
           />
         </div>
         <AcceptedCurrenciesPanel
@@ -734,51 +911,58 @@ const StoreDashboard = () => {
           status={storefront.status}
           error={storefront.error}
           shopConfigured={hasShopConfig}
-          canManageCurrencies={Boolean(hasShopConfig && isShopOwner)}
+          canManageCurrencies={canManageCurrencies}
           onAddCurrency={openAddCurrencyModal}
+          onRemoveCurrency={openRemoveCurrencyModal}
         />
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+      <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
         <PurchasedItemsPanel
           purchasedItems={wallet.purchasedItems}
           status={wallet.status}
           error={wallet.error}
           walletConfigured={hasWalletConfig}
         />
-      <DiscountsPanel
-        discountTickets={wallet.discountTickets}
-        discountTemplates={storefront.discountTemplates}
-        storefrontStatus={storefront.status}
-        storefrontError={storefront.error}
-        walletStatus={wallet.status}
-        walletError={wallet.error}
-        shopConfigured={hasShopConfig}
-        walletConfigured={hasWalletConfig}
-        canManageDiscounts={Boolean(hasShopConfig && isShopOwner)}
-        onAddDiscount={openAddDiscountModal}
-      />
+        <DiscountsPanel
+          discountTickets={wallet.discountTickets}
+          discountTemplates={storefront.discountTemplates}
+          templateLookup={discountTemplateLookup}
+          storefrontStatus={storefront.status}
+          storefrontError={storefront.error}
+          clockTimestampMs={storefront.clockTimestampMs}
+          walletStatus={wallet.status}
+          walletError={wallet.error}
+          shopConfigured={hasShopConfig}
+          walletConfigured={hasWalletConfig}
+          canManageDiscounts={canManageDiscounts}
+          onClaimDiscount={claimDiscountTicket}
+          claimingTemplateId={claimingTemplateId}
+          isClaiming={isClaiming}
+          onAddDiscount={openAddDiscountModal}
+          onRemoveDiscount={openRemoveDiscountModal}
+        />
       </div>
 
       <BuyFlowModal
-        open={isBuyModalOpen}
+        open={modalState.isBuyModalOpen}
         onClose={closeBuyModal}
         shopId={shopId}
-        listing={activeListing ?? undefined}
+        listing={modalState.activeListing ?? undefined}
         acceptedCurrencies={storefront.acceptedCurrencies}
         discountTemplates={storefront.discountTemplates}
         discountTickets={wallet.discountTickets}
       />
 
       <AddItemModal
-        open={isAddItemModalOpen}
+        open={modalState.isAddItemModalOpen}
         onClose={closeAddItemModal}
         shopId={shopId}
         onListingCreated={handleListingCreated}
       />
 
       <AddDiscountModal
-        open={isAddDiscountModalOpen}
+        open={modalState.isAddDiscountModalOpen}
         onClose={closeAddDiscountModal}
         shopId={shopId}
         itemListings={storefront.itemListings}
@@ -786,11 +970,35 @@ const StoreDashboard = () => {
       />
 
       <AddCurrencyModal
-        open={isAddCurrencyModalOpen}
+        open={modalState.isAddCurrencyModalOpen}
         onClose={closeAddCurrencyModal}
         shopId={shopId}
         acceptedCurrencies={storefront.acceptedCurrencies}
         onCurrencyCreated={handleCurrencyCreated}
+      />
+
+      <RemoveItemModal
+        open={modalState.isRemoveItemModalOpen}
+        onClose={closeRemoveItemModal}
+        shopId={shopId}
+        listing={modalState.activeListingToRemove ?? undefined}
+        onListingRemoved={handleListingRemoved}
+      />
+
+      <RemoveDiscountModal
+        open={modalState.isRemoveDiscountModalOpen}
+        onClose={closeRemoveDiscountModal}
+        shopId={shopId}
+        template={modalState.activeDiscountToRemove ?? undefined}
+        onDiscountUpdated={handleDiscountUpdated}
+      />
+
+      <RemoveCurrencyModal
+        open={modalState.isRemoveCurrencyModalOpen}
+        onClose={closeRemoveCurrencyModal}
+        shopId={shopId}
+        currency={modalState.activeCurrencyToRemove ?? undefined}
+        onCurrencyRemoved={handleCurrencyRemoved}
       />
     </div>
   )

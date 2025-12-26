@@ -15,11 +15,9 @@ import {
   requireAcceptedCurrencyByCoinType,
   type AcceptedCurrencyMatch
 } from "@sui-oracle-market/domain-core/models/currency"
-import {
-  buildAddAcceptedCurrencyTransaction,
-  deriveCurrencyObjectId
-} from "@sui-oracle-market/domain-core/ptb/currency"
+import { buildAddAcceptedCurrencyTransaction } from "@sui-oracle-market/domain-core/ptb/currency"
 import { resolveLatestShopIdentifiers } from "@sui-oracle-market/domain-node/shop-identifiers"
+import { resolveCurrencyObjectId } from "@sui-oracle-market/tooling-core/coin-registry"
 import {
   assertBytesLength,
   hexToBytes
@@ -59,11 +57,12 @@ type NormalizedInputs = {
 
 runSuiScript(
   async (tooling, cliArguments) => {
+    const suiClient = tooling.suiClient
     const inputs = await normalizeInputs(
       cliArguments,
-      tooling.network.networkName
+      tooling.network.networkName,
+      suiClient
     )
-    const suiClient = tooling.suiClient
     const existingAcceptedCurrency = await findAcceptedCurrencyByCoinType({
       coinType: inputs.coinType,
       shopId: inputs.shopId,
@@ -203,7 +202,8 @@ runSuiScript(
 
 const normalizeInputs = async (
   cliArguments: AddCurrencyArguments,
-  networkName: string
+  networkName: string,
+  suiClient: SuiClient
 ): Promise<NormalizedInputs> => {
   const { packageId, shopId, ownerCapId } = await resolveLatestShopIdentifiers(
     {
@@ -220,7 +220,19 @@ const normalizeInputs = async (
   const priceInfoObjectId = normalizeSuiObjectId(cliArguments.priceInfoObjectId)
   const currencyId =
     cliArguments.currencyId ||
-    deriveCurrencyObjectId(coinType, SUI_COIN_REGISTRY_ID)
+    (await resolveCurrencyObjectId(
+      {
+        coinType,
+        registryId: SUI_COIN_REGISTRY_ID,
+        fallbackRegistryScan: true
+      },
+      { suiClient }
+    ))
+
+  if (!currencyId)
+    throw new Error(
+      `Could not resolve currency registry entry for ${coinType}. Provide --currency-id or register the coin first.`
+    )
 
   return {
     packageId,
