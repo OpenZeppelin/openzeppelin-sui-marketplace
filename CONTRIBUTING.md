@@ -27,14 +27,22 @@ Your contribution must meet these requirements:
 
 ## Local hooks (recommended)
 
-To keep localnet-only Move.lock data out of commits, enable the repo hooks:
+To keep localnet-only Move.lock data out of commits, enable the repo hooks (this repo uses versioned hooks in `.githooks`):
 
 ```sh
-git config core.hooksPath .githooks
+git config --local core.hooksPath .githooks
 ```
 
-This installs a pre-commit hook that strips the `[env.localnet]` block from any staged `Move.lock`.
-Your working tree keeps the localnet block; only the staged content is cleaned.
+This enables a pre-commit hook that strips the `[env.localnet]` block from any staged `Move.lock`.
+Your working tree may still contain the localnet block; only the commit content is cleaned.
+
+To verify hooks are enabled:
+
+```sh
+git config --local --get core.hooksPath
+```
+
+Note: `git commit --no-verify` bypasses hooks.
 
 ## A typical workflow
 
