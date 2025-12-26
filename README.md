@@ -1,5 +1,7 @@
 # Sui Oracle Market – End-to-End Developer Guide
 
+The purpose of this the DApp is to illustrate an end-to-end example of a small online market selling items at a USD-pegged stablecoin but that can be bought in different currencies, using an oracle to get selling price of items in those different available currencies.
+
 A practical onboarding guide for Solidity/EVM developers building and deploying the `sui_oracle_market` Move package. This repo is a pnpm workspace with Move packages, deployment scripts, and a Next.js UI. The README walks from a fresh clone to a full local flow (mock oracles + mock coins), then covers publishing to shared networks.
 
 ---
@@ -38,7 +40,7 @@ pnpm script chain:mock:setup
 # 6) Publish oracle-market with dev dependencies (mock coin currencies, pyth price feeds)
 pnpm script chain:publish-package --package-path oracle-market --dev
 
-# 7) Continue setting up the shop look at the scripts section
+# 7) To continue setting up the shop, listings, discounts, accepted currencies look at the scripts section
 ```
 
 Optional run the UI (after publishing + creating a shop + updated UI environment variable config):
@@ -146,7 +148,7 @@ sui client new-address ed25519
 sui client active-address
 ```
 
-If you want to run buyer scripts as the buyer account, switch your active address or export the buyer credentials before running buyer scripts.
+If you want to run buyer scripts as the buyer account, switch your active address or update sui.config file before running buyer scripts.
 
 ### 1) Start localnet
 ```bash
