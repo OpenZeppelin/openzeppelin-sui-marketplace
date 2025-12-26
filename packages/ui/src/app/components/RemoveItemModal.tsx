@@ -168,6 +168,8 @@ const RemoveItemModal = ({
     listing,
     onListingRemoved
   })
+  const errorState =
+    transactionState.status === "error" ? transactionState : undefined
 
   if (!open || !listing) return null
 
@@ -182,8 +184,8 @@ const RemoveItemModal = ({
         />
       ) : isErrorState ? (
         <ListingErrorView
-          error={transactionState.error}
-          details={transactionState.details}
+          error={errorState?.error ?? "Unknown error"}
+          details={errorState?.details}
           listingLabel={listing.name || getStructLabel(listing.itemType)}
           onClose={onClose}
           onReset={resetState}

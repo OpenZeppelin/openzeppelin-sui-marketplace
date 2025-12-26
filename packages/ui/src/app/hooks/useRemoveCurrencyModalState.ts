@@ -9,6 +9,7 @@ import {
   useSuiClientContext
 } from "@mysten/dapp-kit"
 import type { SuiTransactionBlockResponse } from "@mysten/sui/client"
+import type { IdentifierString } from "@mysten/wallet-standard"
 import type { AcceptedCurrencySummary } from "@sui-oracle-market/domain-core/models/currency"
 import { buildRemoveAcceptedCurrencyTransaction } from "@sui-oracle-market/domain-core/ptb/currency"
 import { deriveRelevantPackageId } from "@sui-oracle-market/tooling-core/object"
@@ -115,7 +116,7 @@ export const useRemoveCurrencyModalState = ({
       return
     }
 
-    const expectedChain = `sui:${network}`
+    const expectedChain = `sui:${network}` as IdentifierString
     const accountChains = currentAccount?.chains ?? []
     const localnetSupported = walletSupportsChain(
       currentWallet ?? currentAccount,

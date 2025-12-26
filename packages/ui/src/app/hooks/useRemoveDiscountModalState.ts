@@ -9,6 +9,7 @@ import {
   useSuiClientContext
 } from "@mysten/dapp-kit"
 import type { SuiTransactionBlockResponse } from "@mysten/sui/client"
+import type { IdentifierString } from "@mysten/wallet-standard"
 import type { DiscountTemplateSummary } from "@sui-oracle-market/domain-core/models/discount"
 import { getDiscountTemplateSummary } from "@sui-oracle-market/domain-core/models/discount"
 import { buildToggleDiscountTemplateTransaction } from "@sui-oracle-market/domain-core/ptb/discount-template"
@@ -136,7 +137,7 @@ export const useRemoveDiscountModalState = ({
       return
     }
 
-    const expectedChain = `sui:${network}`
+    const expectedChain = `sui:${network}` as IdentifierString
     const accountChains = currentAccount?.chains ?? []
     const localnetSupported = walletSupportsChain(
       currentWallet ?? currentAccount,

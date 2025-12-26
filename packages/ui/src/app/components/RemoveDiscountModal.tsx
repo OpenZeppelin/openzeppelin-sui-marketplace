@@ -189,6 +189,8 @@ const RemoveDiscountModal = ({
     template,
     onDiscountUpdated
   })
+  const errorState =
+    transactionState.status === "error" ? transactionState : undefined
 
   if (!open || !template) return null
 
@@ -203,8 +205,8 @@ const RemoveDiscountModal = ({
         />
       ) : isErrorState ? (
         <DiscountErrorView
-          error={transactionState.error}
-          details={transactionState.details}
+          error={errorState?.error ?? "Unknown error"}
+          details={errorState?.details}
           templateLabel={template.ruleDescription}
           onClose={onClose}
           onReset={resetState}

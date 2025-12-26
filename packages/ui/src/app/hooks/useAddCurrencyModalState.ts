@@ -10,6 +10,7 @@ import {
 } from "@mysten/dapp-kit"
 import type { SuiTransactionBlockResponse } from "@mysten/sui/client"
 import { normalizeSuiObjectId } from "@mysten/sui/utils"
+import type { IdentifierString } from "@mysten/wallet-standard"
 import type { AcceptedCurrencySummary } from "@sui-oracle-market/domain-core/models/currency"
 import {
   getAcceptedCurrencySummary,
@@ -454,7 +455,7 @@ export const useAddCurrencyModalState = ({
 
     if (hasFieldErrors) return
 
-    const expectedChain = `sui:${network}`
+    const expectedChain = `sui:${network}` as IdentifierString
     const accountChains = currentAccount?.chains ?? []
     const localnetSupported = walletSupportsChain(
       currentWallet ?? currentAccount,
@@ -593,6 +594,7 @@ export const useAddCurrencyModalState = ({
       const optimisticCurrency = acceptedCurrencyId
         ? {
             acceptedCurrencyId,
+            markerObjectId: acceptedCurrencyId,
             coinType: currencyInputs.coinType,
             symbol: undefined,
             decimals: undefined,

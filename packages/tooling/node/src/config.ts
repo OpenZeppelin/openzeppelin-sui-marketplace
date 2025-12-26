@@ -19,6 +19,12 @@ export type SuiMoveConfig = {
   withUnpublishedDependencies?: boolean
 }
 
+export type SuiPythConfig = {
+  hermesUrl: string
+  pythStateId: string
+  wormholeStateId: string
+}
+
 export type SuiNetworkConfig = {
   networkName: string
   url: string
@@ -27,6 +33,7 @@ export type SuiNetworkConfig = {
   accounts?: Record<string, SuiAccountConfig>
   gasBudget?: number
   move?: SuiMoveConfig
+  pyth?: SuiPythConfig
 }
 
 export type SuiPathsUserConfig = {

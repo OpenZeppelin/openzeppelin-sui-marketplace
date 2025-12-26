@@ -10,6 +10,7 @@ import {
 } from "@mysten/dapp-kit"
 import type { SuiTransactionBlockResponse } from "@mysten/sui/client"
 import { normalizeSuiAddress } from "@mysten/sui/utils"
+import type { IdentifierString } from "@mysten/wallet-standard"
 import {
   buildBuyTransaction,
   estimateRequiredAmount,
@@ -23,6 +24,7 @@ import type {
   DiscountTicketDetails
 } from "@sui-oracle-market/domain-core/models/discount"
 import type { ItemListingSummary } from "@sui-oracle-market/domain-core/models/item-listing"
+import type { PriceUpdatePolicy } from "@sui-oracle-market/domain-core/models/pyth"
 import { SUI_CLOCK_ID } from "@sui-oracle-market/tooling-core/constants"
 import {
   deriveRelevantPackageId,
@@ -153,7 +155,7 @@ const buildDiscountOptions = ({
     return true
   })
 
-  const ticketOptions = eligibleTickets.map((ticket) => {
+  const ticketOptions: DiscountOption[] = eligibleTickets.map((ticket) => {
     const template = templateLookup[ticket.discountTemplateId]
     const status = template?.status
     const isActive = status ? status === "active" : true
@@ -175,7 +177,7 @@ const buildDiscountOptions = ({
     }
   })
 
-  const claimOption =
+  const claimOption: DiscountOption[] =
     spotlightTemplate &&
     spotlightTemplate.status === "active" &&
     !eligibleTickets.some(
@@ -278,6 +280,12 @@ export const useBuyFlowModalState = ({
       }),
     [localnetClient, signTransaction.mutateAsync]
   )
+  const priceUpdatePolicy: PriceUpdatePolicy =
+    network === ENetwork.LOCALNET ||
+    network === ENetwork.TESTNET ||
+    network === ENetwork.MAINNET
+      ? "required"
+      : "auto"
 
   const [balancesByType, setBalancesByType] = useState<Record<string, bigint>>(
     {}
@@ -522,7 +530,7 @@ export const useBuyFlowModalState = ({
     const currencySnapshot = selectedCurrency
     const discountSelection = selectedDiscount.selection
 
-    const expectedChain = `sui:${network}`
+    const expectedChain = `sui:${network}` as IdentifierString
     const accountChains = currentAccount?.chains ?? []
     const localnetSupported = walletSupportsChain(
       currentWallet ?? currentAccount,
@@ -686,7 +694,7 @@ export const useBuyFlowModalState = ({
           maxPriceAgeSecs: undefined,
           maxConfidenceRatioBps: undefined,
           discountContext: discountSelection,
-          skipPriceUpdate: false,
+          priceUpdatePolicy,
           hermesUrlOverride: undefined,
           networkName: network,
           signerAddress: walletAddress,
@@ -777,6 +785,7 @@ export const useBuyFlowModalState = ({
     listing,
     localnetExecutor,
     mintTo,
+    priceUpdatePolicy,
     network,
     refundTo,
     selectedCurrency,

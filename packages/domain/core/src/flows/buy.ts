@@ -1,5 +1,5 @@
-import type { SuiClient, SuiObjectData } from "@mysten/sui/client"
 import { bcs } from "@mysten/sui/bcs"
+import type { SuiClient, SuiObjectData } from "@mysten/sui/client"
 import type { Transaction } from "@mysten/sui/transactions"
 import { fromB64, normalizeSuiObjectId } from "@mysten/sui/utils"
 import {
@@ -16,20 +16,21 @@ import {
 } from "@sui-oracle-market/tooling-core/object"
 import { getSuiSharedObject } from "@sui-oracle-market/tooling-core/shared-object"
 import { newTransaction } from "@sui-oracle-market/tooling-core/transactions"
-import { requireValue } from "@sui-oracle-market/tooling-core/utils/utility"
 import {
   extractFieldValueByKeys,
   normalizeBigIntFromMoveValue,
   parseI64FromMoveValue,
   unwrapMoveFields
 } from "@sui-oracle-market/tooling-core/utils/move-values"
+import { requireValue } from "@sui-oracle-market/tooling-core/utils/utility"
 import { normalizeCoinType } from "../models/currency.ts"
 import type {
   DiscountTemplateSummary,
   DiscountTicketDetails
 } from "../models/discount.ts"
 import { parseDiscountTicketFromObject } from "../models/discount.ts"
-import { getPythPullOracleConfig } from "../models/pyth.ts"
+import type { PriceUpdatePolicy, PythPullOracleConfig } from "../models/pyth.ts"
+import { resolvePythPullOracleConfig } from "../models/pyth.ts"
 
 export type DiscountContext =
   | { mode: "none" }
@@ -137,7 +138,7 @@ export const resolveDiscountedPriceUsdCents = ({
 }
 
 const parseU64ReturnValue = (
-  returnValues?: Array<[string, string]>
+  returnValues?: Array<[string | number[] | Uint8Array, string]>
 ): bigint | undefined => {
   const firstReturn = returnValues?.[0]
   if (!firstReturn) return undefined
@@ -146,7 +147,13 @@ const parseU64ReturnValue = (
   if (!bytes) return undefined
 
   try {
-    const decoded = bcs.u64().parse(fromB64(bytes))
+    const normalizedBytes =
+      typeof bytes === "string"
+        ? fromB64(bytes)
+        : bytes instanceof Uint8Array
+          ? bytes
+          : Uint8Array.from(bytes)
+    const decoded = bcs.u64().parse(normalizedBytes)
     return typeof decoded === "bigint" ? decoded : BigInt(decoded)
   } catch {
     return undefined
@@ -239,15 +246,17 @@ const maybeUpdatePythPriceFeed = async ({
   suiClient,
   networkName,
   feedIdHex,
-  hermesUrlOverride
+  hermesUrlOverride,
+  pythConfigOverride
 }: {
   transaction: Transaction
   suiClient: SuiClient
   networkName: string
   feedIdHex: string
   hermesUrlOverride?: string
+  pythConfigOverride?: PythPullOracleConfig
 }): Promise<boolean> => {
-  const config = getPythPullOracleConfig(networkName)
+  const config = resolvePythPullOracleConfig(networkName, pythConfigOverride)
   if (!config) return false
 
   const hermesUrl = hermesUrlOverride ?? config.hermesUrl
@@ -266,6 +275,15 @@ const maybeUpdatePythPriceFeed = async ({
 
   return true
 }
+
+const resolvePriceUpdatePolicy = ({
+  skipPriceUpdate,
+  priceUpdatePolicy
+}: {
+  skipPriceUpdate?: boolean
+  priceUpdatePolicy?: PriceUpdatePolicy
+}): PriceUpdatePolicy =>
+  skipPriceUpdate ? "skip" : (priceUpdatePolicy ?? "auto")
 
 const maybeUpdateMockPriceFeed = ({
   transaction,
@@ -417,7 +435,9 @@ export const buildBuyTransaction = async (
     maxConfidenceRatioBps,
     discountContext,
     skipPriceUpdate,
+    priceUpdatePolicy,
     hermesUrlOverride,
+    pythConfigOverride,
     networkName,
     signerAddress,
     onWarning
@@ -436,8 +456,10 @@ export const buildBuyTransaction = async (
     maxPriceAgeSecs?: bigint
     maxConfidenceRatioBps?: bigint
     discountContext: DiscountContext
-    skipPriceUpdate: boolean
+    skipPriceUpdate?: boolean
+    priceUpdatePolicy?: PriceUpdatePolicy
     hermesUrlOverride?: string
+    pythConfigOverride?: PythPullOracleConfig
     networkName: string
     signerAddress: string
     onWarning?: (message: string) => void
@@ -474,7 +496,18 @@ export const buildBuyTransaction = async (
   )
 
   const clockArgument = transaction.sharedObjectRef(clockShared.sharedRef)
-  const usesMockUpdate = !skipPriceUpdate && networkName === "localnet"
+  const resolvedPriceUpdatePolicy = resolvePriceUpdatePolicy({
+    skipPriceUpdate,
+    priceUpdatePolicy
+  })
+  const pythConfig = resolvePythPullOracleConfig(
+    networkName,
+    pythConfigOverride
+  )
+  const usesMockUpdate =
+    resolvedPriceUpdatePolicy !== "skip" &&
+    networkName === "localnet" &&
+    !pythConfig
   const pythPriceInfoSharedRef = usesMockUpdate
     ? { ...pythPriceInfoShared.sharedRef, mutable: true }
     : pythPriceInfoShared.sharedRef
@@ -482,13 +515,18 @@ export const buildBuyTransaction = async (
     pythPriceInfoSharedRef
   )
 
-  if (!skipPriceUpdate) {
+  if (resolvedPriceUpdatePolicy === "skip") {
+    onWarning?.(
+      "Skipping price update; ensure the provided PriceInfoObject is fresh."
+    )
+  } else {
     const didPullUpdate = await maybeUpdatePythPriceFeed({
       transaction,
       suiClient,
       networkName,
       feedIdHex: pythFeedIdHex,
-      hermesUrlOverride
+      hermesUrlOverride,
+      pythConfigOverride
     })
 
     if (!didPullUpdate) {
@@ -502,12 +540,17 @@ export const buildBuyTransaction = async (
         })
         if (!didMockUpdate)
           throw new Error(
-            "Failed to update localnet mock price feed; pass --skip-price-update to proceed with existing price info."
+            "Failed to update localnet mock price feed; pass --price-update-policy skip (or --skip-price-update) to proceed with existing price info."
           )
       } else {
-        throw new Error(
-          `No Pyth pull oracle config for network ${networkName}; pass --skip-price-update to proceed with existing price info.`
-        )
+        const message = `No Pyth pull oracle config for network ${networkName}.`
+        if (resolvedPriceUpdatePolicy === "required") {
+          throw new Error(
+            `${message} Configure Pyth endpoints or pass --price-update-policy skip (or --skip-price-update) to proceed with existing price info.`
+          )
+        }
+
+        onWarning?.(`${message} Proceeding without updating price info.`)
       }
     }
   }

@@ -1,4 +1,4 @@
-import type { TransactionArgument } from "@mysten/sui/transactions"
+import type { TransactionObjectArgument } from "@mysten/sui/transactions"
 import { newTransaction } from "./transactions.ts"
 
 /**
@@ -29,5 +29,5 @@ export const buildCoinTransferTransaction = ({
 }
 
 const unwrapSplitCoin = (
-  splitResult: TransactionArgument | TransactionArgument[]
+  splitResult: TransactionObjectArgument | TransactionObjectArgument[]
 ) => (Array.isArray(splitResult) ? splitResult[0] : splitResult)

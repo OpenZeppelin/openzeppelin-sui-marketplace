@@ -9,6 +9,7 @@ import {
   useSuiClientContext
 } from "@mysten/dapp-kit"
 import type { SuiTransactionBlockResponse } from "@mysten/sui/client"
+import type { IdentifierString } from "@mysten/wallet-standard"
 import type { ItemListingSummary } from "@sui-oracle-market/domain-core/models/item-listing"
 import { getItemListingSummary } from "@sui-oracle-market/domain-core/models/item-listing"
 import { parseUsdToCents } from "@sui-oracle-market/domain-core/models/shop"
@@ -307,7 +308,7 @@ export const useAddItemModalState = ({
 
     if (hasFieldErrors) return
 
-    const expectedChain = `sui:${network}`
+    const expectedChain = `sui:${network}` as IdentifierString
     const accountChains = currentAccount?.chains ?? []
     const localnetSupported = walletSupportsChain(
       currentWallet ?? currentAccount,

@@ -9,6 +9,7 @@ import {
   useSuiClientContext
 } from "@mysten/dapp-kit"
 import type { SuiTransactionBlockResponse } from "@mysten/sui/client"
+import type { IdentifierString } from "@mysten/wallet-standard"
 import type { ItemListingSummary } from "@sui-oracle-market/domain-core/models/item-listing"
 import { buildRemoveItemListingTransaction } from "@sui-oracle-market/domain-core/ptb/item-listing"
 import { deriveRelevantPackageId } from "@sui-oracle-market/tooling-core/object"
@@ -115,7 +116,7 @@ export const useRemoveItemModalState = ({
       return
     }
 
-    const expectedChain = `sui:${network}`
+    const expectedChain = `sui:${network}` as IdentifierString
     const accountChains = currentAccount?.chains ?? []
     const localnetSupported = walletSupportsChain(
       currentWallet ?? currentAccount,

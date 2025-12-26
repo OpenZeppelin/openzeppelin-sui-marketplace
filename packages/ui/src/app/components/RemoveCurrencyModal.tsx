@@ -185,6 +185,8 @@ const RemoveCurrencyModal = ({
     currency,
     onCurrencyRemoved
   })
+  const errorState =
+    transactionState.status === "error" ? transactionState : undefined
 
   if (!open || !currency) return null
 
@@ -199,8 +201,8 @@ const RemoveCurrencyModal = ({
         />
       ) : isErrorState ? (
         <CurrencyErrorView
-          error={transactionState.error}
-          details={transactionState.details}
+          error={errorState?.error ?? "Unknown error"}
+          details={errorState?.details}
           currencyLabel={getStructLabel(currency.coinType)}
           onClose={onClose}
           onReset={resetState}

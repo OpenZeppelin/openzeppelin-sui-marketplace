@@ -8,6 +8,7 @@ import {
   useSuiClient,
   useSuiClientContext
 } from "@mysten/dapp-kit"
+import type { IdentifierString } from "@mysten/wallet-standard"
 import type {
   DiscountTemplateSummary,
   DiscountTicketDetails
@@ -76,7 +77,7 @@ export const useClaimDiscountTicketAction = ({
   })
 
   const walletAddress = currentAccount?.address
-  const expectedChain = `sui:${network}`
+  const expectedChain = `sui:${network}` as IdentifierString
   const isSubmissionPending = isLocalnet
     ? signTransaction.isPending
     : signAndExecuteTransaction.isPending

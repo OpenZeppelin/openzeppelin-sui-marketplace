@@ -194,6 +194,8 @@ const AddItemModal = ({
     shouldShowFieldError,
     resetForm
   } = useAddItemModalState({ open, shopId, onListingCreated })
+  const errorState =
+    transactionState.status === "error" ? transactionState : undefined
 
   if (!open) return null
 
@@ -209,8 +211,8 @@ const AddItemModal = ({
         />
       ) : isErrorState ? (
         <ListingErrorView
-          error={transactionState.error}
-          details={transactionState.details}
+          error={errorState?.error ?? "Unknown error"}
+          details={errorState?.details}
           itemName={formState.itemName || "Listing"}
           onClose={onClose}
           onReset={resetForm}

@@ -15,6 +15,8 @@ export type PythPullOracleConfig = {
   wormholeStateId: string
 }
 
+export type PriceUpdatePolicy = "auto" | "required" | "skip"
+
 const PYTH_TESTNET_CONFIG: PythPullOracleConfig = {
   hermesUrl: "https://hermes-beta.pyth.network",
   pythStateId:
@@ -43,6 +45,12 @@ export const getPythPullOracleConfig = (
   if (networkName === "mainnet") return PYTH_MAINNET_CONFIG
   return undefined
 }
+
+export const resolvePythPullOracleConfig = (
+  networkName: string,
+  override?: PythPullOracleConfig
+): PythPullOracleConfig | undefined =>
+  override ?? getPythPullOracleConfig(networkName)
 
 export type MockPriceFeedConfig = {
   feedIdHex: string

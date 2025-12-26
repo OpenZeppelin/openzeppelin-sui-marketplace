@@ -3,6 +3,10 @@
     "target": "ES2020",
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
+    "lib": [
+      "ES2022",
+      "DOM"
+    ],
     "resolveJsonModule": true,
     "esModuleInterop": true,
     "skipLibCheck": true,

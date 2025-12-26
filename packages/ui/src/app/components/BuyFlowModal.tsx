@@ -412,6 +412,8 @@ const BuyFlowModal = ({
     discountTemplates,
     discountTickets
   })
+  const errorState =
+    transactionState.status === "error" ? transactionState : undefined
 
   if (!open) return null
 
@@ -429,8 +431,8 @@ const BuyFlowModal = ({
         />
       ) : isErrorState ? (
         <TransactionErrorView
-          error={transactionState.error}
-          details={transactionState.details}
+          error={errorState?.error ?? "Unknown error"}
+          details={errorState?.details}
           listingLabel={listingLabel}
           onClose={onClose}
           onReset={resetTransactionState}

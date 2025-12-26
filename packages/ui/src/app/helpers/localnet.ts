@@ -1,27 +1,29 @@
 import type { SuiTransactionBlockResponse } from "@mysten/sui/client"
 import { SuiClient } from "@mysten/sui/client"
 import type { Transaction } from "@mysten/sui/transactions"
+import { toB64 } from "@mysten/sui/utils"
+import type { IdentifierString, WalletAccount } from "@mysten/wallet-standard"
 import { LOCALNET_RPC_URL } from "../config/network"
 
-const LOCALNET_CHAIN = "sui:localnet"
+const LOCALNET_CHAIN: IdentifierString = "sui:localnet"
 const LOCALNET_HOSTS = new Set(["localhost", "127.0.0.1"])
 
 type WalletChainSupport =
-  | { chains?: string[] }
-  | { accounts?: { chains?: string[] }[] }
+  | { chains?: readonly string[] }
+  | { accounts?: { chains?: readonly string[] }[] }
   | null
   | undefined
 
 type SignTransactionInput = {
   transaction: Transaction
-  chain?: string
-  account?: string
+  chain?: IdentifierString
+  account?: WalletAccount
 }
 
 type SignTransactionResult = {
   bytes: string
   signature: string
-  reportTransactionEffects?: (effects: string | Uint8Array) => Promise<unknown>
+  reportTransactionEffects?: (effects: string) => Promise<unknown> | void
 }
 
 const getClientRpcUrl = (client: SuiClient) => {
@@ -76,7 +78,7 @@ export const makeLocalnetExecutor = ({
 
   return async (
     transaction: Transaction,
-    options?: { chain?: string; dryRun?: boolean }
+    options?: { chain?: IdentifierString; dryRun?: boolean }
   ): Promise<SuiTransactionBlockResponse> => {
     const chain = options?.chain ?? LOCALNET_CHAIN
 
@@ -110,7 +112,8 @@ export const makeLocalnetExecutor = ({
     })
 
     if (reportTransactionEffects && result.rawEffects) {
-      await reportTransactionEffects(result.rawEffects)
+      const rawEffectsBytes = Uint8Array.from(result.rawEffects)
+      await reportTransactionEffects(toB64(rawEffectsBytes))
     }
 
     if (result.effects?.status?.status !== "success") {

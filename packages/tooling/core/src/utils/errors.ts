@@ -48,7 +48,7 @@ export const serializeForJson = (
 
   if (typeof (value as { toString?: () => string }).toString === "function") {
     try {
-      output.toString = String(value)
+      output.toStringValue = String(value)
     } catch {
       // Ignore toString errors.
     }

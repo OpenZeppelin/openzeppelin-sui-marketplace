@@ -20,6 +20,7 @@ import {
   requireAcceptedCurrencyByCoinType
 } from "@sui-oracle-market/domain-core/models/currency"
 import { getItemListingSummary } from "@sui-oracle-market/domain-core/models/item-listing"
+import type { PriceUpdatePolicy } from "@sui-oracle-market/domain-core/models/pyth"
 import { resolveLatestArtifactShopId } from "@sui-oracle-market/domain-node/shop-identifiers"
 import type { ObjectArtifact } from "@sui-oracle-market/tooling-core/object"
 import {
@@ -47,6 +48,7 @@ type BuyArguments = {
   maxPriceAgeSecs?: string
   maxConfidenceRatioBps?: string
   skipPriceUpdate?: boolean
+  priceUpdatePolicy?: string
   hermesUrl?: string
 }
 
@@ -63,6 +65,7 @@ type NormalizedBuyInputs = {
   maxPriceAgeSecs?: bigint
   maxConfidenceRatioBps?: bigint
   skipPriceUpdate: boolean
+  priceUpdatePolicy: PriceUpdatePolicy
   hermesUrl?: string
 }
 
@@ -167,7 +170,9 @@ runSuiScript(
         maxConfidenceRatioBps: inputs.maxConfidenceRatioBps,
         discountContext,
         skipPriceUpdate: inputs.skipPriceUpdate,
+        priceUpdatePolicy: inputs.priceUpdatePolicy,
         hermesUrlOverride: inputs.hermesUrl,
+        pythConfigOverride: tooling.suiConfig.network.pyth,
         networkName: tooling.suiConfig.network.networkName,
         signerAddress,
         onWarning: (message) => logKeyValueYellow("Oracle")(message)
@@ -267,6 +272,13 @@ runSuiScript(
         "Skip the Hermes + Pyth price update step (not recommended on testnet/mainnet).",
       default: false
     })
+    .option("priceUpdatePolicy", {
+      alias: ["price-update-policy"],
+      type: "string",
+      choices: ["auto", "required", "skip"],
+      description:
+        "How to handle oracle price updates. auto: update when config exists. required: always update or fail. skip: never update."
+    })
     .option("hermesUrl", {
       alias: ["hermes-url"],
       type: "string",
@@ -291,6 +303,16 @@ const normalizeInputs = async (
     throw new Error(
       "Use either --claim-discount or --discount-ticket-id, not both."
     )
+
+  const defaultPriceUpdatePolicy: PriceUpdatePolicy =
+    networkName === "localnet" ||
+    networkName === "testnet" ||
+    networkName === "mainnet"
+      ? "required"
+      : "auto"
+  const resolvedPriceUpdatePolicy = resolvePriceUpdatePolicyInput(
+    cliArguments.priceUpdatePolicy
+  )
 
   return {
     shopId,
@@ -321,8 +343,23 @@ const normalizeInputs = async (
       "maxConfidenceRatioBps"
     ),
     skipPriceUpdate: Boolean(cliArguments.skipPriceUpdate),
+    priceUpdatePolicy: resolvedPriceUpdatePolicy ?? defaultPriceUpdatePolicy,
     hermesUrl: cliArguments.hermesUrl?.trim() || undefined
   }
+}
+
+const resolvePriceUpdatePolicyInput = (
+  value?: string
+): PriceUpdatePolicy | undefined => {
+  if (!value) return undefined
+  const normalized = value.trim().toLowerCase()
+  if (
+    normalized === "auto" ||
+    normalized === "required" ||
+    normalized === "skip"
+  )
+    return normalized
+  throw new Error("priceUpdatePolicy must be one of: auto, required, skip.")
 }
 
 const logBuyContext = ({

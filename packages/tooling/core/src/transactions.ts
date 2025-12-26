@@ -129,16 +129,7 @@ export const ensureCreatedObject = (
 export const extractCreatedObjects = (
   transactionBlock: SuiTransactionBlockResponse
 ) =>
-  (transactionBlock.objectChanges ?? []).filter(
-    (
-      change
-    ): change is { objectId: string; objectType: string; type: "created" } =>
-      change.type === "created" &&
-      "objectType" in change &&
-      typeof change.objectType === "string" &&
-      "objectId" in change &&
-      typeof change.objectId === "string"
-  )
+  (transactionBlock.objectChanges ?? []).filter(isCreatedWithType)
 
 type ObjectTypeCount = {
   objectType: string

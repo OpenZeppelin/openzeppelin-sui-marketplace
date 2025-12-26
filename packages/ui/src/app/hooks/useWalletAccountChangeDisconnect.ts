@@ -33,6 +33,8 @@ const shouldDisconnectForAccounts = (
   )
 }
 
+type WalletEventUnsubscribe = (() => void) | { remove?: () => void } | undefined
+
 export const useWalletAccountChangeDisconnect = () => {
   const wallet = useCurrentWallet()
   const { mutate: disconnectWallet } = useDisconnectWallet()
@@ -78,7 +80,7 @@ export const useWalletAccountChangeDisconnect = () => {
       if (shouldDisconnectForAccounts(lastKnownAddressRef.current, accounts)) {
         disconnectWallet()
       }
-    })
+    }) as WalletEventUnsubscribe
 
     if (typeof unsubscribe === "function") {
       return () => unsubscribe()

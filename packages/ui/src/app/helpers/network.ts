@@ -30,7 +30,7 @@ export const formatNetworkType = (machineName: string) => {
 }
 
 export const resolveWalletNetworkType = (
-  chains?: string[]
+  chains?: readonly string[]
 ): string | undefined => {
   const chainId = chains?.[0]
   return chainId ? formatNetworkType(chainId) : undefined

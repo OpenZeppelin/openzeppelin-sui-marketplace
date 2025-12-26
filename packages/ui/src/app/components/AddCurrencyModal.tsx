@@ -310,6 +310,8 @@ const AddCurrencyModal = ({
     shouldShowFieldWarning,
     resetForm
   } = useAddCurrencyModalState({ open, shopId, onCurrencyCreated })
+  const errorState =
+    transactionState.status === "error" ? transactionState : undefined
 
   if (!open) return null
 
@@ -325,8 +327,8 @@ const AddCurrencyModal = ({
         />
       ) : isErrorState ? (
         <CurrencyErrorView
-          error={transactionState.error}
-          details={transactionState.details}
+          error={errorState?.error ?? "Unknown error"}
+          details={errorState?.details}
           currencyLabel={coinTypeLabel}
           onClose={onClose}
           onReset={resetForm}

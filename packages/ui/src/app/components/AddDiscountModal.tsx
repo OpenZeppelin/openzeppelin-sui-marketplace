@@ -240,6 +240,8 @@ const AddDiscountModal = ({
     shouldShowFieldError,
     resetForm
   } = useAddDiscountModalState({ open, shopId, onDiscountCreated })
+  const errorState =
+    transactionState.status === "error" ? transactionState : undefined
 
   const listingLookup = useMemo(
     () => buildListingLookup(itemListings),
@@ -313,8 +315,8 @@ const AddDiscountModal = ({
         />
       ) : isErrorState ? (
         <DiscountErrorView
-          error={transactionState.error}
-          details={transactionState.details}
+          error={errorState?.error ?? "Unknown error"}
+          details={errorState?.details}
           rulePreview={rulePreview}
           onClose={onClose}
           onReset={resetForm}
