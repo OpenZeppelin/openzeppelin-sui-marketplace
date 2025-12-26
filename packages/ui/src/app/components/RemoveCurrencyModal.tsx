@@ -7,6 +7,7 @@ import {
   useRemoveCurrencyModalState,
   type RemoveCurrencyTransactionSummary
 } from "../hooks/useRemoveCurrencyModalState"
+import Button from "./Button"
 import CopyableId from "./CopyableId"
 import {
   ModalBody,
@@ -18,7 +19,6 @@ import {
   ModalSection,
   ModalStatusHeader
 } from "./ModalPrimitives"
-import Button from "./Button"
 import TransactionRecap from "./TransactionRecap"
 
 const CurrencySummarySection = ({

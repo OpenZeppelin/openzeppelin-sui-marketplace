@@ -290,21 +290,9 @@ const ItemListingsPanel = ({
                         {formatUsdFromCents(listing.basePriceUsdCents)}
                       </span>
                     </div>
-                    <div className="mt-4 grid gap-3 text-[0.65rem] text-slate-500 sm:grid-cols-2 dark:text-slate-200/70">
+                    <div className="mt-4 grid gap-4 text-[0.65rem] text-slate-500 sm:grid-cols-2 sm:gap-x-8 dark:text-slate-200/70">
                       <div>
-                        <div className="text-[0.55rem] uppercase tracking-[0.18em]">
-                          Item type
-                        </div>
-                        <CopyableId
-                          value={listing.itemType}
-                          displayValue={listing.itemType}
-                          title="Copy item type"
-                          className="mt-1 w-full justify-start text-[0.65rem] text-slate-500 dark:text-slate-200/70"
-                          valueClassName="truncate font-semibold text-sds-dark dark:text-sds-light"
-                        />
-                      </div>
-                      <div>
-                        <div className="text-[0.55rem] uppercase tracking-[0.18em]">
+                        <div className="text-[0.6rem] uppercase tracking-[0.18em]">
                           Availability
                         </div>
                         <div
@@ -317,7 +305,7 @@ const ItemListingsPanel = ({
                         </div>
                       </div>
                       <div>
-                        <div className="text-[0.55rem] uppercase tracking-[0.18em]">
+                        <div className="text-[0.6rem] uppercase tracking-[0.18em]">
                           Stock
                         </div>
                         <div className="mt-1 text-sm font-semibold text-sds-dark dark:text-sds-light">
@@ -325,7 +313,7 @@ const ItemListingsPanel = ({
                         </div>
                       </div>
                       <div>
-                        <div className="text-[0.55rem] uppercase tracking-[0.18em]">
+                        <div className="text-[0.6rem] uppercase tracking-[0.18em]">
                           Discount
                         </div>
                         <div className="mt-1 text-sm font-semibold text-sds-dark dark:text-sds-light">
@@ -354,7 +342,7 @@ const ItemListingsPanel = ({
                     </div>
                     {canBuy || canManageListings ? (
                       <div className="mt-5 space-y-3">
-                        <div className="text-xs uppercase tracking-[0.14em] text-slate-500 dark:text-slate-200/60">
+                        <div className="text-[0.6rem] uppercase tracking-[0.18em] text-slate-500 dark:text-slate-200/60">
                           {actionLabel}
                         </div>
                         <div
@@ -381,7 +369,7 @@ const ItemListingsPanel = ({
                               className="group"
                             >
                               <span>Buy</span>
-                              <span className="text-[0.55rem] text-slate-500 transition group-hover:text-slate-700 dark:text-slate-200/60 dark:group-hover:text-slate-100">
+                              <span className="text-[0.6rem] text-slate-500 transition group-hover:text-slate-700 dark:text-slate-200/60 dark:group-hover:text-slate-100">
                                 {isOutOfStock ? "Unavailable" : "Now"}
                               </span>
                             </Button>
@@ -446,25 +434,25 @@ const AcceptedCurrenciesPanel = ({
               return (
                 <div
                   key={currency.acceptedCurrencyId}
-                  className="rounded-lg border border-slate-300/70 bg-white/90 px-4 py-3 text-sm shadow-[0_10px_24px_-20px_rgba(15,23,42,0.3)] dark:border-slate-50/25 dark:bg-slate-950/60"
+                  className="rounded-xl border border-slate-300/80 bg-white/95 p-4 shadow-[0_12px_30px_-22px_rgba(15,23,42,0.35)] dark:border-slate-50/25 dark:bg-slate-950/60"
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex min-w-0 flex-col">
-                      <span className="font-semibold text-sds-dark dark:text-sds-light">
+                      <span className="text-lg font-semibold text-sds-dark dark:text-sds-light">
                         {currency.symbol || getStructLabel(currency.coinType)}
                       </span>
                       <CopyableId
                         value={currency.coinType}
-                        displayValue={currency.coinType}
+                        displayValue={`Coin type ${currency.coinType}`}
                         title="Copy coin type"
-                        className="mt-0.5 w-full justify-start text-xs text-slate-500 dark:text-slate-200/60"
-                        valueClassName="truncate font-normal text-slate-500 dark:text-slate-200/60"
+                        className="mt-1 w-full justify-start text-sm font-semibold text-slate-500 dark:text-slate-200/70"
+                        valueClassName="truncate font-semibold text-slate-500 dark:text-slate-200/70"
                       />
                     </div>
                   </div>
-                  <div className="mt-3 grid gap-3 text-[0.65rem] text-slate-500 sm:grid-cols-2 sm:gap-x-6 dark:text-slate-200/70">
+                  <div className="mt-4 grid gap-4 text-[0.65rem] text-slate-500 sm:grid-cols-2 sm:gap-x-8 dark:text-slate-200/70">
                     <div>
-                      <div className="text-[0.55rem] uppercase tracking-[0.18em]">
+                      <div className="text-[0.6rem] uppercase tracking-[0.18em]">
                         Feed id
                       </div>
                       <CopyableId
@@ -477,7 +465,7 @@ const AcceptedCurrenciesPanel = ({
                     </div>
                     {currency.pythObjectId ? (
                       <div>
-                        <div className="text-[0.55rem] uppercase tracking-[0.18em]">
+                        <div className="text-[0.6rem] uppercase tracking-[0.18em]">
                           Price info
                         </div>
                         <CopyableId
@@ -490,10 +478,10 @@ const AcceptedCurrenciesPanel = ({
                       </div>
                     ) : null}
                   </div>
-                  <div className="mt-3 flex flex-wrap items-center gap-3 text-[0.65rem]">
+                  <div className="mt-4 flex flex-wrap items-center gap-3 text-[0.65rem]">
                     <CopyableId
                       value={currency.acceptedCurrencyId}
-                      label="Accepted"
+                      label="Accepted Currency"
                     />
                     {currency.pythObjectId ? (
                       <CopyableId value={currency.pythObjectId} label="Pyth" />
@@ -552,7 +540,7 @@ const PurchasedItemsPanel = ({
               return (
                 <div
                   key={item.shopItemId}
-                  className="rounded-xl border border-slate-300/80 bg-white/95 p-4 text-sm shadow-[0_12px_30px_-22px_rgba(15,23,42,0.35)] dark:border-slate-50/25 dark:bg-slate-950/60"
+                  className="rounded-xl border border-slate-300/80 bg-white/95 p-4 shadow-[0_12px_30px_-22px_rgba(15,23,42,0.35)] dark:border-slate-50/25 dark:bg-slate-950/60"
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div>
@@ -701,16 +689,33 @@ const DiscountsPanel = ({
                       <div
                         key={template.discountTemplateId}
                         className={clsx(
-                          "rounded-xl border border-slate-300/80 bg-white/95 px-4 py-3 text-sm shadow-[0_12px_30px_-22px_rgba(15,23,42,0.35)] transition dark:border-slate-50/25 dark:bg-slate-950/60",
+                          "rounded-xl border border-slate-300/80 bg-white/95 p-4 shadow-[0_12px_30px_-22px_rgba(15,23,42,0.35)] transition dark:border-slate-50/25 dark:bg-slate-950/60",
                           isClaimable ? "" : "opacity-60"
                         )}
                         title={claimBlockingReason}
                       >
                         <div className="flex flex-col gap-3">
-                          <div className="flex items-center justify-between gap-3">
-                            <span className="font-semibold text-sds-dark dark:text-sds-light">
-                              {template.ruleDescription}
-                            </span>
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <div className="text-lg font-semibold text-sds-dark dark:text-sds-light">
+                                {template.ruleDescription}
+                              </div>
+                              {template.appliesToListingId ? (
+                                <CopyableId
+                                  value={template.appliesToListingId}
+                                  displayValue={`Applies to listing ${shortenId(
+                                    template.appliesToListingId
+                                  )}`}
+                                  title="Copy listing id"
+                                  className="mt-1 w-full justify-start text-sm font-semibold text-slate-500 dark:text-slate-200/70"
+                                  valueClassName="truncate font-semibold text-slate-500 dark:text-slate-200/70"
+                                />
+                              ) : (
+                                <div className="mt-1 text-sm font-semibold text-slate-500 dark:text-slate-200/70">
+                                  Applies to all listings
+                                </div>
+                              )}
+                            </div>
                             <div className="flex items-center gap-3">
                               {!canManageDiscounts ? (
                                 <span className="text-xs uppercase tracking-[0.12em] text-slate-500 dark:text-slate-200/60">
@@ -719,14 +724,9 @@ const DiscountsPanel = ({
                               ) : null}
                             </div>
                           </div>
-                          <div className="text-xs text-slate-500 dark:text-slate-200/60">
-                            {template.appliesToListingId
-                              ? `Listing ${shortenId(template.appliesToListingId)}`
-                              : "Applies to all listings"}
-                          </div>
-                          <div className="mt-2 grid gap-3 text-[0.65rem] text-slate-500 sm:grid-cols-2 dark:text-slate-200/70">
+                          <div className="mt-4 grid gap-4 text-[0.65rem] text-slate-500 sm:grid-cols-2 sm:gap-x-8 dark:text-slate-200/70">
                             <div>
-                              <div className="text-[0.55rem] uppercase tracking-[0.18em]">
+                              <div className="text-[0.6rem] uppercase tracking-[0.18em]">
                                 Starts
                               </div>
                               <div className="mt-1 text-sm font-semibold text-sds-dark dark:text-sds-light">
@@ -737,7 +737,7 @@ const DiscountsPanel = ({
                               </div>
                             </div>
                             <div>
-                              <div className="text-[0.55rem] uppercase tracking-[0.18em]">
+                              <div className="text-[0.6rem] uppercase tracking-[0.18em]">
                                 Expires
                               </div>
                               <div className="mt-1 text-sm font-semibold text-sds-dark dark:text-sds-light">
@@ -747,17 +747,11 @@ const DiscountsPanel = ({
                               </div>
                             </div>
                           </div>
-                          <div className="mt-1 flex flex-wrap items-center gap-3 text-[0.65rem]">
+                          <div className="mt-4 flex flex-wrap items-center gap-3 text-[0.65rem]">
                             <CopyableId
                               value={template.discountTemplateId}
                               label="Template"
                             />
-                            {template.appliesToListingId ? (
-                              <CopyableId
-                                value={template.appliesToListingId}
-                                label="Listing"
-                              />
-                            ) : null}
                           </div>
                           <div
                             className={clsx(
@@ -814,13 +808,31 @@ const DiscountsPanel = ({
                       return (
                         <div
                           key={ticket.discountTicketId}
-                          className="rounded-xl border border-slate-300/80 bg-white/95 px-4 py-3 text-sm shadow-[0_12px_30px_-22px_rgba(15,23,42,0.35)] dark:border-slate-50/25 dark:bg-slate-950/60"
+                          className="rounded-xl border border-slate-300/80 bg-white/95 p-4 shadow-[0_12px_30px_-22px_rgba(15,23,42,0.35)] dark:border-slate-50/25 dark:bg-slate-950/60"
                         >
                           <div className="flex flex-col gap-3">
-                            <div className="flex items-center justify-between">
-                              <span className="font-semibold text-sds-dark dark:text-sds-light">
-                                {template?.ruleDescription || "Discount ticket"}
-                              </span>
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="min-w-0">
+                                <div className="text-lg font-semibold text-sds-dark dark:text-sds-light">
+                                  {template?.ruleDescription ||
+                                    "Discount ticket"}
+                                </div>
+                                {ticket.listingId ? (
+                                  <CopyableId
+                                    value={ticket.listingId}
+                                    displayValue={`Applies to listing ${shortenId(
+                                      ticket.listingId
+                                    )}`}
+                                    title="Copy listing id"
+                                    className="mt-1 w-full justify-start text-sm font-semibold text-slate-500 dark:text-slate-200/70"
+                                    valueClassName="truncate font-semibold text-slate-500 dark:text-slate-200/70"
+                                  />
+                                ) : (
+                                  <div className="mt-1 text-sm font-semibold text-slate-500 dark:text-slate-200/70">
+                                    Applies to any listing
+                                  </div>
+                                )}
+                              </div>
                               {!canManageDiscounts ? (
                                 <span className="text-xs uppercase tracking-[0.12em] text-slate-500 dark:text-slate-200/60">
                                   {template?.status || "active"}
@@ -831,11 +843,6 @@ const DiscountsPanel = ({
                               value={ticket.discountTicketId}
                               label="Object ID"
                             />
-                            <div className="text-xs text-slate-500 dark:text-slate-200/60">
-                              {ticket.listingId
-                                ? `Listing ${shortenId(ticket.listingId)}`
-                                : "Applies to any listing"}
-                            </div>
                           </div>
                         </div>
                       )
