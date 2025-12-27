@@ -185,3 +185,66 @@ export const getLatestObjectFromArtifact = async (
     undefined
   )
 }
+
+export const getLatestArtifact = <TArtifact extends { publishedAt?: string }>(
+  artifacts: TArtifact[]
+): TArtifact | undefined => {
+  if (artifacts.length === 0) return undefined
+
+  const hasPublishedAt = artifacts.some((artifact) =>
+    Boolean(artifact.publishedAt)
+  )
+  if (!hasPublishedAt) return artifacts[artifacts.length - 1]
+
+  return artifacts.reduce<TArtifact | undefined>((latest, current) => {
+    if (!latest) return current
+
+    const latestTime = Date.parse(latest.publishedAt ?? "")
+    const currentTime = Date.parse(current.publishedAt ?? "")
+
+    if (!Number.isFinite(latestTime)) return current
+    if (!Number.isFinite(currentTime)) return latest
+
+    return currentTime >= latestTime ? current : latest
+  }, undefined)
+}
+
+export const findLatestArtifactThat = (
+  predicate: (artifact: PublishArtifact) => boolean,
+  deploymentArtifacts: PublishArtifact[]
+) => getLatestArtifact(deploymentArtifacts.filter(predicate))
+
+export const isPublishArtifactNamed =
+  (artifactName: string) =>
+  (artifact: PublishArtifact): boolean => {
+    const normalizedPackageName = artifact.packageName?.trim().toLowerCase()
+    if (normalizedPackageName === artifactName) return true
+
+    const packagePath = (artifact.packagePath ?? "").replace(/\\/g, "/")
+    if (packagePath.endsWith("/oracle-market")) return true
+    if (packagePath.includes("/move/oracle-market")) return true
+
+    return false
+  }
+
+export const resolvePublisherCapIdFromObjectArtifacts = async ({
+  networkName,
+  publishDigest
+}: {
+  networkName: string
+  publishDigest?: string
+}): Promise<string | undefined> => {
+  if (!publishDigest) return undefined
+
+  const objectArtifacts = await loadObjectArtifacts(networkName)
+  const publisherArtifact = objectArtifacts.reduceRight<
+    (typeof objectArtifacts)[number] | undefined
+  >((latest, artifact) => {
+    if (latest) return latest
+    if (artifact.digest !== publishDigest) return undefined
+    if (!artifact.objectType?.endsWith("::package::Publisher")) return undefined
+    return artifact
+  }, undefined)
+
+  return publisherArtifact?.objectId
+}

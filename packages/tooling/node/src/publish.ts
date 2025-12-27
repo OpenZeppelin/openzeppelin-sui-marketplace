@@ -1,9 +1,13 @@
 import fs from "node:fs/promises"
 import path from "node:path"
 
-import type { SuiTransactionBlockResponse } from "@mysten/sui/client"
+import type { SuiClient, SuiTransactionBlockResponse } from "@mysten/sui/client"
 import type { Ed25519Keypair } from "@mysten/sui/keypairs/ed25519"
 import { buildExplorerUrl } from "@sui-oracle-market/tooling-core/network"
+import {
+  deriveRelevantPackageId,
+  getSuiObject
+} from "@sui-oracle-market/tooling-core/object"
 import { newTransaction } from "@sui-oracle-market/tooling-core/transactions"
 import type {
   BuildOutput,
@@ -27,10 +31,18 @@ import {
   logSimpleGreen,
   logWarning
 } from "./log.ts"
+import {
+  findUnpublishedDependenciesInLock,
+  normalizeDependencyId,
+  parsePublishedAddressesFromLock,
+  resolveAllowedDependencyIds,
+  updateMoveLockPublishedAddresses
+} from "./move-lock.ts"
 import { buildMovePackage } from "./move.ts"
 import { runSuiCli } from "./suiCli.ts"
 
 type PackageNames = { root?: string; dependencies: string[] }
+type DependencyAddressMap = Record<string, string>
 
 type PublishPlan = {
   network: SuiNetworkConfig
@@ -56,6 +68,10 @@ type PublishPlan = {
  * Why: Publishing on Sui requires bundling compiled modules, dependency addresses, and gas strategy;
  * this helper mirrors common EVM “deploy script” ergonomics while honoring Sui-specific constraints
  * (unpublished deps, Move.lock addresses, UpgradeCap transfer).
+ *
+ * Note: This will update Move.lock with published-at addresses for the active network
+ * (using configured dependency addresses + Pyth package lookup) before publishing,
+ * so consumers only need to switch Sui config/network.
  */
 export const publishPackageWithLog = async (
   {
@@ -87,6 +103,7 @@ export const publishPackageWithLog = async (
     fullNodeUrl: resolvedFullNodeUrl,
     packagePath,
     keypair,
+    suiClient: suiContext.suiClient,
     gasBudget,
     withUnpublishedDependencies,
     useDevBuild,
@@ -105,6 +122,9 @@ export const publishPackageWithLog = async (
 /**
  * Publishes a Move package according to a prepared plan (build flags, dep strategy).
  * Returns publish artifacts persisted to disk, similar to an EVM deploy receipt.
+ *
+ * Note: The publish plan is prepared after ensuring Move.lock is up to date for the
+ * active network, so dependency address resolution matches the current environment.
  */
 export const publishPackage = async (
   publishPlan: PublishPlan,
@@ -263,6 +283,7 @@ const buildPublishPlan = async ({
   fullNodeUrl,
   packagePath,
   keypair,
+  suiClient,
   gasBudget,
   withUnpublishedDependencies = false,
   useDevBuild = false,
@@ -273,12 +294,41 @@ const buildPublishPlan = async ({
   packagePath: string
   fullNodeUrl: string
   keypair: Ed25519Keypair
+  suiClient: SuiClient
   gasBudget: number
   withUnpublishedDependencies?: boolean
   useDevBuild?: boolean
   useCliPublish?: boolean
   allowAutoUnpublishedDependencies?: boolean
 }): Promise<PublishPlan> => {
+  if (network.networkName !== "localnet") {
+    if (useDevBuild)
+      throw new Error(
+        "Dev builds are limited to localnet. Remove --dev when publishing to shared networks."
+      )
+    if (withUnpublishedDependencies)
+      throw new Error(
+        "--with-unpublished-dependencies is reserved for localnet. Link to published packages in Move.lock for shared networks."
+      )
+  }
+
+  const allowImplicitUnpublishedDependencies =
+    network.networkName === "localnet"
+      ? allowAutoUnpublishedDependencies
+      : false
+
+  const initialMoveLockContents = await readMoveLockContents(packagePath)
+
+  const updatedMoveLockContents = await ensureMoveLockPublishedAddresses({
+    packagePath,
+    lockContents: initialMoveLockContents,
+    network,
+    includeDevDependencies: useDevBuild,
+    suiClient
+  })
+
+  const moveLockContents = updatedMoveLockContents ?? initialMoveLockContents
+
   const {
     unpublishedDependencies,
     shouldUseUnpublishedDependencies,
@@ -286,14 +336,16 @@ const buildPublishPlan = async ({
   } = await resolveUnpublishedDependencyUsage(
     packagePath,
     withUnpublishedDependencies,
-    allowAutoUnpublishedDependencies
+    allowImplicitUnpublishedDependencies,
+    useDevBuild,
+    moveLockContents
   )
 
   if (
     !shouldSkipFrameworkConsistency(
       network.networkName,
       useDevBuild,
-      allowAutoUnpublishedDependencies
+      allowImplicitUnpublishedDependencies
     )
   ) {
     await assertFrameworkRevisionConsistency(packagePath)
@@ -318,7 +370,7 @@ const buildPublishPlan = async ({
     useDevBuild,
     includeUnpublishedDeps: Boolean(shouldUseUnpublishedDependencies),
     ignoreChain: shouldIgnoreChain(network.networkName, {
-      allowAutoUnpublishedDependencies,
+      allowAutoUnpublishedDependencies: allowImplicitUnpublishedDependencies,
       useDevBuild
     })
   })
@@ -337,7 +389,10 @@ const buildPublishPlan = async ({
     shouldUseUnpublishedDependencies: Boolean(shouldUseUnpublishedDependencies),
     unpublishedDependencies,
     buildFlags,
-    dependencyAddressesFromLock: await readDependencyAddresses(packagePath),
+    dependencyAddressesFromLock: readDependencyAddresses(
+      moveLockContents,
+      useDevBuild
+    ),
     useCliPublish: cliPublish,
     keystorePath: network.account?.keystorePath,
     suiCliVersion: await getSuiCliVersion(),
@@ -345,9 +400,9 @@ const buildPublishPlan = async ({
       packagePath,
       unpublishedDependencies
     ),
-    allowAutoUnpublishedDependencies,
+    allowAutoUnpublishedDependencies: allowImplicitUnpublishedDependencies,
     ignoreChainDuringBuild: shouldIgnoreChain(network.networkName, {
-      allowAutoUnpublishedDependencies,
+      allowAutoUnpublishedDependencies: allowImplicitUnpublishedDependencies,
       useDevBuild
     })
   }
@@ -657,41 +712,174 @@ const extractPublishResult = (
   }
 }
 
-const CORE_PUBLISHED_DEPENDENCIES = new Set([
-  "bridge",
-  "movestdlib",
-  "sui",
-  "suisystem"
-])
+const resolveMoveLockPath = (packagePath: string) =>
+  path.join(packagePath, "Move.lock")
+
+const readMoveLockContents = async (
+  packagePath: string
+): Promise<string | undefined> => {
+  const lockPath = resolveMoveLockPath(packagePath)
+  try {
+    return await fs.readFile(lockPath, "utf8")
+  } catch {
+    return undefined
+  }
+}
+
+const writeMoveLockContents = async (packagePath: string, contents: string) => {
+  const lockPath = resolveMoveLockPath(packagePath)
+  await fs.writeFile(lockPath, contents)
+}
 
 /**
  * Finds dependencies that do not advertise a published address in Move.lock.
  */
-const findUnpublishedDependencies = async (
-  packagePath: string
-): Promise<{ unpublishedDependencies: string[]; lockMissing: boolean }> => {
-  const lockPath = path.join(packagePath, "Move.lock")
-  try {
-    const lockContents = await fs.readFile(lockPath, "utf8")
-    const packageBlocks = lockContents.split(/\[\[move\.package\]\]/).slice(1)
-
-    const unpublishedDependencies: string[] = []
-    for (const block of packageBlocks) {
-      const idMatch = block.match(/id\s*=\s*"([^"]+)"/)
-      if (!idMatch || CORE_PUBLISHED_DEPENDENCIES.has(idMatch[1].toLowerCase()))
-        continue
-
-      const hasPublishedAddress =
-        /published-at\s*=\s*"0x[0-9a-fA-F]+"/.test(block) ||
-        /published-id\s*=\s*"0x[0-9a-fA-F]+"/.test(block)
-
-      if (!hasPublishedAddress) unpublishedDependencies.push(idMatch[1])
+const findUnpublishedDependencies = (
+  lockContents: string | undefined,
+  includeDevDependencies = true
+): { unpublishedDependencies: string[]; lockMissing: boolean } => {
+  if (!lockContents)
+    return {
+      unpublishedDependencies: [],
+      lockMissing: true
     }
 
-    return { unpublishedDependencies, lockMissing: false }
-  } catch {
-    return { unpublishedDependencies: [], lockMissing: true }
+  const unpublishedDependencies = findUnpublishedDependenciesInLock(
+    lockContents,
+    { includeDevDependencies }
+  )
+
+  return { unpublishedDependencies, lockMissing: false }
+}
+
+const shouldResolveDependencyId = (
+  dependencyId: string,
+  allowedDependencyIds?: Set<string>
+) =>
+  !allowedDependencyIds ||
+  allowedDependencyIds.has(normalizeDependencyId(dependencyId))
+
+const filterDependencyAddressMap = (
+  dependencyAddresses: DependencyAddressMap,
+  allowedDependencyIds?: Set<string>
+): DependencyAddressMap => {
+  if (!allowedDependencyIds) return dependencyAddresses
+
+  return Object.fromEntries(
+    Object.entries(dependencyAddresses).filter(([dependencyId]) =>
+      allowedDependencyIds.has(normalizeDependencyId(dependencyId))
+    )
+  )
+}
+
+const hasDependencyAddress = (
+  dependencyAddresses: DependencyAddressMap,
+  dependencyId: string
+) =>
+  Object.keys(dependencyAddresses).some(
+    (key) => normalizeDependencyId(key) === normalizeDependencyId(dependencyId)
+  )
+
+const resolvePythPackageId = async ({
+  network,
+  allowedDependencyIds,
+  suiClient,
+  configuredAddresses
+}: {
+  network: SuiNetworkConfig
+  allowedDependencyIds?: Set<string>
+  suiClient: SuiClient
+  configuredAddresses: DependencyAddressMap
+}): Promise<string | undefined> => {
+  if (!shouldResolveDependencyId("Pyth", allowedDependencyIds)) return undefined
+  if (hasDependencyAddress(configuredAddresses, "Pyth")) return undefined
+
+  const pythStateId = network.pyth?.pythStateId
+  if (!pythStateId) return undefined
+
+  const { object } = await getSuiObject(
+    {
+      objectId: pythStateId,
+      options: { showType: true }
+    },
+    { suiClient }
+  )
+
+  if (!object.type)
+    throw new Error(`Pyth state object ${pythStateId} did not return a type.`)
+
+  return deriveRelevantPackageId(object.type)
+}
+
+const resolveDependencyAddressesForNetwork = async ({
+  network,
+  allowedDependencyIds,
+  suiClient
+}: {
+  network: SuiNetworkConfig
+  allowedDependencyIds?: Set<string>
+  suiClient: SuiClient
+}): Promise<DependencyAddressMap> => {
+  const configuredAddresses = network.move?.dependencyAddresses ?? {}
+  const resolvedAddresses: DependencyAddressMap = { ...configuredAddresses }
+
+  const pythPackageId = await resolvePythPackageId({
+    network,
+    allowedDependencyIds,
+    suiClient,
+    configuredAddresses
+  })
+
+  if (pythPackageId) {
+    resolvedAddresses.Pyth = pythPackageId
   }
+
+  return filterDependencyAddressMap(resolvedAddresses, allowedDependencyIds)
+}
+
+const ensureMoveLockPublishedAddresses = async ({
+  packagePath,
+  lockContents,
+  network,
+  includeDevDependencies,
+  suiClient
+}: {
+  packagePath: string
+  lockContents: string | undefined
+  network: SuiNetworkConfig
+  includeDevDependencies: boolean
+  suiClient: SuiClient
+}): Promise<string | undefined> => {
+  if (!lockContents) return lockContents
+  if (network.networkName === "localnet") return lockContents
+
+  const allowedDependencyIds = resolveAllowedDependencyIds(
+    lockContents,
+    includeDevDependencies
+  )
+
+  const dependencyAddresses = await resolveDependencyAddressesForNetwork({
+    network,
+    allowedDependencyIds,
+    suiClient
+  })
+
+  if (Object.keys(dependencyAddresses).length === 0) return lockContents
+
+  const { updatedContents, updatedDependencies } =
+    updateMoveLockPublishedAddresses(lockContents, dependencyAddresses)
+
+  if (updatedContents === lockContents) return lockContents
+
+  await writeMoveLockContents(packagePath, updatedContents)
+
+  if (updatedDependencies.length) {
+    logKeyValueBlue("Move.lock")(
+      `updated ${updatedDependencies.length} dependencies`
+    )
+  }
+
+  return updatedContents
 }
 
 /**
@@ -700,10 +888,14 @@ const findUnpublishedDependencies = async (
 const resolveUnpublishedDependencyUsage = async (
   packagePath: string,
   explicitWithUnpublished?: boolean,
-  allowImplicitUnpublished?: boolean
+  allowImplicitUnpublished?: boolean,
+  includeDevDependencies = true,
+  lockContents?: string
 ) => {
-  const { unpublishedDependencies, lockMissing } =
-    await findUnpublishedDependencies(packagePath)
+  const { unpublishedDependencies, lockMissing } = findUnpublishedDependencies(
+    lockContents,
+    includeDevDependencies
+  )
 
   if (lockMissing && !allowImplicitUnpublished && !explicitWithUnpublished) {
     throw new Error(buildMissingMoveLockError(packagePath))
@@ -801,16 +993,15 @@ const resolvePackageNames = async (
 /**
  * Reads Move.lock for published-at/published-id addresses keyed by package id/name.
  */
-const readDependencyAddresses = async (
-  packagePath: string
-): Promise<Record<string, string>> => {
-  const lockPath = path.join(packagePath, "Move.lock")
-  try {
-    const lockContents = await fs.readFile(lockPath, "utf8")
-    return parsePublishedAddresses(lockContents)
-  } catch {
-    return {}
-  }
+const readDependencyAddresses = (
+  lockContents: string | undefined,
+  includeDevDependencies = true
+): Record<string, string> => {
+  if (!lockContents) return {}
+
+  return parsePublishedAddressesFromLock(lockContents, {
+    includeDevDependencies
+  })
 }
 
 /** Ensures the root package and any local dependencies share the same framework git revision. */
@@ -967,29 +1158,6 @@ const parseSuiCliVersionOutput = (stdout: string): string | undefined => {
   const firstLine = stdout.trim().split(/\r?\n/)[0] ?? ""
   const versionMatch = firstLine.match(/sui\s+([^\s]+)/i)
   return (versionMatch?.[1] ?? firstLine) || undefined
-}
-
-/** Parses published addresses from a Move.lock blob keyed by package alias. */
-const parsePublishedAddresses = (
-  lockContents: string
-): Record<string, string> => {
-  const blocks = lockContents.split(/\[\[move\.package\]\]/).slice(1)
-  const addresses: Record<string, string> = {}
-
-  for (const block of blocks) {
-    const idMatch = block.match(/id\s*=\s*"([^"]+)"/)
-    const publishedMatch =
-      block.match(/published-at\s*=\s*"0x([0-9a-fA-F]+)"/) ||
-      block.match(/published-id\s*=\s*"0x([0-9a-fA-F]+)"/)
-
-    if (idMatch && publishedMatch) {
-      const alias = idMatch[1]
-      const address = `0x${publishedMatch[1].toLowerCase()}`
-      addresses[alias] = address
-    }
-  }
-
-  return addresses
 }
 
 /**

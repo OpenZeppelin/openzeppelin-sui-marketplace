@@ -17,12 +17,14 @@ export type SuiAccountConfig = {
 
 export type SuiMoveConfig = {
   withUnpublishedDependencies?: boolean
+  dependencyAddresses?: Record<string, string>
 }
 
 export type SuiPythConfig = {
   hermesUrl: string
   pythStateId: string
   wormholeStateId: string
+  wormholePackageId?: string
 }
 
 export type SuiNetworkConfig = {

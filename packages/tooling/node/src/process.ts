@@ -6,15 +6,37 @@ import { fileURLToPath } from "node:url"
 
 import { type Argv } from "yargs"
 import { hideBin } from "yargs/helpers"
+import type { SuiResolvedConfig } from "./config.ts"
 import { getNetworkConfig, loadSuiConfig } from "./config.ts"
 import { createSuiClient } from "./describe-object.ts"
 import type { Tooling } from "./factory.ts"
 import { createTooling } from "./factory.ts"
-import { logEachBlue, logError, logKeyValueBlue, logSimpleBlue } from "./log.ts"
-import { ensureSuiCli } from "./suiCli.ts"
+import {
+  logEachBlue,
+  logError,
+  logKeyValueBlue,
+  logSimpleBlue,
+  logWarning
+} from "./log.ts"
+import {
+  createSuiCliEnvironment,
+  ensureSuiCli,
+  getActiveSuiCliEnvironment,
+  listSuiCliEnvironments,
+  switchSuiCliEnvironment
+} from "./suiCli.ts"
 
 export type CommonCliArgs = {
   network?: string
+}
+
+type ScriptExecutionContext<TCliArgument> = {
+  scriptName: string
+  cliArguments?: CommonCliArgs & TCliArgument
+  cliArgumentsToLog: Record<string, string | number | boolean | undefined>
+  networkName: string
+  networkConfig: SuiResolvedConfig["network"]
+  suiConfig: SuiResolvedConfig
 }
 
 type ScriptExecutor<TCliArgument> = (
@@ -42,6 +64,11 @@ const currentScriptName = () => {
 }
 
 export type BaseYargs = Argv<CommonCliArgs>
+
+type SuiCliEnvironmentSwitch = {
+  originalEnvironment?: string
+  didSwitch: boolean
+}
 
 /**
  * Adds the standard `--network` option and parses CLI arguments.
@@ -122,6 +149,234 @@ const sanitizeCliArgumentsForLogging = <TCliArgument>(
   return Object.fromEntries(filteredEntries)
 }
 
+const resolveNetworkName = (
+  cliArguments: CommonCliArgs | undefined,
+  suiConfig: SuiResolvedConfig
+) => cliArguments?.network || suiConfig.currentNetwork
+
+const buildSuiConfigForNetwork = ({
+  suiConfigFromFile,
+  networkName,
+  networkConfig
+}: {
+  suiConfigFromFile: SuiResolvedConfig
+  networkName: string
+  networkConfig: SuiResolvedConfig["network"]
+}): SuiResolvedConfig => ({
+  ...suiConfigFromFile,
+  currentNetwork: networkName,
+  network: networkConfig
+})
+
+const resolveCliArguments = async <TCliArgument>(
+  scriptName: string,
+  cliOptions?: Argv<TCliArgument>
+): Promise<(CommonCliArgs & TCliArgument) | undefined> => {
+  if (!cliOptions) return undefined
+  return addBaseOptions<TCliArgument>(scriptName, cliOptions)
+}
+
+const resolveScriptNetwork = (
+  cliArguments: CommonCliArgs | undefined,
+  suiConfigFromFile: SuiResolvedConfig
+) => {
+  const networkName = resolveNetworkName(cliArguments, suiConfigFromFile)
+  const networkConfig = getNetworkConfig(networkName, suiConfigFromFile)
+
+  return { networkName, networkConfig }
+}
+
+const buildScriptExecutionContext = async <TCliArgument>(
+  cliOptions?: Argv<TCliArgument>
+): Promise<ScriptExecutionContext<TCliArgument>> => {
+  const suiConfigFromFile = await loadSuiConfig()
+  const scriptName = currentScriptName()
+  const cliArguments = await resolveCliArguments(scriptName, cliOptions)
+  const { networkName, networkConfig } = resolveScriptNetwork(
+    cliArguments,
+    suiConfigFromFile
+  )
+  const cliArgumentsToLog = sanitizeCliArgumentsForLogging(
+    cliArguments,
+    cliOptions
+  )
+
+  return {
+    scriptName,
+    cliArguments,
+    cliArgumentsToLog,
+    networkName,
+    networkConfig,
+    suiConfig: buildSuiConfigForNetwork({
+      suiConfigFromFile,
+      networkName,
+      networkConfig
+    })
+  }
+}
+
+const createToolingForNetwork = async (
+  networkConfig: SuiResolvedConfig["network"],
+  suiConfig: SuiResolvedConfig
+) =>
+  createTooling({
+    suiClient: createSuiClient(networkConfig.url),
+    suiConfig
+  })
+
+const logScriptStart = (context: ScriptExecutionContext<unknown>) => {
+  logSimpleBlue("Starting script 🤖")
+  logKeyValueBlue("Script")(context.scriptName)
+  logKeyValueBlue("Network")(context.networkName)
+  logEachBlue(context.cliArgumentsToLog)
+  console.log("")
+}
+
+const logScriptFailure = (error: unknown) => {
+  console.log("")
+  logError("Script failed ❌")
+  logError(
+    `${error instanceof Error ? error.message : String(error)}\n${
+      error instanceof Error ? error.stack : ""
+    }`
+  )
+  logError(`${error instanceof Error ? error.message : String(error)}\n`)
+}
+
+const isSuiCliEnvironmentConfigured = (
+  environmentName: string,
+  availableEnvironments: string[]
+) => availableEnvironments.includes(environmentName)
+
+const switchSuiCliEnvironmentIfNeeded = async ({
+  environmentName,
+  rpcUrl
+}: {
+  environmentName: string | undefined
+  rpcUrl: string | undefined
+}): Promise<SuiCliEnvironmentSwitch> => {
+  const originalEnvironment = await getActiveSuiCliEnvironment()
+
+  if (!environmentName || originalEnvironment === environmentName) {
+    return { originalEnvironment, didSwitch: false }
+  }
+
+  const availableEnvironments = await listSuiCliEnvironments()
+  const environmentExists = isSuiCliEnvironmentConfigured(
+    environmentName,
+    availableEnvironments
+  )
+  let didCreateEnvironment = false
+
+  if (!environmentExists && rpcUrl) {
+    didCreateEnvironment = await createSuiCliEnvironment(
+      environmentName,
+      rpcUrl
+    )
+    if (!didCreateEnvironment) {
+      logWarning(
+        `Failed to create Sui CLI environment ${environmentName}; attempting to switch anyway.`
+      )
+    }
+  }
+
+  const shouldAttemptSwitch =
+    environmentExists ||
+    didCreateEnvironment ||
+    availableEnvironments.length === 0
+
+  if (!shouldAttemptSwitch) {
+    logWarning(
+      `Sui CLI environment ${environmentName} is not configured; CLI commands may target a different network.`
+    )
+    return { originalEnvironment, didSwitch: false }
+  }
+
+  const didSwitch = await switchSuiCliEnvironment(environmentName)
+  if (!didSwitch)
+    logWarning(
+      `Failed to switch Sui CLI environment to ${environmentName}; CLI commands may target a different network.`
+    )
+
+  return { originalEnvironment, didSwitch }
+}
+
+const restoreSuiCliEnvironment = async (
+  switchState: SuiCliEnvironmentSwitch
+) => {
+  if (!switchState.didSwitch || !switchState.originalEnvironment) return
+
+  const didRestore = await switchSuiCliEnvironment(
+    switchState.originalEnvironment
+  )
+  if (!didRestore) {
+    logWarning(
+      `Failed to restore Sui CLI environment to ${switchState.originalEnvironment}.`
+    )
+  }
+}
+
+const withSuiCliEnvironment = async <TResult>(
+  {
+    environmentName,
+    rpcUrl
+  }: {
+    environmentName: string | undefined
+    rpcUrl: string | undefined
+  },
+  action: () => Promise<TResult>
+): Promise<TResult> => {
+  const environmentSwitch = await switchSuiCliEnvironmentIfNeeded({
+    environmentName,
+    rpcUrl
+  })
+
+  try {
+    return await action()
+  } finally {
+    await restoreSuiCliEnvironment(environmentSwitch)
+  }
+}
+
+const runScriptAndCaptureExitCode = async <TCliArgument>(
+  scriptToExecute: ScriptExecutor<TCliArgument>,
+  cliOptions?: Argv<TCliArgument>
+): Promise<number> => {
+  try {
+    await ensureSuiCli()
+
+    const context = await buildScriptExecutionContext(cliOptions)
+
+    return await withSuiCliEnvironment(
+      {
+        environmentName: context.networkName,
+        rpcUrl: context.networkConfig.url
+      },
+      async () => {
+        logScriptStart(context)
+
+        await scriptToExecute(
+          await createToolingForNetwork(
+            context.networkConfig,
+            context.suiConfig
+          ),
+          context.cliArguments as CommonCliArgs & TCliArgument
+        )
+
+        return 0
+      }
+    )
+  } catch (error) {
+    logScriptFailure(error)
+    return 1
+  }
+}
+
+const finalizeProcess = (exitCode: number) => {
+  if (exitCode === 0) process.exit(0)
+  process.exitCode = exitCode
+}
+
 /**
  * Thin wrapper around yargs + Sui config loading to run CLI scripts consistently.
  * Why: Centralizes logging, network resolution, and Sui CLI presence so each script
@@ -132,58 +387,10 @@ export const runSuiScript = <TCliArgument>(
   cliOptions?: Argv<TCliArgument>
 ) => {
   ;(async () => {
-    try {
-      await ensureSuiCli()
-
-      const suiConfigFromFile = await loadSuiConfig()
-      const scriptName = currentScriptName()
-
-      const cliArguments = cliOptions
-        ? await addBaseOptions<TCliArgument>(scriptName, cliOptions)
-        : undefined
-
-      const networkNameToLoad =
-        cliArguments?.network || suiConfigFromFile.currentNetwork
-      const cliArgumentsToLog = sanitizeCliArgumentsForLogging(
-        cliArguments,
-        cliOptions
-      )
-
-      const networkToLoad = getNetworkConfig(
-        cliArguments?.network || suiConfigFromFile.currentNetwork,
-        suiConfigFromFile
-      )
-
-      logSimpleBlue("Starting script 🤖")
-      logKeyValueBlue("Script")(scriptName)
-      logKeyValueBlue("Network")(networkNameToLoad)
-      logEachBlue(cliArgumentsToLog)
-      console.log("")
-
-      const suiConfig = {
-        ...suiConfigFromFile,
-        currentNetwork: networkNameToLoad,
-        network: networkToLoad
-      }
-
-      await scriptToExecute(
-        await createTooling({
-          suiClient: createSuiClient(networkToLoad.url),
-          suiConfig
-        }),
-        cliArguments as CommonCliArgs & TCliArgument
-      )
-      process.exit(0)
-    } catch (error) {
-      console.log("")
-      logError("Script failed ❌")
-      logError(
-        `${error instanceof Error ? error.message : String(error)}\n${
-          error instanceof Error ? error.stack : ""
-        }`
-      )
-      logError(`${error instanceof Error ? error.message : String(error)}\n`)
-      process.exitCode = 1
-    }
+    const exitCode = await runScriptAndCaptureExitCode(
+      scriptToExecute,
+      cliOptions
+    )
+    finalizeProcess(exitCode)
   })()
 }

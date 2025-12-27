@@ -10,7 +10,6 @@ deployments/
 **/move/**/build/
 **/move/**/.trace
 **/move/**/.coverage*
-**/Move.lock
 
 patches/pyth-crosschain/
 

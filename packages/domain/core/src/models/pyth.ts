@@ -15,6 +15,8 @@ export type PythPullOracleConfig = {
   wormholeStateId: string
 }
 
+export type PythPullOracleConfigOverrides = Partial<PythPullOracleConfig>
+
 export type PriceUpdatePolicy = "auto" | "required" | "skip"
 
 const PYTH_TESTNET_CONFIG: PythPullOracleConfig = {
@@ -51,6 +53,35 @@ export const resolvePythPullOracleConfig = (
   override?: PythPullOracleConfig
 ): PythPullOracleConfig | undefined =>
   override ?? getPythPullOracleConfig(networkName)
+
+export const resolvePythPullOracleConfigWithOverrides = ({
+  networkName,
+  overrides
+}: {
+  networkName: string
+  overrides?: PythPullOracleConfigOverrides
+}): PythPullOracleConfig | undefined => {
+  const baseConfig = getPythPullOracleConfig(networkName)
+  const mergedConfig: PythPullOracleConfigOverrides = {
+    hermesUrl: overrides?.hermesUrl ?? baseConfig?.hermesUrl,
+    pythStateId: overrides?.pythStateId ?? baseConfig?.pythStateId,
+    wormholeStateId: overrides?.wormholeStateId ?? baseConfig?.wormholeStateId
+  }
+
+  return isCompletePythPullOracleConfig(mergedConfig) ? mergedConfig : undefined
+}
+
+const isCompletePythPullOracleConfig = (
+  config: PythPullOracleConfigOverrides
+): config is PythPullOracleConfig =>
+  Boolean(config.hermesUrl && config.pythStateId && config.wormholeStateId)
+
+export const requirePythPullOracleConfig = (
+  config?: PythPullOracleConfig
+): PythPullOracleConfig => {
+  if (!config) throw new Error("Missing Pyth pull oracle configuration.")
+  return config
+}
 
 export type MockPriceFeedConfig = {
   feedIdHex: string

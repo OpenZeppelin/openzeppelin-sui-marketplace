@@ -15,6 +15,7 @@
     "./log": "./src/log.ts",
     "./localnet": "./src/localnet.ts",
     "./move": "./src/move.ts",
+    "./move-lock": "./src/move-lock.ts",
     "./process": "./src/process.ts",
     "./publish": "./src/publish.ts",
     "./suiCli": "./src/suiCli.ts",

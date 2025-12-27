@@ -23,7 +23,7 @@ type SignTransactionInput = {
 type SignTransactionResult = {
   bytes: string
   signature: string
-  reportTransactionEffects?: (effects: string) => Promise<unknown> | void
+  reportTransactionEffects?: (effects: string) => unknown
 }
 
 const getClientRpcUrl = (client: SuiClient) => {

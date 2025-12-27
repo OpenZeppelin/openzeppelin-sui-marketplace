@@ -79,18 +79,34 @@ pnpm install
 - The script config lives at `packages/dapp/sui.config.ts` (loaded automatically when you run `pnpm script ...`).
   - `defaultNetwork`: default network name used when `--network` is not passed (localnet by default).
   - `networks[networkName]`: per-network settings:
-    - `url`: RPC endpoint (auto-resolved if omitted).
-    - `faucetUrl`: optional faucet override.
+    - `url`: RPC endpoint for the fullnode. If omitted, tooling auto-resolves from `networkName`.
+    - `networkName`: optional override; defaults to the key name (e.g., `testnet`).
+    - `faucetUrl`: optional faucet override for `sui client faucet`.
     - `gasBudget`: default publish gas budget for that network.
-    - `move.withUnpublishedDependencies`: localnet-only switch for dev builds.
-    - `account`: account configuration (env overrides preferred):
-      - `keystorePath` (defaults to `~/.sui/sui_config/sui.keystore`)
-      - `accountIndex` (index in keystore, default `0`)
-      - `accountAddress`, `accountPrivateKey`, `accountMnemonic` (direct credentials)
-    - `accounts`: optional named account map.
+    - `move`: Move-specific publish/build options:
+      - `withUnpublishedDependencies`: localnet-only switch for dev builds; enables `--with-unpublished-dependencies`.
+      - `dependencyAddresses`: map of Move package IDs/names to published addresses. Used to update `Move.lock` for shared networks so publishes link against the right packages.
+    - `pyth`: Pyth pull-oracle configuration:
+      - `hermesUrl`: Hermes endpoint for price updates.
+      - `pythStateId`: on-chain Pyth state object ID for the network.
+      - `wormholeStateId`: on-chain Wormhole state object ID for the network.
+      - `wormholePackageId`: Wormhole package ID on the network (optional metadata).
+    - `account`: default signer configuration for scripts:
+      - `keystorePath`: path to Sui CLI keystore (defaults to `~/.sui/sui_config/sui.keystore`).
+      - `accountIndex`: index in the keystore (default `0`).
+      - `accountAddress`: explicit address to use instead of keystore.
+      - `accountPrivateKey`: private key for the signer (base64 or hex).
+      - `accountMnemonic`: mnemonic for the signer.
+    - `accounts`: optional named account map (same shape as `account`) for scripts that switch signer roles.
   - `paths`:
     - `move`: Move root (defaults to `packages/dapp/move` at runtime).
-    - `deployments`, `objects`, `artifacts`: artifact output directories (defaults to `packages/dapp/deployments`).
+    - `deployments`: publish artifacts output directory.
+    - `objects`: object artifacts output directory.
+    - `artifacts`: alias for deployments (kept for compatibility).
+
+Environment overrides (optional):
+- `SUI_NETWORK`: overrides `defaultNetwork`.
+- `SUI_KEYSTORE_PATH`, `SUI_ACCOUNT_INDEX`, `SUI_ACCOUNT_ADDRESS`, `SUI_ACCOUNT_PRIVATE_KEY`, `SUI_ACCOUNT_MNEMONIC`: override the `account` fields above.
 
 How it’s used:
 - Scripts load `sui.config.ts` to decide RPC URL, account, and artifact paths.
@@ -304,6 +320,7 @@ Where to find values:
 - `shopId`: `packages/dapp/deployments/objects.localnet.json` entry with `objectType` ending in `::shop::Shop`
 
 ### Other useful scripts while iterating
+- `pnpm script owner:pyth:list --quote USD`: list Pyth feeds for a quote currency and surface feed IDs + PriceInfoObject IDs.
 - `pnpm script buyer:currency:list`: list accepted currencies for the shop.
 - `pnpm script buyer:item-listing:list`: list all listings and their IDs.
 - `pnpm script buyer:discount-template:list`: list all discount templates and their IDs.
@@ -501,7 +518,7 @@ Owner scripts default `--shop-package-id`, `--shop-id`, and `--owner-cap-id` fro
   - `--recipient <0x...>`: address to receive the transfer (required; alias `--to`).
 - Example:
   ```bash
-  pnpm script owner:coin:transfer -- --coin-id 0xCOIN_OBJECT_ID --amount 1000000 --recipient 0xd8e74f5ab0a34a05e45fb44bd54b323779b3208d599ae14d4c71b268a1de179f
+  pnpm script owner:coin:transfer --coin-id 0xCOIN_OBJECT_ID --amount 1000000 --recipient 0xd8e74f5ab0a34a05e45fb44bd54b323779b3208d599ae14d4c71b268a1de179f
   ```
 
 #### `pnpm script owner:currency:add`
@@ -513,6 +530,42 @@ Owner scripts default `--shop-package-id`, `--shop-id`, and `--owner-cap-id` fro
   - `--currency-object-id <id>`: coin registry `Currency` object (defaults to the derived `CurrencyKey<T>`).
   - `--max-price-age-secs-cap <u64>` / `--max-confidence-ratio-bps-cap <u64>` / `--max-price-status-lag-secs-cap <u64>`: optional guardrail caps.
   - `--shop-package-id <id>` / `--shop-id <id>` / `--owner-cap-id <id>`: override artifact defaults.
+
+**Pyth setup flow (feed discovery → currency registration)**
+- 1) Find the feed + PriceInfoObject:
+  ```bash
+  pnpm script owner:pyth:list --quote USD --limit 5
+  ```
+- 2) Register the currency using the feed + object IDs from step 1:
+  ```bash
+  pnpm script owner:currency:add \
+    --coin-type 0x2::sui::SUI \
+    --feed-id <PYTH_FEED_ID> \
+    --price-info-object-id <PYTH_PRICE_INFO_OBJECT_ID>
+  ```
+
+#### `pnpm script owner:pyth:list`
+- Lists all available Pyth feeds for the current network and surfaces the fields needed to call `owner:currency:add` (feed id, PriceInfoObject id, coin registry matches).
+- Flags:
+  - `--query <text>`: filter by symbol/description (Hermes query). Coin-type pairs like `0x2::sui::SUI/0x...::usdc::USDC` are parsed locally.
+  - `--asset-type <type>`: filter by asset class (e.g. `crypto`, `fx`, `equity`, `commodity`).
+  - `--quote <symbol>`: filter by quote symbol after Hermes results are loaded (e.g. `USD`).
+  - `--coin <symbol-or-type>`: filter feeds that include a coin (symbol or full coin type).
+  - `--limit <n>`: only show the first `n` feeds.
+  - `--skip-price-info`: skip on-chain PriceInfoObject lookup for faster output.
+  - `--skip-registry`: skip coin registry matching for faster output.
+  - `--json`: output machine-readable JSON.
+  - `--hermes-url <url>` / `--pyth-state-id <id>` / `--wormhole-state-id <id>`: override Pyth network config (defaults are set for testnet/mainnet).
+- Example:
+  ```bash
+  pnpm script owner:pyth:list --quote USD --limit 10
+  ```
+  ```bash
+  pnpm script owner:pyth:list --coin 0x...::usdc::USDC --quote USD --limit 10
+  ```
+  ```bash
+  pnpm script owner:pyth:list --query 0x2::sui::SUI/0x...::usdc::USDC --limit 10
+  ```
 
 #### `pnpm script owner:currency:remove`
 - Deregisters an accepted currency. Provide either the `AcceptedCurrency` object ID or a coin type to resolve it.
@@ -779,7 +832,25 @@ Implementation details:
 
 ## Moving to Testnet/Mainnet
 
-TODO
+### Get testnet SUI
+
+Use a faucet to fund your testnet wallet before deploying or testing:
+
+- Official Sui faucet: https://faucet.sui.io/
+- Community faucets:
+  - http://faucet.n1stake.com/
+  - http://faucet.suilearn.io/
+
+### Swap for testnet tokens
+
+If you need a non-SUI coin for purchases, use FlowX on testnet:
+
+- https://testnet.flowx.finance/
+
+We recommend swapping some SUI into
+`0xea10912247c015ead590e481ae8545ff1518492dee41d6d03abdad828c1d2bde::usdc::USDC`.
+Make sure the coin type matches the accepted currency that will be added in
+the store.
 
 ---
 
