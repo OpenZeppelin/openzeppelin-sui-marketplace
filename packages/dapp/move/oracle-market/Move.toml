@@ -1,58 +1,39 @@
 [package]
 name = "sui_oracle_market"
 edition = "2024"
-# license = ""
-# authors = []
 
+# TODO switch once [environments] added in dependencies
 [dependencies]
-
-# Oracle price feeds
-[dependencies.Pyth]
+[dependencies.pyth]
 git = "https://github.com/pyth-network/pyth-crosschain.git"
 subdir = "target_chains/sui/contracts"
-rev = "sui-contract-testnet"
+rev = "d809788e83087c69d76e4671cd694e88a189a179"
 
 [dependencies.openzeppelin_math]
 git = "https://github.com/OpenZeppelin/contracts-sui.git"
 subdir = "math/core"
 rev = "v0.1"
 
-# For remote import, use the `{ git = "...", subdir = "...", rev = "..." }`.
-# Revision can be a branch, a tag, and a commit hash.
-# MyRemotePackage = { git = "https://some.remote/host.git", subdir = "remote/path", rev = "main" }
+# [dependencies]
 
-# For local dependencies use `local = path`. Path is relative to the package root
-# Local = { local = "../path/to" }
+# # Oracle price feeds
+# [dependencies.pyth]
+# local = "../vendors/pyth"
 
-# To resolve a version conflict and force a specific version for dependency
-# override use `override = true`
-# Override = { local = "../conflicting/version", override = true }
+# [dependencies.openzeppelin_math]
+# local = "../vendors/openzeppelin-math"
 
-# Update `pyth` if you publish a different Pyth package on your target network.
-[addresses]
-sui_oracle_market = "0x0"
+# [dependencies.Sui]
+# local = "../vendors/sui-framework"
 
-# Named addresses will be accessible in Move as `@name`. They're also exported:
-# for example, `std = "0x1"` is exported by the Standard Library.
-# alice = "0xA11CE"
+# [dependencies.MoveStdlib]
+# local = "../vendors/move-stdlib"
+
 
 [environments]
 # Localnet chain id is included to allow dep replacements for local mocks.
-localnet = "1dab32c7"
-devnet = "a2c63a99"
-testnet = "4c78adac"
-mainnet = "35834a8a"
+localnet = "279218ea"
 
 [dep-replacements.localnet]
+pyth = { local = "../pyth-mock", override = true }
 # Use the local mock on localnet without relying on dev-mode flags.
-Pyth = { local = "../pyth-mock", override = true }
-openzeppelin_math = { local = "../openzeppelin-math", override = true }
-
-[dev-dependencies]
-[dev-dependencies.mock_coin]
-# Local-only mock assets for localnet demos; ignored on shared networks.
-local = "../coin-mock"
-[dev-dependencies.item_examples]
-# Local-only example item types for typed listing tests.
-local = "../item-examples"
-override = true

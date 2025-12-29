@@ -418,7 +418,7 @@ const buildLocalnetAcceptedCurrencySeeds = async (): Promise<
 
   if (!coins.length || !priceFeeds.length)
     throw new Error(
-      "Localnet mock data is missing coins or price feeds. Run `pnpm --filter dapp chain:mock:setup` first."
+      "Localnet mock data is missing coins or price feeds. Run `pnpm --filter dapp mock:setup` first."
     )
 
   const initialState: {

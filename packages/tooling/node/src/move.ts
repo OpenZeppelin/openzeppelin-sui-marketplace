@@ -5,7 +5,6 @@ import type {
 } from "@sui-oracle-market/tooling-core/types"
 import fs from "node:fs/promises"
 import path from "node:path"
-import { exitCode } from "node:process"
 import { logWarning } from "./log.ts"
 import { getSuiCliEnvironmentChainId, runSuiCli } from "./suiCli.ts"
 
@@ -370,6 +369,20 @@ export const syncMoveEnvironmentChainId = async ({
  * (from Move.lock or build artifacts); this helper mirrors `sui move build` behavior
  * while allowing dev/test builds to strip test modules for publish.
  */
+const ensureMoveBuildInstallDir = (
+  buildArguments: string[],
+  resolvedPackagePath: string
+): string[] => {
+  const hasInstallDir = buildArguments.some(
+    (argument) =>
+      argument === "--install-dir" || argument.startsWith("--install-dir=")
+  )
+
+  return hasInstallDir
+    ? buildArguments
+    : [...buildArguments, "--install-dir", resolvedPackagePath]
+}
+
 export const buildMovePackage = async (
   packagePath: string,
   buildArguments: string[] = [],
@@ -380,22 +393,32 @@ export const buildMovePackage = async (
   if (!resolvedPackagePath)
     throw new Error(`Contracts not found at ${resolvedPackagePath}`)
 
-  const { stdout, stderr } = await runMoveBuild([
+  const resolvedBuildArguments = ensureMoveBuildInstallDir(
+    buildArguments,
+    resolvedPackagePath
+  )
+  const { stdout, stderr, exitCode: buildExitCode } = await runMoveBuild([
     "--path",
     resolvedPackagePath,
-    ...buildArguments
+    ...resolvedBuildArguments
   ])
-  if (stderr) logWarning(stderr.toString())
+  const stdoutText = stdout?.toString() ?? ""
+  const stderrText = stderr?.toString() ?? ""
+  if (stderrText.trim()) logWarning(stderrText.trim())
 
   const { modules, dependencies } = await resolveBuildArtifacts(
-    stdout.toString(),
+    stdoutText,
     resolvedPackagePath,
-    { stripTestModules }
+    {
+      stripTestModules,
+      exitCode: buildExitCode,
+      stderr: stderrText
+    }
   )
 
-  if (exitCode !== undefined && exitCode !== 0) {
+  if (buildExitCode !== undefined && buildExitCode !== 0) {
     logWarning(
-      `sui move build returned non-zero exit code (${exitCode}) but JSON output was parsed.`
+      `sui move build returned non-zero exit code (${buildExitCode}) but JSON output was parsed.`
     )
   }
 
@@ -412,6 +435,12 @@ export type MoveEnvironmentOptions = {
 }
 
 export type MoveTestFlagOptions = MoveEnvironmentOptions
+
+export type MoveTestPublishOptions = {
+  buildEnvironmentName?: string
+  publicationFilePath?: string
+  withUnpublishedDependencies?: boolean
+}
 
 /**
  * Builds CLI flags for Move commands that accept an environment.
@@ -441,10 +470,40 @@ export const buildMoveTestArguments = ({
   ...buildMoveTestFlags(options)
 ]
 
+const buildMoveTestPublishFlags = ({
+  buildEnvironmentName,
+  publicationFilePath,
+  withUnpublishedDependencies
+}: MoveTestPublishOptions): string[] => {
+  const flags: string[] = []
+
+  if (buildEnvironmentName) flags.push("--build-env", buildEnvironmentName)
+  if (publicationFilePath) flags.push("--pubfile-path", publicationFilePath)
+  if (withUnpublishedDependencies) flags.push("--with-unpublished-dependencies")
+
+  return flags
+}
+
+/**
+ * Builds full CLI arguments for `sui client test-publish` including the package path.
+ */
+export const buildMoveTestPublishArguments = ({
+  packagePath,
+  ...options
+}: { packagePath: string } & MoveTestPublishOptions): string[] => [
+  packagePath,
+  ...buildMoveTestPublishFlags(options)
+]
+
 /**
  * Returns a CLI runner for `sui move test`.
  */
 export const runMoveTest = runSuiCli(["move", "test"])
+
+/**
+ * Returns a CLI runner for `sui client test-publish`.
+ */
+export const runClientTestPublish = runSuiCli(["client", "test-publish"])
 
 /**
  * Resolves build outputs from CLI JSON or the build/ artifacts on disk.
@@ -453,21 +512,41 @@ const resolveBuildArtifacts = async (
   stdout: string,
   resolvedPackagePath: string,
   {
-    stripTestModules = false
+    stripTestModules = false,
+    exitCode,
+    stderr
   }: {
     stripTestModules?: boolean
+    exitCode?: number
+    stderr?: string
   } = {}
 ): Promise<BuildOutput> => {
-  const parsed = parseBuildJson(stdout)
+  const parsed =
+    parseBuildJson(stdout) ?? (stderr ? parseBuildJson(stderr) : undefined)
   const parsedModules = parsed?.modules ?? []
   const parsedDependencies = parsed?.dependencies ?? []
   const shouldReadArtifacts =
     stripTestModules ||
     parsedModules.length === 0 ||
     parsedDependencies.length === 0
-  const fallback = shouldReadArtifacts
-    ? await readBuildArtifacts(resolvedPackagePath, { stripTestModules })
-    : undefined
+  let fallback: { modules: string[]; dependencies: string[] } | undefined
+  if (shouldReadArtifacts) {
+    try {
+      fallback = await readBuildArtifacts(resolvedPackagePath, {
+        stripTestModules
+      })
+    } catch (error) {
+      if (isErrnoWithCode(error, "ENOENT")) {
+        const buildDir = path.join(resolvedPackagePath, "build")
+        const codeSuffix = exitCode !== undefined ? ` (exit code ${exitCode})` : ""
+        const outputTail = formatBuildOutputTail(stdout, stderr)
+        throw new Error(
+          `Move build did not emit bytecode output${codeSuffix} and no build artifacts were found at ${buildDir}.${outputTail}`
+        )
+      }
+      throw error
+    }
+  }
 
   if (parsedModules.length === 0) {
     logWarning(
@@ -492,8 +571,9 @@ const resolveBuildArtifacts = async (
 
   if (!modules.length) {
     const codeSuffix = exitCode !== undefined ? ` (exit code ${exitCode})` : ""
+    const outputTail = formatBuildOutputTail(stdout, stderr)
     throw new Error(
-      `Unexpected build output${codeSuffix}. Ensure the package builds correctly.\n${stdout}`
+      `Unexpected build output${codeSuffix}. Ensure the package builds correctly.${outputTail}`
     )
   }
 
@@ -507,42 +587,152 @@ const resolveBuildArtifacts = async (
 const parseBuildJson = (
   stdout: string
 ): { modules: string[]; dependencies: string[] } | undefined => {
-  if (!stdout) return
+  const normalizedOutput = stdout.trim()
+  if (!normalizedOutput) return
 
-  // Look for the last line that looks like JSON and try to parse it.
-  const lines = stdout.trim().split(/\r?\n/).reverse()
-  for (const line of lines) {
-    const candidate = line.trim()
-    if (!candidate.startsWith("{")) continue
-    try {
-      const parsed = JSON.parse(candidate)
-      if (
-        Array.isArray(parsed?.modules) &&
-        Array.isArray(parsed?.dependencies)
-      ) {
-        return { modules: parsed.modules, dependencies: parsed.dependencies }
-      }
-    } catch {
-      // keep scanning earlier lines
-    }
+  const candidates: string[] = [normalizedOutput]
+
+  const lines = normalizedOutput.split(/\r?\n/)
+  for (let idx = lines.length - 1; idx >= 0; idx -= 1) {
+    const line = lines[idx]?.trimStart()
+    if (!line || (!line.startsWith("{") && !line.startsWith("["))) continue
+    candidates.push(lines.slice(idx).join("\n").trim())
+    break
   }
 
-  // Fallback: attempt parsing from the first '{' onward in the whole stdout blob.
-  const firstBrace = stdout.indexOf("{")
-  if (firstBrace >= 0) {
-    try {
-      const parsed = JSON.parse(stdout.slice(firstBrace))
-      if (
-        Array.isArray(parsed?.modules) &&
-        Array.isArray(parsed?.dependencies)
-      ) {
-        return { modules: parsed.modules, dependencies: parsed.dependencies }
-      }
-    } catch {
-      /* ignore */
-    }
+  const trailingBlockMatch = normalizedOutput.match(
+    /(\{[\s\S]*\}|\[[\s\S]*\])\s*$/
+  )
+  if (trailingBlockMatch?.[1]) {
+    candidates.push(trailingBlockMatch[1].trim())
+  }
+
+  const firstBrace = normalizedOutput.indexOf("{")
+  const lastBrace = normalizedOutput.lastIndexOf("}")
+  if (firstBrace >= 0 && lastBrace > firstBrace) {
+    candidates.push(normalizedOutput.slice(firstBrace, lastBrace + 1))
+  }
+
+  for (const candidate of candidates) {
+    const parsed = tryParseJson(candidate)
+    if (!parsed) continue
+    const normalized = normalizeBuildJson(parsed)
+    if (normalized) return normalized
   }
 }
+
+const tryParseJson = (candidate: string): unknown | undefined => {
+  try {
+    return JSON.parse(candidate)
+  } catch {
+    return undefined
+  }
+}
+
+const normalizeBuildJson = (
+  parsed: unknown
+): { modules: string[]; dependencies: string[] } | undefined => {
+  if (!parsed || typeof parsed !== "object") return
+
+  const payload = parsed as Record<string, unknown>
+  const modules = normalizeModuleList(
+    payload.modules ??
+      payload.compiledModules ??
+      payload.compiled_modules ??
+      payload.bytecodeModules ??
+      payload.bytecode_modules
+  )
+  const dependencies = normalizeDependencyList(
+    payload.dependencies ??
+      payload.dependencyIds ??
+      payload.dependency_ids ??
+      payload.deps ??
+      payload.packageDependencies ??
+      payload.package_dependencies
+  )
+
+  if (!modules.length && !dependencies.length) return
+  return { modules, dependencies }
+}
+
+const normalizeModuleList = (modules: unknown): string[] => {
+  if (!Array.isArray(modules)) return []
+  if (modules.every((item) => typeof item === "string"))
+    return modules as string[]
+
+  const normalized = modules
+    .map((item) => {
+      if (typeof item === "string") return item
+      if (Array.isArray(item)) {
+        const lastItem = item[item.length - 1]
+        return typeof lastItem === "string" ? lastItem : undefined
+      }
+      if (item && typeof item === "object") {
+        const record = item as Record<string, unknown>
+        const candidate =
+          record.bytecode ??
+          record.bytes ??
+          record.module ??
+          record.moduleBytes ??
+          record.module_bytes ??
+          record.module_base64 ??
+          record.base64 ??
+          record.data
+        return typeof candidate === "string" ? candidate : undefined
+      }
+      return undefined
+    })
+    .filter((item): item is string => Boolean(item))
+
+  return normalized
+}
+
+const normalizeDependencyList = (dependencies: unknown): string[] => {
+  if (!Array.isArray(dependencies)) return []
+  if (dependencies.every((item) => typeof item === "string"))
+    return dependencies as string[]
+
+  return dependencies
+    .map((item) => {
+      if (typeof item === "string") return item
+      if (item && typeof item === "object") {
+        const record = item as Record<string, unknown>
+        const candidate =
+          record.address ??
+          record.id ??
+          record.packageId ??
+          record.package_id ??
+          record.package ??
+          record.dependency
+        return typeof candidate === "string" ? candidate : undefined
+      }
+      return undefined
+    })
+    .filter((item): item is string => Boolean(item))
+}
+
+const formatBuildOutputTail = (stdout: string, stderr?: string): string => {
+  const chunks = [stderr, stdout].filter(
+    (chunk): chunk is string => Boolean(chunk && chunk.trim())
+  )
+  if (!chunks.length) return ""
+
+  const combined = chunks.join("\n").trim()
+  const lines = combined.split(/\r?\n/)
+  const tail = lines.slice(-20).join("\n")
+  const maxChars = 2000
+  const trimmed = tail.length > maxChars ? `${tail.slice(0, maxChars)}\n...` : tail
+
+  return `\nSui CLI output (tail):\n${trimmed}`
+}
+
+const isErrnoWithCode = (error: unknown, code: string): boolean =>
+  Boolean(
+    error &&
+      typeof error === "object" &&
+      "code" in error &&
+      (error as { code?: string }).code === code
+  )
 
 /**
  * Reads compiled bytecode from the build directory and base64-encodes it.

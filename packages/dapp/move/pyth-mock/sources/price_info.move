@@ -1,4 +1,3 @@
-#[allow(lint(share_owned))]
 module pyth::price_info;
 
 use pyth::i64 as pyth_i64;

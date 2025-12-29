@@ -18,6 +18,7 @@ import {
 import path from "node:path"
 import { setTimeout as delay } from "node:timers/promises"
 
+import fkill from "fkill"
 import yargs from "yargs"
 
 import type { Ed25519Keypair } from "@mysten/sui/keypairs/ed25519"
@@ -37,6 +38,8 @@ import {
 } from "@sui-oracle-market/tooling-node/log"
 import { runSuiScript } from "@sui-oracle-market/tooling-node/process"
 import { runSuiCli } from "@sui-oracle-market/tooling-node/suiCli"
+
+process.env.SUI_NETWORK = "localnet"
 
 type RpcSnapshot = {
   rpcUrl: string
@@ -70,6 +73,12 @@ runSuiScript<StartLocalnetCliArgs>(
     tooling,
     { withFaucet, checkOnly, waitSeconds, forceRegenesis, configDir }
   ) => {
+    if (tooling.network.networkName !== "localnet") {
+      throw new Error(
+        `chain:localnet:start is localnet-only. Remove --network or use --network localnet (received ${tooling.network.networkName}).`
+      )
+    }
+
     const paths = tooling.suiConfig.paths
     const localnetConfigDir = resolveLocalnetConfigDir(configDir)
     const configDirManagedByScript = isConfigDirManagedByScript()
@@ -150,7 +159,8 @@ runSuiScript<StartLocalnetCliArgs>(
 
     const localnetProcess = startLocalnetProcess({
       withFaucet,
-      configDir: localnetConfigDir
+      configDir: localnetConfigDir,
+      rpcUrl
     })
 
     const readySnapshot = await waitForRpcReadiness({
@@ -267,16 +277,19 @@ const waitForRpcReadiness = async ({
 
 const startLocalnetProcess = ({
   withFaucet,
-  configDir
+  configDir,
+  rpcUrl
 }: {
   withFaucet: boolean
   configDir: string
+  rpcUrl: string
 }): ChildProcess => {
   const args = buildStartArguments(withFaucet, configDir)
   const processHandle = spawn("sui", args, {
     stdio: ["inherit", "pipe", "pipe"]
   })
 
+  registerLocalnetProcessCleanup(processHandle, { rpcUrl, withFaucet })
   streamLocalnetLogs(processHandle)
 
   processHandle.once("error", (error) => {
@@ -288,6 +301,100 @@ const startLocalnetProcess = ({
   logKeyValueYellow("Starting")(`sui ${args.join(" ")}`)
 
   return processHandle
+}
+
+const parsePortFromUrl = (rpcUrl: string | undefined) => {
+  if (!rpcUrl) return undefined
+  try {
+    const parsed = new URL(rpcUrl)
+    if (!parsed.port) return undefined
+    const port = Number(parsed.port)
+    if (!Number.isInteger(port) || port <= 0 || port > 65535) return undefined
+    return port
+  } catch {
+    return undefined
+  }
+}
+
+const buildPortTargets = (rpcUrl: string, withFaucet: boolean) => {
+  const rpcPort = parsePortFromUrl(rpcUrl)
+  const faucetPort = withFaucet
+    ? parsePortFromUrl(deriveFaucetUrl(rpcUrl))
+    : undefined
+
+  return [rpcPort, faucetPort]
+    .filter((port): port is number => typeof port === "number")
+    .map((port) => `:${port}`)
+}
+
+const isFkillMissingProcessError = (error: unknown) => {
+  if (!(error instanceof Error)) return false
+  const message = error.message.toLowerCase()
+  return (
+    message.includes("process doesn't exist") ||
+    message.includes("no matching process") ||
+    message.includes("no process found") ||
+    message.includes("not found")
+  )
+}
+
+const killTargets = async (targets: string[]) => {
+  for (const target of targets) {
+    try {
+      await fkill(target, { force: true, silent: true, tree: true })
+    } catch (error) {
+      if (isFkillMissingProcessError(error)) continue
+      // Cleanup is best-effort; avoid noisy logs on shutdown.
+    }
+  }
+}
+
+const registerLocalnetProcessCleanup = (
+  processHandle: ChildProcess,
+  { rpcUrl, withFaucet }: { rpcUrl: string; withFaucet: boolean }
+) => {
+  let didCleanup = false
+  const portTargets = buildPortTargets(rpcUrl, withFaucet)
+
+  const cleanupSync = () => {
+    if (didCleanup) return
+    didCleanup = true
+    if (processHandle.exitCode !== null) return
+    try {
+      processHandle.kill("SIGTERM")
+    } catch {
+      // Ignore cleanup failures; the process may have already exited.
+    }
+  }
+
+  const cleanupAsync = async () => {
+    if (didCleanup) return
+    cleanupSync()
+    if (!portTargets.length) return
+    await killTargets(portTargets)
+    await killTargets(["sui-node", "sui-faucet"])
+  }
+
+  const registerSignal = (signal: NodeJS.Signals, exitCode: number) => {
+    process.once(signal, () => {
+      void cleanupAsync().finally(() => process.exit(exitCode))
+    })
+  }
+
+  process.once("exit", cleanupSync)
+  registerSignal("SIGINT", 130)
+  registerSignal("SIGTERM", 143)
+
+  if (process.platform !== "win32") {
+    registerSignal("SIGHUP", 129)
+    registerSignal("SIGQUIT", 131)
+  } else {
+    registerSignal("SIGBREAK", 21)
+  }
+
+  processHandle.once("exit", () => {
+    void cleanupAsync()
+  })
 }
 
 const buildStartArguments = (withFaucet: boolean, configDir: string) => {

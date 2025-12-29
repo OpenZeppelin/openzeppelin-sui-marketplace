@@ -84,7 +84,7 @@ runSuiScript(
 
     if (priceFeedArtifacts.length === 0)
       throw new Error(
-        "No mock price feeds found. Run `pnpm chain:mock:setup` before updating prices."
+        "No mock price feeds found. Run `pnpm mock:setup` before updating prices."
       )
 
     logKeyValueBlue("Network")(network.networkName)
@@ -160,7 +160,7 @@ const resolvePythPackageId = (
 
   if (!packageId)
     throw new Error(
-      "Missing Pyth mock package id. Run `pnpm chain:mock:setup` or pass --pyth-package-id."
+      "Missing Pyth mock package id. Run `pnpm mock:setup` or pass --pyth-package-id."
     )
 
   return normalizeSuiObjectId(packageId)

@@ -39,7 +39,7 @@ export const runSuiCli =
       // whatever stdout was produced (warnings often go to stdout), so plumb it through.
       return {
         stdout: executionError?.stdout ?? "",
-        stderr: executionError?.stderr ?? executionError?.message ?? "",
+        stderr: `Error running sui ${[...baseCliArguments, ...complementaryCliArguments].join(" ")}: ${executionError?.stderr ?? executionError?.message ?? ""}`,
         exitCode:
           typeof executionError?.code === "number"
             ? executionError.code

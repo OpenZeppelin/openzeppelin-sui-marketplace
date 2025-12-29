@@ -45,10 +45,10 @@ sui client faucet --address <0x...>
 pnpm script chain:localnet:start --with-faucet
 
 # 6) Seed mocks (coins + Pyth stub + price feeds)
-pnpm script chain:mock:setup
+pnpm script mock:setup
 
 # 7) Publish oracle-market (uses localnet dep replacements for mocks)
-pnpm script chain:publish-package --package-path oracle-market
+pnpm script move:publish --package-path oracle-market
 
 # 8) To continue setting up the shop, listings, discounts, accepted currencies look at the scripts section
 ```
@@ -134,8 +134,8 @@ Quick decision table:
 | Goal | Example command | Resulting network |
 | --- | --- | --- |
 | Local dev (default) | `pnpm script chain:localnet:start --with-faucet` | `localnet` |
-| Local publish | `pnpm script chain:publish-package --package-path oracle-market` | `localnet` |
-| Testnet publish | `pnpm script chain:publish-package --network testnet --package-path oracle-market` | `testnet` |
+| Local publish | `pnpm script move:publish --package-path oracle-market` | `localnet` |
+| Testnet publish | `pnpm script move:publish --network testnet --package-path oracle-market` | `testnet` |
 | Testnet scripts | `pnpm script buyer:shop-view --network testnet` | `testnet` |
 
 ### 3) Start localnet
@@ -154,7 +154,7 @@ Note: running `sui start` without a stable config dir can regenesis and wipe loc
 
 ### 4) Seed mocks (coins + Pyth)
 ```bash
-pnpm script chain:mock:setup
+pnpm script mock:setup
 ```
 What it does:
 - Publishes `packages/dapp/move/pyth-mock` and `packages/dapp/move/coin-mock` if needed.
@@ -164,7 +164,7 @@ What it does:
 
 ### 5) Publish oracle-market (localnet)
 ```bash
-pnpm script chain:publish-package --package-path oracle-market
+pnpm script move:publish --package-path oracle-market
 ```
 What it does:
 - Builds against the localnet dependency replacements and unpublished deps.
@@ -210,7 +210,7 @@ What it does:
 
 ### 2) Seed local mocks (coins, Pyth feeds, example item types)
 ```bash
-pnpm script chain:mock:setup
+pnpm script mock:setup
 ```
 What it does:
 - Publishes mock Move packages (`pyth-mock`, `coin-mock`, and `item-examples`) on localnet.
@@ -225,7 +225,7 @@ Where to find values:
 
 ### 3) Publish the oracle-market package
 ```bash
-pnpm script chain:publish-package --package-path oracle-market
+pnpm script move:publish --package-path oracle-market
 ```
 What it does:
 - Publishes the main `sui_oracle_market` Move package to localnet using dep replacements (no dev-mode flags).
@@ -333,7 +333,7 @@ Where to find values:
 
 ### 10) Refresh mock prices (recommended before buys)
 ```bash
-pnpm script chain:mock:update-prices
+pnpm script mock:update-prices
 ```
 What it does:
 - Updates the mock Pyth `PriceInfoObject` timestamps so oracle freshness checks pass.
@@ -356,9 +356,9 @@ Where to find values:
 - `pnpm script buyer:item-listing:list`: list all listings and their IDs.
 - `pnpm script buyer:discount-template:list`: list all discount templates and their IDs.
 - `pnpm script buyer:discount-ticket:claim --discount-template-id <ID>`: claim a DiscountTicket for a buyer.
-- `pnpm script buyer:buy --item-listing-id <ID> --coin-type <COIN_TYPE>`: execute checkout (run `chain:mock:update-prices` first on localnet).
+- `pnpm script buyer:buy --item-listing-id <ID> --coin-type <COIN_TYPE>`: execute checkout (run `mock:update-prices` first on localnet).
 - `pnpm script buyer:buy:list`: list ShopItem receipts owned by the buyer.
-- `pnpm script chain:mock:get-currency`: inspect mock coin registry entries (localnet only; uses `mock.localnet.json` by default).
+- `pnpm script mock:get-currency`: inspect mock coin registry entries (localnet only; uses `mock.localnet.json` by default).
 - `pnpm script chain:describe-coin-balances --address <ADDR>`: list aggregate balances and coin object counts for an address.
 - `pnpm script chain:describe-object --object-id <ID>`: inspect any on-chain object by ID.
 - `pnpm script chain:describe-dynamic-field-object --parent-id <PARENT> --child-id <CHILD>`: inspect dynamic field entries.
@@ -461,7 +461,7 @@ Common flag (applies to all scripts that use the standard runner):
 
 Exceptions:
 - `pnpm script chain:localnet:stop` has no CLI flags.
-- `pnpm script chain:mock:get-currency` does not accept `--network` and is localnet-only.
+- `pnpm script mock:get-currency` does not accept `--network` and is localnet-only.
 
 ### Chain + Localnet Scripts (infra + inspection)
 
@@ -478,14 +478,14 @@ Exceptions:
 #### `pnpm script chain:localnet:stop`
 - Scans the process table for detached `sui start` processes and SIGTERMs them. No flags.
 
-#### `pnpm script chain:mock:setup`
+#### `pnpm script mock:setup`
 - Localnet-only seeding. Publishes/reuses `pyth-mock`, `coin-mock`, and `item-examples`, mints mock coins, and creates two mock Pyth price feeds. Writes artifacts to `packages/dapp/deployments/mock.localnet.json`.
 - Flags:
   - `--coin-package-id <id>` / `--pyth-package-id <id>`: reuse existing mock package IDs instead of publishing.
   - `--coin-contract-path <path>` / `--pyth-contract-path <path>`: override Move package paths.
   - `--re-publish`: ignore existing artifacts; republish mocks and recreate feeds.
 
-#### `pnpm script chain:publish-package`
+#### `pnpm script move:publish`
 - Builds and publishes a Move package under `packages/dapp/move`, skipping if a deployment artifact already exists unless `--re-publish` is set.
 - Flags:
   - `--package-path <path>`: package folder relative to `packages/dapp/move` (required).
@@ -493,13 +493,13 @@ Exceptions:
   - `--re-publish`: publish even if a deployment artifact already exists.
   - Use `--network <name>` to switch between `localnet`, `testnet`, etc; the script passes the matching Move `--environment` to the CLI.
 
-#### `pnpm script chain:mock:get-currency`
+#### `pnpm script mock:get-currency`
 - Localnet-only coin registry inspection. If `--coin-type` is omitted it reads coin types from `packages/dapp/deployments/mock.localnet.json`.
 - Flags:
   - `--registry-id <id>`: coin registry shared object (defaults to Sui registry).
   - `--coin-type <type>`: coin type(s) to inspect (repeatable; defaults to mock artifact coins).
 
-#### `pnpm script chain:mock:update-prices`
+#### `pnpm script mock:update-prices`
 - Localnet-only refresh of mock Pyth `PriceInfoObject`s to keep freshness checks valid.
 - The UI buy flow now refreshes mock feeds automatically; use this script for CLI-driven buys or manual inspection flows.
 - Flags:
@@ -544,7 +544,7 @@ Owner scripts default `--shop-package-id`, `--shop-id`, and `--owner-cap-id` fro
     - USDC PriceInfoObject: `0x9c4dd4008297ffa5e480684b8100ec21cc934405ed9a25d4e4d7b6259aad9c81`
     - WAL feed: `0xa6ba0195b5364be116059e401fb71484ed3400d4d9bfbdf46bd11eab4f9b7cea`
     - WAL PriceInfoObject: `0x52e5fb291bd86ca8bdd3e6d89ef61d860ea02e009a64bcc287bc703907ff3e8a`
-  - **Localnet**: reads `packages/dapp/deployments/mock.localnet.json` for mock coins + feeds (requires `pnpm script chain:mock:setup`).
+  - **Localnet**: reads `packages/dapp/deployments/mock.localnet.json` for mock coins + feeds (requires `pnpm script mock:setup`).
 - Seeded data:
   - 4 low-price listings (Car, Bike, ConcertTicket, DigitalPass).
   - 2 discount templates (10% percent + $2 fixed) and attaches the fixed discount to the Bike listing.
@@ -734,7 +734,7 @@ Owner scripts default `--shop-package-id`, `--shop-id`, and `--owner-cap-id` fro
   - `--shop-id <id>`: shop object ID (optional; inferred from artifacts when omitted).
 
 #### `pnpm script buyer:buy`
-- Executes checkout with oracle guardrails and optional discounts. On localnet, run `pnpm script chain:mock:update-prices` periodically for CLI-driven buys (the UI buy flow refreshes mock feeds automatically).
+- Executes checkout with oracle guardrails and optional discounts. On localnet, run `pnpm script mock:update-prices` periodically for CLI-driven buys (the UI buy flow refreshes mock feeds automatically).
 - Flags:
   - `--shop-id <id>`: shared Shop object ID; defaults to the latest Shop artifact.
   - `--item-listing-id <id>`: listing object ID to purchase (required).
@@ -787,7 +787,7 @@ Artifacts land in `packages/dapp/deployments` after running scripts. Use them to
   - `suiCliVersion`: Sui CLI version used during publish.
 
 ### `packages/dapp/deployments/mock.<network>.json`
-- Captures local-only mocks produced by `chain:mock:setup`.
+- Captures local-only mocks produced by `mock:setup`.
 - Key fields:
   - `pythPackageId` / `coinPackageId`: package IDs for the mock Pyth and coin Move packages.
   - `coins`: array of minted mock coins with `coinType`, `currencyObjectId`, and sample minted coin object IDs.
@@ -830,7 +830,7 @@ Localnet signing + execution (UI):
 - The UI **always** signs on the wallet and **executes** via the app’s local RPC client when the app network is `localnet`. This avoids wallet execution on whatever network the wallet is configured for.
 - Detection is app-driven (not wallet-driven): `useSuiClientContext()` supplies `network`, and the buy flow checks `network === localnet` before choosing the execution path.
 - Localnet RPC is locked to `http://127.0.0.1:9000` and guarded so only `localhost/127.0.0.1` are accepted. See `packages/ui/src/app/config/network.ts` and `packages/ui/src/app/helpers/localnet.ts`.
-- The buy flow also refreshes local mock Pyth feeds in the same PTB, so UI purchases do not require running `pnpm script chain:mock:update-prices` first.
+- The buy flow also refreshes local mock Pyth feeds in the same PTB, so UI purchases do not require running `pnpm script mock:update-prices` first.
 
 Why this matters:
 - Wallet Standard distinguishes **sign-only** from **sign+execute**. Using `signTransaction` keeps the wallet from picking an RPC endpoint.
