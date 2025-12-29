@@ -111,8 +111,8 @@ const withDefault = (
  */
 const resolveConfig = (userConfig: SuiUserConfig): SuiResolvedConfig => {
   const currentNetwork =
-    userConfig.defaultNetwork ??
     (process.env.SUI_NETWORK as NetworkName | undefined) ??
+    userConfig.defaultNetwork ??
     "localnet"
 
   return {

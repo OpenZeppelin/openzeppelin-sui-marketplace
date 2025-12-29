@@ -6,3 +6,10 @@ edition = "2024.beta"
 
 [addresses]
 pyth = "0x0" # Zeroed so localnet publishes can pick up the package ID at deploy time.
+
+[environments]
+# Update the localnet chain id when regenerating localnet.
+localnet = "1dab32c7"
+devnet = "a2c63a99"
+testnet = "4c78adac"
+mainnet = "35834a8a"

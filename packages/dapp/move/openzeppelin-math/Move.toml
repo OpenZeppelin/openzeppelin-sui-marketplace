@@ -1,11 +1,10 @@
 [package]
-name = "mock_coin"
-edition = "2024.beta"
-
-[dependencies]
+name = "openzeppelin_math"
+version = "0.0.1"
+edition = "2024"
 
 [addresses]
-mock_coin = "0x0"
+openzeppelin_math = "0x0"
 
 [environments]
 # Update the localnet chain id when regenerating localnet.

@@ -1,6 +1,6 @@
 /**
- * Seeds a shop with accepted USDC and WAL currencies, example listings, and discounts.
- * Intended for testnet setup after publishing the Move packages.
+ * Seeds a shop with accepted currencies, example listings, and discounts.
+ * On testnet it registers USDC + WAL. On localnet it uses the mock coin/feed artifacts.
  */
 import type { SuiClient } from "@mysten/sui/client"
 import { normalizeSuiObjectId } from "@mysten/sui/utils"
@@ -54,6 +54,7 @@ import {
   parseOptionalU64,
   parsePositiveU64
 } from "@sui-oracle-market/tooling-core/utils/utility"
+import { readArtifact } from "@sui-oracle-market/tooling-node/artifacts"
 import { SUI_COIN_REGISTRY_ID } from "@sui-oracle-market/tooling-node/constants"
 import type { Tooling } from "@sui-oracle-market/tooling-node/factory"
 import {
@@ -69,10 +70,12 @@ import {
   logItemListingSummary,
   logShopOverview
 } from "../../utils/log-summaries.ts"
+import type { MockArtifact } from "../../utils/mocks.ts"
+import { mockArtifactPath } from "../../utils/mocks.ts"
 import {
   resolveItemExamplesPackageId,
   resolveShopPublishInputs
-} from "../../utils/publish-artifacts.ts"
+} from "../../utils/published-artifacts.ts"
 
 const DEFAULT_USDC_COIN_TYPE =
   "0xea10912247c015ead590e481ae8545ff1518492dee41d6d03abdad828c1d2bde::usdc::USDC"
@@ -97,8 +100,6 @@ type ShopSeedArguments = {
   shopId?: string
   ownerCapId?: string
   itemPackageId?: string
-  coinType?: string
-  currencyId?: string
   maxPriceAgeSecsCap?: string
   maxConfidenceRatioBpsCap?: string
   maxPriceStatusLagSecsCap?: string
@@ -124,10 +125,16 @@ type DiscountSeedDefinition = {
   maxRedemptions?: string
 }
 
+type DiscountTemplateMap = Record<
+  "fixed" | "percent",
+  { discountTemplateId: string } | undefined
+>
+
 type AcceptedCurrencySeed = {
   coinType: string
   feedId: string
   priceInfoObjectId: string
+  currencyId?: string
 }
 
 const ACCEPTED_CURRENCY_SEEDS: AcceptedCurrencySeed[] = [
@@ -142,6 +149,12 @@ const ACCEPTED_CURRENCY_SEEDS: AcceptedCurrencySeed[] = [
     priceInfoObjectId: DEFAULT_WAL_PRICE_INFO_OBJECT_ID
   }
 ]
+
+type MockPriceFeedArtifact = NonNullable<MockArtifact["priceFeeds"]>[number]
+type MockCoinArtifact = NonNullable<MockArtifact["coins"]>[number]
+type DiscountTemplateEntry = Awaited<
+  ReturnType<typeof getDiscountTemplateSummaries>
+>[number]
 
 const LISTING_SEEDS: ItemListingSeedDefinition[] = [
   {
@@ -207,7 +220,9 @@ runSuiScript(
     })
     const listingSeeds = buildItemListingSeeds(itemPackageId)
 
-    const acceptedCurrencySeeds = resolveAcceptedCurrencySeeds(cliArguments)
+    const acceptedCurrencySeeds = await resolveAcceptedCurrencySeeds({
+      networkName
+    })
     await ensureAcceptedCurrencies({
       acceptedCurrencySeeds,
       cliArguments,
@@ -269,18 +284,6 @@ runSuiScript(
       type: "string",
       description:
         "Package ID for item-examples Move package; inferred from the latest publish entry when omitted."
-    })
-    .option("coinType", {
-      alias: ["coin-type", "type"],
-      type: "string",
-      description:
-        "Optional coin type filter (USDC or WAL). When provided, only that currency is seeded."
-    })
-    .option("currencyId", {
-      alias: ["currency-object-id", "currency"],
-      type: "string",
-      description:
-        "Currency<T> object ID in the coin registry. Requires --coin-type when provided."
     })
     .option("maxPriceAgeSecsCap", {
       alias: ["max-price-age-secs-cap", "max-price-age"],
@@ -393,23 +396,104 @@ const buildItemListingSeeds = (itemPackageId: string): ItemListingSeed[] => {
   }))
 }
 
-const resolveAcceptedCurrencySeeds = (
-  cliArguments: ShopSeedArguments
-): AcceptedCurrencySeed[] => {
-  if (!cliArguments.coinType) return ACCEPTED_CURRENCY_SEEDS
+const resolveAcceptedCurrencySeeds = async ({
+  networkName
+}: {
+  networkName: string
+}): Promise<AcceptedCurrencySeed[]> => {
+  if (networkName === "testnet") return ACCEPTED_CURRENCY_SEEDS
+  if (networkName === "localnet") return buildLocalnetAcceptedCurrencySeeds()
 
-  const normalizedCoinType = normalizeCoinType(cliArguments.coinType)
-  const matchedSeed = ACCEPTED_CURRENCY_SEEDS.find(
-    (seed) => normalizeCoinType(seed.coinType) === normalizedCoinType
+  throw new Error(
+    `shop-seed only supports testnet and localnet networks (received ${networkName}).`
   )
+}
 
-  if (!matchedSeed)
+const buildLocalnetAcceptedCurrencySeeds = async (): Promise<
+  AcceptedCurrencySeed[]
+> => {
+  const mockArtifact = await readArtifact<MockArtifact>(mockArtifactPath, {})
+  const coins = mockArtifact.coins ?? []
+  const priceFeeds = mockArtifact.priceFeeds ?? []
+
+  if (!coins.length || !priceFeeds.length)
     throw new Error(
-      `Unsupported coin type ${normalizedCoinType}. Supported coins: ${ACCEPTED_CURRENCY_SEEDS.map((seed) => seed.coinType).join(", ")}.`
+      "Localnet mock data is missing coins or price feeds. Run `pnpm --filter dapp chain:mock:setup` first."
     )
 
-  return [matchedSeed]
+  const initialState: {
+    seeds: AcceptedCurrencySeed[]
+    usedFeedIds: Set<string>
+  } = { seeds: [], usedFeedIds: new Set<string>() }
+
+  return coins.reduce((state, coin) => {
+    const feed = pickMockFeedForCoin({
+      coin,
+      priceFeeds,
+      usedFeedIds: state.usedFeedIds
+    })
+    if (!feed)
+      throw new Error(
+        `No mock price feed found for ${coin.label ?? coin.coinType}.`
+      )
+
+    const nextUsedFeedIds = new Set(state.usedFeedIds)
+    nextUsedFeedIds.add(feed.feedIdHex)
+
+    return {
+      seeds: [
+        ...state.seeds,
+        {
+          coinType: coin.coinType,
+          feedId: feed.feedIdHex,
+          priceInfoObjectId: feed.priceInfoObjectId,
+          currencyId: coin.currencyObjectId
+        }
+      ],
+      usedFeedIds: nextUsedFeedIds
+    }
+  }, initialState).seeds
 }
+
+const pickMockFeedForCoin = ({
+  coin,
+  priceFeeds,
+  usedFeedIds
+}: {
+  coin: MockCoinArtifact
+  priceFeeds: MockPriceFeedArtifact[]
+  usedFeedIds: Set<string>
+}) => {
+  const coinKey = resolveMockLabelKey(coin.label)
+  if (coinKey) {
+    const matchedFeed = priceFeeds.find((feed) => {
+      if (usedFeedIds.has(feed.feedIdHex)) return false
+      const feedKey = resolveMockLabelKey(feed.label)
+      return feedKey === coinKey
+    })
+    if (matchedFeed) return matchedFeed
+  }
+
+  return priceFeeds.find((feed) => !usedFeedIds.has(feed.feedIdHex))
+}
+
+const resolveMockLabelKey = (label?: string): string | undefined => {
+  const normalized = label?.trim().toLowerCase()
+  if (!normalized) return undefined
+  if (normalized.includes("usd")) return "usd"
+  if (normalized.includes("btc")) return "btc"
+  return normalized
+}
+
+const runSequentially = async <TItem, TResult>(
+  items: TItem[],
+  runner: (item: TItem) => Promise<TResult>
+): Promise<TResult[]> =>
+  items.reduce<Promise<TResult[]>>(async (pendingResults, item) => {
+    const results = await pendingResults
+    const nextResult = await runner(item)
+    return [...results, nextResult]
+  }, Promise.resolve([]))
 
 const ensureAcceptedCurrencies = async ({
   acceptedCurrencySeeds,
@@ -424,33 +508,25 @@ const ensureAcceptedCurrencies = async ({
   tooling: Tooling
   suiClient: SuiClient
 }) => {
-  if (cliArguments.currencyId && acceptedCurrencySeeds.length !== 1)
-    throw new Error(
-      "currencyId overrides require --coin-type to target a single currency."
-    )
-
-  for (const currencySeed of acceptedCurrencySeeds) {
-    await ensureAcceptedCurrency({
+  await runSequentially(acceptedCurrencySeeds, (currencySeed) =>
+    ensureAcceptedCurrency({
       currencySeed,
-      currencyIdOverride: cliArguments.currencyId,
       cliArguments,
       shopIdentifiers,
       tooling,
       suiClient
     })
-  }
+  )
 }
 
 const ensureAcceptedCurrency = async ({
   currencySeed,
-  currencyIdOverride,
   cliArguments,
   shopIdentifiers,
   tooling,
   suiClient
 }: {
   currencySeed: AcceptedCurrencySeed
-  currencyIdOverride?: string
   cliArguments: ShopSeedArguments
   shopIdentifiers: { packageId: string; shopId: string; ownerCapId: string }
   tooling: Tooling
@@ -476,7 +552,6 @@ const ensureAcceptedCurrency = async ({
 
   const inputs = await normalizeAcceptedCurrencyInputs({
     currencySeed,
-    currencyIdOverride,
     cliArguments,
     shopIdentifiers,
     suiClient
@@ -536,28 +611,23 @@ const ensureAcceptedCurrency = async ({
 
 const normalizeAcceptedCurrencyInputs = async ({
   currencySeed,
-  currencyIdOverride,
   cliArguments,
   shopIdentifiers,
   suiClient
 }: {
   currencySeed: AcceptedCurrencySeed
-  currencyIdOverride?: string
   cliArguments: ShopSeedArguments
   shopIdentifiers: { packageId: string; shopId: string; ownerCapId: string }
   suiClient: SuiClient
 }) => {
   const coinType = normalizeCoinType(currencySeed.coinType)
-  const feedIdBytes = assertBytesLength(
-    hexToBytes(currencySeed.feedId),
-    32
-  )
+  const feedIdBytes = assertBytesLength(hexToBytes(currencySeed.feedId), 32)
   const normalizedPriceInfoObjectId = normalizeSuiObjectId(
     currencySeed.priceInfoObjectId
   )
 
   const currencyId =
-    currencyIdOverride ||
+    currencySeed.currencyId ||
     (await resolveCurrencyObjectId(
       {
         coinType,
@@ -569,7 +639,7 @@ const normalizeAcceptedCurrencyInputs = async ({
 
   if (!currencyId)
     throw new Error(
-      `Could not resolve currency registry entry for ${coinType}. Provide --currency-id or register the coin first.`
+      `Could not resolve currency registry entry for ${coinType}. Ensure the coin is registered in the registry.`
     )
 
   return {
@@ -647,57 +717,77 @@ const ensureItemListings = async ({
     mutable: true
   })
 
-  const ensuredListings: ItemListingSummary[] = []
-
-  for (const listing of listingSeeds) {
-    const listingKey = buildListingKey(listing)
-    const existingListing = listingKey
-      ? existingListingIndex.get(listingKey)
-      : undefined
-
-    if (existingListing) {
-      logKeyValueYellow("Listing")(`Using existing ${listing.name}.`)
-      logItemListingSummary(existingListing)
-      ensuredListings.push(existingListing)
-      continue
-    }
-
-    const addItemTransaction = buildAddItemListingTransaction({
-      packageId: shopIdentifiers.packageId,
-      itemType: listing.itemType,
-      shop: shopSharedObject,
-      ownerCapId: shopIdentifiers.ownerCapId,
-      itemName: listing.name,
-      basePriceUsdCents: parseUsdToCents(listing.priceUsd),
-      stock: parsePositiveU64(listing.stock, "stock"),
-      spotlightDiscountId: undefined
-    })
-
-    const { transactionResult } = await tooling.signAndExecute({
-      transaction: addItemTransaction,
-      signer: tooling.loadedEd25519KeyPair
-    })
-
-    const createdListingChange = ensureCreatedObject(
-      "::shop::ItemListing",
-      transactionResult
-    )
-
-    const listingId = normalizeIdOrThrow(
-      createdListingChange.objectId,
-      "Expected an ItemListing to be created."
-    )
-    const listingSummary = await getItemListingSummary(
-      shopIdentifiers.shopId,
-      listingId,
+  return runSequentially(listingSeeds, (listing) =>
+    ensureItemListing({
+      listing,
+      existingListingIndex,
+      shopIdentifiers,
+      shopSharedObject,
+      tooling,
       suiClient
-    )
+    })
+  )
+}
 
-    logItemListingSummary(listingSummary)
-    ensuredListings.push(listingSummary)
+const ensureItemListing = async ({
+  listing,
+  existingListingIndex,
+  shopIdentifiers,
+  shopSharedObject,
+  tooling,
+  suiClient
+}: {
+  listing: ItemListingSeed
+  existingListingIndex: Map<string, ItemListingSummary>
+  shopIdentifiers: { packageId: string; shopId: string; ownerCapId: string }
+  shopSharedObject: Awaited<ReturnType<Tooling["getSuiSharedObject"]>>
+  tooling: Tooling
+  suiClient: SuiClient
+}): Promise<ItemListingSummary> => {
+  const listingKey = buildListingKey(listing)
+  const existingListing = listingKey
+    ? existingListingIndex.get(listingKey)
+    : undefined
+
+  if (existingListing) {
+    logKeyValueYellow("Listing")(`Using existing ${listing.name}.`)
+    logItemListingSummary(existingListing)
+    return existingListing
   }
 
-  return ensuredListings
+  const addItemTransaction = buildAddItemListingTransaction({
+    packageId: shopIdentifiers.packageId,
+    itemType: listing.itemType,
+    shop: shopSharedObject,
+    ownerCapId: shopIdentifiers.ownerCapId,
+    itemName: listing.name,
+    basePriceUsdCents: parseUsdToCents(listing.priceUsd),
+    stock: parsePositiveU64(listing.stock, "stock"),
+    spotlightDiscountId: undefined
+  })
+
+  const { transactionResult } = await tooling.signAndExecute({
+    transaction: addItemTransaction,
+    signer: tooling.loadedEd25519KeyPair
+  })
+
+  const createdListingChange = ensureCreatedObject(
+    "::shop::ItemListing",
+    transactionResult
+  )
+
+  const listingId = normalizeIdOrThrow(
+    createdListingChange.objectId,
+    "Expected an ItemListing to be created."
+  )
+  const listingSummary = await getItemListingSummary(
+    shopIdentifiers.shopId,
+    listingId,
+    suiClient
+  )
+
+  logItemListingSummary(listingSummary)
+  return listingSummary
 }
 
 const ensureDiscountTemplates = async ({
@@ -710,9 +800,7 @@ const ensureDiscountTemplates = async ({
   shopIdentifiers: { packageId: string; shopId: string; ownerCapId: string }
   tooling: Tooling
   suiClient: SuiClient
-}): Promise<
-  Record<"fixed" | "percent", { discountTemplateId: string } | undefined>
-> => {
+}): Promise<DiscountTemplateMap> => {
   const existingTemplates = await getDiscountTemplateSummaries(
     shopIdentifiers.shopId,
     suiClient
@@ -725,88 +813,113 @@ const ensureDiscountTemplates = async ({
     mutable: true
   })
 
-  const ensuredTemplates: Record<
-    "fixed" | "percent",
-    { discountTemplateId: string } | undefined
-  > = {
+  const initialTemplates: DiscountTemplateMap = {
     fixed: undefined,
     percent: undefined
   }
 
-  for (const seed of discountSeeds) {
-    const normalizedRuleKind = parseDiscountRuleKind(seed.ruleKind)
-    const ruleValue = parseDiscountRuleValue(normalizedRuleKind, seed.value)
-    const ruleValueKey = ruleValue.toString()
-    const templateKey = buildDiscountTemplateKey({
-      ruleKind: seed.ruleKind,
-      ruleValue: ruleValueKey,
-      appliesToListingId: undefined
-    })
+  return discountSeeds.reduce(
+    async (pendingTemplates, seed) =>
+      ensureDiscountTemplate({
+        seed,
+        existingTemplateIndex,
+        currentTemplates: await pendingTemplates,
+        shopIdentifiers,
+        shopSharedObject,
+        tooling,
+        suiClient
+      }),
+    Promise.resolve(initialTemplates)
+  )
+}
 
-    const existingTemplate = templateKey
-      ? existingTemplateIndex.get(templateKey)
-      : undefined
+const ensureDiscountTemplate = async ({
+  seed,
+  existingTemplateIndex,
+  currentTemplates,
+  shopIdentifiers,
+  shopSharedObject,
+  tooling,
+  suiClient
+}: {
+  seed: DiscountSeedDefinition
+  existingTemplateIndex: Map<string, DiscountTemplateEntry>
+  currentTemplates: DiscountTemplateMap
+  shopIdentifiers: { packageId: string; shopId: string; ownerCapId: string }
+  shopSharedObject: Awaited<ReturnType<Tooling["getSuiSharedObject"]>>
+  tooling: Tooling
+  suiClient: SuiClient
+}): Promise<DiscountTemplateMap> => {
+  const normalizedRuleKind = parseDiscountRuleKind(seed.ruleKind)
+  const ruleValue = parseDiscountRuleValue(normalizedRuleKind, seed.value)
+  const ruleValueKey = ruleValue.toString()
+  const templateKey = buildDiscountTemplateKey({
+    ruleKind: seed.ruleKind,
+    ruleValue: ruleValueKey,
+    appliesToListingId: undefined
+  })
 
-    if (existingTemplate) {
-      logKeyValueYellow("Discount")(`Using existing ${seed.ruleKind} template.`)
-      logDiscountTemplateSummary(existingTemplate)
-      ensuredTemplates[seed.ruleKind] = {
+  const existingTemplate = existingTemplateIndex.get(templateKey)
+
+  if (existingTemplate) {
+    logKeyValueYellow("Discount")(`Using existing ${seed.ruleKind} template.`)
+    logDiscountTemplateSummary(existingTemplate)
+    return {
+      ...currentTemplates,
+      [seed.ruleKind]: {
         discountTemplateId: existingTemplate.discountTemplateId
       }
-      continue
-    }
-
-    const startsAt = parseNonNegativeU64(
-      defaultStartTimestampSeconds().toString(),
-      "startsAt"
-    )
-    const expiresAt = undefined
-    const maxRedemptions = parseOptionalU64(
-      seed.maxRedemptions,
-      "maxRedemptions"
-    )
-
-    validateDiscountSchedule(startsAt, expiresAt)
-
-    const createDiscountTemplateTransaction =
-      buildCreateDiscountTemplateTransaction({
-        packageId: shopIdentifiers.packageId,
-        shop: shopSharedObject,
-        appliesToListingId: undefined,
-        ruleKind: normalizedRuleKind,
-        ruleValue,
-        startsAt,
-        expiresAt,
-        maxRedemptions,
-        ownerCapId: shopIdentifiers.ownerCapId
-      })
-
-    const {
-      objectArtifacts: { created: createdObjects }
-    } = await tooling.signAndExecute({
-      transaction: createDiscountTemplateTransaction,
-      signer: tooling.loadedEd25519KeyPair
-    })
-
-    const createdTemplateId = requireCreatedObjectId(
-      createdObjects,
-      DISCOUNT_TEMPLATE_TYPE_FRAGMENT,
-      "DiscountTemplate"
-    )
-
-    const discountTemplateSummary = await getDiscountTemplateSummary(
-      shopIdentifiers.shopId,
-      createdTemplateId,
-      suiClient
-    )
-
-    logDiscountTemplateSummary(discountTemplateSummary)
-    ensuredTemplates[seed.ruleKind] = {
-      discountTemplateId: createdTemplateId
     }
   }
 
-  return ensuredTemplates
+  const startsAt = parseNonNegativeU64(
+    defaultStartTimestampSeconds().toString(),
+    "startsAt"
+  )
+  const expiresAt = undefined
+  const maxRedemptions = parseOptionalU64(seed.maxRedemptions, "maxRedemptions")
+
+  validateDiscountSchedule(startsAt, expiresAt)
+
+  const createDiscountTemplateTransaction =
+    buildCreateDiscountTemplateTransaction({
+      packageId: shopIdentifiers.packageId,
+      shop: shopSharedObject,
+      appliesToListingId: undefined,
+      ruleKind: normalizedRuleKind,
+      ruleValue,
+      startsAt,
+      expiresAt,
+      maxRedemptions,
+      ownerCapId: shopIdentifiers.ownerCapId
+    })
+
+  const {
+    objectArtifacts: { created: createdObjects }
+  } = await tooling.signAndExecute({
+    transaction: createDiscountTemplateTransaction,
+    signer: tooling.loadedEd25519KeyPair
+  })
+
+  const createdTemplateId = requireCreatedObjectId(
+    createdObjects,
+    DISCOUNT_TEMPLATE_TYPE_FRAGMENT,
+    "DiscountTemplate"
+  )
+
+  const discountTemplateSummary = await getDiscountTemplateSummary(
+    shopIdentifiers.shopId,
+    createdTemplateId,
+    suiClient
+  )
+
+  logDiscountTemplateSummary(discountTemplateSummary)
+  return {
+    ...currentTemplates,
+    [seed.ruleKind]: {
+      discountTemplateId: createdTemplateId
+    }
+  }
 }
 
 const ensureFixedDiscountSpotlight = async ({

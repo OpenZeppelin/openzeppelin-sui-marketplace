@@ -1,6 +1,6 @@
 [package]
 name = "sui_oracle_market"
-edition = "2024.beta"
+edition = "2024"
 # license = ""
 # authors = []
 
@@ -10,7 +10,7 @@ edition = "2024.beta"
 [dependencies.Pyth]
 git = "https://github.com/pyth-network/pyth-crosschain.git"
 subdir = "target_chains/sui/contracts"
-rev = "main"
+rev = "sui-contract-testnet"
 
 [dependencies.openzeppelin_math]
 git = "https://github.com/OpenZeppelin/contracts-sui.git"
@@ -36,11 +36,19 @@ sui_oracle_market = "0x0"
 # for example, `std = "0x1"` is exported by the Standard Library.
 # alice = "0xA11CE"
 
+[environments]
+# Localnet chain id is included to allow dep replacements for local mocks.
+localnet = "1dab32c7"
+devnet = "a2c63a99"
+testnet = "4c78adac"
+mainnet = "35834a8a"
+
+[dep-replacements.localnet]
+# Use the local mock on localnet without relying on dev-mode flags.
+Pyth = { local = "../pyth-mock", override = true }
+openzeppelin_math = { local = "../openzeppelin-math", override = true }
+
 [dev-dependencies]
-[dev-dependencies.Pyth]
-# Use the local mock only for dev/test builds (e.g., localnet publishes with --dev).
-local = "../pyth-mock"
-override = true
 [dev-dependencies.mock_coin]
 # Local-only mock assets for localnet demos; ignored on shared networks.
 local = "../coin-mock"
@@ -48,8 +56,3 @@ local = "../coin-mock"
 # Local-only example item types for typed listing tests.
 local = "../item-examples"
 override = true
-
-# [dev-addresses]
-# # The dev-addresses section allows overwriting named addresses for the `--test`
-# # and `--dev` modes.
-# pyth = "0x25891f189a00639f17a5dd298d426970b93cf3366f7abf69f27ab5434fb8bd97"

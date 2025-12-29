@@ -10,7 +10,7 @@ import { getShopOverview } from "@sui-oracle-market/domain-core/models/shop"
 import { buildCreateShopTransaction } from "@sui-oracle-market/domain-core/ptb/shop"
 import { runSuiScript } from "@sui-oracle-market/tooling-node/process"
 import { logShopOverview } from "../../utils/log-summaries.ts"
-import { resolveShopPublishInputs } from "../../utils/publish-artifacts.ts"
+import { resolveShopPublishInputs } from "../../utils/published-artifacts.ts"
 
 type CreateShopArguments = {
   shopPackageId?: string

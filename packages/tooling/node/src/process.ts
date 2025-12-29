@@ -1,6 +1,7 @@
 import { config } from "dotenv"
 config({ quiet: true })
 
+import { createHash } from "node:crypto"
 import { basename } from "node:path"
 import { fileURLToPath } from "node:url"
 
@@ -18,10 +19,12 @@ import {
   logSimpleBlue,
   logWarning
 } from "./log.ts"
+import { syncLocalnetMoveEnvironmentChainId } from "./move.ts"
 import {
   createSuiCliEnvironment,
   ensureSuiCli,
   getActiveSuiCliEnvironment,
+  getSuiCliEnvironmentRpc,
   listSuiCliEnvironments,
   switchSuiCliEnvironment
 } from "./suiCli.ts"
@@ -243,10 +246,208 @@ const logScriptFailure = (error: unknown) => {
   logError(`${error instanceof Error ? error.message : String(error)}\n`)
 }
 
+const syncLocalnetMoveEnvironmentChainIdForTooling = async (
+  tooling: Tooling
+) => {
+  const { chainId, updatedFiles, didAttempt } =
+    await syncLocalnetMoveEnvironmentChainId({
+      moveRootPath: tooling.suiConfig.paths.move,
+      environmentName: tooling.suiConfig.network.networkName,
+      suiClient: tooling.suiClient
+    })
+
+  if (didAttempt && !chainId) {
+    logWarning(
+      "Unable to resolve localnet chain id; Move.toml environments were not updated."
+    )
+  }
+
+  if (updatedFiles.length) {
+    logKeyValueBlue("Move.toml")(
+      `updated ${updatedFiles.length} localnet environment entries`
+    )
+  }
+}
+
 const isSuiCliEnvironmentConfigured = (
   environmentName: string,
   availableEnvironments: string[]
 ) => availableEnvironments.includes(environmentName)
+
+const normalizeRpcUrlForComparison = (value: string): string =>
+  value.trim().replace(/\/+$/, "")
+
+const hashRpcUrl = (rpcUrl: string): string =>
+  createHash("sha256").update(rpcUrl).digest("hex").slice(0, 10)
+
+const addEnvironmentName = (
+  environmentName: string,
+  availableEnvironments: string[]
+): string[] =>
+  isSuiCliEnvironmentConfigured(environmentName, availableEnvironments)
+    ? availableEnvironments
+    : [...availableEnvironments, environmentName]
+
+const ensureSuiCliEnvironmentExists = async ({
+  environmentName,
+  rpcUrl,
+  availableEnvironments
+}: {
+  environmentName: string
+  rpcUrl: string
+  availableEnvironments: string[]
+}): Promise<{ didEnsure: boolean; availableEnvironments: string[] }> => {
+  if (isSuiCliEnvironmentConfigured(environmentName, availableEnvironments)) {
+    return { didEnsure: true, availableEnvironments }
+  }
+
+  const didCreate = await createSuiCliEnvironment(environmentName, rpcUrl)
+  if (!didCreate) return { didEnsure: false, availableEnvironments }
+
+  return {
+    didEnsure: true,
+    availableEnvironments: addEnvironmentName(
+      environmentName,
+      availableEnvironments
+    )
+  }
+}
+
+const isSuiCliEnvironmentRpcMatching = async ({
+  environmentName,
+  expectedRpcUrl
+}: {
+  environmentName: string
+  expectedRpcUrl: string
+}): Promise<boolean> => {
+  const configuredRpcUrl = await getSuiCliEnvironmentRpc(environmentName)
+  if (!configuredRpcUrl) return true
+
+  return (
+    normalizeRpcUrlForComparison(configuredRpcUrl) ===
+    normalizeRpcUrlForComparison(expectedRpcUrl)
+  )
+}
+
+const buildTemporaryEnvironmentBaseAlias = (
+  baseAlias: string,
+  rpcUrl: string
+) => `${baseAlias}-rpc-${hashRpcUrl(normalizeRpcUrlForComparison(rpcUrl))}`
+
+const createOrReuseTemporarySuiCliEnvironment = async ({
+  baseAlias,
+  rpcUrl,
+  availableEnvironments
+}: {
+  baseAlias: string
+  rpcUrl: string
+  availableEnvironments: string[]
+}): Promise<{ environmentName: string; availableEnvironments: string[] }> => {
+  const candidateBase = buildTemporaryEnvironmentBaseAlias(baseAlias, rpcUrl)
+
+  const tryEnsureEnvironment = async (
+    environmentName: string,
+    currentEnvironments: string[]
+  ): Promise<{ didEnsure: boolean; availableEnvironments: string[] }> => {
+    const exists = isSuiCliEnvironmentConfigured(
+      environmentName,
+      currentEnvironments
+    )
+    if (exists) {
+      const rpcMatches = await isSuiCliEnvironmentRpcMatching({
+        environmentName,
+        expectedRpcUrl: rpcUrl
+      })
+      return {
+        didEnsure: rpcMatches,
+        availableEnvironments: currentEnvironments
+      }
+    }
+
+    return ensureSuiCliEnvironmentExists({
+      environmentName,
+      rpcUrl,
+      availableEnvironments: currentEnvironments
+    })
+  }
+
+  const stableAttempt = await tryEnsureEnvironment(
+    candidateBase,
+    availableEnvironments
+  )
+  if (stableAttempt.didEnsure)
+    return {
+      environmentName: candidateBase,
+      availableEnvironments: stableAttempt.availableEnvironments
+    }
+
+  let updatedEnvironmentNames = stableAttempt.availableEnvironments
+
+  for (let attemptIndex = 0; attemptIndex < 5; attemptIndex += 1) {
+    const uniqueAlias = `${candidateBase}-${Date.now().toString(36)}-${attemptIndex}`
+    const attempt = await tryEnsureEnvironment(
+      uniqueAlias,
+      updatedEnvironmentNames
+    )
+    updatedEnvironmentNames = attempt.availableEnvironments
+    if (attempt.didEnsure)
+      return {
+        environmentName: uniqueAlias,
+        availableEnvironments: updatedEnvironmentNames
+      }
+  }
+
+  throw new Error(
+    `Unable to create a Sui CLI environment pointing at ${rpcUrl}. ` +
+      `Run \`sui client envs --json\` and ensure your environment aliases point to the intended RPC.`
+  )
+}
+
+const resolveSuiCliEnvironmentForRpcUrl = async ({
+  requestedEnvironmentName,
+  rpcUrl,
+  availableEnvironments
+}: {
+  requestedEnvironmentName: string
+  rpcUrl: string
+  availableEnvironments: string[]
+}): Promise<{
+  environmentName: string
+  availableEnvironments: string[]
+  didUseTemporaryEnvironment: boolean
+}> => {
+  const rpcMatches = await isSuiCliEnvironmentRpcMatching({
+    environmentName: requestedEnvironmentName,
+    expectedRpcUrl: rpcUrl
+  })
+
+  if (rpcMatches)
+    return {
+      environmentName: requestedEnvironmentName,
+      availableEnvironments,
+      didUseTemporaryEnvironment: false
+    }
+
+  const configuredRpcUrl = await getSuiCliEnvironmentRpc(
+    requestedEnvironmentName
+  )
+  logWarning(
+    `Sui CLI environment '${requestedEnvironmentName}' points at ${configuredRpcUrl ?? "<unknown>"}, but this script expects ${rpcUrl}. ` +
+      `Switching to a temporary environment alias to avoid targeting the wrong network.`
+  )
+
+  const temporaryEnvironment = await createOrReuseTemporarySuiCliEnvironment({
+    baseAlias: requestedEnvironmentName,
+    rpcUrl,
+    availableEnvironments
+  })
+
+  return {
+    environmentName: temporaryEnvironment.environmentName,
+    availableEnvironments: temporaryEnvironment.availableEnvironments,
+    didUseTemporaryEnvironment: true
+  }
+}
 
 const switchSuiCliEnvironmentIfNeeded = async ({
   environmentName,
@@ -257,25 +458,49 @@ const switchSuiCliEnvironmentIfNeeded = async ({
 }): Promise<SuiCliEnvironmentSwitch> => {
   const originalEnvironment = await getActiveSuiCliEnvironment()
 
-  if (!environmentName || originalEnvironment === environmentName) {
+  if (!environmentName) {
     return { originalEnvironment, didSwitch: false }
   }
 
   const availableEnvironments = await listSuiCliEnvironments()
+
+  const resolvedEnvironment = rpcUrl
+    ? await resolveSuiCliEnvironmentForRpcUrl({
+        requestedEnvironmentName: environmentName,
+        rpcUrl,
+        availableEnvironments
+      })
+    : {
+        environmentName,
+        availableEnvironments,
+        didUseTemporaryEnvironment: false
+      }
+
+  const targetEnvironmentName = resolvedEnvironment.environmentName
+  const resolvedAvailableEnvironments =
+    resolvedEnvironment.availableEnvironments
+
+  if (originalEnvironment === targetEnvironmentName) {
+    return { originalEnvironment, didSwitch: false }
+  }
+
   const environmentExists = isSuiCliEnvironmentConfigured(
-    environmentName,
-    availableEnvironments
+    targetEnvironmentName,
+    resolvedAvailableEnvironments
   )
   let didCreateEnvironment = false
 
   if (!environmentExists && rpcUrl) {
-    didCreateEnvironment = await createSuiCliEnvironment(
-      environmentName,
-      rpcUrl
-    )
+    didCreateEnvironment = (
+      await ensureSuiCliEnvironmentExists({
+        environmentName: targetEnvironmentName,
+        rpcUrl,
+        availableEnvironments: resolvedAvailableEnvironments
+      })
+    ).didEnsure
     if (!didCreateEnvironment) {
       logWarning(
-        `Failed to create Sui CLI environment ${environmentName}; attempting to switch anyway.`
+        `Failed to create Sui CLI environment ${targetEnvironmentName}; attempting to switch anyway.`
       )
     }
   }
@@ -283,19 +508,19 @@ const switchSuiCliEnvironmentIfNeeded = async ({
   const shouldAttemptSwitch =
     environmentExists ||
     didCreateEnvironment ||
-    availableEnvironments.length === 0
+    resolvedAvailableEnvironments.length === 0
 
   if (!shouldAttemptSwitch) {
     logWarning(
-      `Sui CLI environment ${environmentName} is not configured; CLI commands may target a different network.`
+      `Sui CLI environment ${targetEnvironmentName} is not configured; CLI commands may target a different network.`
     )
     return { originalEnvironment, didSwitch: false }
   }
 
-  const didSwitch = await switchSuiCliEnvironment(environmentName)
+  const didSwitch = await switchSuiCliEnvironment(targetEnvironmentName)
   if (!didSwitch)
     logWarning(
-      `Failed to switch Sui CLI environment to ${environmentName}; CLI commands may target a different network.`
+      `Failed to switch Sui CLI environment to ${targetEnvironmentName}; CLI commands may target a different network.`
     )
 
   return { originalEnvironment, didSwitch }
@@ -355,13 +580,19 @@ const runScriptAndCaptureExitCode = async <TCliArgument>(
       async () => {
         logScriptStart(context)
 
+        const tooling = await createToolingForNetwork(
+          context.networkConfig,
+          context.suiConfig
+        )
+
+        await syncLocalnetMoveEnvironmentChainIdForTooling(tooling)
+
         await scriptToExecute(
-          await createToolingForNetwork(
-            context.networkConfig,
-            context.suiConfig
-          ),
+          tooling,
           context.cliArguments as CommonCliArgs & TCliArgument
         )
+
+        await syncLocalnetMoveEnvironmentChainIdForTooling(tooling)
 
         return 0
       }

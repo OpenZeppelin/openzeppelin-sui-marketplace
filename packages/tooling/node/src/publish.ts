@@ -38,7 +38,11 @@ import {
   resolveAllowedDependencyIds,
   updateMoveLockPublishedAddresses
 } from "./move-lock.ts"
-import { buildMovePackage } from "./move.ts"
+import {
+  buildMoveEnvironmentFlags,
+  buildMovePackage,
+  syncLocalnetMoveEnvironmentChainId
+} from "./move.ts"
 import { runSuiCli } from "./suiCli.ts"
 
 type PackageNames = { root?: string; dependencies: string[] }
@@ -57,10 +61,37 @@ type PublishPlan = {
   dependencyAddressesFromLock: Record<string, string>
   useCliPublish?: boolean
   keystorePath?: string
-  useDevBuild?: boolean
   suiCliVersion?: string
   allowAutoUnpublishedDependencies?: boolean
-  ignoreChainDuringBuild: boolean
+}
+
+const syncLocalnetMoveEnvironmentChainIdForPublish = async ({
+  network,
+  packagePath,
+  suiClient
+}: {
+  network: SuiNetworkConfig
+  packagePath: string
+  suiClient: SuiClient
+}) => {
+  const { chainId, updatedFiles, didAttempt } =
+    await syncLocalnetMoveEnvironmentChainId({
+      moveRootPath: packagePath,
+      environmentName: network.networkName,
+      suiClient
+    })
+
+  if (didAttempt && !chainId) {
+    logWarning(
+      "Unable to resolve localnet chain id; Move.toml environments were not updated."
+    )
+  }
+
+  if (updatedFiles.length) {
+    logKeyValueBlue("Move.toml")(
+      `updated ${updatedFiles.length} localnet environment entries`
+    )
+  }
 }
 
 /**
@@ -79,15 +110,13 @@ export const publishPackageWithLog = async (
     keypair,
     gasBudget = DEFAULT_PUBLISH_GAS_BUDGET,
     withUnpublishedDependencies = false,
-    useDevBuild = false,
-    useCliPublish = false,
+    useCliPublish = true,
     allowAutoUnpublishedDependencies = true
   }: {
     packagePath: string
     keypair: Ed25519Keypair
     gasBudget?: number
     withUnpublishedDependencies?: boolean
-    useDevBuild?: boolean
     useCliPublish?: boolean
     allowAutoUnpublishedDependencies?: boolean
   },
@@ -106,7 +135,6 @@ export const publishPackageWithLog = async (
     suiClient: suiContext.suiClient,
     gasBudget,
     withUnpublishedDependencies,
-    useDevBuild,
     useCliPublish,
     allowAutoUnpublishedDependencies
   })
@@ -242,9 +270,6 @@ export const doPublishPackage = async (
 }
 
 /**
- * Builds the publish transaction payload with gas budget, publish command, and upgrade-cap transfer.
- */
-/**
  * Builds the publish transaction with a publish command and upgrade cap transfer.
  */
 const createPublishTransaction = (
@@ -286,8 +311,7 @@ const buildPublishPlan = async ({
   suiClient,
   gasBudget,
   withUnpublishedDependencies = false,
-  useDevBuild = false,
-  useCliPublish = false,
+  useCliPublish = true,
   allowAutoUnpublishedDependencies = true
 }: {
   network: SuiNetworkConfig
@@ -297,33 +321,33 @@ const buildPublishPlan = async ({
   suiClient: SuiClient
   gasBudget: number
   withUnpublishedDependencies?: boolean
-  useDevBuild?: boolean
   useCliPublish?: boolean
   allowAutoUnpublishedDependencies?: boolean
 }): Promise<PublishPlan> => {
-  if (network.networkName !== "localnet") {
-    if (useDevBuild)
-      throw new Error(
-        "Dev builds are limited to localnet. Remove --dev when publishing to shared networks."
-      )
-    if (withUnpublishedDependencies)
-      throw new Error(
-        "--with-unpublished-dependencies is reserved for localnet. Link to published packages in Move.lock for shared networks."
-      )
-  }
+  if (network.networkName !== "localnet" && withUnpublishedDependencies)
+    throw new Error(
+      "--with-unpublished-dependencies is reserved for localnet. Link to published packages in Move.lock for shared networks."
+    )
+
+  await syncLocalnetMoveEnvironmentChainIdForPublish({
+    network,
+    packagePath,
+    suiClient
+  })
 
   const allowImplicitUnpublishedDependencies =
     network.networkName === "localnet"
       ? allowAutoUnpublishedDependencies
       : false
 
+  const includeDevDependencies = false
   const initialMoveLockContents = await readMoveLockContents(packagePath)
 
   const updatedMoveLockContents = await ensureMoveLockPublishedAddresses({
     packagePath,
     lockContents: initialMoveLockContents,
     network,
-    includeDevDependencies: useDevBuild,
+    includeDevDependencies,
     suiClient
   })
 
@@ -337,14 +361,13 @@ const buildPublishPlan = async ({
     packagePath,
     withUnpublishedDependencies,
     allowImplicitUnpublishedDependencies,
-    useDevBuild,
+    includeDevDependencies,
     moveLockContents
   )
 
   if (
     !shouldSkipFrameworkConsistency(
       network.networkName,
-      useDevBuild,
       allowImplicitUnpublishedDependencies
     )
   ) {
@@ -367,17 +390,11 @@ const buildPublishPlan = async ({
   }
 
   const buildFlags = buildMoveBuildFlags({
-    useDevBuild,
-    includeUnpublishedDeps: Boolean(shouldUseUnpublishedDependencies),
-    ignoreChain: shouldIgnoreChain(network.networkName, {
-      allowAutoUnpublishedDependencies: allowImplicitUnpublishedDependencies,
-      useDevBuild
-    })
+    environmentName: network.networkName,
+    includeUnpublishedDeps: Boolean(shouldUseUnpublishedDependencies)
   })
 
-  // Prefer CLI for standard publishes; dev builds fall back to SDK because
-  // Sui CLI rejects packages that require test-only code (e.g. std::unit_test).
-  const cliPublish = useCliPublish || !useDevBuild
+  const cliPublish = useCliPublish
 
   return {
     network,
@@ -385,13 +402,12 @@ const buildPublishPlan = async ({
     fullNodeUrl,
     keypair,
     gasBudget,
-    useDevBuild,
     shouldUseUnpublishedDependencies: Boolean(shouldUseUnpublishedDependencies),
     unpublishedDependencies,
     buildFlags,
     dependencyAddressesFromLock: readDependencyAddresses(
       moveLockContents,
-      useDevBuild
+      includeDevDependencies
     ),
     useCliPublish: cliPublish,
     keystorePath: network.account?.keystorePath,
@@ -400,56 +416,34 @@ const buildPublishPlan = async ({
       packagePath,
       unpublishedDependencies
     ),
-    allowAutoUnpublishedDependencies: allowImplicitUnpublishedDependencies,
-    ignoreChainDuringBuild: shouldIgnoreChain(network.networkName, {
-      allowAutoUnpublishedDependencies: allowImplicitUnpublishedDependencies,
-      useDevBuild
-    })
+    allowAutoUnpublishedDependencies: allowImplicitUnpublishedDependencies
   }
 }
 
-const SKIP_FETCH_LATEST_GIT_DEPS_FLAG = "--skip-fetch-latest-git-deps"
 const DUMP_BYTECODE_AS_BASE64_FLAG = "--dump-bytecode-as-base64"
 /**
  * Determines whether to skip framework revision checks for the given network/build mode.
  */
 const shouldSkipFrameworkConsistency = (
   networkName: string,
-  useDevBuild: boolean,
   allowAutoUnpublishedDependencies: boolean
-) =>
-  networkName === "localnet" || useDevBuild || allowAutoUnpublishedDependencies
-/**
- * Determines whether to pass --ignore-chain for Move builds.
- */
-const shouldIgnoreChain = (
-  networkName: string,
-  {
-    allowAutoUnpublishedDependencies,
-    useDevBuild
-  }: { allowAutoUnpublishedDependencies: boolean; useDevBuild: boolean }
-) =>
-  networkName === "localnet" ||
-  (allowAutoUnpublishedDependencies && useDevBuild)
+) => networkName === "localnet" || allowAutoUnpublishedDependencies
 
 /**
- * Derives the Move build flags for publishing.
+ * Derives the Move build flags for publishing with environment-aware settings.
  */
 const buildMoveBuildFlags = ({
-  useDevBuild,
-  includeUnpublishedDeps,
-  ignoreChain
+  environmentName,
+  includeUnpublishedDeps
 }: {
-  useDevBuild: boolean
+  environmentName: string
   includeUnpublishedDeps: boolean
-  ignoreChain: boolean
 }) => {
-  const flags = [DUMP_BYTECODE_AS_BASE64_FLAG, SKIP_FETCH_LATEST_GIT_DEPS_FLAG]
-  if (useDevBuild) {
-    flags.push("--dev", "--test")
-  }
+  const flags = [
+    DUMP_BYTECODE_AS_BASE64_FLAG,
+    ...buildMoveEnvironmentFlags({ environmentName })
+  ]
   if (includeUnpublishedDeps) flags.push("--with-unpublished-dependencies")
-  if (ignoreChain) flags.push("--ignore-chain")
 
   return flags
 }
@@ -464,8 +458,6 @@ const logPublishStart = (plan: PublishPlan) => {
   logKeyValueBlue("publisher")(plan.keypair.toSuiAddress())
   logKeyValueBlue("gas budget")(plan.gasBudget)
   logKeyValueBlue("mode")(plan.useCliPublish ? "cli" : "sdk")
-  if (plan.useDevBuild)
-    logKeyValueBlue("build mode")("dev (uses dev-dependencies)")
 
   if (plan.shouldUseUnpublishedDependencies) {
     logKeyValueBlue("with unpublished deps")(
@@ -529,12 +521,12 @@ const buildCliPublishArguments = (plan: PublishPlan): string[] => {
     "--json",
     "--gas-budget",
     plan.gasBudget.toString(),
-    SKIP_FETCH_LATEST_GIT_DEPS_FLAG,
     "--sender",
-    plan.keypair.toSuiAddress()
+    plan.keypair.toSuiAddress(),
+    ...buildMoveEnvironmentFlags({
+      environmentName: plan.network.networkName
+    })
   ]
-
-  if (plan.useDevBuild) args.push("--dev")
 
   if (plan.shouldUseUnpublishedDependencies)
     args.push("--with-unpublished-dependencies")
@@ -889,7 +881,7 @@ const resolveUnpublishedDependencyUsage = async (
   packagePath: string,
   explicitWithUnpublished?: boolean,
   allowImplicitUnpublished?: boolean,
-  includeDevDependencies = true,
+  includeDevDependencies = false,
   lockContents?: string
 ) => {
   const { unpublishedDependencies, lockMissing } = findUnpublishedDependencies(
@@ -941,7 +933,7 @@ const buildMissingMoveLockError = (packagePath: string) =>
   [
     `Move.lock not found for ${packagePath}.`,
     "Publishing to shared networks requires a Move.lock that pins dependency addresses to deployed packages.",
-    "Run `sui move build --skip-fetch-latest-git-deps` against the intended dependency set or copy an existing Move.lock before publishing."
+    "Run `sui move build` against the intended dependency set or copy an existing Move.lock before publishing."
   ].join("\n")
 
 /**

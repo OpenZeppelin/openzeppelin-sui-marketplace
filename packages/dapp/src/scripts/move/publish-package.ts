@@ -8,7 +8,10 @@ import path from "node:path"
 import yargs from "yargs"
 
 import type { PublishArtifact } from "@sui-oracle-market/tooling-core/types"
-import { loadDeploymentArtifacts } from "@sui-oracle-market/tooling-node/artifacts"
+import {
+  getLatestArtifact,
+  loadDeploymentArtifacts
+} from "@sui-oracle-market/tooling-node/artifacts"
 import {
   DEFAULT_PUBLISH_GAS_BUDGET,
   MINIMUM_GAS_COIN_OBJECTS
@@ -19,6 +22,7 @@ import {
   logWarning
 } from "@sui-oracle-market/tooling-node/log"
 import {
+  canonicalizePackagePath,
   hasDeploymentForPackage,
   resolveFullPackagePath
 } from "@sui-oracle-market/tooling-node/move"
@@ -27,21 +31,68 @@ import { runSuiScript } from "@sui-oracle-market/tooling-node/process"
 type PublishScriptArguments = {
   packagePath: string
   withUnpublishedDependencies?: boolean
-  dev?: boolean
   rePublish?: boolean
 }
 
 type ResolvedPublishOptions = {
-  useDevBuild: boolean
   withUnpublishedDependencies: boolean
   allowAutoUnpublishedDependencies: boolean
 }
 
-const shouldSkipPublish = (
+const getLatestDeploymentForPackagePath = (
+  deploymentArtifacts: PublishArtifact[],
+  packagePath: string
+): PublishArtifact | undefined => {
+  const normalizedTargetPath = canonicalizePackagePath(packagePath)
+  const matches = deploymentArtifacts.filter(
+    (artifact) =>
+      canonicalizePackagePath(artifact.packagePath) === normalizedTargetPath
+  )
+  return getLatestArtifact(matches)
+}
+
+const doesPackageObjectExistOnNetwork = async (
+  tooling: Tooling,
+  packageId: string
+): Promise<boolean> => {
+  try {
+    const result = await tooling.suiClient.getObject({ id: packageId })
+    return Boolean(result.data)
+  } catch {
+    return false
+  }
+}
+
+const shouldSkipPublish = async (
+  tooling: Tooling,
   rePublishFlag: boolean | undefined,
   deploymentArtifacts: PublishArtifact[],
   packagePath: string
-) => !rePublishFlag && hasDeploymentForPackage(deploymentArtifacts, packagePath)
+): Promise<boolean> => {
+  if (rePublishFlag) return false
+  if (!hasDeploymentForPackage(deploymentArtifacts, packagePath)) return false
+
+  const latestDeployment = getLatestDeploymentForPackagePath(
+    deploymentArtifacts,
+    packagePath
+  )
+  const latestPackageId = latestDeployment?.packageId
+  if (!latestPackageId) return false
+
+  const existsOnChain = await doesPackageObjectExistOnNetwork(
+    tooling,
+    latestPackageId
+  )
+  if (existsOnChain) return true
+
+  logWarning(
+    "Deployment artifact exists but the package object was not found on the target network. Republish will proceed to refresh deployments."
+  )
+  logKeyValueBlue("artifactPackageId")(latestPackageId)
+  logKeyValueBlue("network")(tooling.network.networkName)
+
+  return false
+}
 
 const logSkippedPublish = (networkName: string, packagePath: string) => {
   logWarning(
@@ -87,7 +138,6 @@ const publishPackageToNetwork = async (
         keypair,
         gasBudget,
         withUnpublishedDependencies: publishOptions.withUnpublishedDependencies,
-        useDevBuild: publishOptions.useDevBuild,
         useCliPublish: true,
         allowAutoUnpublishedDependencies:
           publishOptions.allowAutoUnpublishedDependencies
@@ -100,12 +150,6 @@ const derivePublishOptions = (
   cliArguments: PublishScriptArguments
 ): ResolvedPublishOptions => {
   const targetingLocalnet = networkName === "localnet"
-  const useDevBuild = cliArguments.dev ?? targetingLocalnet
-
-  if (useDevBuild && !targetingLocalnet)
-    throw new Error(
-      "Dev builds are limited to localnet. Remove --dev when publishing to shared networks."
-    )
 
   if (!targetingLocalnet && cliArguments.withUnpublishedDependencies)
     throw new Error(
@@ -113,7 +157,6 @@ const derivePublishOptions = (
     )
 
   return {
-    useDevBuild,
     withUnpublishedDependencies:
       cliArguments.withUnpublishedDependencies ?? targetingLocalnet,
     allowAutoUnpublishedDependencies: targetingLocalnet
@@ -135,7 +178,8 @@ runSuiScript(
     )
 
     if (
-      shouldSkipPublish(
+      await shouldSkipPublish(
+        tooling,
         cliArguments.rePublish,
         deploymentArtifacts,
         fullPackagePath
@@ -145,7 +189,7 @@ runSuiScript(
       return
     }
 
-    // Publish with network-aware options (dev builds localnet-only, published deps on shared nets).
+    // Publish with network-aware options (unpublished deps localnet-only, published deps on shared nets).
     await publishPackageToNetwork(
       tooling,
       fullPackagePath,
@@ -163,12 +207,6 @@ runSuiScript(
       alias: "with-unpublished-dependencies",
       type: "boolean",
       description: `Publish package with unpublished dependencies`,
-      default: undefined
-    })
-    .option("dev", {
-      type: "boolean",
-      description:
-        "Build with dev-dependencies (use the mock Pyth package on localnet)",
       default: undefined
     })
     .option("rePublish", {

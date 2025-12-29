@@ -6,3 +6,10 @@ edition = "2024.beta"
 
 [addresses]
 item_examples = "0x0"
+
+[environments]
+# Update the localnet chain id when regenerating localnet.
+localnet = "1dab32c7"
+devnet = "a2c63a99"
+testnet = "4c78adac"
+mainnet = "35834a8a"

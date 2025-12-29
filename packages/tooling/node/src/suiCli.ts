@@ -50,6 +50,15 @@ export const runSuiCli =
 
 const runSuiClientCli = runSuiCli(["client"])
 
+type SuiCliEnvironmentJsonEntry = {
+  alias: string
+  rpc?: string
+  chain_id?: string
+  chainId?: string
+}
+
+type SuiCliEnvironmentsJson = [SuiCliEnvironmentJsonEntry[], string | null]
+
 const parseActiveEnvironmentOutput = (output: string): string | undefined => {
   const normalizedOutput = output.trim()
   if (!normalizedOutput) return undefined
@@ -68,23 +77,73 @@ const parseActiveEnvironmentOutput = (output: string): string | undefined => {
   return tokens.length > 0 ? tokens[tokens.length - 1] : undefined
 }
 
+const parseActiveEnvironmentJson = (output: string): string | undefined => {
+  const normalizedOutput = output.trim()
+  if (!normalizedOutput) return undefined
+  if (!/^["[{]/.test(normalizedOutput)) return undefined
+
+  try {
+    const parsed = JSON.parse(normalizedOutput)
+    return typeof parsed === "string" ? parsed : undefined
+  } catch {
+    return undefined
+  }
+}
+
+const parseEnvironmentTableRow = (
+  line: string
+): { environmentName: string; isActive: boolean } | undefined => {
+  const trimmedLine = line.trim()
+  if (!trimmedLine.startsWith("│")) return undefined
+
+  const columns = trimmedLine
+    .split("│")
+    .map((value) => value.trim())
+    .filter(Boolean)
+
+  if (columns.length < 2) return undefined
+
+  const [environmentName, , activeColumn] = columns
+  if (!environmentName || environmentName.toLowerCase() === "alias")
+    return undefined
+
+  return {
+    environmentName,
+    isActive: activeColumn === "*"
+  }
+}
+
+const parseEnvironmentTokenLine = (
+  line: string
+): { environmentName: string; isActive: boolean } | undefined => {
+  const trimmedLine = line.trim()
+  if (!trimmedLine) return undefined
+  if (trimmedLine.startsWith("│")) return undefined
+  if (/^[┌┐└┘├┤┬┴┼╭╮╰╯─]+/.test(trimmedLine)) return undefined
+
+  const isActive = trimmedLine.startsWith("*")
+  const normalizedLine = trimmedLine.replace(/^\*\s*/, "")
+  const environmentName = normalizedLine.split(/\s+/)[0]
+
+  if (!environmentName || environmentName.toLowerCase() === "alias")
+    return undefined
+
+  return { environmentName, isActive }
+}
+
 const parseEnvironmentList = (output: string) => {
   const environments: string[] = []
   let activeEnvironment: string | undefined
 
   for (const line of output.split(/\r?\n/)) {
-    const trimmedLine = line.trim()
-    if (!trimmedLine) continue
+    const tableRow = parseEnvironmentTableRow(line)
+    const tokenRow = tableRow ?? parseEnvironmentTokenLine(line)
 
-    const isActive = trimmedLine.startsWith("*")
-    const normalizedLine = trimmedLine.replace(/^\*\s*/, "")
-    const environmentName = normalizedLine.split(/\s+/)[0]
+    if (!tokenRow) continue
 
-    if (!environmentName) continue
-
-    environments.push(environmentName)
-    if (isActive && !activeEnvironment) {
-      activeEnvironment = environmentName
+    environments.push(tokenRow.environmentName)
+    if (tokenRow.isActive && !activeEnvironment) {
+      activeEnvironment = tokenRow.environmentName
     }
   }
 
@@ -94,12 +153,39 @@ const parseEnvironmentList = (output: string) => {
   }
 }
 
+const parseSuiCliEnvironmentsJson = (
+  rawOutput: string
+): {
+  environments: SuiCliEnvironmentJsonEntry[]
+  activeEnvironment?: string
+} => {
+  if (!rawOutput?.trim()) return { environments: [] }
+
+  try {
+    const parsed = JSON.parse(rawOutput) as SuiCliEnvironmentsJson
+    const environments = Array.isArray(parsed?.[0]) ? parsed[0] : []
+    const activeEnvironment =
+      typeof parsed?.[1] === "string" ? parsed[1] : undefined
+    return { environments, activeEnvironment }
+  } catch {
+    return { environments: [] }
+  }
+}
+
 /**
  * Returns the active Sui CLI environment name when available.
  */
 export const getActiveSuiCliEnvironment = async (): Promise<
   string | undefined
 > => {
+  const activeEnvJsonResult = await runSuiClientCli(["active-env", "--json"])
+  if (activeEnvJsonResult.exitCode === 0) {
+    const parsed = parseActiveEnvironmentJson(
+      activeEnvJsonResult.stdout.toString()
+    )
+    if (parsed) return parsed
+  }
+
   const activeEnvResult = await runSuiClientCli(["active-env"])
   if (activeEnvResult.exitCode === 0) {
     const parsed = parseActiveEnvironmentOutput(
@@ -108,20 +194,74 @@ export const getActiveSuiCliEnvironment = async (): Promise<
     if (parsed) return parsed
   }
 
-  const envsResult = await runSuiClientCli(["envs"])
-  if (envsResult.exitCode !== 0) return undefined
+  const envsResult = await runSuiClientCli(["envs", "--json"])
+  if (envsResult.exitCode === 0) {
+    const parsed = parseSuiCliEnvironmentsJson(envsResult.stdout.toString())
+    if (parsed.activeEnvironment) return parsed.activeEnvironment
+  }
 
-  return parseEnvironmentList(envsResult.stdout.toString()).activeEnvironment
+  const envsFallbackResult = await runSuiClientCli(["envs"])
+  if (envsFallbackResult.exitCode !== 0) return undefined
+
+  return parseEnvironmentList(envsFallbackResult.stdout.toString())
+    .activeEnvironment
 }
 
 /**
  * Lists available Sui CLI environments.
  */
 export const listSuiCliEnvironments = async (): Promise<string[]> => {
+  const envsJsonResult = await runSuiClientCli(["envs", "--json"])
+  if (envsJsonResult.exitCode === 0) {
+    const parsed = parseSuiCliEnvironmentsJson(envsJsonResult.stdout.toString())
+    if (parsed.environments.length) {
+      return parsed.environments.map((entry) => entry.alias)
+    }
+  }
+
   const envsResult = await runSuiClientCli(["envs"])
   if (envsResult.exitCode !== 0) return []
 
   return parseEnvironmentList(envsResult.stdout.toString()).environments
+}
+
+/**
+ * Reads the chain identifier recorded in Sui CLI config for an environment.
+ */
+export const getSuiCliEnvironmentChainId = async (
+  environmentName?: string
+): Promise<string | undefined> => {
+  const envsResult = await runSuiClientCli(["envs", "--json"])
+  if (envsResult.exitCode !== 0) return undefined
+
+  const { environments, activeEnvironment } = parseSuiCliEnvironmentsJson(
+    envsResult.stdout.toString()
+  )
+  const targetEnvironment = environmentName ?? activeEnvironment
+  if (!targetEnvironment) return undefined
+
+  const match = environments.find((entry) => entry.alias === targetEnvironment)
+  return match?.chain_id ?? match?.chainId
+}
+
+/**
+ * Reads the RPC URL recorded in Sui CLI config for an environment.
+ * Useful to ensure that an env alias like "localnet" actually points at the expected RPC.
+ */
+export const getSuiCliEnvironmentRpc = async (
+  environmentName?: string
+): Promise<string | undefined> => {
+  const envsResult = await runSuiClientCli(["envs", "--json"])
+  if (envsResult.exitCode !== 0) return undefined
+
+  const { environments, activeEnvironment } = parseSuiCliEnvironmentsJson(
+    envsResult.stdout.toString()
+  )
+  const targetEnvironment = environmentName ?? activeEnvironment
+  if (!targetEnvironment) return undefined
+
+  const match = environments.find((entry) => entry.alias === targetEnvironment)
+  return match?.rpc
 }
 
 /**

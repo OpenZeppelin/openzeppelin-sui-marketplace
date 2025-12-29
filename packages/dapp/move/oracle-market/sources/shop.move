@@ -117,7 +117,6 @@ fun claim_publisher(
   pkg::claim<SHOP>(publisher_witness, ctx)
 }
 
-#[allow(lint(self_transfer))]
 fun transfer_publisher_to_sender(
   publisher: pkg::Publisher,
   ctx: &tx::TxContext,
@@ -1020,7 +1019,6 @@ public entry fun prune_discount_claims(
 /// - Compared to EVM: no `approve/transferFrom` race windows, no reliance on global stateful
 ///   oracles, and refunds happen in-line without reentrancy hooks because coin transfers are moves
 ///   of owned resources, not external calls.
-#[allow(lint(self_transfer))]
 public entry fun buy_item<TItem: store, TCoin>(
   shop: &Shop,
   item_listing: &mut ItemListing,
@@ -1065,7 +1063,6 @@ public entry fun buy_item<TItem: store, TCoin>(
 /// - Oracle guardrails remain caller-tunable; pass `none` to use defaults.
 /// - In EVM you might check a Merkle root or signature each time; here the coupon object plus
 ///   dynamic-field counters provide the proof and rate-limiting without bespoke off-chain infra.
-#[allow(lint(self_transfer))]
 public entry fun buy_item_with_discount<TItem: store, TCoin>(
   shop: &Shop,
   item_listing: &mut ItemListing,
@@ -1141,7 +1138,6 @@ public entry fun buy_item_with_discount<TItem: store, TCoin>(
 /// - This pattern highlights Sui’s composability: objects can be created, used, and destroyed in a
 ///   single PTB without extra approvals or intermediate transactions—something Solidity flows often
 ///   approximate with meta-transactions or batching routers.
-#[allow(lint(self_transfer))]
 public entry fun claim_and_buy_item_with_discount<TItem: store, TCoin>(
   shop: &Shop,
   item_listing: &mut ItemListing,
