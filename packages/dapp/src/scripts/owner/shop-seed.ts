@@ -431,7 +431,9 @@ const ensureListingTypesAvailable = async ({
   networkName: string
   suiClient: SuiClient
 }) => {
-  const uniqueItemTypes = [...new Set(listingSeeds.map((listing) => listing.itemType))]
+  const uniqueItemTypes = [
+    ...new Set(listingSeeds.map((listing) => listing.itemType))
+  ]
 
   await Promise.all(
     uniqueItemTypes.map(async (itemType) => {
@@ -443,7 +445,7 @@ const ensureListingTypesAvailable = async ({
           module,
           struct: name
         })
-      } catch (error) {
+      } catch {
         const artifactPath = `deployments/deployment.${networkName}.json`
         throw new Error(
           `Failed to locate ${itemType} on ${networkName}. Ensure the item-examples package is published and recorded in ${artifactPath} (run \`pnpm --filter dapp mock:setup -- --re-publish\`).`

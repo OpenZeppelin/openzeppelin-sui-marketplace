@@ -120,9 +120,9 @@ const findSectionBlock = (
 const isErrnoWithCode = (error: unknown, code: string): boolean =>
   Boolean(
     error &&
-      typeof error === "object" &&
-      "code" in error &&
-      (error as { code?: string }).code === code
+    typeof error === "object" &&
+    "code" in error &&
+    (error as { code?: string }).code === code
   )
 
 const trimLeadingEmptyLines = (contents: string) =>
