@@ -1015,7 +1015,9 @@ const extractDependencies = (
   packageName: string
 ): string[] =>
   Array.from(
-    new Set(Object.values(extractDependencyAddressMap(buildInfoRaw, packageName)))
+    new Set(
+      Object.values(extractDependencyAddressMap(buildInfoRaw, packageName))
+    )
   )
 
 /**
