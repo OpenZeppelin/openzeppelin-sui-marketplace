@@ -1,7 +1,6 @@
 [package]
 name = "mock_coin"
-edition = "2024.beta"
+edition = "2024"
 
 [environments]
-# Update the localnet chain id when regenerating localnet.
 localnet = "279218ea"

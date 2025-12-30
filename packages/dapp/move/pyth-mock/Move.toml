@@ -1,11 +1,6 @@
 [package]
 name = "Pyth"
-edition = "2024.beta"
+edition = "2024"
 
 [environments]
-# Update the localnet chain id when regenerating localnet.
 localnet = "279218ea"
-
-# [addresses]
-# Pyth = "0x0"
-# pyth = "0x0"

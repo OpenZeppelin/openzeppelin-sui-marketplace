@@ -19,6 +19,7 @@ import {
   logWarning
 } from "@sui-oracle-market/tooling-node/log"
 import {
+  clearPublishedEntryForNetwork,
   canonicalizePackagePath,
   hasDeploymentForPackage,
   resolveFullPackagePath
@@ -172,6 +173,18 @@ runSuiScript(
       path.resolve(paths.move),
       cliArguments.packagePath
     )
+
+    if (cliArguments.rePublish) {
+      const { didUpdate } = await clearPublishedEntryForNetwork({
+        packagePath: fullPackagePath,
+        networkName: network.networkName
+      })
+      if (didUpdate) {
+        logKeyValueBlue("Published.toml")(
+          `cleared ${network.networkName} entry`
+        )
+      }
+    }
 
     // Load prior deployment artifacts to short-circuit if already published (unless --re-publish).
     const deploymentArtifacts = await loadDeploymentArtifacts(

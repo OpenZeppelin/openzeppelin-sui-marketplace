@@ -1,4 +1,4 @@
-module pyth::price_identifier {
+module Pyth::price_identifier {
     const IDENTIFIER_BYTES_LENGTH: u64 = 32;
     const E_INCORRECT_IDENTIFIER_LENGTH: u64 = 0;
 

@@ -31,9 +31,7 @@ rev = "v0.1"
 
 
 [environments]
-# Localnet chain id is included to allow dep replacements for local mocks.
 localnet = "279218ea"
 
 [dep-replacements.localnet]
-pyth = { local = "../pyth-mock", override = true }
-# Use the local mock on localnet without relying on dev-mode flags.
+pyth = { local = "../pyth-mock", override = true, rename-from = "Pyth" }

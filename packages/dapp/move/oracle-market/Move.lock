@@ -31,7 +31,7 @@ deps = { std = "MoveStdlib", sui = "Sui" }
 [pinned.localnet.sui_oracle_market]
 source = { root = true }
 use_environment = "localnet"
-manifest_digest = "0793ABB5892FC9CF948BE916C91A80C6E122FC962B5D37DA80579ABD4EBAA938"
+manifest_digest = "0C5CA2B8E7CC9C173182B5F99330D05EED44941EF9F040164263AB1FF6B756F4"
 deps = { openzeppelin_math = "openzeppelin_math", pyth = "Pyth", std = "MoveStdlib", sui = "Sui" }
 
 [pinned.testnet.MoveStdlib]

@@ -1,7 +1,7 @@
-module pyth::pyth {
-    use pyth::price as pyth_price;
-    use pyth::price_feed;
-    use pyth::price_info::{Self as price_info, PriceInfoObject};
+module Pyth::pyth {
+    use Pyth::price as pyth_price;
+    use Pyth::price_feed;
+    use Pyth::price_info::{Self as price_info, PriceInfoObject};
     use sui::clock::{Self as sui_clock, Clock};
 
     const E_STALE_PRICE_UPDATE: u64 = 0;

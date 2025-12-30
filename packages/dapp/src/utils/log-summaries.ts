@@ -14,6 +14,7 @@ import {
 export const logShopOverview = ({ shopId, ownerAddress }: ShopOverview) => {
   logKeyValueGreen("Shop")(shopId)
   logKeyValueGreen("Owner")(ownerAddress)
+  console.log("")
 }
 
 export const logItemListingSummary = (

@@ -117,6 +117,59 @@ const findSectionBlock = (
   return { block: contents.slice(start, end), start, end }
 }
 
+const isErrnoWithCode = (error: unknown, code: string): boolean =>
+  Boolean(
+    error &&
+      typeof error === "object" &&
+      "code" in error &&
+      (error as { code?: string }).code === code
+  )
+
+const trimLeadingEmptyLines = (contents: string) =>
+  contents.replace(/^(?:\s*\r?\n)+/, "")
+
+const trimTrailingEmptyLines = (contents: string) =>
+  contents.replace(/(?:\r?\n\s*)+$/, "")
+
+const ensureTrailingNewline = (
+  contents: string,
+  lineEnding: string,
+  shouldPreserveTrailingNewline: boolean
+) => {
+  if (!shouldPreserveTrailingNewline) return contents
+  return contents.endsWith("\n") ? contents : `${contents}${lineEnding}`
+}
+
+const removePublishedSectionForNetwork = (
+  contents: string,
+  networkName: string
+): { updatedContents: string; didUpdate: boolean } => {
+  const sectionName = `published.${networkName}`
+  const sectionBlock = findSectionBlock(contents, sectionName)
+  if (!sectionBlock) return { updatedContents: contents, didUpdate: false }
+
+  const lineEnding = resolveLineEnding(contents)
+  const shouldPreserveTrailingNewline = contents.endsWith("\n")
+  const before = trimTrailingEmptyLines(contents.slice(0, sectionBlock.start))
+  const after = trimLeadingEmptyLines(contents.slice(sectionBlock.end))
+  const separator =
+    before && after
+      ? `${lineEnding}${lineEnding}`
+      : before && !after
+        ? lineEnding
+        : ""
+  const combined = `${before}${separator}${after}`
+
+  return {
+    updatedContents: ensureTrailingNewline(
+      combined,
+      lineEnding,
+      shouldPreserveTrailingNewline
+    ),
+    didUpdate: true
+  }
+}
+
 const hasDepReplacementSection = (contents: string, environmentName: string) =>
   new RegExp(
     `^\\s*\\[dep-replacements\\.${escapeRegExp(environmentName)}\\]\\s*(#.*)?$`,
@@ -363,6 +416,35 @@ export const syncMoveEnvironmentChainId = async ({
   return { updatedFiles }
 }
 
+export const clearPublishedEntryForNetwork = async ({
+  packagePath,
+  networkName
+}: {
+  packagePath: string
+  networkName: string | undefined
+}): Promise<{ publishedTomlPath: string; didUpdate: boolean }> => {
+  const publishedTomlPath = path.join(packagePath, "Published.toml")
+  if (!networkName) return { publishedTomlPath, didUpdate: false }
+
+  let contents: string
+  try {
+    contents = await fs.readFile(publishedTomlPath, "utf8")
+  } catch (error) {
+    if (isErrnoWithCode(error, "ENOENT"))
+      return { publishedTomlPath, didUpdate: false }
+    throw error
+  }
+
+  const { updatedContents, didUpdate } = removePublishedSectionForNetwork(
+    contents,
+    networkName
+  )
+  if (!didUpdate) return { publishedTomlPath, didUpdate: false }
+
+  await fs.writeFile(publishedTomlPath, updatedContents)
+  return { publishedTomlPath, didUpdate: true }
+}
+
 /**
  * Builds a Move package and returns compiled modules + dependency addresses.
  * Why: Publishing on Sui needs base64-encoded modules and resolved dep addresses
@@ -397,7 +479,11 @@ export const buildMovePackage = async (
     buildArguments,
     resolvedPackagePath
   )
-  const { stdout, stderr, exitCode: buildExitCode } = await runMoveBuild([
+  const {
+    stdout,
+    stderr,
+    exitCode: buildExitCode
+  } = await runMoveBuild([
     "--path",
     resolvedPackagePath,
     ...resolvedBuildArguments
@@ -538,7 +624,8 @@ const resolveBuildArtifacts = async (
     } catch (error) {
       if (isErrnoWithCode(error, "ENOENT")) {
         const buildDir = path.join(resolvedPackagePath, "build")
-        const codeSuffix = exitCode !== undefined ? ` (exit code ${exitCode})` : ""
+        const codeSuffix =
+          exitCode !== undefined ? ` (exit code ${exitCode})` : ""
         const outputTail = formatBuildOutputTail(stdout, stderr)
         throw new Error(
           `Move build did not emit bytecode output${codeSuffix} and no build artifacts were found at ${buildDir}.${outputTail}`
@@ -712,8 +799,8 @@ const normalizeDependencyList = (dependencies: unknown): string[] => {
 }
 
 const formatBuildOutputTail = (stdout: string, stderr?: string): string => {
-  const chunks = [stderr, stdout].filter(
-    (chunk): chunk is string => Boolean(chunk && chunk.trim())
+  const chunks = [stderr, stdout].filter((chunk): chunk is string =>
+    Boolean(chunk && chunk.trim())
   )
   if (!chunks.length) return ""
 
@@ -721,18 +808,11 @@ const formatBuildOutputTail = (stdout: string, stderr?: string): string => {
   const lines = combined.split(/\r?\n/)
   const tail = lines.slice(-20).join("\n")
   const maxChars = 2000
-  const trimmed = tail.length > maxChars ? `${tail.slice(0, maxChars)}\n...` : tail
+  const trimmed =
+    tail.length > maxChars ? `${tail.slice(0, maxChars)}\n...` : tail
 
   return `\nSui CLI output (tail):\n${trimmed}`
 }
-
-const isErrnoWithCode = (error: unknown, code: string): boolean =>
-  Boolean(
-    error &&
-      typeof error === "object" &&
-      "code" in error &&
-      (error as { code?: string }).code === code
-  )
 
 /**
  * Reads compiled bytecode from the build directory and base64-encodes it.

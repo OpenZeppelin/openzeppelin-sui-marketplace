@@ -1,4 +1,4 @@
-#[allow(lint(public_entry), unused_field)]
+#[allow(unused_field)]
 module item_examples::items;
 
 use sui::object as obj;

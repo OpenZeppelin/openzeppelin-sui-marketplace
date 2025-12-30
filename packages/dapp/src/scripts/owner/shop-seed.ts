@@ -3,7 +3,7 @@
  * On testnet it registers USDC + WAL. On localnet it uses the mock coin/feed artifacts.
  */
 import type { SuiClient } from "@mysten/sui/client"
-import { normalizeSuiObjectId } from "@mysten/sui/utils"
+import { normalizeSuiObjectId, parseStructTag } from "@mysten/sui/utils"
 import yargs from "yargs"
 
 import {
@@ -214,11 +214,16 @@ runSuiScript(
     )
     logShopOverview(shopOverview)
 
-    const itemPackageId = await resolveItemExamplesPackageId({
+    const itemPackageId = await resolveItemExamplesPackageIdForNetwork({
       networkName,
       itemPackageId: cliArguments.itemPackageId
     })
     const listingSeeds = buildItemListingSeeds(itemPackageId)
+    await ensureListingTypesAvailable({
+      listingSeeds,
+      networkName,
+      suiClient
+    })
 
     const acceptedCurrencySeeds = await resolveAcceptedCurrencySeeds({
       networkName
@@ -394,6 +399,58 @@ const buildItemListingSeeds = (itemPackageId: string): ItemListingSeed[] => {
     stock: seed.stock,
     itemType: buildItemType(seed.itemTypeName)
   }))
+}
+
+const resolveItemExamplesPackageIdForNetwork = async ({
+  networkName,
+  itemPackageId
+}: {
+  networkName: string
+  itemPackageId?: string
+}) => {
+  const resolvedPackageId = await resolveItemExamplesPackageId({
+    networkName,
+    itemPackageId
+  })
+
+  if (networkName === "localnet") {
+    const mockArtifact = await readArtifact<MockArtifact>(mockArtifactPath, {})
+    const mockItemPackageId = mockArtifact.itemPackageId
+    if (mockItemPackageId) return normalizeSuiObjectId(mockItemPackageId)
+  }
+
+  return resolvedPackageId
+}
+
+const ensureListingTypesAvailable = async ({
+  listingSeeds,
+  networkName,
+  suiClient
+}: {
+  listingSeeds: ItemListingSeed[]
+  networkName: string
+  suiClient: SuiClient
+}) => {
+  const uniqueItemTypes = [...new Set(listingSeeds.map((listing) => listing.itemType))]
+
+  await Promise.all(
+    uniqueItemTypes.map(async (itemType) => {
+      const { address, module, name } = parseStructTag(itemType)
+
+      try {
+        await suiClient.getNormalizedMoveStruct({
+          package: normalizeSuiObjectId(address),
+          module,
+          struct: name
+        })
+      } catch (error) {
+        const artifactPath = `deployments/deployment.${networkName}.json`
+        throw new Error(
+          `Failed to locate ${itemType} on ${networkName}. Ensure the item-examples package is published and recorded in ${artifactPath} (run \`pnpm --filter dapp mock:setup -- --re-publish\`).`
+        )
+      }
+    })
+  )
 }
 
 const resolveAcceptedCurrencySeeds = async ({

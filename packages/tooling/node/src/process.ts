@@ -458,9 +458,7 @@ const switchSuiCliEnvironmentIfNeeded = async ({
 }): Promise<SuiCliEnvironmentSwitch> => {
   const originalEnvironment = await getActiveSuiCliEnvironment()
 
-  if (!environmentName) {
-    return { originalEnvironment, didSwitch: false }
-  }
+  if (!environmentName) return { originalEnvironment, didSwitch: false }
 
   const availableEnvironments = await listSuiCliEnvironments()
 
@@ -480,9 +478,8 @@ const switchSuiCliEnvironmentIfNeeded = async ({
   const resolvedAvailableEnvironments =
     resolvedEnvironment.availableEnvironments
 
-  if (originalEnvironment === targetEnvironmentName) {
+  if (originalEnvironment === targetEnvironmentName)
     return { originalEnvironment, didSwitch: false }
-  }
 
   const environmentExists = isSuiCliEnvironmentConfigured(
     targetEnvironmentName,

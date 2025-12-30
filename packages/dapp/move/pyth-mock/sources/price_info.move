@@ -1,9 +1,9 @@
-module pyth::price_info;
+module Pyth::price_info;
 
-use pyth::i64 as pyth_i64;
-use pyth::price as pyth_price;
-use pyth::price_feed::{Self as price_feed, PriceFeed};
-use pyth::price_identifier;
+use Pyth::i64 as pyth_i64;
+use Pyth::price as pyth_price;
+use Pyth::price_feed::{Self as price_feed, PriceFeed};
+use Pyth::price_identifier;
 use sui::clock;
 use sui::object as obj;
 use sui::transfer as txf;
