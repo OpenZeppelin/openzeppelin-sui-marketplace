@@ -32,11 +32,9 @@ import {
   logWarning
 } from "./log.ts"
 import {
-  findUnpublishedDependenciesInLock,
-  normalizeDependencyId,
-  parsePublishedAddressesFromLock,
-  resolveAllowedDependencyIds,
-  updateMoveLockPublishedAddresses
+  extractSingleSuiFrameworkRevisionFromMoveLock,
+  extractSuiFrameworkPinnedEntriesFromMoveLock,
+  extractSuiFrameworkRevisionsFromMoveLock
 } from "./move-lock.ts"
 import {
   buildMoveEnvironmentFlags,
@@ -58,7 +56,7 @@ type PublishPlan = {
   unpublishedDependencies: string[]
   buildFlags: string[]
   packageNames: PackageNames
-  dependencyAddressesFromLock: Record<string, string>
+  dependencyAddresses: DependencyAddressMap
   useCliPublish?: boolean
   keystorePath?: string
   suiCliVersion?: string
@@ -98,11 +96,11 @@ const syncLocalnetMoveEnvironmentChainIdForPublish = async ({
  * Builds and publishes a Move package, logging friendly output and persisting artifacts.
  * Why: Publishing on Sui requires bundling compiled modules, dependency addresses, and gas strategy;
  * this helper mirrors common EVM “deploy script” ergonomics while honoring Sui-specific constraints
- * (unpublished deps, Move.lock addresses, UpgradeCap transfer).
+ * (unpublished deps, Move.toml environments/dep-replacements, UpgradeCap transfer).
  *
- * Note: This will update Move.lock with published-at addresses for the active network
- * (using configured dependency addresses + Pyth package lookup) before publishing,
- * so consumers only need to switch Sui config/network.
+ * Note: For Sui 1.63+ the package manager expects published dependency addresses
+ * to be managed via Move.toml environments/dep-replacements or Move registry (mvr),
+ * not by mutating Move.lock.
  */
 export const publishPackageWithLog = async (
   {
@@ -151,8 +149,8 @@ export const publishPackageWithLog = async (
  * Publishes a Move package according to a prepared plan (build flags, dep strategy).
  * Returns publish artifacts persisted to disk, similar to an EVM deploy receipt.
  *
- * Note: The publish plan is prepared after ensuring Move.lock is up to date for the
- * active network, so dependency address resolution matches the current environment.
+ * Note: For Sui 1.63+ the dependency linkage for shared networks is controlled by
+ * Move.toml environment config (dep-replacements) or Move registry (mvr).
  */
 export const publishPackage = async (
   publishPlan: PublishPlan,
@@ -189,10 +187,7 @@ export const publishPackage = async (
   if (!publishResult.packages.length)
     throw new Error("Publish succeeded but no packageId was returned.")
 
-  const dependencyAddresses = mergeDependencyAddresses(
-    publishPlan.dependencyAddressesFromLock,
-    publishResult.packages
-  )
+  const dependencyAddresses = publishPlan.dependencyAddresses
 
   const artifacts: PublishArtifact[] = publishResult.packages.map(
     (pkg, idx) => ({
@@ -300,9 +295,6 @@ const runSuiCliVersion = runSuiCli([])
 /**
  * Builds the full plan for a publish, including flags, dependency strategy, and package naming.
  */
-/**
- * Builds the full plan for a publish, including flags, dependency strategy, and package naming.
- */
 const buildPublishPlan = async ({
   network,
   fullNodeUrl,
@@ -326,7 +318,7 @@ const buildPublishPlan = async ({
 }): Promise<PublishPlan> => {
   if (network.networkName !== "localnet" && withUnpublishedDependencies)
     throw new Error(
-      "--with-unpublished-dependencies is reserved for localnet. Link to published packages in Move.lock for shared networks."
+      "--with-unpublished-dependencies is reserved for localnet. For shared networks, link to published packages via Move.toml dep-replacements (or Move registry/mvr)."
     )
 
   await syncLocalnetMoveEnvironmentChainIdForPublish({
@@ -340,30 +332,19 @@ const buildPublishPlan = async ({
       ? allowAutoUnpublishedDependencies
       : false
 
-  const includeDevDependencies = false
-  const initialMoveLockContents = await readMoveLockContents(packagePath)
-
-  const updatedMoveLockContents = await ensureMoveLockPublishedAddresses({
-    packagePath,
-    lockContents: initialMoveLockContents,
-    network,
-    includeDevDependencies,
-    suiClient
-  })
-
-  const moveLockContents = updatedMoveLockContents ?? initialMoveLockContents
-
-  const {
-    unpublishedDependencies,
-    shouldUseUnpublishedDependencies,
-    lockMissing
-  } = await resolveUnpublishedDependencyUsage(
-    packagePath,
-    withUnpublishedDependencies,
-    allowImplicitUnpublishedDependencies,
-    includeDevDependencies,
-    moveLockContents
+  const shouldUseUnpublishedDependencies = Boolean(
+    network.networkName === "localnet"
+      ? withUnpublishedDependencies || allowImplicitUnpublishedDependencies
+      : withUnpublishedDependencies
   )
+
+  const unpublishedDependencies: string[] = []
+
+  // Localnet publishes are intentionally permissive, but a mixed Sui framework in Move.lock
+  // is a strong signal that shared-network publishes will fail later.
+  if (network.networkName === "localnet") {
+    await warnOnFrameworkRevisionInconsistency(packagePath)
+  }
 
   if (
     !shouldSkipFrameworkConsistency(
@@ -375,19 +356,21 @@ const buildPublishPlan = async ({
   }
 
   const implicitlyEnabledUnpublishedDeps =
-    (unpublishedDependencies.length > 0 || lockMissing) &&
+    network.networkName === "localnet" &&
+    allowImplicitUnpublishedDependencies &&
     !withUnpublishedDependencies &&
     shouldUseUnpublishedDependencies
 
   if (implicitlyEnabledUnpublishedDeps) {
     logWarning(
-      lockMissing
-        ? `Enabling --with-unpublished-dependencies for ${packagePath} (Move.lock missing; cannot resolve published dependency addresses).`
-        : `Enabling --with-unpublished-dependencies for ${packagePath} (unpublished packages: ${unpublishedDependencies.join(
-            ", "
-          )})`
+      `Enabling --with-unpublished-dependencies for ${packagePath} (localnet auto mode).`
     )
   }
+
+  const dependencyAddresses = await resolveDependencyAddressesForNetwork({
+    network,
+    suiClient
+  })
 
   const buildFlags = buildMoveBuildFlags({
     environmentName: network.networkName,
@@ -405,10 +388,7 @@ const buildPublishPlan = async ({
     shouldUseUnpublishedDependencies: Boolean(shouldUseUnpublishedDependencies),
     unpublishedDependencies,
     buildFlags,
-    dependencyAddressesFromLock: readDependencyAddresses(
-      moveLockContents,
-      includeDevDependencies
-    ),
+    dependencyAddresses,
     useCliPublish: cliPublish,
     keystorePath: network.account?.keystorePath,
     suiCliVersion: await getSuiCliVersion(),
@@ -494,23 +474,11 @@ const derivePackageLabel = (artifact: PublishArtifact, idx: number) =>
   artifact.packageName ??
   (artifact.isDependency ? `dependency #${idx}` : "root package")
 
-/** Combines dependency addresses from Move.lock with newly published dependency packages. */
-const mergeDependencyAddresses = (
-  lockAddresses: Record<string, string>,
-  publishedPackages: PublishedPackage[]
-) => {
-  const publishedDependencyAddresses = publishedPackages
-    .filter(
-      (publishedPackage) =>
-        publishedPackage.isDependency && publishedPackage.packageName
-    )
-    .reduce<Record<string, string>>((acc, publishedPackage) => {
-      acc[publishedPackage.packageName as string] = publishedPackage.packageId
-      return acc
-    }, {})
-
-  return { ...lockAddresses, ...publishedDependencyAddresses }
-}
+/**
+ * Dependency addresses recorded in artifacts are for application convenience.
+ * For Sui 1.63+ publishing/linkage, dependency publication is managed by Move.toml
+ * env configuration (dep-replacements) or Move registry (mvr), not Move.lock.
+ */
 
 /**
  * Builds CLI arguments for `sui client publish`.
@@ -535,7 +503,7 @@ const buildCliPublishArguments = (plan: PublishPlan): string[] => {
 }
 
 /**
- * Publishes using `sui client publish` to mirror CLI behavior (including Move.lock updates).
+ * Publishes using `sui client publish` to mirror CLI behavior.
  */
 const publishViaCli = async (plan: PublishPlan): Promise<PublishResult> => {
   const args = buildCliPublishArguments(plan)
@@ -704,65 +672,8 @@ const extractPublishResult = (
   }
 }
 
-const resolveMoveLockPath = (packagePath: string) =>
-  path.join(packagePath, "Move.lock")
-
-const readMoveLockContents = async (
-  packagePath: string
-): Promise<string | undefined> => {
-  const lockPath = resolveMoveLockPath(packagePath)
-  try {
-    return await fs.readFile(lockPath, "utf8")
-  } catch {
-    return undefined
-  }
-}
-
-const writeMoveLockContents = async (packagePath: string, contents: string) => {
-  const lockPath = resolveMoveLockPath(packagePath)
-  await fs.writeFile(lockPath, contents)
-}
-
-/**
- * Finds dependencies that do not advertise a published address in Move.lock.
- */
-const findUnpublishedDependencies = (
-  lockContents: string | undefined,
-  includeDevDependencies = true
-): { unpublishedDependencies: string[]; lockMissing: boolean } => {
-  if (!lockContents)
-    return {
-      unpublishedDependencies: [],
-      lockMissing: true
-    }
-
-  const unpublishedDependencies = findUnpublishedDependenciesInLock(
-    lockContents,
-    { includeDevDependencies }
-  )
-
-  return { unpublishedDependencies, lockMissing: false }
-}
-
-const shouldResolveDependencyId = (
-  dependencyId: string,
-  allowedDependencyIds?: Set<string>
-) =>
-  !allowedDependencyIds ||
-  allowedDependencyIds.has(normalizeDependencyId(dependencyId))
-
-const filterDependencyAddressMap = (
-  dependencyAddresses: DependencyAddressMap,
-  allowedDependencyIds?: Set<string>
-): DependencyAddressMap => {
-  if (!allowedDependencyIds) return dependencyAddresses
-
-  return Object.fromEntries(
-    Object.entries(dependencyAddresses).filter(([dependencyId]) =>
-      allowedDependencyIds.has(normalizeDependencyId(dependencyId))
-    )
-  )
-}
+const normalizeDependencyId = (dependencyId: string) =>
+  dependencyId.trim().toLowerCase()
 
 const hasDependencyAddress = (
   dependencyAddresses: DependencyAddressMap,
@@ -774,16 +685,13 @@ const hasDependencyAddress = (
 
 const resolvePythPackageId = async ({
   network,
-  allowedDependencyIds,
   suiClient,
   configuredAddresses
 }: {
   network: SuiNetworkConfig
-  allowedDependencyIds?: Set<string>
   suiClient: SuiClient
   configuredAddresses: DependencyAddressMap
 }): Promise<string | undefined> => {
-  if (!shouldResolveDependencyId("Pyth", allowedDependencyIds)) return undefined
   if (hasDependencyAddress(configuredAddresses, "Pyth")) return undefined
 
   const pythStateId = network.pyth?.pythStateId
@@ -805,11 +713,9 @@ const resolvePythPackageId = async ({
 
 const resolveDependencyAddressesForNetwork = async ({
   network,
-  allowedDependencyIds,
   suiClient
 }: {
   network: SuiNetworkConfig
-  allowedDependencyIds?: Set<string>
   suiClient: SuiClient
 }): Promise<DependencyAddressMap> => {
   const configuredAddresses = network.move?.dependencyAddresses ?? {}
@@ -817,7 +723,6 @@ const resolveDependencyAddressesForNetwork = async ({
 
   const pythPackageId = await resolvePythPackageId({
     network,
-    allowedDependencyIds,
     suiClient,
     configuredAddresses
   })
@@ -826,115 +731,8 @@ const resolveDependencyAddressesForNetwork = async ({
     resolvedAddresses.Pyth = pythPackageId
   }
 
-  return filterDependencyAddressMap(resolvedAddresses, allowedDependencyIds)
+  return resolvedAddresses
 }
-
-const ensureMoveLockPublishedAddresses = async ({
-  packagePath,
-  lockContents,
-  network,
-  includeDevDependencies,
-  suiClient
-}: {
-  packagePath: string
-  lockContents: string | undefined
-  network: SuiNetworkConfig
-  includeDevDependencies: boolean
-  suiClient: SuiClient
-}): Promise<string | undefined> => {
-  if (!lockContents) return lockContents
-  if (network.networkName === "localnet") return lockContents
-
-  const allowedDependencyIds = resolveAllowedDependencyIds(
-    lockContents,
-    includeDevDependencies
-  )
-
-  const dependencyAddresses = await resolveDependencyAddressesForNetwork({
-    network,
-    allowedDependencyIds,
-    suiClient
-  })
-
-  if (Object.keys(dependencyAddresses).length === 0) return lockContents
-
-  const { updatedContents, updatedDependencies } =
-    updateMoveLockPublishedAddresses(lockContents, dependencyAddresses)
-
-  if (updatedContents === lockContents) return lockContents
-
-  await writeMoveLockContents(packagePath, updatedContents)
-
-  if (updatedDependencies.length) {
-    logKeyValueBlue("Move.lock")(
-      `updated ${updatedDependencies.length} dependencies`
-    )
-  }
-
-  return updatedContents
-}
-
-/**
- * Decides whether --with-unpublished-dependencies should be used and returns the raw dep list.
- */
-const resolveUnpublishedDependencyUsage = async (
-  packagePath: string,
-  explicitWithUnpublished?: boolean,
-  allowImplicitUnpublished?: boolean,
-  includeDevDependencies = false,
-  lockContents?: string
-) => {
-  const { unpublishedDependencies, lockMissing } = findUnpublishedDependencies(
-    lockContents,
-    includeDevDependencies
-  )
-
-  if (lockMissing && !allowImplicitUnpublished && !explicitWithUnpublished) {
-    throw new Error(buildMissingMoveLockError(packagePath))
-  }
-
-  const shouldUseUnpublishedDependencies =
-    explicitWithUnpublished ||
-    (allowImplicitUnpublished &&
-      (unpublishedDependencies.length > 0 || lockMissing))
-
-  if (unpublishedDependencies.length > 0 && !shouldUseUnpublishedDependencies) {
-    throw new Error(
-      buildUnpublishedDependencyError(packagePath, unpublishedDependencies)
-    )
-  }
-
-  return {
-    unpublishedDependencies,
-    shouldUseUnpublishedDependencies,
-    lockMissing
-  }
-}
-
-/**
- * Builds a helpful error message for unpublished dependencies.
- */
-const buildUnpublishedDependencyError = (
-  packagePath: string,
-  unpublishedDependencies: string[]
-) =>
-  [
-    `Unpublished dependencies detected for ${packagePath}: ${unpublishedDependencies.join(
-      ", "
-    )}.`,
-    "Publishing to shared networks requires linking to already deployed packages.",
-    "Add published addresses to Move.lock (or pass --with-unpublished-dependencies only on localnet) before publishing."
-  ].join("\n")
-
-/**
- * Builds a helpful error message when Move.lock is missing.
- */
-const buildMissingMoveLockError = (packagePath: string) =>
-  [
-    `Move.lock not found for ${packagePath}.`,
-    "Publishing to shared networks requires a Move.lock that pins dependency addresses to deployed packages.",
-    "Run `sui move build` against the intended dependency set or copy an existing Move.lock before publishing."
-  ].join("\n")
 
 /**
  * Adds human-friendly names to the publish result, pairing upgrade caps with package names.
@@ -982,25 +780,21 @@ const resolvePackageNames = async (
   return { root, dependencies: unpublishedDependencies }
 }
 
-/**
- * Reads Move.lock for published-at/published-id addresses keyed by package id/name.
- */
-const readDependencyAddresses = (
-  lockContents: string | undefined,
-  includeDevDependencies = true
-): Record<string, string> => {
-  if (!lockContents) return {}
-
-  return parsePublishedAddressesFromLock(lockContents, {
-    includeDevDependencies
-  })
-}
-
 /** Ensures the root package and any local dependencies share the same framework git revision. */
 const assertFrameworkRevisionConsistency = async (packagePath: string) => {
-  const rootFrameworkRevision =
-    await readFrameworkRevisionForPackage(packagePath)
-  if (!rootFrameworkRevision) return
+  const frameworkRevisions = await readFrameworkRevisionsForPackage(packagePath)
+  if (frameworkRevisions.size === 0) return
+
+  if (frameworkRevisions.size > 1)
+    throw new Error(
+      await buildMultipleFrameworkRevisionsMessage({
+        packagePath,
+        frameworkRevisions,
+        severity: "error"
+      })
+    )
+
+  const [rootFrameworkRevision] = [...frameworkRevisions]
 
   const dependencyPackages = await discoverLocalDependencyPackages(packagePath)
   const mismatchedRevisions = collectMismatchedFrameworkRevisions(
@@ -1011,6 +805,159 @@ const assertFrameworkRevisionConsistency = async (packagePath: string) => {
   if (mismatchedRevisions.length) {
     throw new Error(buildFrameworkMismatchMessage(mismatchedRevisions))
   }
+}
+
+const warnOnFrameworkRevisionInconsistency = async (packagePath: string) => {
+  const frameworkRevisions = await readFrameworkRevisionsForPackage(packagePath)
+  if (frameworkRevisions.size <= 1) return
+
+  logWarning(
+    await buildMultipleFrameworkRevisionsMessage({
+      packagePath,
+      frameworkRevisions,
+      severity: "warning"
+    })
+  )
+}
+
+const groupPinnedEntriesByRevision = <TEntry extends { revision: string }>(
+  entries: TEntry[]
+): Map<string, TEntry[]> => {
+  const grouped = new Map<string, TEntry[]>()
+
+  for (const entry of entries) {
+    const existing = grouped.get(entry.revision) ?? []
+    grouped.set(entry.revision, [...existing, entry])
+  }
+
+  return grouped
+}
+
+const buildMultipleFrameworkRevisionsMessage = async ({
+  packagePath,
+  frameworkRevisions,
+  severity
+}: {
+  packagePath: string
+  frameworkRevisions: Set<string>
+  severity: "warning" | "error"
+}) => {
+  const lockPath = path.join(packagePath, "Move.lock")
+
+  let lockContents: string | undefined
+  try {
+    lockContents = await fs.readFile(lockPath, "utf8")
+  } catch {
+    lockContents = undefined
+  }
+
+  const pinnedEntries = lockContents
+    ? extractSuiFrameworkPinnedEntriesFromMoveLock({
+        lockContents,
+        environmentName: undefined
+      })
+    : []
+
+  const groupedEntries = groupPinnedEntriesByRevision(pinnedEntries)
+
+  const isFrameworkPackageName = (packageName: string) =>
+    packageName === "Sui" ||
+    packageName.startsWith("Sui_") ||
+    packageName === "MoveStdlib" ||
+    packageName.startsWith("MoveStdlib_")
+
+  const getNonFrameworkPackagesForRevision = (revision: string) => {
+    const entriesForRevision = groupedEntries.get(revision) ?? []
+    return [
+      ...new Set(
+        entriesForRevision
+          .map((entry) => entry.packageName)
+          .filter((packageName) => !isFrameworkPackageName(packageName))
+      )
+    ].sort()
+  }
+
+  const detailsLines: string[] = []
+  if (pinnedEntries.length) {
+    detailsLines.push("Details (from Move.lock pinned sections):")
+    for (const revision of [...frameworkRevisions]) {
+      const entriesForRevision = groupedEntries.get(revision) ?? []
+      const formattedEntries = entriesForRevision
+        .map((entry) => {
+          const environmentLabel = entry.environmentName
+            ? `${entry.environmentName}.`
+            : ""
+
+          const subdirLabel = entry.subdir ? ` (${entry.subdir})` : ""
+          return `  - ${environmentLabel}${entry.packageName}${subdirLabel}`
+        })
+        .sort()
+
+      detailsLines.push(`- ${revision}`)
+      detailsLines.push(
+        ...(formattedEntries.length
+          ? formattedEntries
+          : ["  - (no pinned section details available)"])
+      )
+    }
+  }
+
+  const howToFixLines: string[] = []
+  if (pinnedEntries.length) {
+    const revisions = [...frameworkRevisions]
+
+    const revisionNonFrameworkCounts = revisions
+      .map((revision) => ({
+        revision,
+        nonFrameworkPackages: getNonFrameworkPackagesForRevision(revision)
+      }))
+      .sort(
+        (a, b) => a.nonFrameworkPackages.length - b.nonFrameworkPackages.length
+      )
+
+    const outlier = revisionNonFrameworkCounts[0]
+    const outlierLabel =
+      outlier && outlier.nonFrameworkPackages.length
+        ? `Likely outlier revision: ${outlier.revision} (introduced by ${outlier.nonFrameworkPackages.join(
+            ", "
+          )}).`
+        : undefined
+
+    howToFixLines.push("How to fix:")
+    if (outlierLabel) howToFixLines.push(`- ${outlierLabel}`)
+
+    for (const {
+      revision,
+      nonFrameworkPackages
+    } of revisionNonFrameworkCounts) {
+      if (!nonFrameworkPackages.length) continue
+      howToFixLines.push(
+        `- Dependencies pinned under ${revision}: ${nonFrameworkPackages.join(", ")}`
+      )
+    }
+
+    howToFixLines.push(
+      "- Pick ONE revision to keep, then bump/downgrade the dependencies listed under the other revision(s) until Move.lock contains only a single Sui/MoveStdlib per environment."
+    )
+    howToFixLines.push(
+      "- Regenerate Move.lock after changes (for example via `sui move update-deps` or a fresh `sui move build`)."
+    )
+  }
+
+  const title =
+    severity === "warning"
+      ? "Multiple Sui framework revisions detected in Move.lock (warning)."
+      : "Multiple Sui framework revisions detected in Move.lock."
+
+  return [
+    title,
+    `Root package: ${packagePath}`,
+    `Revisions: ${[...frameworkRevisions].join(", ")}`,
+    ...(detailsLines.length ? ["", ...detailsLines] : []),
+    ...(howToFixLines.length ? ["", ...howToFixLines] : []),
+    "",
+    "Align all dependencies to a single Sui framework revision (typically by updating your Move dependencies together and regenerating Move.lock) before publishing to shared networks."
+  ].join("\n")
 }
 
 /**
@@ -1044,41 +991,25 @@ const buildFrameworkMismatchMessage = (mismatches: string[]) =>
   [
     "Framework version mismatch detected across Move.lock files.",
     ...mismatches.map((mismatch) => `- ${mismatch}`),
-    "Align all packages to the same Sui framework commit (e.g., run `sui move update` in each package) before publishing."
+    "Align all packages to the same Sui framework commit (for example via `sui move update-deps`) before publishing."
   ].join("\n")
 
 /**
  * Reads the Sui framework revision for a package from Move.lock.
  */
-const readFrameworkRevisionForPackage = async (
+const readFrameworkRevisionsForPackage = async (
   packagePath: string
-): Promise<string | undefined> => {
+): Promise<Set<string>> => {
   const lockPath = path.join(packagePath, "Move.lock")
   try {
     const lockContents = await fs.readFile(lockPath, "utf8")
-    return extractFrameworkRevisionFromLock(lockContents)
+    return extractSuiFrameworkRevisionsFromMoveLock({
+      lockContents,
+      environmentName: undefined
+    })
   } catch {
-    return undefined
+    return new Set<string>()
   }
-}
-
-/**
- * Extracts the framework revision from a Move.lock file contents.
- */
-const extractFrameworkRevisionFromLock = (
-  lockContents: string
-): string | undefined => {
-  const packageBlocks = lockContents.split(/\[\[move\.package\]\]/).slice(1)
-  for (const packageBlock of packageBlocks) {
-    const isFrameworkBlock =
-      /id\s*=\s*"Bridge"/i.test(packageBlock) ||
-      /id\s*=\s*"Sui"/i.test(packageBlock)
-    if (!isFrameworkBlock) continue
-
-    const revisionMatch = packageBlock.match(/rev\s*=\s*"([^"]+)"/)
-    if (revisionMatch) return revisionMatch[1]
-  }
-  return undefined
 }
 
 /**
@@ -1119,13 +1050,28 @@ const discoverLocalDependencyPackages = async (
     return Promise.all(
       dependencyPackages.map(async (dependency) => ({
         ...dependency,
-        frameworkRevision: await readFrameworkRevisionForPackage(
+        frameworkRevision: await readSingleFrameworkRevisionForPackage(
           dependency.path
         )
       }))
     )
   } catch {
     return []
+  }
+}
+
+const readSingleFrameworkRevisionForPackage = async (
+  packagePath: string
+): Promise<string | undefined> => {
+  const lockPath = path.join(packagePath, "Move.lock")
+  try {
+    const lockContents = await fs.readFile(lockPath, "utf8")
+    return extractSingleSuiFrameworkRevisionFromMoveLock({
+      lockContents,
+      environmentName: undefined
+    })
+  } catch {
+    return undefined
   }
 }
 

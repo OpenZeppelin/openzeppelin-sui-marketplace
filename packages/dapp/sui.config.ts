@@ -37,6 +37,10 @@ const OpenZeppelinPackageIds = {
   testnet: "0x1252a9eebce06a98f55eb5132787377ce2cfb28b64145562ba58b1a571c44e34"
 }
 
+const WormholePackageIds = {
+  testnet: "0x31358d198147da50db32eda2562951d53973a0c0ad5ed738e9b17d88b213d790"
+}
+
 export default defineSuiConfig({
   defaultNetwork: "localnet",
   networks: {
@@ -60,7 +64,8 @@ export default defineSuiConfig({
       move: {
         dependencyAddresses: {
           Pyth: PYTH_CONFIG.testnet.pythPackageId,
-          openzeppelin_math: OpenZeppelinPackageIds.testnet
+          openzeppelin_math: OpenZeppelinPackageIds.testnet,
+          Wormhole: WormholePackageIds.testnet
         }
       },
       pyth: {

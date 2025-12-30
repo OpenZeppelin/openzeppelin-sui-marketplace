@@ -14,8 +14,10 @@ A practical onboarding guide for Solidity/EVM developers building and deploying 
 - **Git** for version control.
 
 ### Note
-Sui CLI version 0.1.63 is required for this you need to use nightly release
-```
+Sui CLI version **1.63.x** (or newer) is recommended for this repo.
+
+If you need a nightly build (for example, to match newer Move.lock/package-manager behavior), you can install it via:
+```bash
 rustup toolchain install nightly
 suiup install sui@testnet --nightly
 ```
@@ -92,7 +94,7 @@ pnpm install
     - `gasBudget`: default publish gas budget for that network.
     - `move`: Move-specific publish/build options:
       - `withUnpublishedDependencies`: localnet-only switch for unpublished dependencies; enables `--with-unpublished-dependencies`.
-      - `dependencyAddresses`: map of Move package IDs/names to published addresses. Used to update `Move.lock` for shared networks so publishes link against the right packages.
+      - `dependencyAddresses`: map of named addresses (Move.toml aliases) to on-chain package IDs. Used as a convenience for scripts and recorded into deployment artifacts; publishing/linkage for shared networks is controlled by Move.toml `dep-replacements.<env>` (or Move registry/mvr).
     - `pyth`: Pyth pull-oracle configuration:
       - `hermesUrl`: Hermes endpoint for price updates.
       - `pythStateId`: on-chain Pyth state object ID for the network.
@@ -782,7 +784,7 @@ Artifacts land in `packages/dapp/deployments` after running scripts. Use them to
   - `digest` / `publishedAt` / `explorerUrl`: transaction digest, ISO timestamp, and explorer deep-link.
   - `modules`: base64-encoded compiled modules returned by the publish (ordered as emitted by Sui).
   - `dependencies`: array of on-chain addresses the package links against.
-  - `dependencyAddresses`: resolved named addresses for any Move.toml aliases.
+  - `dependencyAddresses`: resolved named addresses (Move.toml aliases) recorded for convenience.
   - `withUnpublishedDependencies` / `unpublishedDependencies`: flags and names when unpublished deps were allowed (localnet only).
   - `suiCliVersion`: Sui CLI version used during publish.
 
@@ -875,7 +877,7 @@ Implementation details:
 - **Objects, not contract storage**: State is stored as owned/shared objects and dynamic fields, improving parallelism.
 - **Typed coins**: `Coin<T>` types replace ERC-20 approvals; metadata comes from the Sui coin registry.
 - **Oracles as objects**: Pyth prices are delivered as `PriceInfoObject` + clock checks; no address lookups.
-- **Localnet vs testnet/mainnet**: Localnet is your sandbox with unpublished deps; shared networks require published package IDs in `Move.lock`.
+- **Localnet vs testnet/mainnet**: Localnet is your sandbox with unpublished deps; shared networks require linking dependencies to already-published package IDs via Move.toml `dep-replacements.<env>` (or Move registry/mvr).
 
 ---
 

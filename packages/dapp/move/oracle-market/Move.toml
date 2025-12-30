@@ -2,7 +2,6 @@
 name = "sui_oracle_market"
 edition = "2024"
 
-# TODO switch once [environments] added in dependencies
 [dependencies]
 [dependencies.pyth]
 git = "https://github.com/pyth-network/pyth-crosschain.git"
@@ -14,24 +13,15 @@ git = "https://github.com/OpenZeppelin/contracts-sui.git"
 subdir = "math/core"
 rev = "v0.1"
 
-# [dependencies]
-
-# # Oracle price feeds
-# [dependencies.pyth]
-# local = "../vendors/pyth"
-
-# [dependencies.openzeppelin_math]
-# local = "../vendors/openzeppelin-math"
-
-# [dependencies.Sui]
-# local = "../vendors/sui-framework"
-
-# [dependencies.MoveStdlib]
-# local = "../vendors/move-stdlib"
-
 
 [environments]
 localnet = "279218ea"
 
 [dep-replacements.localnet]
 pyth = { local = "../pyth-mock", override = true, rename-from = "Pyth" }
+
+# These addresses are the already-published package IDs on Sui testnet.
+[dep-replacements.testnet]
+openzeppelin_math = { published-at = "0x1252a9eebce06a98f55eb5132787377ce2cfb28b64145562ba58b1a571c44e34", original-id = "0x1252a9eebce06a98f55eb5132787377ce2cfb28b64145562ba58b1a571c44e34" }
+pyth = { published-at = "0xabf837e98c26087cba0883c0a7a28326b1fa3c5e1e2c5abdb486f9e8f594c837", original-id = "0xabf837e98c26087cba0883c0a7a28326b1fa3c5e1e2c5abdb486f9e8f594c837" }
+Wormhole = { published-at = "0xf47329f4344f3bf0f8e436e2f7b485466cff300f12a166563995d3888c296a94", original-id = "0xf47329f4344f3bf0f8e436e2f7b485466cff300f12a166563995d3888c296a94" }
