@@ -8,12 +8,6 @@ git = "https://github.com/pyth-network/pyth-crosschain.git"
 subdir = "target_chains/sui/contracts"
 rev = "d809788e83087c69d76e4671cd694e88a189a179"
 
-[dependencies.openzeppelin_math]
-git = "https://github.com/OpenZeppelin/contracts-sui.git"
-subdir = "math/core"
-rev = "v0.1"
-
-
 [environments]
 localnet = "279218ea"
 
@@ -22,6 +16,5 @@ pyth = { local = "../pyth-mock", override = true, rename-from = "Pyth" }
 
 # These addresses are the already-published package IDs on Sui testnet.
 [dep-replacements.testnet]
-openzeppelin_math = { published-at = "0x1252a9eebce06a98f55eb5132787377ce2cfb28b64145562ba58b1a571c44e34", original-id = "0x1252a9eebce06a98f55eb5132787377ce2cfb28b64145562ba58b1a571c44e34" }
 pyth = { published-at = "0xabf837e98c26087cba0883c0a7a28326b1fa3c5e1e2c5abdb486f9e8f594c837", original-id = "0xabf837e98c26087cba0883c0a7a28326b1fa3c5e1e2c5abdb486f9e8f594c837" }
-Wormhole = { published-at = "0xf47329f4344f3bf0f8e436e2f7b485466cff300f12a166563995d3888c296a94", original-id = "0xf47329f4344f3bf0f8e436e2f7b485466cff300f12a166563995d3888c296a94" }
+Wormhole = { published-at = "0x31358d198147da50db32eda2562951d53973a0c0ad5ed738e9b17d88b213d790", original-id = "0x31358d198147da50db32eda2562951d53973a0c0ad5ed738e9b17d88b213d790", rename-from = "Wormhole" }

@@ -4,10 +4,6 @@ import path from "node:path"
 import type { SuiClient, SuiTransactionBlockResponse } from "@mysten/sui/client"
 import type { Ed25519Keypair } from "@mysten/sui/keypairs/ed25519"
 import { buildExplorerUrl } from "@sui-oracle-market/tooling-core/network"
-import {
-  deriveRelevantPackageId,
-  getSuiObject
-} from "@sui-oracle-market/tooling-core/object"
 import { newTransaction } from "@sui-oracle-market/tooling-core/transactions"
 import type {
   BuildOutput,
@@ -56,7 +52,6 @@ type PublishPlan = {
   unpublishedDependencies: string[]
   buildFlags: string[]
   packageNames: PackageNames
-  dependencyAddresses: DependencyAddressMap
   useCliPublish?: boolean
   keystorePath?: string
   suiCliVersion?: string
@@ -187,7 +182,8 @@ export const publishPackage = async (
   if (!publishResult.packages.length)
     throw new Error("Publish succeeded but no packageId was returned.")
 
-  const dependencyAddresses = publishPlan.dependencyAddresses
+  const dependencyAddresses: DependencyAddressMap =
+    buildOutput.dependencyAddresses ?? {}
 
   const artifacts: PublishArtifact[] = publishResult.packages.map(
     (pkg, idx) => ({
@@ -367,11 +363,6 @@ const buildPublishPlan = async ({
     )
   }
 
-  const dependencyAddresses = await resolveDependencyAddressesForNetwork({
-    network,
-    suiClient
-  })
-
   const buildFlags = buildMoveBuildFlags({
     environmentName: network.networkName,
     includeUnpublishedDeps: Boolean(shouldUseUnpublishedDependencies)
@@ -388,7 +379,6 @@ const buildPublishPlan = async ({
     shouldUseUnpublishedDependencies: Boolean(shouldUseUnpublishedDependencies),
     unpublishedDependencies,
     buildFlags,
-    dependencyAddresses,
     useCliPublish: cliPublish,
     keystorePath: network.account?.keystorePath,
     suiCliVersion: await getSuiCliVersion(),
@@ -473,12 +463,6 @@ const logPublishSuccess = (artifacts: PublishArtifact[]) => {
 const derivePackageLabel = (artifact: PublishArtifact, idx: number) =>
   artifact.packageName ??
   (artifact.isDependency ? `dependency #${idx}` : "root package")
-
-/**
- * Dependency addresses recorded in artifacts are for application convenience.
- * For Sui 1.63+ publishing/linkage, dependency publication is managed by Move.toml
- * env configuration (dep-replacements) or Move registry (mvr), not Move.lock.
- */
 
 /**
  * Builds CLI arguments for `sui client publish`.
@@ -670,68 +654,6 @@ const extractPublishResult = (
     packages,
     digest: result.digest
   }
-}
-
-const normalizeDependencyId = (dependencyId: string) =>
-  dependencyId.trim().toLowerCase()
-
-const hasDependencyAddress = (
-  dependencyAddresses: DependencyAddressMap,
-  dependencyId: string
-) =>
-  Object.keys(dependencyAddresses).some(
-    (key) => normalizeDependencyId(key) === normalizeDependencyId(dependencyId)
-  )
-
-const resolvePythPackageId = async ({
-  network,
-  suiClient,
-  configuredAddresses
-}: {
-  network: SuiNetworkConfig
-  suiClient: SuiClient
-  configuredAddresses: DependencyAddressMap
-}): Promise<string | undefined> => {
-  if (hasDependencyAddress(configuredAddresses, "Pyth")) return undefined
-
-  const pythStateId = network.pyth?.pythStateId
-  if (!pythStateId) return undefined
-
-  const { object } = await getSuiObject(
-    {
-      objectId: pythStateId,
-      options: { showType: true }
-    },
-    { suiClient }
-  )
-
-  if (!object.type)
-    throw new Error(`Pyth state object ${pythStateId} did not return a type.`)
-
-  return deriveRelevantPackageId(object.type)
-}
-
-const resolveDependencyAddressesForNetwork = async ({
-  network,
-  suiClient
-}: {
-  network: SuiNetworkConfig
-  suiClient: SuiClient
-}): Promise<DependencyAddressMap> => {
-  const configuredAddresses = network.move?.dependencyAddresses ?? {}
-  const resolvedAddresses: DependencyAddressMap = { ...configuredAddresses }
-
-  const pythPackageId = await resolvePythPackageId({
-    network,
-    suiClient,
-    configuredAddresses
-  })
-
-  if (pythPackageId) {
-    resolvedAddresses.Pyth = pythPackageId
-  }
-
-  return resolvedAddresses
 }
 
 /**

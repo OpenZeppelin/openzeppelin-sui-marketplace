@@ -3,9 +3,9 @@ import { normalizeSuiAddress } from "@mysten/sui/utils"
 import {
   getAllOwnedObjectsByFilter,
   getSuiObject,
+  normalizeIdOrThrow,
   normalizeOptionalAddress,
   normalizeOptionalIdFromValue,
-  normalizeIdOrThrow,
   unwrapMoveObjectFields
 } from "@sui-oracle-market/tooling-core/object"
 import {

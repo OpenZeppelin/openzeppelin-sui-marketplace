@@ -94,7 +94,6 @@ pnpm install
     - `gasBudget`: default publish gas budget for that network.
     - `move`: Move-specific publish/build options:
       - `withUnpublishedDependencies`: localnet-only switch for unpublished dependencies; enables `--with-unpublished-dependencies`.
-      - `dependencyAddresses`: map of named addresses (Move.toml aliases) to on-chain package IDs. Used as a convenience for scripts and recorded into deployment artifacts; publishing/linkage for shared networks is controlled by Move.toml `dep-replacements.<env>` (or Move registry/mvr).
     - `pyth`: Pyth pull-oracle configuration:
       - `hermesUrl`: Hermes endpoint for price updates.
       - `pythStateId`: on-chain Pyth state object ID for the network.
@@ -784,7 +783,7 @@ Artifacts land in `packages/dapp/deployments` after running scripts. Use them to
   - `digest` / `publishedAt` / `explorerUrl`: transaction digest, ISO timestamp, and explorer deep-link.
   - `modules`: base64-encoded compiled modules returned by the publish (ordered as emitted by Sui).
   - `dependencies`: array of on-chain addresses the package links against.
-  - `dependencyAddresses`: resolved named addresses (Move.toml aliases) recorded for convenience.
+  - `dependencyAddresses`: named address aliases resolved from Move build artifacts (`BuildInfo.yaml`) and recorded for convenience.
   - `withUnpublishedDependencies` / `unpublishedDependencies`: flags and names when unpublished deps were allowed (localnet only).
   - `suiCliVersion`: Sui CLI version used during publish.
 

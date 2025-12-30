@@ -165,26 +165,48 @@ export const loadObjectArtifacts = (networkName: string) =>
  * Returns the most recent object artifact that matches a type suffix.
  * Useful when multiple instances of the same Move type are created across runs.
  */
-export const getLatestObjectFromArtifact = async (
-  objectTypeSuffix: string,
-  networkName: string
-): Promise<ObjectArtifact | undefined> => {
-  const objectArtifacts = await loadObjectArtifacts(networkName)
+export const getLatestObjectFromArtifact =
+  (objectTypeSuffix: string) =>
+  async (networkName: string): Promise<ObjectArtifact | undefined> => {
+    const objectArtifacts = await loadObjectArtifacts(networkName)
 
-  return objectArtifacts.reduceRight<ObjectArtifact | undefined>(
-    (latestMatch, artifact) => {
-      if (latestMatch) return latestMatch
-      if (!artifact.objectType?.endsWith(objectTypeSuffix)) return undefined
+    return objectArtifacts.reduceRight<ObjectArtifact | undefined>(
+      (latestMatch, artifact) => {
+        if (latestMatch) return latestMatch
+        if (!artifact.objectType?.endsWith(objectTypeSuffix)) return undefined
 
-      return {
-        ...artifact,
-        packageId: normalizeSuiObjectId(artifact.packageId),
-        objectId: normalizeSuiObjectId(artifact.objectId)
-      }
-    },
-    undefined
-  )
-}
+        return {
+          ...artifact,
+          packageId: normalizeSuiObjectId(artifact.packageId),
+          objectId: normalizeSuiObjectId(artifact.objectId)
+        }
+      },
+      undefined
+    )
+  }
+
+/**
+ * Returns the most recent deployment artifact that matches a type suffix.
+ * Useful when multiple instances of the same Move type are created across runs.
+ */
+export const getLatestDeploymentFromArtifact =
+  (packageName: string) =>
+  async (networkName: string): Promise<PublishArtifact | undefined> => {
+    const objectArtifacts = await loadDeploymentArtifacts(networkName)
+
+    return objectArtifacts.reduceRight<PublishArtifact | undefined>(
+      (latestMatch, artifact) => {
+        if (latestMatch) return latestMatch
+        if (!artifact.packageName?.endsWith(packageName)) return undefined
+
+        return {
+          ...artifact,
+          packageId: normalizeSuiObjectId(artifact.packageId)
+        }
+      },
+      undefined
+    )
+  }
 
 export const getLatestArtifact = <TArtifact extends { publishedAt?: string }>(
   artifacts: TArtifact[]

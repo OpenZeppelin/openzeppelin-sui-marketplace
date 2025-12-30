@@ -99,10 +99,8 @@ const resolveInputs = async (
   networkName: string,
   networkConfig: SuiNetworkConfig
 ): Promise<NormalizedInputs> => {
-  const shopArtifact = await getLatestObjectFromArtifact(
-    "shop::Shop",
-    networkName
-  )
+  const shopArtifact =
+    await getLatestObjectFromArtifact("shop::Shop")(networkName)
 
   const shopPackageId = cliArguments.shopPackageId || shopArtifact?.packageId
 

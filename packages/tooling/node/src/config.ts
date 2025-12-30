@@ -17,7 +17,6 @@ export type SuiAccountConfig = {
 
 export type SuiMoveConfig = {
   withUnpublishedDependencies?: boolean
-  dependencyAddresses?: Record<string, string>
 }
 
 export type SuiPythConfig = {

@@ -28,6 +28,7 @@ import {
   getItemListingSummary,
   type ItemListingSummary
 } from "@sui-oracle-market/domain-core/models/item-listing"
+import type { ShopIdentifiers } from "@sui-oracle-market/domain-core/models/shop"
 import {
   getShopOverview,
   parseUsdToCents
@@ -319,7 +320,7 @@ const resolveOrCreateShopIdentifiers = async ({
   cliArguments: ShopSeedArguments
   networkName: string
   tooling: Tooling
-}) => {
+}): Promise<ShopIdentifiers> => {
   const hasExplicitShopInputs =
     Boolean(cliArguments.shopId) || Boolean(cliArguments.ownerCapId)
 
@@ -328,7 +329,12 @@ const resolveOrCreateShopIdentifiers = async ({
     networkName,
     allowMissing: !hasExplicitShopInputs
   })
-  if (existingIdentifiers) return existingIdentifiers
+  if (
+    existingIdentifiers?.packageId &&
+    existingIdentifiers?.shopId &&
+    existingIdentifiers?.ownerCapId
+  )
+    return existingIdentifiers as ShopIdentifiers
 
   const { shopPackageId, publisherCapId } = await resolveShopPublishInputs({
     networkName,

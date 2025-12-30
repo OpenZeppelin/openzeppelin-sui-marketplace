@@ -15,6 +15,7 @@ export enum ENetwork {
 export type BuildOutput = {
   modules: string[]
   dependencies: string[]
+  dependencyAddresses?: Record<string, string>
 }
 
 export type PublishResult = {

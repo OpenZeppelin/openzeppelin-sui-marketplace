@@ -95,10 +95,8 @@ const resolveInputs = async (
   cliArguments: ClaimDiscountTicketArguments,
   networkName: string
 ): Promise<Required<ClaimDiscountTicketArguments>> => {
-  const shopArtifact = await getLatestObjectFromArtifact(
-    "shop::Shop",
-    networkName
-  )
+  const shopArtifact =
+    await getLatestObjectFromArtifact("shop::Shop")(networkName)
 
   return {
     shopId: normalizeIdOrThrow(

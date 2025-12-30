@@ -446,10 +446,9 @@ export const clearPublishedEntryForNetwork = async ({
 }
 
 /**
- * Builds a Move package and returns compiled modules + dependency addresses.
- * Why: Publishing on Sui needs base64-encoded modules and resolved dep addresses
- * (from Move.lock or build artifacts); this helper mirrors `sui move build` behavior
- * while allowing dev/test builds to strip test modules for publish.
+ * Builds a Move package and returns compiled modules plus dependency metadata.
+ * Why: Publishing on Sui needs base64-encoded modules and resolved dependencies;
+ * dependency addresses are derived from build artifacts for artifact recording.
  */
 const ensureMoveBuildInstallDir = (
   buildArguments: string[],
@@ -501,6 +500,8 @@ export const buildMovePackage = async (
       stderr: stderrText
     }
   )
+  const dependencyAddresses =
+    await resolveDependencyAddressesFromBuildArtifacts(resolvedPackagePath)
 
   if (buildExitCode !== undefined && buildExitCode !== 0) {
     logWarning(
@@ -508,7 +509,7 @@ export const buildMovePackage = async (
     )
   }
 
-  return { modules, dependencies }
+  return { modules, dependencies, dependencyAddresses }
 }
 
 /**
@@ -814,6 +815,16 @@ const formatBuildOutputTail = (stdout: string, stderr?: string): string => {
   return `\nSui CLI output (tail):\n${trimmed}`
 }
 
+const readBuildInfo = async (
+  buildDir: string
+): Promise<{ packageName: string; buildInfoRaw: string }> => {
+  const packageName = await inferPackageName(buildDir)
+  const buildInfoPath = await findBuildInfoPath(buildDir, packageName)
+  const buildInfoRaw = await fs.readFile(buildInfoPath, "utf8")
+
+  return { packageName, buildInfoRaw }
+}
+
 /**
  * Reads compiled bytecode from the build directory and base64-encodes it.
  * Useful when `sui move build --dump-bytecode-as-base64` does not emit modules.
@@ -823,10 +834,7 @@ const readBuildArtifacts = async (
   { stripTestModules = false }: { stripTestModules?: boolean } = {}
 ): Promise<{ modules: string[]; dependencies: string[] }> => {
   const buildDir = path.join(resolvedPackagePath, "build")
-  const packageName = await inferPackageName(buildDir)
-
-  const buildInfoPath = await findBuildInfoPath(buildDir, packageName)
-  const buildInfoRaw = await fs.readFile(buildInfoPath, "utf8")
+  const { packageName, buildInfoRaw } = await readBuildInfo(buildDir)
 
   const modules = await readBytecodeModules(
     buildDir,
@@ -836,6 +844,23 @@ const readBuildArtifacts = async (
   const dependencies = extractDependencies(buildInfoRaw, packageName)
 
   return { modules, dependencies }
+}
+
+const resolveDependencyAddressesFromBuildArtifacts = async (
+  resolvedPackagePath: string
+): Promise<Record<string, string>> => {
+  const buildDir = path.join(resolvedPackagePath, "build")
+
+  try {
+    const { packageName, buildInfoRaw } = await readBuildInfo(buildDir)
+    return extractDependencyAddressMap(buildInfoRaw, packageName)
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    logWarning(
+      `Failed to resolve dependency addresses from build artifacts: ${message}`
+    )
+    return {}
+  }
 }
 
 /**
@@ -933,15 +958,19 @@ const readBytecodeModules = async (
   return modules
 }
 
-/**
- * Extracts dependency addresses from BuildInfo.yaml.
- */
-const extractDependencies = (
-  buildInfoRaw: string,
-  packageName: string
-): string[] => {
+const normalizeHexAddress = (address: string) => {
+  const trimmed = address.trim().toLowerCase()
+  const withoutPrefix = trimmed.startsWith("0x") ? trimmed.slice(2) : trimmed
+  return `0x${withoutPrefix}`
+}
+
+type AddressAliasEntry = { alias: string; address: string }
+
+const parseAddressAliasInstantiations = (
+  buildInfoRaw: string
+): AddressAliasEntry[] => {
   const addressSectionMatch = buildInfoRaw.match(
-    /address_alias_instantiation:\s*\n((?:\s+[A-Za-z0-9_]+\s*:\s*"?[0-9a-fA-F]{64}"?\s*\n)+)/
+    /address_alias_instantiation:\s*\n((?:\s+[A-Za-z0-9_]+\s*:\s*"?0x?[0-9a-fA-F]{64}"?\s*\n)+)/
   )
 
   if (!addressSectionMatch) return []
@@ -949,16 +978,45 @@ const extractDependencies = (
   const dependenciesBlock = addressSectionMatch[1]
   const dependencyMatches = [
     ...dependenciesBlock.matchAll(
-      /^\s+([A-Za-z0-9_]+)\s*:\s*"?([0-9a-fA-F]{64})"?/gm
+      /^\s+([A-Za-z0-9_]+)\s*:\s*"?0x?([0-9a-fA-F]{64})"?/gm
     )
   ]
 
-  return dependencyMatches
-    .map(([, alias, address]) => ({ alias, address }))
-    .filter(({ alias }) => alias.toLowerCase() !== packageName.toLowerCase())
-    .map(({ address }) => `0x${address.toLowerCase()}`)
-    .filter((address, index, all) => all.indexOf(address) === index)
+  return dependencyMatches.map(([, alias, address]) => ({ alias, address }))
 }
+
+const buildDependencyAddressMap = (
+  entries: AddressAliasEntry[],
+  packageName: string
+): Record<string, string> => {
+  const normalizedPackageName = packageName.toLowerCase()
+
+  return Object.fromEntries(
+    entries
+      .filter((entry) => entry.alias.toLowerCase() !== normalizedPackageName)
+      .map((entry) => [entry.alias, normalizeHexAddress(entry.address)])
+  )
+}
+
+/**
+ * Extracts dependency addresses from BuildInfo.yaml.
+ */
+const extractDependencyAddressMap = (
+  buildInfoRaw: string,
+  packageName: string
+): Record<string, string> =>
+  buildDependencyAddressMap(
+    parseAddressAliasInstantiations(buildInfoRaw),
+    packageName
+  )
+
+const extractDependencies = (
+  buildInfoRaw: string,
+  packageName: string
+): string[] =>
+  Array.from(
+    new Set(Object.values(extractDependencyAddressMap(buildInfoRaw, packageName)))
+  )
 
 /**
  * Returns true if a bytecode filename is likely a test module.

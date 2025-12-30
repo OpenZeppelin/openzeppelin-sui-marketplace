@@ -1,8 +1,6 @@
 #[allow(lint(public_entry), lint(self_transfer), unused_field)]
 module sui_oracle_market::shop;
 
-use openzeppelin_math::rounding as oz_rounding;
-use openzeppelin_math::u128 as oz_u128;
 use pyth::i64 as pyth_i64;
 use pyth::price as pyth_price;
 use pyth::price_feed as pyth_price_feed;
@@ -1752,16 +1750,14 @@ fun checked_mul_u128(lhs: u128, rhs: u128): u128 {
   if (lhs == 0 || rhs == 0) {
     0
   } else {
-    let res = oz_u128::mul_div(lhs, rhs, 1, oz_rounding::down());
-    assert!(opt::is_some(&res), EPriceOverflow);
-    opt::destroy_some(res)
+    assert!(lhs <= u128::max_value!() / rhs, EPriceOverflow);
+    lhs * rhs
   }
 }
 
 fun ceil_div_u128(numerator: u128, denominator: u128): u128 {
-  let result = oz_u128::mul_div(numerator, 1, denominator, oz_rounding::up());
-  assert!(opt::is_some(&result), EPriceOverflow);
-  opt::destroy_some(result)
+  assert!(denominator != 0, EPriceOverflow);
+  u128::divide_and_round_up(numerator, denominator)
 }
 
 fun positive_price_to_u128(value: &pyth_i64::I64): u128 {
