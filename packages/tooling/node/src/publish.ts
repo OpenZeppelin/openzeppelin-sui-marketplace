@@ -34,6 +34,7 @@ import {
   extractSuiFrameworkRevisionsFromMoveLock
 } from "./move-lock.ts"
 import {
+  clearPublishedEntryForNetwork,
   buildMoveEnvironmentFlags,
   buildMovePackage,
   syncLocalnetMoveEnvironmentChainId
@@ -1044,14 +1045,31 @@ export const publishMovePackageWithFunding = async ({
   packagePath,
   gasBudget,
   withUnpublishedDependencies,
-  allowAutoUnpublishedDependencies
+  allowAutoUnpublishedDependencies,
+  useCliPublish = true,
+  clearPublishedEntry = false
 }: {
   tooling: Tooling
   packagePath: string
   gasBudget?: number
   withUnpublishedDependencies?: boolean
   allowAutoUnpublishedDependencies?: boolean
+  useCliPublish?: boolean
+  clearPublishedEntry?: boolean
 }): Promise<PublishArtifact> => {
+  const resolvedPackagePath = path.resolve(packagePath)
+  if (clearPublishedEntry) {
+    const { didUpdate } = await clearPublishedEntryForNetwork({
+      packagePath: resolvedPackagePath,
+      networkName: tooling.suiConfig.network.networkName
+    })
+    if (didUpdate) {
+      logKeyValueBlue("Published.toml")(
+        `cleared ${tooling.suiConfig.network.networkName} entry`
+      )
+    }
+  }
+
   const artifacts = await tooling.withTestnetFaucetRetry(
     {
       signerAddress: tooling.loadedEd25519KeyPair.toSuiAddress(),
@@ -1059,11 +1077,11 @@ export const publishMovePackageWithFunding = async ({
     },
     async () =>
       tooling.publishPackageWithLog({
-        packagePath: path.resolve(packagePath),
+        packagePath: resolvedPackagePath,
         keypair: tooling.loadedEd25519KeyPair,
         gasBudget,
         withUnpublishedDependencies,
-        useCliPublish: true,
+        useCliPublish,
         allowAutoUnpublishedDependencies
       })
   )

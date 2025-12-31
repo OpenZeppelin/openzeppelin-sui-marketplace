@@ -22,9 +22,15 @@ import {
 } from "@sui-oracle-market/tooling-core/hex"
 import type { ObjectArtifact } from "@sui-oracle-market/tooling-core/object"
 import { parseOptionalPositiveU64 } from "@sui-oracle-market/tooling-core/utils/utility"
-import { SUI_COIN_REGISTRY_ID } from "@sui-oracle-market/tooling-node/constants"
+import {
+  DEFAULT_TX_GAS_BUDGET,
+  SUI_COIN_REGISTRY_ID
+} from "@sui-oracle-market/tooling-node/constants"
 import type { Tooling } from "@sui-oracle-market/tooling-node/factory"
-import { logKeyValueGreen } from "@sui-oracle-market/tooling-node/log"
+import {
+  logKeyValueGreen,
+  logKeyValueYellow
+} from "@sui-oracle-market/tooling-node/log"
 import { runSuiScript } from "@sui-oracle-market/tooling-node/process"
 import { logAcceptedCurrencySummary } from "../../utils/log-summaries.ts"
 import { resolveLatestShopIdentifiers } from "@sui-oracle-market/domain-node/shop"
@@ -62,6 +68,8 @@ runSuiScript(
       mutable: false
     })
 
+    const gasBudget = tooling.network.gasBudget ?? DEFAULT_TX_GAS_BUDGET
+
     const addCurrencyTransaction = buildAddAcceptedCurrencyTransaction({
       packageId: inputs.packageId,
       coinType: inputs.coinType,
@@ -73,8 +81,33 @@ runSuiScript(
       ownerCapId: inputs.ownerCapId,
       maxPriceAgeSecsCap: inputs.maxPriceAgeSecsCap,
       maxConfidenceRatioBpsCap: inputs.maxConfidenceRatioBpsCap,
-      maxPriceStatusLagSecsCap: inputs.maxPriceStatusLagSecsCap
+      maxPriceStatusLagSecsCap: inputs.maxPriceStatusLagSecsCap,
+      gasBudget
     })
+
+    if (cliArguments.debug) {
+      const devInspectResult =
+        await tooling.suiClient.devInspectTransactionBlock({
+          sender: tooling.loadedEd25519KeyPair.toSuiAddress(),
+          transactionBlock: addCurrencyTransaction
+        })
+      const devInspectError =
+        devInspectResult.effects?.status?.error ??
+        devInspectResult.error ??
+        "ok"
+      logKeyValueYellow("dev-inspect")(devInspectError)
+      console.log(
+        JSON.stringify(
+          {
+            error: devInspectResult.error,
+            status: devInspectResult.effects?.status,
+            results: devInspectResult.results
+          },
+          null,
+          2
+        )
+      )
+    }
 
     const {
       objectArtifacts: { created }
@@ -170,6 +203,11 @@ runSuiScript(
       description:
         "Optional guardrail for maximum attestation lag in seconds. Leave empty to use the module default."
     })
+    .option("debug", {
+      type: "boolean",
+      default: false,
+      description: "Run a dev-inspect and log VM error details."
+    })
     .strict()
 )
 
@@ -185,6 +223,7 @@ const normalizeInputs = async (
     maxPriceAgeSecsCap?: string
     maxConfidenceRatioBpsCap?: string
     maxPriceStatusLagSecsCap?: string
+    debug?: boolean
   },
   networkName: string,
   tooling: Pick<Tooling, "resolveCurrencyObjectId">

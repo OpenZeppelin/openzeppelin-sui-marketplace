@@ -29,6 +29,7 @@ import { runSuiScript } from "@sui-oracle-market/tooling-node/process"
 type ResolvedPublishOptions = {
   withUnpublishedDependencies: boolean
   allowAutoUnpublishedDependencies: boolean
+  useCliPublish: boolean
 }
 
 // Publishing is a single transaction; requiring 3+ gas coin objects can force an extra
@@ -134,7 +135,7 @@ const publishPackageToNetwork = async (
         keypair,
         gasBudget,
         withUnpublishedDependencies: publishOptions.withUnpublishedDependencies,
-        useCliPublish: true,
+        useCliPublish: publishOptions.useCliPublish,
         allowAutoUnpublishedDependencies:
           publishOptions.allowAutoUnpublishedDependencies
       })
@@ -147,6 +148,7 @@ const derivePublishOptions = (
     packagePath: string
     withUnpublishedDependencies?: boolean
     rePublish?: boolean
+    useCliPublish?: boolean
   }
 ): ResolvedPublishOptions => {
   const targetingLocalnet = networkName === "localnet"
@@ -159,7 +161,8 @@ const derivePublishOptions = (
   return {
     withUnpublishedDependencies:
       cliArguments.withUnpublishedDependencies ?? targetingLocalnet,
-    allowAutoUnpublishedDependencies: targetingLocalnet
+    allowAutoUnpublishedDependencies: targetingLocalnet,
+    useCliPublish: cliArguments.useCliPublish ?? true
   }
 }
 
@@ -226,6 +229,13 @@ runSuiScript(
       description:
         "Re-publish the package even if it already exists in the deployment artifact",
       default: false
+    })
+    .option("useCliPublish", {
+      alias: "use-cli-publish",
+      type: "boolean",
+      description:
+        "Publish with the Sui CLI instead of the SDK (use --no-use-cli-publish to force SDK)",
+      default: true
     })
     .strict()
 )

@@ -12,7 +12,8 @@ export const buildAddAcceptedCurrencyTransaction = ({
   ownerCapId,
   maxPriceAgeSecsCap,
   maxConfidenceRatioBpsCap,
-  maxPriceStatusLagSecsCap
+  maxPriceStatusLagSecsCap,
+  gasBudget
 }: {
   packageId: string
   coinType: string
@@ -25,8 +26,9 @@ export const buildAddAcceptedCurrencyTransaction = ({
   maxPriceAgeSecsCap?: bigint
   maxConfidenceRatioBpsCap?: bigint
   maxPriceStatusLagSecsCap?: bigint
+  gasBudget?: number
 }) => {
-  const transaction = newTransaction()
+  const transaction = newTransaction(gasBudget)
 
   const shopArgument = transaction.sharedObjectRef(shop.sharedRef)
   const currencyArgument = transaction.sharedObjectRef(currency.sharedRef)

@@ -52,8 +52,14 @@ use_environment = "testnet"
 manifest_digest = "84C86CF483EDD44052570BCE6464DC0DA987165BDC453F929791C8151AD30D01"
 deps = { Sui = "Sui" }
 
+[pinned.testnet.item_examples]
+source = { local = "../item-examples" }
+use_environment = "testnet"
+manifest_digest = "5745706258F61D6CE210904B3E6AE87A73CE9D31A6F93BE4718C442529332A87"
+deps = { std = "MoveStdlib", sui = "Sui" }
+
 [pinned.testnet.sui_oracle_market]
 source = { root = true }
 use_environment = "testnet"
-manifest_digest = "3A0BCB55D15419119C4524FABF4E688EC4F4748070503EC976C789C818F1A1C1"
-deps = { pyth = "Pyth", std = "MoveStdlib", sui = "Sui" }
+manifest_digest = "91EB62D0818E065C67BE52A96D903770C4347B62D60572AE3240A4B7DD503B4B"
+deps = { item_examples = "item_examples", pyth = "Pyth", std = "MoveStdlib", sui = "Sui" }

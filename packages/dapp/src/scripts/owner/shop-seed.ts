@@ -5,6 +5,7 @@
 import path from "node:path"
 
 import type { SuiClient, SuiObjectResponse } from "@mysten/sui/client"
+import type { Transaction } from "@mysten/sui/transactions"
 import { normalizeSuiObjectId, parseStructTag } from "@mysten/sui/utils"
 import yargs from "yargs"
 
@@ -72,10 +73,14 @@ import {
   parseNonNegativeU64,
   parseOptionalPositiveU64,
   parseOptionalU64,
-  parsePositiveU64
+  parsePositiveU64,
+  wait
 } from "@sui-oracle-market/tooling-core/utils/utility"
 import { readArtifact } from "@sui-oracle-market/tooling-node/artifacts"
-import { SUI_COIN_REGISTRY_ID } from "@sui-oracle-market/tooling-node/constants"
+import {
+  DEFAULT_TX_GAS_BUDGET,
+  SUI_COIN_REGISTRY_ID
+} from "@sui-oracle-market/tooling-node/constants"
 import type { Tooling } from "@sui-oracle-market/tooling-node/factory"
 import {
   logKeyValueBlue,
@@ -115,6 +120,47 @@ const DEFAULT_WAL_COIN_TYPE =
 const DEFAULT_PYTH_QUOTE_SYMBOL = "USD"
 const DEFAULT_ITEM_MODULE = "items"
 const ITEM_EXAMPLES_PACKAGE_NAME = "item-examples"
+const ITEM_TYPE_LOOKUP_RETRY_DELAY_MS = 1_500
+const ITEM_TYPE_LOOKUP_MAX_ATTEMPTS = 6
+const STALE_OBJECT_RETRY_DELAY_MS = 750
+const STALE_OBJECT_RETRY_MAX_ATTEMPTS = 3
+
+type SignAndExecuteResult = Awaited<ReturnType<Tooling["signAndExecute"]>>
+
+const isStaleObjectVersionError = (error: unknown) => {
+  const message =
+    error instanceof Error ? error.message : error ? String(error) : ""
+  const normalizedMessage = message.toLowerCase()
+  return (
+    normalizedMessage.includes("not available for consumption") &&
+    normalizedMessage.includes("current version")
+  )
+}
+
+const signAndExecuteWithRetry = async ({
+  buildTransaction,
+  tooling,
+  maxAttempts = STALE_OBJECT_RETRY_MAX_ATTEMPTS
+}: {
+  buildTransaction: () => Transaction
+  tooling: Tooling
+  maxAttempts?: number
+}): Promise<SignAndExecuteResult> => {
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    try {
+      return await tooling.signAndExecute({
+        transaction: buildTransaction(),
+        signer: tooling.loadedEd25519KeyPair
+      })
+    } catch (error) {
+      if (!isStaleObjectVersionError(error) || attempt >= maxAttempts - 1)
+        throw error
+      await wait(STALE_OBJECT_RETRY_DELAY_MS)
+    }
+  }
+
+  throw new Error("Unable to execute transaction after stale object retries.")
+}
 
 type ShopSeedArguments = {
   shopPackageId?: string
@@ -359,16 +405,15 @@ const resolveOrCreateShopIdentifiers = async ({
 
   logKeyValueBlue("Shop")("Creating shop from published package.")
 
-  const createShopTransaction = buildCreateShopTransaction({
-    packageId: shopPackageId,
-    publisherCapId
-  })
-
   const {
     objectArtifacts: { created }
-  } = await tooling.signAndExecute({
-    transaction: createShopTransaction,
-    signer: tooling.loadedEd25519KeyPair
+  } = await signAndExecuteWithRetry({
+    tooling,
+    buildTransaction: () =>
+      buildCreateShopTransaction({
+        packageId: shopPackageId,
+        publisherCapId
+      })
   })
 
   const shopId = requireCreatedArtifactIdBySuffix({
@@ -512,11 +557,20 @@ const ensureListingTypesAvailable = async ({
   networkName: string
   suiClient: SuiClient
 }) => {
-  const missingItemTypes = await findMissingItemTypes({
+  let missingItemTypes = await findMissingItemTypes({
     listingSeeds,
     suiClient
   })
   if (!missingItemTypes.length) return
+
+  for (let attempt = 0; attempt < ITEM_TYPE_LOOKUP_MAX_ATTEMPTS; attempt += 1) {
+    await wait(ITEM_TYPE_LOOKUP_RETRY_DELAY_MS)
+    missingItemTypes = await findMissingItemTypes({
+      listingSeeds,
+      suiClient
+    })
+    if (!missingItemTypes.length) return
+  }
 
   throw buildMissingItemTypesError({ missingItemTypes, networkName })
 }
@@ -534,7 +588,9 @@ const publishItemExamplesPackage = async ({
 
   const publishArtifact = await publishMovePackageWithFunding({
     tooling,
-    packagePath: resolveItemExamplesPackagePath(tooling)
+    packagePath: resolveItemExamplesPackagePath(tooling),
+    clearPublishedEntry: true,
+    useCliPublish: false
   })
 
   const publishedPackageId = normalizeSuiObjectId(publishArtifact.packageId)
@@ -890,25 +946,27 @@ const ensureAcceptedCurrency = async ({
     mutable: false
   })
 
-  const addCurrencyTransaction = buildAddAcceptedCurrencyTransaction({
-    packageId: inputs.packageId,
-    coinType: inputs.coinType,
-    shop: shopSharedObject,
-    currency: currencySharedObject,
-    feedIdBytes: inputs.feedIdBytes,
-    pythObjectId: inputs.priceInfoObjectId,
-    priceInfoObject: priceInfoSharedObject,
-    ownerCapId: inputs.ownerCapId,
-    maxPriceAgeSecsCap: inputs.maxPriceAgeSecsCap,
-    maxConfidenceRatioBpsCap: inputs.maxConfidenceRatioBpsCap,
-    maxPriceStatusLagSecsCap: inputs.maxPriceStatusLagSecsCap
-  })
+  const gasBudget = tooling.network.gasBudget ?? DEFAULT_TX_GAS_BUDGET
 
   const {
     objectArtifacts: { created }
-  } = await tooling.signAndExecute({
-    transaction: addCurrencyTransaction,
-    signer: tooling.loadedEd25519KeyPair
+  } = await signAndExecuteWithRetry({
+    tooling,
+    buildTransaction: () =>
+      buildAddAcceptedCurrencyTransaction({
+        packageId: inputs.packageId,
+        coinType: inputs.coinType,
+        shop: shopSharedObject,
+        currency: currencySharedObject,
+        feedIdBytes: inputs.feedIdBytes,
+        pythObjectId: inputs.priceInfoObjectId,
+        priceInfoObject: priceInfoSharedObject,
+        ownerCapId: inputs.ownerCapId,
+        maxPriceAgeSecsCap: inputs.maxPriceAgeSecsCap,
+        maxConfidenceRatioBpsCap: inputs.maxConfidenceRatioBpsCap,
+        maxPriceStatusLagSecsCap: inputs.maxPriceStatusLagSecsCap,
+        gasBudget
+      })
   })
 
   const acceptedCurrencyId =
@@ -1072,20 +1130,19 @@ const ensureItemListing = async ({
     return existingListing
   }
 
-  const addItemTransaction = buildAddItemListingTransaction({
-    packageId: shopIdentifiers.packageId,
-    itemType: listing.itemType,
-    shop: shopSharedObject,
-    ownerCapId: shopIdentifiers.ownerCapId,
-    itemName: listing.name,
-    basePriceUsdCents: parseUsdToCents(listing.priceUsd),
-    stock: parsePositiveU64(listing.stock, "stock"),
-    spotlightDiscountId: undefined
-  })
-
-  const { transactionResult } = await tooling.signAndExecute({
-    transaction: addItemTransaction,
-    signer: tooling.loadedEd25519KeyPair
+  const { transactionResult } = await signAndExecuteWithRetry({
+    tooling,
+    buildTransaction: () =>
+      buildAddItemListingTransaction({
+        packageId: shopIdentifiers.packageId,
+        itemType: listing.itemType,
+        shop: shopSharedObject,
+        ownerCapId: shopIdentifiers.ownerCapId,
+        itemName: listing.name,
+        basePriceUsdCents: parseUsdToCents(listing.priceUsd),
+        stock: parsePositiveU64(listing.stock, "stock"),
+        spotlightDiscountId: undefined
+      })
   })
 
   const createdListingChange = ensureCreatedObject(
@@ -1198,24 +1255,22 @@ const ensureDiscountTemplate = async ({
 
   validateDiscountSchedule(startsAt, expiresAt)
 
-  const createDiscountTemplateTransaction =
-    buildCreateDiscountTemplateTransaction({
-      packageId: shopIdentifiers.packageId,
-      shop: shopSharedObject,
-      appliesToListingId: undefined,
-      ruleKind: normalizedRuleKind,
-      ruleValue,
-      startsAt,
-      expiresAt,
-      maxRedemptions,
-      ownerCapId: shopIdentifiers.ownerCapId
-    })
-
   const {
     objectArtifacts: { created: createdObjects }
-  } = await tooling.signAndExecute({
-    transaction: createDiscountTemplateTransaction,
-    signer: tooling.loadedEd25519KeyPair
+  } = await signAndExecuteWithRetry({
+    tooling,
+    buildTransaction: () =>
+      buildCreateDiscountTemplateTransaction({
+        packageId: shopIdentifiers.packageId,
+        shop: shopSharedObject,
+        appliesToListingId: undefined,
+        ruleKind: normalizedRuleKind,
+        ruleValue,
+        startsAt,
+        expiresAt,
+        maxRedemptions,
+        ownerCapId: shopIdentifiers.ownerCapId
+      })
   })
 
   const createdTemplateId = requireCreatedArtifactIdBySuffix({
@@ -1297,18 +1352,16 @@ const ensureFixedDiscountSpotlight = async ({
     mutable: false
   })
 
-  const attachDiscountTemplateTransaction =
-    buildAttachDiscountTemplateTransaction({
-      packageId: shopIdentifiers.packageId,
-      shop: shopSharedObject,
-      itemListing: itemListingSharedObject,
-      discountTemplate: discountTemplateSharedObject,
-      ownerCapId: shopIdentifiers.ownerCapId
-    })
-
-  await tooling.signAndExecute({
-    transaction: attachDiscountTemplateTransaction,
-    signer: tooling.loadedEd25519KeyPair
+  await signAndExecuteWithRetry({
+    tooling,
+    buildTransaction: () =>
+      buildAttachDiscountTemplateTransaction({
+        packageId: shopIdentifiers.packageId,
+        shop: shopSharedObject,
+        itemListing: itemListingSharedObject,
+        discountTemplate: discountTemplateSharedObject,
+        ownerCapId: shopIdentifiers.ownerCapId
+      })
   })
 
   const [listingSummary, discountTemplateSummary] = await Promise.all([
