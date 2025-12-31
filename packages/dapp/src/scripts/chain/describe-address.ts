@@ -15,6 +15,7 @@ import {
   type OwnedObjectSummary
 } from "@sui-oracle-market/tooling-core/object-info"
 import { resolveOwnerAddress } from "@sui-oracle-market/tooling-node/account"
+import type { Tooling } from "@sui-oracle-market/tooling-node/factory"
 import {
   logEachGreen,
   logKeyValueBlue,
@@ -70,7 +71,7 @@ runSuiScript<GetAddressInfoCliArgs>(
 
     const addressInformation = await collectAddressInformation({
       address: addressToInspect,
-      suiClient: tooling.suiClient
+      tooling
     })
 
     logAddressInformation(addressInformation)
@@ -88,19 +89,25 @@ runSuiScript<GetAddressInfoCliArgs>(
  */
 const collectAddressInformation = async ({
   address,
-  suiClient
+  tooling
 }: {
   address: string
-  suiClient: SuiClient
+  tooling: Pick<
+    Tooling,
+    "getCoinBalanceSummary" | "getCoinBalances" | "suiClient"
+  >
 }): Promise<AddressInformation> => {
   const normalizedAddress = normalizeSuiAddress(address)
 
   const [suiBalance, coinBalances, ownedObjectsResult, stakeSummary] =
     await Promise.all([
-      getSuiBalance(normalizedAddress, suiClient),
-      getCoinBalances(normalizedAddress, suiClient),
-      getOwnedObjectSummaries(normalizedAddress, suiClient),
-      getStakeSummary(normalizedAddress, suiClient)
+      tooling.getCoinBalanceSummary({
+        address: normalizedAddress,
+        coinType: "0x2::sui::SUI"
+      }),
+      tooling.getCoinBalances({ address: normalizedAddress }),
+      getOwnedObjectSummaries(normalizedAddress, tooling.suiClient),
+      getStakeSummary(normalizedAddress, tooling.suiClient)
     ])
 
   return {
@@ -111,43 +118,6 @@ const collectAddressInformation = async ({
     ownedObjectsTruncated: ownedObjectsResult.truncated,
     stakeSummary
   }
-}
-
-/**
- * Gets the SUI balance (both amount and object count) for the address.
- */
-const getSuiBalance = async (
-  address: string,
-  suiClient: SuiClient
-): Promise<CoinBalanceSummary> => {
-  const balance = await suiClient.getBalance({
-    owner: address,
-    coinType: "0x2::sui::SUI"
-  })
-
-  return {
-    coinType: balance.coinType,
-    coinObjectCount: balance.coinObjectCount,
-    totalBalance: BigInt(balance.totalBalance),
-    lockedBalanceTotal: sumLockedBalance(balance.lockedBalance)
-  }
-}
-
-/**
- * Returns the balances for every coin type owned by the address.
- */
-const getCoinBalances = async (
-  address: string,
-  suiClient: SuiClient
-): Promise<CoinBalanceSummary[]> => {
-  const balances = await suiClient.getAllBalances({ owner: address })
-
-  return balances.map((balance) => ({
-    coinType: balance.coinType,
-    coinObjectCount: balance.coinObjectCount,
-    totalBalance: BigInt(balance.totalBalance),
-    lockedBalanceTotal: sumLockedBalance(balance.lockedBalance)
-  }))
 }
 
 /**
@@ -352,15 +322,6 @@ const logInspectionContext = ({
   logKeyValueBlue("Inspecting")(address)
   console.log("")
 }
-
-/**
- * Sums the locked balance entries returned by the RPC.
- */
-const sumLockedBalance = (lockedBalance: Record<string, string>): bigint =>
-  Object.values(lockedBalance).reduce(
-    (total, lockedAmount) => total + BigInt(lockedAmount),
-    0n
-  )
 
 /**
  * Formats bigint values for display.

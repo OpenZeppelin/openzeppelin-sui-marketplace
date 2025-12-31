@@ -21,35 +21,18 @@ import {
   logItemListingSummary
 } from "../../utils/log-summaries.ts"
 
-type AttachDiscountTemplateArguments = {
-  shopPackageId?: string
-  shopId?: string
-  ownerCapId?: string
-  itemListingId: string
-  discountTemplateId: string
-}
-
-type NormalizedInputs = {
-  packageId: string
-  shopId: string
-  ownerCapId: string
-  itemListingId: string
-  discountTemplateId: string
-}
-
 runSuiScript(
   async (tooling, cliArguments) => {
     const inputs = await normalizeInputs(
       cliArguments,
       tooling.network.networkName
     )
-    const suiClient = tooling.suiClient
 
     const resolvedIds = await validateTemplateAndListing({
       shopId: inputs.shopId,
       itemListingId: inputs.itemListingId,
       discountTemplateId: inputs.discountTemplateId,
-      suiClient
+      suiClient: tooling.suiClient
     })
 
     const shopSharedObject = await tooling.getSuiSharedObject({
@@ -83,12 +66,12 @@ runSuiScript(
       getItemListingSummary(
         inputs.shopId,
         resolvedIds.itemListingId,
-        suiClient
+        tooling.suiClient
       ),
       getDiscountTemplateSummary(
         inputs.shopId,
         resolvedIds.discountTemplateId,
-        suiClient
+        tooling.suiClient
       )
     ])
 
@@ -134,9 +117,15 @@ runSuiScript(
 )
 
 const normalizeInputs = async (
-  cliArguments: AttachDiscountTemplateArguments,
+  cliArguments: {
+    shopPackageId?: string
+    shopId?: string
+    ownerCapId?: string
+    itemListingId: string
+    discountTemplateId: string
+  },
   networkName: string
-): Promise<NormalizedInputs> => {
+) => {
   const { packageId, shopId, ownerCapId } = await resolveLatestShopIdentifiers(
     {
       packageId: cliArguments.shopPackageId,

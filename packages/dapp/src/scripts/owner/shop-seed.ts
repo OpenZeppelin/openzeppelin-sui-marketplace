@@ -56,16 +56,18 @@ import {
 import { buildCreateShopTransaction } from "@sui-oracle-market/domain-core/ptb/shop"
 import { resolveItemExamplesPackageId } from "@sui-oracle-market/domain-node/item-example"
 import {
+  assertPriceInfoObjectDependency,
   resolveMaybeLatestShopIdentifiers,
+  resolveShopDependencyIds,
   resolveShopPublishInputs
 } from "@sui-oracle-market/domain-node/shop"
-import { resolveCurrencyObjectId } from "@sui-oracle-market/tooling-core/coin-registry"
 import {
   assertBytesLength,
   hexToBytes
 } from "@sui-oracle-market/tooling-core/hex"
-import type { ObjectArtifact } from "@sui-oracle-market/tooling-core/object"
 import { normalizeIdOrThrow } from "@sui-oracle-market/tooling-core/object"
+import { readMoveString } from "@sui-oracle-market/tooling-core/utils/formatters"
+import { extractStructNameFromType } from "@sui-oracle-market/tooling-core/utils/type-name"
 import {
   parseNonNegativeU64,
   parseOptionalPositiveU64,
@@ -83,7 +85,11 @@ import {
 } from "@sui-oracle-market/tooling-node/log"
 import { runSuiScript } from "@sui-oracle-market/tooling-node/process"
 import { publishMovePackageWithFunding } from "@sui-oracle-market/tooling-node/publish"
-import { ensureCreatedObject } from "@sui-oracle-market/tooling-node/transactions"
+import {
+  ensureCreatedObject,
+  findCreatedArtifactIdBySuffix,
+  requireCreatedArtifactIdBySuffix
+} from "@sui-oracle-market/tooling-node/transactions"
 import {
   logAcceptedCurrencySummary,
   logDiscountTemplateSummary,
@@ -92,7 +98,6 @@ import {
 } from "../../utils/log-summaries.ts"
 import type { MockArtifact } from "../../utils/mocks.ts"
 import { mockArtifactPath, writeMockArtifact } from "../../utils/mocks.ts"
-import { readMoveString } from "@sui-oracle-market/tooling-core/utils/formatters"
 
 // NOTE: Testnet coin package IDs can change over time.
 // If this ever fails to resolve via the coin registry, run:
@@ -236,7 +241,8 @@ runSuiScript(
 
     const acceptedCurrencySeeds = await resolveAcceptedCurrencySeeds({
       networkName,
-      suiClient
+      shopPackageId: shopIdentifiers.packageId,
+      tooling
     })
     await ensureAcceptedCurrencies({
       acceptedCurrencySeeds,
@@ -365,12 +371,16 @@ const resolveOrCreateShopIdentifiers = async ({
     signer: tooling.loadedEd25519KeyPair
   })
 
-  const shopId = requireCreatedObjectId(created, "::shop::Shop", "Shop")
-  const ownerCapId = requireCreatedObjectId(
-    created,
-    "::shop::ShopOwnerCap",
-    "ShopOwnerCap"
-  )
+  const shopId = requireCreatedArtifactIdBySuffix({
+    createdArtifacts: created,
+    suffix: "::shop::Shop",
+    label: "Shop"
+  })
+  const ownerCapId = requireCreatedArtifactIdBySuffix({
+    createdArtifacts: created,
+    suffix: "::shop::ShopOwnerCap",
+    label: "ShopOwnerCap"
+  })
 
   return {
     packageId: shopPackageId,
@@ -585,13 +595,18 @@ const resolveItemListingSeeds = async ({
 
 const resolveAcceptedCurrencySeeds = async ({
   networkName,
-  suiClient
+  shopPackageId,
+  tooling
 }: {
   networkName: string
-  suiClient: SuiClient
+  shopPackageId: string
+  tooling: Tooling
 }): Promise<AcceptedCurrencySeed[]> => {
   if (networkName === "testnet")
-    return resolveTestnetAcceptedCurrencySeeds({ suiClient })
+    return resolveTestnetAcceptedCurrencySeeds({
+      shopPackageId,
+      tooling
+    })
   if (networkName === "localnet") return buildLocalnetAcceptedCurrencySeeds()
 
   throw new Error(
@@ -600,17 +615,23 @@ const resolveAcceptedCurrencySeeds = async ({
 }
 
 const resolveTestnetAcceptedCurrencySeeds = async ({
-  suiClient
+  shopPackageId,
+  tooling
 }: {
-  suiClient: SuiClient
+  shopPackageId: string
+  tooling: Tooling
 }): Promise<AcceptedCurrencySeed[]> => {
   const pythConfig = requirePythPullOracleConfig(
     resolvePythPullOracleConfig("testnet")
   )
   const pythClient = createPythClient({
-    suiClient,
+    suiClient: tooling.suiClient,
     pythStateId: pythConfig.pythStateId,
     wormholeStateId: pythConfig.wormholeStateId
+  })
+  const dependencyIds = await resolveShopDependencyIds({
+    networkName: "testnet",
+    shopPackageId
   })
 
   return Promise.all(
@@ -618,9 +639,9 @@ const resolveTestnetAcceptedCurrencySeeds = async ({
       const normalizedCoinType = normalizeCoinType(seed.coinType)
       const { currencyId, symbol } = await resolveCurrencyRegistrySummary({
         coinType: normalizedCoinType,
-        suiClient
+        tooling
       })
-      const baseSymbol = symbol ?? extractSymbolFromType(normalizedCoinType)
+      const baseSymbol = symbol ?? extractStructNameFromType(normalizedCoinType)
 
       const feedResolution = await resolvePythFeedResolution({
         hermesUrl: pythConfig.hermesUrl,
@@ -655,6 +676,12 @@ const resolveTestnetAcceptedCurrencySeeds = async ({
         )
       }
 
+      await assertPriceInfoObjectDependency({
+        priceInfoObjectId,
+        dependencyIds,
+        suiClient: tooling.suiClient
+      })
+
       return {
         coinType: normalizedCoinType,
         feedId,
@@ -667,26 +694,23 @@ const resolveTestnetAcceptedCurrencySeeds = async ({
 
 const resolveCurrencyRegistrySummary = async ({
   coinType,
-  suiClient
+  tooling
 }: {
   coinType: string
-  suiClient: SuiClient
+  tooling: Pick<Tooling, "resolveCurrencyObjectId" | "suiClient">
 }): Promise<{ currencyId: string; symbol?: string }> => {
-  const currencyId = await resolveCurrencyObjectId(
-    {
-      coinType,
-      registryId: SUI_COIN_REGISTRY_ID,
-      fallbackRegistryScan: true
-    },
-    { suiClient }
-  )
+  const currencyId = await tooling.resolveCurrencyObjectId({
+    coinType,
+    registryId: SUI_COIN_REGISTRY_ID,
+    fallbackRegistryScan: true
+  })
 
   if (!currencyId)
     throw new Error(
       `Could not resolve currency registry entry for ${coinType}. Provide an updated coin type or register the coin first.`
     )
 
-  const currencyObject = await suiClient.getObject({
+  const currencyObject = await tooling.suiClient.getObject({
     id: currencyId,
     options: { showContent: true, showType: true }
   })
@@ -695,11 +719,6 @@ const resolveCurrencyRegistrySummary = async ({
     currencyId: normalizeSuiObjectId(currencyId),
     symbol: readCurrencySymbol(currencyObject)
   }
-}
-
-const extractSymbolFromType = (coinType: string) => {
-  const segments = coinType.split("::")
-  return segments[segments.length - 1]
 }
 
 const readCurrencySymbol = (object: SuiObjectResponse) => {
@@ -855,7 +874,7 @@ const ensureAcceptedCurrency = async ({
     currencySeed,
     cliArguments,
     shopIdentifiers,
-    suiClient
+    tooling
   })
 
   const shopSharedObject = await tooling.getSuiSharedObject({
@@ -893,7 +912,7 @@ const ensureAcceptedCurrency = async ({
   })
 
   const acceptedCurrencyId =
-    findCreatedObjectId(created, "::shop::AcceptedCurrency") ??
+    findCreatedArtifactIdBySuffix(created, "::shop::AcceptedCurrency") ??
     (await requireAcceptedCurrencyId({
       shopId: inputs.shopId,
       coinType: inputs.coinType,
@@ -914,12 +933,12 @@ const normalizeAcceptedCurrencyInputs = async ({
   currencySeed,
   cliArguments,
   shopIdentifiers,
-  suiClient
+  tooling
 }: {
   currencySeed: AcceptedCurrencySeed
   cliArguments: ShopSeedArguments
   shopIdentifiers: { packageId: string; shopId: string; ownerCapId: string }
-  suiClient: SuiClient
+  tooling: Pick<Tooling, "resolveCurrencyObjectId">
 }) => {
   const coinType = normalizeCoinType(currencySeed.coinType)
   const feedIdBytes = assertBytesLength(hexToBytes(currencySeed.feedId), 32)
@@ -929,14 +948,11 @@ const normalizeAcceptedCurrencyInputs = async ({
 
   const currencyId =
     currencySeed.currencyId ||
-    (await resolveCurrencyObjectId(
-      {
-        coinType,
-        registryId: SUI_COIN_REGISTRY_ID,
-        fallbackRegistryScan: true
-      },
-      { suiClient }
-    ))
+    (await tooling.resolveCurrencyObjectId({
+      coinType,
+      registryId: SUI_COIN_REGISTRY_ID,
+      fallbackRegistryScan: true
+    }))
 
   if (!currencyId)
     throw new Error(
@@ -1202,11 +1218,11 @@ const ensureDiscountTemplate = async ({
     signer: tooling.loadedEd25519KeyPair
   })
 
-  const createdTemplateId = requireCreatedObjectId(
-    createdObjects,
-    DISCOUNT_TEMPLATE_TYPE_FRAGMENT,
-    "DiscountTemplate"
-  )
+  const createdTemplateId = requireCreatedArtifactIdBySuffix({
+    createdArtifacts: createdObjects,
+    suffix: DISCOUNT_TEMPLATE_TYPE_FRAGMENT,
+    label: "DiscountTemplate"
+  })
 
   const discountTemplateSummary = await getDiscountTemplateSummary(
     shopIdentifiers.shopId,
@@ -1353,23 +1369,6 @@ const indexDiscountTemplateSummaries = (
       return index
     },
     new Map()
-  )
-
-const findCreatedObjectId = (
-  createdArtifacts: ObjectArtifact[] | undefined,
-  suffix: string
-) =>
-  createdArtifacts?.find((artifact) => artifact.objectType?.endsWith(suffix))
-    ?.objectId
-
-const requireCreatedObjectId = (
-  createdArtifacts: ObjectArtifact[] | undefined,
-  suffix: string,
-  label: string
-) =>
-  normalizeIdOrThrow(
-    findCreatedObjectId(createdArtifacts, suffix),
-    `Expected ${label} to be created, but it was not found in transaction artifacts.`
   )
 
 const requireAcceptedCurrencyId = async ({

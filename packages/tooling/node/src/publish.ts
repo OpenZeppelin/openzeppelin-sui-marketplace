@@ -1052,17 +1052,15 @@ export const publishMovePackageWithFunding = async ({
   withUnpublishedDependencies?: boolean
   allowAutoUnpublishedDependencies?: boolean
 }): Promise<PublishArtifact> => {
-  const keypair = tooling.loadedEd25519KeyPair
-
   const artifacts = await tooling.withTestnetFaucetRetry(
     {
-      signerAddress: keypair.toSuiAddress(),
-      signer: keypair
+      signerAddress: tooling.loadedEd25519KeyPair.toSuiAddress(),
+      signer: tooling.loadedEd25519KeyPair
     },
     async () =>
       tooling.publishPackageWithLog({
         packagePath: path.resolve(packagePath),
-        keypair,
+        keypair: tooling.loadedEd25519KeyPair,
         gasBudget,
         withUnpublishedDependencies,
         useCliPublish: true,

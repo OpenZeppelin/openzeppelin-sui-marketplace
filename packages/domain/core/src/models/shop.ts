@@ -12,6 +12,12 @@ import {
   requireValue,
   tryParseBigInt
 } from "@sui-oracle-market/tooling-core/utils/utility"
+import type { AcceptedCurrencySummary } from "./currency.ts"
+import { getAcceptedCurrencySummaries } from "./currency.ts"
+import type { DiscountTemplateSummary } from "./discount.ts"
+import { getDiscountTemplateSummaries } from "./discount.ts"
+import type { ItemListingSummary } from "./item-listing.ts"
+import { getItemListingSummaries } from "./item-listing.ts"
 
 export type ShopIdentifierInputs = {
   packageId?: string
@@ -169,4 +175,31 @@ export const resolveOwnerCapabilityId = async ({
     matchingCapability.objectId,
     "No ShopOwnerCap found for this shop. Ensure the owner capability is in your wallet."
   )
+}
+
+export type ShopSnapshot = {
+  shopOverview: ShopOverview
+  itemListings: ItemListingSummary[]
+  acceptedCurrencies: AcceptedCurrencySummary[]
+  discountTemplates: DiscountTemplateSummary[]
+}
+
+export const getShopSnapshot = async (
+  shopId: string,
+  suiClient: SuiClient
+): Promise<ShopSnapshot> => {
+  const [shopOverview, itemListings, acceptedCurrencies, discountTemplates] =
+    await Promise.all([
+      getShopOverview(shopId, suiClient),
+      getItemListingSummaries(shopId, suiClient),
+      getAcceptedCurrencySummaries(shopId, suiClient),
+      getDiscountTemplateSummaries(shopId, suiClient)
+    ])
+
+  return {
+    shopOverview,
+    itemListings,
+    acceptedCurrencies,
+    discountTemplates
+  }
 }

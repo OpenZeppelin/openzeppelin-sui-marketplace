@@ -1,7 +1,6 @@
 #[test_only]
 module sui_oracle_market::shop_tests;
 
-use item_examples::items;
 use pyth::i64 as pyth_i64;
 use pyth::price as pyth_price;
 use pyth::price_feed as pyth_price_feed;
@@ -35,6 +34,18 @@ public struct AltTestCoin has key, store { id: obj::UID }
 public struct HighDecimalCoin has key, store { id: obj::UID }
 public struct TestItem has store {}
 public struct OtherItem has store {}
+
+public struct Car has key, store {
+  id: obj::UID,
+  wheels: u64,
+  motor_type: vector<u8>,
+}
+
+public struct Bike has key, store {
+  id: obj::UID,
+  gears: u8,
+  brand: vector<u8>,
+}
 
 const PRIMARY_FEED_ID: vector<u8> =
   x"000102030405060708090a0b0c0d0e0f000102030405060708090a0b0c0d0e0f";
@@ -4997,7 +5008,7 @@ fun buy_item_supports_example_car_receipts() {
     accepted_currency_id,
     listing_id,
     price_info_id,
-  ) = setup_shop_with_currency_listing_and_price_info_for_item<items::Car>(
+  ) = setup_shop_with_currency_listing_and_price_info_for_item<Car>(
     &mut scn,
     b"Car Listing",
     175_00,
@@ -5041,7 +5052,7 @@ fun buy_item_supports_example_car_receipts() {
     scenario::ctx(&mut scn),
   );
 
-  shop::buy_item<items::Car, TestCoin>(
+  shop::buy_item<Car, TestCoin>(
     &shared_shop,
     &mut listing,
     &accepted_currency,
@@ -5074,7 +5085,7 @@ fun buy_item_supports_example_bike_receipts() {
     accepted_currency_id,
     listing_id,
     price_info_id,
-  ) = setup_shop_with_currency_listing_and_price_info_for_item<items::Bike>(
+  ) = setup_shop_with_currency_listing_and_price_info_for_item<Bike>(
     &mut scn,
     b"Bike Listing",
     95_00,
@@ -5118,7 +5129,7 @@ fun buy_item_supports_example_bike_receipts() {
     scenario::ctx(&mut scn),
   );
 
-  shop::buy_item<items::Bike, TestCoin>(
+  shop::buy_item<Bike, TestCoin>(
     &shared_shop,
     &mut listing,
     &accepted_currency,

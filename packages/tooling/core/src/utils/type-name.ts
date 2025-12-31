@@ -120,3 +120,20 @@ export const formatTypeNameFromFieldValue = (fieldValue: unknown) => {
 
   return formatTypeName(typeName)
 }
+
+/**
+ * Extracts the struct name from a fully qualified Move type string.
+ * Returns undefined when the type cannot be parsed.
+ */
+export const extractStructNameFromType = (
+  typeName: string
+): string | undefined => {
+  const trimmed = typeName.trim()
+  if (!trimmed) return undefined
+
+  const withoutGenerics = trimmed.split("<")[0]
+  const parts = withoutGenerics.split("::").filter(Boolean)
+  if (parts.length === 0) return undefined
+
+  return parts[parts.length - 1]
+}

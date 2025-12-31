@@ -1,6 +1,15 @@
 import type { SuiClient } from "@mysten/sui/client"
 
 import type { Ed25519Keypair } from "@mysten/sui/keypairs/ed25519"
+import {
+  getCoinBalanceSummary,
+  getCoinBalances
+} from "@sui-oracle-market/tooling-core/address"
+import { resolveCoinOwnership } from "@sui-oracle-market/tooling-core/coin"
+import {
+  listCurrencyRegistryEntries,
+  resolveCurrencyObjectId
+} from "@sui-oracle-market/tooling-core/coin-registry"
 import { getSuiDynamicFieldObject } from "@sui-oracle-market/tooling-core/dynamic-fields"
 import {
   getAllOwnedObjectsByFilter,
@@ -39,6 +48,21 @@ export type Tooling = ToolingContext & {
   getAllOwnedObjectsByFilter: (
     args: Parameters<typeof getAllOwnedObjectsByFilter>[0]
   ) => ReturnType<typeof getAllOwnedObjectsByFilter>
+  getCoinBalanceSummary: (
+    args: Parameters<typeof getCoinBalanceSummary>[0]
+  ) => ReturnType<typeof getCoinBalanceSummary>
+  getCoinBalances: (
+    args: Parameters<typeof getCoinBalances>[0]
+  ) => ReturnType<typeof getCoinBalances>
+  resolveCoinOwnership: (
+    args: Parameters<typeof resolveCoinOwnership>[0]
+  ) => ReturnType<typeof resolveCoinOwnership>
+  listCurrencyRegistryEntries: (
+    args: Parameters<typeof listCurrencyRegistryEntries>[0]
+  ) => ReturnType<typeof listCurrencyRegistryEntries>
+  resolveCurrencyObjectId: (
+    args: Parameters<typeof resolveCurrencyObjectId>[0]
+  ) => ReturnType<typeof resolveCurrencyObjectId>
   signAndExecute: (
     args: Parameters<typeof signAndExecute>[0]
   ) => ReturnType<typeof signAndExecute>
@@ -150,6 +174,15 @@ export const createTooling = async ({
       getSuiDynamicFieldObject(args, { suiClient }),
     getAllOwnedObjectsByFilter: async (args) =>
       getAllOwnedObjectsByFilter(args, { suiClient }),
+    resolveCoinOwnership: async (args) =>
+      resolveCoinOwnership(args, { suiClient }),
+    getCoinBalanceSummary: async (args) =>
+      getCoinBalanceSummary(args, { suiClient }),
+    getCoinBalances: async (args) => getCoinBalances(args, { suiClient }),
+    listCurrencyRegistryEntries: async (args) =>
+      listCurrencyRegistryEntries(args, { suiClient }),
+    resolveCurrencyObjectId: async (args) =>
+      resolveCurrencyObjectId(args, { suiClient }),
     signAndExecute: async (args) =>
       signAndExecute(args, { suiClient, suiConfig }),
     executeTransactionOnce: async (args) =>

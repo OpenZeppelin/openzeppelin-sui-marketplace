@@ -15,10 +15,10 @@ import {
   parseDiscountRuleKind,
   parseDiscountRuleValue,
   validateDiscountSchedule,
-  type DiscountRuleKindLabel,
-  type NormalizedRuleKind
+  type DiscountRuleKindLabel
 } from "@sui-oracle-market/domain-core/models/discount"
 import { buildCreateDiscountTemplateTransaction } from "@sui-oracle-market/domain-core/ptb/discount-template"
+import { resolveLatestShopIdentifiers } from "@sui-oracle-market/domain-node/shop"
 import { normalizeOptionalId } from "@sui-oracle-market/tooling-core/object"
 import {
   parseNonNegativeU64,
@@ -27,33 +27,6 @@ import {
 import { logKeyValueGreen } from "@sui-oracle-market/tooling-node/log"
 import { runSuiScript } from "@sui-oracle-market/tooling-node/process"
 import { logDiscountTemplateSummary } from "../../utils/log-summaries.ts"
-import { resolveLatestShopIdentifiers } from "@sui-oracle-market/domain-node/shop"
-
-type CreateDiscountTemplateArguments = {
-  shopPackageId?: string
-  shopId?: string
-  ownerCapId?: string
-  listingId?: string
-  ruleKind: DiscountRuleKindLabel
-  value: string
-  startsAt?: string
-  expiresAt?: string
-  maxRedemptions?: string
-  publisherId?: string
-}
-
-type NormalizedInputs = {
-  packageId: string
-  shopId: string
-  ownerCapId: string
-  appliesToListingId?: string
-  ruleKind: NormalizedRuleKind
-  ruleValue: bigint
-  startsAt: bigint
-  expiresAt?: bigint
-  maxRedemptions?: bigint
-  publisherId?: string
-}
 
 runSuiScript(
   async (tooling, cliArguments) => {
@@ -61,7 +34,6 @@ runSuiScript(
       cliArguments,
       tooling.network.networkName
     )
-    const suiClient = tooling.suiClient
 
     const shopSharedObject = await tooling.getSuiSharedObject({
       objectId: inputs.shopId,
@@ -101,7 +73,7 @@ runSuiScript(
     const discountTemplateSummary = await getDiscountTemplateSummary(
       inputs.shopId,
       discountTemplateId,
-      suiClient
+      tooling.suiClient
     )
 
     logDiscountTemplateSummary(discountTemplateSummary)
@@ -176,9 +148,20 @@ runSuiScript(
 )
 
 const normalizeInputs = async (
-  cliArguments: CreateDiscountTemplateArguments,
+  cliArguments: {
+    shopPackageId?: string
+    shopId?: string
+    ownerCapId?: string
+    listingId?: string
+    ruleKind: DiscountRuleKindLabel
+    value: string
+    startsAt?: string
+    expiresAt?: string
+    maxRedemptions?: string
+    publisherId?: string
+  },
   networkName: string
-): Promise<NormalizedInputs> => {
+) => {
   const { packageId, shopId, ownerCapId } = await resolveLatestShopIdentifiers(
     {
       packageId: cliArguments.shopPackageId,

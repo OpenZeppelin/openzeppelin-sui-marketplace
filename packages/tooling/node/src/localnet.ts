@@ -2,6 +2,7 @@ import os from "node:os"
 import path from "node:path"
 
 import { getFaucetHost } from "@mysten/sui/faucet"
+import { createSuiClient } from "./describe-object.ts"
 
 const FAUCET_SUPPORTED_NETWORKS = ["localnet", "devnet", "testnet"] as const
 
@@ -51,5 +52,51 @@ export const deriveFaucetUrl = (rpcUrl: string) => {
     return faucetUrl.toString()
   } catch {
     return "http://127.0.0.1:9123/v2/gas"
+  }
+}
+
+export type RpcSnapshot = {
+  rpcUrl: string
+  epoch: string
+  protocolVersion: string
+  latestCheckpoint: string
+  validatorCount: number
+  referenceGasPrice: bigint
+  epochStartTimestampMs?: string | number | null
+}
+
+export type ProbeResult =
+  | { status: "running"; snapshot: RpcSnapshot }
+  | { status: "offline"; error: string }
+
+export const getRpcSnapshot = async (rpcUrl: string): Promise<RpcSnapshot> => {
+  const client = createSuiClient(rpcUrl)
+
+  const [systemState, latestCheckpoint, referenceGasPrice] = await Promise.all([
+    client.getLatestSuiSystemState(),
+    client.getLatestCheckpointSequenceNumber(),
+    client.getReferenceGasPrice()
+  ])
+
+  return {
+    rpcUrl,
+    epoch: systemState.epoch,
+    protocolVersion: String(systemState.protocolVersion),
+    latestCheckpoint,
+    validatorCount: systemState.activeValidators?.length ?? 0,
+    referenceGasPrice,
+    epochStartTimestampMs: systemState.epochStartTimestampMs
+  }
+}
+
+export const probeRpcHealth = async (rpcUrl: string): Promise<ProbeResult> => {
+  try {
+    return { status: "running", snapshot: await getRpcSnapshot(rpcUrl) }
+  } catch (error) {
+    return {
+      status: "offline",
+      error:
+        error instanceof Error ? error.message : "Unable to reach localnet RPC"
+    }
   }
 }

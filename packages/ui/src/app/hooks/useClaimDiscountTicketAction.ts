@@ -14,7 +14,7 @@ import type {
   DiscountTicketDetails
 } from "@sui-oracle-market/domain-core/models/discount"
 import {
-  DISCOUNT_TICKET_TYPE_FRAGMENT,
+  findCreatedDiscountTicketId,
   parseDiscountTicketFromObject
 } from "@sui-oracle-market/domain-core/models/discount"
 import { buildClaimDiscountTicketTransaction } from "@sui-oracle-market/domain-core/ptb/discount-ticket"
@@ -182,9 +182,9 @@ export const useClaimDiscountTicketAction = ({
           })
         }
 
-        const createdTicketId = extractCreatedObjects(transactionBlock).find(
-          (change) => change.objectType.endsWith(DISCOUNT_TICKET_TYPE_FRAGMENT)
-        )?.objectId
+        const createdTicketId = findCreatedDiscountTicketId(
+          extractCreatedObjects(transactionBlock)
+        )
 
         let claimedTicket: DiscountTicketDetails | undefined
 

@@ -26,12 +26,6 @@ import {
 } from "@sui-oracle-market/tooling-node/move"
 import { runSuiScript } from "@sui-oracle-market/tooling-node/process"
 
-type PublishScriptArguments = {
-  packagePath: string
-  withUnpublishedDependencies?: boolean
-  rePublish?: boolean
-}
-
 type ResolvedPublishOptions = {
   withUnpublishedDependencies: boolean
   allowAutoUnpublishedDependencies: boolean
@@ -149,7 +143,11 @@ const publishPackageToNetwork = async (
 
 const derivePublishOptions = (
   networkName: string,
-  cliArguments: PublishScriptArguments
+  cliArguments: {
+    packagePath: string
+    withUnpublishedDependencies?: boolean
+    rePublish?: boolean
+  }
 ): ResolvedPublishOptions => {
   const targetingLocalnet = networkName === "localnet"
 
@@ -167,28 +165,27 @@ const derivePublishOptions = (
 
 runSuiScript(
   async (tooling, cliArguments) => {
-    const { network, paths } = tooling.suiConfig
     // Resolve the absolute Move package path (relative to repo root or move/).
     const fullPackagePath = resolveFullPackagePath(
-      path.resolve(paths.move),
+      path.resolve(tooling.suiConfig.paths.move),
       cliArguments.packagePath
     )
 
     if (cliArguments.rePublish) {
       const { didUpdate } = await clearPublishedEntryForNetwork({
         packagePath: fullPackagePath,
-        networkName: network.networkName
+        networkName: tooling.suiConfig.network.networkName
       })
       if (didUpdate) {
         logKeyValueBlue("Published.toml")(
-          `cleared ${network.networkName} entry`
+          `cleared ${tooling.suiConfig.network.networkName} entry`
         )
       }
     }
 
     // Load prior deployment artifacts to short-circuit if already published (unless --re-publish).
     const deploymentArtifacts = await loadDeploymentArtifacts(
-      network.networkName
+      tooling.suiConfig.network.networkName
     )
 
     if (
@@ -199,7 +196,7 @@ runSuiScript(
         fullPackagePath
       )
     ) {
-      logSkippedPublish(network.networkName, fullPackagePath)
+      logSkippedPublish(tooling.suiConfig.network.networkName, fullPackagePath)
       return
     }
 
@@ -207,7 +204,7 @@ runSuiScript(
     await publishPackageToNetwork(
       tooling,
       fullPackagePath,
-      derivePublishOptions(network.networkName, cliArguments)
+      derivePublishOptions(tooling.suiConfig.network.networkName, cliArguments)
     )
   },
   yargs()

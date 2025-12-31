@@ -14,7 +14,11 @@ import type { IdentifierString } from "@mysten/wallet-standard"
 import type { AcceptedCurrencySummary } from "@sui-oracle-market/domain-core/models/currency"
 import {
   getAcceptedCurrencySummary,
-  normalizeCoinType
+  normalizeCoinType,
+  MAX_CONFIDENCE_RATIO_BPS_CAP,
+  MAX_PRICE_AGE_SECS_CAP,
+  MAX_PRICE_STATUS_LAG_SECS_CAP,
+  parseAcceptedCurrencyGuardrailValue
 } from "@sui-oracle-market/domain-core/models/currency"
 import { buildAddAcceptedCurrencyTransaction } from "@sui-oracle-market/domain-core/ptb/currency"
 import { resolveCurrencyObjectId } from "@sui-oracle-market/tooling-core/coin-registry"
@@ -37,7 +41,6 @@ import {
 } from "../helpers/localnet"
 import { resolveOwnerCapabilityId } from "../helpers/ownerCapabilities"
 import {
-  resolveValidationMessage,
   resolveCoinTypeInput,
   validateCoinType,
   validateOptionalSuiObjectId,
@@ -101,26 +104,8 @@ const emptyFormState = (): CurrencyFormState => ({
   maxPriceStatusLagSecsCap: ""
 })
 
-const MAX_PRICE_AGE_SECS_CAP = 60n
-const MAX_CONFIDENCE_RATIO_BPS_CAP = 1_000n
-const MAX_PRICE_STATUS_LAG_SECS_CAP = 5n
-
 type CurrencyFieldErrors = Partial<Record<keyof CurrencyFormState, string>>
 type CurrencyFieldWarnings = Partial<Record<keyof CurrencyFormState, string>>
-
-const parseGuardrailValue = (rawValue: string, label: string) => {
-  const trimmed = rawValue.trim()
-  if (!trimmed) return { value: undefined }
-
-  try {
-    return { value: parseOptionalPositiveU64(trimmed, label) }
-  } catch (error) {
-    return {
-      value: undefined,
-      error: resolveValidationMessage(error, `${label} must be a positive u64.`)
-    }
-  }
-}
 
 const buildCurrencyFieldErrors = (
   formState: CurrencyFormState
@@ -149,20 +134,20 @@ const buildCurrencyFieldErrors = (
   )
   if (priceInfoError) errors.priceInfoObjectId = priceInfoError
 
-  const priceAgeResult = parseGuardrailValue(
+  const priceAgeResult = parseAcceptedCurrencyGuardrailValue(
     formState.maxPriceAgeSecsCap,
     "Max price age"
   )
   if (priceAgeResult.error) errors.maxPriceAgeSecsCap = priceAgeResult.error
 
-  const confidenceResult = parseGuardrailValue(
+  const confidenceResult = parseAcceptedCurrencyGuardrailValue(
     formState.maxConfidenceRatioBpsCap,
     "Max confidence"
   )
   if (confidenceResult.error)
     errors.maxConfidenceRatioBpsCap = confidenceResult.error
 
-  const statusLagResult = parseGuardrailValue(
+  const statusLagResult = parseAcceptedCurrencyGuardrailValue(
     formState.maxPriceStatusLagSecsCap,
     "Max status lag"
   )
@@ -177,7 +162,7 @@ const buildCurrencyFieldWarnings = (
 ): CurrencyFieldWarnings => {
   const warnings: CurrencyFieldWarnings = {}
 
-  const priceAgeResult = parseGuardrailValue(
+  const priceAgeResult = parseAcceptedCurrencyGuardrailValue(
     formState.maxPriceAgeSecsCap,
     "Max price age"
   )
@@ -188,7 +173,7 @@ const buildCurrencyFieldWarnings = (
     warnings.maxPriceAgeSecsCap = `Will be clamped to ${MAX_PRICE_AGE_SECS_CAP.toString()} seconds.`
   }
 
-  const confidenceResult = parseGuardrailValue(
+  const confidenceResult = parseAcceptedCurrencyGuardrailValue(
     formState.maxConfidenceRatioBpsCap,
     "Max confidence"
   )
@@ -199,7 +184,7 @@ const buildCurrencyFieldWarnings = (
     warnings.maxConfidenceRatioBpsCap = `Will be clamped to ${MAX_CONFIDENCE_RATIO_BPS_CAP.toString()} bps.`
   }
 
-  const statusLagResult = parseGuardrailValue(
+  const statusLagResult = parseAcceptedCurrencyGuardrailValue(
     formState.maxPriceStatusLagSecsCap,
     "Max status lag"
   )

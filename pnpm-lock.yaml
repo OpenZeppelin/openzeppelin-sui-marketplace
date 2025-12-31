@@ -90,6 +90,9 @@ importers:
 
   packages/domain/node:
     dependencies:
+      '@mysten/sui':
+        specifier: ^1.45.2
+        version: 1.45.2(typescript@5.9.3)
       '@sui-oracle-market/domain-core':
         specifier: workspace:*
         version: link:../core

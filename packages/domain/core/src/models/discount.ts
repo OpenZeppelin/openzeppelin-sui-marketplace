@@ -12,13 +12,17 @@ import {
   normalizeOptionalIdFromValue,
   unwrapMoveObjectFields
 } from "@sui-oracle-market/tooling-core/object"
-import { formatOptionalNumericValue } from "@sui-oracle-market/tooling-core/utils/formatters"
+import {
+  formatOptionalNumericValue,
+  shortenId
+} from "@sui-oracle-market/tooling-core/utils/formatters"
 import { requireValue } from "@sui-oracle-market/tooling-core/utils/utility"
 import {
   extractFieldValueByKeys,
   normalizeBigIntFromMoveValue,
   unwrapMoveFields
 } from "@sui-oracle-market/tooling-core/utils/move-values"
+import type { ItemListingSummary } from "./item-listing.ts"
 import { parseUsdToCents } from "./shop.ts"
 
 export const DISCOUNT_TEMPLATE_TYPE_FRAGMENT = "::shop::DiscountTemplate"
@@ -28,6 +32,16 @@ export const discountRuleChoices = ["fixed", "percent"] as const
 export type DiscountRuleKindLabel = (typeof discountRuleChoices)[number]
 
 export type NormalizedRuleKind = 0 | 1
+
+export type DiscountContext =
+  | { mode: "none" }
+  | {
+      mode: "ticket"
+      discountTicketId: string
+      discountTemplateId: string
+      ticketDetails: DiscountTicketDetails
+    }
+  | { mode: "claim"; discountTemplateId: string }
 
 export const defaultStartTimestampSeconds = () => Math.floor(Date.now() / 1000)
 
@@ -253,6 +267,108 @@ export const buildDiscountTemplateLookup = (
     {}
   )
 
+export type DiscountOption = {
+  id: string
+  label: string
+  description?: string
+  status?: string
+  disabled?: boolean
+  selection: DiscountContext
+}
+
+export const pickDefaultDiscountOptionId = (options: DiscountOption[]) => {
+  const enabledOptions = options.filter((option) => !option.disabled)
+  return enabledOptions[0]?.id ?? "none"
+}
+
+export const buildDiscountOptions = ({
+  listing,
+  shopId,
+  discountTemplates,
+  discountTickets
+}: {
+  listing?: ItemListingSummary
+  shopId?: string
+  discountTemplates: DiscountTemplateSummary[]
+  discountTickets: DiscountTicketDetails[]
+}): DiscountOption[] => {
+  if (!listing || !shopId) return []
+  const templateLookup = buildDiscountTemplateLookup(discountTemplates)
+  const spotlightTemplate = listing.spotlightTemplateId
+    ? templateLookup[listing.spotlightTemplateId]
+    : undefined
+
+  const eligibleTickets = discountTickets.filter((ticket) => {
+    if (ticket.shopAddress !== shopId) return false
+    if (ticket.listingId && ticket.listingId !== listing.itemListingId)
+      return false
+
+    const template = templateLookup[ticket.discountTemplateId]
+    if (
+      template?.appliesToListingId &&
+      template.appliesToListingId !== listing.itemListingId
+    )
+      return false
+
+    return true
+  })
+
+  const ticketOptions: DiscountOption[] = eligibleTickets.map((ticket) => {
+    const template = templateLookup[ticket.discountTemplateId]
+    const status = template?.status
+    const isActive = status ? status === "active" : true
+
+    return {
+      id: `ticket:${ticket.discountTicketId}`,
+      label: template?.ruleDescription || "Discount ticket",
+      description: `Use ticket ${shortenId(ticket.discountTicketId)}${
+        ticket.listingId ? " for this listing" : ""
+      }.`,
+      status,
+      disabled: !isActive,
+      selection: {
+        mode: "ticket",
+        discountTicketId: ticket.discountTicketId,
+        discountTemplateId: ticket.discountTemplateId,
+        ticketDetails: ticket
+      }
+    }
+  })
+
+  const claimOption: DiscountOption[] =
+    spotlightTemplate &&
+    spotlightTemplate.status === "active" &&
+    !eligibleTickets.some(
+      (ticket) =>
+        ticket.discountTemplateId === spotlightTemplate.discountTemplateId
+    )
+      ? [
+          {
+            id: "claim",
+            label: spotlightTemplate.ruleDescription,
+            description:
+              "Claim a single-use ticket and redeem it in the same transaction.",
+            status: spotlightTemplate.status,
+            selection: {
+              mode: "claim",
+              discountTemplateId: spotlightTemplate.discountTemplateId
+            }
+          }
+        ]
+      : []
+
+  return [
+    {
+      id: "none",
+      label: "No discount",
+      description: "Checkout without a discount ticket.",
+      selection: { mode: "none" }
+    },
+    ...ticketOptions,
+    ...claimOption
+  ]
+}
+
 export const getDiscountTemplateSummaries = async (
   shopId: string,
   suiClient: SuiClient
@@ -438,6 +554,18 @@ export const parseDiscountTicketFromObject = (
     )
   }
 }
+
+type CreatedObjectLike = {
+  objectType?: string | null
+  objectId?: string | null
+}
+
+export const findCreatedDiscountTicketId = (
+  createdObjects: CreatedObjectLike[]
+) =>
+  createdObjects.find((object) =>
+    object.objectType?.includes(DISCOUNT_TICKET_TYPE_FRAGMENT)
+  )?.objectId
 
 /**
  * Lists DiscountTicket objects owned by an address with optional shop filtering.

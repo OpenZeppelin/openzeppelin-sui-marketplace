@@ -1,8 +1,13 @@
+import type { SuiClient } from "@mysten/sui/client"
+import { normalizeSuiObjectId } from "@mysten/sui/utils"
 import type {
   ShopIdentifierInputs,
   ShopIdentifiers
 } from "@sui-oracle-market/domain-core/models/shop"
-import { normalizeIdOrThrow } from "@sui-oracle-market/tooling-core/object"
+import {
+  deriveRelevantPackageId,
+  normalizeIdOrThrow
+} from "@sui-oracle-market/tooling-core/object"
 import {
   findLatestArtifactThat,
   getLatestDeploymentFromArtifact,
@@ -126,4 +131,72 @@ export const resolveShopPublishInputs = async ({
     shopPackageId: resolvedShopPackageId,
     publisherCapId: resolvedPublisherCapId
   }
+}
+
+export const resolveShopDependencyIds = async ({
+  networkName,
+  shopPackageId
+}: {
+  networkName: string
+  shopPackageId: string
+}): Promise<string[]> => {
+  const deploymentArtifacts = await loadDeploymentArtifacts(networkName)
+  const match = deploymentArtifacts.find(
+    (artifact) =>
+      normalizeSuiObjectId(artifact.packageId) ===
+      normalizeSuiObjectId(shopPackageId)
+  )
+
+  return (match?.dependencies ?? []).map((dependency) =>
+    normalizeSuiObjectId(dependency)
+  )
+}
+
+export const resolvePriceInfoPackageId = async ({
+  priceInfoObjectId,
+  suiClient
+}: {
+  priceInfoObjectId: string
+  suiClient: SuiClient
+}): Promise<string> => {
+  const priceInfoObject = await suiClient.getObject({
+    id: priceInfoObjectId,
+    options: { showType: true }
+  })
+
+  const objectType = priceInfoObject.data?.type
+  if (!objectType)
+    throw new Error(
+      `Pyth PriceInfoObject ${priceInfoObjectId} is missing a Move type.`
+    )
+
+  if (!objectType.includes("::price_info::PriceInfoObject"))
+    throw new Error(
+      `Object ${priceInfoObjectId} is not a Pyth PriceInfoObject (type: ${objectType}).`
+    )
+
+  return deriveRelevantPackageId(objectType)
+}
+
+export const assertPriceInfoObjectDependency = async ({
+  priceInfoObjectId,
+  dependencyIds,
+  suiClient
+}: {
+  priceInfoObjectId: string
+  dependencyIds: string[]
+  suiClient: SuiClient
+}) => {
+  if (dependencyIds.length === 0) return
+
+  const priceInfoPackageId = await resolvePriceInfoPackageId({
+    priceInfoObjectId,
+    suiClient
+  })
+
+  if (dependencyIds.includes(priceInfoPackageId)) return
+
+  throw new Error(
+    `Pyth PriceInfoObject ${priceInfoObjectId} belongs to package ${priceInfoPackageId}, which is not a dependency of the published shop package. Re-publish the Move package with the current Pyth dependency or update the Pyth config to match the on-chain package.`
+  )
 }

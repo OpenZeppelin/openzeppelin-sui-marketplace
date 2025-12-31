@@ -15,29 +15,21 @@ import { logKeyValueGreen } from "@sui-oracle-market/tooling-node/log"
 import { runSuiScript } from "@sui-oracle-market/tooling-node/process"
 import { logItemListingSummary } from "../../utils/log-summaries.ts"
 
-type UpdateStockArguments = {
-  shopPackageId?: string
-  shopId?: string
-  ownerCapId?: string
-  itemListingId: string
-  stock: string
-}
-
-type NormalizedInputs = {
-  packageId: string
-  shopId: string
-  ownerCapId: string
-  itemListingId: string
-  newStock: bigint
-}
-
 runSuiScript(
-  async (tooling, cliArguments: UpdateStockArguments) => {
+  async (
+    tooling,
+    cliArguments: {
+      shopPackageId?: string
+      shopId?: string
+      ownerCapId?: string
+      itemListingId: string
+      stock: string
+    }
+  ) => {
     const inputs = await normalizeInputs(
       cliArguments,
       tooling.network.networkName
     )
-    const suiClient = tooling.suiClient
     const shopSharedObject = await tooling.getSuiSharedObject({
       objectId: inputs.shopId,
       mutable: false
@@ -63,7 +55,7 @@ runSuiScript(
     const listingSummary = await getItemListingSummary(
       inputs.shopId,
       inputs.itemListingId,
-      suiClient
+      tooling.suiClient
     )
 
     logItemListingSummary(listingSummary)
@@ -107,9 +99,15 @@ runSuiScript(
 )
 
 const normalizeInputs = async (
-  cliArguments: UpdateStockArguments,
+  cliArguments: {
+    shopPackageId?: string
+    shopId?: string
+    ownerCapId?: string
+    itemListingId: string
+    stock: string
+  },
   networkName: string
-): Promise<NormalizedInputs> => {
+) => {
   const { packageId, shopId, ownerCapId } = await resolveLatestShopIdentifiers(
     {
       packageId: cliArguments.shopPackageId,

@@ -16,6 +16,7 @@ import {
   deriveRelevantPackageId,
   getSuiObject,
   mapOwnerToArtifact,
+  normalizeIdOrThrow,
   normalizeVersion
 } from "@sui-oracle-market/tooling-core/object"
 import { extractInitialSharedVersion } from "@sui-oracle-market/tooling-core/shared-object"
@@ -56,6 +57,30 @@ export {
   findObjectMatching,
   newTransaction
 }
+
+export const findCreatedArtifactBySuffix = (
+  createdArtifacts: ObjectArtifact[] | undefined,
+  suffix: string
+) => createdArtifacts?.find((artifact) => artifact.objectType?.endsWith(suffix))
+
+export const findCreatedArtifactIdBySuffix = (
+  createdArtifacts: ObjectArtifact[] | undefined,
+  suffix: string
+) => findCreatedArtifactBySuffix(createdArtifacts, suffix)?.objectId
+
+export const requireCreatedArtifactIdBySuffix = ({
+  createdArtifacts,
+  suffix,
+  label
+}: {
+  createdArtifacts: ObjectArtifact[] | undefined
+  suffix: string
+  label: string
+}) =>
+  normalizeIdOrThrow(
+    findCreatedArtifactIdBySuffix(createdArtifacts, suffix),
+    `Expected ${label} to be created, but it was not found in transaction artifacts.`
+  )
 
 type GasPaymentOptions = {
   transaction: Transaction
@@ -109,26 +134,25 @@ export const executeTransactionOnce = async (
   { transaction, signer, requestType, assertSuccess }: ExecuteOnceArgs,
   toolingContext: ToolingContext
 ) => {
-  const { suiClient, suiConfig } = toolingContext
-  const networkName = suiConfig.network.networkName
-  const transactionResult = await suiClient.signAndExecuteTransaction({
-    transaction,
-    signer,
-    options: {
-      showEffects: true,
-      showEvents: true,
-      showObjectChanges: true
-    },
-    requestType
-  })
+  const transactionResult =
+    await toolingContext.suiClient.signAndExecuteTransaction({
+      transaction,
+      signer,
+      options: {
+        showEffects: true,
+        showEvents: true,
+        showObjectChanges: true
+      },
+      requestType
+    })
 
   if (assertSuccess) assertTransactionSuccess(transactionResult)
 
   const objectArtifacts = await persistObjectsIfAny({
     transactionResult,
-    suiClient,
+    suiClient: toolingContext.suiClient,
     signerAddress: signer.toSuiAddress(),
-    networkName
+    networkName: toolingContext.suiConfig.network.networkName
   })
 
   return {
@@ -187,12 +211,15 @@ export const signAndExecute = async (
   transactionResult: SuiTransactionBlockResponse
   objectArtifacts: PersistedObjectArtifacts
 }> => {
-  const { suiClient } = toolingContext
   const signerAddress = signer.toSuiAddress()
   const maximumAttempts = retryOnGasStale ? 2 : 1
 
   // Pre-populate gas with the freshest coin to avoid stale object errors on the first attempt.
-  await ensureGasPayment({ transaction, signerAddress, suiClient })
+  await ensureGasPayment({
+    transaction,
+    signerAddress,
+    suiClient: toolingContext.suiClient
+  })
 
   for (let attemptIndex = 0; attemptIndex < maximumAttempts; attemptIndex++) {
     try {
@@ -218,7 +245,7 @@ export const signAndExecute = async (
       await ensureGasPayment({
         transaction,
         signerAddress,
-        suiClient,
+        suiClient: toolingContext.suiClient,
         forceUpdate: true,
         excludedObjectIds: lockedObjectIds
       })

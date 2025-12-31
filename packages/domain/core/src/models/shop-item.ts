@@ -14,6 +14,17 @@ import { formatTypeNameFromFieldValue } from "@sui-oracle-market/tooling-core/ut
 
 export const SHOP_ITEM_TYPE_FRAGMENT = "::shop::ShopItem"
 
+type CreatedObjectLike = {
+  objectType?: string | null
+  objectId?: string | null
+}
+
+export const findCreatedShopItemIds = (createdObjects: CreatedObjectLike[]) =>
+  createdObjects
+    .filter((object) => object.objectType?.includes(SHOP_ITEM_TYPE_FRAGMENT))
+    .map((object) => object.objectId)
+    .filter((objectId): objectId is string => Boolean(objectId))
+
 export type ShopItemReceiptSummary = {
   shopItemId: string
   shopAddress: string

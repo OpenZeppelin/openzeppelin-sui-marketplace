@@ -29,12 +29,6 @@ type ListPurchasesArguments = {
   shopId?: string
 }
 
-type NormalizedInputs = {
-  ownerAddress: string
-  shopPackageId: string
-  shopId?: string
-}
-
 runSuiScript(
   async (tooling, cliArguments: ListPurchasesArguments) => {
     const inputs = await resolveInputs(
@@ -42,7 +36,6 @@ runSuiScript(
       tooling.network.networkName,
       tooling.network
     )
-    const suiClient = tooling.suiClient
 
     logListContext({
       ownerAddress: inputs.ownerAddress,
@@ -56,7 +49,7 @@ runSuiScript(
       ownerAddress: inputs.ownerAddress,
       shopPackageId: inputs.shopPackageId,
       shopFilterId: inputs.shopId,
-      suiClient
+      suiClient: tooling.suiClient
     })
 
     if (shopItemReceipts.length === 0)
@@ -64,7 +57,7 @@ runSuiScript(
 
     const listingDetails = await getListingDetailsForReceipts(
       shopItemReceipts,
-      suiClient
+      tooling.suiClient
     )
 
     shopItemReceipts.forEach((shopItem, index) =>
@@ -100,7 +93,7 @@ const resolveInputs = async (
   cliArguments: ListPurchasesArguments,
   networkName: string,
   networkConfig: SuiNetworkConfig
-): Promise<NormalizedInputs> => {
+) => {
   const shopArtifact =
     await getLatestObjectFromArtifact("shop::Shop")(networkName)
 

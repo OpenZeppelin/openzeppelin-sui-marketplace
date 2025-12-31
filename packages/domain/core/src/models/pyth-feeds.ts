@@ -4,6 +4,8 @@ import {
   SuiPriceServiceConnection,
   SuiPythClient
 } from "@pythnetwork/pyth-sui-js"
+import type { CurrencyRegistryEntry } from "@sui-oracle-market/tooling-core/coin-registry"
+import { extractStructNameFromType } from "@sui-oracle-market/tooling-core/utils/type-name"
 
 export type HermesFeedMetadata = {
   id?: string
@@ -137,6 +139,12 @@ export type PythFeedResolution = {
   selected?: PythFeedSummary
 }
 
+export type PythFeedFilters = {
+  baseSymbol?: string
+  quoteSymbol?: string
+  coinSymbol?: string
+}
+
 const normalizeSymbolPair = (
   baseSymbol?: string,
   quoteSymbol?: string
@@ -235,7 +243,7 @@ export const resolvePythFeedResolution = async ({
   quoteSymbol
 }: {
   hermesUrl: string
-  baseSymbol: string
+  baseSymbol?: string
   quoteSymbol: string
 }): Promise<PythFeedResolution> => {
   const symbolPair = normalizeSymbolPair(baseSymbol, quoteSymbol)
@@ -259,6 +267,155 @@ export const resolvePythFeedResolution = async ({
     })
   }
 }
+
+export const resolveHermesQuery = (query?: string) =>
+  query && query.includes("::") ? undefined : query
+
+const filterFeedSummariesByQuoteSymbol = ({
+  feedSummaries,
+  quoteSymbol
+}: {
+  feedSummaries: PythFeedSummary[]
+  quoteSymbol?: string
+}) => {
+  const normalizedQuote = normalizeSymbol(quoteSymbol)
+  if (!normalizedQuote) return feedSummaries
+
+  return feedSummaries.filter(
+    (summary) => normalizeSymbol(summary.quoteSymbol) === normalizedQuote
+  )
+}
+
+const filterFeedSummariesByBaseSymbol = ({
+  feedSummaries,
+  baseSymbol
+}: {
+  feedSummaries: PythFeedSummary[]
+  baseSymbol?: string
+}) => {
+  const normalizedBase = normalizeSymbol(baseSymbol)
+  if (!normalizedBase) return feedSummaries
+
+  return feedSummaries.filter(
+    (summary) => normalizeSymbol(summary.baseSymbol) === normalizedBase
+  )
+}
+
+const filterFeedSummariesByCoinSymbol = ({
+  feedSummaries,
+  coinSymbol
+}: {
+  feedSummaries: PythFeedSummary[]
+  coinSymbol?: string
+}) => {
+  const normalizedCoin = normalizeSymbol(coinSymbol)
+  if (!normalizedCoin) return feedSummaries
+
+  return feedSummaries.filter((summary) => {
+    const baseSymbol = normalizeSymbol(summary.baseSymbol)
+    const quoteSymbol = normalizeSymbol(summary.quoteSymbol)
+    return baseSymbol === normalizedCoin || quoteSymbol === normalizedCoin
+  })
+}
+
+export const filterPythFeedSummaries = ({
+  feedSummaries,
+  filters
+}: {
+  feedSummaries: PythFeedSummary[]
+  filters?: PythFeedFilters
+}) =>
+  filterFeedSummariesByQuoteSymbol({
+    feedSummaries: filterFeedSummariesByBaseSymbol({
+      feedSummaries: filterFeedSummariesByCoinSymbol({
+        feedSummaries,
+        coinSymbol: filters?.coinSymbol
+      }),
+      baseSymbol: filters?.baseSymbol
+    }),
+    quoteSymbol: filters?.quoteSymbol
+  })
+
+export const resolveQuerySymbolFilters = ({
+  query,
+  registryEntries
+}: {
+  query?: string
+  registryEntries: CurrencyRegistryEntry[]
+}): PythFeedFilters => {
+  if (!query || !query.includes("::")) return {}
+
+  const parts = query
+    .split("/")
+    .map((part) => part.trim())
+    .filter(Boolean)
+  if (parts.length === 0) return {}
+
+  const resolvedSymbols = parts.map((part) =>
+    resolveCoinFilterSymbol({ coinInput: part, registryEntries })
+  )
+  if (resolvedSymbols.length === 1) return { coinSymbol: resolvedSymbols[0] }
+
+  return {
+    baseSymbol: resolvedSymbols[0],
+    quoteSymbol: resolvedSymbols[1]
+  }
+}
+
+export const resolveCoinFilterSymbol = ({
+  coinInput,
+  registryEntries
+}: {
+  coinInput?: string
+  registryEntries: CurrencyRegistryEntry[]
+}): string | undefined => {
+  const normalizedInput = normalizeCoinInput(coinInput)
+  if (!normalizedInput) return undefined
+
+  const coinTypeCandidate = extractCoinTypeCandidate(normalizedInput)
+  if (coinTypeCandidate) {
+    const registryMatch = findRegistryEntryByCoinType(
+      coinTypeCandidate,
+      registryEntries
+    )
+    return registryMatch?.symbol ?? extractStructNameFromType(coinTypeCandidate)
+  }
+
+  const registrySymbolMatch = findRegistryEntryBySymbol(
+    normalizedInput,
+    registryEntries
+  )
+  return registrySymbolMatch?.symbol ?? normalizedInput
+}
+
+const normalizeCoinInput = (value?: string) => value?.trim() || undefined
+
+const extractCoinTypeCandidate = (input: string) => {
+  if (!input.includes("::")) return undefined
+
+  const parts = input.split(/\s+/)
+  for (let index = parts.length - 1; index >= 0; index -= 1) {
+    if (parts[index].includes("::")) return parts[index]
+  }
+
+  return undefined
+}
+
+const findRegistryEntryByCoinType = (
+  coinType: string,
+  registryEntries: CurrencyRegistryEntry[]
+) =>
+  registryEntries.find(
+    (entry) => entry.coinType.trim().toLowerCase() === coinType.toLowerCase()
+  )
+
+const findRegistryEntryBySymbol = (
+  symbol: string,
+  registryEntries: CurrencyRegistryEntry[]
+) =>
+  registryEntries.find(
+    (entry) => normalizeSymbol(entry.symbol) === normalizeSymbol(symbol)
+  )
 
 const buildHermesRequestOptions = ({
   query,

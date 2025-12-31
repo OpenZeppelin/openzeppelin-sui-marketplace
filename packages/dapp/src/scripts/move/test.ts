@@ -25,10 +25,6 @@ import {
 } from "@sui-oracle-market/tooling-node/move"
 import { runSuiScript } from "@sui-oracle-market/tooling-node/process"
 
-type MoveTestScriptArguments = {
-  packagePath: string
-}
-
 type ResolvedMoveTestOptions = MoveTestFlagOptions
 type LocalnetTestPublishOptions = Required<
   Pick<MoveTestPublishOptions, "buildEnvironmentName" | "publicationFilePath">
@@ -133,14 +129,13 @@ const logLocalnetTestPublishPlan = (
   console.log("")
 }
 
-type MoveTestTooling = Pick<Tooling, "suiClient" | "suiConfig">
-
-const syncMoveEnvironmentForTests = async (tooling: MoveTestTooling) => {
-  const { network, paths } = tooling.suiConfig
+const syncMoveEnvironmentForTests = async (
+  tooling: Pick<Tooling, "suiClient" | "suiConfig">
+) => {
   const { chainId, updatedFiles, didAttempt } =
     await syncLocalnetMoveEnvironmentChainId({
-      moveRootPath: path.resolve(paths.move),
-      environmentName: network.networkName,
+      moveRootPath: path.resolve(tooling.suiConfig.paths.move),
+      environmentName: tooling.suiConfig.network.networkName,
       suiClient: tooling.suiClient
     })
 
@@ -196,16 +191,17 @@ const runMoveTestsForPackage = async (
 }
 
 runSuiScript(
-  async (tooling, cliArguments: MoveTestScriptArguments) => {
-    const { network, paths } = tooling.suiConfig
+  async (tooling, cliArguments: { packagePath: string }) => {
     await syncMoveEnvironmentForTests(tooling)
     const fullPackagePath = resolveFullPackagePath(
-      path.resolve(paths.move),
+      path.resolve(tooling.suiConfig.paths.move),
       cliArguments.packagePath
     )
-    const resolvedOptions = deriveMoveTestOptions(network.networkName)
+    const resolvedOptions = deriveMoveTestOptions(
+      tooling.suiConfig.network.networkName
+    )
 
-    if (isLocalnetNetwork(network.networkName)) {
+    if (isLocalnetNetwork(tooling.suiConfig.network.networkName)) {
       const localnetTestPublishOptions =
         await deriveLocalnetTestPublishOptions(fullPackagePath)
 

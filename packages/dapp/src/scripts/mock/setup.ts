@@ -8,21 +8,20 @@ import path from "node:path"
 
 import type { SuiClient, SuiTransactionBlockResponse } from "@mysten/sui/client"
 import type { Ed25519Keypair } from "@mysten/sui/keypairs/ed25519"
-import {
-  deriveObjectID,
-  normalizeSuiAddress,
-  normalizeSuiObjectId
-} from "@mysten/sui/utils"
+import { normalizeSuiAddress, normalizeSuiObjectId } from "@mysten/sui/utils"
 import yargs from "yargs"
 
+import { ensureSignerOwnsCoin } from "@sui-oracle-market/domain-core/models/currency"
 import {
+  DEFAULT_MOCK_PRICE_FEEDS,
   getPythPriceInfoType,
+  isMatchingMockPriceFeedConfig,
   publishMockPriceFeed,
   SUI_CLOCK_ID,
-  type MockPriceFeedConfig
+  type LabeledMockPriceFeedConfig
 } from "@sui-oracle-market/domain-core/models/pyth"
 import { buildCoinTransferTransaction } from "@sui-oracle-market/tooling-core/coin"
-import { normalizeHex } from "@sui-oracle-market/tooling-core/hex"
+import { deriveCurrencyObjectId } from "@sui-oracle-market/tooling-core/coin-registry"
 import { assertLocalnetNetwork } from "@sui-oracle-market/tooling-core/network"
 import { objectTypeMatches } from "@sui-oracle-market/tooling-core/object"
 import type { WrappedSuiSharedObject } from "@sui-oracle-market/tooling-core/shared-object"
@@ -45,8 +44,6 @@ import {
 } from "@sui-oracle-market/tooling-node/transactions"
 import type { MockArtifact } from "../../utils/mocks.ts"
 import { mockArtifactPath, writeMockArtifact } from "../../utils/mocks.ts"
-import { ensureSignerOwnsCoin } from "@sui-oracle-market/domain-core/models/currency"
-import { resolveCoinOwnershipSnapshot } from "@sui-oracle-market/domain-node/coin"
 
 type SetupLocalCliArgs = {
   buyerAddress: string
@@ -77,7 +74,7 @@ const DEFAULT_ITEM_EXAMPLES_CONTRACT_PATH = path.join(
   "item-examples"
 )
 
-type LabeledPriceFeedConfig = MockPriceFeedConfig & { label: string }
+type LabeledPriceFeedConfig = LabeledMockPriceFeedConfig
 type CoinArtifact = NonNullable<MockArtifact["coins"]>[number]
 type ItemTypeArtifact = NonNullable<MockArtifact["itemTypes"]>[number]
 type PriceFeedArtifact = NonNullable<MockArtifact["priceFeeds"]>[number]
@@ -101,24 +98,7 @@ type CoinSeed = {
 }
 
 // Two sample feeds to seed Pyth price objects with.
-const DEFAULT_FEEDS: LabeledPriceFeedConfig[] = [
-  {
-    label: "MOCK_USD_FEED",
-    feedIdHex:
-      "0x000102030405060708090a0b0c0d0e0f000102030405060708090a0b0c0d0e0f",
-    price: 1_000n,
-    confidence: 10n,
-    exponent: -2
-  },
-  {
-    label: "MOCK_BTC_FEED",
-    feedIdHex:
-      "0x101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f",
-    price: 25_000n,
-    confidence: 50n,
-    exponent: -2
-  }
-]
+const DEFAULT_FEEDS: LabeledPriceFeedConfig[] = DEFAULT_MOCK_PRICE_FEEDS
 
 const normalizeSetupInputs = (
   cliArguments: SetupLocalCliArgs
@@ -169,13 +149,10 @@ runSuiScript(
     const existingState = await extendCliArguments(inputs)
 
     // Load signer (env/keystore) and derive address; Sui requires explicit key material for PTBs.
-    const keypair = tooling.loadedEd25519KeyPair
-    const signerAddress = keypair.toSuiAddress()
-
     // Ensure the account has gas coins (auto-faucet on localnet) to avoid funding errors downstream.
     await tooling.ensureFoundedAddress({
-      signerAddress,
-      signer: keypair
+      signerAddress: tooling.loadedEd25519KeyPair.toSuiAddress(),
+      signer: tooling.loadedEd25519KeyPair
     })
 
     // Publish or reuse mock Pyth + mock coin packages; record package IDs for later steps.
@@ -201,8 +178,8 @@ runSuiScript(
       (await ensureMockCoins(
         {
           coinPackageId,
-          owner: signerAddress,
-          signer: keypair,
+          owner: tooling.loadedEd25519KeyPair.toSuiAddress(),
+          signer: tooling.loadedEd25519KeyPair,
           coinRegistryObject
         },
         tooling
@@ -223,8 +200,8 @@ runSuiScript(
       {
         coins: createdCoins,
         buyerAddress: inputs.buyerAddress,
-        signer: keypair,
-        signerAddress
+        signer: tooling.loadedEd25519KeyPair,
+        signerAddress: tooling.loadedEd25519KeyPair.toSuiAddress()
       },
       tooling
     )
@@ -235,7 +212,7 @@ runSuiScript(
       (await ensurePriceFeeds(
         {
           pythPackageId,
-          signer: keypair,
+          signer: tooling.loadedEd25519KeyPair,
           clockObject,
           existingPriceFeeds: existingState.existingPriceFeeds || []
         },
@@ -435,12 +412,14 @@ const ensureCoin = async (
   },
   tooling: Tooling
 ): Promise<SeededCoin> => {
-  const { suiClient } = tooling
-  const currencyObjectId = deriveCurrencyId(seed.coinType)
+  const currencyObjectId = deriveCurrencyObjectId(
+    seed.coinType,
+    SUI_COIN_REGISTRY_ID
+  )
 
   // Read any existing coin metadata/currency object and any minted coin for the owner.
   const [metadata, currencyObject, mintedCoinObjectId] = await Promise.all([
-    suiClient.getCoinMetadata({ coinType: seed.coinType }),
+    tooling.suiClient.getCoinMetadata({ coinType: seed.coinType }),
     tooling.getObjectSafe({
       objectId: currencyObjectId,
       options: {
@@ -448,7 +427,11 @@ const ensureCoin = async (
         showBcs: true
       }
     }),
-    findOwnedCoinObjectId({ suiClient, owner, coinType: seed.coinType })
+    findOwnedCoinObjectId({
+      suiClient: tooling.suiClient,
+      owner,
+      coinType: seed.coinType
+    })
   ])
   const coinTypeSuffix = `<${seed.coinType}>`
   const currencyType = `0x2::coin_registry::Currency${coinTypeSuffix}`
@@ -526,7 +509,7 @@ const transferHalfTreasuryToBuyer = async (
     signer: Ed25519Keypair
     signerAddress: string
   },
-  tooling: Pick<Tooling, "suiClient" | "getSuiObject" | "signAndExecute">
+  tooling: Tooling
 ) => {
   if (coins.length === 0) return
 
@@ -555,7 +538,7 @@ const transferHalfTreasuryForCoin = async (
     signer: Ed25519Keypair
     signerAddress: string
   },
-  tooling: Pick<Tooling, "suiClient" | "getSuiObject" | "signAndExecute">
+  tooling: Tooling
 ) => {
   const treasurySnapshot = await resolveTreasuryCoinSnapshot({
     coinType: coin.coinType,
@@ -579,9 +562,8 @@ const transferHalfTreasuryForCoin = async (
     return
   }
 
-  const coinSnapshot = await resolveCoinOwnershipSnapshot({
-    coinObjectId: treasurySnapshot.coinObjectId,
-    getSuiObject: tooling.getSuiObject
+  const coinSnapshot = await tooling.resolveCoinOwnership({
+    coinObjectId: treasurySnapshot.coinObjectId
   })
 
   ensureSignerOwnsCoin({
@@ -778,21 +760,12 @@ const buildItemTypeArtifacts = (itemPackageId: string): ItemTypeArtifact[] => {
   ]
 }
 
-const deriveCurrencyId = (coinType: string) =>
-  deriveObjectID(
-    SUI_COIN_REGISTRY_ID,
-    `0x2::coin_registry::CurrencyKey<${coinType}>`,
-    new Uint8Array()
-  )
-
 const findMatchingFeed = (
   existingPriceFeeds: PriceFeedArtifact[],
   feedConfig: LabeledPriceFeedConfig
 ) =>
-  existingPriceFeeds.find(
-    (feed) =>
-      normalizeHex(feed.feedIdHex) === normalizeHex(feedConfig.feedIdHex) ||
-      feed.label === feedConfig.label
+  existingPriceFeeds.find((feed) =>
+    isMatchingMockPriceFeedConfig(feedConfig, feed)
   )
 
 const resolveTreasuryCoinSnapshot = async ({

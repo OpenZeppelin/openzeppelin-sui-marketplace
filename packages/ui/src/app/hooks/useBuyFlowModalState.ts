@@ -15,13 +15,18 @@ import {
   buildBuyTransaction,
   estimateRequiredAmount,
   resolveDiscountedPriceUsdCents,
-  resolvePaymentCoinObjectId,
-  type DiscountContext
+  resolvePaymentCoinObjectId
 } from "@sui-oracle-market/domain-core/flows/buy"
 import type { AcceptedCurrencySummary } from "@sui-oracle-market/domain-core/models/currency"
 import type {
+  DiscountContext,
+  DiscountOption,
   DiscountTemplateSummary,
   DiscountTicketDetails
+} from "@sui-oracle-market/domain-core/models/discount"
+import {
+  buildDiscountOptions,
+  pickDefaultDiscountOptionId
 } from "@sui-oracle-market/domain-core/models/discount"
 import type { ItemListingSummary } from "@sui-oracle-market/domain-core/models/item-listing"
 import type { PriceUpdatePolicy } from "@sui-oracle-market/domain-core/models/pyth"
@@ -36,7 +41,7 @@ import { useCallback, useEffect, useMemo, useState } from "react"
 import { EXPLORER_URL_VARIABLE_NAME } from "../config/network"
 import { parseBalance } from "../helpers/balance"
 import { buildDiscountTemplateLookup } from "../helpers/discountTemplates"
-import { formatCoinBalance, getStructLabel, shortenId } from "../helpers/format"
+import { formatCoinBalance, getStructLabel } from "../helpers/format"
 import {
   getLocalnetClient,
   makeLocalnetExecutor,
@@ -54,15 +59,6 @@ import { useIdleFieldValidation } from "./useIdleFieldValidation"
 
 type CurrencyBalance = AcceptedCurrencySummary & {
   balance: bigint
-}
-
-type DiscountOption = {
-  id: string
-  label: string
-  description?: string
-  status?: string
-  disabled?: boolean
-  selection: DiscountContext
 }
 
 type BuyFieldErrors = {
@@ -117,99 +113,6 @@ type BalanceStatus =
   | { status: "loading" }
   | { status: "success" }
   | { status: "error"; error: string }
-
-const pickDefaultDiscountOptionId = (options: DiscountOption[]) => {
-  const enabledOptions = options.filter((option) => !option.disabled)
-  return enabledOptions[0]?.id ?? "none"
-}
-
-const buildDiscountOptions = ({
-  listing,
-  shopId,
-  discountTemplates,
-  discountTickets
-}: {
-  listing?: ItemListingSummary
-  shopId?: string
-  discountTemplates: DiscountTemplateSummary[]
-  discountTickets: DiscountTicketDetails[]
-}): DiscountOption[] => {
-  if (!listing || !shopId) return []
-  const templateLookup = buildDiscountTemplateLookup(discountTemplates)
-  const spotlightTemplate = listing.spotlightTemplateId
-    ? templateLookup[listing.spotlightTemplateId]
-    : undefined
-
-  const eligibleTickets = discountTickets.filter((ticket) => {
-    if (ticket.shopAddress !== shopId) return false
-    if (ticket.listingId && ticket.listingId !== listing.itemListingId)
-      return false
-
-    const template = templateLookup[ticket.discountTemplateId]
-    if (
-      template?.appliesToListingId &&
-      template.appliesToListingId !== listing.itemListingId
-    )
-      return false
-
-    return true
-  })
-
-  const ticketOptions: DiscountOption[] = eligibleTickets.map((ticket) => {
-    const template = templateLookup[ticket.discountTemplateId]
-    const status = template?.status
-    const isActive = status ? status === "active" : true
-
-    return {
-      id: `ticket:${ticket.discountTicketId}`,
-      label: template?.ruleDescription || "Discount ticket",
-      description: `Use ticket ${shortenId(ticket.discountTicketId)}${
-        ticket.listingId ? " for this listing" : ""
-      }.`,
-      status,
-      disabled: !isActive,
-      selection: {
-        mode: "ticket",
-        discountTicketId: ticket.discountTicketId,
-        discountTemplateId: ticket.discountTemplateId,
-        ticketDetails: ticket
-      }
-    }
-  })
-
-  const claimOption: DiscountOption[] =
-    spotlightTemplate &&
-    spotlightTemplate.status === "active" &&
-    !eligibleTickets.some(
-      (ticket) =>
-        ticket.discountTemplateId === spotlightTemplate.discountTemplateId
-    )
-      ? [
-          {
-            id: "claim",
-            label: spotlightTemplate.ruleDescription,
-            description:
-              "Claim a single-use ticket and redeem it in the same transaction.",
-            status: spotlightTemplate.status,
-            selection: {
-              mode: "claim",
-              discountTemplateId: spotlightTemplate.discountTemplateId
-            }
-          }
-        ]
-      : []
-
-  return [
-    {
-      id: "none",
-      label: "No discount",
-      description: "Checkout without a discount ticket.",
-      selection: { mode: "none" }
-    },
-    ...ticketOptions,
-    ...claimOption
-  ]
-}
 
 type BuyFlowModalState = {
   explorerUrl?: string

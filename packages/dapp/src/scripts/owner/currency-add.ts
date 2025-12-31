@@ -16,7 +16,6 @@ import {
   type AcceptedCurrencyMatch
 } from "@sui-oracle-market/domain-core/models/currency"
 import { buildAddAcceptedCurrencyTransaction } from "@sui-oracle-market/domain-core/ptb/currency"
-import { resolveCurrencyObjectId } from "@sui-oracle-market/tooling-core/coin-registry"
 import {
   assertBytesLength,
   hexToBytes
@@ -24,49 +23,23 @@ import {
 import type { ObjectArtifact } from "@sui-oracle-market/tooling-core/object"
 import { parseOptionalPositiveU64 } from "@sui-oracle-market/tooling-core/utils/utility"
 import { SUI_COIN_REGISTRY_ID } from "@sui-oracle-market/tooling-node/constants"
+import type { Tooling } from "@sui-oracle-market/tooling-node/factory"
 import { logKeyValueGreen } from "@sui-oracle-market/tooling-node/log"
 import { runSuiScript } from "@sui-oracle-market/tooling-node/process"
 import { logAcceptedCurrencySummary } from "../../utils/log-summaries.ts"
 import { resolveLatestShopIdentifiers } from "@sui-oracle-market/domain-node/shop"
 
-type AddCurrencyArguments = {
-  shopPackageId?: string
-  shopId?: string
-  ownerCapId?: string
-  coinType: string
-  feedId: string
-  priceInfoObjectId: string
-  currencyId?: string
-  maxPriceAgeSecsCap?: string
-  maxConfidenceRatioBpsCap?: string
-  maxPriceStatusLagSecsCap?: string
-}
-
-type NormalizedInputs = {
-  packageId: string
-  shopId: string
-  ownerCapId: string
-  coinType: string
-  currencyId: string
-  feedIdBytes: number[]
-  priceInfoObjectId: string
-  maxPriceAgeSecsCap?: bigint
-  maxConfidenceRatioBpsCap?: bigint
-  maxPriceStatusLagSecsCap?: bigint
-}
-
 runSuiScript(
   async (tooling, cliArguments) => {
-    const suiClient = tooling.suiClient
     const inputs = await normalizeInputs(
       cliArguments,
       tooling.network.networkName,
-      suiClient
+      tooling
     )
     const existingAcceptedCurrency = await findAcceptedCurrencyByCoinType({
       coinType: inputs.coinType,
       shopId: inputs.shopId,
-      suiClient
+      suiClient: tooling.suiClient
     })
     if (existingAcceptedCurrency) {
       logExistingAcceptedCurrency({
@@ -116,13 +89,13 @@ runSuiScript(
       (await requireAcceptedCurrencyId({
         shopId: inputs.shopId,
         coinType: inputs.coinType,
-        suiClient
+        suiClient: tooling.suiClient
       }))
 
     const acceptedCurrencySummary = await getAcceptedCurrencySummary(
       inputs.shopId,
       acceptedCurrencyId,
-      suiClient
+      tooling.suiClient
     )
 
     logAcceptedCurrencySummary(acceptedCurrencySummary)
@@ -201,10 +174,21 @@ runSuiScript(
 )
 
 const normalizeInputs = async (
-  cliArguments: AddCurrencyArguments,
+  cliArguments: {
+    shopPackageId?: string
+    shopId?: string
+    ownerCapId?: string
+    coinType: string
+    feedId: string
+    priceInfoObjectId: string
+    currencyId?: string
+    maxPriceAgeSecsCap?: string
+    maxConfidenceRatioBpsCap?: string
+    maxPriceStatusLagSecsCap?: string
+  },
   networkName: string,
-  suiClient: SuiClient
-): Promise<NormalizedInputs> => {
+  tooling: Pick<Tooling, "resolveCurrencyObjectId">
+) => {
   const { packageId, shopId, ownerCapId } = await resolveLatestShopIdentifiers(
     {
       packageId: cliArguments.shopPackageId,
@@ -220,14 +204,11 @@ const normalizeInputs = async (
   const priceInfoObjectId = normalizeSuiObjectId(cliArguments.priceInfoObjectId)
   const currencyId =
     cliArguments.currencyId ||
-    (await resolveCurrencyObjectId(
-      {
-        coinType,
-        registryId: SUI_COIN_REGISTRY_ID,
-        fallbackRegistryScan: true
-      },
-      { suiClient }
-    ))
+    (await tooling.resolveCurrencyObjectId({
+      coinType,
+      registryId: SUI_COIN_REGISTRY_ID,
+      fallbackRegistryScan: true
+    }))
 
   if (!currencyId)
     throw new Error(

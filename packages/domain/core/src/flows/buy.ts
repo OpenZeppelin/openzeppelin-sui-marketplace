@@ -25,22 +25,12 @@ import {
 import { requireValue } from "@sui-oracle-market/tooling-core/utils/utility"
 import { normalizeCoinType } from "../models/currency.ts"
 import type {
-  DiscountTemplateSummary,
-  DiscountTicketDetails
+  DiscountContext,
+  DiscountTemplateSummary
 } from "../models/discount.ts"
 import { parseDiscountTicketFromObject } from "../models/discount.ts"
 import type { PriceUpdatePolicy, PythPullOracleConfig } from "../models/pyth.ts"
 import { resolvePythPullOracleConfig } from "../models/pyth.ts"
-
-export type DiscountContext =
-  | { mode: "none" }
-  | {
-      mode: "ticket"
-      discountTicketId: string
-      discountTemplateId: string
-      ticketDetails: DiscountTicketDetails
-    }
-  | { mode: "claim"; discountTemplateId: string }
 
 const isSuiCoinType = (coinType: string) =>
   normalizeCoinType(coinType) === "0x2::sui::SUI"

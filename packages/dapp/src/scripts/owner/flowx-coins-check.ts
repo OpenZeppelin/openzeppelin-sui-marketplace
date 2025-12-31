@@ -6,7 +6,6 @@
  * This is useful when you want "easy to get" testnet coins (via FlowX) that are also
  * compatible with scripts that require coin-registry + Pyth config.
  */
-import type { SuiClient, SuiObjectResponse } from "@mysten/sui/client"
 import { normalizeSuiObjectId } from "@mysten/sui/utils"
 import yargs from "yargs"
 
@@ -17,10 +16,11 @@ import {
 import {
   createPythClient,
   listPythFeedSummaries,
+  normalizeSymbol,
   resolvePythPriceInfoObjectId,
   type PythFeedSummary
 } from "@sui-oracle-market/domain-core/models/pyth-feeds"
-import { getAllDynamicFields } from "@sui-oracle-market/tooling-core/dynamic-fields"
+import type { CurrencyRegistryEntry } from "@sui-oracle-market/tooling-core/coin-registry"
 import {
   formatTypeName,
   parseTypeNameFromString
@@ -45,11 +45,6 @@ type FlowxCoin = {
   decimals?: number
   isVerified?: boolean
   iconUrl?: string
-}
-
-type CurrencyRegistryEntry = {
-  currencyId: string
-  coinType: string
 }
 
 type PythCoinMatch = {
@@ -88,8 +83,6 @@ const DEFAULT_FLOWX_TESTNET_COINS_URL =
 
 runSuiScript(
   async (tooling, cliArguments: FlowxCoinsCheckArguments) => {
-    const { suiClient, network } = tooling
-
     const flowxCoinsUrl =
       cliArguments.flowxCoinsUrl ?? DEFAULT_FLOWX_TESTNET_COINS_URL
 
@@ -100,7 +93,7 @@ runSuiScript(
     const quoteSymbol = normalizeSymbol(cliArguments.quote ?? "USD")
 
     const pythPullConfig = resolvePythPullConfigOrThrow(
-      network.networkName,
+      tooling.network.networkName,
       cliArguments
     )
 
@@ -127,9 +120,8 @@ runSuiScript(
     )
 
     // 1) Load coin registry entries so we can check membership by coin type.
-    const registryEntries = await listCurrencyRegistryEntries({
-      registryId,
-      suiClient
+    const registryEntries = await tooling.listCurrencyRegistryEntries({
+      registryId
     })
 
     const registryByCoinType = new Map<string, CurrencyRegistryEntry>()
@@ -141,7 +133,7 @@ runSuiScript(
 
     // 2) Load Pyth feeds and keep only those relevant to FlowX coins.
     const pythClient = createPythClient({
-      suiClient,
+      suiClient: tooling.suiClient,
       pythStateId: pythPullConfig.pythStateId,
       wormholeStateId: pythPullConfig.wormholeStateId
     })
@@ -203,7 +195,7 @@ runSuiScript(
       console.log(
         JSON.stringify(
           {
-            network: network.networkName,
+            network: tooling.network.networkName,
             flowxCoinsUrl,
             registryId,
             quote: quoteSymbol ?? "USD",
@@ -224,7 +216,7 @@ runSuiScript(
       return
     }
 
-    console.log(`Network: ${network.networkName}`)
+    console.log(`Network: ${tooling.network.networkName}`)
     console.log(`FlowX coins url: ${flowxCoinsUrl}`)
     console.log(`Registry id: ${registryId}`)
     console.log(`Quote symbol: ${quoteSymbol ?? "USD"}`)
@@ -306,12 +298,6 @@ const resolvePythPullConfigOrThrow = (
     })
   )
 
-const normalizeSymbol = (symbol?: string) => {
-  const trimmed = symbol?.trim()
-  if (!trimmed) return undefined
-  return trimmed.toLowerCase()
-}
-
 const unique = <T>(values: T[]) => Array.from(new Set(values))
 
 const normalizeCoinTypeOrUndefined = (coinType: string) => {
@@ -371,104 +357,6 @@ const parseFlowxCoin = (value: unknown): FlowxCoin | undefined => {
       typeof record.isVerified === "boolean" ? record.isVerified : undefined,
     iconUrl: typeof record.iconUrl === "string" ? record.iconUrl : undefined
   }
-}
-
-type DynamicFieldName = {
-  value?: {
-    pos0?: string
-  }
-}
-
-const listCurrencyRegistryEntries = async ({
-  registryId,
-  suiClient
-}: {
-  registryId: string
-  suiClient: SuiClient
-}): Promise<CurrencyRegistryEntry[]> => {
-  const currencyIds = await listCurrencyIds({ registryId, suiClient })
-  const currencyObjects = await fetchObjectTypesInChunks({
-    ids: currencyIds,
-    chunkSize: 50,
-    suiClient
-  })
-
-  const entries: CurrencyRegistryEntry[] = []
-  currencyObjects.forEach((object) => {
-    const data = object.data
-    if (!data?.type || !data.objectId) return
-
-    const match = data.type.match(/^0x2::coin_registry::Currency<(.+)>$/)
-    if (!match) return
-
-    entries.push({
-      currencyId: normalizeSuiObjectId(data.objectId),
-      coinType: match[1]
-    })
-  })
-
-  return entries
-}
-
-const listCurrencyIds = async ({
-  registryId,
-  suiClient
-}: {
-  registryId: string
-  suiClient: SuiClient
-}): Promise<string[]> => {
-  const dynamicFields = await getAllDynamicFields(
-    {
-      parentObjectId: registryId,
-      objectTypeFilter: "derived_object::ClaimedStatus"
-    },
-    { suiClient }
-  )
-
-  return dynamicFields
-    .map((field) => extractClaimedObjectId(field.name as DynamicFieldName))
-    .filter((value): value is string => Boolean(value))
-}
-
-const extractClaimedObjectId = (fieldName: DynamicFieldName) => {
-  const candidate = fieldName.value?.pos0
-  if (!candidate) return undefined
-  try {
-    return normalizeSuiObjectId(candidate)
-  } catch {
-    return undefined
-  }
-}
-
-const fetchObjectTypesInChunks = async ({
-  ids,
-  chunkSize,
-  suiClient
-}: {
-  ids: string[]
-  chunkSize: number
-  suiClient: SuiClient
-}): Promise<SuiObjectResponse[]> => {
-  const chunks = splitIntoChunks(ids, chunkSize)
-  const results: SuiObjectResponse[] = []
-
-  for (const chunk of chunks) {
-    const chunkResult = await suiClient.multiGetObjects({
-      ids: chunk,
-      options: { showType: true }
-    })
-    results.push(...chunkResult)
-  }
-
-  return results
-}
-
-const splitIntoChunks = <T>(items: T[], chunkSize: number) => {
-  const chunks: T[][] = []
-  for (let index = 0; index < items.length; index += chunkSize) {
-    chunks.push(items.slice(index, index + chunkSize))
-  }
-  return chunks
 }
 
 const buildPythMatchesBySymbol = async ({

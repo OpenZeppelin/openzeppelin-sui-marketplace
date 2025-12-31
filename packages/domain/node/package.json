@@ -7,6 +7,7 @@
     "./*": "./src/*.ts"
   },
   "dependencies": {
+    "@mysten/sui": "^1.45.2",
     "@sui-oracle-market/domain-core": "workspace:*",
     "@sui-oracle-market/tooling-core": "workspace:*",
     "@sui-oracle-market/tooling-node": "workspace:*"

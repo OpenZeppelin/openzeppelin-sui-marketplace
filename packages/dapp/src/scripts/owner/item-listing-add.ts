@@ -21,25 +21,12 @@ import { runSuiScript } from "@sui-oracle-market/tooling-node/process"
 import { ensureCreatedObject } from "@sui-oracle-market/tooling-node/transactions"
 import { logItemListingSummary } from "../../utils/log-summaries.ts"
 
-type AddItemArguments = {
-  shopPackageId?: string
-  shopId?: string
-  ownerCapId?: string
-  name: string
-  price: string
-  stock: string
-  itemType: string
-  spotlightDiscountId?: string
-  publisherId?: string
-}
-
 runSuiScript(
   async (tooling, cliArguments) => {
     const inputs = await normalizeInputs(
       cliArguments,
       tooling.network.networkName
     )
-    const suiClient = tooling.suiClient
 
     const shopSharedObject = await tooling.getSuiSharedObject({
       objectId: inputs.shopId,
@@ -74,7 +61,7 @@ runSuiScript(
     const listingSummary = await getItemListingSummary(
       inputs.shopId,
       listingId,
-      suiClient
+      tooling.suiClient
     )
 
     logItemListingSummary(listingSummary)
@@ -141,7 +128,17 @@ runSuiScript(
 )
 
 const normalizeInputs = async (
-  cliArguments: AddItemArguments,
+  cliArguments: {
+    shopPackageId?: string
+    shopId?: string
+    ownerCapId?: string
+    name: string
+    price: string
+    stock: string
+    itemType: string
+    spotlightDiscountId?: string
+    publisherId?: string
+  },
   networkName: string
 ) => {
   const { packageId, shopId, ownerCapId } = await resolveLatestShopIdentifiers(

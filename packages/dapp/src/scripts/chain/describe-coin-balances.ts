@@ -4,7 +4,6 @@
  * If you come from EVM, this shows both the aggregate balance and how many coin objects back it.
  * Helpful for understanding coin fragmentation and preparing inputs for transactions.
  */
-import type { SuiClient } from "@mysten/sui/client"
 import yargs from "yargs"
 
 import { resolveOwnerAddress } from "@sui-oracle-market/tooling-node/account"
@@ -40,7 +39,9 @@ runSuiScript<CoinBalancesCliArgs>(
       networkName: tooling.network.networkName
     })
 
-    const balances = await getCoinBalances(addressToInspect, tooling.suiClient)
+    const balances = await tooling.getCoinBalances({
+      address: addressToInspect
+    })
     logCoinBalances(balances)
   },
   yargs()
@@ -52,20 +53,6 @@ runSuiScript<CoinBalancesCliArgs>(
     })
     .strict()
 )
-
-const getCoinBalances = async (
-  address: string,
-  suiClient: SuiClient
-): Promise<CoinBalanceSummary[]> => {
-  const balances = await suiClient.getAllBalances({ owner: address })
-
-  return balances.map((balance) => ({
-    coinType: balance.coinType,
-    coinObjectCount: balance.coinObjectCount,
-    totalBalance: BigInt(balance.totalBalance),
-    lockedBalanceTotal: sumLockedBalance(balance.lockedBalance)
-  }))
-}
 
 const logCoinBalances = (balances: CoinBalanceSummary[]) => {
   const sortedBalances = [...balances].sort((left, right) =>
@@ -105,11 +92,5 @@ const logInspectionContext = ({
   logKeyValueBlue("Address")(address)
   console.log("")
 }
-
-const sumLockedBalance = (lockedBalance: Record<string, string>): bigint =>
-  Object.values(lockedBalance).reduce(
-    (total, lockedAmount) => total + BigInt(lockedAmount),
-    0n
-  )
 
 const formatBigInt = (value: bigint) => value.toString()

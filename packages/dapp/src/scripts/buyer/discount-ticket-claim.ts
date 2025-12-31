@@ -6,13 +6,12 @@
  */
 import yargs from "yargs"
 
+import { findCreatedDiscountTicketId } from "@sui-oracle-market/domain-core/models/discount"
 import { buildClaimDiscountTicketTransaction } from "@sui-oracle-market/domain-core/ptb/discount-ticket"
-import type { ObjectArtifact } from "@sui-oracle-market/tooling-core/object"
 import {
   deriveRelevantPackageId,
   normalizeIdOrThrow
 } from "@sui-oracle-market/tooling-core/object"
-import { getLatestObjectFromArtifact } from "@sui-oracle-market/tooling-node/artifacts"
 import { SUI_CLOCK_ID } from "@sui-oracle-market/tooling-node/constants"
 import {
   logKeyValueBlue,
@@ -20,6 +19,7 @@ import {
   logKeyValueYellow
 } from "@sui-oracle-market/tooling-node/log"
 import { runSuiScript } from "@sui-oracle-market/tooling-node/process"
+import { resolveLatestArtifactShopId } from "@sui-oracle-market/domain-node/shop"
 
 type ClaimDiscountTicketArguments = {
   discountTemplateId: string
@@ -71,7 +71,7 @@ runSuiScript(
 
     logClaimResult({
       discountTemplateId,
-      claimedTicket: findDiscountTicket(created),
+      claimedTicketId: findCreatedDiscountTicketId(created),
       digest: transactionResult.digest
     })
   },
@@ -95,27 +95,14 @@ const resolveInputs = async (
   cliArguments: ClaimDiscountTicketArguments,
   networkName: string
 ): Promise<Required<ClaimDiscountTicketArguments>> => {
-  const shopArtifact =
-    await getLatestObjectFromArtifact("shop::Shop")(networkName)
-
   return {
-    shopId: normalizeIdOrThrow(
-      cliArguments.shopId ?? shopArtifact?.objectId,
-      "A shop id is required; create a shop first or provide --shop-id."
-    ),
+    shopId: await resolveLatestArtifactShopId(cliArguments.shopId, networkName),
     discountTemplateId: normalizeIdOrThrow(
       cliArguments.discountTemplateId,
       "A discount template id is required; provide --discount-template-id."
     )
   }
 }
-
-const findDiscountTicket = (
-  createdObjects: ObjectArtifact[]
-): ObjectArtifact | undefined =>
-  createdObjects.find((created) =>
-    created.objectType?.includes("::shop::DiscountTicket")
-  )
 
 const logClaimContext = ({
   discountTemplateId,
@@ -140,15 +127,15 @@ const logClaimContext = ({
 
 const logClaimResult = ({
   discountTemplateId,
-  claimedTicket,
+  claimedTicketId,
   digest
 }: {
   discountTemplateId: string
-  claimedTicket?: ObjectArtifact
+  claimedTicketId?: string | null
   digest?: string
 }) => {
   logKeyValueGreen("template")(discountTemplateId)
-  if (claimedTicket) logKeyValueGreen("ticket")(claimedTicket.objectId)
+  if (claimedTicketId) logKeyValueGreen("ticket")(claimedTicketId)
   else
     logKeyValueYellow("ticket")(
       "No DiscountTicket object detected; check transaction outputs."

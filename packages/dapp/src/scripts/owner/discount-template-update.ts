@@ -14,8 +14,7 @@ import {
   parseDiscountRuleKind,
   parseDiscountRuleValue,
   validateDiscountSchedule,
-  type DiscountRuleKindLabel,
-  type NormalizedRuleKind
+  type DiscountRuleKindLabel
 } from "@sui-oracle-market/domain-core/models/discount"
 import { SUI_CLOCK_ID } from "@sui-oracle-market/domain-core/models/pyth"
 import { buildUpdateDiscountTemplateTransaction } from "@sui-oracle-market/domain-core/ptb/discount-template"
@@ -28,37 +27,12 @@ import { logKeyValueGreen } from "@sui-oracle-market/tooling-node/log"
 import { runSuiScript } from "@sui-oracle-market/tooling-node/process"
 import { logDiscountTemplateSummary } from "../../utils/log-summaries.ts"
 
-type UpdateDiscountTemplateArguments = {
-  shopPackageId?: string
-  shopId?: string
-  ownerCapId?: string
-  discountTemplateId: string
-  ruleKind: DiscountRuleKindLabel
-  value: string
-  startsAt?: string
-  expiresAt?: string
-  maxRedemptions?: string
-}
-
-type NormalizedInputs = {
-  packageId: string
-  shopId: string
-  ownerCapId: string
-  discountTemplateId: string
-  ruleKind: NormalizedRuleKind
-  ruleValue: bigint
-  startsAt: bigint
-  expiresAt?: bigint
-  maxRedemptions?: bigint
-}
-
 runSuiScript(
   async (tooling, cliArguments) => {
     const inputs = await normalizeInputs(
       cliArguments,
       tooling.network.networkName
     )
-    const suiClient = tooling.suiClient
 
     const shopSharedObject = await tooling.getSuiSharedObject({
       objectId: inputs.shopId,
@@ -94,7 +68,7 @@ runSuiScript(
     const discountTemplateSummary = await getDiscountTemplateSummary(
       inputs.shopId,
       inputs.discountTemplateId,
-      suiClient
+      tooling.suiClient
     )
 
     logDiscountTemplateSummary(discountTemplateSummary)
@@ -163,9 +137,19 @@ runSuiScript(
 )
 
 const normalizeInputs = async (
-  cliArguments: UpdateDiscountTemplateArguments,
+  cliArguments: {
+    shopPackageId?: string
+    shopId?: string
+    ownerCapId?: string
+    discountTemplateId: string
+    ruleKind: DiscountRuleKindLabel
+    value: string
+    startsAt?: string
+    expiresAt?: string
+    maxRedemptions?: string
+  },
   networkName: string
-): Promise<NormalizedInputs> => {
+) => {
   const { packageId, shopId, ownerCapId } = await resolveLatestShopIdentifiers(
     {
       packageId: cliArguments.shopPackageId,

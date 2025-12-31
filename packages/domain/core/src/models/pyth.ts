@@ -3,7 +3,8 @@ import { type TransactionArgument } from "@mysten/sui/transactions"
 import { SUI_CLOCK_ID } from "@sui-oracle-market/tooling-core/constants"
 import {
   assertBytesLength,
-  hexToBytes
+  hexToBytes,
+  normalizeHex
 } from "@sui-oracle-market/tooling-core/hex"
 export { SUI_CLOCK_ID }
 
@@ -89,6 +90,50 @@ export type MockPriceFeedConfig = {
   confidence: bigint
   exponent: number
 }
+
+export type LabeledMockPriceFeedConfig = MockPriceFeedConfig & { label: string }
+
+export const DEFAULT_MOCK_PRICE_FEEDS: LabeledMockPriceFeedConfig[] = [
+  {
+    label: "MOCK_USD_FEED",
+    feedIdHex:
+      "0x000102030405060708090a0b0c0d0e0f000102030405060708090a0b0c0d0e0f",
+    price: 1_000n,
+    confidence: 10n,
+    exponent: -2
+  },
+  {
+    label: "MOCK_BTC_FEED",
+    feedIdHex:
+      "0x101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f",
+    price: 25_000n,
+    confidence: 50n,
+    exponent: -2
+  }
+]
+
+type MockFeedMatcher = {
+  feedIdHex?: string
+  label?: string
+}
+
+export const isMatchingMockPriceFeedConfig = (
+  config: LabeledMockPriceFeedConfig,
+  candidate: MockFeedMatcher
+) => {
+  const feedIdMatch = candidate.feedIdHex
+    ? normalizeHex(candidate.feedIdHex) === normalizeHex(config.feedIdHex)
+    : false
+
+  const labelMatch = candidate.label ? candidate.label === config.label : false
+
+  return feedIdMatch || labelMatch
+}
+
+export const findMockPriceFeedConfig = (
+  candidate: MockFeedMatcher,
+  configs: LabeledMockPriceFeedConfig[] = DEFAULT_MOCK_PRICE_FEEDS
+) => configs.find((config) => isMatchingMockPriceFeedConfig(config, candidate))
 
 const PYTH_PRICE_INFO_TYPE = "price_info::PriceInfoObject"
 /**

@@ -3,26 +3,20 @@
 import { useSuiClient } from "@mysten/dapp-kit"
 import type { SuiClient } from "@mysten/sui/client"
 import type { AcceptedCurrencySummary } from "@sui-oracle-market/domain-core/models/currency"
-import { getAcceptedCurrencySummaries } from "@sui-oracle-market/domain-core/models/currency"
 import type {
   DiscountTemplateSummary,
   DiscountTicketDetails
 } from "@sui-oracle-market/domain-core/models/discount"
-import {
-  getDiscountTemplateSummaries,
-  getDiscountTicketSummaries
-} from "@sui-oracle-market/domain-core/models/discount"
+import { getDiscountTicketSummaries } from "@sui-oracle-market/domain-core/models/discount"
 import type { ItemListingSummary } from "@sui-oracle-market/domain-core/models/item-listing"
-import { getItemListingSummaries } from "@sui-oracle-market/domain-core/models/item-listing"
+import { getShopSnapshot } from "@sui-oracle-market/domain-core/models/shop"
 import type { ShopItemReceiptSummary } from "@sui-oracle-market/domain-core/models/shop-item"
 import { getShopItemReceiptSummaries } from "@sui-oracle-market/domain-core/models/shop-item"
-import { getShopOverview } from "@sui-oracle-market/domain-core/models/shop"
-import { SUI_CLOCK_ID } from "@sui-oracle-market/tooling-core/constants"
+import { getClockTimestampMs } from "@sui-oracle-market/tooling-core/clock"
 import {
   deriveRelevantPackageId,
   getSuiObject,
-  normalizeOptionalId,
-  unwrapMoveObjectFields
+  normalizeOptionalId
 } from "@sui-oracle-market/tooling-core/object"
 import { useCallback, useEffect, useMemo, useState } from "react"
 
@@ -66,36 +60,6 @@ const emptyWalletState = (): WalletState => ({
   discountTickets: []
 })
 
-const getClockTimestampMs = async (
-  suiClient: SuiClient
-): Promise<number | undefined> => {
-  try {
-    const { object } = await getSuiObject(
-      { objectId: SUI_CLOCK_ID, options: { showContent: true } },
-      { suiClient }
-    )
-    const clockFields = unwrapMoveObjectFields<{
-      timestamp_ms?: string | number | bigint
-    }>(object)
-    const rawTimestamp = clockFields.timestamp_ms
-
-    if (typeof rawTimestamp === "number" && Number.isFinite(rawTimestamp))
-      return rawTimestamp
-    if (typeof rawTimestamp === "bigint") {
-      const parsed = Number(rawTimestamp)
-      return Number.isFinite(parsed) ? parsed : undefined
-    }
-    if (typeof rawTimestamp === "string") {
-      const parsed = Number(rawTimestamp)
-      return Number.isFinite(parsed) ? parsed : undefined
-    }
-  } catch {
-    return undefined
-  }
-
-  return undefined
-}
-
 const getStorefrontData = async ({
   shopId,
   suiClient
@@ -103,25 +67,16 @@ const getStorefrontData = async ({
   shopId: string
   suiClient: SuiClient
 }) => {
-  const [
-    itemListings,
-    acceptedCurrencies,
-    discountTemplates,
-    shopOverview,
-    clockTimestampMs
-  ] = await Promise.all([
-    getItemListingSummaries(shopId, suiClient),
-    getAcceptedCurrencySummaries(shopId, suiClient),
-    getDiscountTemplateSummaries(shopId, suiClient),
-    getShopOverview(shopId, suiClient),
+  const [snapshot, clockTimestampMs] = await Promise.all([
+    getShopSnapshot(shopId, suiClient),
     getClockTimestampMs(suiClient)
   ])
 
   return {
-    itemListings,
-    acceptedCurrencies,
-    discountTemplates,
-    shopOwnerAddress: shopOverview.ownerAddress,
+    itemListings: snapshot.itemListings,
+    acceptedCurrencies: snapshot.acceptedCurrencies,
+    discountTemplates: snapshot.discountTemplates,
+    shopOwnerAddress: snapshot.shopOverview.ownerAddress,
     clockTimestampMs
   }
 }

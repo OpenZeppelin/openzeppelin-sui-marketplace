@@ -1,4 +1,5 @@
 import type { SuiClient, SuiObjectData } from "@mysten/sui/client"
+import { normalizeCoinType } from "@sui-oracle-market/tooling-core/coin"
 
 import {
   getAllDynamicFields,
@@ -17,14 +18,43 @@ import {
   parseOptionalNumber
 } from "@sui-oracle-market/tooling-core/utils/formatters"
 import {
-  formatTypeName,
   formatTypeNameFromFieldValue,
   isMatchingTypeName,
   parseTypeNameFromString
 } from "@sui-oracle-market/tooling-core/utils/type-name"
+import { parseOptionalPositiveU64 } from "@sui-oracle-market/tooling-core/utils/utility"
+import { resolveValidationMessage } from "@sui-oracle-market/tooling-core/utils/validation"
 
 export const ACCEPTED_CURRENCY_TYPE_FRAGMENT = "::shop::AcceptedCurrencyMarker"
 export const TYPE_NAME_STRUCT = "0x1::type_name::TypeName"
+
+export const MAX_PRICE_AGE_SECS_CAP = 60n
+export const MAX_CONFIDENCE_RATIO_BPS_CAP = 1_000n
+export const MAX_PRICE_STATUS_LAG_SECS_CAP = 5n
+
+export { normalizeCoinType }
+
+export type GuardrailParseResult = {
+  value?: bigint
+  error?: string
+}
+
+export const parseAcceptedCurrencyGuardrailValue = (
+  rawValue: string,
+  label: string
+): GuardrailParseResult => {
+  const trimmed = rawValue.trim()
+  if (!trimmed) return { value: undefined }
+
+  try {
+    return { value: parseOptionalPositiveU64(trimmed, label) }
+  } catch (error) {
+    return {
+      value: undefined,
+      error: resolveValidationMessage(error, `${label} must be a positive u64.`)
+    }
+  }
+}
 
 export type AcceptedCurrencyMatch = {
   coinType?: string
@@ -32,16 +62,6 @@ export type AcceptedCurrencyMatch = {
   typeIndexFieldId?: string
   acceptedCurrencyFieldId?: string
 }
-
-export const normalizeCoinType = (coinType: string): string => {
-  const trimmed = coinType.trim()
-  if (!trimmed) throw new Error("coinType cannot be empty.")
-
-  return formatTypeName(parseTypeNameFromString(trimmed))
-}
-
-export const normalizeOptionalCoinType = (coinType?: string) =>
-  coinType ? normalizeCoinType(coinType) : undefined
 
 export const ensureSignerOwnsCoin = ({
   coinObjectId,
@@ -56,16 +76,6 @@ export const ensureSignerOwnsCoin = ({
     throw new Error(
       `Coin object ${coinObjectId} is owned by ${coinOwnerAddress}, not the signer ${signerAddress}.`
     )
-}
-
-export const extractCoinType = (objectType?: string): string => {
-  if (!objectType)
-    throw new Error("Coin object is missing its type information.")
-
-  if (!objectType.includes("::coin::Coin<"))
-    throw new Error(`Object ${objectType} is not a Coin object.`)
-
-  return objectType
 }
 
 export const findAcceptedCurrencyByCoinType = async ({

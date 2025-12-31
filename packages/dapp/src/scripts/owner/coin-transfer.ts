@@ -7,39 +7,24 @@
 import { normalizeSuiAddress, normalizeSuiObjectId } from "@mysten/sui/utils"
 import yargs from "yargs"
 
+import { ensureSignerOwnsCoin } from "@sui-oracle-market/domain-core/models/currency"
 import { buildCoinTransferTransaction } from "@sui-oracle-market/tooling-core/coin"
 import { parsePositiveU64 } from "@sui-oracle-market/tooling-core/utils/utility"
 import { logKeyValueGreen } from "@sui-oracle-market/tooling-node/log"
 import { runSuiScript } from "@sui-oracle-market/tooling-node/process"
-import { ensureSignerOwnsCoin } from "@sui-oracle-market/domain-core/models/currency"
-import { resolveCoinOwnershipSnapshot } from "@sui-oracle-market/domain-node/coin"
-
-type TransferCoinArguments = {
-  coinId: string
-  amount: string
-  recipient: string
-}
-
-type NormalizedInputs = {
-  coinObjectId: string
-  amount: bigint
-  recipientAddress: string
-}
 
 runSuiScript(
   async (tooling, cliArguments) => {
     const inputs = normalizeInputs(cliArguments)
-    const signerAddress = tooling.loadedEd25519KeyPair.toSuiAddress()
 
-    const coinSnapshot = await resolveCoinOwnershipSnapshot({
-      coinObjectId: inputs.coinObjectId,
-      getSuiObject: tooling.getSuiObject
+    const coinSnapshot = await tooling.resolveCoinOwnership({
+      coinObjectId: inputs.coinObjectId
     })
 
     ensureSignerOwnsCoin({
       coinObjectId: inputs.coinObjectId,
       coinOwnerAddress: coinSnapshot.ownerAddress,
-      signerAddress
+      signerAddress: tooling.loadedEd25519KeyPair.toSuiAddress()
     })
 
     const transferTransaction = buildCoinTransferTransaction({
@@ -58,7 +43,7 @@ runSuiScript(
       coinType: coinSnapshot.coinType,
       amount: inputs.amount,
       recipientAddress: inputs.recipientAddress,
-      senderAddress: signerAddress,
+      senderAddress: tooling.loadedEd25519KeyPair.toSuiAddress(),
       digest: transactionResult.digest
     })
   },
@@ -83,9 +68,11 @@ runSuiScript(
     .strict()
 )
 
-const normalizeInputs = (
-  cliArguments: TransferCoinArguments
-): NormalizedInputs => ({
+const normalizeInputs = (cliArguments: {
+  coinId: string
+  amount: string
+  recipient: string
+}) => ({
   coinObjectId: normalizeSuiObjectId(cliArguments.coinId),
   amount: parsePositiveU64(cliArguments.amount, "amount"),
   recipientAddress: normalizeSuiAddress(cliArguments.recipient)

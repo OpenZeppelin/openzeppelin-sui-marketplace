@@ -10,23 +10,15 @@ import yargs from "yargs"
 
 import {
   type AcceptedCurrencyMatch,
-  normalizeOptionalCoinType,
   requireAcceptedCurrencyByCoinType
 } from "@sui-oracle-market/domain-core/models/currency"
 import { buildRemoveAcceptedCurrencyTransaction } from "@sui-oracle-market/domain-core/ptb/currency"
+import { resolveLatestShopIdentifiers } from "@sui-oracle-market/domain-node/shop"
 import { normalizeOptionalId } from "@sui-oracle-market/tooling-core/object"
 import type { Tooling } from "@sui-oracle-market/tooling-node/factory"
 import { logKeyValueGreen } from "@sui-oracle-market/tooling-node/log"
 import { runSuiScript } from "@sui-oracle-market/tooling-node/process"
-import { resolveLatestShopIdentifiers } from "@sui-oracle-market/domain-node/shop"
-
-type RemoveCurrencyArguments = {
-  shopPackageId?: string
-  shopId?: string
-  ownerCapId?: string
-  acceptedCurrencyId?: string
-  coinType?: string
-}
+import { normalizeOptionalCoinType } from "@sui-oracle-market/tooling-core/coin"
 
 type NormalizedInputs = {
   packageId: string
@@ -38,13 +30,15 @@ type NormalizedInputs = {
 
 runSuiScript(
   async (tooling, cliArguments) => {
-    const suiClient = tooling.suiClient
     const inputs = await normalizeInputs(
       cliArguments,
       tooling.network.networkName
     )
 
-    const acceptedCurrency = await resolveAcceptedCurrency(inputs, suiClient)
+    const acceptedCurrency = await resolveAcceptedCurrency(
+      inputs,
+      tooling.suiClient
+    )
 
     const shop = await tooling.getSuiSharedObject({
       objectId: inputs.shopId,
@@ -116,7 +110,13 @@ runSuiScript(
 )
 
 const normalizeInputs = async (
-  cliArguments: RemoveCurrencyArguments,
+  cliArguments: {
+    shopPackageId?: string
+    shopId?: string
+    ownerCapId?: string
+    acceptedCurrencyId?: string
+    coinType?: string
+  },
   networkName: string
 ): Promise<NormalizedInputs> => {
   const { packageId, shopId, ownerCapId } = await resolveLatestShopIdentifiers(

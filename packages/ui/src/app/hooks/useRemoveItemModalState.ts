@@ -79,7 +79,11 @@ export const useRemoveItemModalState = ({
     () =>
       makeLocalnetExecutor({
         client: localnetClient,
-        signTransaction: signTransaction.mutateAsync
+        signTransaction: (input) =>
+          signTransaction.mutateAsync({
+            ...input,
+            chain: input.chain as IdentifierString | undefined
+          })
       }),
     [localnetClient, signTransaction.mutateAsync]
   )

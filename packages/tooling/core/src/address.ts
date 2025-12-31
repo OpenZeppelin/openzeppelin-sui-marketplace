@@ -51,6 +51,54 @@ export const getSuiBalance = async (
   return BigInt(balance.totalBalance ?? 0n)
 }
 
+export type CoinBalanceSummary = {
+  coinType: string
+  coinObjectCount: number
+  totalBalance: bigint
+  lockedBalanceTotal: bigint
+}
+
+const sumLockedBalance = (
+  lockedBalance: Record<string, string> | undefined
+): bigint =>
+  Object.values(lockedBalance ?? {}).reduce(
+    (total, lockedAmount) => total + BigInt(lockedAmount),
+    0n
+  )
+
+export const getCoinBalanceSummary = async (
+  { address, coinType }: { address: string; coinType: string },
+  { suiClient }: ToolingCoreContext
+): Promise<CoinBalanceSummary> => {
+  const balance = await suiClient.getBalance({
+    owner: normalizeSuiAddress(address),
+    coinType
+  })
+
+  return {
+    coinType: balance.coinType,
+    coinObjectCount: balance.coinObjectCount,
+    totalBalance: BigInt(balance.totalBalance ?? 0n),
+    lockedBalanceTotal: sumLockedBalance(balance.lockedBalance)
+  }
+}
+
+export const getCoinBalances = async (
+  { address }: { address: string },
+  { suiClient }: ToolingCoreContext
+): Promise<CoinBalanceSummary[]> => {
+  const balances = await suiClient.getAllBalances({
+    owner: normalizeSuiAddress(address)
+  })
+
+  return balances.map((balance) => ({
+    coinType: balance.coinType,
+    coinObjectCount: balance.coinObjectCount,
+    totalBalance: BigInt(balance.totalBalance ?? 0n),
+    lockedBalanceTotal: sumLockedBalance(balance.lockedBalance)
+  }))
+}
+
 /**
  * Checks whether an address meets a minimum total SUI balance threshold.
  * Useful for gating operations that require multiple gas coin objects in Sui,

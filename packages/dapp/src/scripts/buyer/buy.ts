@@ -11,15 +11,16 @@ import yargs from "yargs"
 import {
   buildBuyTransaction,
   resolveDiscountContext,
-  resolvePaymentCoinObjectId,
-  type DiscountContext
+  resolvePaymentCoinObjectId
 } from "@sui-oracle-market/domain-core/flows/buy"
+import type { DiscountContext } from "@sui-oracle-market/domain-core/models/discount"
 import {
   getAcceptedCurrencySummary,
   normalizeCoinType,
   requireAcceptedCurrencyByCoinType
 } from "@sui-oracle-market/domain-core/models/currency"
 import { getItemListingSummary } from "@sui-oracle-market/domain-core/models/item-listing"
+import { findCreatedShopItemIds } from "@sui-oracle-market/domain-core/models/shop-item"
 import type { PriceUpdatePolicy } from "@sui-oracle-market/domain-core/models/pyth"
 import type { ObjectArtifact } from "@sui-oracle-market/tooling-core/object"
 import {
@@ -52,34 +53,16 @@ type BuyArguments = {
   hermesUrl?: string
 }
 
-type NormalizedBuyInputs = {
-  shopId: string
-  itemListingId: string
-  coinType: string
-  paymentCoinObjectId?: string
-  mintTo?: string
-  refundTo?: string
-  discountTicketId?: string
-  discountTemplateId?: string
-  claimDiscount: boolean
-  maxPriceAgeSecs?: bigint
-  maxConfidenceRatioBps?: bigint
-  skipPriceUpdate: boolean
-  priceUpdatePolicy: PriceUpdatePolicy
-  hermesUrl?: string
-}
-
 runSuiScript(
   async (tooling, cliArguments: BuyArguments) => {
     const inputs = await normalizeInputs(
       cliArguments,
       tooling.suiConfig.network.networkName
     )
-    const signer = tooling.loadedEd25519KeyPair
 
-    const signerAddress = signer.toSuiAddress()
-    const mintTo = inputs.mintTo ?? signerAddress
-    const refundTo = inputs.refundTo ?? signerAddress
+    const mintTo = inputs.mintTo ?? tooling.loadedEd25519KeyPair.toSuiAddress()
+    const refundTo =
+      inputs.refundTo ?? tooling.loadedEd25519KeyPair.toSuiAddress()
 
     const shopShared = await tooling.getSuiSharedObject({
       objectId: inputs.shopId,
@@ -127,7 +110,7 @@ runSuiScript(
     const paymentCoinObjectId = await resolvePaymentCoinObjectId({
       providedCoinObjectId: inputs.paymentCoinObjectId,
       coinType: inputs.coinType,
-      signerAddress,
+      signerAddress: tooling.loadedEd25519KeyPair.toSuiAddress(),
       suiClient: tooling.suiClient
     })
 
@@ -174,7 +157,7 @@ runSuiScript(
         hermesUrlOverride: inputs.hermesUrl,
         pythConfigOverride: tooling.suiConfig.network.pyth,
         networkName: tooling.suiConfig.network.networkName,
-        signerAddress,
+        signerAddress: tooling.loadedEd25519KeyPair.toSuiAddress(),
         onWarning: (message) => logKeyValueYellow("Oracle")(message)
       },
       tooling.suiClient
@@ -185,7 +168,7 @@ runSuiScript(
       objectArtifacts: { created }
     } = await tooling.signAndExecute({
       transaction: buyTransaction,
-      signer
+      signer: tooling.loadedEd25519KeyPair
     })
 
     logBuyResult({
@@ -291,7 +274,7 @@ runSuiScript(
 const normalizeInputs = async (
   cliArguments: BuyArguments,
   networkName: string
-): Promise<NormalizedBuyInputs> => {
+) => {
   const shopId = await resolveLatestArtifactShopId(
     cliArguments.shopId,
     networkName
@@ -412,9 +395,6 @@ const logBuyContext = ({
   console.log("")
 }
 
-const findPurchasedShopItems = (created: ObjectArtifact[]) =>
-  created.filter((object) => object.objectType.includes("::shop::ShopItem"))
-
 const logBuyResult = ({
   digest,
   createdObjects,
@@ -429,10 +409,10 @@ const logBuyResult = ({
   logKeyValueGreen("mint-to")(mintTo)
   logKeyValueGreen("refund-to")(refundTo)
 
-  const receipts = findPurchasedShopItems(createdObjects)
+  const receipts = findCreatedShopItemIds(createdObjects)
   if (receipts.length > 0)
-    receipts.forEach((receipt, index) =>
-      logKeyValueGreen(`receipt-${index + 1}`)(receipt.objectId)
+    receipts.forEach((receiptId, index) =>
+      logKeyValueGreen(`receipt-${index + 1}`)(receiptId)
     )
   else
     logKeyValueYellow("receipt")(

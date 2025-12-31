@@ -22,12 +22,13 @@ import fkill from "fkill"
 import yargs from "yargs"
 
 import type { Ed25519Keypair } from "@mysten/sui/keypairs/ed25519"
-import { createSuiClient } from "@sui-oracle-market/tooling-node/describe-object"
 import type { Tooling } from "@sui-oracle-market/tooling-node/factory"
 import {
   deriveFaucetUrl,
   isFaucetSupportedNetwork,
-  resolveLocalnetConfigDir
+  probeRpcHealth,
+  resolveLocalnetConfigDir,
+  type RpcSnapshot
 } from "@sui-oracle-market/tooling-node/localnet"
 import {
   logKeyValueBlue,
@@ -41,34 +42,18 @@ import { runSuiCli } from "@sui-oracle-market/tooling-node/suiCli"
 
 process.env.SUI_NETWORK = "localnet"
 
-type RpcSnapshot = {
-  rpcUrl: string
-  epoch: string
-  protocolVersion: string
-  latestCheckpoint: string
-  validatorCount: number
-  referenceGasPrice: bigint
-  epochStartTimestampMs?: string | number | null
-}
-
-type ProbeResult =
-  | { status: "running"; snapshot: RpcSnapshot }
-  | { status: "offline"; error: string }
-
-type StartLocalnetCliArgs = {
-  checkOnly: boolean
-  waitSeconds: number
-  withFaucet: boolean
-  forceRegenesis: boolean
-  configDir: string
-}
-
 const LEGACY_SUI_CLI_VERSION_FILE = "sui-cli-version.txt"
 const SUI_CLI_VERSION_FILE_PREFIX = "sui-cli-version-"
 const SUI_CLI_VERSION_FILE_SUFFIX = ".txt"
 const runSuiCliVersion = runSuiCli([])
 
-runSuiScript<StartLocalnetCliArgs>(
+runSuiScript<{
+  checkOnly: boolean
+  waitSeconds: number
+  withFaucet: boolean
+  forceRegenesis: boolean
+  configDir: string
+}>(
   async (
     tooling,
     { withFaucet, checkOnly, waitSeconds, forceRegenesis, configDir }
@@ -79,11 +64,9 @@ runSuiScript<StartLocalnetCliArgs>(
       )
     }
 
-    const paths = tooling.suiConfig.paths
     const localnetConfigDir = resolveLocalnetConfigDir(configDir)
     const configDirManagedByScript = isConfigDirManagedByScript()
-    const rpcUrl = tooling.network.url
-    const probeResult = await probeRpcHealth(rpcUrl)
+    const probeResult = await probeRpcHealth(tooling.network.url)
     const suiCliVersion = await getSuiCliVersion()
 
     if (checkOnly) {
@@ -94,7 +77,7 @@ runSuiScript<StartLocalnetCliArgs>(
       }
 
       throw new Error(
-        `Localnet RPC unavailable at ${rpcUrl}: ${probeResult.error}`
+        `Localnet RPC unavailable at ${tooling.network.url}: ${probeResult.error}`
       )
     }
 
@@ -149,7 +132,7 @@ runSuiScript<StartLocalnetCliArgs>(
     }
 
     if (shouldRegenesis) {
-      await deleteLocalnetDeployments(paths.deployments)
+      await deleteLocalnetDeployments(tooling.suiConfig.paths.deployments)
       await resetLocalnetConfig({ configDir: localnetConfigDir, withFaucet })
     } else {
       await ensureLocalnetConfig({ configDir: localnetConfigDir, withFaucet })
@@ -160,11 +143,11 @@ runSuiScript<StartLocalnetCliArgs>(
     const localnetProcess = startLocalnetProcess({
       withFaucet,
       configDir: localnetConfigDir,
-      rpcUrl
+      rpcUrl: tooling.network.url
     })
 
     const readySnapshot = await waitForRpcReadiness({
-      rpcUrl,
+      rpcUrl: tooling.network.url,
       waitSeconds: waitSeconds
     })
 
@@ -213,38 +196,6 @@ runSuiScript<StartLocalnetCliArgs>(
     })
     .strict()
 )
-
-const probeRpcHealth = async (rpcUrl: string): Promise<ProbeResult> => {
-  try {
-    return { status: "running", snapshot: await getRpcSnapshot(rpcUrl) }
-  } catch (error) {
-    return {
-      status: "offline",
-      error:
-        error instanceof Error ? error.message : "Unable to reach localnet RPC"
-    }
-  }
-}
-
-const getRpcSnapshot = async (rpcUrl: string): Promise<RpcSnapshot> => {
-  const client = createSuiClient(rpcUrl)
-
-  const [systemState, latestCheckpoint, referenceGasPrice] = await Promise.all([
-    client.getLatestSuiSystemState(),
-    client.getLatestCheckpointSequenceNumber(),
-    client.getReferenceGasPrice()
-  ])
-
-  return {
-    rpcUrl,
-    epoch: systemState.epoch,
-    protocolVersion: String(systemState.protocolVersion),
-    latestCheckpoint,
-    validatorCount: systemState.activeValidators?.length ?? 0,
-    referenceGasPrice,
-    epochStartTimestampMs: systemState.epochStartTimestampMs
-  }
-}
 
 const waitForRpcReadiness = async ({
   rpcUrl,
@@ -457,17 +408,17 @@ const maybeFundAfterRegenesis = async ({
   await fundConfiguredAddressIfPossible(tooling)
 }
 
-type FundingTarget = {
-  signerAddress: string
-  signer?: Ed25519Keypair
-}
-
 const deriveFundingTarget = async (
   tooling: Tooling
-): Promise<FundingTarget | null> => {
+): Promise<{
+  signerAddress: string
+  signer?: Ed25519Keypair
+} | null> => {
   try {
-    const signer = tooling.loadedEd25519KeyPair
-    return { signerAddress: signer.toSuiAddress(), signer }
+    return {
+      signerAddress: tooling.loadedEd25519KeyPair.toSuiAddress(),
+      signer: tooling.loadedEd25519KeyPair
+    }
   } catch (error) {
     if (tooling.network.account.accountAddress)
       return { signerAddress: tooling.network.account.accountAddress }

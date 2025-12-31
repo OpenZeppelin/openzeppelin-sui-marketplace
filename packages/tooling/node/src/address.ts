@@ -270,11 +270,12 @@ export const ensureFoundedAddress = async (
   }: EnsureFoundedAddressOptions,
   toolingContext: ToolingContext
 ) => {
-  const { suiClient, suiConfig } = toolingContext
-  const network = suiConfig.network
-  const networkName = network.networkName
-  const faucetSupported = isFaucetSupported(networkName)
-  const faucetNetwork = asFaucetNetwork(networkName)
+  const faucetSupported = isFaucetSupported(
+    toolingContext.suiConfig.network.networkName
+  )
+  const faucetNetwork = asFaucetNetwork(
+    toolingContext.suiConfig.network.networkName
+  )
   const normalizedAddress = normalizeSuiAddress(signerAddress)
 
   const effectiveMinimumBalance = deriveEffectiveMinimumBalance({
@@ -294,7 +295,7 @@ export const ensureFoundedAddress = async (
         minimumCoinObjects,
         minimumGasCoinBalance
       },
-      suiClient
+      toolingContext.suiClient
     )
 
     if (snapshot.ready) return
@@ -303,7 +304,7 @@ export const ensureFoundedAddress = async (
       snapshot,
       signer,
       signerAddress: normalizedAddress,
-      client: suiClient,
+      client: toolingContext.suiClient,
       minimumCoinObjects,
       minimumGasCoinBalance,
       splitGasBudget
@@ -315,12 +316,16 @@ export const ensureFoundedAddress = async (
 
     if (!faucetSupported) {
       if (!snapshot.hasEnoughBalance)
-        throw new Error(`faucet is unavailable for network ${networkName}`)
+        throw new Error(
+          `faucet is unavailable for network ${toolingContext.suiConfig.network.networkName}`
+        )
       return
     }
 
     if (!faucetNetwork)
-      throw new Error(`faucet is unavailable for network ${networkName}`)
+      throw new Error(
+        `faucet is unavailable for network ${toolingContext.suiConfig.network.networkName}`
+      )
 
     const faucetResult = await requestFunding({
       network: faucetNetwork,
@@ -331,7 +336,11 @@ export const ensureFoundedAddress = async (
     if (!faucetResult.success) lastError = faucetResult.error
   }
 
-  throw fundingFailure(normalizedAddress, networkName, lastError)
+  throw fundingFailure(
+    normalizedAddress,
+    toolingContext.suiConfig.network.networkName,
+    lastError
+  )
 }
 
 /**
@@ -500,8 +509,9 @@ export const withTestnetFaucetRetry = async <T>(
   transactionRun: () => Promise<T>,
   toolingContext: ToolingContext
 ): Promise<T> => {
-  const networkName = toolingContext.suiConfig.network.networkName
-  const faucetSupported = isFaucetSupported(networkName)
+  const faucetSupported = isFaucetSupported(
+    toolingContext.suiConfig.network.networkName
+  )
   const ensureOptions = {
     signerAddress,
     signer,

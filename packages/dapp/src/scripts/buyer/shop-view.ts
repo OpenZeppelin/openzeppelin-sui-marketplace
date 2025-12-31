@@ -4,10 +4,8 @@
  * If you come from EVM, you will see multiple object reads instead of one contract call, which maps to Sui's model.
  * The script is read-only and combines results into a human-friendly snapshot.
  */
-import { getAcceptedCurrencySummaries } from "@sui-oracle-market/domain-core/models/currency"
-import { getDiscountTemplateSummaries } from "@sui-oracle-market/domain-core/models/discount"
-import { getItemListingSummaries } from "@sui-oracle-market/domain-core/models/item-listing"
-import { getShopOverview } from "@sui-oracle-market/domain-core/models/shop"
+import { getShopSnapshot } from "@sui-oracle-market/domain-core/models/shop"
+import { resolveLatestArtifactShopId } from "@sui-oracle-market/domain-node/shop"
 import { logKeyValueBlue } from "@sui-oracle-market/tooling-node/log"
 import { runSuiScript } from "@sui-oracle-market/tooling-node/process"
 import yargs from "yargs"
@@ -18,19 +16,13 @@ import {
   logItemListingSummary,
   logShopOverview
 } from "../../utils/log-summaries.ts"
-import { resolveLatestArtifactShopId } from "@sui-oracle-market/domain-node/shop"
-
-type ShowShopArguments = {
-  shopId?: string
-}
 
 runSuiScript(
-  async (tooling, cliArguments: ShowShopArguments) => {
+  async (tooling, cliArguments: { shopId?: string }) => {
     const shopId = await resolveLatestArtifactShopId(
       cliArguments.shopId,
       tooling.network.networkName
     )
-    const suiClient = tooling.suiClient
 
     logContext({
       shopId,
@@ -38,13 +30,12 @@ runSuiScript(
       networkName: tooling.network.networkName
     })
 
-    const [shopOverview, itemListings, acceptedCurrencies, discountTemplates] =
-      await Promise.all([
-        getShopOverview(shopId, suiClient),
-        getItemListingSummaries(shopId, suiClient),
-        getAcceptedCurrencySummaries(shopId, suiClient),
-        getDiscountTemplateSummaries(shopId, suiClient)
-      ])
+    const {
+      shopOverview,
+      itemListings,
+      acceptedCurrencies,
+      discountTemplates
+    } = await getShopSnapshot(shopId, tooling.suiClient)
 
     logShopOverview(shopOverview)
     console.log("")

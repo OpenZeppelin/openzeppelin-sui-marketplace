@@ -16,29 +16,12 @@ import { runSuiScript } from "@sui-oracle-market/tooling-node/process"
 import { logDiscountTemplateSummary } from "../../utils/log-summaries.ts"
 import { resolveLatestShopIdentifiers } from "@sui-oracle-market/domain-node/shop"
 
-type PruneDiscountClaimsArguments = {
-  shopPackageId?: string
-  shopId?: string
-  ownerCapId?: string
-  discountTemplateId: string
-  claimers?: string[]
-}
-
-type NormalizedInputs = {
-  packageId: string
-  shopId: string
-  ownerCapId: string
-  discountTemplateId: string
-  claimers: string[]
-}
-
 runSuiScript(
   async (tooling, cliArguments) => {
     const inputs = await normalizeInputs(
       cliArguments,
       tooling.network.networkName
     )
-    const suiClient = tooling.suiClient
 
     const shopSharedObject = await tooling.getSuiSharedObject({
       objectId: inputs.shopId,
@@ -69,7 +52,7 @@ runSuiScript(
     const discountTemplateSummary = await getDiscountTemplateSummary(
       inputs.shopId,
       inputs.discountTemplateId,
-      suiClient
+      tooling.suiClient
     )
 
     logDiscountTemplateSummary(discountTemplateSummary)
@@ -114,9 +97,15 @@ runSuiScript(
 )
 
 const normalizeInputs = async (
-  cliArguments: PruneDiscountClaimsArguments,
+  cliArguments: {
+    shopPackageId?: string
+    shopId?: string
+    ownerCapId?: string
+    discountTemplateId: string
+    claimers?: string[]
+  },
   networkName: string
-): Promise<NormalizedInputs> => {
+) => {
   const { packageId, shopId, ownerCapId } = await resolveLatestShopIdentifiers(
     {
       packageId: cliArguments.shopPackageId,

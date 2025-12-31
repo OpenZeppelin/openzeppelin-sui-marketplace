@@ -9,11 +9,13 @@ import { normalizeSuiObjectId } from "@mysten/sui/utils"
 import yargs from "yargs"
 
 import {
+  DEFAULT_MOCK_PRICE_FEEDS,
   SUI_CLOCK_ID,
   deriveMockPriceComponents,
+  findMockPriceFeedConfig,
+  type LabeledMockPriceFeedConfig,
   type MockPriceFeedConfig
 } from "@sui-oracle-market/domain-core/models/pyth"
-import { normalizeHex } from "@sui-oracle-market/tooling-core/hex"
 import { assertLocalnetNetwork } from "@sui-oracle-market/tooling-core/network"
 import type { WrappedSuiSharedObject } from "@sui-oracle-market/tooling-core/shared-object"
 
@@ -35,26 +37,9 @@ type UpdatePricesCliArguments = {
 
 type PriceFeedArtifact = NonNullable<MockArtifact["priceFeeds"]>[number]
 
-type LabeledPriceFeedConfig = MockPriceFeedConfig & { label: string }
+type LabeledPriceFeedConfig = LabeledMockPriceFeedConfig
 
-const DEFAULT_FEEDS: LabeledPriceFeedConfig[] = [
-  {
-    label: "MOCK_USD_FEED",
-    feedIdHex:
-      "0x000102030405060708090a0b0c0d0e0f000102030405060708090a0b0c0d0e0f",
-    price: 1_000n,
-    confidence: 10n,
-    exponent: -2
-  },
-  {
-    label: "MOCK_BTC_FEED",
-    feedIdHex:
-      "0x101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f",
-    price: 25_000n,
-    confidence: 50n,
-    exponent: -2
-  }
-]
+const DEFAULT_FEEDS: LabeledPriceFeedConfig[] = DEFAULT_MOCK_PRICE_FEEDS
 
 runSuiScript(
   async (tooling, cliArguments: UpdatePricesCliArguments) => {
@@ -169,13 +154,7 @@ const resolvePythPackageId = (
 const findMatchingFeedConfig = (
   priceFeedArtifact: PriceFeedArtifact
 ): LabeledPriceFeedConfig | undefined => {
-  const normalizedArtifactFeedId = normalizeHex(priceFeedArtifact.feedIdHex)
-
-  return DEFAULT_FEEDS.find(
-    (config) =>
-      normalizeHex(config.feedIdHex) === normalizedArtifactFeedId ||
-      config.label === priceFeedArtifact.label
-  )
+  return findMockPriceFeedConfig(priceFeedArtifact, DEFAULT_FEEDS)
 }
 
 const enqueuePriceUpdate = async ({
