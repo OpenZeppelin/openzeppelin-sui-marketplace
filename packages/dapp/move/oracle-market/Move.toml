@@ -4,17 +4,11 @@ edition = "2024"
 
 [dependencies]
 [dependencies.pyth]
-git = "https://github.com/pyth-network/pyth-crosschain.git"
-subdir = "target_chains/sui/contracts"
-rev = "d809788e83087c69d76e4671cd694e88a189a179"
+local = "../pyth-upstream-patched"
 
 [environments]
 localnet = "279218ea"
+testnet_beta = "4c78adac"
 
 [dep-replacements.localnet]
 pyth = { local = "../pyth-mock", override = true, rename-from = "Pyth" }
-
-# These addresses are the already-published package IDs on Sui testnet.
-[dep-replacements.testnet]
-pyth = { published-at = "0xabf837e98c26087cba0883c0a7a28326b1fa3c5e1e2c5abdb486f9e8f594c837", original-id = "0xabf837e98c26087cba0883c0a7a28326b1fa3c5e1e2c5abdb486f9e8f594c837" }
-Wormhole = { published-at = "0x31358d198147da50db32eda2562951d53973a0c0ad5ed738e9b17d88b213d790", original-id = "0x31358d198147da50db32eda2562951d53973a0c0ad5ed738e9b17d88b213d790", rename-from = "Wormhole" }

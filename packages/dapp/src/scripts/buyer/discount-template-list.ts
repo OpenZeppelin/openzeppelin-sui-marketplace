@@ -7,13 +7,13 @@
 import yargs from "yargs"
 
 import { getDiscountTemplateSummaries } from "@sui-oracle-market/domain-core/models/discount"
-import { resolveLatestArtifactShopId } from "@sui-oracle-market/domain-node/shop-identifiers"
 import { logKeyValueBlue } from "@sui-oracle-market/tooling-node/log"
 import { runSuiScript } from "@sui-oracle-market/tooling-node/process"
 import {
   logDiscountTemplateSummary,
   logEmptyList
 } from "../../utils/log-summaries.ts"
+import { resolveLatestArtifactShopId } from "@sui-oracle-market/domain-node/shop"
 
 type ListDiscountTemplatesArguments = {
   shopId?: string

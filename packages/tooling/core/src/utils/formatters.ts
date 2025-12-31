@@ -23,6 +23,66 @@ export const decodeUtf8Vector = (value: unknown): string | undefined => {
   return decoded || undefined
 }
 
+const tryGetBufferForBase64 = ():
+  | {
+      from: (
+        data: string,
+        encoding: string
+      ) => { toString: (enc: string) => string }
+    }
+  | undefined => {
+  const maybeBuffer = (globalThis as unknown as { Buffer?: unknown }).Buffer
+  if (!maybeBuffer) return undefined
+
+  const candidate = maybeBuffer as { from?: unknown }
+  if (typeof candidate.from !== "function") return undefined
+  return candidate as {
+    from: (
+      data: string,
+      encoding: string
+    ) => { toString: (enc: string) => string }
+  }
+}
+
+const decodeBase64ToString = (value: string): string | undefined => {
+  const buffer = tryGetBufferForBase64()
+  if (buffer) {
+    try {
+      return buffer.from(value, "base64").toString("utf8")
+    } catch {
+      return undefined
+    }
+  }
+
+  if (typeof globalThis.atob === "function") {
+    try {
+      const binary = globalThis.atob(value)
+      const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0))
+      return new TextDecoder().decode(bytes)
+    } catch {
+      return undefined
+    }
+  }
+
+  return undefined
+}
+
+/**
+ * Attempts to decode a Move `string` field from Sui RPC responses.
+ */
+export const readMoveString = (value: unknown): string | undefined => {
+  if (typeof value === "string") return value
+  if (!value || typeof value !== "object") return undefined
+
+  const record = value as Record<string, unknown>
+  const fields = record.fields as Record<string, unknown> | undefined
+  const bytes = fields?.bytes
+  if (typeof bytes !== "string") return undefined
+
+  const decoded = decodeBase64ToString(bytes)?.trim()
+  return decoded || undefined
+}
+
 /**
  * Decodes a byte array to a UTF-8 string.
  */

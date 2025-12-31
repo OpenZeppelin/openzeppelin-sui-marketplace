@@ -176,3 +176,51 @@ Reference
 - Entry functions: `create_shop`, `update_shop_owner`, `add_item_listing`, `update_item_listing_stock`, `remove_item_listing`, `add_accepted_currency`, `remove_accepted_currency`, `create_discount_template`, `update_discount_template`, `toggle_discount_template`, `attach_template_to_listing`, `clear_template_from_listing`, `claim_discount_ticket`, `prune_discount_claims`, `buy_item`, `buy_item_with_discount`, `claim_and_buy_item_with_discount`.
 - Key types: `Shop`, `ShopOwnerCap`, `ItemListing`, `AcceptedCurrency`, `DiscountTemplate`, `DiscountTicket`, `ShopItem`
 - Events: `ShopCreated`, `ShopOwnerUpdated`, `ItemListingAdded`, `ItemListingStockUpdated`, `ItemListingRemoved`, `DiscountTemplateCreated`, `DiscountTemplateUpdated`, `DiscountTemplateToggled`, `AcceptedCoinAdded`, `AcceptedCoinRemoved`, `DiscountClaimed`, `DiscountRedeem`, `PurchaseCompleted`, `MintingCompleted`.
+
+Vendored deps (Pyth/Wormhole)
+----------------------------
+For **testnet** builds/publishes, we intentionally vendor Pyth + Wormhole sources and patch their manifests.
+This avoids resolver edge-cases (notably duplicate named-address definitions like `wormhole`) and keeps the Sui framework revision consistent.
+
+Where the vendored packages live:
+- `packages/dapp/move/pyth-upstream-patched`
+- `packages/dapp/move/wormhole-upstream-patched`
+
+How dependency resolution works:
+- `packages/dapp/move/oracle-market` depends on the vendored Pyth by default.
+- `localnet` swaps Pyth to `pyth-mock` via `dep-replacements`.
+
+Update instructions
+-------------------
+When updating Pyth/Wormhole versions, do the following in order.
+
+1) Refresh vendored sources
+- Replace the contents of:
+    - `packages/dapp/move/pyth-upstream-patched/sources/`
+    - `packages/dapp/move/wormhole-upstream-patched/sources/`
+    with the new upstream sources you want to pin to.
+
+2) Keep these manifest invariants
+- `packages/dapp/move/pyth-upstream-patched/Move.toml`
+    - `edition = "legacy"`
+    - MUST NOT define an `[addresses] wormhole = ...` entry (Wormhole owns the `wormhole` named address in this repo)
+    - MUST define `[addresses] pyth = "<pyth package id>"`
+    - MUST depend on the same Sui framework revision as the rest of the repo
+    - MUST depend on local Wormhole: `[dependencies.Wormhole] local = "../wormhole-upstream-patched"`
+
+- `packages/dapp/move/wormhole-upstream-patched/Move.toml`
+    - `edition = "legacy"`
+    - MUST define `[addresses] wormhole = "<wormhole package id>"`
+    - MUST depend on the same Sui framework revision as the rest of the repo
+
+3) Re-pin the lockfile
+- From `packages/dapp/move/oracle-market`, run:
+    - `sui move build -e testnet`
+    - `sui move build -e localnet`
+    This should update/validate `Move.lock` resolution per-environment.
+
+4) Sanity check publish flow (testnet)
+- From repo root:
+    - `pnpm --filter dapp move:publish --package-path oracle-market --network testnet`
+
+If you hit `Address 'wormhole' is defined more than once...`, re-check step (2): Pyth must not define the `wormhole` named address.

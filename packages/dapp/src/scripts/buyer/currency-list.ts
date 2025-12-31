@@ -7,13 +7,13 @@
 import yargs from "yargs"
 
 import { getAcceptedCurrencySummaries } from "@sui-oracle-market/domain-core/models/currency"
-import { resolveLatestArtifactShopId } from "@sui-oracle-market/domain-node/shop-identifiers"
 import { logKeyValueBlue } from "@sui-oracle-market/tooling-node/log"
 import { runSuiScript } from "@sui-oracle-market/tooling-node/process"
 import {
   logAcceptedCurrencySummary,
   logEmptyList
 } from "../../utils/log-summaries.ts"
+import { resolveLatestArtifactShopId } from "@sui-oracle-market/domain-node/shop"
 
 type ListCurrenciesArguments = {
   shopId?: string

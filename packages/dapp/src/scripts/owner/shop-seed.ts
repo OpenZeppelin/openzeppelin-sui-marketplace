@@ -2,7 +2,9 @@
  * Seeds a shop with accepted currencies, example listings, and discounts.
  * On testnet it registers USDC + WAL. On localnet it uses the mock coin/feed artifacts.
  */
-import type { SuiClient } from "@mysten/sui/client"
+import path from "node:path"
+
+import type { SuiClient, SuiObjectResponse } from "@mysten/sui/client"
 import { normalizeSuiObjectId, parseStructTag } from "@mysten/sui/utils"
 import yargs from "yargs"
 
@@ -28,6 +30,17 @@ import {
   getItemListingSummary,
   type ItemListingSummary
 } from "@sui-oracle-market/domain-core/models/item-listing"
+import {
+  requirePythPullOracleConfig,
+  resolvePythPullOracleConfig
+} from "@sui-oracle-market/domain-core/models/pyth"
+import {
+  createPythClient,
+  formatPythFeedCandidates,
+  normalizePythFeedId,
+  resolvePythFeedResolution,
+  resolvePythPriceInfoObjectId
+} from "@sui-oracle-market/domain-core/models/pyth-feeds"
 import type { ShopIdentifiers } from "@sui-oracle-market/domain-core/models/shop"
 import {
   getShopOverview,
@@ -41,7 +54,11 @@ import {
   validateTemplateAndListing
 } from "@sui-oracle-market/domain-core/ptb/item-listing"
 import { buildCreateShopTransaction } from "@sui-oracle-market/domain-core/ptb/shop"
-import { resolveLatestShopIdentifiers } from "@sui-oracle-market/domain-node/shop-identifiers"
+import { resolveItemExamplesPackageId } from "@sui-oracle-market/domain-node/item-example"
+import {
+  resolveMaybeLatestShopIdentifiers,
+  resolveShopPublishInputs
+} from "@sui-oracle-market/domain-node/shop"
 import { resolveCurrencyObjectId } from "@sui-oracle-market/tooling-core/coin-registry"
 import {
   assertBytesLength,
@@ -61,9 +78,11 @@ import type { Tooling } from "@sui-oracle-market/tooling-node/factory"
 import {
   logKeyValueBlue,
   logKeyValueGreen,
-  logKeyValueYellow
+  logKeyValueYellow,
+  logWarning
 } from "@sui-oracle-market/tooling-node/log"
 import { runSuiScript } from "@sui-oracle-market/tooling-node/process"
+import { publishMovePackageWithFunding } from "@sui-oracle-market/tooling-node/publish"
 import { ensureCreatedObject } from "@sui-oracle-market/tooling-node/transactions"
 import {
   logAcceptedCurrencySummary,
@@ -72,28 +91,25 @@ import {
   logShopOverview
 } from "../../utils/log-summaries.ts"
 import type { MockArtifact } from "../../utils/mocks.ts"
-import { mockArtifactPath } from "../../utils/mocks.ts"
-import {
-  resolveItemExamplesPackageId,
-  resolveShopPublishInputs
-} from "../../utils/published-artifacts.ts"
+import { mockArtifactPath, writeMockArtifact } from "../../utils/mocks.ts"
+import { readMoveString } from "@sui-oracle-market/tooling-core/utils/formatters"
 
+// NOTE: Testnet coin package IDs can change over time.
+// If this ever fails to resolve via the coin registry, run:
+//   pnpm -s script owner:pyth:list --network testnet --query usdc --quote USD --limit 5
+// and pick a `Coin-type`/`Currency-id` pair that matches the coin you can acquire.
 const DEFAULT_USDC_COIN_TYPE =
-  "0xea10912247c015ead590e481ae8545ff1518492dee41d6d03abdad828c1d2bde::usdc::USDC"
-// Pyth feed config for USDC on testnet.
-const DEFAULT_USDC_FEED_ID =
-  "0x41f3625971ca2ed2263e78573fe5ce23e13d2558ed3f2e47ab0f84fb9e7ae722"
-// Pyth price info object id for the USDC coin on testnet.
-const DEFAULT_USDC_PRICE_INFO_OBJECT_ID =
-  "0x9c4dd4008297ffa5e480684b8100ec21cc934405ed9a25d4e4d7b6259aad9c81"
+  "0xa1ec7fc00a6f40db9693ad1415d0c193ad3906494428cf252621037bd7117e29::usdc::USDC"
+// NOTE: Testnet coin package IDs can change over time.
+// If this ever fails to resolve via the coin registry, run:
+//   pnpm -s script owner:pyth:list --network testnet --query wal --quote USD --limit 5
+// and pick a `Coin-type`/`Currency-id` pair that matches the coin you can acquire.
 const DEFAULT_WAL_COIN_TYPE =
-  "0x8270feb7375eee355e64fdb69c50abb6b5f9393a722883c1cf45f8e26048810a::wal::WAL"
-// Pyth feed config for WAL (Walrus Protocol) on testnet.
-const DEFAULT_WAL_FEED_ID =
-  "0xa6ba0195b5364be116059e401fb71484ed3400d4d9bfbdf46bd11eab4f9b7cea"
-const DEFAULT_WAL_PRICE_INFO_OBJECT_ID =
-  "0x52e5fb291bd86ca8bdd3e6d89ef61d860ea02e009a64bcc287bc703907ff3e8a"
+  "0xa7f7382f67ef48972ad6a92677f2a764201041f5e29c7a9e0389b75e61038cdf::wal::WAL"
+// Pyth feed ids are resolved at runtime from Hermes using the coin symbol + quote.
+const DEFAULT_PYTH_QUOTE_SYMBOL = "USD"
 const DEFAULT_ITEM_MODULE = "items"
+const ITEM_EXAMPLES_PACKAGE_NAME = "item-examples"
 
 type ShopSeedArguments = {
   shopPackageId?: string
@@ -131,6 +147,10 @@ type DiscountTemplateMap = Record<
   { discountTemplateId: string } | undefined
 >
 
+type AcceptedCurrencySeedInput = {
+  coinType: string
+}
+
 type AcceptedCurrencySeed = {
   coinType: string
   feedId: string
@@ -138,17 +158,9 @@ type AcceptedCurrencySeed = {
   currencyId?: string
 }
 
-const ACCEPTED_CURRENCY_SEEDS: AcceptedCurrencySeed[] = [
-  {
-    coinType: DEFAULT_USDC_COIN_TYPE,
-    feedId: DEFAULT_USDC_FEED_ID,
-    priceInfoObjectId: DEFAULT_USDC_PRICE_INFO_OBJECT_ID
-  },
-  {
-    coinType: DEFAULT_WAL_COIN_TYPE,
-    feedId: DEFAULT_WAL_FEED_ID,
-    priceInfoObjectId: DEFAULT_WAL_PRICE_INFO_OBJECT_ID
-  }
+const ACCEPTED_CURRENCY_SEEDS: AcceptedCurrencySeedInput[] = [
+  { coinType: DEFAULT_USDC_COIN_TYPE },
+  { coinType: DEFAULT_WAL_COIN_TYPE }
 ]
 
 type MockPriceFeedArtifact = NonNullable<MockArtifact["priceFeeds"]>[number]
@@ -215,19 +227,16 @@ runSuiScript(
     )
     logShopOverview(shopOverview)
 
-    const itemPackageId = await resolveItemExamplesPackageIdForNetwork({
+    const { listingSeeds } = await resolveItemListingSeeds({
+      cliArguments,
       networkName,
-      itemPackageId: cliArguments.itemPackageId
-    })
-    const listingSeeds = buildItemListingSeeds(itemPackageId)
-    await ensureListingTypesAvailable({
-      listingSeeds,
-      networkName,
+      tooling,
       suiClient
     })
 
     const acceptedCurrencySeeds = await resolveAcceptedCurrencySeeds({
-      networkName
+      networkName,
+      suiClient
     })
     await ensureAcceptedCurrencies({
       acceptedCurrencySeeds,
@@ -380,7 +389,7 @@ const resolveExistingShopIdentifiers = async ({
   allowMissing: boolean
 }) => {
   try {
-    return await resolveLatestShopIdentifiers(
+    return await resolveMaybeLatestShopIdentifiers(
       {
         packageId: cliArguments.shopPackageId,
         shopId: cliArguments.shopId,
@@ -428,20 +437,21 @@ const resolveItemExamplesPackageIdForNetwork = async ({
   return resolvedPackageId
 }
 
-const ensureListingTypesAvailable = async ({
+const resolveItemExamplesPackagePath = (tooling: Tooling) =>
+  path.join(tooling.suiConfig.paths.move, ITEM_EXAMPLES_PACKAGE_NAME)
+
+const findMissingItemTypes = async ({
   listingSeeds,
-  networkName,
   suiClient
 }: {
   listingSeeds: ItemListingSeed[]
-  networkName: string
   suiClient: SuiClient
-}) => {
+}): Promise<string[]> => {
   const uniqueItemTypes = [
     ...new Set(listingSeeds.map((listing) => listing.itemType))
   ]
 
-  await Promise.all(
+  const missingItemTypes = await Promise.all(
     uniqueItemTypes.map(async (itemType) => {
       const { address, module, name } = parseStructTag(itemType)
 
@@ -451,27 +461,253 @@ const ensureListingTypesAvailable = async ({
           module,
           struct: name
         })
+        return undefined
       } catch {
-        const artifactPath = `deployments/deployment.${networkName}.json`
-        throw new Error(
-          `Failed to locate ${itemType} on ${networkName}. Ensure the item-examples package is published and recorded in ${artifactPath} (run \`pnpm --filter dapp mock:setup -- --re-publish\`).`
-        )
+        return itemType
       }
     })
   )
+
+  return missingItemTypes.filter(Boolean) as string[]
+}
+
+const buildMissingItemTypesError = ({
+  missingItemTypes,
+  networkName
+}: {
+  missingItemTypes: string[]
+  networkName: string
+}) => {
+  const artifactPath = `deployments/deployment.${networkName}.json`
+  const missingTypeSummary =
+    missingItemTypes.length === 1
+      ? missingItemTypes[0]
+      : missingItemTypes.join(", ")
+  const publishCommand =
+    networkName === "localnet"
+      ? "pnpm --filter dapp mock:setup -- --re-publish"
+      : "pnpm --filter dapp move:publish -- --package-path item-examples --re-publish"
+
+  return new Error(
+    `Failed to locate ${missingTypeSummary} on ${networkName}. Ensure the item-examples package is published and recorded in ${artifactPath} (run \`${publishCommand}\`).`
+  )
+}
+
+const ensureListingTypesAvailable = async ({
+  listingSeeds,
+  networkName,
+  suiClient
+}: {
+  listingSeeds: ItemListingSeed[]
+  networkName: string
+  suiClient: SuiClient
+}) => {
+  const missingItemTypes = await findMissingItemTypes({
+    listingSeeds,
+    suiClient
+  })
+  if (!missingItemTypes.length) return
+
+  throw buildMissingItemTypesError({ missingItemTypes, networkName })
+}
+
+const publishItemExamplesPackage = async ({
+  networkName,
+  tooling
+}: {
+  networkName: string
+  tooling: Tooling
+}) => {
+  logWarning(
+    `Missing item types detected on ${networkName}; publishing item-examples.`
+  )
+
+  const publishArtifact = await publishMovePackageWithFunding({
+    tooling,
+    packagePath: resolveItemExamplesPackagePath(tooling)
+  })
+
+  const publishedPackageId = normalizeSuiObjectId(publishArtifact.packageId)
+
+  if (networkName === "localnet") {
+    await writeMockArtifact(mockArtifactPath, {
+      itemPackageId: publishedPackageId
+    })
+  }
+
+  return publishedPackageId
+}
+
+const resolveItemListingSeeds = async ({
+  cliArguments,
+  networkName,
+  tooling,
+  suiClient
+}: {
+  cliArguments: ShopSeedArguments
+  networkName: string
+  tooling: Tooling
+  suiClient: SuiClient
+}): Promise<{ itemPackageId: string; listingSeeds: ItemListingSeed[] }> => {
+  const itemPackageId = await resolveItemExamplesPackageIdForNetwork({
+    networkName,
+    itemPackageId: cliArguments.itemPackageId
+  })
+  const listingSeeds = buildItemListingSeeds(itemPackageId)
+
+  const missingItemTypes = await findMissingItemTypes({
+    listingSeeds,
+    suiClient
+  })
+
+  if (!missingItemTypes.length) return { itemPackageId, listingSeeds }
+
+  if (cliArguments.itemPackageId)
+    throw buildMissingItemTypesError({ missingItemTypes, networkName })
+
+  const publishedItemPackageId = await publishItemExamplesPackage({
+    networkName,
+    tooling
+  })
+  const refreshedListingSeeds = buildItemListingSeeds(publishedItemPackageId)
+
+  await ensureListingTypesAvailable({
+    listingSeeds: refreshedListingSeeds,
+    networkName,
+    suiClient
+  })
+
+  return {
+    itemPackageId: publishedItemPackageId,
+    listingSeeds: refreshedListingSeeds
+  }
 }
 
 const resolveAcceptedCurrencySeeds = async ({
-  networkName
+  networkName,
+  suiClient
 }: {
   networkName: string
+  suiClient: SuiClient
 }): Promise<AcceptedCurrencySeed[]> => {
-  if (networkName === "testnet") return ACCEPTED_CURRENCY_SEEDS
+  if (networkName === "testnet")
+    return resolveTestnetAcceptedCurrencySeeds({ suiClient })
   if (networkName === "localnet") return buildLocalnetAcceptedCurrencySeeds()
 
   throw new Error(
     `shop-seed only supports testnet and localnet networks (received ${networkName}).`
   )
+}
+
+const resolveTestnetAcceptedCurrencySeeds = async ({
+  suiClient
+}: {
+  suiClient: SuiClient
+}): Promise<AcceptedCurrencySeed[]> => {
+  const pythConfig = requirePythPullOracleConfig(
+    resolvePythPullOracleConfig("testnet")
+  )
+  const pythClient = createPythClient({
+    suiClient,
+    pythStateId: pythConfig.pythStateId,
+    wormholeStateId: pythConfig.wormholeStateId
+  })
+
+  return Promise.all(
+    ACCEPTED_CURRENCY_SEEDS.map(async (seed) => {
+      const normalizedCoinType = normalizeCoinType(seed.coinType)
+      const { currencyId, symbol } = await resolveCurrencyRegistrySummary({
+        coinType: normalizedCoinType,
+        suiClient
+      })
+      const baseSymbol = symbol ?? extractSymbolFromType(normalizedCoinType)
+
+      const feedResolution = await resolvePythFeedResolution({
+        hermesUrl: pythConfig.hermesUrl,
+        baseSymbol,
+        quoteSymbol: DEFAULT_PYTH_QUOTE_SYMBOL
+      })
+
+      if (!feedResolution.selected) {
+        if (feedResolution.candidates.length > 1) {
+          throw new Error(
+            `Multiple Pyth feeds match ${baseSymbol}/${DEFAULT_PYTH_QUOTE_SYMBOL}: ${formatPythFeedCandidates(
+              feedResolution.candidates
+            )}`
+          )
+        }
+
+        throw new Error(
+          `Unable to resolve a Pyth feed for ${baseSymbol}/${DEFAULT_PYTH_QUOTE_SYMBOL}. Run \`pnpm -s script owner:pyth:list --network testnet --query ${baseSymbol} --quote ${DEFAULT_PYTH_QUOTE_SYMBOL} --limit 5\` to inspect available feeds.`
+        )
+      }
+
+      const feedId = normalizePythFeedId(feedResolution.selected.feedId)
+
+      const priceInfoObjectId = await resolvePythPriceInfoObjectId({
+        pythClient,
+        feedId
+      })
+
+      if (!priceInfoObjectId) {
+        throw new Error(
+          `Unable to resolve Pyth PriceInfoObject id for feed ${feedId}. Run \`pnpm -s script owner:pyth:list --network testnet --query ${baseSymbol} --quote ${DEFAULT_PYTH_QUOTE_SYMBOL} --limit 5\` to verify the feed.`
+        )
+      }
+
+      return {
+        coinType: normalizedCoinType,
+        feedId,
+        priceInfoObjectId,
+        currencyId
+      }
+    })
+  )
+}
+
+const resolveCurrencyRegistrySummary = async ({
+  coinType,
+  suiClient
+}: {
+  coinType: string
+  suiClient: SuiClient
+}): Promise<{ currencyId: string; symbol?: string }> => {
+  const currencyId = await resolveCurrencyObjectId(
+    {
+      coinType,
+      registryId: SUI_COIN_REGISTRY_ID,
+      fallbackRegistryScan: true
+    },
+    { suiClient }
+  )
+
+  if (!currencyId)
+    throw new Error(
+      `Could not resolve currency registry entry for ${coinType}. Provide an updated coin type or register the coin first.`
+    )
+
+  const currencyObject = await suiClient.getObject({
+    id: currencyId,
+    options: { showContent: true, showType: true }
+  })
+
+  return {
+    currencyId: normalizeSuiObjectId(currencyId),
+    symbol: readCurrencySymbol(currencyObject)
+  }
+}
+
+const extractSymbolFromType = (coinType: string) => {
+  const segments = coinType.split("::")
+  return segments[segments.length - 1]
+}
+
+const readCurrencySymbol = (object: SuiObjectResponse) => {
+  const data = object.data
+  if (!data?.content || data.content.dataType !== "moveObject") return undefined
+
+  const fields = data.content.fields as Record<string, unknown>
+  return readMoveString(fields.symbol)
 }
 
 const buildLocalnetAcceptedCurrencySeeds = async (): Promise<

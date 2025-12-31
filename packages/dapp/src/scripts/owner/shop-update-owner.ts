@@ -12,7 +12,7 @@ import {
   getShopOwnerAddressFromObject
 } from "@sui-oracle-market/domain-core/models/shop"
 import { buildUpdateShopOwnerTransaction } from "@sui-oracle-market/domain-core/ptb/shop"
-import { resolveLatestShopIdentifiers } from "@sui-oracle-market/domain-node/shop-identifiers"
+import { resolveLatestShopIdentifiers } from "@sui-oracle-market/domain-node/shop"
 import { logKeyValueGreen } from "@sui-oracle-market/tooling-node/log"
 import { runSuiScript } from "@sui-oracle-market/tooling-node/process"
 import { logShopOverview } from "../../utils/log-summaries.ts"

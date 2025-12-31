@@ -43,6 +43,31 @@ export const normalizeCoinType = (coinType: string): string => {
 export const normalizeOptionalCoinType = (coinType?: string) =>
   coinType ? normalizeCoinType(coinType) : undefined
 
+export const ensureSignerOwnsCoin = ({
+  coinObjectId,
+  coinOwnerAddress,
+  signerAddress
+}: {
+  coinObjectId: string
+  coinOwnerAddress: string
+  signerAddress: string
+}) => {
+  if (coinOwnerAddress !== signerAddress)
+    throw new Error(
+      `Coin object ${coinObjectId} is owned by ${coinOwnerAddress}, not the signer ${signerAddress}.`
+    )
+}
+
+export const extractCoinType = (objectType?: string): string => {
+  if (!objectType)
+    throw new Error("Coin object is missing its type information.")
+
+  if (!objectType.includes("::coin::Coin<"))
+    throw new Error(`Object ${objectType} is not a Coin object.`)
+
+  return objectType
+}
+
 export const findAcceptedCurrencyByCoinType = async ({
   coinType,
   shopId,

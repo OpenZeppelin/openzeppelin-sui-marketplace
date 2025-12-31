@@ -19,7 +19,6 @@ import {
   type NormalizedRuleKind
 } from "@sui-oracle-market/domain-core/models/discount"
 import { buildCreateDiscountTemplateTransaction } from "@sui-oracle-market/domain-core/ptb/discount-template"
-import { resolveLatestShopIdentifiers } from "@sui-oracle-market/domain-node/shop-identifiers"
 import { normalizeOptionalId } from "@sui-oracle-market/tooling-core/object"
 import {
   parseNonNegativeU64,
@@ -28,6 +27,7 @@ import {
 import { logKeyValueGreen } from "@sui-oracle-market/tooling-node/log"
 import { runSuiScript } from "@sui-oracle-market/tooling-node/process"
 import { logDiscountTemplateSummary } from "../../utils/log-summaries.ts"
+import { resolveLatestShopIdentifiers } from "@sui-oracle-market/domain-node/shop"
 
 type CreateDiscountTemplateArguments = {
   shopPackageId?: string

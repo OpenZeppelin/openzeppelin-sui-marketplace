@@ -12,10 +12,10 @@ import {
   buildClearDiscountTemplateTransaction,
   resolveListingIdForShop
 } from "@sui-oracle-market/domain-core/ptb/item-listing"
-import { resolveLatestShopIdentifiers } from "@sui-oracle-market/domain-node/shop-identifiers"
 import { logKeyValueGreen } from "@sui-oracle-market/tooling-node/log"
 import { runSuiScript } from "@sui-oracle-market/tooling-node/process"
 import { logItemListingSummary } from "../../utils/log-summaries.ts"
+import { resolveLatestShopIdentifiers } from "@sui-oracle-market/domain-node/shop"
 
 type ClearDiscountTemplateArguments = {
   shopPackageId?: string

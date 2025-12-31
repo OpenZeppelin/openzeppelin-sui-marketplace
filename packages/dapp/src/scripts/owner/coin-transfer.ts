@@ -4,15 +4,15 @@
  * If you come from EVM, there is no allowance or transferFrom here; the signer must own the Coin object.
  * This script validates ownership, builds a PTB, and reports the transfer digest.
  */
-import type { ObjectOwner } from "@mysten/sui/client"
 import { normalizeSuiAddress, normalizeSuiObjectId } from "@mysten/sui/utils"
 import yargs from "yargs"
 
 import { buildCoinTransferTransaction } from "@sui-oracle-market/tooling-core/coin"
 import { parsePositiveU64 } from "@sui-oracle-market/tooling-core/utils/utility"
-import type { Tooling } from "@sui-oracle-market/tooling-node/factory"
 import { logKeyValueGreen } from "@sui-oracle-market/tooling-node/log"
 import { runSuiScript } from "@sui-oracle-market/tooling-node/process"
+import { ensureSignerOwnsCoin } from "@sui-oracle-market/domain-core/models/currency"
+import { resolveCoinOwnershipSnapshot } from "@sui-oracle-market/domain-node/coin"
 
 type TransferCoinArguments = {
   coinId: string
@@ -25,13 +25,6 @@ type NormalizedInputs = {
   amount: bigint
   recipientAddress: string
 }
-
-type CoinOwnershipSnapshot = {
-  coinType: string
-  ownerAddress: string
-}
-
-type GetSuiObject = Tooling["getSuiObject"]
 
 runSuiScript(
   async (tooling, cliArguments) => {
@@ -97,67 +90,6 @@ const normalizeInputs = (
   amount: parsePositiveU64(cliArguments.amount, "amount"),
   recipientAddress: normalizeSuiAddress(cliArguments.recipient)
 })
-
-const resolveCoinOwnershipSnapshot = async ({
-  coinObjectId,
-  getSuiObject
-}: {
-  coinObjectId: string
-  getSuiObject: GetSuiObject
-}): Promise<CoinOwnershipSnapshot> => {
-  const { object, owner } = await getSuiObject({
-    objectId: coinObjectId,
-    options: { showOwner: true, showType: true }
-  })
-
-  const coinType = extractCoinType(object.type || undefined)
-  const ownerAddress = extractOwnerAddress(owner)
-
-  return {
-    coinType,
-    ownerAddress
-  }
-}
-
-const extractCoinType = (objectType?: string): string => {
-  if (!objectType)
-    throw new Error("Coin object is missing its type information.")
-
-  if (!objectType.includes("::coin::Coin<"))
-    throw new Error(`Object ${objectType} is not a Coin object.`)
-
-  return objectType
-}
-
-const extractOwnerAddress = (owner?: ObjectOwner): string => {
-  if (!owner) throw new Error("Coin object is missing its owner.")
-
-  if (typeof owner !== "object" || owner === null) {
-    throw new Error("Coin object is not address-owned.")
-  }
-
-  if ("AddressOwner" in owner) return normalizeSuiAddress(owner.AddressOwner)
-
-  if ("ConsensusAddressOwner" in owner)
-    return normalizeSuiAddress(owner.ConsensusAddressOwner.owner)
-
-  throw new Error("Coin object is not address-owned.")
-}
-
-const ensureSignerOwnsCoin = ({
-  coinObjectId,
-  coinOwnerAddress,
-  signerAddress
-}: {
-  coinObjectId: string
-  coinOwnerAddress: string
-  signerAddress: string
-}) => {
-  if (coinOwnerAddress !== signerAddress)
-    throw new Error(
-      `Coin object ${coinObjectId} is owned by ${coinOwnerAddress}, not the signer ${signerAddress}.`
-    )
-}
 
 const logTransferSummary = ({
   coinObjectId,

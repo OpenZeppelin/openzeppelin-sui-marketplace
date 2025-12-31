@@ -13,7 +13,7 @@ import {
   buildAttachDiscountTemplateTransaction,
   validateTemplateAndListing
 } from "@sui-oracle-market/domain-core/ptb/item-listing"
-import { resolveLatestShopIdentifiers } from "@sui-oracle-market/domain-node/shop-identifiers"
+import { resolveLatestShopIdentifiers } from "@sui-oracle-market/domain-node/shop"
 import { logKeyValueGreen } from "@sui-oracle-market/tooling-node/log"
 import { runSuiScript } from "@sui-oracle-market/tooling-node/process"
 import {

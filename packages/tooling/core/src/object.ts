@@ -366,3 +366,18 @@ export const objectTypeMatches = (
   object: SuiObjectResponse | undefined,
   expectedType: string
 ) => extractObjectType(object)?.toLowerCase() === expectedType.toLowerCase()
+
+export const extractOwnerAddress = (owner?: ObjectOwner): string => {
+  if (!owner) throw new Error("Coin object is missing its owner.")
+
+  if (typeof owner !== "object" || owner === null) {
+    throw new Error("Coin object is not address-owned.")
+  }
+
+  if ("AddressOwner" in owner) return normalizeSuiAddress(owner.AddressOwner)
+
+  if ("ConsensusAddressOwner" in owner)
+    return normalizeSuiAddress(owner.ConsensusAddressOwner.owner)
+
+  throw new Error("Coin object is not address-owned.")
+}

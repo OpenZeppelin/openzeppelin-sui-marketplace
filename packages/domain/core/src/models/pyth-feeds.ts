@@ -124,6 +124,142 @@ export const resolvePythPriceInfoObjectId = async ({
 export const normalizePythFeedId = (feedId: string) =>
   feedId.startsWith("0x") ? feedId : `0x${feedId}`
 
+export const normalizeSymbol = (symbol?: string) =>
+  symbol?.trim().toLowerCase() || undefined
+
+type NormalizedSymbolPair = {
+  base: string
+  quote: string
+}
+
+export type PythFeedResolution = {
+  candidates: PythFeedSummary[]
+  selected?: PythFeedSummary
+}
+
+const normalizeSymbolPair = (
+  baseSymbol?: string,
+  quoteSymbol?: string
+): NormalizedSymbolPair | undefined => {
+  const base = normalizeSymbol(baseSymbol)
+  const quote = normalizeSymbol(quoteSymbol)
+  if (!base || !quote) return undefined
+  return { base, quote }
+}
+
+const findPythFeedCandidatesForPair = ({
+  feedSummaries,
+  symbolPair
+}: {
+  feedSummaries: PythFeedSummary[]
+  symbolPair: NormalizedSymbolPair
+}) => {
+  const exactMatches = feedSummaries.filter((summary) =>
+    isExactSymbolMatch({
+      summary,
+      symbolPair
+    })
+  )
+
+  if (exactMatches.length > 0) return exactMatches
+
+  return feedSummaries.filter((summary) =>
+    isFallbackSymbolMatch({
+      summary,
+      symbolPair
+    })
+  )
+}
+
+const selectPreferredCandidate = ({
+  candidates,
+  symbolPair
+}: {
+  candidates: PythFeedSummary[]
+  symbolPair: NormalizedSymbolPair
+}) => {
+  if (candidates.length === 0) return undefined
+  if (candidates.length === 1) return candidates[0]
+
+  const symbolLabel = `${symbolPair.base}/${symbolPair.quote}`
+  return candidates.find(
+    (summary) => normalizeSymbol(summary.symbol) === symbolLabel
+  )
+}
+
+const isExactSymbolMatch = ({
+  summary,
+  symbolPair
+}: {
+  summary: PythFeedSummary
+  symbolPair: NormalizedSymbolPair
+}) =>
+  normalizeSymbol(summary.baseSymbol) === symbolPair.base &&
+  normalizeSymbol(summary.quoteSymbol) === symbolPair.quote
+
+const isFallbackSymbolMatch = ({
+  summary,
+  symbolPair
+}: {
+  summary: PythFeedSummary
+  symbolPair: NormalizedSymbolPair
+}) => {
+  const symbolPairFromSummary =
+    parseSymbolPair(summary.symbol) ?? parseSymbolPair(summary.description)
+  if (!symbolPairFromSummary) return false
+
+  return (
+    normalizeSymbol(symbolPairFromSummary.base) === symbolPair.base &&
+    normalizeSymbol(symbolPairFromSummary.quote) === symbolPair.quote
+  )
+}
+
+const parseSymbolPair = (value?: string) => {
+  if (!value) return undefined
+  const match = value.match(/([A-Za-z0-9]+)\s*\/\s*([A-Za-z0-9]+)/)
+  if (!match) return undefined
+  return { base: match[1], quote: match[2] }
+}
+
+export const formatPythFeedCandidates = (summaries: PythFeedSummary[]) =>
+  summaries
+    .map(
+      (summary) =>
+        `${summary.feedId} (${summary.symbol ?? summary.description ?? "n/a"})`
+    )
+    .join(", ")
+
+export const resolvePythFeedResolution = async ({
+  hermesUrl,
+  baseSymbol,
+  quoteSymbol
+}: {
+  hermesUrl: string
+  baseSymbol: string
+  quoteSymbol: string
+}): Promise<PythFeedResolution> => {
+  const symbolPair = normalizeSymbolPair(baseSymbol, quoteSymbol)
+  if (!symbolPair) return { candidates: [] }
+
+  const feedSummaries = await listPythFeedSummaries({
+    hermesUrl,
+    query: baseSymbol
+  })
+
+  const candidates = findPythFeedCandidatesForPair({
+    feedSummaries,
+    symbolPair
+  })
+
+  return {
+    candidates,
+    selected: selectPreferredCandidate({
+      candidates,
+      symbolPair
+    })
+  }
+}
+
 const buildHermesRequestOptions = ({
   query,
   assetType

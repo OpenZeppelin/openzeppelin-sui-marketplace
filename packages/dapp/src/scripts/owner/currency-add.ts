@@ -16,7 +16,6 @@ import {
   type AcceptedCurrencyMatch
 } from "@sui-oracle-market/domain-core/models/currency"
 import { buildAddAcceptedCurrencyTransaction } from "@sui-oracle-market/domain-core/ptb/currency"
-import { resolveLatestShopIdentifiers } from "@sui-oracle-market/domain-node/shop-identifiers"
 import { resolveCurrencyObjectId } from "@sui-oracle-market/tooling-core/coin-registry"
 import {
   assertBytesLength,
@@ -28,6 +27,7 @@ import { SUI_COIN_REGISTRY_ID } from "@sui-oracle-market/tooling-node/constants"
 import { logKeyValueGreen } from "@sui-oracle-market/tooling-node/log"
 import { runSuiScript } from "@sui-oracle-market/tooling-node/process"
 import { logAcceptedCurrencySummary } from "../../utils/log-summaries.ts"
+import { resolveLatestShopIdentifiers } from "@sui-oracle-market/domain-node/shop"
 
 type AddCurrencyArguments = {
   shopPackageId?: string

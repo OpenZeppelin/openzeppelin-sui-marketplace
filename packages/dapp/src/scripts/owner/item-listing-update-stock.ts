@@ -9,7 +9,7 @@ import yargs from "yargs"
 
 import { getItemListingSummary } from "@sui-oracle-market/domain-core/models/item-listing"
 import { buildUpdateItemListingStockTransaction } from "@sui-oracle-market/domain-core/ptb/item-listing"
-import { resolveLatestShopIdentifiers } from "@sui-oracle-market/domain-node/shop-identifiers"
+import { resolveLatestShopIdentifiers } from "@sui-oracle-market/domain-node/shop"
 import { parseNonNegativeU64 } from "@sui-oracle-market/tooling-core/utils/utility"
 import { logKeyValueGreen } from "@sui-oracle-market/tooling-node/log"
 import { runSuiScript } from "@sui-oracle-market/tooling-node/process"

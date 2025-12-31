@@ -19,7 +19,7 @@ import {
 } from "@sui-oracle-market/domain-core/models/discount"
 import { SUI_CLOCK_ID } from "@sui-oracle-market/domain-core/models/pyth"
 import { buildUpdateDiscountTemplateTransaction } from "@sui-oracle-market/domain-core/ptb/discount-template"
-import { resolveLatestShopIdentifiers } from "@sui-oracle-market/domain-node/shop-identifiers"
+import { resolveLatestShopIdentifiers } from "@sui-oracle-market/domain-node/shop"
 import {
   parseNonNegativeU64,
   parseOptionalU64

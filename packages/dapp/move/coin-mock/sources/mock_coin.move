@@ -18,7 +18,7 @@ public struct LocalMockBtc has key, store {
   id: obj::UID,
 }
 
-const MOCK_COIN_SUPPLY: u64 = 1_000_000_000_000;
+const MOCK_COIN_SUPPLY: u64 = 1_000_000_000_000_000_000;
 
 public entry fun init_local_mock_usd(
   registry: &mut registry::CoinRegistry,

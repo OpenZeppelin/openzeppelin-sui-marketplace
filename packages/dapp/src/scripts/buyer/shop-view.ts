@@ -8,7 +8,6 @@ import { getAcceptedCurrencySummaries } from "@sui-oracle-market/domain-core/mod
 import { getDiscountTemplateSummaries } from "@sui-oracle-market/domain-core/models/discount"
 import { getItemListingSummaries } from "@sui-oracle-market/domain-core/models/item-listing"
 import { getShopOverview } from "@sui-oracle-market/domain-core/models/shop"
-import { resolveLatestArtifactShopId } from "@sui-oracle-market/domain-node/shop-identifiers"
 import { logKeyValueBlue } from "@sui-oracle-market/tooling-node/log"
 import { runSuiScript } from "@sui-oracle-market/tooling-node/process"
 import yargs from "yargs"
@@ -19,6 +18,7 @@ import {
   logItemListingSummary,
   logShopOverview
 } from "../../utils/log-summaries.ts"
+import { resolveLatestArtifactShopId } from "@sui-oracle-market/domain-node/shop"
 
 type ShowShopArguments = {
   shopId?: string

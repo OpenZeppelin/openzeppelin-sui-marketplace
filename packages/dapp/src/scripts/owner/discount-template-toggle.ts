@@ -9,10 +9,10 @@ import yargs from "yargs"
 
 import { getDiscountTemplateSummary } from "@sui-oracle-market/domain-core/models/discount"
 import { buildToggleDiscountTemplateTransaction } from "@sui-oracle-market/domain-core/ptb/discount-template"
-import { resolveLatestShopIdentifiers } from "@sui-oracle-market/domain-node/shop-identifiers"
 import { logKeyValueGreen } from "@sui-oracle-market/tooling-node/log"
 import { runSuiScript } from "@sui-oracle-market/tooling-node/process"
 import { logDiscountTemplateSummary } from "../../utils/log-summaries.ts"
+import { resolveLatestShopIdentifiers } from "@sui-oracle-market/domain-node/shop"
 
 type ToggleDiscountTemplateArguments = {
   shopPackageId?: string

@@ -14,11 +14,11 @@ import {
   requireAcceptedCurrencyByCoinType
 } from "@sui-oracle-market/domain-core/models/currency"
 import { buildRemoveAcceptedCurrencyTransaction } from "@sui-oracle-market/domain-core/ptb/currency"
-import { resolveLatestShopIdentifiers } from "@sui-oracle-market/domain-node/shop-identifiers"
 import { normalizeOptionalId } from "@sui-oracle-market/tooling-core/object"
 import type { Tooling } from "@sui-oracle-market/tooling-node/factory"
 import { logKeyValueGreen } from "@sui-oracle-market/tooling-node/log"
 import { runSuiScript } from "@sui-oracle-market/tooling-node/process"
+import { resolveLatestShopIdentifiers } from "@sui-oracle-market/domain-node/shop"
 
 type RemoveCurrencyArguments = {
   shopPackageId?: string

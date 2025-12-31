@@ -21,7 +21,6 @@ import {
 } from "@sui-oracle-market/domain-core/models/currency"
 import { getItemListingSummary } from "@sui-oracle-market/domain-core/models/item-listing"
 import type { PriceUpdatePolicy } from "@sui-oracle-market/domain-core/models/pyth"
-import { resolveLatestArtifactShopId } from "@sui-oracle-market/domain-node/shop-identifiers"
 import type { ObjectArtifact } from "@sui-oracle-market/tooling-core/object"
 import {
   deriveRelevantPackageId,
@@ -34,6 +33,7 @@ import {
   logKeyValueYellow
 } from "@sui-oracle-market/tooling-node/log"
 import { runSuiScript } from "@sui-oracle-market/tooling-node/process"
+import { resolveLatestArtifactShopId } from "@sui-oracle-market/domain-node/shop"
 
 type BuyArguments = {
   shopId?: string

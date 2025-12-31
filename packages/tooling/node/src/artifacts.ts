@@ -7,6 +7,13 @@ import path, { dirname } from "node:path"
 export const ARTIFACTS_FILES = ["mock", "deployment", "objects"] as const
 export type ArtifactFile = (typeof ARTIFACTS_FILES)[number]
 
+export const pickRootNonDependencyArtifact = (artifacts: PublishArtifact[]) => {
+  const artifact =
+    artifacts.find((candidate) => !candidate.isDependency) ?? artifacts[0]
+  if (artifact) return artifact
+  throw new Error("No artifacts to select from.")
+}
+
 const resolveArtifactKey = (value: unknown): string | undefined => {
   if (!value || typeof value !== "object") return undefined
   const record = value as Record<string, unknown>

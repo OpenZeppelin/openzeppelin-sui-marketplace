@@ -10,7 +10,7 @@ import yargs from "yargs"
 import { getItemListingSummary } from "@sui-oracle-market/domain-core/models/item-listing"
 import { parseUsdToCents } from "@sui-oracle-market/domain-core/models/shop"
 import { buildAddItemListingTransaction } from "@sui-oracle-market/domain-core/ptb/item-listing"
-import { resolveLatestShopIdentifiers } from "@sui-oracle-market/domain-node/shop-identifiers"
+import { resolveLatestShopIdentifiers } from "@sui-oracle-market/domain-node/shop"
 import {
   normalizeIdOrThrow,
   normalizeOptionalId

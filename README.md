@@ -47,7 +47,7 @@ sui client faucet --address <0x...>
 pnpm script chain:localnet:start --with-faucet
 
 # 6) Seed mocks (coins + Pyth stub + price feeds)
-pnpm script mock:setup
+pnpm script mock:setup --buyer-address <0x...>
 
 # 7) Publish oracle-market (uses localnet dep replacements for mocks)
 pnpm script move:publish --package-path oracle-market
@@ -155,11 +155,11 @@ Note: running `sui start` without a stable config dir can regenesis and wipe loc
 
 ### 4) Seed mocks (coins + Pyth)
 ```bash
-pnpm script mock:setup
+pnpm script mock:setup --buyer-address <0x...>
 ```
 What it does:
 - Publishes `packages/dapp/move/pyth-mock` and `packages/dapp/move/coin-mock` if needed.
-- Mints mock coins via the coin registry and funds your signer.
+- Mints mock coins via the coin registry, funds your signer, and transfers half of each minted coin to the buyer address.
 - Publishes mock Pyth price feeds with fresh timestamps.
 - Writes artifacts to `packages/dapp/deployments/mock.localnet.json` for reuse.
 
@@ -211,11 +211,11 @@ What it does:
 
 ### 2) Seed local mocks (coins, Pyth feeds, example item types)
 ```bash
-pnpm script mock:setup
+pnpm script mock:setup --buyer-address <0x...>
 ```
 What it does:
 - Publishes mock Move packages (`pyth-mock`, `coin-mock`, and `item-examples`) on localnet.
-- Mints mock coins to the signer and creates two mock Pyth `PriceInfoObject`s.
+- Mints mock coins to the signer, transfers half of each minted coin to the buyer address, and creates two mock Pyth `PriceInfoObject`s.
 - Writes mock artifacts to `packages/dapp/deployments/mock.localnet.json`.
 
 Where to find values:
@@ -480,8 +480,9 @@ Exceptions:
 - Scans the process table for detached `sui start` processes and SIGTERMs them. No flags.
 
 #### `pnpm script mock:setup`
-- Localnet-only seeding. Publishes/reuses `pyth-mock`, `coin-mock`, and `item-examples`, mints mock coins, and creates two mock Pyth price feeds. Writes artifacts to `packages/dapp/deployments/mock.localnet.json`.
+- Localnet-only seeding. Publishes/reuses `pyth-mock`, `coin-mock`, and `item-examples`, mints mock coins, transfers half of each minted coin to the buyer address, and creates two mock Pyth price feeds. Writes artifacts to `packages/dapp/deployments/mock.localnet.json`.
 - Flags:
+  - `--buyer-address <0x...>`: buyer address to receive half of each minted mock coin (required; alias `--buyer`).
   - `--coin-package-id <id>` / `--pyth-package-id <id>`: reuse existing mock package IDs instead of publishing.
   - `--coin-contract-path <path>` / `--pyth-contract-path <path>`: override Move package paths.
   - `--re-publish`: ignore existing artifacts; republish mocks and recreate feeds.
@@ -545,7 +546,7 @@ Owner scripts default `--shop-package-id`, `--shop-id`, and `--owner-cap-id` fro
     - USDC PriceInfoObject: `0x9c4dd4008297ffa5e480684b8100ec21cc934405ed9a25d4e4d7b6259aad9c81`
     - WAL feed: `0xa6ba0195b5364be116059e401fb71484ed3400d4d9bfbdf46bd11eab4f9b7cea`
     - WAL PriceInfoObject: `0x52e5fb291bd86ca8bdd3e6d89ef61d860ea02e009a64bcc287bc703907ff3e8a`
-  - **Localnet**: reads `packages/dapp/deployments/mock.localnet.json` for mock coins + feeds (requires `pnpm script mock:setup`).
+  - **Localnet**: reads `packages/dapp/deployments/mock.localnet.json` for mock coins + feeds (requires `pnpm script mock:setup --buyer-address <0x...>`).
 - Seeded data:
   - 4 low-price listings (Car, Bike, ConcertTicket, DigitalPass).
   - 2 discount templates (10% percent + $2 fixed) and attaches the fixed discount to the Bike listing.
@@ -897,10 +898,13 @@ If you need a non-SUI coin for purchases, use FlowX on testnet:
 
 - https://testnet.flowx.finance/
 
-We recommend swapping some SUI into
-`0xea10912247c015ead590e481ae8545ff1518492dee41d6d03abdad828c1d2bde::usdc::USDC`.
-Make sure the coin type matches the accepted currency that will be added in
-the store.
+We recommend swapping some SUI into USDC on testnet.
+
+One coin type currently registered in Sui's coin registry is:
+`0xa7f7382f67ef48972ad6a92677f2a764201041f5e29c7a9e0389b75e61038cdf::usdc::USDC`.
+
+Note: testnet coin package IDs can change over time. Always make sure the coin
+type you acquire matches the accepted currency type configured in the store.
 
 ---
 

@@ -89,7 +89,22 @@ export const addBaseOptions = async <TCliArguments>(
     })
     .strict()
     .help()
-    .parseAsync(hideBin(process.argv))) as CommonCliArgs & TCliArguments
+    .parseAsync(stripYargsTerminator(hideBin(process.argv)))) as CommonCliArgs &
+    TCliArguments
+
+/**
+ * Some runners (notably `ts-node`) insert a literal `--` into argv to
+ * separate their flags from the script flags. When that marker is forwarded
+ * to Node, `yargs` treats it as "end of options" and ignores all flags after.
+ *
+ * We strip leading terminators so CLI flags like `--network` and `--json`
+ * work consistently across `pnpm` scripts.
+ */
+function stripYargsTerminator(argv: string[]) {
+  let startIndex = 0
+  while (argv[startIndex] === "--") startIndex += 1
+  return argv.slice(startIndex)
+}
 
 /**
  * Normalizes CLI argument keys for clean logging (dedupes aliases).

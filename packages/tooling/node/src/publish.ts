@@ -15,11 +15,12 @@ import type {
 
 import {
   getDeploymentArtifactPath,
+  pickRootNonDependencyArtifact,
   writeDeploymentArtifact
 } from "./artifacts.ts"
 import type { SuiNetworkConfig } from "./config.ts"
 import { DEFAULT_PUBLISH_GAS_BUDGET } from "./constants.ts"
-import type { ToolingContext } from "./factory.ts"
+import type { Tooling, ToolingContext } from "./factory.ts"
 import {
   logKeyValueBlue,
   logKeyValueGreen,
@@ -1037,3 +1038,37 @@ const isSizeLimitError = (error: unknown) => {
  */
 const shouldRetryWithCli = (plan: PublishPlan, error: unknown) =>
   !plan.useCliPublish && isSizeLimitError(error)
+
+export const publishMovePackageWithFunding = async ({
+  tooling,
+  packagePath,
+  gasBudget,
+  withUnpublishedDependencies,
+  allowAutoUnpublishedDependencies
+}: {
+  tooling: Tooling
+  packagePath: string
+  gasBudget?: number
+  withUnpublishedDependencies?: boolean
+  allowAutoUnpublishedDependencies?: boolean
+}): Promise<PublishArtifact> => {
+  const keypair = tooling.loadedEd25519KeyPair
+
+  const artifacts = await tooling.withTestnetFaucetRetry(
+    {
+      signerAddress: keypair.toSuiAddress(),
+      signer: keypair
+    },
+    async () =>
+      tooling.publishPackageWithLog({
+        packagePath: path.resolve(packagePath),
+        keypair,
+        gasBudget,
+        withUnpublishedDependencies,
+        useCliPublish: true,
+        allowAutoUnpublishedDependencies
+      })
+  )
+
+  return pickRootNonDependencyArtifact(artifacts)
+}

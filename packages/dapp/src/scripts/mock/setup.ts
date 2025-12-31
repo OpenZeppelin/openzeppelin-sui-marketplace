@@ -8,7 +8,11 @@ import path from "node:path"
 
 import type { SuiClient, SuiTransactionBlockResponse } from "@mysten/sui/client"
 import type { Ed25519Keypair } from "@mysten/sui/keypairs/ed25519"
-import { deriveObjectID, normalizeSuiObjectId } from "@mysten/sui/utils"
+import {
+  deriveObjectID,
+  normalizeSuiAddress,
+  normalizeSuiObjectId
+} from "@mysten/sui/utils"
 import yargs from "yargs"
 
 import {
@@ -17,11 +21,11 @@ import {
   SUI_CLOCK_ID,
   type MockPriceFeedConfig
 } from "@sui-oracle-market/domain-core/models/pyth"
+import { buildCoinTransferTransaction } from "@sui-oracle-market/tooling-core/coin"
 import { normalizeHex } from "@sui-oracle-market/tooling-core/hex"
 import { assertLocalnetNetwork } from "@sui-oracle-market/tooling-core/network"
 import { objectTypeMatches } from "@sui-oracle-market/tooling-core/object"
 import type { WrappedSuiSharedObject } from "@sui-oracle-market/tooling-core/shared-object"
-import type { PublishArtifact } from "@sui-oracle-market/tooling-core/types"
 import { readArtifact } from "@sui-oracle-market/tooling-node/artifacts"
 import {
   DEFAULT_TX_GAS_BUDGET,
@@ -34,14 +38,18 @@ import {
   logWarning
 } from "@sui-oracle-market/tooling-node/log"
 import { runSuiScript } from "@sui-oracle-market/tooling-node/process"
+import { publishMovePackageWithFunding } from "@sui-oracle-market/tooling-node/publish"
 import {
   findCreatedObjectIds,
   newTransaction
 } from "@sui-oracle-market/tooling-node/transactions"
 import type { MockArtifact } from "../../utils/mocks.ts"
 import { mockArtifactPath, writeMockArtifact } from "../../utils/mocks.ts"
+import { ensureSignerOwnsCoin } from "@sui-oracle-market/domain-core/models/currency"
+import { resolveCoinOwnershipSnapshot } from "@sui-oracle-market/domain-node/coin"
 
 type SetupLocalCliArgs = {
+  buyerAddress: string
   coinPackageId?: string
   coinContractPath: string
   itemPackageId?: string
@@ -73,19 +81,23 @@ type LabeledPriceFeedConfig = MockPriceFeedConfig & { label: string }
 type CoinArtifact = NonNullable<MockArtifact["coins"]>[number]
 type ItemTypeArtifact = NonNullable<MockArtifact["itemTypes"]>[number]
 type PriceFeedArtifact = NonNullable<MockArtifact["priceFeeds"]>[number]
+type SeededCoin = {
+  coin: CoinArtifact
+  wasCreated: boolean
+}
+type OwnedCoinBalance = {
+  coinObjectId: string
+  balance: string
+}
+type OwnedCoinSnapshot = {
+  coinObjectId: string
+  balance: bigint
+}
 
 type CoinSeed = {
   label: string
   coinType: string
   initTarget: string
-}
-
-const pickRootArtifact = (artifacts: PublishArtifact[]) => {
-  const artifact =
-    artifacts.find((candidate) => !candidate.isDependency) ?? artifacts[0]
-  if (!artifact)
-    throw new Error("Publish did not return any artifacts to select from.")
-  return artifact
 }
 
 // Two sample feeds to seed Pyth price objects with.
@@ -107,6 +119,13 @@ const DEFAULT_FEEDS: LabeledPriceFeedConfig[] = [
     exponent: -2
   }
 ]
+
+const normalizeSetupInputs = (
+  cliArguments: SetupLocalCliArgs
+): SetupLocalCliArgs => ({
+  ...cliArguments,
+  buyerAddress: normalizeSuiAddress(cliArguments.buyerAddress)
+})
 
 // Parse CLI flags and reuse prior mock artifacts unless --re-publish is set.
 const extendCliArguments = async (
@@ -139,6 +158,7 @@ const extendCliArguments = async (
 
 runSuiScript(
   async (tooling, cliArguments) => {
+    const inputs = normalizeSetupInputs(cliArguments)
     const {
       suiConfig: { network }
     } = tooling
@@ -146,9 +166,7 @@ runSuiScript(
     assertLocalnetNetwork(network.networkName)
 
     // Load prior artifacts unless --re-publish was passed (idempotent runs).
-    const existingState = await extendCliArguments(cliArguments)
-
-    const fullNodeUrl = network.url
+    const existingState = await extendCliArguments(inputs)
 
     // Load signer (env/keystore) and derive address; Sui requires explicit key material for PTBs.
     const keypair = tooling.loadedEd25519KeyPair
@@ -164,10 +182,8 @@ runSuiScript(
     const { coinPackageId, pythPackageId, itemPackageId } =
       await publishMockPackages(
         {
-          fullNodeUrl,
-          keypair,
           existingState,
-          cliArguments
+          cliArguments: inputs
         },
         tooling
       )
@@ -177,8 +193,11 @@ runSuiScript(
       await resolveRegistryAndClockRefs(tooling)
 
     // Ensure mock coins exist (mint + register in coin registry if missing); reuse if already minted.
-    const coins =
-      existingState.existingCoins ||
+    const seededCoins =
+      existingState.existingCoins?.map((coin) => ({
+        coin,
+        wasCreated: false
+      })) ||
       (await ensureMockCoins(
         {
           coinPackageId,
@@ -189,10 +208,26 @@ runSuiScript(
         tooling
       ))
 
+    const coins = seededCoins.map((seeded) => seeded.coin)
+
     // Persist coin artifacts for reuse in later runs/scripts.
     await writeMockArtifact(mockArtifactPath, {
       coins
     })
+
+    const createdCoins = seededCoins
+      .filter((seeded) => seeded.wasCreated)
+      .map((seeded) => seeded.coin)
+
+    await transferHalfTreasuryToBuyer(
+      {
+        coins: createdCoins,
+        buyerAddress: inputs.buyerAddress,
+        signer: keypair,
+        signerAddress
+      },
+      tooling
+    )
 
     // Ensure mock price feeds exist with fresh timestamps; reuse if valid objects already present.
     const priceFeeds =
@@ -230,6 +265,12 @@ runSuiScript(
     logKeyValueGreen("Item types")(JSON.stringify(itemTypes))
   },
   yargs()
+    .option("buyerAddress", {
+      alias: ["buyer-address", "buyer"],
+      type: "string",
+      description: "Buyer address to receive half of each minted mock coin",
+      demandOption: true
+    })
     .option("coinPackageId", {
       alias: "coin-package-id",
       type: "string",
@@ -277,13 +318,9 @@ runSuiScript(
 
 const publishMockPackages = async (
   {
-    fullNodeUrl: _fullNodeUrl,
-    keypair,
     cliArguments,
     existingState
   }: {
-    fullNodeUrl: string
-    keypair: Ed25519Keypair
     cliArguments: SetupLocalCliArgs
     existingState: ExistingState
   },
@@ -292,20 +329,12 @@ const publishMockPackages = async (
   // Publish or reuse the local Pyth stub. We allow unpublished deps here because this is localnet-only.
   const pythPackageId =
     existingState.existingPythPackageId ||
-    pickRootArtifact(
-      await tooling.withTestnetFaucetRetry(
-        {
-          signerAddress: keypair.toSuiAddress(),
-          signer: keypair
-        },
-        async () =>
-          await tooling.publishPackageWithLog({
-            packagePath: path.resolve(cliArguments.pythContractPath),
-            keypair,
-            withUnpublishedDependencies: true,
-            useCliPublish: true
-          })
-      )
+    (
+      await publishMovePackageWithFunding({
+        tooling,
+        packagePath: cliArguments.pythContractPath,
+        withUnpublishedDependencies: true
+      })
     ).packageId
 
   if (pythPackageId !== existingState.existingPythPackageId)
@@ -316,19 +345,11 @@ const publishMockPackages = async (
   // Publish or reuse the local mock coin package.
   const coinPackageId =
     existingState.existingCoinPackageId ||
-    pickRootArtifact(
-      await tooling.withTestnetFaucetRetry(
-        {
-          signerAddress: keypair.toSuiAddress(),
-          signer: keypair
-        },
-        async () =>
-          await tooling.publishPackageWithLog({
-            packagePath: path.resolve(cliArguments.coinContractPath),
-            keypair,
-            useCliPublish: true
-          })
-      )
+    (
+      await publishMovePackageWithFunding({
+        tooling,
+        packagePath: cliArguments.coinContractPath
+      })
     ).packageId
 
   if (coinPackageId !== existingState.existingCoinPackageId)
@@ -338,19 +359,11 @@ const publishMockPackages = async (
 
   const itemPackageId =
     existingState.existingItemPackageId ||
-    pickRootArtifact(
-      await tooling.withTestnetFaucetRetry(
-        {
-          signerAddress: keypair.toSuiAddress(),
-          signer: keypair
-        },
-        async () =>
-          await tooling.publishPackageWithLog({
-            packagePath: path.resolve(cliArguments.itemContractPath),
-            keypair,
-            useCliPublish: true
-          })
-      )
+    (
+      await publishMovePackageWithFunding({
+        tooling,
+        packagePath: cliArguments.itemContractPath
+      })
     ).packageId
 
   if (itemPackageId !== existingState.existingItemPackageId)
@@ -392,7 +405,7 @@ const ensureMockCoins = async (
     coinRegistryObject: WrappedSuiSharedObject
   },
   tooling: Tooling
-): Promise<CoinArtifact[]> =>
+): Promise<SeededCoin[]> =>
   await Promise.all(
     buildCoinSeeds(coinPackageId).map(async (seed) => {
       // For each mock coin type, ensure currency/metadata/treasury exist; mint and register if missing.
@@ -421,7 +434,7 @@ const ensureCoin = async (
     coinRegistryObject: WrappedSuiSharedObject
   },
   tooling: Tooling
-): Promise<CoinArtifact> => {
+): Promise<SeededCoin> => {
   const { suiClient } = tooling
   const currencyObjectId = deriveCurrencyId(seed.coinType)
 
@@ -450,10 +463,13 @@ const ensureCoin = async (
       logKeyValueBlue("Coin")(`${seed.label} ${seed.coinType}`)
     }
     return {
-      label: seed.label,
-      coinType: seed.coinType,
-      currencyObjectId,
-      mintedCoinObjectId
+      coin: {
+        label: seed.label,
+        coinType: seed.coinType,
+        currencyObjectId,
+        mintedCoinObjectId
+      },
+      wasCreated: false
     }
   }
 
@@ -490,9 +506,107 @@ const ensureCoin = async (
   logKeyValueGreen("Coin")(`${seed.label} ${created.currencyObjectId}`)
 
   return {
-    ...created,
-    mintedCoinObjectId: created.mintedCoinObjectId ?? mintedCoinObjectId
+    coin: {
+      ...created,
+      mintedCoinObjectId: created.mintedCoinObjectId ?? mintedCoinObjectId
+    },
+    wasCreated: true
   }
+}
+
+const transferHalfTreasuryToBuyer = async (
+  {
+    coins,
+    buyerAddress,
+    signer,
+    signerAddress
+  }: {
+    coins: CoinArtifact[]
+    buyerAddress: string
+    signer: Ed25519Keypair
+    signerAddress: string
+  },
+  tooling: Pick<Tooling, "suiClient" | "getSuiObject" | "signAndExecute">
+) => {
+  if (coins.length === 0) return
+
+  for (const coin of coins) {
+    await transferHalfTreasuryForCoin(
+      {
+        coin,
+        buyerAddress,
+        signer,
+        signerAddress
+      },
+      tooling
+    )
+  }
+}
+
+const transferHalfTreasuryForCoin = async (
+  {
+    coin,
+    buyerAddress,
+    signer,
+    signerAddress
+  }: {
+    coin: CoinArtifact
+    buyerAddress: string
+    signer: Ed25519Keypair
+    signerAddress: string
+  },
+  tooling: Pick<Tooling, "suiClient" | "getSuiObject" | "signAndExecute">
+) => {
+  const treasurySnapshot = await resolveTreasuryCoinSnapshot({
+    coinType: coin.coinType,
+    owner: signerAddress,
+    mintedCoinObjectId: coin.mintedCoinObjectId,
+    suiClient: tooling.suiClient
+  })
+
+  if (!treasurySnapshot) {
+    logWarning(
+      `No coin objects found for ${coin.label} (${coin.coinType}); skipping buyer transfer.`
+    )
+    return
+  }
+
+  const transferAmount = calculateHalfBalance(treasurySnapshot.balance)
+  if (transferAmount <= 0n) {
+    logWarning(
+      `Balance too small to split for ${coin.label} (${coin.coinType}); skipping buyer transfer.`
+    )
+    return
+  }
+
+  const coinSnapshot = await resolveCoinOwnershipSnapshot({
+    coinObjectId: treasurySnapshot.coinObjectId,
+    getSuiObject: tooling.getSuiObject
+  })
+
+  ensureSignerOwnsCoin({
+    coinObjectId: treasurySnapshot.coinObjectId,
+    coinOwnerAddress: coinSnapshot.ownerAddress,
+    signerAddress
+  })
+
+  const transferTransaction = buildCoinTransferTransaction({
+    coinObjectId: treasurySnapshot.coinObjectId,
+    amount: transferAmount,
+    recipientAddress: buyerAddress
+  })
+
+  const { transactionResult } = await tooling.signAndExecute({
+    transaction: transferTransaction,
+    signer
+  })
+
+  logKeyValueGreen("Buyer transfer")(`${coin.label} ${coin.coinType}`)
+  logKeyValueGreen("amount")(transferAmount.toString())
+  logKeyValueGreen("from")(signerAddress)
+  logKeyValueGreen("to")(buyerAddress)
+  if (transactionResult.digest)
+    logKeyValueGreen("digest")(transactionResult.digest)
 }
 
 const coinArtifactsFromResult = ({
@@ -680,6 +794,52 @@ const findMatchingFeed = (
       normalizeHex(feed.feedIdHex) === normalizeHex(feedConfig.feedIdHex) ||
       feed.label === feedConfig.label
   )
+
+const resolveTreasuryCoinSnapshot = async ({
+  suiClient,
+  owner,
+  coinType,
+  mintedCoinObjectId
+}: {
+  suiClient: SuiClient
+  owner: string
+  coinType: string
+  mintedCoinObjectId?: string
+}): Promise<OwnedCoinSnapshot | undefined> => {
+  try {
+    const coins = await suiClient.getCoins({ owner, coinType })
+    const ownedCoins = (coins.data ?? []) as OwnedCoinBalance[]
+    if (!ownedCoins.length) return undefined
+
+    const preferredCoinId = mintedCoinObjectId
+      ? normalizeSuiObjectId(mintedCoinObjectId)
+      : undefined
+
+    const preferredCoin = preferredCoinId
+      ? ownedCoins.find(
+          (coin) => normalizeSuiObjectId(coin.coinObjectId) === preferredCoinId
+        )
+      : undefined
+
+    const selectedCoin = preferredCoin ?? selectRichestCoin(ownedCoins)
+    if (!selectedCoin) return undefined
+
+    return {
+      coinObjectId: selectedCoin.coinObjectId,
+      balance: BigInt(selectedCoin.balance)
+    }
+  } catch {
+    return undefined
+  }
+}
+
+const selectRichestCoin = (coins: OwnedCoinBalance[]) =>
+  coins.reduce<OwnedCoinBalance | null>((richest, coin) => {
+    if (!richest) return coin
+    return BigInt(coin.balance) > BigInt(richest.balance) ? coin : richest
+  }, null)
+
+const calculateHalfBalance = (balance: bigint) => balance / 2n
 
 const findOwnedCoinObjectId = async ({
   suiClient,

@@ -14,10 +14,12 @@ import {
 import {
   createPythClient,
   listPythFeedSummaries,
+  normalizeSymbol,
   resolvePythPriceInfoObjectId,
   type PythFeedSummary
 } from "@sui-oracle-market/domain-core/models/pyth-feeds"
 import { getAllDynamicFields } from "@sui-oracle-market/tooling-core/dynamic-fields"
+import { readMoveString } from "@sui-oracle-market/tooling-core/utils/formatters"
 import { SUI_COIN_REGISTRY_ID } from "@sui-oracle-market/tooling-node/constants"
 import {
   logKeyValueBlue,
@@ -296,9 +298,6 @@ const filterFeedSummaries = ({
     quoteSymbol
   })
 
-const normalizeSymbol = (symbol?: string) =>
-  symbol?.trim().toLowerCase() || undefined
-
 const resolveQuerySymbolFilters = ({
   query,
   registryEntries
@@ -532,24 +531,6 @@ const parseCurrencyObject = (
     description: readMoveString(fields.description),
     iconUrl: readMoveString(fields.icon_url)
   }
-}
-
-const readMoveString = (value: unknown): string | undefined => {
-  if (typeof value === "string") return value
-  if (!value || typeof value !== "object") return undefined
-
-  const record = value as Record<string, unknown>
-  const fields = record.fields as Record<string, unknown> | undefined
-  const bytes = fields?.bytes
-  if (typeof bytes === "string") {
-    try {
-      return Buffer.from(bytes, "base64").toString("utf8")
-    } catch {
-      return undefined
-    }
-  }
-
-  return undefined
 }
 
 const readMoveNumber = (value: unknown): number | undefined => {
