@@ -5,8 +5,6 @@ edition = "2024"
 [dependencies]
 [dependencies.pyth]
 local = "../pyth-upstream-patched"
-[dependencies.item_examples]
-local = "../item-examples"
 
 [environments]
 localnet = "279218ea"

@@ -1,0 +1,6 @@
+[published.localnet]
+package-id = "0x1"
+published-at = "2024-01-01T00:00:00Z"
+
+[published.testnet]
+package-id = "0x2"

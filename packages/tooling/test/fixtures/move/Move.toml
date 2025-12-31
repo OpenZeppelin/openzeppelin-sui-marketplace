@@ -1,0 +1,15 @@
+[package]
+name = "fixture"
+version = "0.0.1"
+
+[dependencies]
+Sui = { local = "../sui" }
+
+[dep-replacements.localnet]
+Sui = { local = "../sui" }
+
+[addresses]
+fixture = "0x0"
+
+[dev-dependencies]
+Sui = { local = "../sui" }

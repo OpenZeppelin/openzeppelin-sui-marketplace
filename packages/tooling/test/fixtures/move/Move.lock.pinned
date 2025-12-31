@@ -1,0 +1,14 @@
+[move]
+version = 1
+
+[pinned.localnet.Sui]
+source = { git = "https://github.com/MystenLabs/sui.git", rev = "1111111", subdir = "crates/sui-framework" }
+
+[pinned.testnet.Sui_1]
+source = { git = "https://github.com/MystenLabs/sui.git", rev = "2222222", subdir = "crates/sui-framework" }
+
+[pinned.testnet.MoveStdlib_1]
+source = { git = "https://github.com/MystenLabs/sui.git", rev = "3333333", subdir = "crates/sui-framework" }
+
+[pinned.localnet.Custom]
+source = { git = "https://example.com/custom.git", rev = "abcd" }

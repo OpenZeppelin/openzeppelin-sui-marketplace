@@ -1,0 +1,11 @@
+[[move.package]]
+id = "Sui"
+source = { git = "https://github.com/MystenLabs/sui.git", rev = "aaaa" }
+
+[[move.package]]
+id = "MoveStdlib"
+source = { git = "https://github.com/MystenLabs/sui.git", rev = "bbbb" }
+
+[[move.package]]
+id = "Other"
+source = { git = "https://github.com/example.com/other.git", rev = "cccc" }
