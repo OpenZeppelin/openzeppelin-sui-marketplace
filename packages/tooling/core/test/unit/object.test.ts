@@ -38,7 +38,7 @@ describe("object helpers", () => {
 
     expect(
       mapOwnerToArtifact({
-        ConsensusAddressOwner: { owner: "0x4" }
+        ConsensusAddressOwner: { owner: "0x4", start_version: "1" }
       })
     ).toEqual({
       ownerType: "consensus-address",
@@ -69,12 +69,15 @@ describe("object helpers", () => {
         ownerType: "object",
         objectId: "0x5"
       },
-      initialSharedVersion: 12,
-      version: 7
+      initialSharedVersion: "12",
+      version: "7"
     })
 
     expect(artifact.objectId).toBe(normalizeSuiObjectId("0x4"))
-    expect(artifact.owner?.objectId).toBe(normalizeSuiObjectId("0x5"))
+    expect(artifact.owner).toEqual({
+      ownerType: "object",
+      objectId: normalizeSuiObjectId("0x5")
+    })
     expect(artifact.initialSharedVersion).toBe("12")
     expect(artifact.version).toBe("7")
   })

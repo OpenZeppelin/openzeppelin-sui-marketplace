@@ -10,6 +10,7 @@ import {
   hasDeploymentForPackage,
   syncMoveEnvironmentChainId
 } from "../../src/move.ts"
+import type { PublishArtifact } from "@sui-oracle-market/tooling-core/types"
 import {
   readFixture,
   readTextFile,
@@ -18,6 +19,21 @@ import {
 } from "../../../test/helpers/fs.ts"
 
 describe("move helpers", () => {
+  const buildPublishArtifact = (
+    overrides: Partial<PublishArtifact> = {}
+  ): PublishArtifact => ({
+    network: "localnet",
+    rpcUrl: "http://localhost:9000",
+    packagePath: "/tmp/contracts/../move/oracle-market",
+    packageId: "0x1",
+    sender: "0x2",
+    digest: "digest",
+    publishedAt: "2024-01-01T00:00:00Z",
+    modules: [],
+    dependencies: [],
+    ...overrides
+  })
+
   it("builds environment flags for move commands", () => {
     expect(buildMoveEnvironmentFlags({})).toEqual([])
     expect(buildMoveEnvironmentFlags({ environmentName: "localnet" })).toEqual([
@@ -63,7 +79,11 @@ describe("move helpers", () => {
   })
 
   it("matches deployments by canonicalized path", () => {
-    const artifacts = [{ packagePath: "/tmp/contracts/../move/oracle-market" }]
+    const artifacts = [
+      buildPublishArtifact({
+        packagePath: "/tmp/contracts/../move/oracle-market"
+      })
+    ]
     expect(hasDeploymentForPackage(artifacts, "/tmp/move/oracle-market")).toBe(
       true
     )

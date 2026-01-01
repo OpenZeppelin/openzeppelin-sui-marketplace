@@ -1,7 +1,7 @@
-import { describe, expect, it, vi } from "vitest"
-import { toB64 } from "@mysten/sui/utils"
-import type { SuiTransactionBlockResponse } from "@mysten/sui/client"
+import type { SuiClient } from "@mysten/sui/client"
 import type { Transaction } from "@mysten/sui/transactions"
+import { toB64 } from "@mysten/sui/utils"
+import { describe, expect, it, vi } from "vitest"
 import {
   isLocalRpc,
   makeLocalnetExecutor,
@@ -13,7 +13,11 @@ const buildTransactionStub = () =>
     build: vi.fn().mockResolvedValue("transaction-bytes")
   }) as unknown as Transaction
 
-const buildLocalClient = (overrides: Partial<Record<string, unknown>> = {}) =>
+type LocalnetClient = SuiClient & { getRpcUrl?: () => string }
+
+const buildLocalClient = (
+  overrides: Partial<LocalnetClient> = {}
+): LocalnetClient =>
   ({
     getRpcUrl: () => "http://localhost:9000",
     dryRunTransactionBlock: vi.fn().mockResolvedValue({
@@ -24,7 +28,7 @@ const buildLocalClient = (overrides: Partial<Record<string, unknown>> = {}) =>
       rawEffects: [1, 2]
     }),
     ...overrides
-  }) as never
+  }) as LocalnetClient
 
 describe("localnet helpers", () => {
   it("detects local RPC urls", () => {

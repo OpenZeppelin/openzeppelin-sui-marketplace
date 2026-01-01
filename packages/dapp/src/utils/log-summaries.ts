@@ -11,9 +11,16 @@ import {
   logKeyValueYellow
 } from "@sui-oracle-market/tooling-node/log"
 
-export const logShopOverview = ({ shopId, ownerAddress }: ShopOverview) => {
+export const logShopOverview = ({
+  shopId,
+  ownerAddress,
+  name,
+  disabled
+}: ShopOverview) => {
   logKeyValueGreen("Shop")(shopId)
+  logKeyValueGreen("Name")(name ?? "Unknown")
   logKeyValueGreen("Owner")(ownerAddress)
+  logKeyValueGreen("Disabled")(disabled ? "Yes" : "No")
   console.log("")
 }
 

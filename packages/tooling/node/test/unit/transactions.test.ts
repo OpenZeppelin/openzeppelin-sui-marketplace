@@ -91,8 +91,18 @@ describe("signAndExecute", () => {
 describe("artifact lookup helpers", () => {
   it("finds created artifact ids by suffix", () => {
     const artifacts = [
-      { objectType: "0x2::package::Publisher", objectId: "0x1" },
-      { objectType: "0x2::example::Thing", objectId: "0x2" }
+      {
+        objectType: "0x2::package::Publisher",
+        objectId: "0x1",
+        packageId: "0x2",
+        signer: "0x9"
+      },
+      {
+        objectType: "0x2::example::Thing",
+        objectId: "0x2",
+        packageId: "0x2",
+        signer: "0x9"
+      }
     ]
 
     expect(
@@ -101,7 +111,14 @@ describe("artifact lookup helpers", () => {
   })
 
   it("throws when a required artifact is missing", () => {
-    const artifacts = [{ objectType: "0x2::example::Thing", objectId: "0x2" }]
+    const artifacts = [
+      {
+        objectType: "0x2::example::Thing",
+        objectId: "0x2",
+        packageId: "0x2",
+        signer: "0x9"
+      }
+    ]
 
     expect(() =>
       requireCreatedArtifactIdBySuffix({

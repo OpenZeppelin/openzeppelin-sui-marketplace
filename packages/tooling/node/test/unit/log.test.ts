@@ -61,7 +61,7 @@ describe("log helpers", () => {
       .map((entry) => entry.join(" "))
       .join(" ")
     expect(logged).toContain("Fields:")
-    expect(logged).toContain("\"name\": \"example\"")
+    expect(logged).toContain('"name": "example"')
     consoleCapture.restore()
   })
 

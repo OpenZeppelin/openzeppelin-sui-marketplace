@@ -25,7 +25,6 @@ use sui::tx_context as tx;
 /// =======///
 /// Errors ///
 /// =======///
-const EInvalidPublisher: u64 = 1;
 const EInvalidOwnerCap: u64 = 2;
 const EEmptyItemName: u64 = 3;
 const EInvalidPrice: u64 = 4;
@@ -66,6 +65,8 @@ const ETemplateFinalized: u64 = 38;
 const EPriceStatusNotTrading: u64 = 39;
 const EItemTypeMismatch: u64 = 40;
 const EUnsupportedCurrencyDecimals: u64 = 41;
+const EEmptyShopName: u64 = 42;
+const EShopDisabled: u64 = 43;
 
 const CENTS_PER_DOLLAR: u64 = 100;
 const BASIS_POINT_DENOMINATOR: u64 = 10_000;
@@ -138,6 +139,8 @@ public struct ShopOwnerCap has key, store {
 public struct Shop has key, store {
   id: obj::UID,
   owner: address, // Payout recipient for sales.
+  name: vector<u8>,
+  disabled: bool,
 }
 
 /// Item listing metadata keyed under the shared `Shop`, will be using to mint specific items on purchase.
@@ -243,6 +246,7 @@ public struct DiscountClaim has key, store {
 public struct ShopCreated has copy, drop {
   shop_address: address,
   owner: address,
+  name: vector<u8>,
   shop_owner_cap_id: address,
 }
 
@@ -252,6 +256,13 @@ public struct ShopOwnerUpdated has copy, drop {
   new_owner: address,
   shop_owner_cap_id: address,
   rotated_by: address,
+}
+
+public struct ShopDisabled has copy, drop {
+  shop_address: address,
+  owner: address,
+  shop_owner_cap_id: address,
+  disabled_by: address,
 }
 
 public struct ItemListingAdded has copy, drop {
@@ -353,8 +364,7 @@ public struct MintingCompleted has copy, drop {
 
 /// Create a new shop and its owner capability.
 ///
-/// The function consumes a `pkg::Publisher` so only the package author can spin up
-/// curated shops.
+/// Any address can spin up a shop and receive the corresponding owner capability.
 /// Sui mindset:
 /// - Capability > `msg.sender`: ownership lives in a first-class `ShopOwnerCap`. Entry functions
 ///   require the cap, so authority follows the object holder rather than whichever address signs
@@ -363,23 +373,15 @@ public struct MintingCompleted has copy, drop {
 ///   siblings indexed by lightweight markers under the shop (plus a coin-type index for currencies).
 ///   State is sharded into per-object locks so PTBs only touch the listing/template/currency they
 ///   mutate instead of contending on a monolithic storage map as in Solidity.
-/// - Publisher gate: consuming `pkg::Publisher` enforces that only the package publisher can create
-///   curated shops. In EVM you would gate on `onlyOwner` or a factory contract; on Sui the publisher
-///   object is the canonical, on-chain proof of authorship.
 public entry fun create_shop(
-  publisher: &pkg::Publisher,
+  name: vector<u8>,
   ctx: &mut tx::TxContext,
 ) {
-  // Ensure the capability comes from this module; otherwise users could pass an
-  // unrelated publisher.
-  assert!(pkg::from_module<Shop>(publisher), EInvalidPublisher);
+  validate_shop_name(&name);
 
   let owner: address = tx::sender(ctx);
-
-  let shop: Shop = Shop {
-    id: obj::new(ctx),
-    owner,
-  };
+  let shop: Shop = new_shop(name, owner, ctx);
+  let shop_name_for_event: vector<u8> = clone_bytes(&shop.name);
 
   let owner_cap: ShopOwnerCap = ShopOwnerCap {
     id: obj::new(ctx),
@@ -390,11 +392,29 @@ public entry fun create_shop(
   event::emit(ShopCreated {
     shop_address: shop_address(&shop),
     owner,
+    name: shop_name_for_event,
     shop_owner_cap_id: obj::uid_to_address(&owner_cap.id),
   });
 
   txf::share_object(shop);
   txf::public_transfer(owner_cap, owner);
+}
+
+/// Disable a shop permanently (buyer flows will reject new checkouts).
+public entry fun disable_shop(
+  shop: &mut Shop,
+  owner_cap: &ShopOwnerCap,
+  ctx: &mut tx::TxContext,
+) {
+  assert_owner_cap(shop, owner_cap);
+  shop.disabled = true;
+
+  event::emit(ShopDisabled {
+    shop_address: shop_address(shop),
+    owner: shop.owner,
+    shop_owner_cap_id: obj::uid_to_address(&owner_cap.id),
+    disabled_by: tx::sender(ctx),
+  });
 }
 
 /// Rotate the payout recipient for a shop.
@@ -905,6 +925,7 @@ public entry fun claim_discount_ticket(
   clock: &clock::Clock,
   ctx: &mut tx::TxContext,
 ): () {
+  assert_shop_active(shop);
   assert_template_matches_shop(shop, discount_template);
 
   let now_secs: u64 = now_secs(clock);
@@ -1009,6 +1030,7 @@ public entry fun buy_item<TItem: store, TCoin>(
   clock: &clock::Clock,
   ctx: &mut tx::TxContext,
 ) {
+  assert_shop_active(shop);
   assert_listing_matches_shop(shop, item_listing);
   let base_price_usd_cents: u64 = item_listing.base_price_usd_cents;
   process_purchase<TItem, TCoin>(
@@ -1055,6 +1077,7 @@ public entry fun buy_item_with_discount<TItem: store, TCoin>(
   clock: &clock::Clock,
   ctx: &mut tx::TxContext,
 ) {
+  assert_shop_active(shop);
   let buyer = tx::sender(ctx);
   assert_template_matches_shop(shop, discount_template);
   assert_listing_matches_shop(shop, item_listing);
@@ -1129,6 +1152,7 @@ public entry fun claim_and_buy_item_with_discount<TItem: store, TCoin>(
   clock: &clock::Clock,
   ctx: &mut tx::TxContext,
 ) {
+  assert_shop_active(shop);
   assert_template_matches_shop(shop, discount_template);
   assert_listing_matches_shop(shop, item_listing);
   let now_secs = now_secs(clock);
@@ -1158,6 +1182,19 @@ public entry fun claim_and_buy_item_with_discount<TItem: store, TCoin>(
 // ==== //
 // Data //
 // ==== //
+
+fun new_shop(
+  name: vector<u8>,
+  owner: address,
+  ctx: &mut tx::TxContext,
+): Shop {
+  Shop {
+    id: obj::new(ctx),
+    owner,
+    name,
+    disabled: false,
+  }
+}
 
 fun new_accepted_currency(
   shop_address: address,
@@ -1910,6 +1947,10 @@ fun assert_owner_cap(shop: &Shop, owner_cap: &ShopOwnerCap) {
   );
 }
 
+fun assert_shop_active(shop: &Shop) {
+  assert!(!shop.disabled, EShopDisabled);
+}
+
 fun assert_non_zero_stock(stock: u64) {
   assert!(stock > 0, EZeroStock)
 }
@@ -1940,6 +1981,10 @@ fun validate_listing_inputs(
     shop,
     spotlight_discount_template_id,
   );
+}
+
+fun validate_shop_name(name: &vector<u8>) {
+  assert!(!vec::is_empty(name), EEmptyShopName);
 }
 
 fun validate_discount_template_inputs(
@@ -2422,10 +2467,7 @@ public fun test_setup_shop(
   owner: address,
   ctx: &mut tx::TxContext,
 ): (Shop, ShopOwnerCap) {
-  let shop = Shop {
-    id: obj::new(ctx),
-    owner,
-  };
+  let shop = new_shop(b"Shop", owner, ctx);
   let owner_cap = ShopOwnerCap {
     id: obj::new(ctx),
     shop_address: obj::uid_to_address(&shop.id),
@@ -3062,7 +3104,12 @@ public fun test_remove_template(shop: &mut Shop, template_id: obj::ID) {
 
 #[test_only]
 public fun test_destroy_shop(shop: Shop) {
-  let Shop { id, owner: _ } = shop;
+  let Shop {
+    id,
+    owner: _,
+    name: _,
+    disabled: _,
+  } = shop;
   obj::delete(id);
 }
 
@@ -3087,6 +3134,16 @@ public fun test_shop_owner(shop: &Shop): address {
 }
 
 #[test_only]
+public fun test_shop_name(shop: &Shop): vector<u8> {
+  clone_bytes(&shop.name)
+}
+
+#[test_only]
+public fun test_shop_disabled(shop: &Shop): bool {
+  shop.disabled
+}
+
+#[test_only]
 public fun test_shop_owner_cap_owner(owner_cap: &ShopOwnerCap): address {
   owner_cap.owner
 }
@@ -3104,6 +3161,11 @@ public fun test_shop_owner_cap_shop_address(owner_cap: &ShopOwnerCap): address {
 #[test_only]
 public fun test_shop_created_owner(event: &ShopCreated): address {
   event.owner
+}
+
+#[test_only]
+public fun test_shop_created_name(event: &ShopCreated): vector<u8> {
+  clone_bytes(&event.name)
 }
 
 #[test_only]
@@ -3141,6 +3203,26 @@ public fun test_shop_owner_updated_rotated_by(
   event: &ShopOwnerUpdated,
 ): address {
   event.rotated_by
+}
+
+#[test_only]
+public fun test_shop_disabled_shop(event: &ShopDisabled): address {
+  event.shop_address
+}
+
+#[test_only]
+public fun test_shop_disabled_owner(event: &ShopDisabled): address {
+  event.owner
+}
+
+#[test_only]
+public fun test_shop_disabled_cap_id(event: &ShopDisabled): address {
+  event.shop_owner_cap_id
+}
+
+#[test_only]
+public fun test_shop_disabled_by(event: &ShopDisabled): address {
+  event.disabled_by
 }
 
 #[test_only]

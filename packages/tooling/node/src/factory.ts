@@ -33,6 +33,7 @@ type WithTestnetFaucetRetryArgs = Parameters<typeof withTestnetFaucetRetry>[0]
 export type Tooling = ToolingContext & {
   loadedEd25519KeyPair: Ed25519Keypair
   network: SuiNetworkConfig
+  toJSON: () => SanitizedTooling
   getSuiObject: (
     args: Parameters<typeof getSuiObject>[0]
   ) => ReturnType<typeof getSuiObject>
@@ -162,11 +163,25 @@ export const createTooling = async ({
   suiConfig
 }: ToolingContext): Promise<Tooling> => {
   const loadedEd25519KeyPair = await loadKeypair(suiConfig.network.account)
-  const tooling: Tooling = {
+  const toJSON = (): SanitizedTooling => ({
+    network: sanitizeNetwork(suiConfig.network),
+    suiConfig: {
+      currentNetwork: suiConfig.currentNetwork,
+      defaultNetwork: suiConfig.defaultNetwork,
+      paths: suiConfig.paths,
+      network: sanitizeNetwork(suiConfig.network),
+      networks: sanitizeNetworks(suiConfig.networks)
+    },
+    hasSuiClient: Boolean(suiClient),
+    hasKeypair: Boolean(loadedEd25519KeyPair)
+  })
+
+  return {
     suiClient,
     suiConfig,
     loadedEd25519KeyPair,
     network: suiConfig.network,
+    toJSON,
     getSuiObject: async (args) => getSuiObject(args, { suiClient }),
     getObjectSafe: async (args) => getObjectSafe(args, { suiClient }),
     getSuiSharedObject: async (args) => getSuiSharedObject(args, { suiClient }),
@@ -196,19 +211,4 @@ export const createTooling = async ({
     publishPackage: async (publishPlan) =>
       publishPackage(publishPlan, { suiClient, suiConfig })
   }
-
-  return Object.assign(tooling, {
-    toJSON: (): SanitizedTooling => ({
-      network: sanitizeNetwork(suiConfig.network),
-      suiConfig: {
-        currentNetwork: suiConfig.currentNetwork,
-        defaultNetwork: suiConfig.defaultNetwork,
-        paths: suiConfig.paths,
-        network: sanitizeNetwork(suiConfig.network),
-        networks: sanitizeNetworks(suiConfig.networks)
-      },
-      hasSuiClient: Boolean(suiClient),
-      hasKeypair: Boolean(loadedEd25519KeyPair)
-    })
-  })
 }

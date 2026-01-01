@@ -78,8 +78,11 @@ describe("describe-object helpers", () => {
       error: { code: "NOT_FOUND", error: "Missing object" } as never
     })
 
-    expect(objectInformation.contentSummary?.dataType).toBe("package")
-    expect(objectInformation.contentSummary?.moduleNames).toEqual(["moduleA"])
+    const contentSummary = objectInformation.contentSummary
+    expect(contentSummary?.dataType).toBe("package")
+    if (contentSummary?.dataType === "package") {
+      expect(contentSummary.moduleNames).toEqual(["moduleA"])
+    }
     expect(objectInformation.displayData).toEqual({ name: "Example" })
     expect(objectInformation.bcsSummary?.bytesLength).toBe(longBcsBytes.length)
     expect(objectInformation.bcsSummary?.bytesPreview?.endsWith("...")).toBe(

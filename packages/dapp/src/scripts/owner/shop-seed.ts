@@ -60,7 +60,7 @@ import {
   assertPriceInfoObjectDependency,
   resolveMaybeLatestShopIdentifiers,
   resolveShopDependencyIds,
-  resolveShopPublishInputs
+  resolveShopPackageId
 } from "@sui-oracle-market/domain-node/shop"
 import {
   assertBytesLength,
@@ -118,6 +118,7 @@ const DEFAULT_WAL_COIN_TYPE =
   "0xa7f7382f67ef48972ad6a92677f2a764201041f5e29c7a9e0389b75e61038cdf::wal::WAL"
 // Pyth feed ids are resolved at runtime from Hermes using the coin symbol + quote.
 const DEFAULT_PYTH_QUOTE_SYMBOL = "USD"
+const DEFAULT_SHOP_NAME = "Shop"
 const DEFAULT_ITEM_MODULE = "items"
 const ITEM_EXAMPLES_PACKAGE_NAME = "item-examples"
 const ITEM_TYPE_LOOKUP_RETRY_DELAY_MS = 1_500
@@ -163,8 +164,8 @@ const signAndExecuteWithRetry = async ({
 }
 
 type ShopSeedArguments = {
+  shopName?: string
   shopPackageId?: string
-  publisherCapId?: string
   shopId?: string
   ownerCapId?: string
   itemPackageId?: string
@@ -322,17 +323,17 @@ runSuiScript(
     })
   },
   yargs()
+    .option("shopName", {
+      alias: ["shop-name", "name"],
+      type: "string",
+      description: "Shop name to store on-chain when creating a new shop.",
+      default: DEFAULT_SHOP_NAME
+    })
     .option("shopPackageId", {
       alias: "shop-package-id",
       type: "string",
       description:
         "Package ID for the sui_oracle_market Move package; inferred from the latest publish entry when omitted."
-    })
-    .option("publisherCapId", {
-      alias: ["publisher-cap-id", "publisher-id"],
-      type: "string",
-      description:
-        "0x2::package::Publisher object ID; inferred from the latest publish entry when omitted."
     })
     .option("shopId", {
       alias: "shop-id",
@@ -397,11 +398,11 @@ const resolveOrCreateShopIdentifiers = async ({
   )
     return existingIdentifiers as ShopIdentifiers
 
-  const { shopPackageId, publisherCapId } = await resolveShopPublishInputs({
+  const shopPackageId = await resolveShopPackageId({
     networkName,
-    shopPackageId: cliArguments.shopPackageId,
-    publisherCapId: cliArguments.publisherCapId
+    shopPackageId: cliArguments.shopPackageId
   })
+  const shopName = cliArguments.shopName ?? DEFAULT_SHOP_NAME
 
   logKeyValueBlue("Shop")("Creating shop from published package.")
 
@@ -412,7 +413,7 @@ const resolveOrCreateShopIdentifiers = async ({
     buildTransaction: () =>
       buildCreateShopTransaction({
         packageId: shopPackageId,
-        publisherCapId
+        shopName
       })
   })
 

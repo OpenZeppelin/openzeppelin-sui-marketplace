@@ -12,6 +12,7 @@ import {
   requireValue,
   tryParseBigInt
 } from "@sui-oracle-market/tooling-core/utils/utility"
+import { decodeUtf8Vector } from "@sui-oracle-market/tooling-core/utils/formatters"
 import type { AcceptedCurrencySummary } from "./currency.ts"
 import { getAcceptedCurrencySummaries } from "./currency.ts"
 import type { DiscountTemplateSummary } from "./discount.ts"
@@ -66,6 +67,8 @@ export const formatUsdFromCents = (rawCents?: string) => {
 export type ShopOverview = {
   shopId: string
   ownerAddress: string
+  name: string
+  disabled: boolean
 }
 
 export const getShopOwnerAddressFromObject = (
@@ -87,11 +90,31 @@ export const getShopOverview = async (
     { suiClient }
   )
   const ownerAddress = getShopOwnerAddressFromObject(object)
+  const name = getShopNameFromObject(object)
+  const disabled = getShopDisabledFlagFromObject(object)
 
   return {
     shopId,
-    ownerAddress
+    ownerAddress,
+    name,
+    disabled
   }
+}
+
+export const getShopNameFromObject = (object: SuiObjectData): string => {
+  const shopFields = unwrapMoveObjectFields<{ name?: unknown }>(object)
+  return requireValue(
+    decodeUtf8Vector(shopFields.name),
+    "Shop object is missing a name field."
+  )
+}
+
+export const getShopDisabledFlagFromObject = (object: SuiObjectData): boolean => {
+  const shopFields = unwrapMoveObjectFields<{ disabled?: unknown }>(object)
+  const rawDisabled = shopFields.disabled
+  if (typeof rawDisabled !== "boolean")
+    throw new Error("Shop object is missing a disabled flag.")
+  return rawDisabled
 }
 
 /**

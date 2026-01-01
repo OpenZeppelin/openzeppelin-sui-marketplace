@@ -13,8 +13,7 @@ import {
   getLatestDeploymentFromArtifact,
   getLatestObjectFromArtifact,
   isPublishArtifactNamed,
-  loadDeploymentArtifacts,
-  resolvePublisherCapIdFromObjectArtifacts
+  loadDeploymentArtifacts
 } from "@sui-oracle-market/tooling-node/artifacts"
 
 export const resolveMaybeLatestShopIdentifiers = async (
@@ -95,42 +94,23 @@ export const resolveLatestArtifactShopId = async (
 export const isOracleMarketPublishArtifact =
   isPublishArtifactNamed("sui_oracle_market")
 
-export const resolveShopPublishInputs = async ({
+export const resolveShopPackageId = async ({
   networkName,
-  shopPackageId,
-  publisherCapId
+  shopPackageId
 }: {
   networkName: string
   shopPackageId?: string
-  publisherCapId?: string
-}): Promise<{ shopPackageId: string; publisherCapId: string }> => {
+}): Promise<string> => {
   const deploymentArtifacts = await loadDeploymentArtifacts(networkName)
   const latestShopPublishArtifact = findLatestArtifactThat(
     isOracleMarketPublishArtifact,
     deploymentArtifacts
   )
 
-  const resolvedShopPackageId = normalizeIdOrThrow(
+  return normalizeIdOrThrow(
     shopPackageId ?? latestShopPublishArtifact?.packageId,
     "A shop package id is required; publish the package or provide --shop-package-id."
   )
-
-  const publisherCapIdFromArtifacts =
-    latestShopPublishArtifact?.publisherId ??
-    (await resolvePublisherCapIdFromObjectArtifacts({
-      networkName,
-      publishDigest: latestShopPublishArtifact?.digest
-    }))
-
-  const resolvedPublisherCapId = normalizeIdOrThrow(
-    publisherCapId ?? publisherCapIdFromArtifacts,
-    "A publisher cap id is required; publish the package or provide --publisher-cap-id."
-  )
-
-  return {
-    shopPackageId: resolvedShopPackageId,
-    publisherCapId: resolvedPublisherCapId
-  }
 }
 
 export const resolveShopDependencyIds = async ({

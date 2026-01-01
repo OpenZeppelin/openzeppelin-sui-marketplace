@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest"
-import type { SuiTransactionBlockResponse } from "@mysten/sui/client"
+import {
+  buildCreatedObjectChange,
+  buildMutatedObjectChange,
+  buildTransactionEffects,
+  buildTransactionResponse
+} from "../helpers/sui.ts"
 import {
   assertCreatedObject,
   assertTransactionSuccess,
@@ -11,21 +16,12 @@ import {
   summarizeObjectChanges
 } from "../../src/transactions.ts"
 
-const buildTransactionResponse = (
-  overrides: Partial<SuiTransactionBlockResponse> = {}
-): SuiTransactionBlockResponse =>
-  ({
-    effects: { status: { status: "success" } },
-    objectChanges: [],
-    ...overrides
-  }) as SuiTransactionBlockResponse
-
 describe("transactions helpers", () => {
   it("asserts transaction success and throws on failure", () => {
     expect(() =>
       assertTransactionSuccess(
         buildTransactionResponse({
-          effects: { status: { status: "success" } }
+          effects: buildTransactionEffects({ status: { status: "success" } })
         })
       )
     ).not.toThrow()
@@ -33,7 +29,9 @@ describe("transactions helpers", () => {
     expect(() =>
       assertTransactionSuccess(
         buildTransactionResponse({
-          effects: { status: { status: "failure", error: "failed" } }
+          effects: buildTransactionEffects({
+            status: { status: "failure", error: "failed" }
+          })
         })
       )
     ).toThrow("failed")
@@ -42,16 +40,14 @@ describe("transactions helpers", () => {
   it("finds created object ids by suffix", () => {
     const response = buildTransactionResponse({
       objectChanges: [
-        {
-          type: "created",
+        buildCreatedObjectChange({
           objectType: "0x2::module::Foo",
           objectId: "0x1"
-        },
-        {
-          type: "created",
+        }),
+        buildCreatedObjectChange({
           objectType: "0x2::module::Bar",
           objectId: "0x2"
-        }
+        })
       ]
     })
 
@@ -61,11 +57,10 @@ describe("transactions helpers", () => {
   it("returns matching created objects and throws when missing", () => {
     const response = buildTransactionResponse({
       objectChanges: [
-        {
-          type: "created",
+        buildCreatedObjectChange({
           objectType: "0x2::module::Foo",
           objectId: "0x1"
-        }
+        })
       ]
     })
 
@@ -80,16 +75,14 @@ describe("transactions helpers", () => {
   it("extracts created objects and summarizes changes", () => {
     const response = buildTransactionResponse({
       objectChanges: [
-        {
-          type: "created",
+        buildCreatedObjectChange({
           objectType: "0x2::module::Foo",
           objectId: "0x1"
-        },
-        {
-          type: "mutated",
+        }),
+        buildMutatedObjectChange({
           objectType: "0x2::module::Foo",
           objectId: "0x2"
-        }
+        })
       ]
     })
 
@@ -105,6 +98,7 @@ describe("transactions helpers", () => {
   it("summarizes gas usage when effects are present", () => {
     const summary = summarizeGasUsed({
       computationCost: "10",
+      nonRefundableStorageFee: "0",
       storageCost: "5",
       storageRebate: "3"
     })

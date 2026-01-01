@@ -11,7 +11,7 @@ import {
 describe("extractInitialSharedVersion", () => {
   it("returns the shared version from shared owners", () => {
     const version = extractInitialSharedVersion({
-      owner: { Shared: { initial_shared_version: 7 } }
+      owner: { Shared: { initial_shared_version: "7" } }
     } as never)
 
     expect(version).toBe("7")
@@ -19,7 +19,7 @@ describe("extractInitialSharedVersion", () => {
 
   it("returns the shared version from initialSharedVersion fields", () => {
     const version = extractInitialSharedVersion({
-      initialSharedVersion: 11
+      initialSharedVersion: "11"
     } as never)
 
     expect(version).toBe("11")
@@ -40,7 +40,7 @@ describe("getSuiSharedObject", () => {
       getObject: vi.fn().mockResolvedValue({
         data: buildSuiObjectData({
           objectId: "0x1",
-          owner: { Shared: { initial_shared_version: 9 } }
+          owner: { Shared: { initial_shared_version: "9" } }
         })
       })
     })
@@ -77,7 +77,7 @@ describe("getSuiSharedObject", () => {
       getObject: vi.fn().mockResolvedValue({
         data: buildSuiObjectData({
           objectId: "0x4",
-          owner: { Shared: { initial_shared_version: undefined } }
+          owner: { Shared: { initial_shared_version: "" } }
         })
       })
     })

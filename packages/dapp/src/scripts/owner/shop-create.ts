@@ -1,7 +1,7 @@
 /**
- * Creates a new Shop object from a published Move package and publisher capability.
- * On Sui, publishing a package yields a Publisher object; creating a Shop uses that capability.
- * If you come from EVM, this is closer to instantiating a contract with a factory plus a capability token.
+ * Creates a new Shop object from a published Move package.
+ * On Sui, the shared Shop object acts like a contract instance, plus a separate owner capability.
+ * If you come from EVM, this is closer to instantiating a contract with a factory.
  * The result is a shared Shop object plus an owner capability stored in artifacts.
  */
 import yargs from "yargs"
@@ -10,24 +10,24 @@ import { getShopOverview } from "@sui-oracle-market/domain-core/models/shop"
 import { buildCreateShopTransaction } from "@sui-oracle-market/domain-core/ptb/shop"
 import { runSuiScript } from "@sui-oracle-market/tooling-node/process"
 import { logShopOverview } from "../../utils/log-summaries.ts"
-import { resolveShopPublishInputs } from "@sui-oracle-market/domain-node/shop"
+import { resolveShopPackageId } from "@sui-oracle-market/domain-node/shop"
 
 type CreateShopArguments = {
+  name?: string
   shopPackageId?: string
-  publisherCapId?: string
 }
 
 runSuiScript(
   async (tooling, cliArguments: CreateShopArguments) => {
-    const { shopPackageId, publisherCapId } = await resolveShopPublishInputs({
+    const shopPackageId = await resolveShopPackageId({
       networkName: tooling.network.networkName,
-      shopPackageId: cliArguments.shopPackageId,
-      publisherCapId: cliArguments.publisherCapId
+      shopPackageId: cliArguments.shopPackageId
     })
+    const shopName = cliArguments.name ?? "Shop"
 
     const createShopTransaction = buildCreateShopTransaction({
       packageId: shopPackageId,
-      publisherCapId
+      shopName
     })
 
     const {
@@ -52,18 +52,17 @@ runSuiScript(
     logShopOverview(shopOverview)
   },
   yargs()
+    .option("name", {
+      type: "string",
+      description: "Shop name to store on-chain (defaults to Shop).",
+      default: "Shop",
+      demandOption: false
+    })
     .option("shopPackageId", {
       alias: "shop-package-id",
       type: "string",
       description:
         "Package ID for the sui_oracle_market Move package; inferred from the latest publish entry in deployments/deployment.<network>.json when omitted.",
-      demandOption: false
-    })
-    .option("publisherCapId", {
-      alias: ["publisher-cap-id", "publisher-id"],
-      type: "string",
-      description:
-        "0x2::package::Publisher object ID for this module (not the UpgradeCap); inferred from the latest publish entry in deployments/deployment.<network>.json when omitted.",
       demandOption: false
     })
     .strict()

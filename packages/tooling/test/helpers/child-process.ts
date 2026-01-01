@@ -16,6 +16,17 @@ type ExecFileResult = {
 const execFileQueue = vi.hoisted(() => [] as ExecFileResult[])
 
 const execFile = vi.hoisted(() => {
+  type ExecFileMock = ((
+    file: string,
+    args?: string[] | ExecFileOptions,
+    options?: ExecFileOptions | ExecFileCallback,
+    callback?: ExecFileCallback
+  ) => void) & {
+    [key: symbol]: (
+      ...args: unknown[]
+    ) => Promise<{ stdout: string; stderr: string }>
+  }
+
   const fn = vi.fn((...args: unknown[]) => {
     const callback = args.find((arg) => typeof arg === "function") as
       | ExecFileCallback
@@ -31,12 +42,7 @@ const execFile = vi.hoisted(() => {
     }
 
     return undefined
-  }) as (
-    file: string,
-    args?: string[] | ExecFileOptions,
-    options?: ExecFileOptions | ExecFileCallback,
-    callback?: ExecFileCallback
-  ) => void
+  }) as unknown as ExecFileMock
 
   const customSymbol = Symbol.for("nodejs.util.promisify.custom")
   fn[customSymbol] = (
