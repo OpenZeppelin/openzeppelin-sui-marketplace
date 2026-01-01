@@ -123,8 +123,8 @@ const isBech32PrivateKey = (value: string): boolean =>
  */
 const keypairFromBech32 = (bech32Key: string): Ed25519Keypair => {
   const decoded = decodeSuiPrivateKey(bech32Key.trim())
-  if (decoded.schema !== "ED25519")
-    throw new Error(`Unsupported key scheme ${decoded.schema}.`)
+  if (decoded.scheme !== "ED25519")
+    throw new Error(`Unsupported key scheme ${decoded.scheme}.`)
 
   return Ed25519Keypair.fromSecretKey(decoded.secretKey)
 }

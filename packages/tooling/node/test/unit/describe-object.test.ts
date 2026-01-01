@@ -1,6 +1,18 @@
-import { describe, expect, it } from "vitest"
+import { describe, expect, it, vi } from "vitest"
 import { normalizeSuiObjectId } from "@mysten/sui/utils"
 import { captureConsole } from "../../../test/helpers/console.ts"
+
+vi.mock("chalk", () => {
+  const identity = (value: unknown) => String(value)
+  return {
+    default: new Proxy(
+      { gray: identity },
+      {
+        get: (_target, _prop) => identity
+      }
+    )
+  }
+})
 import {
   buildObjectInformation,
   logInspectionContext,
@@ -36,6 +48,46 @@ describe("describe-object helpers", () => {
     expect(objectInformation.contentSummary?.dataType).toBe("moveObject")
   })
 
+  it("builds object information with package, display, bcs, and errors", () => {
+    const longBcsBytes = "a".repeat(130)
+    const objectInformation = buildObjectInformation({
+      object: {
+        objectId: "0x1",
+        version: "5",
+        digest: "digest",
+        owner: { AddressOwner: "0x3" },
+        type: "0x3::module::Struct",
+        storageRebate: "100",
+        previousTransaction: "0xabc",
+        content: {
+          dataType: "package",
+          disassembled: { moduleA: "content" }
+        },
+        display: {
+          data: {
+            name: "Example",
+            count: 10
+          }
+        },
+        bcs: {
+          dataType: "moveObject",
+          type: "0x3::module::Struct",
+          bcsBytes: longBcsBytes
+        }
+      } as never,
+      error: { code: "NOT_FOUND", error: "Missing object" } as never
+    })
+
+    expect(objectInformation.contentSummary?.dataType).toBe("package")
+    expect(objectInformation.contentSummary?.moduleNames).toEqual(["moduleA"])
+    expect(objectInformation.displayData).toEqual({ name: "Example" })
+    expect(objectInformation.bcsSummary?.bytesLength).toBe(longBcsBytes.length)
+    expect(objectInformation.bcsSummary?.bytesPreview?.endsWith("...")).toBe(
+      true
+    )
+    expect(objectInformation.errorMessage).toBe("NOT_FOUND - Missing object")
+  })
+
   it("logs inspection context and object information", () => {
     const consoleCapture = captureConsole()
 
@@ -57,6 +109,23 @@ describe("describe-object helpers", () => {
     })
 
     expect(consoleCapture.records.log.length).toBeGreaterThan(0)
+    consoleCapture.restore()
+  })
+
+  it("logs warnings when object details are missing", () => {
+    const consoleCapture = captureConsole()
+
+    logObjectInformation({
+      objectId: "0x2",
+      version: "1"
+    })
+
+    const logged = consoleCapture.records.log
+      .map((entry) => entry.join(" "))
+      .join(" ")
+    expect(logged).toContain("No content returned for this object.")
+    expect(logged).toContain("No display data available.")
+    expect(logged).toContain("No BCS bytes available.")
     consoleCapture.restore()
   })
 })

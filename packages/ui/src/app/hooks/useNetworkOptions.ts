@@ -7,7 +7,7 @@ import type { TNetworkOption } from "../types/TNetworkOption"
 import useCustomNetworks from "./useCustomNetworks"
 import useHostNetworkPolicy from "./useHostNetworkPolicy"
 
-const baseNetworks = [ENetwork.LOCALNET, ENetwork.TESTNET] as const
+const baseNetworks: ENetwork[] = [ENetwork.LOCALNET, ENetwork.TESTNET]
 
 const formatNetworkLabel = (network: string) => {
   if (!network) return "Unknown"

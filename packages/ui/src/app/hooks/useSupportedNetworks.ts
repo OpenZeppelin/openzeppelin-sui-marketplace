@@ -6,7 +6,7 @@ import { supportedNetworks } from "../helpers/network"
 import useCustomNetworks from "./useCustomNetworks"
 import useHostNetworkPolicy from "./useHostNetworkPolicy"
 
-const baseNetworks = [ENetwork.LOCALNET, ENetwork.TESTNET] as const
+const baseNetworks: ENetwork[] = [ENetwork.LOCALNET, ENetwork.TESTNET]
 
 const useSupportedNetworks = () => {
   const { allowNetworkSwitching } = useHostNetworkPolicy()

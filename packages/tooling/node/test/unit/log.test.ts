@@ -17,6 +17,7 @@ import {
   logEachBlue,
   logKeyValueBlue,
   logSimpleBlue,
+  logStructuredJson,
   toKebabCase
 } from "../../src/log.ts"
 
@@ -48,6 +49,31 @@ describe("log helpers", () => {
       .join(" ")
     expect(logged).toContain("network-name")
     expect(logged).toContain("gas-budget")
+    consoleCapture.restore()
+  })
+
+  it("logs structured json output", () => {
+    const consoleCapture = captureConsole()
+
+    logStructuredJson("Fields", { name: "example" })
+
+    const logged = consoleCapture.records.log
+      .map((entry) => entry.join(" "))
+      .join(" ")
+    expect(logged).toContain("Fields:")
+    expect(logged).toContain("\"name\": \"example\"")
+    consoleCapture.restore()
+  })
+
+  it("logs an empty structured json message", () => {
+    const consoleCapture = captureConsole()
+
+    logStructuredJson("Fields", {})
+
+    const logged = consoleCapture.records.log
+      .map((entry) => entry.join(" "))
+      .join(" ")
+    expect(logged).toContain("No fields present.")
     consoleCapture.restore()
   })
 })

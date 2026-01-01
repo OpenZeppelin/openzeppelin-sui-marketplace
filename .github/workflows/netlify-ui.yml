@@ -1,0 +1,64 @@
+name: Deploy UI to Netlify
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "packages/ui/**"
+      - "packages/domain/**"
+      - "packages/tooling/**"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - "package.json"
+      - "netlify.toml"
+      - ".github/workflows/netlify-ui.yml"
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      NEXT_TELEMETRY_DISABLED: "1"
+      NEXT_PUBLIC_APP_NAME: ${{ secrets.NEXT_PUBLIC_APP_NAME }}
+      NEXT_PUBLIC_APP_DESCRIPTION: ${{ secrets.NEXT_PUBLIC_APP_DESCRIPTION }}
+      NEXT_PUBLIC_LOCALNET_CONTRACT_PACKAGE_ID: ${{ secrets.NEXT_PUBLIC_LOCALNET_CONTRACT_PACKAGE_ID }}
+      NEXT_PUBLIC_LOCALNET_SHOP_ID: ${{ secrets.NEXT_PUBLIC_LOCALNET_SHOP_ID }}
+      NEXT_PUBLIC_DEVNET_CONTRACT_PACKAGE_ID: ${{ secrets.NEXT_PUBLIC_DEVNET_CONTRACT_PACKAGE_ID }}
+      NEXT_PUBLIC_DEVNET_SHOP_ID: ${{ secrets.NEXT_PUBLIC_DEVNET_SHOP_ID }}
+      NEXT_PUBLIC_TESTNET_CONTRACT_PACKAGE_ID: ${{ secrets.NEXT_PUBLIC_TESTNET_CONTRACT_PACKAGE_ID }}
+      NEXT_PUBLIC_TESTNET_SHOP_ID: ${{ secrets.NEXT_PUBLIC_TESTNET_SHOP_ID }}
+      NEXT_PUBLIC_MAINNET_CONTRACT_PACKAGE_ID: ${{ secrets.NEXT_PUBLIC_MAINNET_CONTRACT_PACKAGE_ID }}
+      NEXT_PUBLIC_MAINNET_SHOP_ID: ${{ secrets.NEXT_PUBLIC_MAINNET_SHOP_ID }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+          run_install: false
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build UI
+        run: pnpm --filter ui build
+
+      - name: Deploy to Netlify
+        uses: nwtgck/actions-netlify@v3
+        with:
+          publish-dir: packages/ui/dist
+          production-deploy: true
+        env:
+          NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+          NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}

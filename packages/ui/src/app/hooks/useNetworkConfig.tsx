@@ -36,7 +36,7 @@ const useNetworkConfig = () => {
   const { networks: customNetworks } = useCustomNetworks()
   const fullNetworkConfig = {
     [ENetwork.LOCALNET]: {
-      url: LOCALNET_RPC_URL,
+      url: getFullnodeUrl(ENetwork.LOCALNET),
       variables: {
         [CONTRACT_PACKAGE_VARIABLE_NAME]: LOCALNET_CONTRACT_PACKAGE_ID,
         [SHOP_ID_VARIABLE_NAME]: LOCALNET_SHOP_ID,

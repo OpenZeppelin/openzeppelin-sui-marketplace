@@ -436,9 +436,14 @@ const executeSplitTransaction = async ({
     transaction,
     options: {
       showEffects: true
-    },
-    requestType: "WaitForLocalExecution"
+    }
   })
+
+  try {
+    await client.waitForTransaction({ digest: response.digest })
+  } catch {
+    // Best-effort to mirror old requestType behavior.
+  }
 
   return response.effects?.status?.status === "success"
 }

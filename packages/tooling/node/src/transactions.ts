@@ -142,9 +142,18 @@ export const executeTransactionOnce = async (
         showEffects: true,
         showEvents: true,
         showObjectChanges: true
-      },
-      requestType
+      }
     })
+
+  if (requestType === "WaitForLocalExecution") {
+    try {
+      await toolingContext.suiClient.waitForTransaction({
+        digest: transactionResult.digest
+      })
+    } catch {
+      // Best-effort to mirror old requestType behavior.
+    }
+  }
 
   if (assertSuccess) assertTransactionSuccess(transactionResult)
 

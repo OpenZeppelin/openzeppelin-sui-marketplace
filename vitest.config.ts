@@ -17,7 +17,9 @@ export default defineConfig({
         "**/*.d.ts",
         "**/dist/**",
         "packages/ui/**",
-        "packages/tooling/node/src/constants.ts"
+        "packages/tooling/node/src/constants.ts",
+        "packages/tooling/**/src/**/types.ts",
+        "packages/tooling/**/src/**/type-utils.ts"
       ],
       extension: [".ts"],
       lines: 35,

@@ -22,6 +22,7 @@ type SuiClientMocks = {
   getDynamicFieldObject: ReturnType<typeof vi.fn>
   multiGetObjects: ReturnType<typeof vi.fn>
   signAndExecuteTransaction: ReturnType<typeof vi.fn>
+  waitForTransaction: ReturnType<typeof vi.fn>
   getLatestSuiSystemState: ReturnType<typeof vi.fn>
   getLatestCheckpointSequenceNumber: ReturnType<typeof vi.fn>
   getReferenceGasPrice: ReturnType<typeof vi.fn>
@@ -60,6 +61,10 @@ export const createSuiClientMock = (
       .mockResolvedValue({ data: undefined, error: undefined }),
     multiGetObjects: vi.fn().mockResolvedValue([]),
     signAndExecuteTransaction: vi.fn().mockResolvedValue({
+      effects: { status: { status: "success" } }
+    }),
+    waitForTransaction: vi.fn().mockResolvedValue({
+      digest: "digest",
       effects: { status: { status: "success" } }
     }),
     getLatestSuiSystemState: vi.fn().mockResolvedValue({
