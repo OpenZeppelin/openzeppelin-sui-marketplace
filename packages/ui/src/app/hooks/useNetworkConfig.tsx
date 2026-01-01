@@ -1,3 +1,5 @@
+"use client"
+
 import { createNetworkConfig } from "@mysten/dapp-kit"
 import { getFullnodeUrl } from "@mysten/sui/client"
 import { ENetwork } from "@sui-oracle-market/tooling-core/types"
@@ -19,6 +21,8 @@ import {
   TESTNET_EXPLORER_URL,
   TESTNET_SHOP_ID
 } from "../config/network"
+import useCustomNetworks from "./useCustomNetworks"
+import useHostNetworkPolicy from "./useHostNetworkPolicy"
 
 /**
  * Build the network map used by @mysten/dapp-kit.
@@ -28,7 +32,9 @@ import {
  * and we keep them in network variables so the UI always targets the right chain.
  */
 const useNetworkConfig = () => {
-  return createNetworkConfig({
+  const { allowNetworkSwitching } = useHostNetworkPolicy()
+  const { networks: customNetworks } = useCustomNetworks()
+  const fullNetworkConfig = {
     [ENetwork.LOCALNET]: {
       url: LOCALNET_RPC_URL,
       variables: {
@@ -61,7 +67,29 @@ const useNetworkConfig = () => {
         [EXPLORER_URL_VARIABLE_NAME]: MAINNET_EXPLORER_URL
       }
     }
-  })
+  }
+
+  type NetworkVariables = Record<string, string>
+
+  const customNetworkConfig = customNetworks.reduce<
+    Record<string, { url: string; variables: NetworkVariables }>
+  >((accumulator, network) => {
+    accumulator[network.networkKey] = {
+      url: network.rpcUrl,
+      variables: {
+        [CONTRACT_PACKAGE_VARIABLE_NAME]: network.contractPackageId,
+        [SHOP_ID_VARIABLE_NAME]: network.shopId,
+        [EXPLORER_URL_VARIABLE_NAME]: network.explorerUrl
+      }
+    }
+    return accumulator
+  }, {})
+
+  const networkConfig = allowNetworkSwitching
+    ? { ...fullNetworkConfig, ...customNetworkConfig }
+    : { [ENetwork.TESTNET]: fullNetworkConfig[ENetwork.TESTNET] }
+
+  return createNetworkConfig(networkConfig)
 }
 
 export default useNetworkConfig

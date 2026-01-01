@@ -275,7 +275,7 @@ const ItemListingsPanel = ({
                 return (
                   <div
                     key={listing.itemListingId}
-                    className="rounded-xl border border-slate-300/80 bg-white/95 p-4 shadow-[0_12px_30px_-22px_rgba(15,23,42,0.35)] dark:border-slate-50/25 dark:bg-slate-950/60"
+                    className="flex h-full flex-col rounded-xl border border-slate-300/80 bg-white/95 p-4 shadow-[0_12px_30px_-22px_rgba(15,23,42,0.35)] dark:border-slate-50/25 dark:bg-slate-950/60"
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
@@ -321,6 +321,15 @@ const ItemListingsPanel = ({
                         </div>
                       </div>
                     </div>
+                    {listing.spotlightTemplateId ? (
+                      <div className="mt-2 flex flex-col gap-2 text-[0.65rem]">
+                        <CopyableId
+                          value={listing.spotlightTemplateId}
+                          label="Discount"
+                          className="w-full justify-start"
+                        />
+                      </div>
+                    ) : null}
                     <div className="mt-4 flex flex-col gap-2 text-[0.65rem]">
                       <CopyableId
                         value={listing.itemListingId}
@@ -332,16 +341,9 @@ const ItemListingsPanel = ({
                         label="Marker"
                         className="w-full justify-start"
                       />
-                      {listing.spotlightTemplateId ? (
-                        <CopyableId
-                          value={listing.spotlightTemplateId}
-                          label="Template"
-                          className="w-full justify-start"
-                        />
-                      ) : null}
                     </div>
                     {canBuy || canManageListings ? (
-                      <div className="mt-5 space-y-3">
+                      <div className="mt-auto space-y-3 pt-5">
                         <div className="text-[0.6rem] uppercase tracking-[0.18em] text-slate-500 dark:text-slate-200/60">
                           {actionLabel}
                         </div>
@@ -434,7 +436,7 @@ const AcceptedCurrenciesPanel = ({
               return (
                 <div
                   key={currency.acceptedCurrencyId}
-                  className="rounded-xl border border-slate-300/80 bg-white/95 p-4 shadow-[0_12px_30px_-22px_rgba(15,23,42,0.35)] dark:border-slate-50/25 dark:bg-slate-950/60"
+                  className="flex h-full flex-col rounded-xl border border-slate-300/80 bg-white/95 p-4 shadow-[0_12px_30px_-22px_rgba(15,23,42,0.35)] dark:border-slate-50/25 dark:bg-slate-950/60"
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex min-w-0 flex-col">
@@ -491,7 +493,7 @@ const AcceptedCurrenciesPanel = ({
                     ) : null}
                   </div>
                   {canManageCurrencies ? (
-                    <div className="mt-5 flex items-center">
+                    <div className="mt-auto flex items-center pt-5">
                       <Button
                         variant="danger"
                         size="compact"
@@ -689,12 +691,12 @@ const DiscountsPanel = ({
                       <div
                         key={template.discountTemplateId}
                         className={clsx(
-                          "rounded-xl border border-slate-300/80 bg-white/95 p-4 shadow-[0_12px_30px_-22px_rgba(15,23,42,0.35)] transition dark:border-slate-50/25 dark:bg-slate-950/60",
+                          "flex h-full flex-col rounded-xl border border-slate-300/80 bg-white/95 p-4 shadow-[0_12px_30px_-22px_rgba(15,23,42,0.35)] transition dark:border-slate-50/25 dark:bg-slate-950/60",
                           isClaimable ? "" : "opacity-60"
                         )}
                         title={claimBlockingReason}
                       >
-                        <div className="flex flex-col gap-3">
+                        <div className="flex flex-1 flex-col gap-3">
                           <div className="flex items-start justify-between gap-3">
                             <div className="min-w-0">
                               <div className="text-lg font-semibold text-sds-dark dark:text-sds-light">
@@ -755,7 +757,7 @@ const DiscountsPanel = ({
                           </div>
                           <div
                             className={clsx(
-                              "mt-5 flex items-center",
+                              "mt-auto flex items-center pt-5",
                               actionAlignment
                             )}
                           >

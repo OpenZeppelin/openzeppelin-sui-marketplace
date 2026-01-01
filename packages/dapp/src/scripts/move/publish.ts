@@ -4,6 +4,8 @@
  * If you come from EVM, this replaces "contract deploy" and can include unpublished dependencies in localnet.
  * The script handles faucet funding, gas budgeting, and skips publishing if already deployed.
  */
+import fs from "node:fs/promises"
+import os from "node:os"
 import path from "node:path"
 import yargs from "yargs"
 
@@ -35,6 +37,68 @@ type ResolvedPublishOptions = {
 // Publishing is a single transaction; requiring 3+ gas coin objects can force an extra
 // coin-splitting transaction (and faucet calls) even when the account has enough total SUI.
 const PUBLISH_MINIMUM_GAS_COIN_OBJECTS = 2
+const MOVE_GIT_LOCK_MAX_AGE_MS = 10 * 60 * 1000
+const MOVE_GIT_LOCK_DIR = path.join(os.homedir(), ".move", "git")
+
+const findStaleMoveGitLocks = async (): Promise<string[]> => {
+  let entries: string[]
+  try {
+    entries = await fs.readdir(MOVE_GIT_LOCK_DIR)
+  } catch {
+    return []
+  }
+
+  const lockFiles = entries.filter((entry) => entry.endsWith(".lock"))
+  if (!lockFiles.length) return []
+
+  const now = Date.now()
+  const staleLocks = await Promise.all(
+    lockFiles.map(async (entry) => {
+      const filePath = path.join(MOVE_GIT_LOCK_DIR, entry)
+      try {
+        const stats = await fs.stat(filePath)
+        const ageMs = now - stats.mtimeMs
+        return ageMs >= MOVE_GIT_LOCK_MAX_AGE_MS ? filePath : undefined
+      } catch {
+        return undefined
+      }
+    })
+  )
+
+  return staleLocks.filter(Boolean) as string[]
+}
+
+const preflightMoveGitLocks = async ({
+  clearStaleLocks
+}: {
+  clearStaleLocks: boolean
+}) => {
+  const staleLocks = await findStaleMoveGitLocks()
+  if (!staleLocks.length) return
+
+  if (clearStaleLocks) {
+    await Promise.all(
+      staleLocks.map(async (filePath) => {
+        try {
+          await fs.unlink(filePath)
+        } catch {
+          return
+        }
+      })
+    )
+    logWarning(
+      `Removed ${staleLocks.length} stale Move git lock file(s) from ${MOVE_GIT_LOCK_DIR}.`
+    )
+    return
+  }
+
+  logWarning(
+    `Detected ${staleLocks.length} stale Move git lock file(s) under ${MOVE_GIT_LOCK_DIR}.`
+  )
+  logKeyValueBlue("Hint")(
+    "Re-run with --clear-stale-move-locks to remove them."
+  )
+}
 
 const getLatestDeploymentForPackagePath = (
   deploymentArtifacts: PublishArtifact[],
@@ -168,6 +232,10 @@ const derivePublishOptions = (
 
 runSuiScript(
   async (tooling, cliArguments) => {
+    await preflightMoveGitLocks({
+      clearStaleLocks: cliArguments.clearStaleMoveLocks
+    })
+
     // Resolve the absolute Move package path (relative to repo root or move/).
     const fullPackagePath = resolveFullPackagePath(
       path.resolve(tooling.suiConfig.paths.move),
@@ -236,6 +304,13 @@ runSuiScript(
       description:
         "Publish with the Sui CLI instead of the SDK (use --no-use-cli-publish to force SDK)",
       default: true
+    })
+    .option("clearStaleMoveLocks", {
+      alias: "clear-stale-move-locks",
+      type: "boolean",
+      description:
+        "Remove Move git lock files older than 10 minutes before publishing",
+      default: false
     })
     .strict()
 )

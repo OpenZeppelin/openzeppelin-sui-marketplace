@@ -2,7 +2,11 @@ import path from "node:path"
 import { describe, expect, it } from "vitest"
 import { withCwd } from "../../../test/helpers/cwd.ts"
 import { withEnv } from "../../../test/helpers/env.ts"
-import { withTempDir, writeFileTree } from "../../../test/helpers/fs.ts"
+import {
+  resolveRealPath,
+  withTempDir,
+  writeFileTree
+} from "../../../test/helpers/fs.ts"
 import {
   getAccountConfig,
   getNetworkConfig,
@@ -27,8 +31,11 @@ describe("loadSuiConfig", () => {
 
           expect(config.currentNetwork).toBe("localnet")
           expect(config.network.networkName).toBe("localnet")
-          expect(config.paths.move).toBe(path.join(dir, "move"))
-          expect(config.paths.deployments).toBe(path.join(dir, "deployments"))
+          const resolvedDir = await resolveRealPath(dir)
+          expect(config.paths.move).toBe(path.join(resolvedDir, "move"))
+          expect(config.paths.deployments).toBe(
+            path.join(resolvedDir, "deployments")
+          )
         })
       })
     })
@@ -37,7 +44,7 @@ describe("loadSuiConfig", () => {
   it("loads network overrides from sui.config.mjs", async () => {
     await withTempDir(async (dir) => {
       await writeFileTree(dir, {
-        "sui.config.mjs": `export default {\n  defaultNetwork: "devnet",\n  networks: {\n    devnet: {\n      url: "http://devnet.loca",\n      account: { accountIndex: 1 }\n    },\n    testnet: {\n      url: "http://testnet.local",\n      account: { accountIndex: 2 }\n    }\n  }\n}\n`
+        "sui.config.mjs": `export default {\n  defaultNetwork: "devnet",\n  networks: {\n    devnet: {\n      url: "http://devnet.local",\n      account: { accountIndex: 1 }\n    },\n    testnet: {\n      url: "http://testnet.local",\n      account: { accountIndex: 2 }\n    }\n  }\n}\n`
       })
 
       await withCwd(dir, async () => {

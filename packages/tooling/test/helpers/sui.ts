@@ -17,6 +17,7 @@ type SuiClientMocks = {
   getBalance: ReturnType<typeof vi.fn>
   getAllBalances: ReturnType<typeof vi.fn>
   getObject: ReturnType<typeof vi.fn>
+  getOwnedObjects: ReturnType<typeof vi.fn>
   getDynamicFields: ReturnType<typeof vi.fn>
   getDynamicFieldObject: ReturnType<typeof vi.fn>
   multiGetObjects: ReturnType<typeof vi.fn>
@@ -44,6 +45,11 @@ export const createSuiClientMock = (
     }),
     getAllBalances: vi.fn().mockResolvedValue([]),
     getObject: vi.fn().mockResolvedValue({ data: undefined, error: undefined }),
+    getOwnedObjects: vi.fn().mockResolvedValue({
+      data: [],
+      hasNextPage: false,
+      nextCursor: null
+    }),
     getDynamicFields: vi.fn().mockResolvedValue({
       data: [],
       hasNextPage: false,

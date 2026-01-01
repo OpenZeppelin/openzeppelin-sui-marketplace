@@ -1,4 +1,11 @@
-import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises"
+import {
+  mkdtemp,
+  mkdir,
+  readFile,
+  realpath,
+  rm,
+  writeFile
+} from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
@@ -35,6 +42,8 @@ export const writeFileTree = async (
 }
 
 export const readTextFile = (filePath: string) => readFile(filePath, "utf8")
+
+export const resolveRealPath = (value: string) => realpath(value)
 
 export const fixturePath = (...segments: string[]) =>
   path.join(testRoot, "fixtures", ...segments)

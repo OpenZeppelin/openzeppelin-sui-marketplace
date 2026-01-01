@@ -13,15 +13,19 @@ type ExecFileResult = {
   stderr?: string
 }
 
-export const mockExecFile = () => {
-  const queue: ExecFileResult[] = []
+const execFileQueue = vi.hoisted(() => [] as ExecFileResult[])
 
-  const execFile = vi.fn((...args: unknown[]) => {
+const execFile = vi.hoisted(() => {
+  const fn = vi.fn((...args: unknown[]) => {
     const callback = args.find((arg) => typeof arg === "function") as
       | ExecFileCallback
       | undefined
 
-    const next = queue.shift() ?? { error: null, stdout: "", stderr: "" }
+    const next = execFileQueue.shift() ?? {
+      error: null,
+      stdout: "",
+      stderr: ""
+    }
     if (callback) {
       callback(next.error ?? null, next.stdout ?? "", next.stderr ?? "")
     }
@@ -34,11 +38,37 @@ export const mockExecFile = () => {
     callback?: ExecFileCallback
   ) => void
 
-  vi.mock("node:child_process", () => ({ execFile }))
+  const customSymbol = Symbol.for("nodejs.util.promisify.custom")
+  fn[customSymbol] = (
+    ..._args: unknown[]
+  ): Promise<{ stdout: string; stderr: string }> => {
+    const next = execFileQueue.shift() ?? {
+      error: null,
+      stdout: "",
+      stderr: ""
+    }
 
-  return {
-    execFile,
-    queueResult: (result: ExecFileResult) => queue.push(result),
-    clearQueue: () => queue.splice(0, queue.length)
+    if (next.error) {
+      return Promise.reject(next.error)
+    }
+
+    return Promise.resolve({
+      stdout: next.stdout ?? "",
+      stderr: next.stderr ?? ""
+    })
   }
+
+  return fn
+})
+
+vi.mock("node:child_process", () => ({ execFile }))
+
+export const queueExecFileResult = (result: ExecFileResult) => {
+  execFileQueue.push(result)
 }
+
+export const clearExecFileQueue = () => {
+  execFileQueue.splice(0, execFileQueue.length)
+}
+
+export const getExecFileMock = () => execFile

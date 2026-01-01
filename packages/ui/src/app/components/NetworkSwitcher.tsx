@@ -1,69 +1,32 @@
 "use client"
 
-import { useSuiClientContext } from "@mysten/dapp-kit"
-import type { ENetwork } from "@sui-oracle-market/tooling-core/types"
 import type { ChangeEvent } from "react"
-import { useCallback, useMemo } from "react"
-import { supportedNetworks } from "../helpers/network"
+import { headerControlSelectClassName } from "./controlStyles"
+import type { TNetworkOption } from "../types/TNetworkOption"
 
-type NetworkOption = {
-  value: string
-  label: string
-  disabled?: boolean
-}
-
-const formatNetworkLabel = (network: string) => {
-  if (!network) return "Unknown"
-  return `${network.charAt(0).toUpperCase()}${network.slice(1)}`
-}
-
-const buildNetworkOptions = (
-  supported: ENetwork[],
-  currentNetwork?: string
-): NetworkOption[] => {
-  const supportedOptions = supported.map((network) => ({
-    value: network,
-    label: formatNetworkLabel(network)
-  }))
-
-  if (!currentNetwork) return supportedOptions
-  if (supported.includes(currentNetwork as ENetwork)) return supportedOptions
-
-  return [
-    {
-      value: currentNetwork,
-      label: `${formatNetworkLabel(currentNetwork)} (unconfigured)`,
-      disabled: true
-    },
-    ...supportedOptions
-  ]
-}
-
-const NetworkSwitcher = () => {
-  const { network: currentNetwork, selectNetwork } = useSuiClientContext()
-  const configuredNetworks = useMemo(() => supportedNetworks(), [])
-  const options = useMemo(
-    () => buildNetworkOptions(configuredNetworks, currentNetwork),
-    [configuredNetworks, currentNetwork]
-  )
-
-  const handleNetworkChange = useCallback(
-    (event: ChangeEvent<HTMLSelectElement>) => {
-      const nextNetwork = event.target.value
-      if (!nextNetwork || nextNetwork === currentNetwork) return
-      selectNetwork(nextNetwork)
-    },
-    [currentNetwork, selectNetwork]
-  )
-
+const NetworkSwitcher = ({
+  value,
+  options,
+  onChange
+}: {
+  value?: string
+  options: TNetworkOption[]
+  onChange: (nextNetwork: string) => void
+}) => {
   if (options.length === 0) return null
+
+  const handleNetworkChange = (event: ChangeEvent<HTMLSelectElement>) => {
+    const nextNetwork = event.target.value
+    if (!nextNetwork || nextNetwork === value) return
+    onChange(nextNetwork)
+  }
 
   return (
     <label className="flex flex-col gap-1 text-xs uppercase tracking-[0.16em] text-slate-500 dark:text-slate-200/70">
       <select
-        value={currentNetwork}
+        value={value ?? ""}
         onChange={handleNetworkChange}
-        className="sds-match-wallet-width focus:ring-sds-blue/40 rounded-lg border border-slate-300/70 bg-white/90 px-3 py-2 text-sm font-semibold text-sds-dark shadow-[0_10px_24px_-20px_rgba(15,23,42,0.3)] transition focus:outline-none focus:ring-2 dark:border-slate-50/25 dark:bg-slate-950/60 dark:text-sds-light"
+        className={headerControlSelectClassName}
       >
         {options.map((option) => (
           <option

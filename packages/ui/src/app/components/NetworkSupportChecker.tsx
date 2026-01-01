@@ -1,15 +1,15 @@
 "use client"
 
 import { useCurrentAccount, useCurrentWallet } from "@mysten/dapp-kit"
-import type { ENetwork } from "@sui-oracle-market/tooling-core/types"
 import { useMemo } from "react"
-import { resolveWalletNetworkType, supportedNetworks } from "../helpers/network"
+import { resolveWalletNetworkType } from "../helpers/network"
+import useSupportedNetworks from "../hooks/useSupportedNetworks"
 
 const NetworkSupportChecker = () => {
   const currentAccount = useCurrentAccount()
   const wallet = useCurrentWallet()
 
-  const configuredNetworks = useMemo(() => supportedNetworks(), [])
+  const configuredNetworks = useSupportedNetworks()
   const walletNetworkType = useMemo(
     () =>
       wallet.isConnected
@@ -20,8 +20,7 @@ const NetworkSupportChecker = () => {
   const walletNetworkSupported = useMemo(
     () =>
       Boolean(
-        walletNetworkType &&
-        configuredNetworks.includes(walletNetworkType as ENetwork)
+        walletNetworkType && configuredNetworks.includes(walletNetworkType)
       ),
     [configuredNetworks, walletNetworkType]
   )

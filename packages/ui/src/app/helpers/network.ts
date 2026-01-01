@@ -2,7 +2,15 @@ import { ENetwork } from "@sui-oracle-market/tooling-core/types"
 import {
   CONTRACT_MODULE_NAME,
   CONTRACT_PACKAGE_ID_NOT_DEFINED,
-  SHOP_ID_NOT_DEFINED
+  DEVNET_CONTRACT_PACKAGE_ID,
+  DEVNET_SHOP_ID,
+  LOCALNET_CONTRACT_PACKAGE_ID,
+  LOCALNET_SHOP_ID,
+  MAINNET_CONTRACT_PACKAGE_ID,
+  MAINNET_SHOP_ID,
+  SHOP_ID_NOT_DEFINED,
+  TESTNET_CONTRACT_PACKAGE_ID,
+  TESTNET_SHOP_ID
 } from "~~/config/network"
 export {
   getResponseContentField,
@@ -45,22 +53,36 @@ export const resolveConfiguredId = (
 }
 
 export const supportedNetworks = () => {
-  const keys = Object.keys(ENetwork)
+  const networkConfig = {
+    [ENetwork.LOCALNET]: {
+      packageId: LOCALNET_CONTRACT_PACKAGE_ID,
+      shopId: LOCALNET_SHOP_ID
+    },
+    [ENetwork.DEVNET]: {
+      packageId: DEVNET_CONTRACT_PACKAGE_ID,
+      shopId: DEVNET_SHOP_ID
+    },
+    [ENetwork.TESTNET]: {
+      packageId: TESTNET_CONTRACT_PACKAGE_ID,
+      shopId: TESTNET_SHOP_ID
+    },
+    [ENetwork.MAINNET]: {
+      packageId: MAINNET_CONTRACT_PACKAGE_ID,
+      shopId: MAINNET_SHOP_ID
+    }
+  }
 
-  return keys
-    .filter((key: string) => {
+  return Object.entries(networkConfig)
+    .filter(([, config]) => {
       const packageId = resolveConfiguredId(
-        process.env[`NEXT_PUBLIC_${key.toUpperCase()}_CONTRACT_PACKAGE_ID`],
+        config.packageId,
         CONTRACT_PACKAGE_ID_NOT_DEFINED
       )
-      const shopId = resolveConfiguredId(
-        process.env[`NEXT_PUBLIC_${key.toUpperCase()}_SHOP_ID`],
-        SHOP_ID_NOT_DEFINED
-      )
+      const shopId = resolveConfiguredId(config.shopId, SHOP_ID_NOT_DEFINED)
 
       return Boolean(packageId && shopId)
     })
-    .map((key: string) => ENetwork[key as keyof typeof ENetwork])
+    .map(([key]) => key as ENetwork)
 }
 
 export const isNetworkSupported = (network: ENetwork | undefined) => {

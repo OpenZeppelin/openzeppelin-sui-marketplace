@@ -1,6 +1,7 @@
 "use client"
 
 import type { ReactNode } from "react"
+import { createPortal } from "react-dom"
 import { copyToClipboard } from "../helpers/clipboard"
 import Button from "./Button"
 
@@ -30,14 +31,19 @@ export const ModalFrame = ({
 }: {
   children: ReactNode
   onClose: () => void
-}) => (
-  <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 px-4 py-10 backdrop-blur-sm">
-    <div className="absolute inset-0" onClick={onClose} aria-hidden="true" />
-    <div className="relative z-10 w-full max-w-4xl overflow-hidden rounded-3xl border border-slate-300/70 bg-white/95 shadow-[0_35px_80px_-55px_rgba(15,23,42,0.55)] dark:border-slate-50/20 dark:bg-slate-950/90">
-      {children}
-    </div>
-  </div>
-)
+}) => {
+  if (typeof document === "undefined") return null
+
+  return createPortal(
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 px-4 py-10 backdrop-blur-sm">
+      <div className="absolute inset-0" onClick={onClose} aria-hidden="true" />
+      <div className="relative z-10 w-full max-w-4xl overflow-hidden rounded-3xl border border-slate-300/70 bg-white/95 shadow-[0_35px_80px_-55px_rgba(15,23,42,0.55)] dark:border-slate-50/20 dark:bg-slate-950/90">
+        {children}
+      </div>
+    </div>,
+    document.body
+  )
+}
 
 export const ModalBody = ({ children }: { children: ReactNode }) => (
   <div className="max-h-[70vh] space-y-5 overflow-y-auto px-6 py-6">

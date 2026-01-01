@@ -8,7 +8,7 @@ import type { CSSProperties } from "react"
 import { useEffect, useRef, useState } from "react"
 import Logo from "../../assets/logo.svg"
 import { APP_NAME } from "../../config/main"
-import WalletNetworkLabel from "../WalletNetworkLabel"
+import NetworkControls from "../NetworkControls"
 
 const Header = () => {
   const buttonRef = useRef<HTMLDivElement | null>(null)
@@ -76,7 +76,7 @@ const Header = () => {
           <div className="sds-balance-wrapper sds-match-wallet-height flex justify-center">
             <Balance />
           </div>
-          <WalletNetworkLabel />
+          <NetworkControls />
         </div>
 
         {/* @todo: Find a better way to style ConnectButton for example through className, which is currently not supported. */}
