@@ -41,7 +41,7 @@ const ListingSummarySection = ({
         <div className="mt-1 text-sm font-semibold text-sds-dark dark:text-sds-light">
           {listing.name || getStructLabel(listing.itemType)}
         </div>
-        <div className="mt-2 text-[0.7rem] text-slate-500 dark:text-slate-200/60 overflow-auto">
+        <div className="mt-2 overflow-auto text-[0.7rem] text-slate-500 dark:text-slate-200/60">
           {listing.itemType}
         </div>
       </div>

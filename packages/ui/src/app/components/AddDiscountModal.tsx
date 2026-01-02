@@ -84,7 +84,7 @@ const DiscountSummarySection = ({
             ruleValue: summary.ruleValue
           })}
         </div>
-        <div className="mt-2 text-[0.7rem] text-slate-500 dark:text-slate-200/60 overflow-auto">
+        <div className="mt-2 overflow-auto text-[0.7rem] text-slate-500 dark:text-slate-200/60">
           {describeRuleKind(summary.ruleKind)} discount
         </div>
       </div>
@@ -125,7 +125,7 @@ const DiscountSummarySection = ({
               : "All listings")}
         </div>
         {summary.appliesToListingId ? (
-          <div className="mt-2 text-[0.7rem] text-slate-500 dark:text-slate-200/60 overflow-auto">
+          <div className="mt-2 overflow-auto text-[0.7rem] text-slate-500 dark:text-slate-200/60">
             {summary.appliesToListingId}
           </div>
         ) : null}

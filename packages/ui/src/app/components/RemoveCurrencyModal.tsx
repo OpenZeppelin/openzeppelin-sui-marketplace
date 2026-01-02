@@ -45,7 +45,7 @@ const CurrencySummarySection = ({
           <div className="mt-1 text-sm font-semibold text-sds-dark dark:text-sds-light">
             {getStructLabel(currency.coinType)}
           </div>
-          <div className="mt-2 text-[0.7rem] text-slate-500 dark:text-slate-200/60 overflow-auto">
+          <div className="mt-2 overflow-auto text-[0.7rem] text-slate-500 dark:text-slate-200/60">
             {currency.coinType}
           </div>
         </div>
@@ -78,25 +78,29 @@ const CurrencySummarySection = ({
             </div>
           </div>
         ) : null}
-    </div>
-    <div className="mt-4 flex flex-wrap items-center gap-3 text-xs">
-      <CopyableId
-        value={currency.acceptedCurrencyId}
-        label="Accepted ID"
-        explorerUrl={explorerUrl}
-      />
-      {registryId ? (
+      </div>
+      <div className="mt-4 flex flex-wrap items-center gap-3 text-xs">
         <CopyableId
-          value={registryId}
-          label="Registry"
+          value={currency.acceptedCurrencyId}
+          label="Accepted ID"
           explorerUrl={explorerUrl}
         />
-      ) : null}
-      {shopId ? (
-        <CopyableId value={shopId} label="Shop ID" explorerUrl={explorerUrl} />
-      ) : null}
-    </div>
-  </ModalSection>
+        {registryId ? (
+          <CopyableId
+            value={registryId}
+            label="Registry"
+            explorerUrl={explorerUrl}
+          />
+        ) : null}
+        {shopId ? (
+          <CopyableId
+            value={shopId}
+            label="Shop ID"
+            explorerUrl={explorerUrl}
+          />
+        ) : null}
+      </div>
+    </ModalSection>
   )
 }
 

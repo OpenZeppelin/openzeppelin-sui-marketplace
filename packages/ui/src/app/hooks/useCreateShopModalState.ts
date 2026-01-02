@@ -163,10 +163,7 @@ export const useCreateShopModalState = ({
   )
 
   const shouldShowFieldError = useCallback(
-    <K extends keyof ShopFormState>(
-      key: K,
-      error?: string
-    ): error is string =>
+    <K extends keyof ShopFormState>(key: K, error?: string): error is string =>
       Boolean(error && shouldShowFieldFeedback(key, hasAttemptedSubmit)),
     [hasAttemptedSubmit, shouldShowFieldFeedback]
   )

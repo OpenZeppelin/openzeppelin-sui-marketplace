@@ -53,7 +53,7 @@ const CurrencySummarySection = ({
         <div className="mt-1 text-sm font-semibold text-sds-dark dark:text-sds-light">
           {getStructLabel(summary.coinType)}
         </div>
-        <div className="mt-2 text-[0.7rem] text-slate-500 dark:text-slate-200/60 overflow-auto">
+        <div className="mt-2 overflow-auto text-[0.7rem] text-slate-500 dark:text-slate-200/60">
           {summary.coinType}
         </div>
       </div>
@@ -64,7 +64,7 @@ const CurrencySummarySection = ({
         <div className="mt-1 text-sm font-semibold text-sds-dark dark:text-sds-light">
           {shortenId(summary.currencyObjectId)}
         </div>
-        <div className="mt-2 text-[0.7rem] text-slate-500 dark:text-slate-200/60 overflow-auto">
+        <div className="mt-2 overflow-auto text-[0.7rem] text-slate-500 dark:text-slate-200/60">
           {summary.currencyObjectId}
         </div>
       </div>
@@ -75,7 +75,7 @@ const CurrencySummarySection = ({
         <div className="mt-1 text-sm font-semibold text-sds-dark dark:text-sds-light">
           {shortenId(summary.feedIdHex, 10, 8)}
         </div>
-        <div className="mt-2 text-[0.7rem] text-slate-500 dark:text-slate-200/60 overflow-auto">
+        <div className="mt-2 overflow-auto text-[0.7rem] text-slate-500 dark:text-slate-200/60">
           {summary.feedIdHex}
         </div>
       </div>
@@ -86,7 +86,7 @@ const CurrencySummarySection = ({
         <div className="mt-1 text-sm font-semibold text-sds-dark dark:text-sds-light">
           {shortenId(summary.priceInfoObjectId)}
         </div>
-        <div className="mt-2 text-[0.7rem] text-slate-500 dark:text-slate-200/60 overflow-auto">
+        <div className="mt-2 overflow-auto text-[0.7rem] text-slate-500 dark:text-slate-200/60">
           {summary.priceInfoObjectId}
         </div>
       </div>

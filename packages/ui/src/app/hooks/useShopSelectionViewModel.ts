@@ -38,13 +38,7 @@ const matchesSearch = ({
   const ownerNoPrefix = ownerAddress ? stripHexPrefix(ownerAddress) : ""
   const name = normalizeSearchValue(shop.name)
 
-  return [
-    shopId,
-    shopIdNoPrefix,
-    ownerAddress,
-    ownerNoPrefix,
-    name
-  ].some(
+  return [shopId, shopIdNoPrefix, ownerAddress, ownerNoPrefix, name].some(
     (candidate) =>
       candidate &&
       (candidate.includes(query) ||
@@ -58,9 +52,7 @@ export const useShopSelectionViewModel = ({
   packageId?: string
 }) => {
   const suiClient = useSuiClient()
-  const [state, setState] = useState<ShopSelectionState>(
-    emptySelectionState()
-  )
+  const [state, setState] = useState<ShopSelectionState>(emptySelectionState())
   const [refreshIndex, setRefreshIndex] = useState(0)
   const [selectedShopId, setSelectedShopId] = useState<string | undefined>()
   const [searchQuery, setSearchQuery] = useState("")

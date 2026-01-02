@@ -684,7 +684,7 @@ const BuyFlowModal = ({
                     {listingLabel}
                   </div>
                   {listing?.itemListingId ? (
-                    <div className="mt-2 text-[0.7rem] text-slate-500 dark:text-slate-200/60 overflow-auto">
+                    <div className="mt-2 overflow-auto text-[0.7rem] text-slate-500 dark:text-slate-200/60">
                       {shortenId(listing.itemListingId)}
                     </div>
                   ) : null}
@@ -699,7 +699,7 @@ const BuyFlowModal = ({
                       : "Select currency"}
                   </div>
                   {selectedCurrency ? (
-                    <div className="mt-2 text-[0.7rem] text-slate-500 dark:text-slate-200/60 overflow-auto">
+                    <div className="mt-2 overflow-auto text-[0.7rem] text-slate-500 dark:text-slate-200/60">
                       {getStructLabel(selectedCurrency.coinType)}
                     </div>
                   ) : null}
@@ -712,7 +712,7 @@ const BuyFlowModal = ({
                     {selectedDiscount?.label ?? "None"}
                   </div>
                   {selectedDiscount?.description ? (
-                    <div className="mt-2 text-[0.7rem] text-slate-500 dark:text-slate-200/60 overflow-auto">
+                    <div className="mt-2 overflow-auto text-[0.7rem] text-slate-500 dark:text-slate-200/60">
                       {selectedDiscount.description}
                     </div>
                   ) : null}
@@ -724,7 +724,7 @@ const BuyFlowModal = ({
                   <div className="mt-1 text-sm font-semibold text-sds-dark dark:text-sds-light">
                     {shortenId(mintTo || walletAddress || "Unknown")}
                   </div>
-                  <div className="mt-2 text-[0.7rem] text-slate-500 dark:text-slate-200/60 overflow-auto">
+                  <div className="mt-2 overflow-auto text-[0.7rem] text-slate-500 dark:text-slate-200/60">
                     Refund: {shortenId(refundTo || walletAddress || "Unknown")}
                   </div>
                 </div>

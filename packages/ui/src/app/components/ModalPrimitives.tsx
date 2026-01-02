@@ -192,7 +192,7 @@ export const ModalErrorNotice = ({
           <summary className="cursor-pointer font-semibold">
             Raw error JSON
           </summary>
-          <pre className="mt-2 mb-4 max-h-40 overflow-auto rounded-lg border border-rose-200/60 bg-white/80 p-2 text-[0.65rem] text-rose-700 dark:border-rose-500/30 dark:bg-slate-950/60 dark:text-rose-200">
+          <pre className="mb-4 mt-2 max-h-40 overflow-auto rounded-lg border border-rose-200/60 bg-white/80 p-2 text-[0.65rem] text-rose-700 dark:border-rose-500/30 dark:bg-slate-950/60 dark:text-rose-200">
             {details}
           </pre>
           <Button

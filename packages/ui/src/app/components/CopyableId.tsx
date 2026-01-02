@@ -40,9 +40,7 @@ const CopyableId = ({
     [value]
   )
   const [isLocalnetModalOpen, setLocalnetModalOpen] = useState(false)
-  const isLocalExplorer = explorerUrl
-    ? isLocalExplorerUrl(explorerUrl)
-    : false
+  const isLocalExplorer = explorerUrl ? isLocalExplorerUrl(explorerUrl) : false
   const canOpenExplorer = Boolean(showExplorer && explorerUrl)
 
   const handleCopy = (event: MouseEvent<HTMLButtonElement>) => {
@@ -65,7 +63,10 @@ const CopyableId = ({
 
   return (
     <div
-      className={clsx("inline-flex min-w-0 items-center gap-2 w-full", className)}
+      className={clsx(
+        "inline-flex w-full min-w-0 items-center gap-2",
+        className
+      )}
     >
       <div className="flex min-w-0 flex-1 items-center gap-2">
         {label ? (
