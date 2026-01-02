@@ -27,19 +27,25 @@ export const modalFieldWarningTextClassName =
 
 export const ModalFrame = ({
   children,
-  onClose
+  onClose,
+  contentClassName
 }: {
   children: ReactNode
   onClose: () => void
+  contentClassName?: string
 }) => {
   if (typeof document === "undefined") return null
+  const containerClassName = [
+    "relative z-10 w-full overflow-hidden rounded-3xl border border-slate-300/70 bg-white/95 shadow-[0_35px_80px_-55px_rgba(15,23,42,0.55)] dark:border-slate-50/20 dark:bg-slate-950/90",
+    contentClassName ?? "max-w-4xl"
+  ]
+    .filter(Boolean)
+    .join(" ")
 
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 px-4 py-10 backdrop-blur-sm">
       <div className="absolute inset-0" onClick={onClose} aria-hidden="true" />
-      <div className="relative z-10 w-full max-w-4xl overflow-hidden rounded-3xl border border-slate-300/70 bg-white/95 shadow-[0_35px_80px_-55px_rgba(15,23,42,0.55)] dark:border-slate-50/20 dark:bg-slate-950/90">
-        {children}
-      </div>
+      <div className={containerClassName}>{children}</div>
     </div>,
     document.body
   )
@@ -186,15 +192,15 @@ export const ModalErrorNotice = ({
           <summary className="cursor-pointer font-semibold">
             Raw error JSON
           </summary>
-          <pre className="mt-2 max-h-40 overflow-auto rounded-lg border border-rose-200/60 bg-white/80 p-2 text-[0.65rem] text-rose-700 dark:border-rose-500/30 dark:bg-slate-950/60 dark:text-rose-200">
+          <pre className="mt-2 mb-4 max-h-40 overflow-auto rounded-lg border border-rose-200/60 bg-white/80 p-2 text-[0.65rem] text-rose-700 dark:border-rose-500/30 dark:bg-slate-950/60 dark:text-rose-200">
             {details}
           </pre>
           <Button
             variant="secondary"
             size="compact"
-            onClick={() => copyToClipboard(details)}
+            onClick={() => copyToClipboard(details.replace(/"/g, '\\"'))}
           >
-            Copy raw error
+            Copy string error
           </Button>
         </details>
       ) : null}

@@ -58,8 +58,8 @@ const CustomNetworkModal = ({
     <ModalFrame onClose={onClose}>
       <ModalHeader
         eyebrow="Network configuration"
-        title="Custom networks"
-        description="Custom RPC endpoints and contract IDs are saved in your browser and only apply on localhost."
+        title="Configure networks"
+        description="Custom RPC endpoints and contract package IDs are saved in your browser and only apply on localhost."
         onClose={onClose}
       />
       <ModalBody>
@@ -105,8 +105,7 @@ const CustomNetworkModal = ({
                         </span>
                       </div>
                       <div className="text-[0.7rem] text-slate-500 dark:text-slate-200/70">
-                        Package {shortenId(network.contractPackageId)} / Shop{" "}
-                        {shortenId(network.shopId)}
+                        Package {shortenId(network.contractPackageId)}
                       </div>
                     </div>
                     <div className="flex flex-wrap items-center gap-2">
@@ -134,7 +133,7 @@ const CustomNetworkModal = ({
 
         <ModalSection
           title={isEditing ? "Edit network" : "Add a network"}
-          subtitle="Supply RPC, explorer, and contract identifiers for the target chain."
+          subtitle="Supply RPC, explorer, and contract package IDs for the target chain."
         >
           <div className="grid gap-4 md:grid-cols-2">
             <label className={modalFieldLabelClassName}>
@@ -203,41 +202,22 @@ const CustomNetworkModal = ({
             ) : null}
           </label>
 
-          <div className="grid gap-4 md:grid-cols-2">
-            <label className={modalFieldLabelClassName}>
-              <span>Contract package ID</span>
-              <input
-                value={draft.contractPackageId}
-                onChange={(event) =>
-                  onFieldChange("contractPackageId", event.target.value)
-                }
-                className={inputClassName(errors.contractPackageId)}
-                placeholder="0x..."
-              />
-              {errors.contractPackageId ? (
-                <span className={modalFieldErrorTextClassName}>
-                  {errors.contractPackageId}
-                </span>
-              ) : null}
-            </label>
-
-            <label className={modalFieldLabelClassName}>
-              <span>Shop ID</span>
-              <input
-                value={draft.shopId}
-                onChange={(event) =>
-                  onFieldChange("shopId", event.target.value)
-                }
-                className={inputClassName(errors.shopId)}
-                placeholder="0x..."
-              />
-              {errors.shopId ? (
-                <span className={modalFieldErrorTextClassName}>
-                  {errors.shopId}
-                </span>
-              ) : null}
-            </label>
-          </div>
+          <label className={modalFieldLabelClassName}>
+            <span>Contract package ID</span>
+            <input
+              value={draft.contractPackageId}
+              onChange={(event) =>
+                onFieldChange("contractPackageId", event.target.value)
+              }
+              className={inputClassName(errors.contractPackageId)}
+              placeholder="0x..."
+            />
+            {errors.contractPackageId ? (
+              <span className={modalFieldErrorTextClassName}>
+                {errors.contractPackageId}
+              </span>
+            ) : null}
+          </label>
 
           <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
             <div className="text-xs uppercase tracking-[0.18em] text-slate-500 dark:text-slate-200/70">

@@ -53,6 +53,7 @@ import {
   serializeForJson
 } from "../helpers/transactionErrors"
 import { extractCreatedObjects } from "../helpers/transactionFormat"
+import { waitForTransactionBlock } from "../helpers/transactionWait"
 import { useIdleFieldValidation } from "./useIdleFieldValidation"
 import useNetworkConfig from "./useNetworkConfig"
 
@@ -442,16 +443,7 @@ export const useAddDiscountModalState = ({
 
         failureStage = "fetch"
         digest = result.digest
-        transactionBlock = await suiClient.getTransactionBlock({
-          digest,
-          options: {
-            showEffects: true,
-            showObjectChanges: true,
-            showEvents: true,
-            showBalanceChanges: true,
-            showInput: true
-          }
-        })
+        transactionBlock = await waitForTransactionBlock(suiClient, digest)
       }
 
       const discountTemplateId = extractCreatedObjects(transactionBlock).find(

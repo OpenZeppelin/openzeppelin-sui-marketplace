@@ -29,6 +29,7 @@ import {
   safeJsonStringify,
   serializeForJson
 } from "../helpers/transactionErrors"
+import { waitForTransactionBlock } from "../helpers/transactionWait"
 import useNetworkConfig from "./useNetworkConfig"
 
 export type RemoveListingTransactionSummary = {
@@ -216,16 +217,7 @@ export const useRemoveItemModalState = ({
 
         failureStage = "fetch"
         digest = result.digest
-        transactionBlock = await suiClient.getTransactionBlock({
-          digest,
-          options: {
-            showEffects: true,
-            showObjectChanges: true,
-            showEvents: true,
-            showBalanceChanges: true,
-            showInput: true
-          }
-        })
+        transactionBlock = await waitForTransactionBlock(suiClient, digest)
       }
 
       setTransactionState({

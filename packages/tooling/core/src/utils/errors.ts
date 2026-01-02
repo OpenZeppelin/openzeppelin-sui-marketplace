@@ -1,6 +1,11 @@
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null
 
+const isPlainObject = (value: object) => {
+  const proto = Object.getPrototypeOf(value)
+  return proto === Object.prototype || proto === null
+}
+
 /**
  * Safely stringifies data to JSON, converting bigint values to strings.
  */
@@ -28,6 +33,41 @@ export const serializeForJson = (
   if (seen.has(value)) return "[Circular]"
   seen.add(value)
 
+  if (Array.isArray(value)) {
+    return value.map((item) => serializeForJson(item, seen))
+  }
+
+  if (value instanceof Date) return value.toISOString()
+  if (value instanceof URL) return value.toString()
+
+  if (value instanceof Error) {
+    return {
+      name: value.name,
+      message: value.message,
+      stack: value.stack,
+      cause: serializeForJson(value.cause, seen)
+    }
+  }
+
+  if (value instanceof Map) {
+    return {
+      name: "Map",
+      entries: Array.from(value.entries()).map(([key, entryValue]) => [
+        serializeForJson(key, seen),
+        serializeForJson(entryValue, seen)
+      ])
+    }
+  }
+
+  if (value instanceof Set) {
+    return {
+      name: "Set",
+      values: Array.from(value.values()).map((entryValue) =>
+        serializeForJson(entryValue, seen)
+      )
+    }
+  }
+
   const output: Record<string, unknown> = {}
   for (const key of Object.getOwnPropertyNames(value)) {
     try {
@@ -40,17 +80,27 @@ export const serializeForJson = (
     }
   }
 
-  if (output.name === undefined && "constructor" in value) {
+  const plainObject = isPlainObject(value)
+
+  if (!plainObject && output.name === undefined && "constructor" in value) {
     const constructorName = (value as { constructor?: { name?: string } })
       .constructor?.name
     if (constructorName) output.name = constructorName
   }
 
-  if (typeof (value as { toString?: () => string }).toString === "function") {
-    try {
-      output.toStringValue = String(value)
-    } catch {
-      // Ignore toString errors.
+  if (!plainObject) {
+    const toStringFn = (value as { toString?: () => string }).toString
+    if (
+      typeof toStringFn === "function" &&
+      toStringFn !== Object.prototype.toString &&
+      toStringFn !== Array.prototype.toString
+    ) {
+      try {
+        const stringified = String(value)
+        if (stringified) output.toStringValue = stringified
+      } catch {
+        // Ignore toString errors.
+      }
     }
   }
 

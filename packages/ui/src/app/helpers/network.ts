@@ -3,14 +3,9 @@ import {
   CONTRACT_MODULE_NAME,
   CONTRACT_PACKAGE_ID_NOT_DEFINED,
   DEVNET_CONTRACT_PACKAGE_ID,
-  DEVNET_SHOP_ID,
   LOCALNET_CONTRACT_PACKAGE_ID,
-  LOCALNET_SHOP_ID,
   MAINNET_CONTRACT_PACKAGE_ID,
-  MAINNET_SHOP_ID,
-  SHOP_ID_NOT_DEFINED,
-  TESTNET_CONTRACT_PACKAGE_ID,
-  TESTNET_SHOP_ID
+  TESTNET_CONTRACT_PACKAGE_ID
 } from "~~/config/network"
 export {
   getResponseContentField,
@@ -19,15 +14,34 @@ export {
 } from "@sui-oracle-market/tooling-core/object-info"
 export { fromBytesToString } from "@sui-oracle-market/tooling-core/utils/formatters"
 
+const normalizeExplorerBaseUrl = (baseExplorerUrl: string) =>
+  baseExplorerUrl.replace(/\/+$/, "")
+
 export const transactionUrl = (baseExplorerUrl: string, txDigest: string) => {
-  return `${baseExplorerUrl}/txblock/${txDigest}`
+  return `${normalizeExplorerBaseUrl(baseExplorerUrl)}/txblock/${txDigest}`
 }
 export const packageUrl = (baseExplorerUrl: string, packageId: string) => {
   // Local explorer doesn't have a package view, so we stick with object view instead.
   const subpath =
     baseExplorerUrl.search("localhost") === -1 ? "package" : "object"
 
-  return `${baseExplorerUrl}/${subpath}/${packageId}`
+  return `${normalizeExplorerBaseUrl(baseExplorerUrl)}/${subpath}/${packageId}`
+}
+
+export const objectUrl = (baseExplorerUrl: string, objectId: string) => {
+  return `${normalizeExplorerBaseUrl(baseExplorerUrl)}/object/${objectId}`
+}
+
+export const isLocalExplorerUrl = (baseExplorerUrl: string) => {
+  try {
+    const parsed = new URL(baseExplorerUrl)
+    return parsed.hostname === "localhost" || parsed.hostname === "127.0.0.1"
+  } catch {
+    return (
+      baseExplorerUrl.includes("localhost") ||
+      baseExplorerUrl.includes("127.0.0.1")
+    )
+  }
 }
 
 export const formatNetworkType = (machineName: string) => {
@@ -55,20 +69,16 @@ export const resolveConfiguredId = (
 export const supportedNetworks = () => {
   const networkConfig = {
     [ENetwork.LOCALNET]: {
-      packageId: LOCALNET_CONTRACT_PACKAGE_ID,
-      shopId: LOCALNET_SHOP_ID
+      packageId: LOCALNET_CONTRACT_PACKAGE_ID
     },
     [ENetwork.DEVNET]: {
-      packageId: DEVNET_CONTRACT_PACKAGE_ID,
-      shopId: DEVNET_SHOP_ID
+      packageId: DEVNET_CONTRACT_PACKAGE_ID
     },
     [ENetwork.TESTNET]: {
-      packageId: TESTNET_CONTRACT_PACKAGE_ID,
-      shopId: TESTNET_SHOP_ID
+      packageId: TESTNET_CONTRACT_PACKAGE_ID
     },
     [ENetwork.MAINNET]: {
-      packageId: MAINNET_CONTRACT_PACKAGE_ID,
-      shopId: MAINNET_SHOP_ID
+      packageId: MAINNET_CONTRACT_PACKAGE_ID
     }
   }
 
@@ -78,9 +88,8 @@ export const supportedNetworks = () => {
         config.packageId,
         CONTRACT_PACKAGE_ID_NOT_DEFINED
       )
-      const shopId = resolveConfiguredId(config.shopId, SHOP_ID_NOT_DEFINED)
 
-      return Boolean(packageId && shopId)
+      return Boolean(packageId)
     })
     .map(([key]) => key as ENetwork)
 }

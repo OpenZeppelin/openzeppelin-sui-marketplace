@@ -9,16 +9,10 @@ import type {
 } from "@sui-oracle-market/domain-core/models/discount"
 import type { ItemListingSummary } from "@sui-oracle-market/domain-core/models/item-listing"
 import { useCallback, useMemo, useState } from "react"
-import {
-  CONTRACT_PACKAGE_ID_NOT_DEFINED,
-  CONTRACT_PACKAGE_VARIABLE_NAME,
-  SHOP_ID_NOT_DEFINED,
-  SHOP_ID_VARIABLE_NAME
-} from "../config/network"
+import { CONTRACT_PACKAGE_ID_NOT_DEFINED } from "../config/network"
 import { buildDiscountTemplateLookup } from "../helpers/discountTemplates"
 import { resolveConfiguredId } from "../helpers/network"
 import { useClaimDiscountTicketAction } from "./useClaimDiscountTicketAction"
-import useNetworkConfig from "./useNetworkConfig"
 import { useShopDashboardData } from "./useShopDashboardData"
 
 type DashboardModalState = {
@@ -49,18 +43,17 @@ const emptyModalState = (): DashboardModalState => ({
   isRemoveDiscountModalOpen: false
 })
 
-export const useStoreDashboardViewModel = () => {
+export const useStoreDashboardViewModel = ({
+  shopId,
+  packageId
+}: {
+  shopId?: string
+  packageId?: string
+}) => {
   const currentAccount = useCurrentAccount()
-  const { useNetworkVariable } = useNetworkConfig()
-  const rawShopId = useNetworkVariable(SHOP_ID_VARIABLE_NAME)
-  const rawPackageId = useNetworkVariable(CONTRACT_PACKAGE_VARIABLE_NAME)
-  const shopId = useMemo(
-    () => resolveConfiguredId(rawShopId, SHOP_ID_NOT_DEFINED),
-    [rawShopId]
-  )
-  const packageId = useMemo(
-    () => resolveConfiguredId(rawPackageId, CONTRACT_PACKAGE_ID_NOT_DEFINED),
-    [rawPackageId]
+  const resolvedPackageId = useMemo(
+    () => resolveConfiguredId(packageId, CONTRACT_PACKAGE_ID_NOT_DEFINED),
+    [packageId]
   )
 
   const [modalState, setModalState] =
@@ -79,7 +72,7 @@ export const useStoreDashboardViewModel = () => {
     removeAcceptedCurrency
   } = useShopDashboardData({
     shopId,
-    packageId,
+    packageId: resolvedPackageId,
     ownerAddress: currentAccount?.address
   })
 

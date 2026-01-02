@@ -10,31 +10,15 @@ import {
 } from "@mysten/dapp-kit"
 import type { SuiTransactionBlockResponse } from "@mysten/sui/client"
 import type { IdentifierString } from "@mysten/wallet-standard"
-import type { ItemListingSummary } from "@sui-oracle-market/domain-core/models/item-listing"
-import { getItemListingSummary } from "@sui-oracle-market/domain-core/models/item-listing"
-import { parseUsdToCents } from "@sui-oracle-market/domain-core/models/shop"
-import { buildAddItemListingTransaction } from "@sui-oracle-market/domain-core/ptb/item-listing"
-import {
-  deriveRelevantPackageId,
-  normalizeOptionalId
-} from "@sui-oracle-market/tooling-core/object"
-import { getSuiSharedObject } from "@sui-oracle-market/tooling-core/shared-object"
+import { buildCreateShopTransaction } from "@sui-oracle-market/domain-core/ptb/shop"
 import { ENetwork } from "@sui-oracle-market/tooling-core/types"
-import { parsePositiveU64 } from "@sui-oracle-market/tooling-core/utils/utility"
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { EXPLORER_URL_VARIABLE_NAME } from "../config/network"
-import { formatUsdFromCents, getStructLabel } from "../helpers/format"
 import {
   getLocalnetClient,
   makeLocalnetExecutor,
   walletSupportsChain
 } from "../helpers/localnet"
-import { resolveOwnerCapabilityId } from "../helpers/ownerCapabilities"
-import {
-  resolveValidationMessage,
-  validateItemType,
-  validateOptionalSuiObjectId
-} from "../helpers/inputValidation"
 import {
   extractErrorDetails,
   formatErrorMessage,
@@ -46,150 +30,67 @@ import { waitForTransactionBlock } from "../helpers/transactionWait"
 import useNetworkConfig from "./useNetworkConfig"
 import { useIdleFieldValidation } from "./useIdleFieldValidation"
 
-type ListingFormState = {
-  itemName: string
-  itemType: string
-  basePrice: string
-  stock: string
-  spotlightDiscountId: string
+type ShopFormState = {
+  shopName: string
 }
 
-type ListingInputs = {
-  itemName: string
-  itemType: string
-  basePriceUsdCents: bigint
-  stock: bigint
-  spotlightDiscountId?: string
-}
-
-export type ListingTransactionSummary = ListingInputs & {
+export type CreateShopTransactionSummary = {
+  shopName: string
   digest: string
   transactionBlock: SuiTransactionBlockResponse
-  listingId?: string
+  shopId?: string
 }
 
 type TransactionState =
   | { status: "idle" }
   | { status: "processing" }
-  | { status: "success"; summary: ListingTransactionSummary }
+  | { status: "success"; summary: CreateShopTransactionSummary }
   | { status: "error"; error: string; details?: string }
 
-const emptyFormState = (): ListingFormState => ({
-  itemName: "",
-  itemType: "",
-  basePrice: "",
-  stock: "",
-  spotlightDiscountId: ""
+const emptyFormState = (): ShopFormState => ({
+  shopName: ""
 })
 
-type ListingFieldErrors = Partial<Record<keyof ListingFormState, string>>
+type ShopFieldErrors = Partial<Record<keyof ShopFormState, string>>
 
-const buildListingFieldErrors = (
-  formState: ListingFormState
-): ListingFieldErrors => {
-  const errors: ListingFieldErrors = {}
-  const itemName = formState.itemName.trim()
-  const basePrice = formState.basePrice.trim()
-  const stock = formState.stock.trim()
-
-  if (!itemName) errors.itemName = "Item name is required."
-
-  const itemTypeError = validateItemType(formState.itemType, "Item type")
-  if (itemTypeError) errors.itemType = itemTypeError
-
-  if (!basePrice) {
-    errors.basePrice = "Base price is required."
-  } else {
-    try {
-      const basePriceUsdCents = parseUsdToCents(basePrice)
-      if (basePriceUsdCents <= 0n)
-        errors.basePrice = "Base price must be greater than zero."
-    } catch (error) {
-      errors.basePrice = resolveValidationMessage(
-        error,
-        "Enter a valid USD amount."
-      )
-    }
-  }
-
-  if (!stock) {
-    errors.stock = "Stock is required."
-  } else {
-    try {
-      parsePositiveU64(stock, "Stock")
-    } catch (error) {
-      errors.stock = resolveValidationMessage(
-        error,
-        "Stock must be a valid u64."
-      )
-    }
-  }
-
-  const spotlightError = validateOptionalSuiObjectId(
-    formState.spotlightDiscountId,
-    "Spotlight discount template id"
-  )
-  if (spotlightError) errors.spotlightDiscountId = spotlightError
-
+const buildShopFieldErrors = (formState: ShopFormState): ShopFieldErrors => {
+  const errors: ShopFieldErrors = {}
+  const shopName = formState.shopName.trim()
+  if (!shopName) errors.shopName = "Shop name is required."
   return errors
 }
 
-const parseListingInputs = (formState: ListingFormState): ListingInputs => {
-  const itemName = formState.itemName.trim()
-  if (!itemName) throw new Error("Item name is required.")
-
-  const itemType = formState.itemType.trim()
-  if (!itemType) throw new Error("Item type is required.")
-
-  const basePriceUsdCents = parseUsdToCents(formState.basePrice)
-  const stock = parsePositiveU64(formState.stock, "stock")
-  const spotlightDiscountId = normalizeOptionalId(
-    formState.spotlightDiscountId.trim() || undefined
-  )
-
-  return {
-    itemName,
-    itemType,
-    basePriceUsdCents,
-    stock,
-    spotlightDiscountId
-  }
-}
-
-type AddItemModalState = {
-  formState: ListingFormState
-  fieldErrors: ListingFieldErrors
-  pricePreview: string
-  stockPreview: string
-  itemTypeLabel: string
+type CreateShopModalState = {
+  formState: ShopFormState
+  fieldErrors: ShopFieldErrors
   transactionState: TransactionState
-  transactionSummary?: ListingTransactionSummary
+  transactionSummary?: CreateShopTransactionSummary
   isSuccessState: boolean
   isErrorState: boolean
   canSubmit: boolean
   explorerUrl?: string
-  handleAddItem: () => Promise<void>
-  handleInputChange: <K extends keyof ListingFormState>(
+  handleCreateShop: () => Promise<void>
+  handleInputChange: <K extends keyof ShopFormState>(
     key: K,
-    value: ListingFormState[K]
+    value: ShopFormState[K]
   ) => void
-  markFieldBlur: (key: keyof ListingFormState) => void
-  shouldShowFieldError: <K extends keyof ListingFormState>(
+  markFieldBlur: (key: keyof ShopFormState) => void
+  shouldShowFieldError: <K extends keyof ShopFormState>(
     key: K,
     error?: string
   ) => error is string
   resetForm: () => void
 }
 
-export const useAddItemModalState = ({
+export const useCreateShopModalState = ({
   open,
-  shopId,
-  onListingCreated
+  packageId,
+  onShopCreated
 }: {
   open: boolean
-  shopId?: string
-  onListingCreated?: (listing?: ItemListingSummary) => void
-}): AddItemModalState => {
+  packageId?: string
+  onShopCreated?: (shopId: string) => void
+}): CreateShopModalState => {
   const currentAccount = useCurrentAccount()
   const { currentWallet } = useCurrentWallet()
   const suiClient = useSuiClient()
@@ -209,7 +110,7 @@ export const useAddItemModalState = ({
     [localnetClient, signTransaction.mutateAsync]
   )
 
-  const [formState, setFormState] = useState<ListingFormState>(emptyFormState())
+  const [formState, setFormState] = useState<ShopFormState>(emptyFormState())
   const [transactionState, setTransactionState] = useState<TransactionState>({
     status: "idle"
   })
@@ -219,48 +120,22 @@ export const useAddItemModalState = ({
     markFieldBlur,
     resetFieldState,
     shouldShowFieldFeedback
-  } = useIdleFieldValidation<keyof ListingFormState>({ idleDelayMs: 600 })
+  } = useIdleFieldValidation<keyof ShopFormState>({ idleDelayMs: 600 })
 
   const walletAddress = currentAccount?.address
 
   const fieldErrors = useMemo(
-    () => buildListingFieldErrors(formState),
+    () => buildShopFieldErrors(formState),
     [formState]
   )
   const hasFieldErrors = Object.values(fieldErrors).some(Boolean)
-
-  const pricePreview = useMemo(() => {
-    if (!formState.basePrice.trim()) return "Enter price"
-    try {
-      return formatUsdFromCents(parseUsdToCents(formState.basePrice).toString())
-    } catch {
-      return "Invalid price"
-    }
-  }, [formState.basePrice])
-
-  const stockPreview = useMemo(() => {
-    if (!formState.stock.trim()) return "Enter stock"
-    try {
-      return parsePositiveU64(formState.stock, "stock").toString()
-    } catch {
-      return "Invalid stock"
-    }
-  }, [formState.stock])
-
-  const itemTypeLabel = useMemo(
-    () =>
-      formState.itemType.trim()
-        ? getStructLabel(formState.itemType)
-        : "Item type",
-    [formState.itemType]
-  )
 
   const isSubmissionPending = isLocalnet
     ? signTransaction.isPending
     : signAndExecuteTransaction.isPending
 
   const canSubmit =
-    Boolean(walletAddress && shopId && !hasFieldErrors) &&
+    Boolean(walletAddress && packageId && !hasFieldErrors) &&
     transactionState.status !== "processing" &&
     isSubmissionPending !== true
 
@@ -277,7 +152,7 @@ export const useAddItemModalState = ({
   }, [open, resetForm])
 
   const handleInputChange = useCallback(
-    <K extends keyof ListingFormState>(key: K, value: ListingFormState[K]) => {
+    <K extends keyof ShopFormState>(key: K, value: ShopFormState[K]) => {
       markFieldChange(key)
       setFormState((previous) => ({
         ...previous,
@@ -288,7 +163,7 @@ export const useAddItemModalState = ({
   )
 
   const shouldShowFieldError = useCallback(
-    <K extends keyof ListingFormState>(
+    <K extends keyof ShopFormState>(
       key: K,
       error?: string
     ): error is string =>
@@ -296,13 +171,13 @@ export const useAddItemModalState = ({
     [hasAttemptedSubmit, shouldShowFieldFeedback]
   )
 
-  const handleAddItem = useCallback(async () => {
+  const handleCreateShop = useCallback(async () => {
     setHasAttemptedSubmit(true)
 
-    if (!walletAddress || !shopId) {
+    if (!walletAddress || !packageId) {
       setTransactionState({
         status: "error",
-        error: "Wallet and shop details are required to add a listing."
+        error: "Wallet and package details are required to create a shop."
       })
       return
     }
@@ -362,38 +237,19 @@ export const useAddItemModalState = ({
     let failureStage: "prepare" | "execute" | "fetch" = "prepare"
 
     try {
-      const listingInputs = parseListingInputs(formState)
-      const shopShared = await getSuiSharedObject(
-        { objectId: shopId, mutable: true },
-        { suiClient }
-      )
-      const resolvedShopId = shopShared.object.objectId
-      const shopPackageId = deriveRelevantPackageId(shopShared.object.type)
-      const ownerCapabilityId = await resolveOwnerCapabilityId({
-        shopId: resolvedShopId,
-        shopPackageId,
-        ownerAddress: walletAddress,
-        suiClient
+      const shopName = formState.shopName.trim()
+      const createShopTransaction = buildCreateShopTransaction({
+        packageId,
+        shopName
       })
-
-      const addListingTransaction = buildAddItemListingTransaction({
-        packageId: shopPackageId,
-        itemType: listingInputs.itemType,
-        shop: shopShared,
-        ownerCapId: ownerCapabilityId,
-        itemName: listingInputs.itemName,
-        basePriceUsdCents: listingInputs.basePriceUsdCents,
-        stock: listingInputs.stock,
-        spotlightDiscountId: listingInputs.spotlightDiscountId
-      })
-      addListingTransaction.setSender(walletAddress)
+      createShopTransaction.setSender(walletAddress)
 
       let digest = ""
       let transactionBlock: SuiTransactionBlockResponse
 
       if (isLocalnet) {
         failureStage = "execute"
-        const result = await localnetExecutor(addListingTransaction, {
+        const result = await localnetExecutor(createShopTransaction, {
           chain: expectedChain
         })
         digest = result.digest
@@ -401,7 +257,7 @@ export const useAddItemModalState = ({
       } else {
         failureStage = "execute"
         const result = await signAndExecuteTransaction.mutateAsync({
-          transaction: addListingTransaction,
+          transaction: createShopTransaction,
           chain: expectedChain
         })
 
@@ -410,38 +266,22 @@ export const useAddItemModalState = ({
         transactionBlock = await waitForTransactionBlock(suiClient, digest)
       }
 
-      const listingId = extractCreatedObjects(transactionBlock).find((change) =>
-        change.objectType.includes("::shop::ItemListing")
+      const shopId = extractCreatedObjects(transactionBlock).find((change) =>
+        change.objectType.endsWith("::shop::Shop")
       )?.objectId
-
-      const optimisticListing = listingId
-        ? {
-            itemListingId: listingId,
-            markerObjectId: listingId,
-            name: listingInputs.itemName,
-            itemType: listingInputs.itemType,
-            basePriceUsdCents: listingInputs.basePriceUsdCents.toString(),
-            stock: listingInputs.stock.toString(),
-            spotlightTemplateId: listingInputs.spotlightDiscountId
-          }
-        : undefined
 
       setTransactionState({
         status: "success",
         summary: {
-          ...listingInputs,
+          shopName,
           digest,
           transactionBlock,
-          listingId
+          shopId
         }
       })
 
-      onListingCreated?.(optimisticListing)
-
-      if (listingId) {
-        void getItemListingSummary(resolvedShopId, listingId, suiClient)
-          .then((summary) => onListingCreated?.(summary))
-          .catch(() => {})
+      if (shopId) {
+        onShopCreated?.(shopId)
       }
     } catch (error) {
       const errorDetails = extractErrorDetails(error)
@@ -472,13 +312,13 @@ export const useAddItemModalState = ({
   }, [
     currentAccount,
     currentWallet,
-    formState,
+    formState.shopName,
     hasFieldErrors,
     isLocalnet,
     localnetExecutor,
     network,
-    onListingCreated,
-    shopId,
+    onShopCreated,
+    packageId,
     signAndExecuteTransaction,
     suiClient,
     walletAddress
@@ -493,16 +333,13 @@ export const useAddItemModalState = ({
   return {
     formState,
     fieldErrors,
-    pricePreview,
-    stockPreview,
-    itemTypeLabel,
     transactionState,
     transactionSummary,
     isSuccessState,
     isErrorState,
     canSubmit,
     explorerUrl,
-    handleAddItem,
+    handleCreateShop,
     handleInputChange,
     markFieldBlur,
     shouldShowFieldError,

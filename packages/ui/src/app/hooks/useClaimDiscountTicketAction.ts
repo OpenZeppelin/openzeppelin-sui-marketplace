@@ -32,6 +32,7 @@ import { notification } from "../helpers/notification"
 import { transactionUrl } from "../helpers/network"
 import { extractCreatedObjects } from "../helpers/transactionFormat"
 import { formatErrorMessage } from "../helpers/transactionErrors"
+import { waitForTransactionBlock } from "../helpers/transactionWait"
 import useNetworkConfig from "./useNetworkConfig"
 
 type ClaimState =
@@ -170,16 +171,10 @@ export const useClaimDiscountTicketAction = ({
             chain: expectedChain
           })
 
-          transactionBlock = await suiClient.getTransactionBlock({
-            digest: result.digest,
-            options: {
-              showEffects: true,
-              showObjectChanges: true,
-              showEvents: true,
-              showBalanceChanges: true,
-              showInput: true
-            }
-          })
+          transactionBlock = await waitForTransactionBlock(
+            suiClient,
+            result.digest
+          )
         }
 
         const createdTicketId = findCreatedDiscountTicketId(

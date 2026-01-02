@@ -352,6 +352,7 @@ export const useShopDashboardData = ({
           clockTimestampMs: data.clockTimestampMs
         })
       } catch (error) {
+        console.log("HERE", error);
         if (!isSubscribed) return
         setStorefrontState((previous) => ({
           ...previous,
@@ -427,3 +428,4 @@ export const useShopDashboardData = ({
     removeAcceptedCurrency
   }
 }
+

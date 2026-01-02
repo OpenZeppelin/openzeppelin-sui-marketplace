@@ -64,11 +64,13 @@ const resolveListingLabel = (
 const DiscountSummarySection = ({
   summary,
   shopId,
-  listingLabel
+  listingLabel,
+  explorerUrl
 }: {
   summary: DiscountTransactionSummary
   shopId?: string
   listingLabel?: string
+  explorerUrl?: string
 }) => (
   <ModalSection title="Discount details" subtitle="Rule, scope, and schedule">
     <div className="grid gap-3 text-xs sm:grid-cols-2">
@@ -82,7 +84,7 @@ const DiscountSummarySection = ({
             ruleValue: summary.ruleValue
           })}
         </div>
-        <div className="mt-2 text-[0.7rem] text-slate-500 dark:text-slate-200/60">
+        <div className="mt-2 text-[0.7rem] text-slate-500 dark:text-slate-200/60 overflow-auto">
           {describeRuleKind(summary.ruleKind)} discount
         </div>
       </div>
@@ -123,7 +125,7 @@ const DiscountSummarySection = ({
               : "All listings")}
         </div>
         {summary.appliesToListingId ? (
-          <div className="mt-2 text-[0.7rem] text-slate-500 dark:text-slate-200/60">
+          <div className="mt-2 text-[0.7rem] text-slate-500 dark:text-slate-200/60 overflow-auto">
             {summary.appliesToListingId}
           </div>
         ) : null}
@@ -131,9 +133,15 @@ const DiscountSummarySection = ({
     </div>
     <div className="mt-4 flex flex-wrap items-center gap-3 text-xs">
       {summary.discountTemplateId ? (
-        <CopyableId value={summary.discountTemplateId} label="Template ID" />
+        <CopyableId
+          value={summary.discountTemplateId}
+          label="Template ID"
+          explorerUrl={explorerUrl}
+        />
       ) : null}
-      {shopId ? <CopyableId value={shopId} label="Shop ID" /> : null}
+      {shopId ? (
+        <CopyableId value={shopId} label="Shop ID" explorerUrl={explorerUrl} />
+      ) : null}
     </div>
   </ModalSection>
 )
@@ -169,6 +177,7 @@ const DiscountSuccessView = ({
         summary={summary}
         shopId={shopId}
         listingLabel={listingLabel}
+        explorerUrl={explorerUrl}
       />
       <TransactionRecap
         transactionBlock={summary.transactionBlock}
@@ -328,7 +337,15 @@ const AddDiscountModal = ({
             title="Add Discount"
             description="Create a discount template for your storefront."
             onClose={onClose}
-            footer={shopId ? <CopyableId value={shopId} label="Shop" /> : null}
+            footer={
+              shopId ? (
+                <CopyableId
+                  value={shopId}
+                  label="Shop"
+                  explorerUrl={explorerUrl}
+                />
+              ) : null
+            }
           />
 
           <ModalBody>

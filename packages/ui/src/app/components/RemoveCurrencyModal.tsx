@@ -23,10 +23,12 @@ import TransactionRecap from "./TransactionRecap"
 
 const CurrencySummarySection = ({
   currency,
-  shopId
+  shopId,
+  explorerUrl
 }: {
   currency: AcceptedCurrencySummary
   shopId?: string
+  explorerUrl?: string
 }) => {
   const registryId = resolveCurrencyRegistryId(currency.coinType)
 
@@ -43,7 +45,7 @@ const CurrencySummarySection = ({
           <div className="mt-1 text-sm font-semibold text-sds-dark dark:text-sds-light">
             {getStructLabel(currency.coinType)}
           </div>
-          <div className="mt-2 text-[0.7rem] text-slate-500 dark:text-slate-200/60">
+          <div className="mt-2 text-[0.7rem] text-slate-500 dark:text-slate-200/60 overflow-auto">
             {currency.coinType}
           </div>
         </div>
@@ -76,13 +78,25 @@ const CurrencySummarySection = ({
             </div>
           </div>
         ) : null}
-      </div>
-      <div className="mt-4 flex flex-wrap items-center gap-3 text-xs">
-        <CopyableId value={currency.acceptedCurrencyId} label="Accepted ID" />
-        {registryId ? <CopyableId value={registryId} label="Registry" /> : null}
-        {shopId ? <CopyableId value={shopId} label="Shop ID" /> : null}
-      </div>
-    </ModalSection>
+    </div>
+    <div className="mt-4 flex flex-wrap items-center gap-3 text-xs">
+      <CopyableId
+        value={currency.acceptedCurrencyId}
+        label="Accepted ID"
+        explorerUrl={explorerUrl}
+      />
+      {registryId ? (
+        <CopyableId
+          value={registryId}
+          label="Registry"
+          explorerUrl={explorerUrl}
+        />
+      ) : null}
+      {shopId ? (
+        <CopyableId value={shopId} label="Shop ID" explorerUrl={explorerUrl} />
+      ) : null}
+    </div>
+  </ModalSection>
   )
 }
 
@@ -118,7 +132,11 @@ const CurrencySuccessView = ({
       onClose={onClose}
     />
     <ModalBody>
-      <CurrencySummarySection currency={summary.currency} shopId={shopId} />
+      <CurrencySummarySection
+        currency={summary.currency}
+        shopId={shopId}
+        explorerUrl={explorerUrl}
+      />
       <TransactionRecap
         transactionBlock={summary.transactionBlock}
         digest={summary.digest}
@@ -218,11 +236,16 @@ const RemoveCurrencyModal = ({
               <CopyableId
                 value={currency.acceptedCurrencyId}
                 label="Accepted"
+                explorerUrl={explorerUrl}
               />
             }
           />
           <ModalBody>
-            <CurrencySummarySection currency={currency} shopId={shopId} />
+            <CurrencySummarySection
+              currency={currency}
+              shopId={shopId}
+              explorerUrl={explorerUrl}
+            />
             <RemovalImpactSection />
           </ModalBody>
           <div className="border-t border-slate-200/70 px-6 py-4 dark:border-slate-50/15">

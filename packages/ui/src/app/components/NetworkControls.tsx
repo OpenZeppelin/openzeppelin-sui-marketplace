@@ -66,7 +66,7 @@ const NetworkControls = () => {
         onClick={openCreate}
         className={headerControlBaseClassName}
       >
-        Custom Network
+        Configure network
       </button>
       <CustomNetworkModal
         open={state.isOpen}

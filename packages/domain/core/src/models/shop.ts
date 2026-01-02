@@ -1,4 +1,4 @@
-import type { SuiClient, SuiObjectData } from "@mysten/sui/client"
+import type { SuiClient, SuiEvent, SuiObjectData } from "@mysten/sui/client"
 import { normalizeSuiAddress } from "@mysten/sui/utils"
 import {
   getAllOwnedObjectsByFilter,
@@ -8,11 +8,11 @@ import {
   normalizeOptionalIdFromValue,
   unwrapMoveObjectFields
 } from "@sui-oracle-market/tooling-core/object"
+import { decodeUtf8Vector } from "@sui-oracle-market/tooling-core/utils/formatters"
 import {
   requireValue,
   tryParseBigInt
 } from "@sui-oracle-market/tooling-core/utils/utility"
-import { decodeUtf8Vector } from "@sui-oracle-market/tooling-core/utils/formatters"
 import type { AcceptedCurrencySummary } from "./currency.ts"
 import { getAcceptedCurrencySummaries } from "./currency.ts"
 import type { DiscountTemplateSummary } from "./discount.ts"
@@ -71,6 +71,86 @@ export type ShopOverview = {
   disabled: boolean
 }
 
+export type ShopCreatedSummary = {
+  shopId: string
+  ownerAddress?: string
+  name?: string
+  ownerCapId?: string
+  createdAtMs?: string
+  txDigest?: string
+}
+
+const parseShopCreatedEvent = (
+  event: SuiEvent
+): ShopCreatedSummary | undefined => {
+  try {
+    if (
+      !event.parsedJson ||
+      typeof event.parsedJson !== "object" ||
+      Array.isArray(event.parsedJson)
+    )
+      return undefined
+    const fields = event.parsedJson as Record<string, unknown>
+    const shopId = normalizeOptionalIdFromValue(
+      fields.shop_address ?? fields.shop_id
+    )
+    if (!shopId) return undefined
+
+    return {
+      shopId,
+      ownerAddress: normalizeOptionalIdFromValue(fields.owner),
+      name: decodeUtf8Vector(fields.name),
+      ownerCapId: normalizeOptionalIdFromValue(fields.shop_owner_cap_id),
+      createdAtMs: event.timestampMs ? String(event.timestampMs) : undefined,
+      txDigest: event.id?.txDigest
+    }
+  } catch {
+    return undefined
+  }
+}
+
+export const getShopCreatedSummaries = async ({
+  shopPackageId,
+  suiClient,
+  pageSize = 50,
+  maxPages = 10
+}: {
+  shopPackageId: string
+  suiClient: SuiClient
+  pageSize?: number
+  maxPages?: number
+}): Promise<ShopCreatedSummary[]> => {
+  const normalizedPackageId = normalizeIdOrThrow(
+    shopPackageId,
+    "Shop package ID is required."
+  )
+  const eventType = `${normalizedPackageId}::shop::ShopCreated`
+  const summaries: ShopCreatedSummary[] = []
+  const seen = new Set<string>()
+  let cursor: Parameters<SuiClient["queryEvents"]>[0]["cursor"]
+
+  for (let page = 0; page < maxPages; page += 1) {
+    const response = await suiClient.queryEvents({
+      query: { MoveEventType: eventType },
+      cursor,
+      limit: pageSize,
+      order: "descending"
+    })
+
+    for (const event of response.data) {
+      const summary = parseShopCreatedEvent(event)
+      if (!summary || seen.has(summary.shopId)) continue
+      seen.add(summary.shopId)
+      summaries.push(summary)
+    }
+
+    if (!response.hasNextPage || !response.nextCursor) break
+    cursor = response.nextCursor
+  }
+
+  return summaries
+}
+
 export const getShopOwnerAddressFromObject = (
   object: SuiObjectData
 ): string => {
@@ -103,18 +183,15 @@ export const getShopOverview = async (
 
 export const getShopNameFromObject = (object: SuiObjectData): string => {
   const shopFields = unwrapMoveObjectFields<{ name?: unknown }>(object)
-  return requireValue(
-    decodeUtf8Vector(shopFields.name),
-    "Shop object is missing a name field."
-  )
+  return (shopFields.name as string) || "Unnamed Shop"
 }
 
-export const getShopDisabledFlagFromObject = (object: SuiObjectData): boolean => {
+export const getShopDisabledFlagFromObject = (
+  object: SuiObjectData
+): boolean => {
   const shopFields = unwrapMoveObjectFields<{ disabled?: unknown }>(object)
   const rawDisabled = shopFields.disabled
-  if (typeof rawDisabled !== "boolean")
-    throw new Error("Shop object is missing a disabled flag.")
-  return rawDisabled
+  return Boolean(rawDisabled as boolean)
 }
 
 /**

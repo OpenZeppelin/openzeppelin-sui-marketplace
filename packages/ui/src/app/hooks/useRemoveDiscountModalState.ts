@@ -30,6 +30,7 @@ import {
   safeJsonStringify,
   serializeForJson
 } from "../helpers/transactionErrors"
+import { waitForTransactionBlock } from "../helpers/transactionWait"
 import useNetworkConfig from "./useNetworkConfig"
 
 export type RemoveDiscountTransactionSummary = {
@@ -236,16 +237,7 @@ export const useRemoveDiscountModalState = ({
 
         failureStage = "fetch"
         digest = result.digest
-        transactionBlock = await suiClient.getTransactionBlock({
-          digest,
-          options: {
-            showEffects: true,
-            showObjectChanges: true,
-            showEvents: true,
-            showBalanceChanges: true,
-            showInput: true
-          }
-        })
+        transactionBlock = await waitForTransactionBlock(suiClient, digest)
       }
 
       const disabledTemplate = buildDisabledTemplateSnapshot(template)

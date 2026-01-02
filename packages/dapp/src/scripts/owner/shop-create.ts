@@ -53,6 +53,7 @@ runSuiScript(
   },
   yargs()
     .option("name", {
+      alias: ["shop-name"],
       type: "string",
       description: "Shop name to store on-chain (defaults to Shop).",
       default: "Shop",

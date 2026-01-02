@@ -63,7 +63,7 @@ const TransactionRecap = ({
           <span className="text-[0.6rem] uppercase tracking-[0.18em] text-slate-500 dark:text-slate-200/60">
             Digest
           </span>
-          <CopyableId value={digest} />
+          <CopyableId value={digest} showExplorer={false} />
           {explorerLink ? (
             <a
               href={explorerLink}

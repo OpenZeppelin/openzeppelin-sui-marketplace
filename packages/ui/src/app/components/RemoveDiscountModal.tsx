@@ -22,10 +22,12 @@ import TransactionRecap from "./TransactionRecap"
 
 const DiscountSummarySection = ({
   template,
-  shopId
+  shopId,
+  explorerUrl
 }: {
   template: DiscountTemplateSummary
   shopId?: string
+  explorerUrl?: string
 }) => (
   <ModalSection
     title="Discount details"
@@ -78,11 +80,21 @@ const DiscountSummarySection = ({
       ) : null}
     </div>
     <div className="mt-4 flex flex-wrap items-center gap-3 text-xs">
-      <CopyableId value={template.discountTemplateId} label="Template ID" />
+      <CopyableId
+        value={template.discountTemplateId}
+        label="Template ID"
+        explorerUrl={explorerUrl}
+      />
       {template.appliesToListingId ? (
-        <CopyableId value={template.appliesToListingId} label="Listing" />
+        <CopyableId
+          value={template.appliesToListingId}
+          label="Listing"
+          explorerUrl={explorerUrl}
+        />
       ) : null}
-      {shopId ? <CopyableId value={shopId} label="Shop ID" /> : null}
+      {shopId ? (
+        <CopyableId value={shopId} label="Shop ID" explorerUrl={explorerUrl} />
+      ) : null}
     </div>
   </ModalSection>
 )
@@ -119,7 +131,11 @@ const DiscountSuccessView = ({
       onClose={onClose}
     />
     <ModalBody>
-      <DiscountSummarySection template={summary.template} shopId={shopId} />
+      <DiscountSummarySection
+        template={summary.template}
+        shopId={shopId}
+        explorerUrl={explorerUrl}
+      />
       <TransactionRecap
         transactionBlock={summary.transactionBlock}
         digest={summary.digest}
@@ -222,11 +238,16 @@ const RemoveDiscountModal = ({
               <CopyableId
                 value={template.discountTemplateId}
                 label="Template"
+                explorerUrl={explorerUrl}
               />
             }
           />
           <ModalBody>
-            <DiscountSummarySection template={template} shopId={shopId} />
+            <DiscountSummarySection
+              template={template}
+              shopId={shopId}
+              explorerUrl={explorerUrl}
+            />
             <RemovalImpactSection />
           </ModalBody>
           <div className="border-t border-slate-200/70 px-6 py-4 dark:border-slate-50/15">

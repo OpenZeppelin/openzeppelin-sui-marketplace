@@ -46,7 +46,7 @@ import type { MockArtifact } from "../../utils/mocks.ts"
 import { mockArtifactPath, writeMockArtifact } from "../../utils/mocks.ts"
 
 type SetupLocalCliArgs = {
-  buyerAddress: string
+  buyerAddress?: string
   coinPackageId?: string
   coinContractPath: string
   itemPackageId?: string
@@ -104,7 +104,9 @@ const normalizeSetupInputs = (
   cliArguments: SetupLocalCliArgs
 ): SetupLocalCliArgs => ({
   ...cliArguments,
-  buyerAddress: normalizeSuiAddress(cliArguments.buyerAddress)
+  buyerAddress: cliArguments.buyerAddress
+    ? normalizeSuiAddress(cliArguments.buyerAddress)
+    : undefined
 })
 
 // Parse CLI flags and reuse prior mock artifacts unless --re-publish is set.
@@ -196,15 +198,17 @@ runSuiScript(
       .filter((seeded) => seeded.wasCreated)
       .map((seeded) => seeded.coin)
 
-    await transferHalfTreasuryToBuyer(
-      {
-        coins: createdCoins,
-        buyerAddress: inputs.buyerAddress,
-        signer: tooling.loadedEd25519KeyPair,
-        signerAddress: tooling.loadedEd25519KeyPair.toSuiAddress()
-      },
-      tooling
-    )
+    if (inputs.buyerAddress)
+      await transferHalfTreasuryToBuyer(
+        {
+          coins: createdCoins,
+          buyerAddress: inputs.buyerAddress,
+          signer: tooling.loadedEd25519KeyPair,
+          signerAddress: tooling.loadedEd25519KeyPair.toSuiAddress()
+        },
+        tooling
+      )
+    else logWarning("--buyer-address not supplied skipping fund transfer")
 
     // Ensure mock price feeds exist with fresh timestamps; reuse if valid objects already present.
     const priceFeeds =
@@ -245,8 +249,7 @@ runSuiScript(
     .option("buyerAddress", {
       alias: ["buyer-address", "buyer"],
       type: "string",
-      description: "Buyer address to receive half of each minted mock coin",
-      demandOption: true
+      description: "Buyer address to receive quarter of each minted mock coin"
     })
     .option("coinPackageId", {
       alias: "coin-package-id",
@@ -554,7 +557,7 @@ const transferHalfTreasuryForCoin = async (
     return
   }
 
-  const transferAmount = calculateHalfBalance(treasurySnapshot.balance)
+  const transferAmount = calculateQuarterBalance(treasurySnapshot.balance)
   if (transferAmount <= 0n) {
     logWarning(
       `Balance too small to split for ${coin.label} (${coin.coinType}); skipping buyer transfer.`
@@ -812,7 +815,7 @@ const selectRichestCoin = (coins: OwnedCoinBalance[]) =>
     return BigInt(coin.balance) > BigInt(richest.balance) ? coin : richest
   }, null)
 
-const calculateHalfBalance = (balance: bigint) => balance / 2n
+const calculateQuarterBalance = (balance: bigint) => balance / 4n
 
 const findOwnedCoinObjectId = async ({
   suiClient,

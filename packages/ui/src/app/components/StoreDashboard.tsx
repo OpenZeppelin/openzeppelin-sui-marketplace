@@ -16,6 +16,7 @@ import {
   getStructLabel,
   shortenId
 } from "../helpers/format"
+import useExplorerUrl from "../hooks/useExplorerUrl"
 import { useStoreDashboardViewModel } from "../hooks/useStoreDashboardViewModel"
 import AddCurrencyModal from "./AddCurrencyModal"
 import AddDiscountModal from "./AddDiscountModal"
@@ -195,7 +196,8 @@ const ItemListingsPanel = ({
   onBuy,
   canManageListings,
   onAddItem,
-  onRemoveItem
+  onRemoveItem,
+  explorerUrl
 }: {
   itemListings: ItemListingSummary[]
   templateLookup: Record<string, DiscountTemplateSummary>
@@ -207,6 +209,7 @@ const ItemListingsPanel = ({
   canManageListings: boolean
   onAddItem?: () => void
   onRemoveItem?: (listing: ItemListingSummary) => void
+  explorerUrl?: string
 }) => {
   const headerAction = canManageListings ? (
     <Button variant="primary" size="compact" onClick={onAddItem}>
@@ -222,7 +225,7 @@ const ItemListingsPanel = ({
     >
       {!shopConfigured ? (
         <div className="text-sm text-slate-500 dark:text-slate-200/70">
-          Provide a shop id to load listings from the chain.
+          Select a shop to load listings from the chain.
         </div>
       ) : (
         <>
@@ -327,6 +330,7 @@ const ItemListingsPanel = ({
                           value={listing.spotlightTemplateId}
                           label="Discount"
                           className="w-full justify-start"
+                          explorerUrl={explorerUrl}
                         />
                       </div>
                     ) : null}
@@ -335,11 +339,13 @@ const ItemListingsPanel = ({
                         value={listing.itemListingId}
                         label="Listing"
                         className="w-full justify-start"
+                        explorerUrl={explorerUrl}
                       />
                       <CopyableId
                         value={listing.markerObjectId}
                         label="Marker"
                         className="w-full justify-start"
+                        explorerUrl={explorerUrl}
                       />
                     </div>
                     {canBuy || canManageListings ? (
@@ -397,7 +403,8 @@ const AcceptedCurrenciesPanel = ({
   shopConfigured,
   canManageCurrencies,
   onAddCurrency,
-  onRemoveCurrency
+  onRemoveCurrency,
+  explorerUrl
 }: {
   acceptedCurrencies: AcceptedCurrencySummary[]
   status: PanelStatus["status"]
@@ -406,6 +413,7 @@ const AcceptedCurrenciesPanel = ({
   canManageCurrencies: boolean
   onAddCurrency?: () => void
   onRemoveCurrency?: (currency: AcceptedCurrencySummary) => void
+  explorerUrl?: string
 }) => (
   <Panel
     title="Accepted Currencies"
@@ -420,7 +428,7 @@ const AcceptedCurrenciesPanel = ({
   >
     {!shopConfigured ? (
       <div className="text-sm text-slate-500 dark:text-slate-200/70">
-        Add a shop id to load accepted currencies.
+        Select a shop to load accepted currencies.
       </div>
     ) : (
       renderPanelBody({
@@ -449,6 +457,7 @@ const AcceptedCurrenciesPanel = ({
                         title="Copy coin type"
                         className="mt-1 w-full justify-start text-sm font-semibold text-slate-500 dark:text-slate-200/70"
                         valueClassName="truncate font-semibold text-slate-500 dark:text-slate-200/70"
+                        showExplorer={false}
                       />
                     </div>
                   </div>
@@ -463,6 +472,7 @@ const AcceptedCurrenciesPanel = ({
                         title="Copy feed id"
                         className="mt-1 w-full justify-start text-[0.65rem] text-slate-500 dark:text-slate-200/70"
                         valueClassName="truncate font-semibold text-sds-dark dark:text-sds-light"
+                        showExplorer={false}
                       />
                     </div>
                     {currency.pythObjectId ? (
@@ -476,6 +486,7 @@ const AcceptedCurrenciesPanel = ({
                           title="Copy price info id"
                           className="mt-1 w-full justify-start text-[0.65rem] text-slate-500 dark:text-slate-200/70"
                           valueClassName="truncate font-semibold text-sds-dark dark:text-sds-light"
+                          explorerUrl={explorerUrl}
                         />
                       </div>
                     ) : null}
@@ -484,12 +495,21 @@ const AcceptedCurrenciesPanel = ({
                     <CopyableId
                       value={currency.acceptedCurrencyId}
                       label="Accepted Currency"
+                      explorerUrl={explorerUrl}
                     />
                     {currency.pythObjectId ? (
-                      <CopyableId value={currency.pythObjectId} label="Pyth" />
+                      <CopyableId
+                        value={currency.pythObjectId}
+                        label="Pyth"
+                        explorerUrl={explorerUrl}
+                      />
                     ) : null}
                     {registryId ? (
-                      <CopyableId value={registryId} label="Registry" />
+                      <CopyableId
+                        value={registryId}
+                        label="Registry"
+                        explorerUrl={explorerUrl}
+                      />
                     ) : null}
                   </div>
                   {canManageCurrencies ? (
@@ -517,12 +537,14 @@ const PurchasedItemsPanel = ({
   purchasedItems,
   status,
   error,
-  walletConfigured
+  walletConfigured,
+  explorerUrl
 }: {
   purchasedItems: ShopItemReceiptSummary[]
   status: PanelStatus["status"]
   error?: string
   walletConfigured: boolean
+  explorerUrl?: string
 }) => (
   <Panel title="Purchased Items" subtitle="Wallet receipts">
     {!walletConfigured ? (
@@ -557,6 +579,7 @@ const PurchasedItemsPanel = ({
                           value={item.shopItemId}
                           label="Receipt ID"
                           className="whitespace-nowrap"
+                          explorerUrl={explorerUrl}
                         />
                       </div>
                     </div>
@@ -568,8 +591,13 @@ const PurchasedItemsPanel = ({
                     <CopyableId
                       value={item.itemListingAddress}
                       label="Listing ID"
+                      explorerUrl={explorerUrl}
                     />
-                    <CopyableId value={item.shopAddress} label="Shop ID" />
+                    <CopyableId
+                      value={item.shopAddress}
+                      label="Shop ID"
+                      explorerUrl={explorerUrl}
+                    />
                   </div>
                 </div>
               )
@@ -597,7 +625,8 @@ const DiscountsPanel = ({
   claimingTemplateId,
   isClaiming,
   onAddDiscount,
-  onRemoveDiscount
+  onRemoveDiscount,
+  explorerUrl
 }: {
   discountTickets: DiscountTicketDetails[]
   discountTemplates: DiscountTemplateSummary[]
@@ -615,6 +644,7 @@ const DiscountsPanel = ({
   isClaiming?: boolean
   onAddDiscount?: () => void
   onRemoveDiscount?: (template: DiscountTemplateSummary) => void
+  explorerUrl?: string
 }) => {
   const nowSeconds = resolveClockNowSeconds(clockTimestampMs)
 
@@ -632,7 +662,7 @@ const DiscountsPanel = ({
     >
       {!shopConfigured ? (
         <div className="text-sm text-slate-500 dark:text-slate-200/70">
-          Provide a shop id to load discount templates.
+          Select a shop to load discount templates.
         </div>
       ) : (
         <div className="space-y-6">
@@ -711,6 +741,7 @@ const DiscountsPanel = ({
                                   title="Copy listing id"
                                   className="mt-1 w-full justify-start text-sm font-semibold text-slate-500 dark:text-slate-200/70"
                                   valueClassName="truncate font-semibold text-slate-500 dark:text-slate-200/70"
+                                  explorerUrl={explorerUrl}
                                 />
                               ) : (
                                 <div className="mt-1 text-sm font-semibold text-slate-500 dark:text-slate-200/70">
@@ -753,6 +784,7 @@ const DiscountsPanel = ({
                             <CopyableId
                               value={template.discountTemplateId}
                               label="Template"
+                              explorerUrl={explorerUrl}
                             />
                           </div>
                           <div
@@ -828,6 +860,7 @@ const DiscountsPanel = ({
                                     title="Copy listing id"
                                     className="mt-1 w-full justify-start text-sm font-semibold text-slate-500 dark:text-slate-200/70"
                                     valueClassName="truncate font-semibold text-slate-500 dark:text-slate-200/70"
+                                    explorerUrl={explorerUrl}
                                   />
                                 ) : (
                                   <div className="mt-1 text-sm font-semibold text-slate-500 dark:text-slate-200/70">
@@ -844,6 +877,7 @@ const DiscountsPanel = ({
                             <CopyableId
                               value={ticket.discountTicketId}
                               label="Object ID"
+                              explorerUrl={explorerUrl}
                             />
                           </div>
                         </div>
@@ -862,13 +896,18 @@ const DiscountsPanel = ({
 
 /**
  * Main dashboard view that binds UI panels to on-chain Sui state.
- * The shopId and packageId come from network variables, so switching networks
- * swaps the object IDs the UI targets. For EVM devs: these are object IDs plus
- * a Move package ID, not chain IDs or contract addresses.
+ * The caller selects which shop is active, while the package ID ensures
+ * contract interactions track the right deployment.
  */
-const StoreDashboard = () => {
+const StoreDashboard = ({
+  shopId,
+  packageId
+}: {
+  shopId?: string
+  packageId?: string
+}) => {
   const {
-    shopId,
+    shopId: resolvedShopId,
     storefront,
     wallet,
     hasShopConfig,
@@ -902,7 +941,8 @@ const StoreDashboard = () => {
     handleListingRemoved,
     handleCurrencyRemoved,
     handleDiscountUpdated
-  } = useStoreDashboardViewModel()
+  } = useStoreDashboardViewModel({ shopId, packageId })
+  const explorerUrl = useExplorerUrl()
 
   return (
     <div className="w-full max-w-6xl space-y-6 px-4">
@@ -919,6 +959,7 @@ const StoreDashboard = () => {
             canManageListings={canManageListings}
             onAddItem={openAddItemModal}
             onRemoveItem={openRemoveItemModal}
+            explorerUrl={explorerUrl}
           />
         </div>
         <AcceptedCurrenciesPanel
@@ -929,6 +970,7 @@ const StoreDashboard = () => {
           canManageCurrencies={canManageCurrencies}
           onAddCurrency={openAddCurrencyModal}
           onRemoveCurrency={openRemoveCurrencyModal}
+          explorerUrl={explorerUrl}
         />
       </div>
 
@@ -938,6 +980,7 @@ const StoreDashboard = () => {
           status={wallet.status}
           error={wallet.error}
           walletConfigured={hasWalletConfig}
+          explorerUrl={explorerUrl}
         />
         <DiscountsPanel
           discountTickets={wallet.discountTickets}
@@ -956,13 +999,14 @@ const StoreDashboard = () => {
           isClaiming={isClaiming}
           onAddDiscount={openAddDiscountModal}
           onRemoveDiscount={openRemoveDiscountModal}
+          explorerUrl={explorerUrl}
         />
       </div>
 
       <BuyFlowModal
         open={modalState.isBuyModalOpen}
         onClose={closeBuyModal}
-        shopId={shopId}
+        shopId={resolvedShopId}
         listing={modalState.activeListing ?? undefined}
         acceptedCurrencies={storefront.acceptedCurrencies}
         discountTemplates={storefront.discountTemplates}
@@ -972,14 +1016,14 @@ const StoreDashboard = () => {
       <AddItemModal
         open={modalState.isAddItemModalOpen}
         onClose={closeAddItemModal}
-        shopId={shopId}
+        shopId={resolvedShopId}
         onListingCreated={handleListingCreated}
       />
 
       <AddDiscountModal
         open={modalState.isAddDiscountModalOpen}
         onClose={closeAddDiscountModal}
-        shopId={shopId}
+        shopId={resolvedShopId}
         itemListings={storefront.itemListings}
         onDiscountCreated={handleDiscountCreated}
       />
@@ -987,7 +1031,7 @@ const StoreDashboard = () => {
       <AddCurrencyModal
         open={modalState.isAddCurrencyModalOpen}
         onClose={closeAddCurrencyModal}
-        shopId={shopId}
+        shopId={resolvedShopId}
         acceptedCurrencies={storefront.acceptedCurrencies}
         onCurrencyCreated={handleCurrencyCreated}
       />
@@ -995,7 +1039,7 @@ const StoreDashboard = () => {
       <RemoveItemModal
         open={modalState.isRemoveItemModalOpen}
         onClose={closeRemoveItemModal}
-        shopId={shopId}
+        shopId={resolvedShopId}
         listing={modalState.activeListingToRemove ?? undefined}
         onListingRemoved={handleListingRemoved}
       />
@@ -1003,7 +1047,7 @@ const StoreDashboard = () => {
       <RemoveDiscountModal
         open={modalState.isRemoveDiscountModalOpen}
         onClose={closeRemoveDiscountModal}
-        shopId={shopId}
+        shopId={resolvedShopId}
         template={modalState.activeDiscountToRemove ?? undefined}
         onDiscountUpdated={handleDiscountUpdated}
       />
@@ -1011,7 +1055,7 @@ const StoreDashboard = () => {
       <RemoveCurrencyModal
         open={modalState.isRemoveCurrencyModalOpen}
         onClose={closeRemoveCurrencyModal}
-        shopId={shopId}
+        shopId={resolvedShopId}
         currency={modalState.activeCurrencyToRemove ?? undefined}
         onCurrencyRemoved={handleCurrencyRemoved}
       />

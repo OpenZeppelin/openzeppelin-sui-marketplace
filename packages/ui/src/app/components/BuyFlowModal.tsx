@@ -1,6 +1,5 @@
 "use client"
 
-import clsx from "clsx"
 import type { SuiTransactionBlockResponse } from "@mysten/sui/client"
 import type { AcceptedCurrencySummary } from "@sui-oracle-market/domain-core/models/currency"
 import type {
@@ -8,6 +7,27 @@ import type {
   DiscountTicketDetails
 } from "@sui-oracle-market/domain-core/models/discount"
 import type { ItemListingSummary } from "@sui-oracle-market/domain-core/models/item-listing"
+import { mapOwnerToLabel } from "@sui-oracle-market/tooling-core/object-info"
+import { summarizeGasUsed } from "@sui-oracle-market/tooling-core/transactions"
+import clsx from "clsx"
+import { parseBalance } from "../helpers/balance"
+import {
+  formatCoinBalance,
+  formatUsdFromCents,
+  getStructLabel,
+  shortenId
+} from "../helpers/format"
+import {
+  extractCreatedObjects,
+  formatTimestamp,
+  summarizeObjectChanges
+} from "../helpers/transactionFormat"
+import {
+  useBuyFlowModalState,
+  type TransactionSummary
+} from "../hooks/useBuyFlowModalState"
+import Button from "./Button"
+import CopyableId from "./CopyableId"
 import {
   ModalBody,
   ModalErrorFooter,
@@ -19,31 +39,11 @@ import {
   ModalSuccessFooter,
   modalFieldDescriptionClassName,
   modalFieldErrorTextClassName,
-  modalFieldInputErrorClassName,
   modalFieldInputClassName,
+  modalFieldInputErrorClassName,
   modalFieldLabelClassName,
   modalFieldTitleClassName
 } from "./ModalPrimitives"
-import Button from "./Button"
-import {
-  formatCoinBalance,
-  formatUsdFromCents,
-  getStructLabel,
-  shortenId
-} from "../helpers/format"
-import { parseBalance } from "../helpers/balance"
-import {
-  extractCreatedObjects,
-  formatTimestamp,
-  summarizeObjectChanges
-} from "../helpers/transactionFormat"
-import { summarizeGasUsed } from "@sui-oracle-market/tooling-core/transactions"
-import { mapOwnerToLabel } from "@sui-oracle-market/tooling-core/object-info"
-import {
-  useBuyFlowModalState,
-  type TransactionSummary
-} from "../hooks/useBuyFlowModalState"
-import CopyableId from "./CopyableId"
 
 const getCurrencyLabel = (currency: AcceptedCurrencySummary) =>
   currency.symbol || getStructLabel(currency.coinType)
@@ -113,7 +113,7 @@ const TransactionRecap = ({
           <span className="text-[0.6rem] uppercase tracking-[0.18em] text-slate-500 dark:text-slate-200/60">
             Digest
           </span>
-          <CopyableId value={digest} />
+          <CopyableId value={digest} showExplorer={false} />
           {explorerLink ? (
             <a
               href={explorerLink}
@@ -169,6 +169,7 @@ const TransactionRecap = ({
                     key={receiptId}
                     value={receiptId}
                     label="ShopItem"
+                    explorerUrl={explorerUrl}
                   />
                 ))}
               </div>
@@ -454,7 +455,11 @@ const BuyFlowModal = ({
             onClose={onClose}
             footer={
               listing ? (
-                <CopyableId value={listing.itemListingId} label="Listing" />
+                <CopyableId
+                  value={listing.itemListingId}
+                  label="Listing"
+                  explorerUrl={explorerUrl}
+                />
               ) : null
             }
           />
@@ -679,7 +684,7 @@ const BuyFlowModal = ({
                     {listingLabel}
                   </div>
                   {listing?.itemListingId ? (
-                    <div className="mt-2 text-[0.7rem] text-slate-500 dark:text-slate-200/60">
+                    <div className="mt-2 text-[0.7rem] text-slate-500 dark:text-slate-200/60 overflow-auto">
                       {shortenId(listing.itemListingId)}
                     </div>
                   ) : null}
@@ -694,7 +699,7 @@ const BuyFlowModal = ({
                       : "Select currency"}
                   </div>
                   {selectedCurrency ? (
-                    <div className="mt-2 text-[0.7rem] text-slate-500 dark:text-slate-200/60">
+                    <div className="mt-2 text-[0.7rem] text-slate-500 dark:text-slate-200/60 overflow-auto">
                       {getStructLabel(selectedCurrency.coinType)}
                     </div>
                   ) : null}
@@ -707,7 +712,7 @@ const BuyFlowModal = ({
                     {selectedDiscount?.label ?? "None"}
                   </div>
                   {selectedDiscount?.description ? (
-                    <div className="mt-2 text-[0.7rem] text-slate-500 dark:text-slate-200/60">
+                    <div className="mt-2 text-[0.7rem] text-slate-500 dark:text-slate-200/60 overflow-auto">
                       {selectedDiscount.description}
                     </div>
                   ) : null}
@@ -719,7 +724,7 @@ const BuyFlowModal = ({
                   <div className="mt-1 text-sm font-semibold text-sds-dark dark:text-sds-light">
                     {shortenId(mintTo || walletAddress || "Unknown")}
                   </div>
-                  <div className="mt-2 text-[0.7rem] text-slate-500 dark:text-slate-200/60">
+                  <div className="mt-2 text-[0.7rem] text-slate-500 dark:text-slate-200/60 overflow-auto">
                     Refund: {shortenId(refundTo || walletAddress || "Unknown")}
                   </div>
                 </div>

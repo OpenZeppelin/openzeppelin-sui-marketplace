@@ -234,12 +234,14 @@ What it does:
 
 Where to find values:
 - `deployment.localnet.json` entries include `packageId`, `packagePath`, and `packageName`.
-- The Publisher object ID is inferred automatically by `owner:shop:create`, but you can also find it in `packages/dapp/deployments/objects.localnet.json` with `objectType` ending in `::package::Publisher` (same `digest` as the publish).
 
 ### 4) Create the shop (shared Shop + ShopOwnerCap)
 ```bash
 pnpm script owner:shop:create
 ```
+Optional:
+- `--name "Your Shop"` sets the on-chain shop name (defaults to `Shop`).
+
 What it does:
 - Calls `shop::create_shop` and creates a shared `Shop` plus a `ShopOwnerCap` capability.
 - Records object artifacts in `packages/dapp/deployments/objects.localnet.json`.
@@ -247,7 +249,7 @@ What it does:
 Where to find values:
 - `shopId`: look for `objectType` ending in `::shop::Shop` in `objects.localnet.json`.
 - `ownerCapId`: look for `objectType` ending in `::shop::ShopOwnerCap` in the same file.
-- The script logs the Shop ID and owner address on success.
+- The script logs the Shop ID, name, and owner address on success.
 
 Optional shortcut (localnet + testnet):
 ```bash
@@ -533,10 +535,10 @@ Exceptions:
 Owner scripts default `--shop-package-id`, `--shop-id`, and `--owner-cap-id` from the latest entries in `packages/dapp/deployments/objects.<network>.json` when omitted.
 
 #### `pnpm script owner:shop:create`
-- Calls `shop::create_shop` using a `0x2::package::Publisher` to create the shared `Shop` plus `ShopOwnerCap`.
+- Calls `shop::create_shop` to create the shared `Shop` plus `ShopOwnerCap`.
 - Flags:
+  - `--name <string>`: shop name stored on-chain (defaults to `Shop`).
   - `--shop-package-id <id>`: published `sui_oracle_market` package ID (defaults to the latest `sui_oracle_market` entry in `packages/dapp/deployments/deployment.<network>.json`).
-  - `--publisher-cap-id <id>`: `0x2::package::Publisher` object ID (defaults to the same latest publish entry, with a fallback to `packages/dapp/deployments/objects.<network>.json` for older artifacts; alias `--publisher-id`).
 
 #### `pnpm script owner:shop:seed`
 - Creates a shop if one is missing, then seeds accepted currencies, listings, and discounts for fast UI testing.
@@ -551,7 +553,8 @@ Owner scripts default `--shop-package-id`, `--shop-id`, and `--owner-cap-id` fro
   - 4 low-price listings (Car, Bike, ConcertTicket, DigitalPass).
   - 2 discount templates (10% percent + $2 fixed) and attaches the fixed discount to the Bike listing.
 - Flags:
-  - `--shop-package-id <id>` / `--publisher-cap-id <id>`: only used if a shop needs to be created (when `--shop-id` or `--owner-cap-id` is missing).
+  - `--shop-package-id <id>`: only used if a shop needs to be created (when `--shop-id` or `--owner-cap-id` is missing).
+  - `--shop-name <string>`: shop name stored on-chain when creating a new shop (defaults to `Shop`).
   - `--shop-id <id>` / `--owner-cap-id <id>`: seed an existing shop.
   - `--item-package-id <id>`: item-examples package ID for typed listings (defaults to the latest `item_examples` publish).
   - `--max-price-age-secs-cap <u64>` / `--max-confidence-ratio-bps-cap <u64>` / `--max-price-status-lag-secs-cap <u64>`: optional per-currency guardrails when registering AcceptedCurrency.

@@ -29,8 +29,7 @@ export const createEmptyCustomNetworkDraft = (): TCustomNetworkDraft => ({
   label: "",
   rpcUrl: "",
   explorerUrl: "",
-  contractPackageId: "",
-  shopId: ""
+  contractPackageId: ""
 })
 
 export const normalizeCustomNetworkDraft = (
@@ -40,8 +39,7 @@ export const normalizeCustomNetworkDraft = (
   label: trimValue(draft.label),
   rpcUrl: trimValue(draft.rpcUrl),
   explorerUrl: trimValue(draft.explorerUrl),
-  contractPackageId: trimValue(draft.contractPackageId),
-  shopId: trimValue(draft.shopId)
+  contractPackageId: trimValue(draft.contractPackageId)
 })
 
 export const validateCustomNetworkDraft = ({
@@ -100,12 +98,6 @@ export const validateCustomNetworkDraft = ({
     errors.contractPackageId = "Provide a valid 0x... package ID."
   }
 
-  if (!normalized.shopId) {
-    errors.shopId = "Shop ID is required."
-  } else if (!isSuiObjectId(normalized.shopId)) {
-    errors.shopId = "Provide a valid 0x... shop ID."
-  }
-
   if (Object.keys(errors).length > 0) {
     return { ok: false, errors }
   }
@@ -131,8 +123,7 @@ export const parseStoredCustomNetworks = (
         label: trimValue(String(entry.label ?? "")),
         rpcUrl: trimValue(String(entry.rpcUrl ?? "")),
         explorerUrl: trimValue(String(entry.explorerUrl ?? "")),
-        contractPackageId: trimValue(String(entry.contractPackageId ?? "")),
-        shopId: trimValue(String(entry.shopId ?? ""))
+        contractPackageId: trimValue(String(entry.contractPackageId ?? ""))
       }))
       .filter(
         (entry) =>
@@ -140,8 +131,7 @@ export const parseStoredCustomNetworks = (
           entry.label &&
           entry.rpcUrl &&
           entry.explorerUrl &&
-          entry.contractPackageId &&
-          entry.shopId
+          entry.contractPackageId
       )
 
     return { networks }

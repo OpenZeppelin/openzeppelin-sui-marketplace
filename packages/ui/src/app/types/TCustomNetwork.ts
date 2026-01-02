@@ -4,7 +4,6 @@ export type TCustomNetworkConfig = {
   rpcUrl: string
   explorerUrl: string
   contractPackageId: string
-  shopId: string
 }
 
 export type TCustomNetworkDraft = TCustomNetworkConfig

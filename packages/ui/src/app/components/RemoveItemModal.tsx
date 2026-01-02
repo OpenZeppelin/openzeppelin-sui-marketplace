@@ -6,6 +6,7 @@ import {
   useRemoveItemModalState,
   type RemoveListingTransactionSummary
 } from "../hooks/useRemoveItemModalState"
+import Button from "./Button"
 import CopyableId from "./CopyableId"
 import {
   ModalBody,
@@ -17,15 +18,16 @@ import {
   ModalSection,
   ModalStatusHeader
 } from "./ModalPrimitives"
-import Button from "./Button"
 import TransactionRecap from "./TransactionRecap"
 
 const ListingSummarySection = ({
   listing,
-  shopId
+  shopId,
+  explorerUrl
 }: {
   listing: ItemListingSummary
   shopId?: string
+  explorerUrl?: string
 }) => (
   <ModalSection
     title="Listing details"
@@ -39,7 +41,7 @@ const ListingSummarySection = ({
         <div className="mt-1 text-sm font-semibold text-sds-dark dark:text-sds-light">
           {listing.name || getStructLabel(listing.itemType)}
         </div>
-        <div className="mt-2 text-[0.7rem] text-slate-500 dark:text-slate-200/60">
+        <div className="mt-2 text-[0.7rem] text-slate-500 dark:text-slate-200/60 overflow-auto">
           {listing.itemType}
         </div>
       </div>
@@ -61,8 +63,14 @@ const ListingSummarySection = ({
       </div>
     </div>
     <div className="mt-4 flex flex-wrap items-center gap-3 text-xs">
-      <CopyableId value={listing.itemListingId} label="Listing ID" />
-      {shopId ? <CopyableId value={shopId} label="Shop ID" /> : null}
+      <CopyableId
+        value={listing.itemListingId}
+        label="Listing ID"
+        explorerUrl={explorerUrl}
+      />
+      {shopId ? (
+        <CopyableId value={shopId} label="Shop ID" explorerUrl={explorerUrl} />
+      ) : null}
     </div>
   </ModalSection>
 )
@@ -101,7 +109,11 @@ const ListingSuccessView = ({
       onClose={onClose}
     />
     <ModalBody>
-      <ListingSummarySection listing={summary.listing} shopId={shopId} />
+      <ListingSummarySection
+        listing={summary.listing}
+        shopId={shopId}
+        explorerUrl={explorerUrl}
+      />
       <TransactionRecap
         transactionBlock={summary.transactionBlock}
         digest={summary.digest}
@@ -198,11 +210,19 @@ const RemoveItemModal = ({
             description="Delist this item from the storefront."
             onClose={onClose}
             footer={
-              <CopyableId value={listing.itemListingId} label="Listing" />
+              <CopyableId
+                value={listing.itemListingId}
+                label="Listing"
+                explorerUrl={explorerUrl}
+              />
             }
           />
           <ModalBody>
-            <ListingSummarySection listing={listing} shopId={shopId} />
+            <ListingSummarySection
+              listing={listing}
+              shopId={shopId}
+              explorerUrl={explorerUrl}
+            />
             <RemovalImpactSection />
           </ModalBody>
           <div className="border-t border-slate-200/70 px-6 py-4 dark:border-slate-50/15">

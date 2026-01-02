@@ -1,7 +1,7 @@
 "use client"
 
-import clsx from "clsx"
 import type { ItemListingSummary } from "@sui-oracle-market/domain-core/models/item-listing"
+import clsx from "clsx"
 import {
   formatUsdFromCents,
   getStructLabel,
@@ -11,8 +11,8 @@ import {
   useAddItemModalState,
   type ListingTransactionSummary
 } from "../hooks/useAddItemModalState"
+import Button from "./Button"
 import CopyableId from "./CopyableId"
-import TransactionRecap from "./TransactionRecap"
 import {
   ModalBody,
   ModalErrorFooter,
@@ -22,21 +22,23 @@ import {
   ModalSection,
   ModalStatusHeader,
   ModalSuccessFooter,
-  modalFieldErrorTextClassName,
-  modalFieldInputErrorClassName,
   modalFieldDescriptionClassName,
+  modalFieldErrorTextClassName,
   modalFieldInputClassName,
+  modalFieldInputErrorClassName,
   modalFieldLabelClassName,
   modalFieldTitleClassName
 } from "./ModalPrimitives"
-import Button from "./Button"
+import TransactionRecap from "./TransactionRecap"
 
 const ListingSummarySection = ({
   summary,
-  shopId
+  shopId,
+  explorerUrl
 }: {
   summary: ListingTransactionSummary
   shopId?: string
+  explorerUrl?: string
 }) => (
   <ModalSection title="Listing details" subtitle="Inventory and pricing record">
     <div className="grid gap-3 text-xs sm:grid-cols-2">
@@ -55,7 +57,7 @@ const ListingSummarySection = ({
         <div className="mt-1 text-sm font-semibold text-sds-dark dark:text-sds-light">
           {getStructLabel(summary.itemType)}
         </div>
-        <div className="mt-2 text-[0.7rem] text-slate-500 dark:text-slate-200/60">
+        <div className="mt-2 text-[0.7rem] text-slate-500 dark:text-slate-200/60 overflow-auto">
           {summary.itemType}
         </div>
       </div>
@@ -86,16 +88,26 @@ const ListingSummarySection = ({
         </div>
         {summary.spotlightDiscountId ? (
           <div className="mt-2">
-            <CopyableId value={summary.spotlightDiscountId} label="Template" />
+            <CopyableId
+              value={summary.spotlightDiscountId}
+              label="Template"
+              explorerUrl={explorerUrl}
+            />
           </div>
         ) : null}
       </div>
     </div>
     <div className="mt-4 flex flex-wrap items-center gap-3 text-xs">
       {summary.listingId ? (
-        <CopyableId value={summary.listingId} label="Listing ID" />
+        <CopyableId
+          value={summary.listingId}
+          label="Listing ID"
+          explorerUrl={explorerUrl}
+        />
       ) : null}
-      {shopId ? <CopyableId value={shopId} label="Shop ID" /> : null}
+      {shopId ? (
+        <CopyableId value={shopId} label="Shop ID" explorerUrl={explorerUrl} />
+      ) : null}
     </div>
   </ModalSection>
 )
@@ -122,7 +134,11 @@ const ListingSuccessView = ({
       onClose={onClose}
     />
     <ModalBody>
-      <ListingSummarySection summary={summary} shopId={shopId} />
+      <ListingSummarySection
+        summary={summary}
+        shopId={shopId}
+        explorerUrl={explorerUrl}
+      />
       <TransactionRecap
         transactionBlock={summary.transactionBlock}
         digest={summary.digest}
@@ -224,7 +240,15 @@ const AddItemModal = ({
             title="Add Item"
             description="Create a new listing for your storefront."
             onClose={onClose}
-            footer={shopId ? <CopyableId value={shopId} label="Shop" /> : null}
+            footer={
+              shopId ? (
+                <CopyableId
+                  value={shopId}
+                  label="Shop"
+                  explorerUrl={explorerUrl}
+                />
+              ) : null
+            }
           />
 
           <ModalBody>
@@ -270,7 +294,7 @@ const AddItemModal = ({
                       handleInputChange("itemType", event.target.value)
                     }
                     onBlur={() => markFieldBlur("itemType")}
-                    placeholder="0x...::item_examples::Bike"
+                    placeholder="0x...::items::Bike"
                     className={clsx(
                       modalFieldInputClassName,
                       shouldShowFieldError("itemType", fieldErrors.itemType) &&
@@ -408,7 +432,7 @@ const AddItemModal = ({
                     {itemTypeLabel}
                   </div>
                   {formState.itemType.trim() ? (
-                    <div className="mt-2 text-[0.7rem] text-slate-500 dark:text-slate-200/60">
+                    <div className="mt-2 text-[0.7rem] text-slate-500 dark:text-slate-200/60 overflow-auto">
                       {shortenId(formState.itemType, 10, 8)}
                     </div>
                   ) : null}

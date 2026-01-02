@@ -6,7 +6,7 @@ This is a short, Sui-first guide to the `sui_oracle_market::shop` module aimed a
 Mental Model Shift
 ------------------
 - **Capabilities, not msg.sender:** Admin entry points require the owned `ShopOwnerCap`; buyers never handle capabilities during checkout. Payout rotation is explicit through `update_shop_owner`.
-- **Publisher-gated instantiation:** `create_shop` consumes the module `pkg::Publisher`, so only the package author can mint curated shops before handing off the owner cap.
+- **Permissionless instantiation:** `create_shop` takes a shop name and mints the shared `Shop` plus the `ShopOwnerCap` for the caller.
 - **Objects over contract storage:** The shop is a shared object. Listings, accepted currencies, and discount templates are themselves shared objects indexed by lightweight dynamic-field markers under the shop (plus a coin-type index for currencies). Edits touch only the relevant object, keeping transactions parallel and minimizing contention.
 - **Typed coins and receipts:** Payment assets are `Coin<T>` resources with no approvals; receipts are `ShopItem<TItem>` whose type must match the listing to keep downstream logic strongly typed. These receipts can be exchanged in a separate fulfillment or on-chain redemption flow for the actual `TItem`.
 - **Clocked, guarded pricing:** Callers pass a refreshed `PriceInfoObject`; the module checks identity, freshness, confidence, and price-status lag against the shared `Clock` before quoting.
@@ -29,7 +29,7 @@ AcceptedCurrency (shared)
 
 Entry Points At A Glance
 ------------------------
-- Shops: `create_shop` (publisher-gated) mints the shared `Shop` plus the owned `ShopOwnerCap`; `update_shop_owner` rotates the payout/owner fields without touching listings.
+- Shops: `create_shop` mints the shared `Shop` plus the owned `ShopOwnerCap`; `disable_shop` permanently disables buyer flows; `update_shop_owner` rotates the payout/owner fields without touching listings.
 - Listings: `add_item_listing<T>` shares a listing object and registers a marker with USD-cent price, stock, and optional `spotlight_discount_template_id`; `update_item_listing_stock` changes inventory through the listing object; `remove_item_listing` removes the marker (delists) while keeping the shared listing addressable for history.
 - Accepted currencies: `add_accepted_currency<T>` shares the `AcceptedCurrency` object, writes a marker under the shop, stores a `coin_type -> accepted_currency_id` index, and keeps feed metadata/guardrail caps; `remove_accepted_currency` removes the marker and type index (the shared currency object remains addressable for history).
 - Discounts: `create_discount_template`, `update_discount_template` (only before claims/redemptions), and `toggle_discount_template` manage templates; `attach_template_to_listing`/`clear_template_from_listing` surface a spotlight template on a listing; `claim_discount_ticket`, `buy_item_with_discount`, `claim_and_buy_item_with_discount`, and `prune_discount_claims` (once finished) govern lifecycle and cleanup.
@@ -68,7 +68,7 @@ Shared Object + Marker Pattern (deep dive)
 Sui Move Principles, Applied
 ----------------------------
 - Resource-first design: coins, tickets, receipts, and capabilities are owned objects moved in/out of entry functions instead of balances in contract storage.
-- Capability-based auth: every admin path requires `ShopOwnerCap`; the publisher gate on `create_shop` proves code authorship on-chain without registries.
+- Capability-based auth: every admin path requires `ShopOwnerCap`.
 - Shared-object composition: the `Shop` is shared; listings, currencies, and templates are shared objects indexed by lightweight markers (plus the coin-type index). PTBs lock only the touched listing/template/currency object.
 - Strong typing over metadata: listings embed `TypeInfo`, and checkout asserts the `TItem` type to mint the correct `ShopItem<TItem>`—no opaque “token type” ints.
 - Explicit data freshness: time comes from `Clock`, price data from `PriceInfoObject`, and both are validated inline so view-only RPC calls are unnecessary.
@@ -76,11 +76,11 @@ Sui Move Principles, Applied
 
 Sui Fundamentals (EVM contrasts)
 --------------------------------
-- **Explicit capabilities over modifiers:** Admin flows require the owned `ShopOwnerCap` instead of `msg.sender` checks (`create_shop`, `add_item_listing`, `update_shop_owner` in `move/sources/shop.move`). Sui docs: capabilities vs privileges (https://docs.sui.io/concepts/sui-move-concepts/abilities). Compared to Solidity, callers must physically present the capability object, so auth is enforced by the type system.
+- **Explicit capabilities over modifiers:** Admin flows require the owned `ShopOwnerCap` instead of `msg.sender` checks (`add_item_listing`, `update_shop_owner` in `move/sources/shop.move`). Sui docs: capabilities vs privileges (https://docs.sui.io/concepts/sui-move-concepts/abilities). Compared to Solidity, callers must physically present the capability object, so auth is enforced by the type system.
 - **Typed events for off-chain sync:** Events are structs with `has copy, drop` and are emitted explicitly (`event::emit` blocks across `move/sources/shop.move`), which indexers/GraphQL pick up without scanning storage. Solidity logs are untyped bytes; here the struct layout is part of the ABI. Docs: https://docs.sui.io/concepts/sui-move-concepts/event.
 - **Object-oriented state and concurrency:** The `Shop` is shared; listings/templates/currencies are shared objects indexed by markers under the shop plus a coin-type index. PTBs lock only the specific listing/template/currency object involved, enabling parallelism versus EVM’s single storage map. Docs: https://docs.sui.io/concepts/objects and https://docs.sui.io/concepts/sui-move-concepts/dynamic-fields.
 - **Shared vs owned paths:** Checkout uses shared listings/currencies for discovery, but burns an owned `DiscountTicket` to keep redemption parallel. Sui’s fast path for owned objects has no consensus hop, unlike EVM where all state writes are sequenced in the same block. Docs: ownership and shared objects (https://docs.sui.io/concepts/objects#object-ownership).
-- **Packages are objects (immutable code):** Publishing creates an immutable package object; `create_shop` even requires the module `pkg::Publisher` to prove authorship. There is no mutable “contract code” slot like `delegatecall` proxies in Solidity. Docs: packages (https://docs.sui.io/concepts/sui-move-concepts/packages).
+- **Packages are objects (immutable code):** Publishing creates an immutable package object. There is no mutable “contract code” slot like `delegatecall` proxies in Solidity. Docs: packages (https://docs.sui.io/concepts/sui-move-concepts/packages).
 - **Upgrading with UpgradeCap:** New versions are published alongside the old one; data migrations are explicit, gated by `UpgradeCap`, and callers opt into the new package ID. Solidity-style in-place proxy upgrades aren’t available. Docs: https://docs.sui.io/concepts/sui-move-concepts/packages/upgrade.
 - **Coin registry integration instead of ERC-20 metadata:** `add_accepted_currency` pulls decimals/symbol from the shared `coin_registry` and stores them on the `AcceptedCurrency` object, avoiding the spoofed-decimals risk of unverified ERC-20s. See registry calls inside `move/sources/shop.move`. Docs: https://docs.sui.io/concepts/token#coin-registry.
 - **Oracle feeds as objects:** Prices come from a `pyth::PriceInfoObject` passed into the PTB; `quote_amount_with_guardrails` wraps `pyth::get_price_no_older_than` and enforces status/σ guards before converting. Unlike Chainlink address lookups, callers must present the feed object and recent VAA bytes. Docs: https://docs.sui.io/guides/developer/app-examples/oracle.
@@ -92,8 +92,7 @@ Minimal PTB Examples
 --------------------
 **Create shop**
 ```
-// Requires module publisher
-create_shop(&publisher, &mut ctx);
+create_shop(b"Shop", &mut ctx);
 ```
 
 **Rotate payout address**
@@ -173,9 +172,9 @@ claim_and_buy_item_with_discount<ItemType, USDC>(
 Reference
 ---------
 - Module: `sui_oracle_market::shop`
-- Entry functions: `create_shop`, `update_shop_owner`, `add_item_listing`, `update_item_listing_stock`, `remove_item_listing`, `add_accepted_currency`, `remove_accepted_currency`, `create_discount_template`, `update_discount_template`, `toggle_discount_template`, `attach_template_to_listing`, `clear_template_from_listing`, `claim_discount_ticket`, `prune_discount_claims`, `buy_item`, `buy_item_with_discount`, `claim_and_buy_item_with_discount`.
+- Entry functions: `create_shop`, `disable_shop`, `update_shop_owner`, `add_item_listing`, `update_item_listing_stock`, `remove_item_listing`, `add_accepted_currency`, `remove_accepted_currency`, `create_discount_template`, `update_discount_template`, `toggle_discount_template`, `attach_template_to_listing`, `clear_template_from_listing`, `claim_discount_ticket`, `prune_discount_claims`, `buy_item`, `buy_item_with_discount`, `claim_and_buy_item_with_discount`.
 - Key types: `Shop`, `ShopOwnerCap`, `ItemListing`, `AcceptedCurrency`, `DiscountTemplate`, `DiscountTicket`, `ShopItem`
-- Events: `ShopCreated`, `ShopOwnerUpdated`, `ItemListingAdded`, `ItemListingStockUpdated`, `ItemListingRemoved`, `DiscountTemplateCreated`, `DiscountTemplateUpdated`, `DiscountTemplateToggled`, `AcceptedCoinAdded`, `AcceptedCoinRemoved`, `DiscountClaimed`, `DiscountRedeem`, `PurchaseCompleted`, `MintingCompleted`.
+- Events: `ShopCreated`, `ShopOwnerUpdated`, `ShopDisabled`, `ItemListingAdded`, `ItemListingStockUpdated`, `ItemListingRemoved`, `DiscountTemplateCreated`, `DiscountTemplateUpdated`, `DiscountTemplateToggled`, `AcceptedCoinAdded`, `AcceptedCoinRemoved`, `DiscountClaimed`, `DiscountRedeem`, `PurchaseCompleted`, `MintingCompleted`.
 
 Vendored deps (Pyth/Wormhole)
 ----------------------------

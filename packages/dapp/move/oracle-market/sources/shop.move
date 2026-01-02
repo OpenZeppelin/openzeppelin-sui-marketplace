@@ -373,12 +373,7 @@ public struct MintingCompleted has copy, drop {
 ///   siblings indexed by lightweight markers under the shop (plus a coin-type index for currencies).
 ///   State is sharded into per-object locks so PTBs only touch the listing/template/currency they
 ///   mutate instead of contending on a monolithic storage map as in Solidity.
-public entry fun create_shop(
-  name: vector<u8>,
-  ctx: &mut tx::TxContext,
-) {
-  validate_shop_name(&name);
-
+public entry fun create_shop(name: vector<u8>, ctx: &mut tx::TxContext) {
   let owner: address = tx::sender(ctx);
   let shop: Shop = new_shop(name, owner, ctx);
   let shop_name_for_event: vector<u8> = clone_bytes(&shop.name);
@@ -1183,11 +1178,8 @@ public entry fun claim_and_buy_item_with_discount<TItem: store, TCoin>(
 // Data //
 // ==== //
 
-fun new_shop(
-  name: vector<u8>,
-  owner: address,
-  ctx: &mut tx::TxContext,
-): Shop {
+fun new_shop(name: vector<u8>, owner: address, ctx: &mut tx::TxContext): Shop {
+  validate_shop_name(&name);
   Shop {
     id: obj::new(ctx),
     owner,

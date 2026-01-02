@@ -1,15 +1,15 @@
 "use client"
 
-import clsx from "clsx"
 import type { AcceptedCurrencySummary } from "@sui-oracle-market/domain-core/models/currency"
+import clsx from "clsx"
 import { resolveCurrencyRegistryId } from "../helpers/currencyRegistry"
 import { getStructLabel, shortenId } from "../helpers/format"
 import {
   useAddCurrencyModalState,
   type CurrencyTransactionSummary
 } from "../hooks/useAddCurrencyModalState"
+import Button from "./Button"
 import CopyableId from "./CopyableId"
-import TransactionRecap from "./TransactionRecap"
 import {
   ModalBody,
   ModalErrorFooter,
@@ -19,25 +19,27 @@ import {
   ModalSection,
   ModalStatusHeader,
   ModalSuccessFooter,
-  modalFieldErrorTextClassName,
-  modalFieldInputErrorClassName,
-  modalFieldWarningTextClassName,
   modalFieldDescriptionClassName,
+  modalFieldErrorTextClassName,
   modalFieldInputClassName,
+  modalFieldInputErrorClassName,
   modalFieldLabelClassName,
-  modalFieldTitleClassName
+  modalFieldTitleClassName,
+  modalFieldWarningTextClassName
 } from "./ModalPrimitives"
-import Button from "./Button"
+import TransactionRecap from "./TransactionRecap"
 
 const formatGuardrailCap = (value?: bigint) =>
   value ? value.toString() : "Default"
 
 const CurrencySummarySection = ({
   summary,
-  shopId
+  shopId,
+  explorerUrl
 }: {
   summary: CurrencyTransactionSummary
   shopId?: string
+  explorerUrl?: string
 }) => (
   <ModalSection
     title="Currency details"
@@ -51,7 +53,7 @@ const CurrencySummarySection = ({
         <div className="mt-1 text-sm font-semibold text-sds-dark dark:text-sds-light">
           {getStructLabel(summary.coinType)}
         </div>
-        <div className="mt-2 text-[0.7rem] text-slate-500 dark:text-slate-200/60">
+        <div className="mt-2 text-[0.7rem] text-slate-500 dark:text-slate-200/60 overflow-auto">
           {summary.coinType}
         </div>
       </div>
@@ -62,7 +64,7 @@ const CurrencySummarySection = ({
         <div className="mt-1 text-sm font-semibold text-sds-dark dark:text-sds-light">
           {shortenId(summary.currencyObjectId)}
         </div>
-        <div className="mt-2 text-[0.7rem] text-slate-500 dark:text-slate-200/60">
+        <div className="mt-2 text-[0.7rem] text-slate-500 dark:text-slate-200/60 overflow-auto">
           {summary.currencyObjectId}
         </div>
       </div>
@@ -73,7 +75,7 @@ const CurrencySummarySection = ({
         <div className="mt-1 text-sm font-semibold text-sds-dark dark:text-sds-light">
           {shortenId(summary.feedIdHex, 10, 8)}
         </div>
-        <div className="mt-2 text-[0.7rem] text-slate-500 dark:text-slate-200/60">
+        <div className="mt-2 text-[0.7rem] text-slate-500 dark:text-slate-200/60 overflow-auto">
           {summary.feedIdHex}
         </div>
       </div>
@@ -84,7 +86,7 @@ const CurrencySummarySection = ({
         <div className="mt-1 text-sm font-semibold text-sds-dark dark:text-sds-light">
           {shortenId(summary.priceInfoObjectId)}
         </div>
-        <div className="mt-2 text-[0.7rem] text-slate-500 dark:text-slate-200/60">
+        <div className="mt-2 text-[0.7rem] text-slate-500 dark:text-slate-200/60 overflow-auto">
           {summary.priceInfoObjectId}
         </div>
       </div>
@@ -115,9 +117,15 @@ const CurrencySummarySection = ({
     </div>
     <div className="mt-4 flex flex-wrap items-center gap-3 text-xs">
       {summary.acceptedCurrencyId ? (
-        <CopyableId value={summary.acceptedCurrencyId} label="Accepted ID" />
+        <CopyableId
+          value={summary.acceptedCurrencyId}
+          label="Accepted ID"
+          explorerUrl={explorerUrl}
+        />
       ) : null}
-      {shopId ? <CopyableId value={shopId} label="Shop ID" /> : null}
+      {shopId ? (
+        <CopyableId value={shopId} label="Shop ID" explorerUrl={explorerUrl} />
+      ) : null}
     </div>
   </ModalSection>
 )
@@ -144,7 +152,11 @@ const CurrencySuccessView = ({
       onClose={onClose}
     />
     <ModalBody>
-      <CurrencySummarySection summary={summary} shopId={shopId} />
+      <CurrencySummarySection
+        summary={summary}
+        shopId={shopId}
+        explorerUrl={explorerUrl}
+      />
       <TransactionRecap
         transactionBlock={summary.transactionBlock}
         digest={summary.digest}
@@ -188,9 +200,11 @@ const CurrencyErrorView = ({
 )
 
 const AvailableFeedsSection = ({
-  acceptedCurrencies
+  acceptedCurrencies,
+  explorerUrl
 }: {
   acceptedCurrencies: AcceptedCurrencySummary[]
+  explorerUrl?: string
 }) => (
   <ModalSection
     title="Available price feeds"
@@ -259,12 +273,21 @@ const AvailableFeedsSection = ({
                 <CopyableId
                   value={currency.acceptedCurrencyId}
                   label="Accepted"
+                  explorerUrl={explorerUrl}
                 />
                 {currency.pythObjectId ? (
-                  <CopyableId value={currency.pythObjectId} label="Pyth" />
+                  <CopyableId
+                    value={currency.pythObjectId}
+                    label="Pyth"
+                    explorerUrl={explorerUrl}
+                  />
                 ) : null}
                 {registryId ? (
-                  <CopyableId value={registryId} label="Registry" />
+                  <CopyableId
+                    value={registryId}
+                    label="Registry"
+                    explorerUrl={explorerUrl}
+                  />
                 ) : null}
               </div>
             </div>
@@ -340,11 +363,22 @@ const AddCurrencyModal = ({
             title="Add Currency"
             description="Wire a new coin type to a Pyth price feed."
             onClose={onClose}
-            footer={shopId ? <CopyableId value={shopId} label="Shop" /> : null}
+            footer={
+              shopId ? (
+                <CopyableId
+                  value={shopId}
+                  label="Shop"
+                  explorerUrl={explorerUrl}
+                />
+              ) : null
+            }
           />
 
           <ModalBody>
-            <AvailableFeedsSection acceptedCurrencies={acceptedCurrencies} />
+            <AvailableFeedsSection
+              acceptedCurrencies={acceptedCurrencies}
+              explorerUrl={explorerUrl}
+            />
 
             <ModalSection
               title="Currency identity"
