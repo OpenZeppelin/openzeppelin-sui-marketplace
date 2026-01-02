@@ -313,7 +313,8 @@ const publishMockPackages = async (
       await publishMovePackageWithFunding({
         tooling,
         packagePath: cliArguments.pythContractPath,
-        withUnpublishedDependencies: true
+        withUnpublishedDependencies: true,
+        clearPublishedEntry: true
       })
     ).packageId
 
@@ -328,7 +329,8 @@ const publishMockPackages = async (
     (
       await publishMovePackageWithFunding({
         tooling,
-        packagePath: cliArguments.coinContractPath
+        packagePath: cliArguments.coinContractPath,
+        clearPublishedEntry: true
       })
     ).packageId
 
@@ -342,7 +344,8 @@ const publishMockPackages = async (
     (
       await publishMovePackageWithFunding({
         tooling,
-        packagePath: cliArguments.itemContractPath
+        packagePath: cliArguments.itemContractPath,
+        clearPublishedEntry: true
       })
     ).packageId
 
