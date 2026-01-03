@@ -595,7 +595,7 @@ public entry fun remove_item_listing(
 ///   `max_confidence_ratio_bps_cap`, `max_price_status_lag_secs_cap`). Buyers may only tighten
 ///   further—never loosen—mirroring “slippage limits” but enforced with object caps instead of
 ///   unbounded calldata.
-public entry fun add_accepted_currency<T: drop>(
+public entry fun add_accepted_currency<T>(
   shop: &mut Shop,
   currency: &registry::Currency<T>,
   feed_id: vector<u8>,
@@ -1351,7 +1351,7 @@ fun remove_currency_field(shop: &mut Shop, coin_type: TypeInfo) {
   dynamic_field::remove_if_exists<TypeInfo, obj::ID>(&mut shop.id, coin_type);
 }
 
-fun currency_type<T: drop>(): TypeInfo {
+fun currency_type<T>(): TypeInfo {
   type_name::with_defining_ids<T>()
 }
 

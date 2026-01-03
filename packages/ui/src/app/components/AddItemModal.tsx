@@ -286,6 +286,7 @@ const AddItemModal = ({
                   <span className={modalFieldTitleClassName}>Item type</span>
                   <span className={modalFieldDescriptionClassName}>
                     Fully qualified Move type minted in the item receipt.
+                    Example (works on all Sui networks): 0x2::kiosk::Item.
                   </span>
                   <input
                     type="text"

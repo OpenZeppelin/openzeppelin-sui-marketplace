@@ -100,7 +100,7 @@ fun create_price_info_object_for_feed_with_price_and_times(
   (price_info_object, price_info_id)
 }
 
-fun add_currency_with_feed<T: store>(
+fun add_currency_with_feed<T>(
   shop: &mut shop::Shop,
   currency: &registry::Currency<T>,
   feed_id: vector<u8>,
@@ -1336,8 +1336,6 @@ fun remove_accepted_currency_rejects_foreign_owner_cap() {
   let _ = scenario::next_tx(&mut scn, TEST_OWNER);
   let owner_cap_obj: shop::ShopOwnerCap = scenario::take_from_sender(&scn);
   let mut other_scn = scenario::begin(OTHER_OWNER);
-    scenario::ctx(&mut other_scn),
-  );
   shop::create_shop(DEFAULT_SHOP_NAME, scenario::ctx(&mut other_scn));
   let other_created = vec::borrow(
     &event::events_by_type<shop::ShopCreated>(),
@@ -1422,8 +1420,6 @@ fun remove_accepted_currency_rejects_missing_id() {
   let _ = scenario::next_tx(&mut scn, TEST_OWNER);
   let owner_cap_obj: shop::ShopOwnerCap = scenario::take_from_sender(&scn);
   let mut other_scn = scenario::begin(OTHER_OWNER);
-    scenario::ctx(&mut other_scn),
-  );
   shop::create_shop(DEFAULT_SHOP_NAME, scenario::ctx(&mut other_scn));
   let other_created = vec::borrow(
     &event::events_by_type<shop::ShopCreated>(),
