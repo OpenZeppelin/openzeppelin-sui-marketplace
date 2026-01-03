@@ -4,6 +4,9 @@ const nextConfig: NextConfig = {
   output: "export",
   distDir: "dist",
   reactStrictMode: true,
+  images: {
+    unoptimized: true
+  },
   transpilePackages: [
     "@mysten/dapp-kit",
     "@mysten/sui.js",

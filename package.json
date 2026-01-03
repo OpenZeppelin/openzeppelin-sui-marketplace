@@ -7,18 +7,14 @@
   "scripts": {
     "ui": "pnpm --filter ui",
     "script": "pnpm --filter dapp",
-    "test:tooling": "vitest --config vitest.config.ts",
-    "test:integration": "vitest --config vitest.integration.config.ts --poolOptions.threads.singleThread=true",
-    "test:integration:parallel": "vitest --config vitest.integration.config.ts",
+    "tooling": "pnpm --filter tooling",
     "typecheck": "tsc -b",
     "lint": "eslint \"packages/**/*.{js,jsx,ts,tsx,mjs,cjs,mts,cts}\"",
     "lint:fix": "eslint --fix \"packages/**/*.{js,jsx,ts,tsx,mjs,cjs,mts,cts}\""
   },
   "devDependencies": {
-    "@mysten/sui": "^1.45.2",
     "@eslint/js": "^9.39.2",
     "@types/node": "^22.19.2",
-    "@vitest/coverage-v8": "^3.2.4",
     "eslint": "^9.39.2",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-prettier": "^5.5.4",
@@ -27,8 +23,7 @@
     "prettier-plugin-tailwindcss": "^0.7.2",
     "ts-node": "^10.9.2",
     "typescript": "^5.9.3",
-    "typescript-eslint": "^8.50.0",
-    "vitest": "^3.2.4"
+    "typescript-eslint": "^8.50.0"
   },
   "engines": {
     "node": ">=22"

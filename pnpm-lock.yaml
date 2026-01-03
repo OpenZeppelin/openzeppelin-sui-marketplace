@@ -11,15 +11,9 @@ importers:
       '@eslint/js':
         specifier: ^9.39.2
         version: 9.39.2
-      '@mysten/sui':
-        specifier: ^1.45.2
-        version: 1.45.2(typescript@5.9.3)
       '@types/node':
         specifier: ^22.19.2
         version: 22.19.3
-      '@vitest/coverage-v8':
-        specifier: ^3.2.4
-        version: 3.2.4(vitest@3.2.4(@types/node@22.19.3)(jiti@1.21.7))
       eslint:
         specifier: ^9.39.2
         version: 9.39.2(jiti@1.21.7)
@@ -47,9 +41,6 @@ importers:
       typescript-eslint:
         specifier: ^8.50.0
         version: 8.50.0(eslint@9.39.2(jiti@1.21.7))(typescript@5.9.3)
-      vitest:
-        specifier: ^3.2.4
-        version: 3.2.4(@types/node@22.19.3)(jiti@1.21.7)
 
   packages/dapp:
     dependencies:
@@ -112,6 +103,18 @@ importers:
         specifier: workspace:*
         version: link:../../tooling/node
 
+  packages/tooling:
+    devDependencies:
+      '@types/node':
+        specifier: ^22.19.2
+        version: 22.19.3
+      '@vitest/coverage-v8':
+        specifier: ^3.2.4
+        version: 3.2.4(vitest@3.2.4(@types/node@22.19.3)(jiti@1.21.7))
+      vitest:
+        specifier: ^3.2.4
+        version: 3.2.4(@types/node@22.19.3)(jiti@1.21.7)
+
   packages/tooling/core:
     dependencies:
       '@mysten/sui':
@@ -142,6 +145,27 @@ importers:
       '@types/yargs':
         specifier: ^17.0.35
         version: 17.0.35
+
+  packages/tooling/tests-integration:
+    devDependencies:
+      '@mysten/sui':
+        specifier: ^1.45.2
+        version: 1.45.2(typescript@5.9.3)
+      '@sui-oracle-market/domain-core':
+        specifier: workspace:*
+        version: link:../../domain/core
+      '@sui-oracle-market/tooling-core':
+        specifier: workspace:*
+        version: link:../core
+      '@sui-oracle-market/tooling-node':
+        specifier: workspace:*
+        version: link:../node
+      '@types/node':
+        specifier: ^22.19.2
+        version: 22.19.3
+      vitest:
+        specifier: ^3.2.4
+        version: 3.2.4(@types/node@22.19.3)(jiti@1.21.7)
 
   packages/ui:
     dependencies:

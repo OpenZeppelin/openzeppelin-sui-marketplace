@@ -1,0 +1,16 @@
+{
+  "name": "tooling",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test:unit": "vitest --config ./vitest.config.ts",
+    "test:integration": "pnpm --filter ./tests-integration test",
+    "test:integration:parallel": "pnpm --filter ./tests-integration test:parallel"
+  },
+  "devDependencies": {
+    "@types/node": "^22.19.2",
+    "@vitest/coverage-v8": "^3.2.4",
+    "vitest": "^3.2.4"
+  }
+}

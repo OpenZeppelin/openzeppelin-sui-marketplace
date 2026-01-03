@@ -1,5 +1,6 @@
 [build]
-  command = "pnpm --filter ui build"
+  base = "."
+  command = "pnpm --filter ui run build"
   publish = "packages/ui/dist"
 
 [build.environment]

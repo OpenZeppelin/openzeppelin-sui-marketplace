@@ -1,0 +1,18 @@
+{
+  "name": "@sui-oracle-market/tooling-tests-integration",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "vitest --config ./vitest.integration.config.ts --poolOptions.threads.singleThread=true",
+    "test:parallel": "vitest --config ./vitest.integration.config.ts"
+  },
+  "devDependencies": {
+    "@mysten/sui": "^1.45.2",
+    "@sui-oracle-market/domain-core": "workspace:*",
+    "@sui-oracle-market/tooling-core": "workspace:*",
+    "@sui-oracle-market/tooling-node": "workspace:*",
+    "@types/node": "^22.19.2",
+    "vitest": "^3.2.4"
+  }
+}
