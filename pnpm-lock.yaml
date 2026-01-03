@@ -11,6 +11,9 @@ importers:
       '@eslint/js':
         specifier: ^9.39.2
         version: 9.39.2
+      '@mysten/sui':
+        specifier: ^1.45.2
+        version: 1.45.2(typescript@5.9.3)
       '@types/node':
         specifier: ^22.19.2
         version: 22.19.3

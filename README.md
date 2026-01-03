@@ -62,6 +62,24 @@ pnpm ui dev
 
 ---
 
+## Integration Tests (localnet)
+
+These suites spin up localnet instances with isolated temp dirs and local artifacts.
+
+```bash
+# Serial (recommended for laptops)
+pnpm test:integration
+
+# Parallel (faster in CI)
+pnpm test:integration:parallel
+```
+
+Optional toggles:
+- `SUI_IT_KEEP_TEMP=1` keeps temp dirs + logs for debugging.
+- `SUI_IT_WITH_FAUCET=0` disables the local faucet (default on; tests fund via the local faucet unless a funded treasury account is available).
+- `SUI_IT_TREASURY_INDEX=<n>` forces which localnet keystore entry to use for funding.
+Note: Vitest 3 uses pool options for threading; `--minThreads`/`--maxThreads` are not supported.
+
 ---
 
 ## Environment Setup (from scratch)

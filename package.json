@@ -8,11 +8,14 @@
     "ui": "pnpm --filter ui",
     "script": "pnpm --filter dapp",
     "test:tooling": "vitest --config vitest.config.ts",
+    "test:integration": "vitest --config vitest.integration.config.ts --poolOptions.threads.singleThread=true",
+    "test:integration:parallel": "vitest --config vitest.integration.config.ts",
     "typecheck": "tsc -b",
     "lint": "eslint \"packages/**/*.{js,jsx,ts,tsx,mjs,cjs,mts,cts}\"",
     "lint:fix": "eslint --fix \"packages/**/*.{js,jsx,ts,tsx,mjs,cjs,mts,cts}\""
   },
   "devDependencies": {
+    "@mysten/sui": "^1.45.2",
     "@eslint/js": "^9.39.2",
     "@types/node": "^22.19.2",
     "@vitest/coverage-v8": "^3.2.4",

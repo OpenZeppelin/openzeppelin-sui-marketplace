@@ -143,9 +143,15 @@ export const readArtifact = async <TArtifact>(
 /**
  * Builds a path resolver for artifact files by network name.
  */
+const resolveArtifactsRoot = () => {
+  const override = process.env.SUI_ARTIFACTS_DIR?.trim()
+  if (override) return path.resolve(override)
+  return path.join(process.cwd(), "deployments")
+}
+
 export const getArtifactPath =
   (artifactType: ArtifactFile) => (network: string) =>
-    path.join(process.cwd(), "deployments", `${artifactType}.${network}.json`)
+    path.join(resolveArtifactsRoot(), `${artifactType}.${network}.json`)
 
 /**
  * Returns the deployment artifact path for a network.
