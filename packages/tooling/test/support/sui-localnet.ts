@@ -35,7 +35,10 @@ import type {
   BuildOutput,
   PublishArtifact
 } from "@sui-oracle-market/tooling-core/types"
-import { buildMovePackage } from "@sui-oracle-market/tooling-node/move"
+import {
+  buildMovePackage,
+  clearPublishedEntryForNetwork
+} from "@sui-oracle-market/tooling-node/move"
 import { publishPackageWithLog } from "@sui-oracle-market/tooling-node/publish"
 import { probeRpcHealth } from "@sui-oracle-market/tooling-node/localnet"
 import { createSuiClient } from "@sui-oracle-market/tooling-node/describe-object"
@@ -924,18 +927,26 @@ export const createTestContext = async (
     options?: { gasBudget?: number; withUnpublishedDependencies?: boolean }
   ) =>
     withArtifactsDir(artifactsDir, () =>
-      publishPackageWithLog(
-        {
-          packagePath: resolvePackagePath(moveRootPath, packageRelativePath),
-          keypair: account.keypair,
-          gasBudget: options?.gasBudget,
-          withUnpublishedDependencies:
-            options?.withUnpublishedDependencies ?? true,
-          useCliPublish: false,
-          allowAutoUnpublishedDependencies: true
-        },
-        { suiClient: localnet.suiClient, suiConfig }
-      )
+      (async () => {
+        const packagePath = resolvePackagePath(moveRootPath, packageRelativePath)
+        await clearPublishedEntryForNetwork({
+          packagePath,
+          networkName: suiConfig.network.networkName
+        })
+
+        return publishPackageWithLog(
+          {
+            packagePath,
+            keypair: account.keypair,
+            gasBudget: options?.gasBudget,
+            withUnpublishedDependencies:
+              options?.withUnpublishedDependencies ?? true,
+            useCliPublish: false,
+            allowAutoUnpublishedDependencies: true
+          },
+          { suiClient: localnet.suiClient, suiConfig }
+        )
+      })()
     )
 
   const signAndExecuteTransaction = async (
