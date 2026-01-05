@@ -1,0 +1,129 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: "22.19.0"
+  PNPM_VERSION: "10"
+  SUI_CLI_VERSION: "1.63.0"
+  SUI_CLI_CHANNEL: "nightly"
+  CI: true
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: ./.github/actions/setup
+      - run: pnpm lint
+
+  typecheck:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: ./.github/actions/setup
+      - run: pnpm typecheck
+
+  unit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        suite: [tooling, dapp]
+    steps:
+      - uses: ./.github/actions/setup
+      - name: Run unit tests
+        run: pnpm ${{ matrix.suite }} test:unit \
+          --reporter=default \
+          --reporter=junit \
+          --outputFile=reports/vitest-unit-pnpm ${{ matrix.suite }} test:unit.xml \
+          --coverage
+
+      - name: Upload unit test artifacts on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unit-${{ matrix.suite }}-artifacts
+          path: |
+            reports/**
+            coverage/**
+          if-no-files-found: ignore
+
+  ui-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: ./.github/actions/setup
+      - run: pnpm ui build
+
+  integration:
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: tooling
+            command: pnpm tooling test:integration:parallel
+            report: reports/vitest-tooling-integration.xml
+          - name: dapp
+            command: pnpm dapp test:integration
+            report: reports/vitest-dapp-integration.xml
+    env:
+      SUI_IT_WITH_FAUCET: "1"
+      SUI_IT_KEEP_TEMP: "1"
+    steps:
+      - uses: ./.github/actions/setup
+      - uses: ./.github/actions/setup-sui
+      - name: Run ${{ matrix.name }} integration tests
+        run: |
+          mkdir -p reports
+          ${{ matrix.command }} -- \
+            --reporter=default \
+            --reporter=junit \
+            --outputFile=${{ matrix.report }}
+      - name: Upload ${{ matrix.name }} integration artifacts on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.name }}-integration-artifacts
+          path: |
+            reports/**
+            /tmp/sui-it-*/logs/**
+          if-no-files-found: ignore
+
+  move-tests:
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        package:
+          - oracle-market
+    steps:
+      - uses: ./.github/actions/setup
+      - uses: ./.github/actions/setup-sui
+      - name: Run Move tests (${{ matrix.package }})
+        run: pnpm dapp move:test --package-path ${{ matrix.package }}
+
+  security-audit:
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: ./.github/actions/setup
+      - run: pnpm audit --audit-level=high

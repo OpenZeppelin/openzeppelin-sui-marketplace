@@ -96,7 +96,7 @@ This repo ships a reusable testing layer in `@sui-oracle-market/tooling-node/tes
 ### Directory layout (dapp)
 - `packages/dapp/src/scripts/owner/test-integration/` → owner script integration tests and helpers.
 - `packages/dapp/src/scripts/buyer/test-integration/` → buyer script integration tests and helpers.
-- `packages/dapp/src/utils/test/helpers/helpers.ts` → shared test utilities used by both owner/buyer suites.
+- `packages/dapp/src/utils/test/helpers/helpers.ts` → shared test utilities and fixtures used by both owner/buyer suites.
 - `packages/dapp/src/scripts/utils/test/` → unit tests for script utilities.
 
 ### Vitest configuration
@@ -173,10 +173,44 @@ const result = await runScriptJson<{
 )
 ```
 
+### Dapp integration fixtures (recommended)
+Use dapp-scoped fixtures to keep setup DRY and consistent across tests:
+```ts
+import {
+  createShopWithItemExamplesFixture,
+  resolveItemType,
+  seedShopWithListingAndDiscount,
+  runBuyerScriptJson
+} from "packages/dapp/src/utils/test/helpers/helpers"
+
+const { publisher, scriptRunner, shopId, itemExamplesPackageId } =
+  await createShopWithItemExamplesFixture(context, {
+    shopName: "Shop View Integration"
+  })
+
+const itemType = resolveItemType(itemExamplesPackageId, "Car")
+await seedShopWithListingAndDiscount({
+  scriptRunner,
+  publisher,
+  shopId,
+  itemType,
+  listingName: "Roadster",
+  price: "1250",
+  stock: "4",
+  ruleKind: "percent",
+  value: "10"
+})
+
+const viewPayload = await runBuyerScriptJson(scriptRunner, "shop-view", {
+  account: publisher,
+  args: { shopId }
+})
+```
+
 Key points:
 - Use the **args map** format; it is converted to kebab-case flags.
 - Always pass `json: true` (handled by `runScriptJson`) for deterministic output parsing.
-- Prefer `publishMovePackage` and `context.createAccount` helpers to avoid shared mutable state.
+- Prefer `createShopFixture`/`createShopWithItemExamplesFixture` to keep base setup consistent and isolated.
 
 ### Assertions and deterministic waits
 Use tooling helpers for clean, deterministic checks:

@@ -1,0 +1,12 @@
+name: Setup Sui CLI
+description: Install Sui CLI and add it to PATH.
+runs:
+  using: composite
+  steps:
+    - name: Install Sui CLI
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        node scripts/ci/install-sui-cli.mjs
+        echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      shell: bash
