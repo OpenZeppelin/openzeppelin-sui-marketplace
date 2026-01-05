@@ -38,8 +38,8 @@ type WalletEventUnsubscribe = (() => void) | { remove?: () => void } | undefined
 export const useWalletAccountChangeDisconnect = () => {
   const wallet = useCurrentWallet()
   const { mutate: disconnectWallet } = useDisconnectWallet()
-  const lastKnownAddressRef = useRef<string | null>(null)
-  const lastWalletIdentifierRef = useRef<string | null>(null)
+  const lastKnownAddressRef = useRef<string | undefined>(undefined)
+  const lastWalletIdentifierRef = useRef<string | undefined>(undefined)
 
   const walletIdentifier = useMemo(
     () => resolveWalletIdentifier(wallet.currentWallet ?? undefined),
@@ -48,14 +48,14 @@ export const useWalletAccountChangeDisconnect = () => {
 
   useEffect(() => {
     if (!wallet.isConnected) {
-      lastKnownAddressRef.current = null
-      lastWalletIdentifierRef.current = null
+      lastKnownAddressRef.current = undefined
+      lastWalletIdentifierRef.current = undefined
       return
     }
 
     if (walletIdentifier !== lastWalletIdentifierRef.current) {
-      lastKnownAddressRef.current = null
-      lastWalletIdentifierRef.current = walletIdentifier ?? null
+      lastKnownAddressRef.current = undefined
+      lastWalletIdentifierRef.current = walletIdentifier ?? undefined
     }
 
     if (!lastKnownAddressRef.current) {
@@ -74,7 +74,7 @@ export const useWalletAccountChangeDisconnect = () => {
     const unsubscribe = eventsFeature.on("change", ({ accounts }) => {
       if (!accounts || accounts.length === 0) return
       if (!lastKnownAddressRef.current) {
-        lastKnownAddressRef.current = getPrimaryAddress(accounts) ?? null
+        lastKnownAddressRef.current = getPrimaryAddress(accounts) ?? undefined
         return
       }
       if (shouldDisconnectForAccounts(lastKnownAddressRef.current, accounts)) {

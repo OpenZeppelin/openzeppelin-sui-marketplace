@@ -4,29 +4,26 @@ import {
   buildCreateShopTransaction,
   buildUpdateShopOwnerTransaction
 } from "@sui-oracle-market/domain-core/ptb/shop"
-import {
-  findCreatedObjectIds,
-  newTransaction
-} from "@sui-oracle-market/tooling-core/transactions"
+import { newTransaction } from "@sui-oracle-market/tooling-core/transactions"
 import { getSuiSharedObject } from "@sui-oracle-market/tooling-core/shared-object"
 import { pickRootNonDependencyArtifact } from "@sui-oracle-market/tooling-node/artifacts"
 import { signAndExecute } from "@sui-oracle-market/tooling-node/transactions"
 
 import { withEnv } from "../helpers/env"
-import type { TestAccount, TestContext } from "../support/sui-localnet"
-import { createLocalnetHarness, withTestContext } from "../support/sui-localnet"
+import { createSuiLocalnetTestEnv } from "@sui-oracle-market/tooling-node/testing/env"
+import { requireCreatedObjectId } from "@sui-oracle-market/tooling-node/testing/assert"
+import type {
+  TestAccount,
+  TestContext
+} from "@sui-oracle-market/tooling-node/testing/localnet"
 
-const localnetHarness = createLocalnetHarness()
 const keepTemp = process.env.SUI_IT_KEEP_TEMP === "1"
 const withFaucet = process.env.SUI_IT_WITH_FAUCET !== "0"
-
-const requireCreatedObjectId = (ids: string[], label: string) => {
-  const [objectId] = ids
-  if (!objectId) {
-    throw new Error(`Expected ${label} to be created, but none was found.`)
-  }
-  return objectId
-}
+const testEnv = createSuiLocalnetTestEnv({
+  mode: "suite",
+  keepTemp,
+  withFaucet
+})
 
 const unwrapSplitCoin = <T>(value: T | T[]) =>
   Array.isArray(value) ? value[0] : value
@@ -62,12 +59,10 @@ const createShop = async (
   )
   await context.waitForFinality(createResult.digest)
 
-  const shopId = requireCreatedObjectId(
-    findCreatedObjectIds(createResult, "::shop::Shop"),
-    "Shop"
-  )
+  const shopId = requireCreatedObjectId(createResult, "::shop::Shop", "Shop")
   const ownerCapId = requireCreatedObjectId(
-    findCreatedObjectIds(createResult, "::shop::ShopOwnerCap"),
+    createResult,
+    "::shop::ShopOwnerCap",
     "ShopOwnerCap"
   )
 
@@ -81,54 +76,40 @@ const createShop = async (
 
 describe("security and concurrency", () => {
   beforeAll(async () => {
-    await localnetHarness.start({
-      testId: "security-concurrency",
-      keepTemp,
-      withFaucet
-    })
+    await testEnv.startSuite("security-concurrency")
   })
 
   afterAll(async () => {
-    await localnetHarness.stop()
+    await testEnv.stopSuite()
   })
 
   it("rejects owner-cap misuse between shops", async () => {
-    await withTestContext(
-      localnetHarness.get(),
-      "security-owner-cap",
-      async (context) => {
-        const { publisher, packageId } = await publishOracleMarket(
-          context,
-          "publisher-a"
-        )
-        const secondOwner = context.createAccount("publisher-b")
-        await context.fundAccount(secondOwner, { minimumCoinObjects: 2 })
+    await testEnv.withTestContext("security-owner-cap", async (context) => {
+      const { publisher, packageId } = await publishOracleMarket(
+        context,
+        "publisher-a"
+      )
+      const secondOwner = context.createAccount("publisher-b")
+      await context.fundAccount(secondOwner, { minimumCoinObjects: 2 })
 
-        const shopA = await createShop(context, packageId, publisher, "Shop A")
-        const shopB = await createShop(
-          context,
-          packageId,
-          secondOwner,
-          "Shop B"
-        )
+      const shopA = await createShop(context, packageId, publisher, "Shop A")
+      const shopB = await createShop(context, packageId, secondOwner, "Shop B")
 
-        const updateOwnerTransaction = buildUpdateShopOwnerTransaction({
-          packageId,
-          shop: shopA.shopShared,
-          ownerCapId: shopB.ownerCapId,
-          newOwner: secondOwner.address
-        })
+      const updateOwnerTransaction = buildUpdateShopOwnerTransaction({
+        packageId,
+        shop: shopA.shopShared,
+        ownerCapId: shopB.ownerCapId,
+        newOwner: secondOwner.address
+      })
 
-        await expect(
-          context.signAndExecuteTransaction(updateOwnerTransaction, secondOwner)
-        ).rejects.toThrow()
-      }
-    )
+      await expect(
+        context.signAndExecuteTransaction(updateOwnerTransaction, secondOwner)
+      ).rejects.toThrow()
+    })
   })
 
   it("rejects transactions signed by a different sender", async () => {
-    await withTestContext(
-      localnetHarness.get(),
+    await testEnv.withTestContext(
       "security-signer-mismatch",
       async (context) => {
         const sender = context.createAccount("sender")
@@ -159,87 +140,79 @@ describe("security and concurrency", () => {
   })
 
   it("retries when two transactions contend on the same gas coin", async () => {
-    await withTestContext(
-      localnetHarness.get(),
-      "concurrency-gas",
-      async (context) => {
-        const account = context.createAccount("gas-owner")
-        await context.fundAccount(account, { minimumCoinObjects: 2 })
+    await testEnv.withTestContext("concurrency-gas", async (context) => {
+      const account = context.createAccount("gas-owner")
+      await context.fundAccount(account, { minimumCoinObjects: 2 })
 
-        const coins = await context.suiClient.getCoins({
-          owner: account.address,
-          coinType: "0x2::sui::SUI",
-          limit: 1
-        })
-        const gasCoin = coins.data[0]
-        if (!gasCoin) {
-          throw new Error("Missing gas coin after funding")
-        }
-
-        const buildContendedTransfer = (recipientAddress: string) => {
-          const transaction = newTransaction()
-          const splitCoin = transaction.splitCoins(transaction.gas, [
-            transaction.pure.u64(1_000_000n)
-          ])
-          transaction.transferObjects(
-            [unwrapSplitCoin(splitCoin)],
-            transaction.pure.address(recipientAddress)
-          )
-          transaction.setGasPayment([
-            {
-              objectId: gasCoin.coinObjectId,
-              version: gasCoin.version,
-              digest: gasCoin.digest
-            }
-          ])
-          transaction.setGasOwner(account.address)
-          return transaction
-        }
-
-        const txA = buildContendedTransfer(context.createAccount("a").address)
-        const txB = buildContendedTransfer(context.createAccount("b").address)
-
-        const results = await Promise.allSettled([
-          context.signAndExecuteTransaction(txA, account),
-          context.signAndExecuteTransaction(txB, account)
-        ])
-
-        const successCount = results.filter(
-          (result) => result.status === "fulfilled"
-        ).length
-        const errors = results
-          .filter((result) => result.status === "rejected")
-          .map((result) => result.reason as Error)
-
-        expect(successCount).toBeGreaterThan(0)
-        if (errors.length > 0) {
-          const errorMessages = errors.map((error) => error.message).join("\n")
-          expect(errorMessages).toMatch(/object|lock|gas|stale/i)
-        }
+      const coins = await context.suiClient.getCoins({
+        owner: account.address,
+        coinType: "0x2::sui::SUI",
+        limit: 1
+      })
+      const gasCoin = coins.data[0]
+      if (!gasCoin) {
+        throw new Error("Missing gas coin after funding")
       }
-    )
-  })
 
-  it("fails when the signer has no gas", async () => {
-    await withTestContext(
-      localnetHarness.get(),
-      "security-no-gas",
-      async (context) => {
-        const account = context.createAccount("unfunded")
-
+      const buildContendedTransfer = (recipientAddress: string) => {
         const transaction = newTransaction()
         const splitCoin = transaction.splitCoins(transaction.gas, [
           transaction.pure.u64(1_000_000n)
         ])
         transaction.transferObjects(
           [unwrapSplitCoin(splitCoin)],
-          transaction.pure.address(context.createAccount("recipient").address)
+          transaction.pure.address(recipientAddress)
         )
-
-        await expect(
-          context.signAndExecuteTransaction(transaction, account)
-        ).rejects.toThrow(/gas|coin/i)
+        transaction.setGasPayment([
+          {
+            objectId: gasCoin.coinObjectId,
+            version: gasCoin.version,
+            digest: gasCoin.digest
+          }
+        ])
+        transaction.setGasOwner(account.address)
+        return transaction
       }
-    )
+
+      const txA = buildContendedTransfer(context.createAccount("a").address)
+      const txB = buildContendedTransfer(context.createAccount("b").address)
+
+      const results = await Promise.allSettled([
+        context.signAndExecuteTransaction(txA, account),
+        context.signAndExecuteTransaction(txB, account)
+      ])
+
+      const successCount = results.filter(
+        (result) => result.status === "fulfilled"
+      ).length
+      const errors = results
+        .filter((result) => result.status === "rejected")
+        .map((result) => result.reason as Error)
+
+      expect(successCount).toBeGreaterThan(0)
+      if (errors.length > 0) {
+        const errorMessages = errors.map((error) => error.message).join("\n")
+        expect(errorMessages).toMatch(/object|lock|gas|stale/i)
+      }
+    })
+  })
+
+  it("fails when the signer has no gas", async () => {
+    await testEnv.withTestContext("security-no-gas", async (context) => {
+      const account = context.createAccount("unfunded")
+
+      const transaction = newTransaction()
+      const splitCoin = transaction.splitCoins(transaction.gas, [
+        transaction.pure.u64(1_000_000n)
+      ])
+      transaction.transferObjects(
+        [unwrapSplitCoin(splitCoin)],
+        transaction.pure.address(context.createAccount("recipient").address)
+      )
+
+      await expect(
+        context.signAndExecuteTransaction(transaction, account)
+      ).rejects.toThrow(/gas|coin/i)
+    })
   })
 })

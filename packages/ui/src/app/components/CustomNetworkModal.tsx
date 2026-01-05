@@ -50,7 +50,7 @@ const CustomNetworkModal = ({
   onDelete: (network: TCustomNetworkConfig) => void
   onStartCreate: () => void
 }) => {
-  if (!open) return null
+  if (!open) return <></>
 
   const isEditing = mode === "edit"
 
@@ -67,7 +67,7 @@ const CustomNetworkModal = ({
           <div className="rounded-2xl border border-amber-200/70 bg-amber-50/70 px-4 py-3 text-xs text-amber-700 dark:border-amber-400/20 dark:bg-amber-500/10 dark:text-amber-200">
             {storageError}
           </div>
-        ) : null}
+        ) : undefined}
 
         <ModalSection
           title="Configured custom networks"
@@ -151,7 +151,7 @@ const CustomNetworkModal = ({
                 <span className={modalFieldErrorTextClassName}>
                   {errors.networkKey}
                 </span>
-              ) : null}
+              ) : undefined}
             </label>
 
             <label className={modalFieldLabelClassName}>
@@ -166,7 +166,7 @@ const CustomNetworkModal = ({
                 <span className={modalFieldErrorTextClassName}>
                   {errors.label}
                 </span>
-              ) : null}
+              ) : undefined}
             </label>
           </div>
 
@@ -182,7 +182,7 @@ const CustomNetworkModal = ({
               <span className={modalFieldErrorTextClassName}>
                 {errors.rpcUrl}
               </span>
-            ) : null}
+            ) : undefined}
           </label>
 
           <label className={modalFieldLabelClassName}>
@@ -199,7 +199,7 @@ const CustomNetworkModal = ({
               <span className={modalFieldErrorTextClassName}>
                 {errors.explorerUrl}
               </span>
-            ) : null}
+            ) : undefined}
           </label>
 
           <label className={modalFieldLabelClassName}>
@@ -216,7 +216,7 @@ const CustomNetworkModal = ({
               <span className={modalFieldErrorTextClassName}>
                 {errors.contractPackageId}
               </span>
-            ) : null}
+            ) : undefined}
           </label>
 
           <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
@@ -234,7 +234,7 @@ const CustomNetworkModal = ({
                 >
                   Add new
                 </Button>
-              ) : null}
+              ) : undefined}
               <Button onClick={onSubmit}>
                 {isEditing ? "Update network" : "Add network"}
               </Button>

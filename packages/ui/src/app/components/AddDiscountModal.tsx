@@ -128,7 +128,7 @@ const DiscountSummarySection = ({
           <div className="mt-2 overflow-auto text-[0.7rem] text-slate-500 dark:text-slate-200/60">
             {summary.appliesToListingId}
           </div>
-        ) : null}
+        ) : undefined}
       </div>
     </div>
     <div className="mt-4 flex flex-wrap items-center gap-3 text-xs">
@@ -138,10 +138,10 @@ const DiscountSummarySection = ({
           label="Template ID"
           explorerUrl={explorerUrl}
         />
-      ) : null}
+      ) : undefined}
       {shopId ? (
         <CopyableId value={shopId} label="Shop ID" explorerUrl={explorerUrl} />
-      ) : null}
+      ) : undefined}
     </div>
   </ModalSection>
 )
@@ -257,7 +257,7 @@ const AddDiscountModal = ({
     [itemListings]
   )
 
-  if (!open) return null
+  if (!open) return <></>
 
   const rulePreview = resolveRuleValuePreview(
     formState.ruleKind,
@@ -344,7 +344,7 @@ const AddDiscountModal = ({
                   label="Shop"
                   explorerUrl={explorerUrl}
                 />
-              ) : null
+              ) : undefined
             }
           />
 
@@ -384,7 +384,7 @@ const AddDiscountModal = ({
                     <span className={modalFieldErrorTextClassName}>
                       {fieldErrors.ruleKind}
                     </span>
-                  ) : null}
+                  ) : undefined}
                 </label>
                 <label className={modalFieldLabelClassName}>
                   <span className={modalFieldTitleClassName}>Rule value</span>
@@ -412,7 +412,7 @@ const AddDiscountModal = ({
                     <span className={modalFieldErrorTextClassName}>
                       {fieldErrors.ruleValue}
                     </span>
-                  ) : null}
+                  ) : undefined}
                 </label>
               </div>
             </ModalSection>
@@ -448,7 +448,7 @@ const AddDiscountModal = ({
                     <span className={modalFieldErrorTextClassName}>
                       {fieldErrors.startsAt}
                     </span>
-                  ) : null}
+                  ) : undefined}
                 </label>
                 <label className={modalFieldLabelClassName}>
                   <span className={modalFieldTitleClassName}>
@@ -478,7 +478,7 @@ const AddDiscountModal = ({
                     <span className={modalFieldErrorTextClassName}>
                       {fieldErrors.expiresAt}
                     </span>
-                  ) : null}
+                  ) : undefined}
                 </label>
                 <label
                   className={clsx(modalFieldLabelClassName, "md:col-span-2")}
@@ -514,7 +514,7 @@ const AddDiscountModal = ({
                     <span className={modalFieldErrorTextClassName}>
                       {fieldErrors.maxRedemptions}
                     </span>
-                  ) : null}
+                  ) : undefined}
                 </label>
               </div>
             </ModalSection>
@@ -559,7 +559,7 @@ const AddDiscountModal = ({
                     <span className={modalFieldErrorTextClassName}>
                       {fieldErrors.appliesToListingId}
                     </span>
-                  ) : null}
+                  ) : undefined}
                   <datalist id="listing-options">
                     {itemListings.map((listing) => (
                       <option
@@ -632,7 +632,7 @@ const AddDiscountModal = ({
                     <div className="mt-1 text-[0.65rem] text-slate-500 dark:text-slate-200/60">
                       {formState.appliesToListingId.trim()}
                     </div>
-                  ) : null}
+                  ) : undefined}
                 </div>
               </div>
             </ModalSection>

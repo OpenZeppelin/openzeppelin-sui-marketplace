@@ -444,7 +444,7 @@ export const useAddCurrencyModalState = ({
     const expectedChain = `sui:${network}` as IdentifierString
     const accountChains = currentAccount?.chains ?? []
     const localnetSupported = walletSupportsChain(
-      currentWallet ?? currentAccount,
+      currentWallet ?? currentAccount ?? undefined,
       expectedChain
     )
     const walletFeatureKeys = currentWallet

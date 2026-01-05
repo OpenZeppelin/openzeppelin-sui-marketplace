@@ -264,6 +264,8 @@ const logScriptFailure = (error: unknown) => {
 const syncLocalnetMoveEnvironmentChainIdForTooling = async (
   tooling: Tooling
 ) => {
+  if (process.env.SUI_SKIP_MOVE_CHAIN_ID_SYNC === "1") return
+
   const { chainId, updatedFiles, didAttempt } =
     await syncLocalnetMoveEnvironmentChainId({
       moveRootPath: tooling.suiConfig.paths.move,

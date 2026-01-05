@@ -12,10 +12,10 @@ const isDangerousKey = (key: string): boolean =>
 const isAllowedKey = (key: string): boolean => !isDangerousKey(key)
 
 /**
- * Checks for non-null, non-array objects for deep merge.
+ * Checks for non-empty, non-array objects for deep merge.
  */
 const isMergeableObject = (value: unknown): value is SafeObject =>
-  typeof value === "object" && value !== null && !Array.isArray(value)
+  Boolean(value) && typeof value === "object" && !Array.isArray(value)
 
 /**
  * Builds a new object from key/value pairs.
@@ -173,8 +173,8 @@ export const parseOptionalPositiveU64 = (
 /**
  * Parses a bigint-like value and falls back to 0 on invalid input.
  */
-export const parseBalance = (value?: string | number | bigint | null) => {
-  if (value === undefined || value === null) return 0n
+export const parseBalance = (value?: string | number | bigint) => {
+  if (value === undefined) return 0n
   if (typeof value === "bigint") return value
   if (typeof value === "number") return BigInt(Math.trunc(value))
   try {

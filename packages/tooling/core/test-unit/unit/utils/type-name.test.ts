@@ -1,12 +1,12 @@
-import { describe, expect, it } from "vitest"
 import { normalizeSuiObjectId } from "@mysten/sui/utils"
+import { describe, expect, it } from "vitest"
 import {
-  extractStructNameFromType,
-  formatTypeName,
-  isMatchingTypeName,
+  parseTypeNameFromString,
   normalizeTypeNameFromFieldValue,
-  parseTypeNameFromString
-} from "../../src/utils/type-name.ts"
+  isMatchingTypeName,
+  formatTypeName,
+  extractStructNameFromType
+} from "../../../src/utils/type-name.ts"
 
 describe("type name helpers", () => {
   it("parses fully qualified type names", () => {

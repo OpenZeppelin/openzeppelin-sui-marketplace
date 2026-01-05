@@ -74,7 +74,7 @@ describe("tooling localnet helpers", () => {
         epoch: "1",
         protocolVersion: "1",
         activeValidators: [],
-        epochStartTimestampMs: null
+        epochStartTimestampMs: undefined
       }),
       getLatestCheckpointSequenceNumber: vi.fn().mockResolvedValue("10"),
       getReferenceGasPrice: vi.fn().mockResolvedValue(1000n)

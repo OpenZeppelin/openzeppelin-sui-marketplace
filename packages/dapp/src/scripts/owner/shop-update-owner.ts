@@ -12,16 +12,20 @@ import {
   getShopOwnerAddressFromObject
 } from "@sui-oracle-market/domain-core/models/shop"
 import { buildUpdateShopOwnerTransaction } from "@sui-oracle-market/domain-core/ptb/shop"
-import { resolveLatestShopIdentifiers } from "@sui-oracle-market/domain-node/shop"
+import { emitJsonOutput } from "@sui-oracle-market/tooling-node/json"
 import { logKeyValueGreen } from "@sui-oracle-market/tooling-node/log"
 import { runSuiScript } from "@sui-oracle-market/tooling-node/process"
 import { logShopOverview } from "../../utils/log-summaries.ts"
+import { resolveOwnerShopIdentifiers } from "../../utils/shop-context.ts"
 
 type UpdateShopOwnerArguments = {
   shopPackageId?: string
   shopId?: string
   ownerCapId?: string
   newOwner: string
+  devInspect?: boolean
+  dryRun?: boolean
+  json?: boolean
 }
 
 type NormalizedInputs = {
@@ -38,9 +42,8 @@ runSuiScript(
       tooling.network.networkName
     )
 
-    const shopSharedObject = await tooling.getSuiSharedObject({
-      objectId: inputs.shopId,
-      mutable: true
+    const shopSharedObject = await tooling.getMutableSharedObject({
+      objectId: inputs.shopId
     })
     const previousOwner = getShopOwnerAddressFromObject(shopSharedObject.object)
 
@@ -51,21 +54,43 @@ runSuiScript(
       newOwner: inputs.newOwner
     })
 
-    const { transactionResult } = await tooling.signAndExecute({
+    const { execution, summary } = await tooling.executeTransactionWithSummary({
       transaction: updateShopOwnerTransaction,
-      signer: tooling.loadedEd25519KeyPair
+      signer: tooling.loadedEd25519KeyPair,
+      summaryLabel: "update-shop-owner",
+      devInspect: cliArguments.devInspect,
+      dryRun: cliArguments.dryRun
     })
+
+    if (!execution) return
+
+    const digest = execution.transactionResult.digest
 
     const updatedShopOverview = await getShopOverview(
       inputs.shopId,
       tooling.suiClient
     )
+    if (
+      emitJsonOutput(
+        {
+          shopOverview: updatedShopOverview,
+          ownerCapId: inputs.ownerCapId,
+          previousOwner,
+          newOwner: inputs.newOwner,
+          digest,
+          transactionSummary: summary
+        },
+        cliArguments.json
+      )
+    )
+      return
+
     logShopOverview(updatedShopOverview)
     logOwnerRotation({
       ownerCapId: inputs.ownerCapId,
       previousOwner,
       newOwner: inputs.newOwner,
-      digest: transactionResult.digest
+      digest
     })
   },
   yargs()
@@ -80,19 +105,36 @@ runSuiScript(
       alias: "shop-package-id",
       type: "string",
       description:
-        "Package ID for the sui_oracle_market Move package; inferred from artifacts if omitted."
+        "Package ID for the sui_oracle_market Move package; defaults to the latest artifact when omitted."
     })
     .option("shopId", {
       alias: "shop-id",
       type: "string",
       description:
-        "Shared Shop object ID; defaults to the latest Shop artifact if available."
+        "Shared Shop object ID; defaults to the latest Shop artifact when available."
     })
     .option("ownerCapId", {
       alias: ["owner-cap-id", "owner-cap"],
       type: "string",
       description:
-        "ShopOwnerCap object ID authorizing the rotation; defaults to the latest artifact when omitted."
+        "ShopOwnerCap object ID authorizing the mutation; defaults to the latest artifact when omitted."
+    })
+    .option("devInspect", {
+      alias: ["dev-inspect", "debug"],
+      type: "boolean",
+      default: false,
+      description: "Run a dev-inspect and log VM error details."
+    })
+    .option("dryRun", {
+      alias: ["dry-run"],
+      type: "boolean",
+      default: false,
+      description: "Run dev-inspect and exit without executing the transaction."
+    })
+    .option("json", {
+      type: "boolean",
+      default: false,
+      description: "Output results as JSON."
     })
     .strict()
 )
@@ -101,14 +143,12 @@ const normalizeInputs = async (
   cliArguments: UpdateShopOwnerArguments,
   networkName: string
 ): Promise<NormalizedInputs> => {
-  const { packageId, shopId, ownerCapId } = await resolveLatestShopIdentifiers(
-    {
-      packageId: cliArguments.shopPackageId,
-      shopId: cliArguments.shopId,
-      ownerCapId: cliArguments.ownerCapId
-    },
-    networkName
-  )
+  const { packageId, shopId, ownerCapId } = await resolveOwnerShopIdentifiers({
+    networkName,
+    shopPackageId: cliArguments.shopPackageId,
+    shopId: cliArguments.shopId,
+    ownerCapId: cliArguments.ownerCapId
+  })
 
   return {
     packageId,

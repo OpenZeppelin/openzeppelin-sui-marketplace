@@ -2,12 +2,12 @@ import { describe, expect, it } from "vitest"
 import {
   asNumberArray,
   decodeUtf8Vector,
-  formatCoinBalance,
-  formatOptionalNumericValue,
-  formatVectorBytesAsHex,
   readMoveString,
+  formatVectorBytesAsHex,
+  formatOptionalNumericValue,
+  formatCoinBalance,
   shortenId
-} from "../../src/utils/formatters.ts"
+} from "../../../src/utils/formatters.ts"
 
 describe("formatters", () => {
   it("parses vector<u8> into number arrays", () => {

@@ -16,7 +16,7 @@ const Notification: FC<PropsWithChildren<INotification>> = ({
   id,
   type
 }) => {
-  const isCloseButtonVisible = id !== null && type !== "loading"
+  const isCloseButtonVisible = id !== undefined && type !== "loading"
 
   return (
     <div className="flex w-full flex-row items-center justify-between gap-2">

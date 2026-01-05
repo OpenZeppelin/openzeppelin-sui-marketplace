@@ -153,11 +153,11 @@ const Panel = ({
           <p className="text-xs uppercase tracking-[0.16em] text-slate-500 dark:text-slate-200/60">
             {subtitle}
           </p>
-        ) : null}
+        ) : undefined}
       </div>
       {headerAction ? (
         <div className="ml-auto flex items-center">{headerAction}</div>
-      ) : null}
+      ) : undefined}
     </div>
     <div className="px-6 py-5">{children}</div>
   </section>
@@ -215,7 +215,7 @@ const ItemListingsPanel = ({
     <Button variant="primary" size="compact" onClick={onAddItem}>
       <span>Add Item</span>
     </Button>
-  ) : null
+  ) : undefined
 
   return (
     <Panel
@@ -248,18 +248,20 @@ const ItemListingsPanel = ({
                 const spotlightLabel = spotlightTemplate
                   ? spotlightTemplate.ruleDescription
                   : undefined
-                const stockValue = listing.stock ? BigInt(listing.stock) : null
+                const stockValue = listing.stock
+                  ? BigInt(listing.stock)
+                  : undefined
                 const isOutOfStock =
-                  stockValue !== null ? stockValue <= 0n : false
+                  stockValue !== undefined ? stockValue <= 0n : false
                 const itemTypeLabel = getStructLabel(listing.itemType)
                 const availabilityLabel =
-                  stockValue === null
+                  stockValue === undefined
                     ? "Availability unknown"
                     : isOutOfStock
                       ? "Sold out"
                       : "In stock"
                 const availabilityTone =
-                  stockValue === null
+                  stockValue === undefined
                     ? "text-slate-600 dark:text-slate-200/70"
                     : isOutOfStock
                       ? "text-rose-600 dark:text-rose-200"
@@ -333,7 +335,7 @@ const ItemListingsPanel = ({
                           explorerUrl={explorerUrl}
                         />
                       </div>
-                    ) : null}
+                    ) : undefined}
                     <div className="mt-4 flex flex-col gap-2 text-[0.65rem]">
                       <CopyableId
                         value={listing.itemListingId}
@@ -367,7 +369,7 @@ const ItemListingsPanel = ({
                             >
                               Remove
                             </Button>
-                          ) : null}
+                          ) : undefined}
                           {showBuy ? (
                             <Button
                               variant="primary"
@@ -381,10 +383,10 @@ const ItemListingsPanel = ({
                                 {isOutOfStock ? "Unavailable" : "Now"}
                               </span>
                             </Button>
-                          ) : null}
+                          ) : undefined}
                         </div>
                       </div>
-                    ) : null}
+                    ) : undefined}
                   </div>
                 )
               })}
@@ -423,7 +425,7 @@ const AcceptedCurrenciesPanel = ({
         <Button variant="primary" size="compact" onClick={onAddCurrency}>
           <span>Add Currency</span>
         </Button>
-      ) : null
+      ) : undefined
     }
   >
     {!shopConfigured ? (
@@ -489,7 +491,7 @@ const AcceptedCurrenciesPanel = ({
                           explorerUrl={explorerUrl}
                         />
                       </div>
-                    ) : null}
+                    ) : undefined}
                   </div>
                   <div className="mt-4 flex flex-wrap items-center gap-3 text-[0.65rem]">
                     <CopyableId
@@ -503,14 +505,14 @@ const AcceptedCurrenciesPanel = ({
                         label="Pyth"
                         explorerUrl={explorerUrl}
                       />
-                    ) : null}
+                    ) : undefined}
                     {registryId ? (
                       <CopyableId
                         value={registryId}
                         label="Registry"
                         explorerUrl={explorerUrl}
                       />
-                    ) : null}
+                    ) : undefined}
                   </div>
                   {canManageCurrencies ? (
                     <div className="mt-auto flex items-center pt-5">
@@ -522,7 +524,7 @@ const AcceptedCurrenciesPanel = ({
                         Remove
                       </Button>
                     </div>
-                  ) : null}
+                  ) : undefined}
                 </div>
               )
             })}
@@ -657,7 +659,7 @@ const DiscountsPanel = ({
           <Button variant="primary" size="compact" onClick={onAddDiscount}>
             <span>Add Discount</span>
           </Button>
-        ) : null
+        ) : undefined
       }
     >
       {!shopConfigured ? (
@@ -754,7 +756,7 @@ const DiscountsPanel = ({
                                 <span className="text-xs uppercase tracking-[0.12em] text-slate-500 dark:text-slate-200/60">
                                   {templateStatus}
                                 </span>
-                              ) : null}
+                              ) : undefined}
                             </div>
                           </div>
                           <div className="mt-4 grid gap-4 text-[0.65rem] text-slate-500 sm:grid-cols-2 sm:gap-x-8 dark:text-slate-200/70">
@@ -802,7 +804,7 @@ const DiscountsPanel = ({
                               >
                                 {template.activeFlag ? "Disable" : "Disabled"}
                               </Button>
-                            ) : null}
+                            ) : undefined}
                             <Button
                               variant="primary"
                               size="compact"
@@ -872,7 +874,7 @@ const DiscountsPanel = ({
                                 <span className="text-xs uppercase tracking-[0.12em] text-slate-500 dark:text-slate-200/60">
                                   {template?.status || "active"}
                                 </span>
-                              ) : null}
+                              ) : undefined}
                             </div>
                             <CopyableId
                               value={ticket.discountTicketId}

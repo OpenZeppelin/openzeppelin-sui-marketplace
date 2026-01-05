@@ -35,7 +35,7 @@ describe("loadKeypair", () => {
     await withTempDir(async (dir) => {
       const keystorePath = `${dir}/sui.keystore`
       await writeFileTree(dir, {
-        "sui.keystore": JSON.stringify([secretBase64], null, 2)
+        "sui.keystore": JSON.stringify([secretBase64], undefined, 2)
       })
 
       const keypair = await loadKeypair({
@@ -65,7 +65,7 @@ describe("loadKeypair", () => {
     await withTempDir(async (dir) => {
       const keystorePath = `${dir}/sui.keystore`
       await writeFileTree(dir, {
-        "sui.keystore": JSON.stringify([secretBase64], null, 2)
+        "sui.keystore": JSON.stringify([secretBase64], undefined, 2)
       })
 
       await expect(

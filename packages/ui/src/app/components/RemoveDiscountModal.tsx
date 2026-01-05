@@ -77,7 +77,7 @@ const DiscountSummarySection = ({
             Listing {shortenId(template.appliesToListingId)}
           </div>
         </div>
-      ) : null}
+      ) : undefined}
     </div>
     <div className="mt-4 flex flex-wrap items-center gap-3 text-xs">
       <CopyableId
@@ -91,10 +91,10 @@ const DiscountSummarySection = ({
           label="Listing"
           explorerUrl={explorerUrl}
         />
-      ) : null}
+      ) : undefined}
       {shopId ? (
         <CopyableId value={shopId} label="Shop ID" explorerUrl={explorerUrl} />
-      ) : null}
+      ) : undefined}
     </div>
   </ModalSection>
 )
@@ -208,7 +208,7 @@ const RemoveDiscountModal = ({
   const errorState =
     transactionState.status === "error" ? transactionState : undefined
 
-  if (!open || !template) return null
+  if (!open || !template) return <></>
 
   return (
     <ModalFrame onClose={onClose}>

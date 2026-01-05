@@ -68,28 +68,18 @@ export const buildOwnedObjectLogFields = (object: OwnedObjectSummary) => ({
  * Extracts a field from a moveObject response content.
  */
 export const getResponseContentField = (
-  response: SuiObjectResponse | null | undefined,
+  response: SuiObjectResponse | undefined,
   field: string
 ) => {
-  if (
-    response == null ||
-    response.data == null ||
-    response.data?.content == null
-  ) {
-    return null
-  }
+  if (!response || !response.data || !response.data.content) return undefined
 
-  if (response.data.content?.dataType !== "moveObject") {
-    return null
-  }
+  if (response.data.content.dataType !== "moveObject") return undefined
 
   // @todo Find a better way to extract fields from SuiParsedData.
   /* eslint-disable  @typescript-eslint/no-explicit-any */
   const content = response.data.content as any
 
-  if (content.fields == null) {
-    return null
-  }
+  if (!content.fields) return undefined
 
   return content.fields[field]
 }
@@ -98,23 +88,15 @@ export const getResponseContentField = (
  * Extracts a field from a response display payload.
  */
 export const getResponseDisplayField = (
-  response: SuiObjectResponse | null | undefined,
+  response: SuiObjectResponse | undefined,
   field: string
 ) => {
-  if (
-    response == null ||
-    response.data == null ||
-    response.data?.display == null
-  ) {
-    return null
-  }
+  if (!response || !response.data || !response.data.display) return undefined
 
   // @todo Find a better way to extract fields from SuiParsedData.
   const display = response.data.display
 
-  if (display.data == null) {
-    return null
-  }
+  if (!display.data) return undefined
 
   return display.data[field]
 }
@@ -123,21 +105,13 @@ export const getResponseDisplayField = (
  * Normalizes the object ID from a response when valid.
  */
 export const getResponseObjectId = (
-  response: SuiObjectResponse | null | undefined
+  response: SuiObjectResponse | undefined
 ) => {
-  if (
-    response == null ||
-    response.data == null ||
-    response.data?.objectId == null
-  ) {
-    return null
-  }
+  if (!response || !response.data || !response.data.objectId) return undefined
 
   const objectId = response.data.objectId
 
-  if (!isValidSuiObjectId(objectId)) {
-    return null
-  }
+  if (!isValidSuiObjectId(objectId)) return undefined
 
   return objectId
 }

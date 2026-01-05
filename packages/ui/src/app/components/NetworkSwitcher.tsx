@@ -13,7 +13,7 @@ const NetworkSwitcher = ({
   options: TNetworkOption[]
   onChange: (nextNetwork: string) => void
 }) => {
-  if (options.length === 0) return null
+  if (options.length === 0) return <></>
 
   const handleNetworkChange = (event: ChangeEvent<HTMLSelectElement>) => {
     const nextNetwork = event.target.value

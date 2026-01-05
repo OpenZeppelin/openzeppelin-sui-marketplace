@@ -126,7 +126,7 @@ export const formatVectorBytesAsHex = (value: unknown): string => {
 export const formatOptionalNumericValue = (
   value: unknown
 ): string | undefined => {
-  if (value === undefined || value === null) return undefined
+  if (value === undefined) return undefined
   if (typeof value === "bigint") return value.toString()
   if (typeof value === "number") return value.toString()
   if (typeof value === "string") return value
@@ -138,7 +138,7 @@ export const formatOptionalNumericValue = (
  * Formats epoch seconds into a locale date string.
  */
 export const formatEpochSeconds = (rawSeconds?: string | number): string => {
-  if (rawSeconds === undefined || rawSeconds === null) return "Unknown"
+  if (rawSeconds === undefined) return "Unknown"
   const seconds =
     typeof rawSeconds === "string" ? Number(rawSeconds) : rawSeconds
   if (!Number.isFinite(seconds)) return "Unknown"
@@ -153,9 +153,7 @@ export const formatEpochSeconds = (rawSeconds?: string | number): string => {
 /**
  * Formats a timestamp (ms) into a locale datetime string.
  */
-export const formatTimestamp = (
-  timestampMs?: string | number | null
-): string => {
+export const formatTimestamp = (timestampMs?: string | number): string => {
   if (!timestampMs) return "Unknown"
   const timestamp = Number(timestampMs)
   if (!Number.isFinite(timestamp)) return "Unknown"

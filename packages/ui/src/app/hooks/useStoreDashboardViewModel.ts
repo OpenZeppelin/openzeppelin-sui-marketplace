@@ -16,10 +16,10 @@ import { useClaimDiscountTicketAction } from "./useClaimDiscountTicketAction"
 import { useShopDashboardData } from "./useShopDashboardData"
 
 type DashboardModalState = {
-  activeListing: ItemListingSummary | null
-  activeListingToRemove: ItemListingSummary | null
-  activeCurrencyToRemove: AcceptedCurrencySummary | null
-  activeDiscountToRemove: DiscountTemplateSummary | null
+  activeListing: ItemListingSummary | undefined
+  activeListingToRemove: ItemListingSummary | undefined
+  activeCurrencyToRemove: AcceptedCurrencySummary | undefined
+  activeDiscountToRemove: DiscountTemplateSummary | undefined
   isBuyModalOpen: boolean
   isAddItemModalOpen: boolean
   isAddDiscountModalOpen: boolean
@@ -30,10 +30,10 @@ type DashboardModalState = {
 }
 
 const emptyModalState = (): DashboardModalState => ({
-  activeListing: null,
-  activeListingToRemove: null,
-  activeCurrencyToRemove: null,
-  activeDiscountToRemove: null,
+  activeListing: undefined,
+  activeListingToRemove: undefined,
+  activeCurrencyToRemove: undefined,
+  activeDiscountToRemove: undefined,
   isBuyModalOpen: false,
   isAddItemModalOpen: false,
   isAddDiscountModalOpen: false,
@@ -124,7 +124,7 @@ export const useStoreDashboardViewModel = ({
   const closeBuyModal = useCallback(() => {
     setModalState((previous) => ({
       ...previous,
-      activeListing: null,
+      activeListing: undefined,
       isBuyModalOpen: false
     }))
   }, [])
@@ -176,7 +176,7 @@ export const useStoreDashboardViewModel = ({
   const closeRemoveItemModal = useCallback(() => {
     setModalState((previous) => ({
       ...previous,
-      activeListingToRemove: null,
+      activeListingToRemove: undefined,
       isRemoveItemModalOpen: false
     }))
   }, [])
@@ -195,7 +195,7 @@ export const useStoreDashboardViewModel = ({
   const closeRemoveCurrencyModal = useCallback(() => {
     setModalState((previous) => ({
       ...previous,
-      activeCurrencyToRemove: null,
+      activeCurrencyToRemove: undefined,
       isRemoveCurrencyModalOpen: false
     }))
   }, [])
@@ -214,7 +214,7 @@ export const useStoreDashboardViewModel = ({
   const closeRemoveDiscountModal = useCallback(() => {
     setModalState((previous) => ({
       ...previous,
-      activeDiscountToRemove: null,
+      activeDiscountToRemove: undefined,
       isRemoveDiscountModalOpen: false
     }))
   }, [])

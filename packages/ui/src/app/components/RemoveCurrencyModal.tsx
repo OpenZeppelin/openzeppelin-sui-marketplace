@@ -77,7 +77,7 @@ const CurrencySummarySection = ({
               {shortenId(currency.pythObjectId)}
             </div>
           </div>
-        ) : null}
+        ) : undefined}
       </div>
       <div className="mt-4 flex flex-wrap items-center gap-3 text-xs">
         <CopyableId
@@ -91,14 +91,14 @@ const CurrencySummarySection = ({
             label="Registry"
             explorerUrl={explorerUrl}
           />
-        ) : null}
+        ) : undefined}
         {shopId ? (
           <CopyableId
             value={shopId}
             label="Shop ID"
             explorerUrl={explorerUrl}
           />
-        ) : null}
+        ) : undefined}
       </div>
     </ModalSection>
   )
@@ -210,7 +210,7 @@ const RemoveCurrencyModal = ({
   const errorState =
     transactionState.status === "error" ? transactionState : undefined
 
-  if (!open || !currency) return null
+  if (!open || !currency) return <></>
 
   return (
     <ModalFrame onClose={onClose}>

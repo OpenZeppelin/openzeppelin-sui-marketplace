@@ -12,6 +12,7 @@ import yargs from "yargs"
 import {
   findAcceptedCurrencyByCoinType,
   getAcceptedCurrencySummary,
+  getAcceptedCurrencySummaries,
   normalizeCoinType,
   requireAcceptedCurrencyByCoinType,
   type AcceptedCurrencyMatch
@@ -24,7 +25,8 @@ import {
   parseDiscountRuleKind,
   parseDiscountRuleValue,
   validateDiscountSchedule,
-  type DiscountRuleKindLabel
+  type DiscountRuleKindLabel,
+  type DiscountTemplateSummary
 } from "@sui-oracle-market/domain-core/models/discount"
 import {
   getItemListingSummaries,
@@ -66,6 +68,7 @@ import {
   assertBytesLength,
   hexToBytes
 } from "@sui-oracle-market/tooling-core/hex"
+import { isStaleObjectVersionError } from "@sui-oracle-market/tooling-core/transactions"
 import { normalizeIdOrThrow } from "@sui-oracle-market/tooling-core/object"
 import { readMoveString } from "@sui-oracle-market/tooling-core/utils/formatters"
 import { extractStructNameFromType } from "@sui-oracle-market/tooling-core/utils/type-name"
@@ -76,12 +79,15 @@ import {
   parsePositiveU64,
   wait
 } from "@sui-oracle-market/tooling-core/utils/utility"
+import { retryWithDelay } from "@sui-oracle-market/tooling-core/utils/retry"
 import { readArtifact } from "@sui-oracle-market/tooling-node/artifacts"
+import { withMutedConsole } from "@sui-oracle-market/tooling-node/console"
 import {
   DEFAULT_TX_GAS_BUDGET,
   SUI_COIN_REGISTRY_ID
 } from "@sui-oracle-market/tooling-node/constants"
 import type { Tooling } from "@sui-oracle-market/tooling-node/factory"
+import { emitJsonOutput } from "@sui-oracle-market/tooling-node/json"
 import {
   logKeyValueBlue,
   logKeyValueGreen,
@@ -128,16 +134,6 @@ const STALE_OBJECT_RETRY_MAX_ATTEMPTS = 3
 
 type SignAndExecuteResult = Awaited<ReturnType<Tooling["signAndExecute"]>>
 
-const isStaleObjectVersionError = (error: unknown) => {
-  const message =
-    error instanceof Error ? error.message : error ? String(error) : ""
-  const normalizedMessage = message.toLowerCase()
-  return (
-    normalizedMessage.includes("not available for consumption") &&
-    normalizedMessage.includes("current version")
-  )
-}
-
 const signAndExecuteWithRetry = async ({
   buildTransaction,
   tooling,
@@ -146,22 +142,17 @@ const signAndExecuteWithRetry = async ({
   buildTransaction: () => Transaction
   tooling: Tooling
   maxAttempts?: number
-}): Promise<SignAndExecuteResult> => {
-  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
-    try {
-      return await tooling.signAndExecute({
+}): Promise<SignAndExecuteResult> =>
+  retryWithDelay({
+    action: () =>
+      tooling.signAndExecute({
         transaction: buildTransaction(),
         signer: tooling.loadedEd25519KeyPair
-      })
-    } catch (error) {
-      if (!isStaleObjectVersionError(error) || attempt >= maxAttempts - 1)
-        throw error
-      await wait(STALE_OBJECT_RETRY_DELAY_MS)
-    }
-  }
-
-  throw new Error("Unable to execute transaction after stale object retries.")
-}
+      }),
+    shouldRetry: isStaleObjectVersionError,
+    maxAttempts,
+    delayMs: STALE_OBJECT_RETRY_DELAY_MS
+  })
 
 type ShopSeedArguments = {
   shopName?: string
@@ -172,6 +163,7 @@ type ShopSeedArguments = {
   maxPriceAgeSecsCap?: string
   maxConfidenceRatioBpsCap?: string
   maxPriceStatusLagSecsCap?: string
+  json?: boolean
 }
 
 type ItemListingSeedDefinition = {
@@ -264,63 +256,85 @@ const FIXED_DISCOUNT_LISTING_NAME = "Metro Bike"
 
 runSuiScript(
   async (tooling, cliArguments: ShopSeedArguments) => {
-    const networkName = tooling.network.networkName
-    const suiClient = tooling.suiClient
+    const seedShop = async () => {
+      const networkName = tooling.network.networkName
+      const suiClient = tooling.suiClient
 
-    const shopIdentifiers = await resolveOrCreateShopIdentifiers({
-      cliArguments,
-      networkName,
-      tooling
-    })
+      const shopIdentifiers = await resolveOrCreateShopIdentifiers({
+        cliArguments,
+        networkName,
+        tooling
+      })
 
-    const shopOverview = await getShopOverview(
-      shopIdentifiers.shopId,
-      suiClient
-    )
-    logShopOverview(shopOverview)
+      const shopOverview = await getShopOverview(
+        shopIdentifiers.shopId,
+        suiClient
+      )
+      logShopOverview(shopOverview)
 
-    const { listingSeeds } = await resolveItemListingSeeds({
-      cliArguments,
-      networkName,
-      tooling,
-      suiClient
-    })
+      const { listingSeeds } = await resolveItemListingSeeds({
+        cliArguments,
+        networkName,
+        tooling,
+        suiClient
+      })
 
-    const acceptedCurrencySeeds = await resolveAcceptedCurrencySeeds({
-      networkName,
-      shopPackageId: shopIdentifiers.packageId,
-      tooling
-    })
-    await ensureAcceptedCurrencies({
-      acceptedCurrencySeeds,
-      cliArguments,
-      shopIdentifiers,
-      tooling,
-      suiClient
-    })
+      const acceptedCurrencySeeds = await resolveAcceptedCurrencySeeds({
+        networkName,
+        shopPackageId: shopIdentifiers.packageId,
+        tooling
+      })
+      await ensureAcceptedCurrencies({
+        acceptedCurrencySeeds,
+        cliArguments,
+        shopIdentifiers,
+        tooling,
+        suiClient
+      })
 
-    const itemListingSummaries = await ensureItemListings({
-      listingSeeds,
-      shopIdentifiers,
-      tooling,
-      suiClient
-    })
+      const itemListingSummaries = await ensureItemListings({
+        listingSeeds,
+        shopIdentifiers,
+        tooling,
+        suiClient
+      })
 
-    const discountTemplateSummaries = await ensureDiscountTemplates({
-      discountSeeds: DISCOUNT_SEEDS,
-      shopIdentifiers,
-      tooling,
-      suiClient
-    })
+      const discountTemplateSummaries = await ensureDiscountTemplates({
+        discountSeeds: DISCOUNT_SEEDS,
+        shopIdentifiers,
+        tooling,
+        suiClient
+      })
 
-    await ensureFixedDiscountSpotlight({
-      fixedTemplateSummary: discountTemplateSummaries.fixed,
-      preferredListingName: FIXED_DISCOUNT_LISTING_NAME,
-      itemListingSummaries,
-      shopIdentifiers,
-      tooling,
-      suiClient
-    })
+      await ensureFixedDiscountSpotlight({
+        fixedTemplateSummary: discountTemplateSummaries.fixed,
+        preferredListingName: FIXED_DISCOUNT_LISTING_NAME,
+        itemListingSummaries,
+        shopIdentifiers,
+        tooling,
+        suiClient
+      })
+
+      const acceptedCurrencies = cliArguments.json
+        ? await getAcceptedCurrencySummaries(shopIdentifiers.shopId, suiClient)
+        : []
+
+      return {
+        shopOverview,
+        acceptedCurrencies,
+        itemListings: itemListingSummaries,
+        discountTemplates: Object.values(discountTemplateSummaries).filter(
+          (template): template is DiscountTemplateSummary =>
+            template !== undefined
+        )
+      }
+    }
+
+    const seedResult = cliArguments.json
+      ? await withMutedConsole(seedShop)
+      : await seedShop()
+
+    if (emitJsonOutput(seedResult, cliArguments.json)) return
   },
   yargs()
     .option("shopName", {
@@ -370,6 +384,11 @@ runSuiScript(
       type: "string",
       description:
         "Optional guardrail for maximum attestation lag in seconds. Leave empty to use the module default."
+    })
+    .option("json", {
+      type: "boolean",
+      default: false,
+      description: "Output results as JSON."
     })
     .strict()
 )
@@ -934,17 +953,14 @@ const ensureAcceptedCurrency = async ({
     tooling
   })
 
-  const shopSharedObject = await tooling.getSuiSharedObject({
-    objectId: inputs.shopId,
-    mutable: true
+  const shopSharedObject = await tooling.getMutableSharedObject({
+    objectId: inputs.shopId
   })
-  const currencySharedObject = await tooling.getSuiSharedObject({
-    objectId: inputs.currencyId,
-    mutable: false
+  const currencySharedObject = await tooling.getImmutableSharedObject({
+    objectId: inputs.currencyId
   })
-  const priceInfoSharedObject = await tooling.getSuiSharedObject({
-    objectId: inputs.priceInfoObjectId,
-    mutable: false
+  const priceInfoSharedObject = await tooling.getImmutableSharedObject({
+    objectId: inputs.priceInfoObjectId
   })
 
   const gasBudget = tooling.network.gasBudget ?? DEFAULT_TX_GAS_BUDGET
@@ -1088,9 +1104,8 @@ const ensureItemListings = async ({
   )
   const existingListingIndex = indexListingSummaries(existingListings)
 
-  const shopSharedObject = await tooling.getSuiSharedObject({
-    objectId: shopIdentifiers.shopId,
-    mutable: true
+  const shopSharedObject = await tooling.getMutableSharedObject({
+    objectId: shopIdentifiers.shopId
   })
 
   return runSequentially(listingSeeds, (listing) =>
@@ -1183,9 +1198,8 @@ const ensureDiscountTemplates = async ({
   const existingTemplateIndex =
     indexDiscountTemplateSummaries(existingTemplates)
 
-  const shopSharedObject = await tooling.getSuiSharedObject({
-    objectId: shopIdentifiers.shopId,
-    mutable: true
+  const shopSharedObject = await tooling.getMutableSharedObject({
+    objectId: shopIdentifiers.shopId
   })
 
   const initialTemplates: DiscountTemplateMap = {
@@ -1340,17 +1354,14 @@ const ensureFixedDiscountSpotlight = async ({
     suiClient
   })
 
-  const shopSharedObject = await tooling.getSuiSharedObject({
-    objectId: shopIdentifiers.shopId,
-    mutable: false
+  const shopSharedObject = await tooling.getImmutableSharedObject({
+    objectId: shopIdentifiers.shopId
   })
-  const itemListingSharedObject = await tooling.getSuiSharedObject({
-    objectId: resolvedIds.itemListingId,
-    mutable: true
+  const itemListingSharedObject = await tooling.getMutableSharedObject({
+    objectId: resolvedIds.itemListingId
   })
-  const discountTemplateSharedObject = await tooling.getSuiSharedObject({
-    objectId: resolvedIds.discountTemplateId,
-    mutable: false
+  const discountTemplateSharedObject = await tooling.getImmutableSharedObject({
+    objectId: resolvedIds.discountTemplateId
   })
 
   await signAndExecuteWithRetry({

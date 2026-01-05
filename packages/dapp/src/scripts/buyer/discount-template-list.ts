@@ -7,34 +7,49 @@
 import yargs from "yargs"
 
 import { getDiscountTemplateSummaries } from "@sui-oracle-market/domain-core/models/discount"
-import { logKeyValueBlue } from "@sui-oracle-market/tooling-node/log"
+import { emitJsonOutput } from "@sui-oracle-market/tooling-node/json"
 import { runSuiScript } from "@sui-oracle-market/tooling-node/process"
+import { logListContextWithHeader } from "../../utils/context.ts"
 import {
   logDiscountTemplateSummary,
   logEmptyList
 } from "../../utils/log-summaries.ts"
-import { resolveLatestArtifactShopId } from "@sui-oracle-market/domain-node/shop"
+import { resolveShopIdOrLatest } from "../../utils/shop-context.ts"
 
 type ListDiscountTemplatesArguments = {
   shopId?: string
+  json?: boolean
 }
 
 runSuiScript(
   async (tooling, cliArguments: ListDiscountTemplatesArguments) => {
-    const shopId = await resolveLatestArtifactShopId(
+    const shopId = await resolveShopIdOrLatest(
       cliArguments.shopId,
       tooling.network.networkName
     )
 
-    logListContext({
-      shopId,
-      rpcUrl: tooling.network.url,
-      networkName: tooling.network.networkName
-    })
-
     const discountTemplates = await getDiscountTemplateSummaries(
       shopId,
       tooling.suiClient
+    )
+    if (
+      emitJsonOutput(
+        {
+          shopId,
+          discountTemplates
+        },
+        cliArguments.json
+      )
+    )
+      return
+
+    logListContextWithHeader(
+      {
+        shopId,
+        rpcUrl: tooling.network.url,
+        networkName: tooling.network.networkName
+      },
+      { label: "Discount-templates", count: discountTemplates.length }
     )
     if (discountTemplates.length === 0)
       return logEmptyList("Discount-templates", "No templates found.")
@@ -48,23 +63,12 @@ runSuiScript(
       alias: "shop-id",
       type: "string",
       description:
-        "Shared Shop object ID; defaults to the latest Shop artifact when available.",
-      demandOption: false
+        "Shared Shop object ID; defaults to the latest Shop artifact when available."
+    })
+    .option("json", {
+      type: "boolean",
+      default: false,
+      description: "Output results as JSON."
     })
     .strict()
 )
-
-const logListContext = ({
-  shopId,
-  rpcUrl,
-  networkName
-}: {
-  shopId: string
-  rpcUrl: string
-  networkName: string
-}) => {
-  logKeyValueBlue("Network")(networkName)
-  logKeyValueBlue("RPC")(rpcUrl)
-  logKeyValueBlue("Shop")(shopId)
-  console.log("")
-}

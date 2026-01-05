@@ -3,7 +3,7 @@ import { tryParseBigInt } from "./utility.ts"
 type MoveFieldRecord = Record<string, unknown>
 
 const isRecord = (value: unknown): value is MoveFieldRecord =>
-  typeof value === "object" && value !== null
+  Boolean(value) && typeof value === "object"
 
 /**
  * Unwraps a Move-like value into its fields record when present.
@@ -55,7 +55,7 @@ export const normalizeBigIntFromMoveValue = (
   value: unknown
 ): bigint | undefined => {
   const unwrappedValue = unwrapMoveOptionValue(value)
-  if (unwrappedValue === undefined || unwrappedValue === null) return undefined
+  if (unwrappedValue === undefined) return undefined
 
   if (typeof unwrappedValue === "bigint") return unwrappedValue
   if (typeof unwrappedValue === "number") return BigInt(unwrappedValue)

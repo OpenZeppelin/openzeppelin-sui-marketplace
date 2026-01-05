@@ -410,10 +410,13 @@ const maybeFundAfterRegenesis = async ({
 
 const deriveFundingTarget = async (
   tooling: Tooling
-): Promise<{
-  signerAddress: string
-  signer?: Ed25519Keypair
-} | null> => {
+): Promise<
+  | {
+      signerAddress: string
+      signer?: Ed25519Keypair
+    }
+  | undefined
+> => {
   try {
     return {
       signerAddress: tooling.loadedEd25519KeyPair.toSuiAddress(),
@@ -428,7 +431,7 @@ const deriveFundingTarget = async (
         error instanceof Error ? error.message : String(error)
       }`
     )
-    return null
+    return
   }
 }
 

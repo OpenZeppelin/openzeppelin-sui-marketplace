@@ -23,6 +23,8 @@
     "./utils/formatters": "./src/utils/formatters.ts",
     "./utils/move-values": "./src/utils/move-values.ts",
     "./utils/errors": "./src/utils/errors.ts",
+    "./utils/retry": "./src/utils/retry.ts",
+    "./utils/settled": "./src/utils/settled.ts",
     "./utils/type-name": "./src/utils/type-name.ts",
     "./utils/utility": "./src/utils/utility.ts",
     "./utils/validation": "./src/utils/validation.ts"

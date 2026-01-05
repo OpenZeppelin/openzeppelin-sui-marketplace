@@ -5,10 +5,10 @@
  * The script is read-only and combines results into a human-friendly snapshot.
  */
 import { getShopSnapshot } from "@sui-oracle-market/domain-core/models/shop"
-import { resolveLatestArtifactShopId } from "@sui-oracle-market/domain-node/shop"
-import { logKeyValueBlue } from "@sui-oracle-market/tooling-node/log"
+import { emitJsonOutput } from "@sui-oracle-market/tooling-node/json"
 import { runSuiScript } from "@sui-oracle-market/tooling-node/process"
 import yargs from "yargs"
+import { logListContextWithHeader } from "../../utils/context.ts"
 import {
   logAcceptedCurrencySummary,
   logDiscountTemplateSummary,
@@ -16,19 +16,14 @@ import {
   logItemListingSummary,
   logShopOverview
 } from "../../utils/log-summaries.ts"
+import { resolveShopIdOrLatest } from "../../utils/shop-context.ts"
 
 runSuiScript(
-  async (tooling, cliArguments: { shopId?: string }) => {
-    const shopId = await resolveLatestArtifactShopId(
+  async (tooling, cliArguments: { shopId?: string; json?: boolean }) => {
+    const shopId = await resolveShopIdOrLatest(
       cliArguments.shopId,
       tooling.network.networkName
     )
-
-    logContext({
-      shopId,
-      rpcUrl: tooling.network.url,
-      networkName: tooling.network.networkName
-    })
 
     const {
       shopOverview,
@@ -36,6 +31,28 @@ runSuiScript(
       acceptedCurrencies,
       discountTemplates
     } = await getShopSnapshot(shopId, tooling.suiClient)
+
+    if (
+      emitJsonOutput(
+        {
+          shopOverview,
+          itemListings,
+          acceptedCurrencies,
+          discountTemplates
+        },
+        cliArguments.json
+      )
+    )
+      return
+
+    logListContextWithHeader(
+      {
+        shopId,
+        rpcUrl: tooling.network.url,
+        networkName: tooling.network.networkName
+      },
+      { label: "Shop-snapshot" }
+    )
 
     logShopOverview(shopOverview)
     console.log("")
@@ -66,23 +83,12 @@ runSuiScript(
       alias: "shop-id",
       type: "string",
       description:
-        "Shared Shop object ID; defaults to the latest Shop artifact when available.",
-      demandOption: false
+        "Shared Shop object ID; defaults to the latest Shop artifact when available."
+    })
+    .option("json", {
+      type: "boolean",
+      default: false,
+      description: "Output results as JSON."
     })
     .strict()
 )
-
-const logContext = ({
-  shopId,
-  rpcUrl,
-  networkName
-}: {
-  shopId: string
-  rpcUrl: string
-  networkName: string
-}) => {
-  logKeyValueBlue("Network")(networkName)
-  logKeyValueBlue("RPC")(rpcUrl)
-  logKeyValueBlue("Shop")(shopId)
-  console.log("")
-}

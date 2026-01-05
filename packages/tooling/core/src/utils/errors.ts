@@ -1,5 +1,5 @@
 const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null
+  Boolean(value) && typeof value === "object"
 
 const isPlainObject = (value: object) => {
   const proto = Object.getPrototypeOf(value)

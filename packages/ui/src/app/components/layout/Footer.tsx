@@ -19,14 +19,17 @@ const Footer = () => {
   const explorerUrl = networkVariables[EXPLORER_URL_VARIABLE_NAME]
   const packageId = networkVariables[CONTRACT_PACKAGE_VARIABLE_NAME]
   const currentAccount = useCurrentAccount()
+  const handleFaucetError = (error: Error | null, errorMessage?: string) => {
+    notification.error(error ?? undefined, errorMessage)
+  }
 
   return (
     <footer className="flex w-full flex-col items-center justify-between gap-3 p-3 sm:flex-row sm:items-end">
       <div className="flex flex-row gap-3 lg:w-1/3">
-        {currentAccount != null && (
+        {currentAccount && (
           <>
             <Faucet
-              onError={notification.error}
+              onError={handleFaucetError}
               onSuccess={notification.success}
             />
             <Link

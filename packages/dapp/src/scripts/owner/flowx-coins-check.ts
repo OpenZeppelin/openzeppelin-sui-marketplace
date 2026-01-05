@@ -26,6 +26,7 @@ import {
   parseTypeNameFromString
 } from "@sui-oracle-market/tooling-core/utils/type-name"
 import { SUI_COIN_REGISTRY_ID } from "@sui-oracle-market/tooling-node/constants"
+import { emitJsonOutput } from "@sui-oracle-market/tooling-node/json"
 import { runSuiScript } from "@sui-oracle-market/tooling-node/process"
 
 type FlowxCoinsCheckArguments = {
@@ -191,30 +192,27 @@ runSuiScript(
       (row) => row.registry?.inRegistry && row.pyth?.hasFeed
     )
 
-    if (cliArguments.json) {
-      console.log(
-        JSON.stringify(
-          {
-            network: tooling.network.networkName,
-            flowxCoinsUrl,
-            registryId,
-            quote: quoteSymbol ?? "USD",
-            counts: {
-              flowxCoinsRaw: flowxCoins.length,
-              flowxCoinsParsed: normalizedFlowxCoins.length,
-              flowxUniqueCoinTypes: uniqueFlowxCoinTypes.length,
-              registryEntries: registryEntries.length,
-              eligible: eligible.length
-            },
-            results,
-            eligible
+    if (
+      emitJsonOutput(
+        {
+          network: tooling.network.networkName,
+          flowxCoinsUrl,
+          registryId,
+          quote: quoteSymbol ?? "USD",
+          counts: {
+            flowxCoinsRaw: flowxCoins.length,
+            flowxCoinsParsed: normalizedFlowxCoins.length,
+            flowxUniqueCoinTypes: uniqueFlowxCoinTypes.length,
+            registryEntries: registryEntries.length,
+            eligible: eligible.length
           },
-          null,
-          2
-        )
+          results,
+          eligible
+        },
+        cliArguments.json
       )
+    )
       return
-    }
 
     console.log(`Network: ${tooling.network.networkName}`)
     console.log(`FlowX coins url: ${flowxCoinsUrl}`)

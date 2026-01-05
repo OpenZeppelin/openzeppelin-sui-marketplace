@@ -538,9 +538,7 @@ const groupObjectChanges = (
 /**
  * Normalizes a candidate object ID, returning undefined if invalid.
  */
-const normalizeObjectIdSafe = (
-  candidate?: string | null
-): string | undefined =>
+const normalizeObjectIdSafe = (candidate?: string): string | undefined =>
   candidate
     ? (() => {
         try {
@@ -791,7 +789,7 @@ const pickFreshGasCoin = async (
   client: SuiClient,
   excludeObjectIds: Set<string> = new Set()
 ) => {
-  let cursor: string | null | undefined = undefined
+  let cursor: string | undefined
 
   do {
     const page = await client.getCoins({
@@ -813,7 +811,7 @@ const pickFreshGasCoin = async (
       }
     }
 
-    cursor = page.hasNextPage ? page.nextCursor : undefined
+    cursor = page.hasNextPage ? (page.nextCursor ?? undefined) : undefined
   } while (cursor)
 
   throw new Error(

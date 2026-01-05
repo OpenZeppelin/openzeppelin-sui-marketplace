@@ -70,7 +70,7 @@ const ListingSummarySection = ({
       />
       {shopId ? (
         <CopyableId value={shopId} label="Shop ID" explorerUrl={explorerUrl} />
-      ) : null}
+      ) : undefined}
     </div>
   </ModalSection>
 )
@@ -183,7 +183,7 @@ const RemoveItemModal = ({
   const errorState =
     transactionState.status === "error" ? transactionState : undefined
 
-  if (!open || !listing) return null
+  if (!open || !listing) return <></>
 
   return (
     <ModalFrame onClose={onClose}>

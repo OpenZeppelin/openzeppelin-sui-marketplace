@@ -72,7 +72,7 @@ export const useRemoveDiscountModalState = ({
 }: {
   open: boolean
   shopId?: string
-  template?: DiscountTemplateSummary | null
+  template?: DiscountTemplateSummary
   onDiscountUpdated?: (template?: DiscountTemplateSummary) => void
 }): RemoveDiscountModalState => {
   const currentAccount = useCurrentAccount()
@@ -141,7 +141,7 @@ export const useRemoveDiscountModalState = ({
     const expectedChain = `sui:${network}` as IdentifierString
     const accountChains = currentAccount?.chains ?? []
     const localnetSupported = walletSupportsChain(
-      currentWallet ?? currentAccount,
+      currentWallet ?? currentAccount ?? undefined,
       expectedChain
     )
     const walletFeatureKeys = currentWallet

@@ -13,28 +13,29 @@ import {
   resolveDiscountContext,
   resolvePaymentCoinObjectId
 } from "@sui-oracle-market/domain-core/flows/buy"
-import type { DiscountContext } from "@sui-oracle-market/domain-core/models/discount"
 import {
   getAcceptedCurrencySummary,
   normalizeCoinType,
   requireAcceptedCurrencyByCoinType
 } from "@sui-oracle-market/domain-core/models/currency"
+import type { DiscountContext } from "@sui-oracle-market/domain-core/models/discount"
 import { getItemListingSummary } from "@sui-oracle-market/domain-core/models/item-listing"
-import { findCreatedShopItemIds } from "@sui-oracle-market/domain-core/models/shop-item"
 import type { PriceUpdatePolicy } from "@sui-oracle-market/domain-core/models/pyth"
+import { findCreatedShopItemIds } from "@sui-oracle-market/domain-core/models/shop-item"
 import type { ObjectArtifact } from "@sui-oracle-market/tooling-core/object"
 import {
   deriveRelevantPackageId,
   normalizeIdOrThrow
 } from "@sui-oracle-market/tooling-core/object"
 import { parseOptionalU64 } from "@sui-oracle-market/tooling-core/utils/utility"
+import { emitJsonOutput } from "@sui-oracle-market/tooling-node/json"
 import {
   logKeyValueBlue,
   logKeyValueGreen,
   logKeyValueYellow
 } from "@sui-oracle-market/tooling-node/log"
 import { runSuiScript } from "@sui-oracle-market/tooling-node/process"
-import { resolveLatestArtifactShopId } from "@sui-oracle-market/domain-node/shop"
+import { resolveShopIdOrLatest } from "../../utils/shop-context.ts"
 
 type BuyArguments = {
   shopId?: string
@@ -51,6 +52,9 @@ type BuyArguments = {
   skipPriceUpdate?: boolean
   priceUpdatePolicy?: string
   hermesUrl?: string
+  devInspect?: boolean
+  dryRun?: boolean
+  json?: boolean
 }
 
 runSuiScript(
@@ -64,13 +68,11 @@ runSuiScript(
     const refundTo =
       inputs.refundTo ?? tooling.loadedEd25519KeyPair.toSuiAddress()
 
-    const shopShared = await tooling.getSuiSharedObject({
-      objectId: inputs.shopId,
-      mutable: false
+    const shopShared = await tooling.getImmutableSharedObject({
+      objectId: inputs.shopId
     })
-    const itemListingShared = await tooling.getSuiSharedObject({
-      objectId: inputs.itemListingId,
-      mutable: true
+    const itemListingShared = await tooling.getMutableSharedObject({
+      objectId: inputs.itemListingId
     })
 
     const shopPackageId = deriveRelevantPackageId(shopShared.object.type)
@@ -92,13 +94,11 @@ runSuiScript(
       `AcceptedCurrency ${acceptedCurrencySummary.acceptedCurrencyId} is missing a pyth_object_id.`
     )
 
-    const acceptedCurrencyShared = await tooling.getSuiSharedObject({
-      objectId: acceptedCurrencySummary.acceptedCurrencyId,
-      mutable: false
+    const acceptedCurrencyShared = await tooling.getImmutableSharedObject({
+      objectId: acceptedCurrencySummary.acceptedCurrencyId
     })
-    const pythPriceInfoShared = await tooling.getSuiSharedObject({
-      objectId: pythPriceInfoObjectId,
-      mutable: false
+    const pythPriceInfoShared = await tooling.getImmutableSharedObject({
+      objectId: pythPriceInfoObjectId
     })
 
     const listingSummary = await getItemListingSummary(
@@ -121,20 +121,22 @@ runSuiScript(
       suiClient: tooling.suiClient
     })
 
-    logBuyContext({
-      networkName: tooling.network.networkName,
-      rpcUrl: tooling.network.url,
-      packageId: shopPackageId,
-      shopId: inputs.shopId,
-      listingId: inputs.itemListingId,
-      listingName: listingSummary.name,
-      itemType: listingSummary.itemType,
-      coinType: inputs.coinType,
-      acceptedCurrencyId: acceptedCurrencySummary.acceptedCurrencyId,
-      pythObjectId: pythPriceInfoObjectId,
-      paymentCoinObjectId,
-      discountContext
-    })
+    if (!cliArguments.json) {
+      logBuyContext({
+        networkName: tooling.network.networkName,
+        rpcUrl: tooling.network.url,
+        packageId: shopPackageId,
+        shopId: inputs.shopId,
+        listingId: inputs.itemListingId,
+        listingName: listingSummary.name,
+        itemType: listingSummary.itemType,
+        coinType: inputs.coinType,
+        acceptedCurrencyId: acceptedCurrencySummary.acceptedCurrencyId,
+        pythObjectId: pythPriceInfoObjectId,
+        paymentCoinObjectId,
+        discountContext
+      })
+    }
 
     const buyTransaction = await buildBuyTransaction(
       {
@@ -158,18 +160,42 @@ runSuiScript(
         pythConfigOverride: tooling.suiConfig.network.pyth,
         networkName: tooling.suiConfig.network.networkName,
         signerAddress: tooling.loadedEd25519KeyPair.toSuiAddress(),
-        onWarning: (message) => logKeyValueYellow("Oracle")(message)
+        onWarning: cliArguments.json
+          ? undefined
+          : (message) => logKeyValueYellow("Oracle")(message)
       },
       tooling.suiClient
     )
 
+    const { execution, summary } = await tooling.executeTransactionWithSummary({
+      transaction: buyTransaction,
+      signer: tooling.loadedEd25519KeyPair,
+      summaryLabel: "buy",
+      devInspect: cliArguments.devInspect,
+      dryRun: cliArguments.dryRun
+    })
+
+    if (!execution) return
+
     const {
       transactionResult,
       objectArtifacts: { created }
-    } = await tooling.signAndExecute({
-      transaction: buyTransaction,
-      signer: tooling.loadedEd25519KeyPair
-    })
+    } = execution
+
+    const createdItemIds = findCreatedShopItemIds(created)
+    if (
+      emitJsonOutput(
+        {
+          digest: transactionResult.digest,
+          mintTo,
+          refundTo,
+          createdItemIds,
+          transactionSummary: summary
+        },
+        cliArguments.json
+      )
+    )
+      return
 
     logBuyResult({
       digest: transactionResult.digest,
@@ -183,8 +209,7 @@ runSuiScript(
       alias: "shop-id",
       type: "string",
       description:
-        "Shared Shop object ID; defaults to the latest Shop artifact when available.",
-      demandOption: false
+        "Shared Shop object ID; defaults to the latest Shop artifact when available."
     })
     .option("itemListingId", {
       alias: ["item-listing-id", "listing-id"],
@@ -268,6 +293,23 @@ runSuiScript(
       description:
         "Optional Hermes endpoint override (defaults to hermes-beta on testnet and hermes on mainnet)."
     })
+    .option("devInspect", {
+      alias: ["dev-inspect", "debug"],
+      type: "boolean",
+      default: false,
+      description: "Run a dev-inspect and log VM error details."
+    })
+    .option("dryRun", {
+      alias: ["dry-run"],
+      type: "boolean",
+      default: false,
+      description: "Run dev-inspect and exit without executing the transaction."
+    })
+    .option("json", {
+      type: "boolean",
+      default: false,
+      description: "Output results as JSON."
+    })
     .strict()
 )
 
@@ -275,10 +317,7 @@ const normalizeInputs = async (
   cliArguments: BuyArguments,
   networkName: string
 ) => {
-  const shopId = await resolveLatestArtifactShopId(
-    cliArguments.shopId,
-    networkName
-  )
+  const shopId = await resolveShopIdOrLatest(cliArguments.shopId, networkName)
 
   const coinType = normalizeCoinType(cliArguments.coinType)
 

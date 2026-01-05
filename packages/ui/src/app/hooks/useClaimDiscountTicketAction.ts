@@ -94,21 +94,21 @@ export const useClaimDiscountTicketAction = ({
       if (!walletAddress) {
         const error = "Connect a wallet before claiming a discount."
         setClaimState({ status: "error", error })
-        notification.error(null, error)
+        notification.error(undefined, error)
         return
       }
 
       if (!shopId) {
         const error = "A shop id is required to claim this discount."
         setClaimState({ status: "error", error })
-        notification.error(null, error)
+        notification.error(undefined, error)
         return
       }
 
       if (template.status !== "active") {
         const error = "This discount template is not active."
         setClaimState({ status: "error", error })
-        notification.error(null, error)
+        notification.error(undefined, error)
         return
       }
 
@@ -119,14 +119,14 @@ export const useClaimDiscountTicketAction = ({
       if (!isLocalnet && chainMismatch) {
         const error = `Wallet chain mismatch. Switch your wallet to ${network}.`
         setClaimState({ status: "error", error })
-        notification.error(null, error)
+        notification.error(undefined, error)
         return
       }
 
       if (!currentWallet) {
         const error = "No wallet connected. Connect a wallet to continue."
         setClaimState({ status: "error", error })
-        notification.error(null, error)
+        notification.error(undefined, error)
         return
       }
 
@@ -208,7 +208,7 @@ export const useClaimDiscountTicketAction = ({
         onClaimed?.(claimedTicket)
       } catch (error) {
         const formattedError = formatErrorMessage(error)
-        const errorObject = error instanceof Error ? error : null
+        const errorObject = error instanceof Error ? error : undefined
         setClaimState({ status: "error", error: formattedError })
         notification.txError(errorObject, formattedError, toastId)
       }

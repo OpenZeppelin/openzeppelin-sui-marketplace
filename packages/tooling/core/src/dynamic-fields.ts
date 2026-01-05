@@ -32,7 +32,7 @@ export const getAllDynamicFields = async (
   { suiClient }: ToolingCoreContext
 ): Promise<DynamicFieldInfo[]> => {
   const dynamicFields: DynamicFieldInfo[] = []
-  let cursor: string | null | undefined
+  let cursor: string | undefined
 
   do {
     const page = await suiClient.getDynamicFields({
@@ -41,7 +41,7 @@ export const getAllDynamicFields = async (
     })
 
     dynamicFields.push(...page.data)
-    cursor = page.hasNextPage ? page.nextCursor : undefined
+    cursor = page.hasNextPage ? (page.nextCursor ?? undefined) : undefined
   } while (cursor)
 
   return objectTypeFilter
@@ -88,7 +88,7 @@ export const getAllDynamicFieldObjects = async (
  * Narrowing helper for plain object records.
  */
 const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null
+  Boolean(value) && typeof value === "object"
 
 type DynamicFieldValueIdContent = {
   fields: {

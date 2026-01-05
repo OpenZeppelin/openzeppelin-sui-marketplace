@@ -95,7 +95,7 @@ export const supportedNetworks = () => {
 }
 
 export const isNetworkSupported = (network: ENetwork | undefined) => {
-  return network != null && supportedNetworks().includes(network)
+  return network !== undefined && supportedNetworks().includes(network)
 }
 
 export const fullFunctionName = (

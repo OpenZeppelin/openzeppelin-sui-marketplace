@@ -113,7 +113,7 @@ const ShopSelection = ({
                 >
                   Clear
                 </Button>
-              ) : null}
+              ) : undefined}
             </div>
           </div>
 
@@ -163,7 +163,7 @@ const ShopSelection = ({
                         <div className="text-xs uppercase tracking-[0.12em] text-slate-400 dark:text-slate-200/50">
                           Created {formatTimestamp(shop.createdAtMs)}
                         </div>
-                      ) : null}
+                      ) : undefined}
                     </div>
                     <Button
                       variant="primary"

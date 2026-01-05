@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest"
-import { captureConsole } from "../../../tests-integration/helpers/console.ts"
+import { captureConsole } from "@sui-oracle-market/tooling-node/testing/observability"
 
 vi.mock("chalk", () => {
   const identity = (value: unknown) => String(value)

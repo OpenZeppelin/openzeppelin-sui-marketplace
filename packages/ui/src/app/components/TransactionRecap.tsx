@@ -42,20 +42,20 @@ const TransactionRecap = ({
             </div>
             {error ? (
               <div className="mt-2 text-xs text-rose-500">{error}</div>
-            ) : null}
+            ) : undefined}
           </div>
           <div className="rounded-xl border border-slate-200/70 bg-white/80 p-3 dark:border-slate-50/15 dark:bg-slate-950/60">
             <div className="text-[0.6rem] uppercase tracking-[0.18em] text-slate-500 dark:text-slate-200/60">
               Timestamp
             </div>
             <div className="mt-1 text-sm font-semibold text-sds-dark dark:text-sds-light">
-              {formatTimestamp(transactionBlock.timestampMs)}
+              {formatTimestamp(transactionBlock.timestampMs || undefined)}
             </div>
             {transactionBlock.checkpoint ? (
               <div className="mt-1 text-[0.65rem] uppercase tracking-[0.18em] text-slate-500 dark:text-slate-200/60">
                 Checkpoint {transactionBlock.checkpoint}
               </div>
-            ) : null}
+            ) : undefined}
           </div>
         </div>
 
@@ -73,7 +73,7 @@ const TransactionRecap = ({
             >
               View on explorer
             </a>
-          ) : null}
+          ) : undefined}
         </div>
 
         <div className="rounded-xl border border-slate-200/70 bg-white/80 p-3 dark:border-slate-50/15 dark:bg-slate-950/60">
@@ -110,7 +110,7 @@ const TransactionRecap = ({
                             ? ` +${item.types.length - 3} more`
                             : ""}
                         </div>
-                      ) : null}
+                      ) : undefined}
                     </div>
                   )
                 })}

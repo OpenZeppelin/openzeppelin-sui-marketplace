@@ -8,13 +8,17 @@ import yargs from "yargs"
 
 import { getShopOverview } from "@sui-oracle-market/domain-core/models/shop"
 import { buildCreateShopTransaction } from "@sui-oracle-market/domain-core/ptb/shop"
+import { resolveShopPackageId } from "@sui-oracle-market/domain-node/shop"
+import { emitJsonOutput } from "@sui-oracle-market/tooling-node/json"
 import { runSuiScript } from "@sui-oracle-market/tooling-node/process"
 import { logShopOverview } from "../../utils/log-summaries.ts"
-import { resolveShopPackageId } from "@sui-oracle-market/domain-node/shop"
 
 type CreateShopArguments = {
   name?: string
   shopPackageId?: string
+  devInspect?: boolean
+  dryRun?: boolean
+  json?: boolean
 }
 
 runSuiScript(
@@ -30,12 +34,19 @@ runSuiScript(
       shopName
     })
 
+    const { execution, summary } = await tooling.executeTransactionWithSummary({
+      transaction: createShopTransaction,
+      signer: tooling.loadedEd25519KeyPair,
+      summaryLabel: "create-shop",
+      devInspect: cliArguments.devInspect,
+      dryRun: cliArguments.dryRun
+    })
+
+    if (!execution) return
+
     const {
       objectArtifacts: { created: createdObjects }
-    } = await tooling.signAndExecute({
-      transaction: createShopTransaction,
-      signer: tooling.loadedEd25519KeyPair
-    })
+    } = execution
 
     const createdShop = createdObjects.find((artifact) =>
       artifact.objectType.endsWith("::shop::Shop")
@@ -49,6 +60,18 @@ runSuiScript(
       createdShop.objectId,
       tooling.suiClient
     )
+    if (
+      emitJsonOutput(
+        {
+          shopOverview,
+          digest: createdShop.digest,
+          transactionSummary: summary
+        },
+        cliArguments.json
+      )
+    )
+      return
+
     logShopOverview(shopOverview)
   },
   yargs()
@@ -65,6 +88,23 @@ runSuiScript(
       description:
         "Package ID for the sui_oracle_market Move package; inferred from the latest publish entry in deployments/deployment.<network>.json when omitted.",
       demandOption: false
+    })
+    .option("devInspect", {
+      alias: ["dev-inspect", "debug"],
+      type: "boolean",
+      default: false,
+      description: "Run a dev-inspect and log VM error details."
+    })
+    .option("dryRun", {
+      alias: ["dry-run"],
+      type: "boolean",
+      default: false,
+      description: "Run dev-inspect and exit without executing the transaction."
+    })
+    .option("json", {
+      type: "boolean",
+      default: false,
+      description: "Output results as JSON."
     })
     .strict()
 )

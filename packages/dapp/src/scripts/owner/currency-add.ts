@@ -27,13 +27,11 @@ import {
   SUI_COIN_REGISTRY_ID
 } from "@sui-oracle-market/tooling-node/constants"
 import type { Tooling } from "@sui-oracle-market/tooling-node/factory"
-import {
-  logKeyValueGreen,
-  logKeyValueYellow
-} from "@sui-oracle-market/tooling-node/log"
+import { emitJsonOutput } from "@sui-oracle-market/tooling-node/json"
+import { logKeyValueGreen } from "@sui-oracle-market/tooling-node/log"
 import { runSuiScript } from "@sui-oracle-market/tooling-node/process"
 import { logAcceptedCurrencySummary } from "../../utils/log-summaries.ts"
-import { resolveLatestShopIdentifiers } from "@sui-oracle-market/domain-node/shop"
+import { resolveOwnerShopIdentifiers } from "../../utils/shop-context.ts"
 
 runSuiScript(
   async (tooling, cliArguments) => {
@@ -48,6 +46,18 @@ runSuiScript(
       suiClient: tooling.suiClient
     })
     if (existingAcceptedCurrency) {
+      if (
+        emitJsonOutput(
+          {
+            status: "already-registered",
+            coinType: inputs.coinType,
+            acceptedCurrency: existingAcceptedCurrency
+          },
+          cliArguments.json
+        )
+      )
+        return
+
       logExistingAcceptedCurrency({
         coinType: inputs.coinType,
         existingAcceptedCurrency
@@ -55,17 +65,14 @@ runSuiScript(
       return
     }
 
-    const shopSharedObject = await tooling.getSuiSharedObject({
-      objectId: inputs.shopId,
-      mutable: true
+    const shopSharedObject = await tooling.getMutableSharedObject({
+      objectId: inputs.shopId
     })
-    const currencySharedObject = await tooling.getSuiSharedObject({
-      objectId: inputs.currencyId,
-      mutable: false
+    const currencySharedObject = await tooling.getImmutableSharedObject({
+      objectId: inputs.currencyId
     })
-    const priceInfoSharedObject = await tooling.getSuiSharedObject({
-      objectId: inputs.priceInfoObjectId,
-      mutable: false
+    const priceInfoSharedObject = await tooling.getImmutableSharedObject({
+      objectId: inputs.priceInfoObjectId
     })
 
     const gasBudget = tooling.network.gasBudget ?? DEFAULT_TX_GAS_BUDGET
@@ -85,36 +92,19 @@ runSuiScript(
       gasBudget
     })
 
-    if (cliArguments.debug) {
-      const devInspectResult =
-        await tooling.suiClient.devInspectTransactionBlock({
-          sender: tooling.loadedEd25519KeyPair.toSuiAddress(),
-          transactionBlock: addCurrencyTransaction
-        })
-      const devInspectError =
-        devInspectResult.effects?.status?.error ??
-        devInspectResult.error ??
-        "ok"
-      logKeyValueYellow("dev-inspect")(devInspectError)
-      console.log(
-        JSON.stringify(
-          {
-            error: devInspectResult.error,
-            status: devInspectResult.effects?.status,
-            results: devInspectResult.results
-          },
-          null,
-          2
-        )
-      )
-    }
+    const { execution, summary } = await tooling.executeTransactionWithSummary({
+      transaction: addCurrencyTransaction,
+      signer: tooling.loadedEd25519KeyPair,
+      summaryLabel: "add-accepted-currency",
+      devInspect: cliArguments.devInspect,
+      dryRun: cliArguments.dryRun
+    })
+
+    if (!execution) return
 
     const {
       objectArtifacts: { created }
-    } = await tooling.signAndExecute({
-      transaction: addCurrencyTransaction,
-      signer: tooling.loadedEd25519KeyPair
-    })
+    } = execution
 
     const createdAcceptedCurrency = findAcceptedCurrency(created)
     const acceptedCurrencyId =
@@ -131,6 +121,19 @@ runSuiScript(
       tooling.suiClient
     )
 
+    if (
+      emitJsonOutput(
+        {
+          acceptedCurrency: acceptedCurrencySummary,
+          feedId: cliArguments.feedId,
+          digest: createdAcceptedCurrency?.digest,
+          transactionSummary: summary
+        },
+        cliArguments.json
+      )
+    )
+      return
+
     logAcceptedCurrencySummary(acceptedCurrencySummary)
     logKeyValueGreen("feed id")(cliArguments.feedId)
     if (createdAcceptedCurrency?.digest)
@@ -141,22 +144,19 @@ runSuiScript(
       alias: "shop-package-id",
       type: "string",
       description:
-        "Package ID for the sui_oracle_market Move package. If omitted, the latest Shop artifact will be used.",
-      demandOption: false
+        "Package ID for the sui_oracle_market Move package; defaults to the latest artifact when omitted."
     })
     .option("shopId", {
       alias: "shop-id",
       type: "string",
       description:
-        "Shared Shop object ID; defaults to the latest Shop artifact when available.",
-      demandOption: false
+        "Shared Shop object ID; defaults to the latest Shop artifact when available."
     })
     .option("ownerCapId", {
       alias: ["owner-cap-id", "owner-cap"],
       type: "string",
       description:
-        "ShopOwnerCap object ID authorizing the mutation; defaults to the latest artifact when available.",
-      demandOption: false
+        "ShopOwnerCap object ID authorizing the mutation; defaults to the latest artifact when omitted."
     })
     .option("coinType", {
       alias: ["coin-type", "type"],
@@ -203,10 +203,22 @@ runSuiScript(
       description:
         "Optional guardrail for maximum attestation lag in seconds. Leave empty to use the module default."
     })
-    .option("debug", {
+    .option("devInspect", {
+      alias: ["dev-inspect", "debug"],
       type: "boolean",
       default: false,
       description: "Run a dev-inspect and log VM error details."
+    })
+    .option("dryRun", {
+      alias: ["dry-run"],
+      type: "boolean",
+      default: false,
+      description: "Run dev-inspect and exit without executing the transaction."
+    })
+    .option("json", {
+      type: "boolean",
+      default: false,
+      description: "Output results as JSON."
     })
     .strict()
 )
@@ -223,19 +235,19 @@ const normalizeInputs = async (
     maxPriceAgeSecsCap?: string
     maxConfidenceRatioBpsCap?: string
     maxPriceStatusLagSecsCap?: string
-    debug?: boolean
+    devInspect?: boolean
+    dryRun?: boolean
+    json?: boolean
   },
   networkName: string,
   tooling: Pick<Tooling, "resolveCurrencyObjectId">
 ) => {
-  const { packageId, shopId, ownerCapId } = await resolveLatestShopIdentifiers(
-    {
-      packageId: cliArguments.shopPackageId,
-      shopId: cliArguments.shopId,
-      ownerCapId: cliArguments.ownerCapId
-    },
-    networkName
-  )
+  const { packageId, shopId, ownerCapId } = await resolveOwnerShopIdentifiers({
+    networkName,
+    shopPackageId: cliArguments.shopPackageId,
+    shopId: cliArguments.shopId,
+    ownerCapId: cliArguments.ownerCapId
+  })
 
   const coinType = normalizeCoinType(cliArguments.coinType)
 

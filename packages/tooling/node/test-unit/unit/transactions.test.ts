@@ -39,7 +39,7 @@ describe("signAndExecute", () => {
           }
         ],
         hasNextPage: false,
-        nextCursor: null
+        nextCursor: undefined
       }),
       signAndExecuteTransaction: vi
         .fn()
@@ -72,7 +72,7 @@ describe("signAndExecute", () => {
           }
         ],
         hasNextPage: false,
-        nextCursor: null
+        nextCursor: undefined
       }),
       signAndExecuteTransaction: vi.fn().mockRejectedValue(new Error("boom"))
     })

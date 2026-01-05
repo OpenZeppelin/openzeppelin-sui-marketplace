@@ -2,13 +2,13 @@ import type { ExecException, ExecFileOptions } from "node:child_process"
 import { vi } from "vitest"
 
 type ExecFileCallback = (
-  error: ExecException | null,
+  error: ExecException | undefined,
   stdout?: string,
   stderr?: string
 ) => void
 
 type ExecFileResult = {
-  error?: ExecException | null
+  error?: ExecException
   stdout?: string
   stderr?: string
 }
@@ -33,12 +33,12 @@ const execFile = vi.hoisted(() => {
       | undefined
 
     const next = execFileQueue.shift() ?? {
-      error: null,
+      error: undefined,
       stdout: "",
       stderr: ""
     }
     if (callback) {
-      callback(next.error ?? null, next.stdout ?? "", next.stderr ?? "")
+      callback(next.error, next.stdout ?? "", next.stderr ?? "")
     }
 
     return undefined
@@ -49,7 +49,7 @@ const execFile = vi.hoisted(() => {
     ..._args: unknown[]
   ): Promise<{ stdout: string; stderr: string }> => {
     const next = execFileQueue.shift() ?? {
-      error: null,
+      error: undefined,
       stdout: "",
       stderr: ""
     }

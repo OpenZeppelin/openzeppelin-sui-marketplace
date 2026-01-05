@@ -18,15 +18,16 @@ import {
   type DiscountRuleKindLabel
 } from "@sui-oracle-market/domain-core/models/discount"
 import { buildCreateDiscountTemplateTransaction } from "@sui-oracle-market/domain-core/ptb/discount-template"
-import { resolveLatestShopIdentifiers } from "@sui-oracle-market/domain-node/shop"
 import { normalizeOptionalId } from "@sui-oracle-market/tooling-core/object"
 import {
   parseNonNegativeU64,
   parseOptionalU64
 } from "@sui-oracle-market/tooling-core/utils/utility"
+import { emitJsonOutput } from "@sui-oracle-market/tooling-node/json"
 import { logKeyValueGreen } from "@sui-oracle-market/tooling-node/log"
 import { runSuiScript } from "@sui-oracle-market/tooling-node/process"
 import { logDiscountTemplateSummary } from "../../utils/log-summaries.ts"
+import { resolveOwnerShopIdentifiers } from "../../utils/shop-context.ts"
 
 runSuiScript(
   async (tooling, cliArguments) => {
@@ -35,9 +36,8 @@ runSuiScript(
       tooling.network.networkName
     )
 
-    const shopSharedObject = await tooling.getSuiSharedObject({
-      objectId: inputs.shopId,
-      mutable: true
+    const shopSharedObject = await tooling.getMutableSharedObject({
+      objectId: inputs.shopId
     })
 
     const createDiscountTemplateTransaction =
@@ -53,12 +53,19 @@ runSuiScript(
         ownerCapId: inputs.ownerCapId
       })
 
+    const { execution, summary } = await tooling.executeTransactionWithSummary({
+      transaction: createDiscountTemplateTransaction,
+      signer: tooling.loadedEd25519KeyPair,
+      summaryLabel: "create-discount-template",
+      devInspect: cliArguments.devInspect,
+      dryRun: cliArguments.dryRun
+    })
+
+    if (!execution) return
+
     const {
       objectArtifacts: { created: createdObjects }
-    } = await tooling.signAndExecute({
-      transaction: createDiscountTemplateTransaction,
-      signer: tooling.loadedEd25519KeyPair
-    })
+    } = execution
 
     const createdDiscountTemplate = createdObjects.find((artifact) =>
       artifact.objectType.endsWith(DISCOUNT_TEMPLATE_TYPE_FRAGMENT)
@@ -75,6 +82,18 @@ runSuiScript(
       discountTemplateId,
       tooling.suiClient
     )
+
+    if (
+      emitJsonOutput(
+        {
+          discountTemplate: discountTemplateSummary,
+          digest: createdDiscountTemplate.digest,
+          transactionSummary: summary
+        },
+        cliArguments.json
+      )
+    )
+      return
 
     logDiscountTemplateSummary(discountTemplateSummary)
     if (createdDiscountTemplate.digest)
@@ -124,25 +143,42 @@ runSuiScript(
       alias: "shop-package-id",
       type: "string",
       description:
-        "Package ID for the sui_oracle_market Move package; inferred from artifacts if omitted."
+        "Package ID for the sui_oracle_market Move package; defaults to the latest artifact when omitted."
     })
     .option("shopId", {
       alias: "shop-id",
       type: "string",
       description:
-        "Shared Shop object ID; defaults to the latest Shop artifact if available."
+        "Shared Shop object ID; defaults to the latest Shop artifact when available."
     })
     .option("ownerCapId", {
       alias: ["owner-cap-id", "owner-cap"],
       type: "string",
       description:
-        "ShopOwnerCap object ID that authorizes template creation; defaults to the latest artifact when omitted."
+        "ShopOwnerCap object ID authorizing the mutation; defaults to the latest artifact when omitted."
     })
     .option("publisherId", {
       alias: "publisher-id",
       type: "string",
       description:
         "Optional Publisher object ID for artifact metadata; resolved from existing artifacts when omitted."
+    })
+    .option("devInspect", {
+      alias: ["dev-inspect", "debug"],
+      type: "boolean",
+      default: false,
+      description: "Run a dev-inspect and log VM error details."
+    })
+    .option("dryRun", {
+      alias: ["dry-run"],
+      type: "boolean",
+      default: false,
+      description: "Run dev-inspect and exit without executing the transaction."
+    })
+    .option("json", {
+      type: "boolean",
+      default: false,
+      description: "Output results as JSON."
     })
     .strict()
 )
@@ -162,14 +198,12 @@ const normalizeInputs = async (
   },
   networkName: string
 ) => {
-  const { packageId, shopId, ownerCapId } = await resolveLatestShopIdentifiers(
-    {
-      packageId: cliArguments.shopPackageId,
-      shopId: cliArguments.shopId,
-      ownerCapId: cliArguments.ownerCapId
-    },
-    networkName
-  )
+  const { packageId, shopId, ownerCapId } = await resolveOwnerShopIdentifiers({
+    networkName,
+    shopPackageId: cliArguments.shopPackageId,
+    shopId: cliArguments.shopId,
+    ownerCapId: cliArguments.ownerCapId
+  })
 
   const ruleKind = parseDiscountRuleKind(cliArguments.ruleKind)
   const startsAt = parseNonNegativeU64(

@@ -63,7 +63,7 @@ export const useRemoveItemModalState = ({
 }: {
   open: boolean
   shopId?: string
-  listing?: ItemListingSummary | null
+  listing?: ItemListingSummary
   onListingRemoved?: (listingId?: string) => void
 }): RemoveItemModalState => {
   const currentAccount = useCurrentAccount()
@@ -124,7 +124,7 @@ export const useRemoveItemModalState = ({
     const expectedChain = `sui:${network}` as IdentifierString
     const accountChains = currentAccount?.chains ?? []
     const localnetSupported = walletSupportsChain(
-      currentWallet ?? currentAccount,
+      currentWallet ?? currentAccount ?? undefined,
       expectedChain
     )
     const walletFeatureKeys = currentWallet

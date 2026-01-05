@@ -10,18 +10,18 @@ const reportLoading = (message: Renderable) => {
 }
 
 const reportError = (
-  error: Error | null,
-  userFriendlyMessage?: string | null,
+  error?: Error,
+  userFriendlyMessage?: string,
   id?: string
 ) => {
-  if (error != null) {
+  if (error) {
     console.error(error)
   }
 
   const message =
-    userFriendlyMessage || error?.message || "An error has occurred"
+    userFriendlyMessage ?? error?.message ?? "An error has occurred"
 
-  if (id == null) {
+  if (id === undefined) {
     id = Date.now().toString()
   }
 
@@ -35,7 +35,7 @@ const reportError = (
 }
 
 const reportSuccess = (message: Renderable, id?: string) => {
-  if (id == null) {
+  if (id === undefined) {
     id = Date.now().toString()
   }
 
@@ -53,8 +53,8 @@ const reportTxLoading = () => {
 }
 
 const reportTxError = (
-  error: Error | null,
-  userFriendlyMessage?: string | null,
+  error?: Error,
+  userFriendlyMessage?: string,
   id?: string
 ) => {
   return reportError(error, userFriendlyMessage, id)

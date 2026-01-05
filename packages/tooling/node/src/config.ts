@@ -65,6 +65,14 @@ const DEFAULT_CONFIG_FILENAMES = [
   "sui.config.mjs"
 ]
 
+const resolveConfigPathOverride = () =>
+  process.env.SUI_CONFIG_PATH?.trim() || undefined
+
+const resolveRpcUrlOverride = () =>
+  process.env.SUI_RPC_URL?.trim() ||
+  process.env.SUI_NETWORK_URL?.trim() ||
+  undefined
+
 /**
  * Resolves tooling paths relative to the workspace, with sensible defaults.
  */
@@ -90,20 +98,34 @@ const withDefault = (
   networkName: string,
   networkConfig?: Partial<SuiNetworkConfig>
 ): SuiNetworkConfig =>
-  mergeDeepObjects(
-    {
-      url: resolveRpcUrl(networkName),
+  (() => {
+    const rpcUrlOverride = resolveRpcUrlOverride()
+    const resolvedUrl = resolveRpcUrl(
       networkName,
-      account: {
-        keystorePath: process.env.SUI_KEYSTORE_PATH || DEFAULT_KEYSTORE_PATH,
-        accountIndex: Number(process.env.SUI_ACCOUNT_INDEX ?? 0),
-        accountAddress: process.env.SUI_ACCOUNT_ADDRESS,
-        accountPrivateKey: process.env.SUI_ACCOUNT_PRIVATE_KEY,
-        accountMnemonic: process.env.SUI_ACCOUNT_MNEMONIC
-      }
-    },
-    networkConfig || {}
-  )
+      rpcUrlOverride ?? networkConfig?.url
+    )
+    const resolvedConfig = mergeDeepObjects(
+      {
+        url: resolvedUrl,
+        networkName,
+        account: {
+          keystorePath: process.env.SUI_KEYSTORE_PATH || DEFAULT_KEYSTORE_PATH,
+          accountIndex: Number(process.env.SUI_ACCOUNT_INDEX ?? 0),
+          accountAddress: process.env.SUI_ACCOUNT_ADDRESS,
+          accountPrivateKey: process.env.SUI_ACCOUNT_PRIVATE_KEY,
+          accountMnemonic: process.env.SUI_ACCOUNT_MNEMONIC
+        }
+      },
+      networkConfig || {}
+    )
+
+    if (!rpcUrlOverride) return resolvedConfig
+
+    return {
+      ...resolvedConfig,
+      url: resolvedUrl
+    }
+  })()
 
 /**
  * Resolves user config into a fully-populated config for a specific network.
@@ -131,6 +153,17 @@ const findConfigPath = () =>
     path.join(process.cwd(), filename)
   ).find((candidate) => existsSync(candidate))
 
+const resolveConfigPath = () => {
+  const overridePath = resolveConfigPathOverride()
+  return overridePath ? path.resolve(overridePath) : findConfigPath()
+}
+
+const ensureConfigPathExists = (configPath: string) => {
+  if (!existsSync(configPath)) {
+    throw new Error(`Sui config not found at ${configPath}.`)
+  }
+}
+
 /**
  * Helper for authoring typed Sui configs (similar to defineConfig in other tools).
  */
@@ -144,10 +177,12 @@ export const defineSuiConfig = (
  * produce a fully resolved object so scripts can run non-interactively across networks.
  */
 export const loadSuiConfig = async (): Promise<SuiResolvedConfig> => {
-  const configPath = findConfigPath()
+  const configPath = resolveConfigPath()
   if (!configPath) {
     return resolveConfig({})
   }
+
+  ensureConfigPathExists(configPath)
 
   try {
     const importedModule = await import(pathToFileURL(configPath).href)

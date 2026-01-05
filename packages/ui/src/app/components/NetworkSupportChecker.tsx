@@ -25,7 +25,7 @@ const NetworkSupportChecker = () => {
     [configuredNetworks, walletNetworkType]
   )
 
-  if (currentAccount == null || configuredNetworks.length === 0) {
+  if (!currentAccount || configuredNetworks.length === 0) {
     return <></>
   }
 

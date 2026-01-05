@@ -1,0 +1,72 @@
+import { readFile } from "node:fs/promises"
+import path from "node:path"
+import { afterAll, beforeAll, describe, expect, it } from "vitest"
+
+import { pickRootNonDependencyArtifact } from "@sui-oracle-market/tooling-node/artifacts"
+import { createSuiLocalnetTestEnv } from "@sui-oracle-market/tooling-node/testing/env"
+import {
+  createSuiScriptRunner,
+  parseJsonFromScriptOutput
+} from "@sui-oracle-market/tooling-node/testing/scripts"
+
+const keepTemp = process.env.SUI_IT_KEEP_TEMP === "1"
+const withFaucet = process.env.SUI_IT_WITH_FAUCET !== "0"
+const testEnv = createSuiLocalnetTestEnv({
+  mode: "suite",
+  keepTemp,
+  withFaucet
+})
+
+describe("script runner", () => {
+  beforeAll(async () => {
+    await testEnv.startSuite("script-runner")
+  })
+
+  afterAll(async () => {
+    await testEnv.stopSuite()
+  })
+
+  it("runs owner shop-create script on localnet", async () => {
+    await testEnv.withTestContext("owner-shop-create", async (context) => {
+      const publisher = context.createAccount("publisher")
+      await context.fundAccount(publisher, { minimumCoinObjects: 2 })
+
+      const artifacts = await context.publishPackage(
+        "oracle-market",
+        publisher,
+        { withUnpublishedDependencies: true }
+      )
+      const rootArtifact = pickRootNonDependencyArtifact(artifacts)
+
+      const scriptRunner = createSuiScriptRunner(context)
+      const result = await scriptRunner.runOwnerScript("shop-create", {
+        account: publisher,
+        args: {
+          json: true,
+          shopPackageId: rootArtifact.packageId,
+          name: "Script Shop"
+        }
+      })
+
+      expect(result.exitCode).toBe(0)
+      const parsed = parseJsonFromScriptOutput<{
+        shopOverview?: { shopId?: string }
+      }>(result.stdout, "shop-create output")
+      expect(parsed.shopOverview?.shopId).toBeTruthy()
+
+      const objectsPath = path.join(
+        context.artifactsDir,
+        "objects.localnet.json"
+      )
+      const objectsContents = await readFile(objectsPath, "utf8")
+      const objects = JSON.parse(objectsContents) as Array<{
+        objectType?: string
+      }>
+
+      const hasShopObject = objects.some((entry) =>
+        entry.objectType?.endsWith("::shop::Shop")
+      )
+      expect(hasShopObject).toBe(true)
+    })
+  })
+})

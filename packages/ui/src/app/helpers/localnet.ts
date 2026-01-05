@@ -9,7 +9,7 @@ import {
 import type { WalletAccount } from "@mysten/wallet-standard"
 import { LOCALNET_RPC_URL } from "../config/network"
 
-let localnetClient: SuiClient | null = null
+let localnetClient: SuiClient | undefined
 
 export const getLocalnetClient = () => {
   if (!isLocalRpc(LOCALNET_RPC_URL)) {

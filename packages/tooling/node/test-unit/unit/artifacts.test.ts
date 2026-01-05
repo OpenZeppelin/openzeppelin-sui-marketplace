@@ -136,12 +136,12 @@ describe("artifact path helpers", () => {
         await writeFileTree(dir, {
           [path.relative(dir, objectArtifactPath)]: JSON.stringify(
             objectArtifacts,
-            null,
+            undefined,
             2
           ),
           [path.relative(dir, deploymentArtifactPath)]: JSON.stringify(
             deploymentArtifacts,
-            null,
+            undefined,
             2
           )
         })
@@ -190,7 +190,7 @@ describe("resolvePublisherCapIdFromObjectArtifacts", () => {
         await writeFileTree(dir, {
           [path.relative(dir, objectArtifactPath)]: JSON.stringify(
             objectArtifacts,
-            null,
+            undefined,
             2
           )
         })

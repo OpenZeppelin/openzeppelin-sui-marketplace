@@ -55,7 +55,7 @@ const ShopSummarySection = ({
           <div className="mt-2">
             <CopyableId value={shopId} label="Shop" explorerUrl={explorerUrl} />
           </div>
-        ) : null}
+        ) : undefined}
       </div>
       <div className="rounded-xl border border-slate-200/70 bg-white/80 p-3 sm:col-span-2 dark:border-slate-50/15 dark:bg-slate-950/60">
         <div className="text-[0.6rem] uppercase tracking-[0.18em] text-slate-500 dark:text-slate-200/60">
@@ -72,7 +72,7 @@ const ShopSummarySection = ({
               explorerUrl={explorerUrl}
             />
           </div>
-        ) : null}
+        ) : undefined}
       </div>
     </div>
   </ModalSection>
@@ -183,7 +183,7 @@ const CreateShopModal = ({
   const errorState =
     transactionState.status === "error" ? transactionState : undefined
 
-  if (!open) return null
+  if (!open) return <></>
 
   return (
     <ModalFrame onClose={onClose}>
@@ -220,7 +220,7 @@ const CreateShopModal = ({
                   label="Package"
                   explorerUrl={explorerUrl}
                 />
-              ) : null
+              ) : undefined
             }
           />
 
@@ -252,7 +252,7 @@ const CreateShopModal = ({
                   <span className={modalFieldErrorTextClassName}>
                     {fieldErrors.shopName}
                   </span>
-                ) : null}
+                ) : undefined}
               </label>
             </ModalSection>
 
@@ -280,7 +280,7 @@ const CreateShopModal = ({
                     <div className="mt-2">
                       <CopyableId value={packageId} explorerUrl={explorerUrl} />
                     </div>
-                  ) : null}
+                  ) : undefined}
                 </div>
               </div>
             </ModalSection>

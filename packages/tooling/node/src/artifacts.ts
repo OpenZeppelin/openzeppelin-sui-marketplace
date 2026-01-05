@@ -63,7 +63,7 @@ export const writeArtifact =
               ...newArtifact
             }
 
-      await writeFile(filePath, JSON.stringify(updatedArtifacts, null, 2))
+      await writeFile(filePath, JSON.stringify(updatedArtifacts, undefined, 2))
 
       return updatedArtifacts as unknown as TArtifact
     } catch (error) {
@@ -99,7 +99,7 @@ export const rewriteUpdatedArtifacts = async <TArtifact>({
   try {
     await writeFile(
       objectArtifactPath,
-      JSON.stringify(objectArtifacts, null, 2)
+      JSON.stringify(objectArtifacts, undefined, 2)
     )
   } catch (error) {
     throw new Error(
@@ -127,7 +127,7 @@ export const readArtifact = async <TArtifact>(
       (error as NodeJS.ErrnoException).code === "ENOENT"
     ) {
       await mkdir(dirname(filePath), { recursive: true })
-      await writeFile(filePath, JSON.stringify(defaultIfMissing, null, 2))
+      await writeFile(filePath, JSON.stringify(defaultIfMissing, undefined, 2))
 
       return defaultIfMissing
     }

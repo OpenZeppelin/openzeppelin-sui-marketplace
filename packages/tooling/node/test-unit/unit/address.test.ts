@@ -57,7 +57,7 @@ describe("ensureFoundedAddress", async () => {
       getCoins: vi.fn().mockResolvedValue({
         data: [],
         hasNextPage: false,
-        nextCursor: null
+        nextCursor: undefined
       })
     })
 
@@ -78,7 +78,7 @@ describe("ensureFoundedAddress", async () => {
       getCoins: vi.fn().mockResolvedValue({
         data: [{ balance: "500000000" }, { balance: "500000000" }],
         hasNextPage: false,
-        nextCursor: null
+        nextCursor: undefined
       })
     })
 
@@ -99,7 +99,7 @@ describe("ensureFoundedAddress", async () => {
       getCoins: vi.fn().mockResolvedValue({
         data: [{ balance: "500000000" }, { balance: "500000000" }],
         hasNextPage: false,
-        nextCursor: null
+        nextCursor: undefined
       })
     })
 
@@ -128,7 +128,7 @@ describe("ensureFoundedAddress", async () => {
       getCoins: vi.fn().mockResolvedValue({
         data: [],
         hasNextPage: false,
-        nextCursor: null
+        nextCursor: undefined
       })
     })
 
@@ -182,7 +182,7 @@ describe("ensureFoundedAddress", async () => {
             }
           ],
           hasNextPage: false,
-          nextCursor: null
+          nextCursor: undefined
         })
         .mockResolvedValueOnce({
           data: [
@@ -190,7 +190,7 @@ describe("ensureFoundedAddress", async () => {
             { coinObjectId: "0x2", balance: "500000000" }
           ],
           hasNextPage: false,
-          nextCursor: null
+          nextCursor: undefined
         }),
       signAndExecuteTransaction: vi.fn().mockResolvedValue({
         effects: { status: { status: "success" } }

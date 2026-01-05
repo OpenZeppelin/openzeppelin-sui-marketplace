@@ -16,7 +16,7 @@ describe("formatters edge cases", () => {
   it("returns Unknown for invalid timestamps", () => {
     expect(formatEpochSeconds("not-a-number")).toBe("Unknown")
     expect(formatTimestamp("not-a-number")).toBe("Unknown")
-    expect(formatTimestamp(null)).toBe("Unknown")
+    expect(formatTimestamp(undefined)).toBe("Unknown")
   })
 
   it("returns formatted strings for valid timestamps", () => {

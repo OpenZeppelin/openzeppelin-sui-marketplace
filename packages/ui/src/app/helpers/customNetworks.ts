@@ -106,7 +106,7 @@ export const validateCustomNetworkDraft = ({
 }
 
 export const parseStoredCustomNetworks = (
-  value: string | null
+  value?: string
 ): { networks: TCustomNetworkConfig[]; error?: string } => {
   if (!value) return { networks: [] }
 

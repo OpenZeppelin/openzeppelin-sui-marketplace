@@ -2,31 +2,30 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest"
 
 import { newTransaction } from "@sui-oracle-market/tooling-core/transactions"
 
-import { createLocalnetHarness, withTestContext } from "../support/sui-localnet"
+import { createSuiLocalnetTestEnv } from "@sui-oracle-market/tooling-node/testing/env"
 
-const localnetHarness = createLocalnetHarness()
 const keepTemp = process.env.SUI_IT_KEEP_TEMP === "1"
 const withFaucet = process.env.SUI_IT_WITH_FAUCET !== "0"
+const testEnv = createSuiLocalnetTestEnv({
+  mode: "suite",
+  keepTemp,
+  withFaucet
+})
 
 const unwrapSplitCoin = <T>(value: T | T[]) =>
   Array.isArray(value) ? value[0] : value
 
 describe("localnet smoke", () => {
   beforeAll(async () => {
-    await localnetHarness.start({
-      testId: "localnet-smoke",
-      keepTemp,
-      withFaucet
-    })
+    await testEnv.startSuite("localnet-smoke")
   })
 
   afterAll(async () => {
-    await localnetHarness.stop()
+    await testEnv.stopSuite()
   })
 
   it("funds an account and transfers SUI", async () => {
-    await withTestContext(
-      localnetHarness.get(),
+    await testEnv.withTestContext(
       "localnet-smoke-transfer",
       async (context) => {
         const sender = context.createAccount("sender")

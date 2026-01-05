@@ -14,17 +14,19 @@ import { normalizeIdOrThrow } from "@sui-oracle-market/tooling-core/object"
 import { resolveOwnerAddress } from "@sui-oracle-market/tooling-node/account"
 import { getLatestObjectFromArtifact } from "@sui-oracle-market/tooling-node/artifacts"
 import { type SuiNetworkConfig } from "@sui-oracle-market/tooling-node/config"
+import { emitJsonOutput } from "@sui-oracle-market/tooling-node/json"
 import {
-  logKeyValueBlue,
   logKeyValueGreen,
   logKeyValueYellow
 } from "@sui-oracle-market/tooling-node/log"
 import { runSuiScript } from "@sui-oracle-market/tooling-node/process"
+import { logListContextWithHeader } from "../../utils/context.ts"
 
 type ListDiscountTicketsArguments = {
   address?: string
   shopPackageId?: string
   shopId?: string
+  json?: boolean
 }
 
 type NormalizedInputs = {
@@ -46,20 +48,37 @@ runSuiScript(
       network
     )
 
-    logListContext({
-      ownerAddress: inputs.ownerAddress,
-      packageId: inputs.shopPackageId,
-      shopId: inputs.shopId,
-      rpcUrl: network.url,
-      networkName: currentNetwork
-    })
-
     const discountTickets = await getDiscountTicketSummaries({
       ownerAddress: inputs.ownerAddress,
       shopPackageId: inputs.shopPackageId,
       shopFilterId: inputs.shopId,
       suiClient: tooling.suiClient
     })
+
+    if (
+      emitJsonOutput(
+        {
+          ownerAddress: inputs.ownerAddress,
+          shopPackageId: inputs.shopPackageId,
+          shopId: inputs.shopId,
+          discountTickets
+        },
+        cliArguments.json
+      )
+    )
+      return
+
+    logListContextWithHeader(
+      {
+        ownerAddress: inputs.ownerAddress,
+        packageId: inputs.shopPackageId,
+        shopId: inputs.shopId,
+        rpcUrl: network.url,
+        networkName: currentNetwork,
+        shopLabel: "Shop-filter"
+      },
+      { label: "Discount-tickets", count: discountTickets.length }
+    )
 
     if (discountTickets.length === 0)
       return logKeyValueYellow("Discount-tickets")(
@@ -74,22 +93,23 @@ runSuiScript(
     .option("address", {
       alias: ["owner", "owner-address"],
       type: "string",
-      description:
-        "Address whose discount tickets to list. Defaults to the configured account.",
-      demandOption: false
+      description: "Address to inspect; defaults to the configured account."
     })
     .option("shopPackageId", {
       alias: "shop-package-id",
       type: "string",
       description:
-        "Package ID for the sui_oracle_market Move package; inferred from the latest Shop artifact when omitted.",
-      demandOption: false
+        "Package ID for the sui_oracle_market Move package; defaults to the latest artifact when omitted."
     })
     .option("shopId", {
       alias: "shop-id",
       type: "string",
-      description: "Optional Shop object ID to filter tickets by shop address.",
-      demandOption: false
+      description: "Optional Shop object ID to filter by shop address."
+    })
+    .option("json", {
+      type: "boolean",
+      default: false,
+      description: "Output results as JSON."
     })
     .strict()
 )
@@ -119,27 +139,6 @@ const resolveInputs = async (
       ? normalizeIdOrThrow(cliArguments.shopId, "Invalid shop id provided.")
       : undefined
   }
-}
-
-const logListContext = ({
-  ownerAddress,
-  packageId,
-  shopId,
-  rpcUrl,
-  networkName
-}: {
-  ownerAddress: string
-  packageId: string
-  shopId?: string
-  rpcUrl: string
-  networkName: string
-}) => {
-  logKeyValueBlue("Network")(networkName)
-  logKeyValueBlue("RPC")(rpcUrl)
-  logKeyValueBlue("Owner")(ownerAddress)
-  logKeyValueBlue("Package")(packageId)
-  if (shopId) logKeyValueBlue("Shop-filter")(shopId)
-  console.log("")
 }
 
 const logDiscountTicket = (

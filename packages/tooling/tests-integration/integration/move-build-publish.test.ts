@@ -4,28 +4,27 @@ import path from "node:path"
 
 import { pickRootNonDependencyArtifact } from "@sui-oracle-market/tooling-node/artifacts"
 
-import { createLocalnetHarness, withTestContext } from "../support/sui-localnet"
+import { createSuiLocalnetTestEnv } from "@sui-oracle-market/tooling-node/testing/env"
 
-const localnetHarness = createLocalnetHarness()
 const keepTemp = process.env.SUI_IT_KEEP_TEMP === "1"
 const withFaucet = process.env.SUI_IT_WITH_FAUCET !== "0"
+const testEnv = createSuiLocalnetTestEnv({
+  mode: "suite",
+  keepTemp,
+  withFaucet
+})
 
 describe("move build and publish", () => {
   beforeAll(async () => {
-    await localnetHarness.start({
-      testId: "move-build-publish",
-      keepTemp,
-      withFaucet
-    })
+    await testEnv.startSuite("move-build-publish")
   })
 
   afterAll(async () => {
-    await localnetHarness.stop()
+    await testEnv.stopSuite()
   })
 
   it("builds the oracle-market Move package", async () => {
-    await withTestContext(
-      localnetHarness.get(),
+    await testEnv.withTestContext(
       "move-build-oracle-market",
       async (context) => {
         const buildOutput = await context.buildMovePackage("oracle-market")
@@ -37,8 +36,7 @@ describe("move build and publish", () => {
   })
 
   it("publishes the oracle-market Move package and writes artifacts", async () => {
-    await withTestContext(
-      localnetHarness.get(),
+    await testEnv.withTestContext(
       "move-publish-oracle-market",
       async (context) => {
         const publisher = context.createAccount("publisher")

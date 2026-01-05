@@ -34,7 +34,7 @@ export const ModalFrame = ({
   onClose: () => void
   contentClassName?: string
 }) => {
-  if (typeof document === "undefined") return null
+  if (typeof document === "undefined") return <></>
   const containerClassName = [
     "relative z-10 w-full overflow-hidden rounded-3xl border border-slate-300/70 bg-white/95 shadow-[0_35px_80px_-55px_rgba(15,23,42,0.55)] dark:border-slate-50/20 dark:bg-slate-950/90",
     contentClassName ?? "max-w-4xl"
@@ -92,13 +92,13 @@ export const ModalHeader = ({
           </div>
           {description ? (
             <div className={descriptionClasses}>{description}</div>
-          ) : null}
+          ) : undefined}
         </div>
         <Button variant="secondary" size="compact" onClick={onClose}>
           Close
         </Button>
       </div>
-      {footer ? <div className="relative mt-4">{footer}</div> : null}
+      {footer ? <div className="relative mt-4">{footer}</div> : undefined}
     </div>
   )
 }
@@ -203,7 +203,7 @@ export const ModalErrorNotice = ({
             Copy string error
           </Button>
         </details>
-      ) : null}
+      ) : undefined}
     </div>
   </div>
 )
@@ -291,7 +291,7 @@ export const ModalSection = ({
         <p className="text-xs text-slate-500 dark:text-slate-200/70">
           {subtitle}
         </p>
-      ) : null}
+      ) : undefined}
     </div>
     {children}
   </section>

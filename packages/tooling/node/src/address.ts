@@ -355,11 +355,11 @@ const calculateMissingCoins = (
  * Picks the largest coin object by balance.
  */
 const selectRichestCoin = (coins: CoinBalance[]) =>
-  coins.reduce<CoinBalance | null>((richest, coin) => {
+  coins.reduce<CoinBalance | undefined>((richest, coin) => {
     if (!richest) return coin
     const difference = BigInt(coin.balance) - BigInt(richest.balance)
     return difference > 0n ? coin : richest
-  }, null)
+  }, undefined)
 
 /**
  * Checks whether the richest coin can be split into the missing number of coins.

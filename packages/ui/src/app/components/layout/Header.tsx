@@ -12,8 +12,10 @@ import NetworkControls from "../NetworkControls"
 
 const Header = () => {
   const buttonRef = useRef<HTMLDivElement | null>(null)
-  const [buttonWidth, setButtonWidth] = useState<number | null>(null)
-  const [buttonHeight, setButtonHeight] = useState<number | null>(null)
+  const [buttonWidth, setButtonWidth] = useState<number | undefined>(undefined)
+  const [buttonHeight, setButtonHeight] = useState<number | undefined>(
+    undefined
+  )
 
   useEffect(() => {
     const element = buttonRef.current

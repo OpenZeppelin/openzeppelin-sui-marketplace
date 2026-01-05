@@ -75,6 +75,9 @@ importers:
       '@types/yargs':
         specifier: ^17.0.35
         version: 17.0.35
+      vitest:
+        specifier: ^3.2.4
+        version: 3.2.4(@types/node@22.19.3)(jiti@1.21.7)
 
   packages/domain/core:
     dependencies:

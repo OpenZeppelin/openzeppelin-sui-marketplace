@@ -48,7 +48,7 @@ const SelectedShopHeader = ({
               )}
               {createdAtMs ? (
                 <span>Created {formatTimestamp(createdAtMs)}</span>
-              ) : null}
+              ) : undefined}
             </div>
           </div>
           <div className="ml-auto flex items-center">

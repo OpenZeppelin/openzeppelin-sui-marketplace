@@ -8,7 +8,6 @@ export type IdentifierString = `${string}:${string}`
 export type WalletChainSupport =
   | { chains?: readonly string[] }
   | { accounts?: { chains?: readonly string[] }[] }
-  | null
   | undefined
 
 export type SignTransactionInput<Account = unknown> = {

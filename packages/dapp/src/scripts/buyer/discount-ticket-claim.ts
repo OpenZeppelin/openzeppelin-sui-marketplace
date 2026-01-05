@@ -13,17 +13,21 @@ import {
   normalizeIdOrThrow
 } from "@sui-oracle-market/tooling-core/object"
 import { SUI_CLOCK_ID } from "@sui-oracle-market/tooling-node/constants"
+import { emitJsonOutput } from "@sui-oracle-market/tooling-node/json"
 import {
   logKeyValueBlue,
   logKeyValueGreen,
   logKeyValueYellow
 } from "@sui-oracle-market/tooling-node/log"
 import { runSuiScript } from "@sui-oracle-market/tooling-node/process"
-import { resolveLatestArtifactShopId } from "@sui-oracle-market/domain-node/shop"
+import { resolveShopIdOrLatest } from "../../utils/shop-context.ts"
 
 type ClaimDiscountTicketArguments = {
   discountTemplateId: string
   shopId?: string
+  devInspect?: boolean
+  dryRun?: boolean
+  json?: boolean
 }
 
 runSuiScript(
@@ -33,53 +37,75 @@ runSuiScript(
       tooling.network.networkName
     )
 
-    const shopShared = await tooling.getSuiSharedObject({
-      objectId: shopId,
-      mutable: true
+    const shopShared = await tooling.getMutableSharedObject({
+      objectId: shopId
     })
-    const discountTemplateShared = await tooling.getSuiSharedObject({
-      objectId: discountTemplateId,
-      mutable: true
+    const discountTemplateShared = await tooling.getMutableSharedObject({
+      objectId: discountTemplateId
     })
 
     const shopPackageId = deriveRelevantPackageId(shopShared.object.type)
 
-    logClaimContext({
-      discountTemplateId,
-      packageId: shopPackageId,
-      shopAddress: shopId,
-      rpcUrl: tooling.network.url,
-      networkName: tooling.network.networkName
-    })
+    if (!cliArguments.json) {
+      logClaimContext({
+        discountTemplateId,
+        packageId: shopPackageId,
+        shopAddress: shopId,
+        rpcUrl: tooling.network.url,
+        networkName: tooling.network.networkName
+      })
+    }
 
     const claimDiscountTicketTransaction = buildClaimDiscountTicketTransaction({
       packageId: shopPackageId,
       shopShared,
       discountTemplateShared,
-      sharedClockObject: await tooling.getSuiSharedObject({
+      sharedClockObject: await tooling.getImmutableSharedObject({
         objectId: SUI_CLOCK_ID
       })
     })
 
+    const { execution, summary } = await tooling.executeTransactionWithSummary({
+      transaction: claimDiscountTicketTransaction,
+      signer: tooling.loadedEd25519KeyPair,
+      summaryLabel: "claim-discount-ticket",
+      devInspect: cliArguments.devInspect,
+      dryRun: cliArguments.dryRun
+    })
+
+    if (!execution) return
+
     const {
       transactionResult,
       objectArtifacts: { created }
-    } = await tooling.signAndExecute({
-      transaction: claimDiscountTicketTransaction,
-      signer: tooling.loadedEd25519KeyPair
-    })
+    } = execution
+
+    const claimedTicketId = findCreatedDiscountTicketId(created)
+    if (
+      emitJsonOutput(
+        {
+          discountTemplateId,
+          claimedTicketId,
+          digest: transactionResult.digest,
+          transactionSummary: summary
+        },
+        cliArguments.json
+      )
+    )
+      return
 
     logClaimResult({
       discountTemplateId,
-      claimedTicketId: findCreatedDiscountTicketId(created),
+      claimedTicketId,
       digest: transactionResult.digest
     })
   },
   yargs()
     .option("shopId", {
-      alias: ["shop-id", "shop"],
+      alias: "shop-id",
       type: "string",
-      description: "Parent shop object id of the template"
+      description:
+        "Shared Shop object ID; defaults to the latest Shop artifact when available."
     })
     .option("discountTemplateId", {
       alias: ["discount-template-id", "template-id"],
@@ -87,6 +113,23 @@ runSuiScript(
       description:
         "DiscountTemplate object ID to claim a single-use ticket from.",
       demandOption: true
+    })
+    .option("devInspect", {
+      alias: ["dev-inspect", "debug"],
+      type: "boolean",
+      default: false,
+      description: "Run a dev-inspect and log VM error details."
+    })
+    .option("dryRun", {
+      alias: ["dry-run"],
+      type: "boolean",
+      default: false,
+      description: "Run dev-inspect and exit without executing the transaction."
+    })
+    .option("json", {
+      type: "boolean",
+      default: false,
+      description: "Output results as JSON."
     })
     .strict()
 )
@@ -96,11 +139,14 @@ const resolveInputs = async (
   networkName: string
 ): Promise<Required<ClaimDiscountTicketArguments>> => {
   return {
-    shopId: await resolveLatestArtifactShopId(cliArguments.shopId, networkName),
+    shopId: await resolveShopIdOrLatest(cliArguments.shopId, networkName),
     discountTemplateId: normalizeIdOrThrow(
       cliArguments.discountTemplateId,
       "A discount template id is required; provide --discount-template-id."
-    )
+    ),
+    devInspect: cliArguments.devInspect ?? false,
+    dryRun: cliArguments.dryRun ?? false,
+    json: cliArguments.json ?? false
   }
 }
 
@@ -131,7 +177,7 @@ const logClaimResult = ({
   digest
 }: {
   discountTemplateId: string
-  claimedTicketId?: string | null
+  claimedTicketId?: string
   digest?: string
 }) => {
   logKeyValueGreen("template")(discountTemplateId)

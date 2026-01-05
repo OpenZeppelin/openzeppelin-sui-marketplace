@@ -92,20 +92,20 @@ const TransactionRecap = ({
             </div>
             {error ? (
               <div className="mt-2 text-xs text-rose-500">{error}</div>
-            ) : null}
+            ) : undefined}
           </div>
           <div className="rounded-xl border border-slate-200/70 bg-white/80 p-3 dark:border-slate-50/15 dark:bg-slate-950/60">
             <div className="text-[0.6rem] uppercase tracking-[0.18em] text-slate-500 dark:text-slate-200/60">
               Timestamp
             </div>
             <div className="mt-1 text-sm font-semibold text-sds-dark dark:text-sds-light">
-              {formatTimestamp(transactionBlock.timestampMs)}
+              {formatTimestamp(transactionBlock.timestampMs || undefined)}
             </div>
             {transactionBlock.checkpoint ? (
               <div className="mt-1 text-[0.65rem] uppercase tracking-[0.18em] text-slate-500 dark:text-slate-200/60">
                 Checkpoint {transactionBlock.checkpoint}
               </div>
-            ) : null}
+            ) : undefined}
           </div>
         </div>
 
@@ -123,7 +123,7 @@ const TransactionRecap = ({
             >
               View on explorer
             </a>
-          ) : null}
+          ) : undefined}
         </div>
 
         {gasSummary ? (
@@ -155,7 +155,7 @@ const TransactionRecap = ({
               Total gas: {gasSummary.total.toString()}
             </div>
           </div>
-        ) : null}
+        ) : undefined}
 
         <div className="grid gap-3 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]">
           <div className="rounded-xl border border-slate-200/70 bg-white/80 p-3 dark:border-slate-50/15 dark:bg-slate-950/60">
@@ -213,7 +213,7 @@ const TransactionRecap = ({
                               ? ` +${item.types.length - 3} more`
                               : ""}
                           </div>
-                        ) : null}
+                        ) : undefined}
                       </div>
                     )
                   })}
@@ -241,10 +241,10 @@ const TransactionRecap = ({
                     <span className="text-slate-500 dark:text-slate-200/60">
                       +{eventTypes.length - 6} more
                     </span>
-                  ) : null}
+                  ) : undefined}
                 </div>
               </div>
-            ) : null}
+            ) : undefined}
           </div>
         </div>
 
@@ -284,7 +284,7 @@ const TransactionRecap = ({
               })}
             </div>
           </div>
-        ) : null}
+        ) : undefined}
       </div>
     </ModalSection>
   )
@@ -416,7 +416,7 @@ const BuyFlowModal = ({
   const errorState =
     transactionState.status === "error" ? transactionState : undefined
 
-  if (!open) return null
+  if (!open) return <></>
 
   const listingLabel = getListingLabel(listing)
 
@@ -460,7 +460,7 @@ const BuyFlowModal = ({
                   label="Listing"
                   explorerUrl={explorerUrl}
                 />
-              ) : null
+              ) : undefined
             }
           />
 
@@ -516,7 +516,7 @@ const BuyFlowModal = ({
                       <span className={modalFieldErrorTextClassName}>
                         {fieldErrors.currency}
                       </span>
-                    ) : null}
+                    ) : undefined}
                   </label>
 
                   {selectedCurrency ? (
@@ -552,7 +552,7 @@ const BuyFlowModal = ({
                         </div>
                       </div>
                     </div>
-                  ) : null}
+                  ) : undefined}
                 </div>
               )}
             </ModalSection>
@@ -596,19 +596,19 @@ const BuyFlowModal = ({
                             <span className="text-[0.6rem] uppercase tracking-[0.18em] text-slate-500 dark:text-slate-200/60">
                               {option.status}
                             </span>
-                          ) : null}
+                          ) : undefined}
                         </div>
                         {option.description ? (
                           <p className="text-[0.7rem] text-slate-500 dark:text-slate-200/60">
                             {option.description}
                           </p>
-                        ) : null}
+                        ) : undefined}
                       </label>
                     )
                   })}
                 </div>
               </ModalSection>
-            ) : null}
+            ) : undefined}
 
             <ModalSection
               title="Delivery details"
@@ -638,7 +638,7 @@ const BuyFlowModal = ({
                     <span className={modalFieldErrorTextClassName}>
                       {fieldErrors.mintTo}
                     </span>
-                  ) : null}
+                  ) : undefined}
                 </label>
                 <label className={modalFieldLabelClassName}>
                   <span className={modalFieldTitleClassName}>
@@ -663,7 +663,7 @@ const BuyFlowModal = ({
                     <span className={modalFieldErrorTextClassName}>
                       {fieldErrors.refundTo}
                     </span>
-                  ) : null}
+                  ) : undefined}
                 </label>
               </div>
               <div className="mt-3 text-[0.7rem] text-slate-500 dark:text-slate-200/60">
@@ -687,7 +687,7 @@ const BuyFlowModal = ({
                     <div className="mt-2 overflow-auto text-[0.7rem] text-slate-500 dark:text-slate-200/60">
                       {shortenId(listing.itemListingId)}
                     </div>
-                  ) : null}
+                  ) : undefined}
                 </div>
                 <div className="rounded-xl border border-slate-200/70 bg-white/80 p-3 dark:border-slate-50/15 dark:bg-slate-950/60">
                   <div className="text-[0.6rem] uppercase tracking-[0.18em] text-slate-500 dark:text-slate-200/60">
@@ -702,7 +702,7 @@ const BuyFlowModal = ({
                     <div className="mt-2 overflow-auto text-[0.7rem] text-slate-500 dark:text-slate-200/60">
                       {getStructLabel(selectedCurrency.coinType)}
                     </div>
-                  ) : null}
+                  ) : undefined}
                 </div>
                 <div className="rounded-xl border border-slate-200/70 bg-white/80 p-3 dark:border-slate-50/15 dark:bg-slate-950/60">
                   <div className="text-[0.6rem] uppercase tracking-[0.18em] text-slate-500 dark:text-slate-200/60">
@@ -715,7 +715,7 @@ const BuyFlowModal = ({
                     <div className="mt-2 overflow-auto text-[0.7rem] text-slate-500 dark:text-slate-200/60">
                       {selectedDiscount.description}
                     </div>
-                  ) : null}
+                  ) : undefined}
                 </div>
                 <div className="rounded-xl border border-slate-200/70 bg-white/80 p-3 dark:border-slate-50/15 dark:bg-slate-950/60">
                   <div className="text-[0.6rem] uppercase tracking-[0.18em] text-slate-500 dark:text-slate-200/60">
@@ -735,7 +735,7 @@ const BuyFlowModal = ({
               <div className="rounded-xl border border-amber-200/70 bg-amber-50/70 px-4 py-3 text-xs text-amber-700 dark:border-amber-400/30 dark:bg-amber-400/10 dark:text-amber-200">
                 {oracleWarning}
               </div>
-            ) : null}
+            ) : undefined}
           </ModalBody>
 
           <div className="border-t border-slate-200/70 px-6 py-4 dark:border-slate-50/15">

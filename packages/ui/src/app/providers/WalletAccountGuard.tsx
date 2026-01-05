@@ -4,7 +4,7 @@ import { useWalletAccountChangeDisconnect } from "../hooks/useWalletAccountChang
 
 const WalletAccountGuard = () => {
   useWalletAccountChangeDisconnect()
-  return null
+  return <></>
 }
 
 export default WalletAccountGuard

@@ -71,7 +71,7 @@ const CopyableId = ({
       <div className="flex min-w-0 flex-1 items-center gap-2">
         {label ? (
           <span className="uppercase tracking-[0.12em]">{label}</span>
-        ) : null}
+        ) : undefined}
         <span
           className={clsx(
             "min-w-0 truncate font-medium text-slate-700 dark:text-slate-100",
@@ -112,7 +112,7 @@ const CopyableId = ({
           >
             <ExternalLinkIcon className="h-3.5 w-3.5" />
           </Button>
-        ) : null}
+        ) : undefined}
       </div>
       {isLocalExplorer && isLocalnetModalOpen ? (
         <ModalFrame
@@ -142,7 +142,7 @@ const CopyableId = ({
             </ModalSection>
           </ModalBody>
         </ModalFrame>
-      ) : null}
+      ) : undefined}
     </div>
   )
 }

@@ -10,14 +10,14 @@ import yargs from "yargs"
 import { getItemListingDetails } from "@sui-oracle-market/domain-core/models/item-listing"
 import { getShopItemReceiptSummaries } from "@sui-oracle-market/domain-core/models/shop-item"
 import { normalizeIdOrThrow } from "@sui-oracle-market/tooling-core/object"
+import { mapSettledWithWarnings } from "@sui-oracle-market/tooling-core/utils/settled"
 import { resolveOwnerAddress } from "@sui-oracle-market/tooling-node/account"
 import { getLatestObjectFromArtifact } from "@sui-oracle-market/tooling-node/artifacts"
 import { type SuiNetworkConfig } from "@sui-oracle-market/tooling-node/config"
-import {
-  logKeyValueBlue,
-  logWarning
-} from "@sui-oracle-market/tooling-node/log"
+import { emitJsonOutput } from "@sui-oracle-market/tooling-node/json"
+import { logWarning } from "@sui-oracle-market/tooling-node/log"
 import { runSuiScript } from "@sui-oracle-market/tooling-node/process"
+import { logListContextWithHeader } from "../../utils/context.ts"
 import {
   logEmptyList,
   logShopItemReceiptSummary
@@ -27,6 +27,13 @@ type ListPurchasesArguments = {
   address?: string
   shopPackageId?: string
   shopId?: string
+  json?: boolean
+}
+
+type ListingDetailsWarning = {
+  itemListingId: string
+  shopId: string
+  error: string
 }
 
 runSuiScript(
@@ -37,14 +44,6 @@ runSuiScript(
       tooling.network
     )
 
-    logListContext({
-      ownerAddress: inputs.ownerAddress,
-      packageId: inputs.shopPackageId,
-      shopId: inputs.shopId,
-      rpcUrl: tooling.network.url,
-      networkName: tooling.network.networkName
-    })
-
     const shopItemReceipts = await getShopItemReceiptSummaries({
       ownerAddress: inputs.ownerAddress,
       shopPackageId: inputs.shopPackageId,
@@ -52,13 +51,54 @@ runSuiScript(
       suiClient: tooling.suiClient
     })
 
-    if (shopItemReceipts.length === 0)
-      return logEmptyList("Purchased-items", "No ShopItem receipts found.")
-
+    const listingWarnings: ListingDetailsWarning[] = []
     const listingDetails = await getListingDetailsForReceipts(
       shopItemReceipts,
-      tooling.suiClient
+      tooling.suiClient,
+      (receipt, reason) => {
+        const warning = {
+          itemListingId: receipt.itemListingAddress,
+          shopId: receipt.shopAddress,
+          error: reason instanceof Error ? reason.message : String(reason)
+        }
+
+        if (cliArguments.json) listingWarnings.push(warning)
+        else
+          logWarning(
+            `Unable to fetch listing ${warning.itemListingId}: ${warning.error}`
+          )
+      }
     )
+
+    if (
+      emitJsonOutput(
+        {
+          ownerAddress: inputs.ownerAddress,
+          shopPackageId: inputs.shopPackageId,
+          shopId: inputs.shopId,
+          receipts: shopItemReceipts,
+          listingDetails,
+          listingWarnings
+        },
+        cliArguments.json
+      )
+    )
+      return
+
+    logListContextWithHeader(
+      {
+        ownerAddress: inputs.ownerAddress,
+        packageId: inputs.shopPackageId,
+        shopId: inputs.shopId,
+        rpcUrl: tooling.network.url,
+        networkName: tooling.network.networkName,
+        shopLabel: "Shop-filter"
+      },
+      { label: "Purchased-items", count: shopItemReceipts.length }
+    )
+
+    if (shopItemReceipts.length === 0)
+      return logEmptyList("Purchased-items", "No ShopItem receipts found.")
 
     shopItemReceipts.forEach((shopItem, index) =>
       logShopItemReceiptSummary(shopItem, index + 1, listingDetails[index])
@@ -68,23 +108,23 @@ runSuiScript(
     .option("address", {
       alias: ["owner", "owner-address"],
       type: "string",
-      description:
-        "Address whose ShopItem receipts to list. Defaults to the configured account.",
-      demandOption: false
+      description: "Address to inspect; defaults to the configured account."
     })
     .option("shopPackageId", {
       alias: "shop-package-id",
       type: "string",
       description:
-        "Package ID for the sui_oracle_market Move package; inferred from the latest Shop artifact when omitted.",
-      demandOption: false
+        "Package ID for the sui_oracle_market Move package; defaults to the latest artifact when omitted."
     })
     .option("shopId", {
       alias: "shop-id",
       type: "string",
-      description:
-        "Optional Shop object ID to filter receipts by shop address.",
-      demandOption: false
+      description: "Optional Shop object ID to filter by shop address."
+    })
+    .option("json", {
+      type: "boolean",
+      default: false,
+      description: "Output results as JSON."
     })
     .strict()
 )
@@ -116,50 +156,19 @@ const resolveInputs = async (
 
 const getListingDetailsForReceipts = async (
   shopItemReceipts: Awaited<ReturnType<typeof getShopItemReceiptSummaries>>,
-  suiClient: SuiClient
-) => {
-  const listingDetailResults = await Promise.allSettled(
-    shopItemReceipts.map((receipt) =>
+  suiClient: SuiClient,
+  onError: (
+    receipt: { itemListingAddress: string; shopAddress: string },
+    reason: unknown
+  ) => void
+) =>
+  mapSettledWithWarnings({
+    items: shopItemReceipts,
+    task: (receipt) =>
       getItemListingDetails(
         receipt.shopAddress,
         receipt.itemListingAddress,
         suiClient
-      )
-    )
-  )
-
-  return listingDetailResults.map((result, index) => {
-    if (result.status === "fulfilled") return result.value
-
-    logWarning(
-      `Unable to fetch listing ${shopItemReceipts[index].itemListingAddress}: ${
-        result.reason instanceof Error
-          ? result.reason.message
-          : String(result.reason)
-      }`
-    )
-
-    return undefined
+      ),
+    onError
   })
-}
-
-const logListContext = ({
-  ownerAddress,
-  packageId,
-  shopId,
-  rpcUrl,
-  networkName
-}: {
-  ownerAddress: string
-  packageId: string
-  shopId?: string
-  rpcUrl: string
-  networkName: string
-}) => {
-  logKeyValueBlue("Network")(networkName)
-  logKeyValueBlue("RPC")(rpcUrl)
-  logKeyValueBlue("Owner")(ownerAddress)
-  logKeyValueBlue("Package")(packageId)
-  if (shopId) logKeyValueBlue("Shop-filter")(shopId)
-  console.log("")
-}

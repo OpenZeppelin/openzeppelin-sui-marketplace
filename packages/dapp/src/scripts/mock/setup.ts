@@ -25,6 +25,7 @@ import { deriveCurrencyObjectId } from "@sui-oracle-market/tooling-core/coin-reg
 import { assertLocalnetNetwork } from "@sui-oracle-market/tooling-core/network"
 import { objectTypeMatches } from "@sui-oracle-market/tooling-core/object"
 import type { WrappedSuiSharedObject } from "@sui-oracle-market/tooling-core/shared-object"
+import { wait } from "@sui-oracle-market/tooling-core/utils/utility"
 import { readArtifact } from "@sui-oracle-market/tooling-node/artifacts"
 import {
   DEFAULT_TX_GAS_BUDGET,
@@ -54,6 +55,7 @@ type SetupLocalCliArgs = {
   pythPackageId?: string
   pythContractPath: string
   rePublish?: boolean
+  useCliPublish?: boolean
 }
 
 type ExistingState = {
@@ -73,6 +75,8 @@ const DEFAULT_ITEM_EXAMPLES_CONTRACT_PATH = path.join(
   "move",
   "item-examples"
 )
+const PACKAGE_AVAILABILITY_TIMEOUT_MS = 20_000
+const PACKAGE_AVAILABILITY_INTERVAL_MS = 250
 
 type LabeledPriceFeedConfig = LabeledMockPriceFeedConfig
 type CoinArtifact = NonNullable<MockArtifact["coins"]>[number]
@@ -293,6 +297,13 @@ runSuiScript(
       description: `Re-create and overwrite local mock data`,
       default: false
     })
+    .option("useCliPublish", {
+      alias: "use-cli-publish",
+      type: "boolean",
+      description:
+        "Publish mock packages with the Sui CLI instead of the SDK (use --no-use-cli-publish to force SDK).",
+      default: true
+    })
     .strict()
 )
 
@@ -314,9 +325,17 @@ const publishMockPackages = async (
         tooling,
         packagePath: cliArguments.pythContractPath,
         withUnpublishedDependencies: true,
-        clearPublishedEntry: true
+        clearPublishedEntry: true,
+        useCliPublish: cliArguments.useCliPublish
       })
     ).packageId
+
+  if (pythPackageId !== existingState.existingPythPackageId)
+    await waitForPackageAvailability(
+      pythPackageId,
+      tooling.suiClient,
+      "pyth-mock"
+    )
 
   if (pythPackageId !== existingState.existingPythPackageId)
     await writeMockArtifact(mockArtifactPath, {
@@ -330,9 +349,17 @@ const publishMockPackages = async (
       await publishMovePackageWithFunding({
         tooling,
         packagePath: cliArguments.coinContractPath,
-        clearPublishedEntry: true
+        clearPublishedEntry: true,
+        useCliPublish: cliArguments.useCliPublish
       })
     ).packageId
+
+  if (coinPackageId !== existingState.existingCoinPackageId)
+    await waitForPackageAvailability(
+      coinPackageId,
+      tooling.suiClient,
+      "coin-mock"
+    )
 
   if (coinPackageId !== existingState.existingCoinPackageId)
     await writeMockArtifact(mockArtifactPath, {
@@ -345,9 +372,17 @@ const publishMockPackages = async (
       await publishMovePackageWithFunding({
         tooling,
         packagePath: cliArguments.itemContractPath,
-        clearPublishedEntry: true
+        clearPublishedEntry: true,
+        useCliPublish: cliArguments.useCliPublish
       })
     ).packageId
+
+  if (itemPackageId !== existingState.existingItemPackageId)
+    await waitForPackageAvailability(
+      itemPackageId,
+      tooling.suiClient,
+      "item-examples"
+    )
 
   if (itemPackageId !== existingState.existingItemPackageId)
     await writeMockArtifact(mockArtifactPath, {
@@ -359,6 +394,37 @@ const publishMockPackages = async (
     coinPackageId,
     itemPackageId
   }
+}
+
+const waitForPackageAvailability = async (
+  packageId: string,
+  suiClient: SuiClient,
+  label: string
+) => {
+  const start = Date.now()
+  let lastError = "package not found"
+
+  while (Date.now() - start < PACKAGE_AVAILABILITY_TIMEOUT_MS) {
+    try {
+      const response = await suiClient.getObject({
+        id: packageId,
+        options: { showType: true }
+      })
+
+      if (response.data) return
+      lastError =
+        //@ts-expect-error error can be present for some errors
+        response.error?.error ?? response.error?.code ?? "package not found"
+    } catch (error) {
+      lastError = error instanceof Error ? error.message : String(error)
+    }
+
+    await wait(PACKAGE_AVAILABILITY_INTERVAL_MS)
+  }
+
+  throw new Error(
+    `Timed out waiting for ${label} package ${packageId}: ${lastError}`
+  )
 }
 
 const resolveRegistryAndClockRefs = async (
@@ -388,11 +454,12 @@ const ensureMockCoins = async (
     coinRegistryObject: WrappedSuiSharedObject
   },
   tooling: Tooling
-): Promise<SeededCoin[]> =>
-  await Promise.all(
-    buildCoinSeeds(coinPackageId).map(async (seed) => {
-      // For each mock coin type, ensure currency/metadata/treasury exist; mint and register if missing.
-      return await ensureCoin(
+): Promise<SeededCoin[]> => {
+  const seededCoins: SeededCoin[] = []
+  for (const seed of buildCoinSeeds(coinPackageId)) {
+    // Serialize shared-coin-registry writes to avoid localnet contention.
+    seededCoins.push(
+      await ensureCoin(
         {
           seed,
           owner,
@@ -401,8 +468,11 @@ const ensureMockCoins = async (
         },
         tooling
       )
-    })
-  )
+    )
+  }
+
+  return seededCoins
+}
 
 const ensureCoin = async (
   {
@@ -813,10 +883,10 @@ const resolveTreasuryCoinSnapshot = async ({
 }
 
 const selectRichestCoin = (coins: OwnedCoinBalance[]) =>
-  coins.reduce<OwnedCoinBalance | null>((richest, coin) => {
+  coins.reduce<OwnedCoinBalance | undefined>((richest, coin) => {
     if (!richest) return coin
     return BigInt(coin.balance) > BigInt(richest.balance) ? coin : richest
-  }, null)
+  }, undefined)
 
 const calculateQuarterBalance = (balance: bigint) => balance / 4n
 

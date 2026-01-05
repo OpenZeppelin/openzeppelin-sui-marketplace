@@ -5,7 +5,6 @@
  * Requires the ShopOwnerCap capability to authorize the mutation.
  */
 import type { SuiClient } from "@mysten/sui/client"
-import type { Ed25519Keypair } from "@mysten/sui/keypairs/ed25519"
 import yargs from "yargs"
 
 import {
@@ -13,12 +12,12 @@ import {
   requireAcceptedCurrencyByCoinType
 } from "@sui-oracle-market/domain-core/models/currency"
 import { buildRemoveAcceptedCurrencyTransaction } from "@sui-oracle-market/domain-core/ptb/currency"
-import { resolveLatestShopIdentifiers } from "@sui-oracle-market/domain-node/shop"
+import { normalizeOptionalCoinType } from "@sui-oracle-market/tooling-core/coin"
 import { normalizeOptionalId } from "@sui-oracle-market/tooling-core/object"
-import type { Tooling } from "@sui-oracle-market/tooling-node/factory"
+import { emitJsonOutput } from "@sui-oracle-market/tooling-node/json"
 import { logKeyValueGreen } from "@sui-oracle-market/tooling-node/log"
 import { runSuiScript } from "@sui-oracle-market/tooling-node/process"
-import { normalizeOptionalCoinType } from "@sui-oracle-market/tooling-core/coin"
+import { resolveOwnerShopIdentifiers } from "../../utils/shop-context.ts"
 
 type NormalizedInputs = {
   packageId: string
@@ -40,13 +39,11 @@ runSuiScript(
       tooling.suiClient
     )
 
-    const shop = await tooling.getSuiSharedObject({
-      objectId: inputs.shopId,
-      mutable: true
+    const shop = await tooling.getMutableSharedObject({
+      objectId: inputs.shopId
     })
-    const acceptedCurrencyShared = await tooling.getSuiSharedObject({
-      objectId: acceptedCurrency.acceptedCurrencyId,
-      mutable: false
+    const acceptedCurrencyShared = await tooling.getImmutableSharedObject({
+      objectId: acceptedCurrency.acceptedCurrencyId
     })
 
     const removeCurrencyTransaction = buildRemoveAcceptedCurrencyTransaction({
@@ -56,17 +53,31 @@ runSuiScript(
       acceptedCurrency: acceptedCurrencyShared
     })
 
-    const { transactionResult } = await executeRemovalTransaction(
-      {
-        transaction: removeCurrencyTransaction,
-        signer: tooling.loadedEd25519KeyPair
-      },
-      tooling
+    const { execution, summary } = await tooling.executeTransactionWithSummary({
+      transaction: removeCurrencyTransaction,
+      signer: tooling.loadedEd25519KeyPair,
+      summaryLabel: "remove-accepted-currency",
+      devInspect: cliArguments.devInspect,
+      dryRun: cliArguments.dryRun
+    })
+
+    if (!execution) return
+
+    const digest = execution.transactionResult.digest
+    if (
+      emitJsonOutput(
+        {
+          deleted: acceptedCurrency.acceptedCurrencyId,
+          digest,
+          transactionSummary: summary
+        },
+        cliArguments.json
+      )
     )
+      return
 
     logKeyValueGreen("deleted")(acceptedCurrency.acceptedCurrencyId)
-    if (transactionResult.digest)
-      logKeyValueGreen("digest")(transactionResult.digest)
+    if (digest) logKeyValueGreen("digest")(digest)
   },
   yargs()
     .option("acceptedCurrencyId", {
@@ -85,19 +96,36 @@ runSuiScript(
       alias: "shop-package-id",
       type: "string",
       description:
-        "Package ID for the sui_oracle_market Move package; inferred from artifacts if omitted."
+        "Package ID for the sui_oracle_market Move package; defaults to the latest artifact when omitted."
     })
     .option("shopId", {
       alias: "shop-id",
       type: "string",
       description:
-        "Shared Shop object ID; defaults to the latest Shop artifact if available."
+        "Shared Shop object ID; defaults to the latest Shop artifact when available."
     })
     .option("ownerCapId", {
       alias: ["owner-cap-id", "owner-cap"],
       type: "string",
       description:
-        "ShopOwnerCap object ID that authorizes removing currencies; defaults to the latest artifact when omitted."
+        "ShopOwnerCap object ID authorizing the mutation; defaults to the latest artifact when omitted."
+    })
+    .option("devInspect", {
+      alias: ["dev-inspect", "debug"],
+      type: "boolean",
+      default: false,
+      description: "Run a dev-inspect and log VM error details."
+    })
+    .option("dryRun", {
+      alias: ["dry-run"],
+      type: "boolean",
+      default: false,
+      description: "Run dev-inspect and exit without executing the transaction."
+    })
+    .option("json", {
+      type: "boolean",
+      default: false,
+      description: "Output results as JSON."
     })
     .check((argv) => {
       if (!argv.acceptedCurrencyId && !argv.coinType)
@@ -119,14 +147,12 @@ const normalizeInputs = async (
   },
   networkName: string
 ): Promise<NormalizedInputs> => {
-  const { packageId, shopId, ownerCapId } = await resolveLatestShopIdentifiers(
-    {
-      packageId: cliArguments.shopPackageId,
-      shopId: cliArguments.shopId,
-      ownerCapId: cliArguments.ownerCapId
-    },
-    networkName
-  )
+  const { packageId, shopId, ownerCapId } = await resolveOwnerShopIdentifiers({
+    networkName,
+    shopPackageId: cliArguments.shopPackageId,
+    shopId: cliArguments.shopId,
+    ownerCapId: cliArguments.ownerCapId
+  })
 
   return {
     packageId,
@@ -156,18 +182,3 @@ const resolveAcceptedCurrency = async (
     suiClient
   })
 }
-
-const executeRemovalTransaction = async (
-  {
-    transaction,
-    signer
-  }: {
-    transaction: ReturnType<typeof buildRemoveAcceptedCurrencyTransaction>
-    signer: Ed25519Keypair
-  },
-  tooling: Tooling
-) =>
-  tooling.signAndExecute({
-    transaction,
-    signer
-  })

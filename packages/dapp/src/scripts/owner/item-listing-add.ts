@@ -10,16 +10,17 @@ import yargs from "yargs"
 import { getItemListingSummary } from "@sui-oracle-market/domain-core/models/item-listing"
 import { parseUsdToCents } from "@sui-oracle-market/domain-core/models/shop"
 import { buildAddItemListingTransaction } from "@sui-oracle-market/domain-core/ptb/item-listing"
-import { resolveLatestShopIdentifiers } from "@sui-oracle-market/domain-node/shop"
 import {
   normalizeIdOrThrow,
   normalizeOptionalId
 } from "@sui-oracle-market/tooling-core/object"
 import { parsePositiveU64 } from "@sui-oracle-market/tooling-core/utils/utility"
+import { emitJsonOutput } from "@sui-oracle-market/tooling-node/json"
 import { logKeyValueGreen } from "@sui-oracle-market/tooling-node/log"
 import { runSuiScript } from "@sui-oracle-market/tooling-node/process"
 import { ensureCreatedObject } from "@sui-oracle-market/tooling-node/transactions"
 import { logItemListingSummary } from "../../utils/log-summaries.ts"
+import { resolveOwnerShopIdentifiers } from "../../utils/shop-context.ts"
 
 runSuiScript(
   async (tooling, cliArguments) => {
@@ -28,9 +29,8 @@ runSuiScript(
       tooling.network.networkName
     )
 
-    const shopSharedObject = await tooling.getSuiSharedObject({
-      objectId: inputs.shopId,
-      mutable: true
+    const shopSharedObject = await tooling.getMutableSharedObject({
+      objectId: inputs.shopId
     })
 
     const addItemTransaction = buildAddItemListingTransaction({
@@ -44,10 +44,17 @@ runSuiScript(
       spotlightDiscountId: inputs.spotlightDiscountId
     })
 
-    const { transactionResult } = await tooling.signAndExecute({
+    const { execution, summary } = await tooling.executeTransactionWithSummary({
       transaction: addItemTransaction,
-      signer: tooling.loadedEd25519KeyPair
+      signer: tooling.loadedEd25519KeyPair,
+      summaryLabel: "add-item-listing",
+      devInspect: cliArguments.devInspect,
+      dryRun: cliArguments.dryRun
     })
+
+    if (!execution) return
+
+    const { transactionResult } = execution
 
     const createdListingChange = ensureCreatedObject(
       "::shop::ItemListing",
@@ -64,6 +71,18 @@ runSuiScript(
       tooling.suiClient
     )
 
+    if (
+      emitJsonOutput(
+        {
+          itemListing: listingSummary,
+          digest: createdListingChange.digest,
+          transactionSummary: summary
+        },
+        cliArguments.json
+      )
+    )
+      return
+
     logItemListingSummary(listingSummary)
     if (createdListingChange.digest)
       logKeyValueGreen("digest")(createdListingChange.digest)
@@ -73,20 +92,36 @@ runSuiScript(
       alias: "shop-package-id",
       type: "string",
       description:
-        "Package ID for the sui_oracle_market Move package. If omitted, the script will infer it from the latest Shop entry in deployments/objects.<network>.json",
-      demandOption: false
+        "Package ID for the sui_oracle_market Move package; defaults to the latest artifact when omitted."
     })
     .option("shopId", {
       alias: "shop-id",
       type: "string",
-      description: "Shared Shop object ID",
-      demandOption: false
+      description:
+        "Shared Shop object ID; defaults to the latest Shop artifact when available."
     })
     .option("ownerCapId", {
       alias: ["owner-cap-id", "owner-cap"],
       type: "string",
-      description: "ShopOwnerCap object ID that authorizes the mutation",
-      demandOption: false
+      description:
+        "ShopOwnerCap object ID authorizing the mutation; defaults to the latest artifact when omitted."
+    })
+    .option("devInspect", {
+      alias: ["dev-inspect", "debug"],
+      type: "boolean",
+      default: false,
+      description: "Run a dev-inspect and log VM error details."
+    })
+    .option("dryRun", {
+      alias: ["dry-run"],
+      type: "boolean",
+      default: false,
+      description: "Run dev-inspect and exit without executing the transaction."
+    })
+    .option("json", {
+      type: "boolean",
+      default: false,
+      description: "Output results as JSON."
     })
     .option("name", {
       type: "string",
@@ -141,14 +176,12 @@ const normalizeInputs = async (
   },
   networkName: string
 ) => {
-  const { packageId, shopId, ownerCapId } = await resolveLatestShopIdentifiers(
-    {
-      packageId: cliArguments.shopPackageId,
-      shopId: cliArguments.shopId,
-      ownerCapId: cliArguments.ownerCapId
-    },
-    networkName
-  )
+  const { packageId, shopId, ownerCapId } = await resolveOwnerShopIdentifiers({
+    networkName,
+    shopPackageId: cliArguments.shopPackageId,
+    shopId: cliArguments.shopId,
+    ownerCapId: cliArguments.ownerCapId
+  })
 
   const spotlightDiscountId = normalizeOptionalId(
     cliArguments.spotlightDiscountId

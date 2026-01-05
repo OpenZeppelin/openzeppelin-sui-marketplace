@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest"
 import {
   validateMoveType,
+  validateRequiredSuiObjectId,
   validateOptionalSuiAddress,
-  validateRequiredHexBytes,
-  validateRequiredSuiObjectId
-} from "../../src/utils/validation.ts"
+  validateRequiredHexBytes
+} from "../../../src/utils/validation.ts"
 
 describe("validation helpers", () => {
   it("validates move types", () => {

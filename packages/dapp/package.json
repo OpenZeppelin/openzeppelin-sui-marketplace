@@ -43,6 +43,8 @@
     "buyer:shop:view": "TS_NODE_SKIP_IGNORE=1 NODE_OPTIONS=\"--no-warnings\" ../../node_modules/.bin/ts-node-esm --transpile-only src/scripts/buyer/shop-view.ts",
     "convenient:owner-update-price-buyer-buy": "pnpm mock:update-prices && pnpm buyer:buy",
     "lint": "../../node_modules/.bin/eslint .",
+    "test:integration": "vitest --config ./vitest.integration.config.ts",
+    "test:unit": "vitest --config ./vitest.config.ts",
     "lint:fix": "../../node_modules/.bin/eslint . --fix"
   },
   "dependencies": {
@@ -57,7 +59,8 @@
   },
   "devDependencies": {
     "@types/node": "^22.19.2",
-    "@types/yargs": "^17.0.35"
+    "@types/yargs": "^17.0.35",
+    "vitest": "^3.2.4"
   },
   "engines": {
     "node": ">=22.19.2"

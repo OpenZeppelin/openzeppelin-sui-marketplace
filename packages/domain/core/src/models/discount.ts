@@ -16,12 +16,12 @@ import {
   formatOptionalNumericValue,
   shortenId
 } from "@sui-oracle-market/tooling-core/utils/formatters"
-import { requireValue } from "@sui-oracle-market/tooling-core/utils/utility"
 import {
   extractFieldValueByKeys,
   normalizeBigIntFromMoveValue,
   unwrapMoveFields
 } from "@sui-oracle-market/tooling-core/utils/move-values"
+import { requireValue } from "@sui-oracle-market/tooling-core/utils/utility"
 import type { ItemListingSummary } from "./item-listing.ts"
 import { parseUsdToCents } from "./shop.ts"
 
@@ -565,7 +565,7 @@ export const findCreatedDiscountTicketId = (
 ) =>
   createdObjects.find((object) =>
     object.objectType?.includes(DISCOUNT_TICKET_TYPE_FRAGMENT)
-  )?.objectId
+  )?.objectId || undefined
 
 /**
  * Lists DiscountTicket objects owned by an address with optional shop filtering.

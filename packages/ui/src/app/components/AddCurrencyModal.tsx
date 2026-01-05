@@ -122,10 +122,10 @@ const CurrencySummarySection = ({
           label="Accepted ID"
           explorerUrl={explorerUrl}
         />
-      ) : null}
+      ) : undefined}
       {shopId ? (
         <CopyableId value={shopId} label="Shop ID" explorerUrl={explorerUrl} />
-      ) : null}
+      ) : undefined}
     </div>
   </ModalSection>
 )
@@ -257,7 +257,7 @@ const AvailableFeedsSection = ({
                       {shortenId(currency.pythObjectId)}
                     </div>
                   </div>
-                ) : null}
+                ) : undefined}
                 {registryId ? (
                   <div>
                     <div className="text-[0.55rem] uppercase tracking-[0.18em]">
@@ -267,7 +267,7 @@ const AvailableFeedsSection = ({
                       {shortenId(registryId)}
                     </div>
                   </div>
-                ) : null}
+                ) : undefined}
               </div>
               <div className="mt-3 flex flex-wrap items-center gap-3 text-[0.65rem]">
                 <CopyableId
@@ -281,14 +281,14 @@ const AvailableFeedsSection = ({
                     label="Pyth"
                     explorerUrl={explorerUrl}
                   />
-                ) : null}
+                ) : undefined}
                 {registryId ? (
                   <CopyableId
                     value={registryId}
                     label="Registry"
                     explorerUrl={explorerUrl}
                   />
-                ) : null}
+                ) : undefined}
               </div>
             </div>
           )
@@ -336,7 +336,7 @@ const AddCurrencyModal = ({
   const errorState =
     transactionState.status === "error" ? transactionState : undefined
 
-  if (!open) return null
+  if (!open) return <></>
 
   return (
     <ModalFrame onClose={onClose}>
@@ -370,7 +370,7 @@ const AddCurrencyModal = ({
                   label="Shop"
                   explorerUrl={explorerUrl}
                 />
-              ) : null
+              ) : undefined
             }
           />
 
@@ -408,7 +408,7 @@ const AddCurrencyModal = ({
                     <span className={modalFieldErrorTextClassName}>
                       {fieldErrors.coinType}
                     </span>
-                  ) : null}
+                  ) : undefined}
                 </label>
                 <label className={modalFieldLabelClassName}>
                   <span className={modalFieldTitleClassName}>
@@ -441,7 +441,7 @@ const AddCurrencyModal = ({
                     <span className={modalFieldErrorTextClassName}>
                       {fieldErrors.currencyObjectId}
                     </span>
-                  ) : null}
+                  ) : undefined}
                 </label>
               </div>
             </ModalSection>
@@ -474,7 +474,7 @@ const AddCurrencyModal = ({
                     <span className={modalFieldErrorTextClassName}>
                       {fieldErrors.feedId}
                     </span>
-                  ) : null}
+                  ) : undefined}
                 </label>
                 <label className={modalFieldLabelClassName}>
                   <span className={modalFieldTitleClassName}>
@@ -506,7 +506,7 @@ const AddCurrencyModal = ({
                     <span className={modalFieldErrorTextClassName}>
                       {fieldErrors.priceInfoObjectId}
                     </span>
-                  ) : null}
+                  ) : undefined}
                 </label>
               </div>
             </ModalSection>
@@ -557,7 +557,7 @@ const AddCurrencyModal = ({
                     <span className={modalFieldWarningTextClassName}>
                       {fieldWarnings.maxPriceAgeSecsCap}
                     </span>
-                  ) : null}
+                  ) : undefined}
                 </label>
                 <label className={modalFieldLabelClassName}>
                   <span className={modalFieldTitleClassName}>
@@ -600,7 +600,7 @@ const AddCurrencyModal = ({
                     <span className={modalFieldWarningTextClassName}>
                       {fieldWarnings.maxConfidenceRatioBpsCap}
                     </span>
-                  ) : null}
+                  ) : undefined}
                 </label>
                 <label className={modalFieldLabelClassName}>
                   <span className={modalFieldTitleClassName}>
@@ -643,7 +643,7 @@ const AddCurrencyModal = ({
                     <span className={modalFieldWarningTextClassName}>
                       {fieldWarnings.maxPriceStatusLagSecsCap}
                     </span>
-                  ) : null}
+                  ) : undefined}
                 </label>
               </div>
             </ModalSection>

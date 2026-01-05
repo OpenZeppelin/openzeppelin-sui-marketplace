@@ -88,5 +88,5 @@ export const logStructuredJson = (
     return logKeyValueYellow(heading)("No fields present.")
 
   console.log(`${heading}:`)
-  console.log(JSON.stringify(content, null, 2))
+  console.log(JSON.stringify(content, undefined, 2))
 }

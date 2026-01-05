@@ -25,7 +25,7 @@ const readFromStorage = () => {
   if (typeof window === "undefined") return
 
   const { networks, error } = parseStoredCustomNetworks(
-    window.localStorage.getItem(CUSTOM_NETWORK_STORAGE_KEY)
+    window.localStorage.getItem(CUSTOM_NETWORK_STORAGE_KEY) ?? undefined
   )
   state = { networks, error }
 }

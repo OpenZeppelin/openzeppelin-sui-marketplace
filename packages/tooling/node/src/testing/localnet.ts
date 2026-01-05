@@ -9,6 +9,7 @@ import { once } from "node:events"
 import { createWriteStream } from "node:fs"
 import {
   cp,
+  mkdtemp,
   mkdir,
   readdir,
   readFile,
@@ -17,6 +18,7 @@ import {
   writeFile
 } from "node:fs/promises"
 import net from "node:net"
+import os from "node:os"
 import path from "node:path"
 import { setTimeout as delay } from "node:timers/promises"
 import { fileURLToPath } from "node:url"
@@ -36,20 +38,14 @@ import type {
   BuildOutput,
   PublishArtifact
 } from "@sui-oracle-market/tooling-core/types"
-import { pickRootNonDependencyArtifact } from "@sui-oracle-market/tooling-node/artifacts"
-import type { SuiResolvedConfig } from "@sui-oracle-market/tooling-node/config"
-import { createSuiClient } from "@sui-oracle-market/tooling-node/describe-object"
-import { loadKeypair } from "@sui-oracle-market/tooling-node/keypair"
-import { probeRpcHealth } from "@sui-oracle-market/tooling-node/localnet"
-import {
-  buildMovePackage,
-  clearPublishedEntryForNetwork
-} from "@sui-oracle-market/tooling-node/move"
-import { publishPackageWithLog } from "@sui-oracle-market/tooling-node/publish"
-import { signAndExecute } from "@sui-oracle-market/tooling-node/transactions"
-
-import { withEnv } from "../helpers/env"
-import { createTempDir } from "../helpers/fs"
+import { pickRootNonDependencyArtifact } from "../artifacts.ts"
+import type { SuiResolvedConfig } from "../config.ts"
+import { createSuiClient } from "../describe-object.ts"
+import { loadKeypair } from "../keypair.ts"
+import { probeRpcHealth } from "../localnet.ts"
+import { buildMovePackage, clearPublishedEntryForNetwork } from "../move.ts"
+import { publishPackageWithLog } from "../publish.ts"
+import { signAndExecute } from "../transactions.ts"
 
 export type LocalnetStartOptions = {
   testId: string
@@ -128,6 +124,39 @@ const DEFAULT_FAUCET_PORT = 9123
 const DEFAULT_MINIMUM_COIN_OBJECTS = 2
 const DEFAULT_MINIMUM_GAS_COIN_BALANCE = 500_000_000n
 
+const createTempDir = async (prefix = "tooling-test-") =>
+  mkdtemp(path.join(os.tmpdir(), prefix))
+
+const withEnv = async <T>(
+  updates: Record<string, string | undefined>,
+  action: () => Promise<T> | T
+): Promise<T> => {
+  const previous = new Map<string, string | undefined>()
+
+  Object.entries(updates).forEach(([key, value]) => {
+    previous.set(key, process.env[key])
+    if (value === undefined) {
+      // eslint-disable-next-line @typescript-eslint/no-dynamic-delete
+      delete process.env[key]
+    } else {
+      process.env[key] = value
+    }
+  })
+
+  try {
+    return await action()
+  } finally {
+    previous.forEach((value, key) => {
+      if (value === undefined) {
+        // eslint-disable-next-line @typescript-eslint/no-dynamic-delete
+        delete process.env[key]
+      } else {
+        process.env[key] = value
+      }
+    })
+  }
+}
+
 const execFile = promisify(execFileCallback)
 
 const sanitizeLabel = (value: string) =>
@@ -135,11 +164,53 @@ const sanitizeLabel = (value: string) =>
 
 const buildTempPrefix = (label: string) => `sui-it-${sanitizeLabel(label)}-`
 
+const LOCALNET_SKIP_ENV_KEYS = ["SUI_IT_SKIP_LOCALNET", "SKIP_LOCALNET"]
+
+const parseBooleanEnv = (value: string | undefined) => {
+  if (!value) return false
+  return ["1", "true", "yes", "on"].includes(value.toLowerCase())
+}
+
+const resolveSkipLocalnetEnvKey = () =>
+  LOCALNET_SKIP_ENV_KEYS.find((key) => parseBooleanEnv(process.env[key]))
+
+const assertLocalnetEnabled = () => {
+  const skipKey = resolveSkipLocalnetEnvKey()
+  if (!skipKey) return
+  throw new Error(
+    `Localnet execution is disabled via ${skipKey}. Unset it to run localnet tests.`
+  )
+}
+
+const resolveErrorCode = (error: unknown) => {
+  if (!error || typeof error !== "object") return undefined
+  const code = (error as { code?: string }).code
+  return typeof code === "string" ? code : undefined
+}
+
+const isPortPermissionError = (error: unknown) => {
+  const code = resolveErrorCode(error)
+  return code === "EPERM" || code === "EACCES"
+}
+
+const createLocalnetPortPermissionError = (action: string, error: unknown) => {
+  const code = resolveErrorCode(error) ?? "unknown"
+  return new Error(
+    `Localnet could not ${action} a port on 127.0.0.1 (${code}). This environment may block localnet networking. Re-run with elevated permissions or set SUI_IT_SKIP_LOCALNET=1 to skip localnet tests.`
+  )
+}
+
 const isPortAvailable = async (port: number): Promise<boolean> =>
-  new Promise((resolve) => {
+  new Promise((resolve, reject) => {
     const server = net.createServer()
     server.unref()
-    server.on("error", () => resolve(false))
+    server.on("error", (error) => {
+      if (isPortPermissionError(error)) {
+        reject(createLocalnetPortPermissionError("bind", error))
+        return
+      }
+      resolve(false)
+    })
     server.listen(port, "127.0.0.1", () => {
       server.close(() => resolve(true))
     })
@@ -149,7 +220,13 @@ const getAvailablePort = async (): Promise<number> =>
   new Promise((resolve, reject) => {
     const server = net.createServer()
     server.unref()
-    server.on("error", reject)
+    server.on("error", (error) => {
+      if (isPortPermissionError(error)) {
+        reject(createLocalnetPortPermissionError("open", error))
+        return
+      }
+      reject(error)
+    })
     server.listen(0, "127.0.0.1", () => {
       const address = server.address()
       if (!address || typeof address === "string") {
@@ -438,6 +515,7 @@ const startLocalnetProcess = async ({
   keepTemp = false,
   rpcWaitTimeoutMs = 30_000
 }: LocalnetStartOptions): Promise<LocalnetInstance> => {
+  assertLocalnetEnabled()
   const tempDir = await createTempDir(buildTempPrefix(testId))
   const configDir = path.join(tempDir, "localnet-config")
   const logsDir = path.join(tempDir, "logs")
@@ -447,7 +525,7 @@ const startLocalnetProcess = async ({
   const ports = await resolveLocalnetPorts(withFaucet)
   const logPath = path.join(logsDir, "localnet.log")
   const logStream = createWriteStream(logPath, { flags: "a" })
-  let processHandle: ChildProcess | null = null
+  let processHandle: ChildProcess | undefined
 
   try {
     await runSuiCommand([
@@ -480,7 +558,7 @@ const startLocalnetProcess = async ({
     const faucetHost = withFaucet
       ? `http://127.0.0.1:${ports.faucetPort ?? DEFAULT_FAUCET_PORT}`
       : undefined
-    let treasuryAccount: TestAccount | undefined = undefined
+    let treasuryAccount: TestAccount | undefined
 
     try {
       treasuryAccount = await loadTreasuryAccount(configDir, suiClient)
@@ -570,6 +648,7 @@ const buildSuiConfig = ({
 const copyMoveSources = async (destinationRoot: string) => {
   const repoRoot = path.resolve(
     path.dirname(fileURLToPath(import.meta.url)),
+    "..",
     "..",
     "..",
     "..",
@@ -875,7 +954,7 @@ const fundAccountWithFaucet = async ({
 }
 
 export const createLocalnetHarness = () => {
-  let instance: LocalnetInstance | null = null
+  let instance: LocalnetInstance | undefined
 
   const start = async (options: LocalnetStartOptions) => {
     if (!instance) {
@@ -892,7 +971,7 @@ export const createLocalnetHarness = () => {
   const stop = async () => {
     if (instance) {
       await instance.stop()
-      instance = null
+      instance = undefined
     }
   }
 

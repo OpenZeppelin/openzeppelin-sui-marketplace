@@ -10,11 +10,21 @@ import yargs from "yargs"
 import { ensureSignerOwnsCoin } from "@sui-oracle-market/domain-core/models/currency"
 import { buildCoinTransferTransaction } from "@sui-oracle-market/tooling-core/coin"
 import { parsePositiveU64 } from "@sui-oracle-market/tooling-core/utils/utility"
+import { emitJsonOutput } from "@sui-oracle-market/tooling-node/json"
 import { logKeyValueGreen } from "@sui-oracle-market/tooling-node/log"
 import { runSuiScript } from "@sui-oracle-market/tooling-node/process"
 
+type CoinTransferArguments = {
+  coinId: string
+  amount: string
+  recipient: string
+  devInspect?: boolean
+  dryRun?: boolean
+  json?: boolean
+}
+
 runSuiScript(
-  async (tooling, cliArguments) => {
+  async (tooling, cliArguments: CoinTransferArguments) => {
     const inputs = normalizeInputs(cliArguments)
 
     const coinSnapshot = await tooling.resolveCoinOwnership({
@@ -33,10 +43,33 @@ runSuiScript(
       recipientAddress: inputs.recipientAddress
     })
 
-    const { transactionResult } = await tooling.signAndExecute({
+    const { execution, summary } = await tooling.executeTransactionWithSummary({
       transaction: transferTransaction,
-      signer: tooling.loadedEd25519KeyPair
+      signer: tooling.loadedEd25519KeyPair,
+      summaryLabel: "coin-transfer",
+      devInspect: cliArguments.devInspect,
+      dryRun: cliArguments.dryRun
     })
+
+    if (!execution) return
+
+    const digest = execution.transactionResult.digest
+
+    if (
+      emitJsonOutput(
+        {
+          coinObjectId: inputs.coinObjectId,
+          coinType: coinSnapshot.coinType,
+          amount: inputs.amount.toString(),
+          recipientAddress: inputs.recipientAddress,
+          senderAddress: tooling.loadedEd25519KeyPair.toSuiAddress(),
+          digest,
+          transactionSummary: summary
+        },
+        cliArguments.json
+      )
+    )
+      return
 
     logTransferSummary({
       coinObjectId: inputs.coinObjectId,
@@ -44,7 +77,7 @@ runSuiScript(
       amount: inputs.amount,
       recipientAddress: inputs.recipientAddress,
       senderAddress: tooling.loadedEd25519KeyPair.toSuiAddress(),
-      digest: transactionResult.digest
+      digest
     })
   },
   yargs()
@@ -64,6 +97,23 @@ runSuiScript(
       type: "string",
       description: "Recipient address for the transfer",
       demandOption: true
+    })
+    .option("devInspect", {
+      alias: ["dev-inspect", "debug"],
+      type: "boolean",
+      default: false,
+      description: "Run a dev-inspect and log VM error details."
+    })
+    .option("dryRun", {
+      alias: ["dry-run"],
+      type: "boolean",
+      default: false,
+      description: "Run dev-inspect and exit without executing the transaction."
+    })
+    .option("json", {
+      type: "boolean",
+      default: false,
+      description: "Output results as JSON."
     })
     .strict()
 )

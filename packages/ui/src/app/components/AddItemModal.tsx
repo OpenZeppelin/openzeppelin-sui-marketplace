@@ -94,7 +94,7 @@ const ListingSummarySection = ({
               explorerUrl={explorerUrl}
             />
           </div>
-        ) : null}
+        ) : undefined}
       </div>
     </div>
     <div className="mt-4 flex flex-wrap items-center gap-3 text-xs">
@@ -104,10 +104,10 @@ const ListingSummarySection = ({
           label="Listing ID"
           explorerUrl={explorerUrl}
         />
-      ) : null}
+      ) : undefined}
       {shopId ? (
         <CopyableId value={shopId} label="Shop ID" explorerUrl={explorerUrl} />
-      ) : null}
+      ) : undefined}
     </div>
   </ModalSection>
 )
@@ -213,7 +213,7 @@ const AddItemModal = ({
   const errorState =
     transactionState.status === "error" ? transactionState : undefined
 
-  if (!open) return null
+  if (!open) return <></>
 
   return (
     <ModalFrame onClose={onClose}>
@@ -247,7 +247,7 @@ const AddItemModal = ({
                   label="Shop"
                   explorerUrl={explorerUrl}
                 />
-              ) : null
+              ) : undefined
             }
           />
 
@@ -280,7 +280,7 @@ const AddItemModal = ({
                     <span className={modalFieldErrorTextClassName}>
                       {fieldErrors.itemName}
                     </span>
-                  ) : null}
+                  ) : undefined}
                 </label>
                 <label className={modalFieldLabelClassName}>
                   <span className={modalFieldTitleClassName}>Item type</span>
@@ -306,7 +306,7 @@ const AddItemModal = ({
                     <span className={modalFieldErrorTextClassName}>
                       {fieldErrors.itemType}
                     </span>
-                  ) : null}
+                  ) : undefined}
                 </label>
               </div>
             </ModalSection>
@@ -344,7 +344,7 @@ const AddItemModal = ({
                     <span className={modalFieldErrorTextClassName}>
                       {fieldErrors.basePrice}
                     </span>
-                  ) : null}
+                  ) : undefined}
                 </label>
                 <label className={modalFieldLabelClassName}>
                   <span className={modalFieldTitleClassName}>Stock</span>
@@ -370,7 +370,7 @@ const AddItemModal = ({
                     <span className={modalFieldErrorTextClassName}>
                       {fieldErrors.stock}
                     </span>
-                  ) : null}
+                  ) : undefined}
                 </label>
                 <label
                   className={clsx(modalFieldLabelClassName, "md:col-span-2")}
@@ -407,7 +407,7 @@ const AddItemModal = ({
                     <span className={modalFieldErrorTextClassName}>
                       {fieldErrors.spotlightDiscountId}
                     </span>
-                  ) : null}
+                  ) : undefined}
                 </label>
               </div>
             </ModalSection>
@@ -436,7 +436,7 @@ const AddItemModal = ({
                     <div className="mt-2 overflow-auto text-[0.7rem] text-slate-500 dark:text-slate-200/60">
                       {shortenId(formState.itemType, 10, 8)}
                     </div>
-                  ) : null}
+                  ) : undefined}
                 </div>
                 <div className="rounded-xl border border-slate-200/70 bg-white/80 p-3 dark:border-slate-50/15 dark:bg-slate-950/60">
                   <div className="text-[0.6rem] uppercase tracking-[0.18em] text-slate-500 dark:text-slate-200/60">

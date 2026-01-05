@@ -18,14 +18,15 @@ import {
 } from "@sui-oracle-market/domain-core/models/discount"
 import { SUI_CLOCK_ID } from "@sui-oracle-market/domain-core/models/pyth"
 import { buildUpdateDiscountTemplateTransaction } from "@sui-oracle-market/domain-core/ptb/discount-template"
-import { resolveLatestShopIdentifiers } from "@sui-oracle-market/domain-node/shop"
 import {
   parseNonNegativeU64,
   parseOptionalU64
 } from "@sui-oracle-market/tooling-core/utils/utility"
+import { emitJsonOutput } from "@sui-oracle-market/tooling-node/json"
 import { logKeyValueGreen } from "@sui-oracle-market/tooling-node/log"
 import { runSuiScript } from "@sui-oracle-market/tooling-node/process"
 import { logDiscountTemplateSummary } from "../../utils/log-summaries.ts"
+import { resolveOwnerShopIdentifiers } from "../../utils/shop-context.ts"
 
 runSuiScript(
   async (tooling, cliArguments) => {
@@ -34,15 +35,13 @@ runSuiScript(
       tooling.network.networkName
     )
 
-    const shopSharedObject = await tooling.getSuiSharedObject({
-      objectId: inputs.shopId,
-      mutable: false
+    const shopSharedObject = await tooling.getImmutableSharedObject({
+      objectId: inputs.shopId
     })
-    const discountTemplateShared = await tooling.getSuiSharedObject({
-      objectId: inputs.discountTemplateId,
-      mutable: true
+    const discountTemplateShared = await tooling.getMutableSharedObject({
+      objectId: inputs.discountTemplateId
     })
-    const sharedClockObject = await tooling.getSuiSharedObject({
+    const sharedClockObject = await tooling.getImmutableSharedObject({
       objectId: SUI_CLOCK_ID
     })
 
@@ -60,10 +59,17 @@ runSuiScript(
         sharedClockObject
       })
 
-    const { transactionResult } = await tooling.signAndExecute({
+    const { execution, summary } = await tooling.executeTransactionWithSummary({
       transaction: updateDiscountTemplateTransaction,
-      signer: tooling.loadedEd25519KeyPair
+      signer: tooling.loadedEd25519KeyPair,
+      summaryLabel: "update-discount-template",
+      devInspect: cliArguments.devInspect,
+      dryRun: cliArguments.dryRun
     })
+
+    if (!execution) return
+
+    const digest = execution.transactionResult.digest
 
     const discountTemplateSummary = await getDiscountTemplateSummary(
       inputs.shopId,
@@ -71,9 +77,20 @@ runSuiScript(
       tooling.suiClient
     )
 
+    if (
+      emitJsonOutput(
+        {
+          discountTemplate: discountTemplateSummary,
+          digest,
+          transactionSummary: summary
+        },
+        cliArguments.json
+      )
+    )
+      return
+
     logDiscountTemplateSummary(discountTemplateSummary)
-    if (transactionResult.digest)
-      logKeyValueGreen("digest")(transactionResult.digest)
+    if (digest) logKeyValueGreen("digest")(digest)
   },
   yargs()
     .option("discountTemplateId", {
@@ -119,19 +136,36 @@ runSuiScript(
       alias: "shop-package-id",
       type: "string",
       description:
-        "Package ID for the sui_oracle_market Move package; inferred from artifacts if omitted."
+        "Package ID for the sui_oracle_market Move package; defaults to the latest artifact when omitted."
     })
     .option("shopId", {
       alias: "shop-id",
       type: "string",
       description:
-        "Shared Shop object ID; defaults to the latest Shop artifact if available."
+        "Shared Shop object ID; defaults to the latest Shop artifact when available."
     })
     .option("ownerCapId", {
       alias: ["owner-cap-id", "owner-cap"],
       type: "string",
       description:
-        "ShopOwnerCap object ID that authorizes updating the discount template; defaults to the latest artifact when omitted."
+        "ShopOwnerCap object ID authorizing the mutation; defaults to the latest artifact when omitted."
+    })
+    .option("devInspect", {
+      alias: ["dev-inspect", "debug"],
+      type: "boolean",
+      default: false,
+      description: "Run a dev-inspect and log VM error details."
+    })
+    .option("dryRun", {
+      alias: ["dry-run"],
+      type: "boolean",
+      default: false,
+      description: "Run dev-inspect and exit without executing the transaction."
+    })
+    .option("json", {
+      type: "boolean",
+      default: false,
+      description: "Output results as JSON."
     })
     .strict()
 )
@@ -150,14 +184,12 @@ const normalizeInputs = async (
   },
   networkName: string
 ) => {
-  const { packageId, shopId, ownerCapId } = await resolveLatestShopIdentifiers(
-    {
-      packageId: cliArguments.shopPackageId,
-      shopId: cliArguments.shopId,
-      ownerCapId: cliArguments.ownerCapId
-    },
-    networkName
-  )
+  const { packageId, shopId, ownerCapId } = await resolveOwnerShopIdentifiers({
+    networkName,
+    shopPackageId: cliArguments.shopPackageId,
+    shopId: cliArguments.shopId,
+    ownerCapId: cliArguments.ownerCapId
+  })
 
   const ruleKind = parseDiscountRuleKind(cliArguments.ruleKind)
   const startsAt = parseNonNegativeU64(

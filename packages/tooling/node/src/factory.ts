@@ -19,9 +19,15 @@ import {
 import { getSuiSharedObject } from "@sui-oracle-market/tooling-core/shared-object"
 import { ensureFoundedAddress, withTestnetFaucetRetry } from "./address.ts"
 import type { SuiNetworkConfig, SuiResolvedConfig } from "./config.ts"
+import { maybeLogDevInspect } from "./dev-inspect.ts"
 import { loadKeypair } from "./keypair.ts"
 import { publishPackage, publishPackageWithLog } from "./publish.ts"
+import {
+  getImmutableSharedObject,
+  getMutableSharedObject
+} from "./shared-objects.ts"
 import { executeTransactionOnce, signAndExecute } from "./transactions.ts"
+import { executeTransactionWithSummary } from "./transactions-execution.ts"
 
 export type ToolingContext = {
   suiClient: SuiClient
@@ -43,6 +49,12 @@ export type Tooling = ToolingContext & {
   getSuiSharedObject: (
     args: Parameters<typeof getSuiSharedObject>[0]
   ) => ReturnType<typeof getSuiSharedObject>
+  getImmutableSharedObject: (
+    args: Parameters<typeof getImmutableSharedObject>[0]
+  ) => ReturnType<typeof getImmutableSharedObject>
+  getMutableSharedObject: (
+    args: Parameters<typeof getMutableSharedObject>[0]
+  ) => ReturnType<typeof getMutableSharedObject>
   getSuiDynamicFieldObject: (
     args: Parameters<typeof getSuiDynamicFieldObject>[0]
   ) => ReturnType<typeof getSuiDynamicFieldObject>
@@ -67,9 +79,15 @@ export type Tooling = ToolingContext & {
   signAndExecute: (
     args: Parameters<typeof signAndExecute>[0]
   ) => ReturnType<typeof signAndExecute>
+  executeTransactionWithSummary: (
+    args: Parameters<typeof executeTransactionWithSummary>[0]
+  ) => ReturnType<typeof executeTransactionWithSummary>
   executeTransactionOnce: (
     args: Parameters<typeof executeTransactionOnce>[0]
   ) => ReturnType<typeof executeTransactionOnce>
+  maybeLogDevInspect: (
+    args: Parameters<typeof maybeLogDevInspect>[0]
+  ) => ReturnType<typeof maybeLogDevInspect>
   ensureFoundedAddress: (
     args: Parameters<typeof ensureFoundedAddress>[0]
   ) => ReturnType<typeof ensureFoundedAddress>
@@ -185,6 +203,10 @@ export const createTooling = async ({
     getSuiObject: async (args) => getSuiObject(args, { suiClient }),
     getObjectSafe: async (args) => getObjectSafe(args, { suiClient }),
     getSuiSharedObject: async (args) => getSuiSharedObject(args, { suiClient }),
+    getImmutableSharedObject: async (args) =>
+      getImmutableSharedObject(args, { suiClient, suiConfig }),
+    getMutableSharedObject: async (args) =>
+      getMutableSharedObject(args, { suiClient, suiConfig }),
     getSuiDynamicFieldObject: async (args) =>
       getSuiDynamicFieldObject(args, { suiClient }),
     getAllOwnedObjectsByFilter: async (args) =>
@@ -200,8 +222,19 @@ export const createTooling = async ({
       resolveCurrencyObjectId(args, { suiClient }),
     signAndExecute: async (args) =>
       signAndExecute(args, { suiClient, suiConfig }),
+    executeTransactionWithSummary: async (args) =>
+      executeTransactionWithSummary(args, { suiClient, suiConfig }),
     executeTransactionOnce: async (args) =>
       executeTransactionOnce(args, { suiClient, suiConfig }),
+    maybeLogDevInspect: async (args) =>
+      maybeLogDevInspect(
+        {
+          ...args,
+          senderAddress:
+            args.senderAddress ?? loadedEd25519KeyPair.toSuiAddress()
+        },
+        { suiClient, suiConfig }
+      ),
     ensureFoundedAddress: async (args) =>
       ensureFoundedAddress(args, { suiClient, suiConfig }),
     withTestnetFaucetRetry: async (args, transactionRun) =>

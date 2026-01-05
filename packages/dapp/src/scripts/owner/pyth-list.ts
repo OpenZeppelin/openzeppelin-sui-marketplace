@@ -23,6 +23,7 @@ import {
 } from "@sui-oracle-market/domain-core/models/pyth-feeds"
 import type { CurrencyRegistryEntry } from "@sui-oracle-market/tooling-core/coin-registry"
 import { SUI_COIN_REGISTRY_ID } from "@sui-oracle-market/tooling-node/constants"
+import { emitJsonOutput } from "@sui-oracle-market/tooling-node/json"
 import {
   logKeyValueBlue,
   logKeyValueGreen,
@@ -91,9 +92,8 @@ runSuiScript(
     })
 
     if (filteredSummaries.length === 0) {
-      if (!cliArguments.json) {
-        logKeyValueYellow("Pyth feeds")("No feeds returned by Hermes.")
-      }
+      if (emitJsonOutput([], cliArguments.json)) return
+      logKeyValueYellow("Pyth feeds")("No feeds returned by Hermes.")
       return
     }
 
@@ -109,8 +109,7 @@ runSuiScript(
       suiClient: tooling.suiClient
     })
 
-    if (cliArguments.json)
-      return console.log(JSON.stringify(feedRecords, null, 2))
+    if (emitJsonOutput(feedRecords, cliArguments.json)) return
 
     logHeader({
       networkName: tooling.network.networkName,
@@ -194,7 +193,7 @@ runSuiScript(
     .option("json", {
       type: "boolean",
       default: false,
-      description: "Output the feed list as JSON."
+      description: "Output results as JSON."
     })
     .strict()
 )

@@ -57,7 +57,7 @@ type SuiCliEnvironmentJsonEntry = {
   chainId?: string
 }
 
-type SuiCliEnvironmentsJson = [SuiCliEnvironmentJsonEntry[], string | null]
+type SuiCliEnvironmentsJson = [SuiCliEnvironmentJsonEntry[], string | undefined]
 
 const parseActiveEnvironmentOutput = (output: string): string | undefined => {
   const normalizedOutput = output.trim()

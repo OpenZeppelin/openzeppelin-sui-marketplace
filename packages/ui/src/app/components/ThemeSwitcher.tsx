@@ -18,7 +18,7 @@ const ThemeSwitcher = () => {
     setTheme(resolvedTheme === "dark" ? "light" : "dark")
   }
 
-  if (!mounted || !resolvedTheme) return null
+  if (!mounted || !resolvedTheme) return <></>
 
   return (
     <Toggle.Root aria-label="Toggle theme" onPressedChange={toggleTheme}>

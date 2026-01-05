@@ -33,20 +33,20 @@ type ProcessInfo = {
 }
 
 /**
- * Parses a single line from `ps` into a structured `ProcessInfo`, or null if
+ * Parses a single line from `ps` into a structured `ProcessInfo`, or undefined if
  * the line does not conform to the expected format.
  */
-const parseProcessLine = (line: string): ProcessInfo | null => {
+const parseProcessLine = (line: string): ProcessInfo | undefined => {
   const trimmedLine = line.trim()
-  if (!trimmedLine) return null
+  if (!trimmedLine) return undefined
 
   const match = trimmedLine.match(/^(\d+)\s+(\S+)\s+(.*)$/)
-  if (!match) return null
+  if (!match) return undefined
 
   const [, pidLiteral, ttyLiteral, argumentsLiteral] = match
   const pid = Number(pidLiteral)
 
-  if (Number.isNaN(pid)) return null
+  if (Number.isNaN(pid)) return undefined
 
   return {
     pid,

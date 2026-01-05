@@ -62,7 +62,7 @@ export type RpcSnapshot = {
   latestCheckpoint: string
   validatorCount: number
   referenceGasPrice: bigint
-  epochStartTimestampMs?: string | number | null
+  epochStartTimestampMs?: string | number
 }
 
 export type ProbeResult =
@@ -85,7 +85,7 @@ export const getRpcSnapshot = async (rpcUrl: string): Promise<RpcSnapshot> => {
     latestCheckpoint,
     validatorCount: systemState.activeValidators?.length ?? 0,
     referenceGasPrice,
-    epochStartTimestampMs: systemState.epochStartTimestampMs
+    epochStartTimestampMs: systemState.epochStartTimestampMs ?? undefined
   }
 }
 

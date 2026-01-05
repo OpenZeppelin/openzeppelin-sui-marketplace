@@ -147,8 +147,8 @@ export const normalizeOptionalAddress = (value?: string) =>
  * Versions are u64 on chain; keeping them as strings avoids precision loss.
  */
 export const normalizeVersion = (
-  value?: number | string | null
-): string | undefined => (value == null ? undefined : String(value))
+  value?: number | string
+): string | undefined => (value === undefined ? undefined : String(value))
 
 /**
  * Fetches an object with owner metadata, normalizing the ID.
@@ -218,22 +218,16 @@ export const normalizeOptionalIdFromValue = (
   }
 
   if (
+    value &&
     typeof value === "object" &&
-    value !== null &&
     "some" in value &&
     (value as { some?: unknown }).some !== undefined
   )
     return attemptNormalize((value as { some?: unknown }).some)
 
-  if (
-    typeof value === "object" &&
-    value !== null &&
-    "none" in value &&
-    (value as { none?: unknown }).none === null
-  )
-    return undefined
+  if (value && typeof value === "object" && "none" in value) return undefined
 
-  if (typeof value === "object" && value !== null && "fields" in value)
+  if (value && typeof value === "object" && "fields" in value)
     return attemptNormalize((value as { fields?: unknown }).fields)
 
   return attemptNormalize(value)
@@ -303,7 +297,7 @@ export const getAllOwnedObjectsByFilter = async (
   { suiClient }: ToolingCoreContext
 ): Promise<SuiObjectData[]> => {
   const objects: SuiObjectData[] = []
-  let cursor: string | null | undefined
+  let cursor: string | undefined
 
   do {
     const page = await suiClient.getOwnedObjects({
@@ -318,7 +312,7 @@ export const getAllOwnedObjectsByFilter = async (
         .map((entry) => entry.data)
         .filter(Boolean) as SuiObjectData[])
     )
-    cursor = page.hasNextPage ? page.nextCursor : undefined
+    cursor = page.hasNextPage ? (page.nextCursor ?? undefined) : undefined
   } while (cursor)
 
   return objects
@@ -370,7 +364,7 @@ export const objectTypeMatches = (
 export const extractOwnerAddress = (owner?: ObjectOwner): string => {
   if (!owner) throw new Error("Coin object is missing its owner.")
 
-  if (typeof owner !== "object" || owner === null) {
+  if (typeof owner !== "object") {
     throw new Error("Coin object is not address-owned.")
   }
 

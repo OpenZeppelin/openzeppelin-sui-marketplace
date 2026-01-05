@@ -50,7 +50,7 @@ const NetworkControls = () => {
     [deleteNetwork, openCreate, state.editingKey, state.mode]
   )
 
-  if (!isClientReady || !allowNetworkSwitching) return null
+  if (!isClientReady || !allowNetworkSwitching) return <></>
 
   return (
     <div className="flex flex-col items-center gap-2 sm:flex-row">
@@ -60,7 +60,7 @@ const NetworkControls = () => {
           options={options}
           onChange={handleNetworkChange}
         />
-      ) : null}
+      ) : undefined}
       <button
         type="button"
         onClick={openCreate}

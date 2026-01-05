@@ -28,6 +28,19 @@ export const assertTransactionSuccess = ({
     throw new Error(effects?.status?.error || "Transaction failed")
 }
 
+/**
+ * Detects stale object version errors that can be retried safely.
+ */
+export const isStaleObjectVersionError = (error: unknown) => {
+  const message =
+    error instanceof Error ? error.message : error ? String(error) : ""
+  const normalizedMessage = message.toLowerCase()
+  return (
+    normalizedMessage.includes("not available for consumption") &&
+    normalizedMessage.includes("current version")
+  )
+}
+
 type ObjectChangeWithType = Extract<
   NonNullable<SuiTransactionBlockResponse["objectChanges"]>[number],
   { type: "created" }

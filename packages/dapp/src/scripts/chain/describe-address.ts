@@ -130,7 +130,7 @@ const getOwnedObjectSummaries = async (
   summaries: OwnedObjectSummary[]
   truncated: boolean
 }> => {
-  let cursor: string | null | undefined
+  let cursor: string | undefined
   const ownedObjects: OwnedObjectSummary[] = []
   let truncated = false
 
@@ -154,7 +154,7 @@ const getOwnedObjectSummaries = async (
       break
     }
 
-    cursor = page.nextCursor
+    cursor = page.nextCursor ?? undefined
   }
 
   return {
