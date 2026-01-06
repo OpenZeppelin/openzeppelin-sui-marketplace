@@ -5,7 +5,7 @@ import { loadKeypair } from "./keypair.ts"
 
 /**
  * Resolves the effective owner address from explicit input, config, or keystore.
- * Mirrors EVM "deployer address" resolution but adapts to Sui's keystore formats.
+ * Adapts to Sui's keystore formats and account selection rules.
  */
 export const resolveOwnerAddress = async (
   providedAddress: string | undefined,

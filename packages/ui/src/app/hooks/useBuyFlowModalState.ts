@@ -611,6 +611,7 @@ export const useBuyFlowModalState = ({
       let transactionBlock: SuiTransactionBlockResponse
 
       if (isLocalnet) {
+        // Localnet signs in-wallet but executes via the app RPC to avoid wallet network mismatches.
         failureStage = "execute"
         const result = await localnetExecutor(buyTransaction, {
           chain: expectedChain

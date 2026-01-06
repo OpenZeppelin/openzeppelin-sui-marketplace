@@ -1,8 +1,7 @@
 /**
- * Starts (or checks) a Sui localnet, optionally with a faucet and regenesis, and waits for RPC readiness.
- * Localnet persists state via a config dir; regenesis wipes state and recreates the chain like a fresh genesis.
- * If you come from EVM, think "start a local chain + faucet" in one command, but with Sui object versions.
- * The script probes the RPC, funds the default account if needed, and logs a snapshot of chain metadata.
+ * Starts or checks a Sui localnet, optionally with faucet and regenesis.
+ * Localnet persists state in a config dir; regenesis wipes state and changes object IDs.
+ * Logs RPC readiness and funds the default account if needed.
  */
 import { spawn, type ChildProcess } from "node:child_process"
 import { once } from "node:events"

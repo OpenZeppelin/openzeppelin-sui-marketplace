@@ -1,8 +1,7 @@
 /**
- * Lists coin balances for an address, including object count and total amounts per coin type.
- * In Sui, coins are objects, so a balance is the sum across many Coin objects you own.
- * If you come from EVM, this shows both the aggregate balance and how many coin objects back it.
- * Helpful for understanding coin fragmentation and preparing inputs for transactions.
+ * Prints coin balances for an address, including object counts per coin type.
+ * On Sui, a "balance" is the sum of many Coin objects.
+ * Helpful for spotting fragmentation before building a PTB.
  */
 import yargs from "yargs"
 

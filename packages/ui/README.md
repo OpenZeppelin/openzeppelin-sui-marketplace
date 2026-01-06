@@ -1,36 +1,50 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# UI: Sui Oracle Market Dashboard
 
-## Getting Started
+This UI is a Next.js 16 app that talks directly to Sui via Mysten dapp-kit. It mirrors the on-chain object model: shared objects for storefront data, owned objects for wallet receipts and tickets.
 
-First, run the development server:
+## 1. Prereqs
+1. Localnet running (or a target network RPC).
+2. A published `sui_oracle_market` package and a Shop ID.
+3. A wallet with the right network selected.
 
+## 2. Run it
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+pnpm ui dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Docs site:
+```bash
+pnpm --filter learn dev
+```
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## 3. Configure networks (.env.local)
+Create `packages/ui/.env.local` and set package + shop IDs:
+```bash
+NEXT_PUBLIC_LOCALNET_CONTRACT_PACKAGE_ID=0x...
+NEXT_PUBLIC_LOCALNET_SHOP_ID=0x...
+NEXT_PUBLIC_TESTNET_CONTRACT_PACKAGE_ID=0x...
+NEXT_PUBLIC_TESTNET_SHOP_ID=0x...
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Optional UI labels:
+```bash
+NEXT_PUBLIC_APP_NAME="Sui Oracle Market"
+NEXT_PUBLIC_APP_DESCRIPTION="Sui Oracle Market"
+```
 
-## Learn More
+## 4. Localnet signing vs execution
+On localnet, the UI **signs** with the wallet but **executes** via the app RPC client to avoid wallet network mismatches. On non-local networks, it uses the wallet's `signAndExecuteTransaction` as usual. This logic lives in `src/app/hooks/useBuyFlowModalState.ts` and uses the localnet helpers in `src/app/helpers/localnet.ts`.
 
-To learn more about Next.js, take a look at the following resources:
+## 5. Useful files
+1. `src/app/hooks/useShopDashboardData.tsx` (shared vs owned queries)
+2. `src/app/hooks/useBuyFlowModalState.ts` (PTB execution)
+3. `src/app/components/BuyFlowModal.tsx` (transaction recap UI)
+4. `src/app/config/network.ts` (network defaults)
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## 6. Common issues
+1. Package ID shows as `0xNOTDEFINED` in the UI
+   - Set the `NEXT_PUBLIC_*_CONTRACT_PACKAGE_ID` variables.
+2. UI loads but no shop data appears
+   - Set `NEXT_PUBLIC_*_SHOP_ID` or select a shop in the UI.
+3. Localnet buys fail but testnet works
+   - Confirm you are running localnet at `http://127.0.0.1:9000`.

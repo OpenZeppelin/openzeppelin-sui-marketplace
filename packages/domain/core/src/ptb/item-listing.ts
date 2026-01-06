@@ -96,6 +96,7 @@ export const validateTemplateAndListing = async ({
 
   const normalizedShopId = normalizeSuiObjectId(shopId)
 
+  // Defensive cross-shop check: prevents attaching a foreign listing/template to this Shop.
   if (listing.shopAddress !== normalizedShopId)
     throw new Error(
       `Item listing ${listing.id} belongs to shop ${listing.shopAddress}, not ${normalizedShopId}.`

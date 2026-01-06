@@ -16,3 +16,5 @@ deployments/
 patches/pyth-crosschain/
 
 tmp.json
+
+.pnpm-store 

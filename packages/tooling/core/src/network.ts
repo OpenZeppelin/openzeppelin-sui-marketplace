@@ -3,7 +3,7 @@ import type { NetworkName } from "./types.ts"
 
 /**
  * Resolves a default fullnode RPC URL for known Sui networks.
- * Unlike EVM, Sui has first-class network names with canonical RPC endpoints.
+ * Sui exposes canonical RPC endpoints for named networks.
  */
 export const resolveCommonRpcUrl = (
   network: NetworkName | string
@@ -38,7 +38,7 @@ export const resolveRpcUrl = (
 
 /**
  * Builds a human-friendly explorer link for a transaction digest.
- * Useful when surfacing publish results to developers coming from EVM scan-style flows.
+ * Useful when surfacing publish results in CLI output.
  */
 export const buildExplorerUrl = (digest: string, network: NetworkName) => {
   const explorerNetwork = network === "mainnet" ? "" : `?network=${network}`

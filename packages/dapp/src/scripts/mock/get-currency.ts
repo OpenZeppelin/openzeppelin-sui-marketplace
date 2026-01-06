@@ -1,8 +1,6 @@
 /**
- * Inspects mock coin registry entries on localnet and prints metadata, caps, and supply details.
- * The coin registry is a shared object; each currency and its metadata live as separate objects.
- * If you come from EVM, this is closer to reading ERC-20 metadata and total supply via object queries.
- * It uses view calls and object inspection rather than mutating state.
+ * Reads coin registry metadata for a mock coin on localnet.
+ * Useful for verifying decimals/symbols and registry object IDs before registering a currency.
  */
 import type { SuiClient } from "@mysten/sui/client"
 import type { Transaction } from "@mysten/sui/transactions"

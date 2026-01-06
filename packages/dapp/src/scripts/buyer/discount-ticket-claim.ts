@@ -1,8 +1,7 @@
 /**
- * Claims a DiscountTicket from a DiscountTemplate by submitting a transaction against the shared Shop.
- * On Sui, claiming a coupon mints a new owned object, which can later be redeemed or transferred.
- * If you come from EVM, think of this as minting a one-time NFT from shared contract state.
- * The Clock shared object is passed in because time-based rules are enforced on chain.
+ * Claims a DiscountTicket from a DiscountTemplate by executing a PTB.
+ * Claiming mints an owned object; ownership proves eligibility for redemption later.
+ * The shared Clock is passed so time windows are enforced on-chain.
  */
 import yargs from "yargs"
 

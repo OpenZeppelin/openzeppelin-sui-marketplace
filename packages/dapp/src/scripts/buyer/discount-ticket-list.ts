@@ -1,8 +1,7 @@
 /**
- * Lists DiscountTicket objects owned by an address and prints their on-chain details.
- * Tickets are owned objects in Sui, so "having a coupon" means holding an object, not a balance in a contract.
- * If you come from EVM, this is closer to an NFT coupon than a mapping entry, and ownership is the source of truth.
- * The script derives the ticket type from the package ID and can filter by an optional Shop ID.
+ * Lists DiscountTicket objects owned by an address and prints their details.
+ * Tickets are address-owned objects, so possession is the source of truth (not a mapping).
+ * Optionally filters by Shop ID and resolves template metadata.
  */
 import yargs from "yargs"
 

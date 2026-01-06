@@ -1,8 +1,6 @@
 /**
- * Enables or disables a DiscountTemplate by toggling its active flag.
- * The template is a shared object, and the update is authorized by the ShopOwnerCap capability.
- * If you come from EVM, this is like flipping a boolean in contract storage, but via object mutation.
- * The script submits a single transaction and then re-reads the updated object summary.
+ * Enables or disables a DiscountTemplate (active flag).
+ * Requires the ShopOwnerCap capability.
  */
 import { normalizeSuiObjectId } from "@mysten/sui/utils"
 import yargs from "yargs"

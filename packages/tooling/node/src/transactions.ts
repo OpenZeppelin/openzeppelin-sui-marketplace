@@ -92,6 +92,7 @@ type GasPaymentOptions = {
 
 /**
  * Checks whether a transaction already has gas payment objects attached.
+ * Gas is explicit on Sui (Coin<SUI> objects), not an implicit balance.
  */
 const hasExistingGasPayment = (transaction: Transaction) => {
   const payment = transaction.getData().gasData.payment
@@ -100,7 +101,7 @@ const hasExistingGasPayment = (transaction: Transaction) => {
 
 /**
  * Ensures a fresh gas coin object is selected for the transaction.
- * Sui gas is paid with coin objects (each with a version), unlike EVM balances.
+ * Gas coins are versioned objects, so we pick a fresh one to avoid stale version errors.
  */
 const ensureGasPayment = async ({
   transaction,
@@ -129,6 +130,7 @@ type ExecuteOnceArgs = {
 
 /**
  * Executes a signed transaction once and persists object artifacts if it succeeds.
+ * Artifacts mirror the objectChanges response so scripts can reuse created IDs.
  */
 export const executeTransactionOnce = async (
   { transaction, signer, requestType, assertSuccess }: ExecuteOnceArgs,
@@ -204,8 +206,8 @@ const normalizeUnknownError = (error: unknown) =>
 
 /**
  * Signs and executes a transaction, retrying once on stale/locked gas objects.
- * Why: Gas coins are objects with versions; this helper refreshes gas to align with Sui’s
- * object model, similar to replacing a nonce-bumped tx in EVM when a coin is outdated.
+ * Gas coins are versioned objects; this helper refreshes gas selection when the input
+ * coin is stale or locked.
  */
 export const signAndExecute = async (
   {

@@ -1,6 +1,6 @@
 /**
- * Seeds a shop with accepted currencies, example listings, and discounts.
- * On testnet it registers USDC + WAL. On localnet it uses the mock coin/feed artifacts.
+ * Seeds a Shop with sample listings, currencies, and discounts.
+ * Uses localnet mock artifacts or testnet coins/feeds depending on network.
  */
 import path from "node:path"
 

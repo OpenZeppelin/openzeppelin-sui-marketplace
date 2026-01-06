@@ -67,6 +67,7 @@ const getStorefrontData = async ({
   shopId: string
   suiClient: SuiClient
 }) => {
+  // Storefront reads shared objects (listings/currencies/templates), not wallet-owned objects.
   const [snapshot, clockTimestampMs] = await Promise.all([
     getShopSnapshot(shopId, suiClient),
     getClockTimestampMs(suiClient)
@@ -115,6 +116,7 @@ const getWalletData = async ({
   shopId?: string
   suiClient: SuiClient
 }) => {
+  // Wallet reads owned objects (receipts/tickets) tied to the address.
   const resolvedPackageId = shopId
     ? await resolveShopPackageId({ shopId, packageId, suiClient })
     : normalizeOptionalId(packageId)

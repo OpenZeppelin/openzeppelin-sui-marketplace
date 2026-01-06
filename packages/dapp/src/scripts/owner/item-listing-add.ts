@@ -1,8 +1,7 @@
 /**
- * Adds a new ItemListing to a Shop with price, stock, and item type metadata.
- * The Shop is a shared object, while listings are separate objects created and owned by the Shop logic.
- * If you come from EVM, instead of pushing data into a mapping, you create a new on-chain object with its own ID.
- * Authorization is via the ShopOwnerCap capability object, not a contract-admin role.
+ * Adds a new ItemListing shared object and registers its marker under the Shop.
+ * Uses the listing's TypeInfo to enforce typed receipts.
+ * Requires the ShopOwnerCap capability.
  */
 import { normalizeSuiObjectId } from "@mysten/sui/utils"
 import yargs from "yargs"

@@ -10,8 +10,7 @@ import type { SuiAccountConfig } from "./config.ts"
 
 /**
  * Loads an Ed25519 keypair from env/config (private key, mnemonic, or Sui keystore).
- * Why: Sui uses explicit key material for signing PTBs; this mirrors EVM-style deployer wallets
- * while supporting the Sui CLI keystore format for local workflows.
+ * Sui uses explicit key material for signing PTBs, and the CLI keystore is the common local source.
  */
 export const loadKeypair = async ({
   accountPrivateKey,

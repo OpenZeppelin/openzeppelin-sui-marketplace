@@ -119,7 +119,7 @@ export const buildObjectInformation = ({
 
 /**
  * Logs a human-friendly view of object details.
- * Useful for EVM developers to see how Sui objects replace account storage.
+ * Useful for understanding ownership, versions, and object contents at a glance.
  */
 export const logObjectInformation = (objectInformation: ObjectInformation) => {
   logKeyValueGreen("Object")(objectInformation.objectId)

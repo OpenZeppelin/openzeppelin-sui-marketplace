@@ -1,6 +1,6 @@
 /**
- * Runs Move unit tests for a specific package using network-aware defaults.
- * The script resolves package paths against the repo move root and delegates to the Sui CLI.
+ * Runs Move unit tests for a package using the Sui CLI.
+ * Resolves package paths relative to the repo Move root.
  */
 import path from "node:path"
 import yargs from "yargs"

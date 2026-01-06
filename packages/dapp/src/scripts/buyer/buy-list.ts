@@ -1,8 +1,7 @@
 /**
- * Lists ShopItem receipt objects owned by an address and prints their related listing details.
- * On Sui, purchases mint an owned receipt object, so you query ownership instead of reading a mapping.
- * If you come from EVM, think of this as a transferable, NFT-like proof of purchase rather than a log event.
- * The shared Shop object is used only for lookup; the receipts themselves live in the buyer account.
+ * Lists ShopItem receipt objects owned by an address and enriches them with listing metadata.
+ * On Sui, receipts are address-owned objects (typed proofs), not events or mapping entries.
+ * The Shop is only used to resolve listing and item metadata; receipts stay in the wallet.
  */
 import type { SuiClient } from "@mysten/sui/client"
 import yargs from "yargs"

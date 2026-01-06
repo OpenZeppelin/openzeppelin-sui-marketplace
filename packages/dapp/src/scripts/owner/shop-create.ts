@@ -1,8 +1,6 @@
 /**
- * Creates a new Shop object from a published Move package.
- * On Sui, the shared Shop object acts like a contract instance, plus a separate owner capability.
- * If you come from EVM, this is closer to instantiating a contract with a factory.
- * The result is a shared Shop object plus an owner capability stored in artifacts.
+ * Creates a new shared Shop and mints a ShopOwnerCap for the caller.
+ * This is the "instantiate contract" step after publishing the package.
  */
 import yargs from "yargs"
 

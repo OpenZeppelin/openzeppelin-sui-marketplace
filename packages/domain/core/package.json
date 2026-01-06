@@ -12,5 +12,9 @@
     "@mysten/sui": "^1.45.2",
     "@pythnetwork/pyth-sui-js": "^2.4.0",
     "@sui-oracle-market/tooling-core": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.19.2",
+    "vitest": "^3.2.4"
   }
 }

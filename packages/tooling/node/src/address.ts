@@ -492,8 +492,8 @@ const topUpCoinObjects = async ({
 
 /**
  * Runs a transaction-like operation with a faucet-backed retry when gas is missing.
- * Why: Sui requires real gas coin objects for signing; this helper pre-funds (and retries once)
- * on localnet/devnet/testnet to smooth developer flows similar to an EVM auto-faucet.
+ * Sui requires real gas coin objects for signing; this helper pre-funds (and retries once)
+ * on localnet/devnet/testnet to smooth dev flows.
  */
 export const withTestnetFaucetRetry = async <T>(
   {

@@ -1,8 +1,6 @@
 /**
- * Publishes a Move package to the target network and records the deployment artifacts.
- * Sui deployment creates on-chain package objects and capabilities, so publishing is just another transaction.
- * If you come from EVM, this replaces "contract deploy" and can include unpublished dependencies in localnet.
- * The script handles faucet funding, gas budgeting, and skips publishing if already deployed.
+ * Publishes a Move package and records deployment artifacts (package ID, UpgradeCap, Publisher).
+ * Uses localnet dep-replacements when configured and can skip if already deployed.
  */
 import fs from "node:fs/promises"
 import os from "node:os"

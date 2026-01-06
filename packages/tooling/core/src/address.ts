@@ -4,8 +4,8 @@ import type { ToolingCoreContext } from "./context.ts"
 
 /**
  * Parses a comma-delimited address list, trims entries, and normalizes Sui addresses.
- * Sui addresses are 32-byte (0x + 64 hex chars) account IDs, not 20-byte EVM addresses,
- * so normalization ensures consistent length and casing for comparisons.
+ * Sui addresses and object IDs share the same 32-byte hex format (0x + 64 chars), so
+ * normalization keeps comparisons stable across CLI inputs and RPC outputs.
  */
 export const parseAddressList = ({
   rawAddresses,
@@ -37,8 +37,8 @@ export const parseAddressList = ({
 
 /**
  * Fetches the total SUI balance for an address by querying the SUI coin type.
- * On Sui, balances are represented as coin objects, not account-balance mappings
- * like in EVM; the RPC aggregates those coin objects for a total balance.
+ * On Sui, balances are represented as coin objects; the RPC aggregates them
+ * into a total for convenience.
  */
 export const getSuiBalance = async (
   { address }: { address: string },
@@ -101,8 +101,7 @@ export const getCoinBalances = async (
 
 /**
  * Checks whether an address meets a minimum total SUI balance threshold.
- * Useful for gating operations that require multiple gas coin objects in Sui,
- * where insufficient total balance can still be blocked by coin object scarcity.
+ * Note: this checks total balance only; it does not guarantee multiple coin objects exist.
  */
 export const asMinimumBalanceOf = async (
   {

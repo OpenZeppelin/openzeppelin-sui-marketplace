@@ -1,8 +1,6 @@
 /**
- * Attaches a DiscountTemplate to an ItemListing so the listing advertises that promotion.
- * Listings and templates are separate objects; this script mutates the listing to reference the template.
- * If you come from EVM, think of updating a struct field on a stored object rather than writing a mapping.
- * Requires the ShopOwnerCap capability because the listing is a shared object.
+ * Sets the listing's spotlight DiscountTemplate reference for UI promotion.
+ * Validates template ownership and requires the ShopOwnerCap capability.
  */
 import { normalizeSuiObjectId } from "@mysten/sui/utils"
 import yargs from "yargs"

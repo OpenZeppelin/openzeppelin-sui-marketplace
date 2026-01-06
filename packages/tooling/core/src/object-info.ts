@@ -14,8 +14,8 @@ export type OwnedObjectSummary = {
 
 /**
  * Translates the RPC owner descriptor into a readable label.
- * Sui ownership can be address-owned, object-owned, shared, or immutable,
- * which is a different mental model from EVM's account-centric state.
+ * Sui ownership can be address-owned, object-owned, shared, immutable, or consensus-address,
+ * which is richer than account-only ownership models.
  */
 export const mapOwnerToLabel = (owner?: unknown): string | undefined => {
   if (!owner) return undefined
@@ -53,8 +53,7 @@ export const countUniqueObjectTypes = (objects: OwnedObjectSummary[]) =>
 
 /**
  * Builds a log-friendly representation for an owned object entry.
- * Sui objects track versioning and previous transaction digests, which can help
- * EVM developers think of state changes per object rather than per account.
+ * Includes versioning and previous transaction digests to show object-level history.
  */
 export const buildOwnedObjectLogFields = (object: OwnedObjectSummary) => ({
   objectId: object.objectId,

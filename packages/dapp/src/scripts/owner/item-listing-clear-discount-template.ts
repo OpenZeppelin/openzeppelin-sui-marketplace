@@ -1,8 +1,6 @@
 /**
- * Clears the spotlighted DiscountTemplate reference from an ItemListing.
- * The listing is a shared object, so this mutation updates the listing's pointer to a template object.
- * If you come from EVM, this is like clearing a struct field back to None on a mutable object.
- * Requires the ShopOwnerCap capability to authorize the change.
+ * Clears the listing's spotlight DiscountTemplate reference.
+ * Requires the ShopOwnerCap capability.
  */
 import { normalizeSuiObjectId } from "@mysten/sui/utils"
 import yargs from "yargs"

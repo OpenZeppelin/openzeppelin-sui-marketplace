@@ -1,8 +1,7 @@
 /**
- * Creates a new DiscountTemplate object for a Shop with rule and schedule configuration.
- * In Sui, this mints a new on-chain object; ownership and mutability are explicit.
- * If you come from EVM, think "deploy a data object" rather than "append to an array in storage."
- * Authorization comes from the ShopOwnerCap, and the template can be global or listing-specific.
+ * Creates a DiscountTemplate shared object with rule + schedule.
+ * Templates can be global or scoped to a listing; the Clock enforces time windows.
+ * Requires the ShopOwnerCap capability.
  */
 import { normalizeSuiObjectId } from "@mysten/sui/utils"
 import yargs from "yargs"

@@ -173,8 +173,8 @@ const sanitizeNetworks = (
   )
 
 /**
- * Creates a tooling façade that binds Sui client + config to helper methods.
- * This gives EVM-style scripts a single entrypoint similar to a Hardhat Runtime Environment.
+ * Creates a tooling facade that binds Sui client + config to helper methods.
+ * Provides a single entrypoint for scripts with shared network and account state.
  */
 export const createTooling = async ({
   suiClient,

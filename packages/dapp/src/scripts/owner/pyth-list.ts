@@ -1,7 +1,6 @@
 /**
- * Lists Pyth feeds and enriches them with on-chain data needed to register
- * AcceptedCurrency entries (feed id + PriceInfoObject id).
- * Optional coin registry matching is included to surface coin types and currency ids.
+ * Lists Pyth feeds and resolves PriceInfoObject IDs for currency registration.
+ * Optionally matches feeds to coin registry entries for convenience.
  */
 import type { SuiClient } from "@mysten/sui/client"
 import { normalizeSuiObjectId } from "@mysten/sui/utils"

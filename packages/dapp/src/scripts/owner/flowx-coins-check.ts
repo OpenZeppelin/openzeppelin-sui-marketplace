@@ -1,10 +1,6 @@
 /**
- * Fetches FlowX testnet's "global coins" list and checks each coin for:
- * 1) Presence in Sui's shared coin registry (Currency<T> object exists).
- * 2) Presence of a Pyth price feed (and PriceInfoObject id) for the coin symbol.
- *
- * This is useful when you want "easy to get" testnet coins (via FlowX) that are also
- * compatible with scripts that require coin-registry + Pyth config.
+ * Checks FlowX testnet "global coins" against Sui coin registry + Pyth feeds.
+ * Helps pick testnet coins that can be registered as AcceptedCurrency entries.
  */
 import { normalizeSuiObjectId } from "@mysten/sui/utils"
 import yargs from "yargs"

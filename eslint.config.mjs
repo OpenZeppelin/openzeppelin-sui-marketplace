@@ -114,6 +114,23 @@ export default typescriptEslint.config(
     }
   },
   {
+    files: ["packages/learn/**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            "node:*",
+            "@sui-oracle-market/*-node",
+            "dapp/*",
+            "~~/dapp/*"
+          ],
+          paths: nodeBuiltinModules
+        }
+      ]
+    }
+  },
+  {
     ignores: [
       "**/node_modules/**",
       "packages/**/dist/**",

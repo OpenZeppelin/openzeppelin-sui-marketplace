@@ -6,8 +6,8 @@ import { getSuiObject, normalizeVersion } from "./object.ts"
 
 /**
  * Extracts the initial shared version from a shared object or object change.
- * Shared objects in Sui include an initial version that must be provided
- * when building PTBs, unlike EVM global state that does not require versions.
+ * Shared (consensus) objects carry `initial_shared_version`, which must be
+ * supplied when building PTBs that touch them.
  */
 export const extractInitialSharedVersion = (
   created: SuiObjectChangeCreated | SuiObjectData
@@ -38,8 +38,7 @@ export type WrappedSuiSharedObject = WrappedSuiObject & {
 
 /**
  * Fetches a shared object and returns the shared reference fields needed for Move calls.
- * Why: Shared objects carry an `initial_shared_version` that must be supplied in PTBs;
- * this helper extracts it so devs coming from EVM (where storage is global) don’t have to.
+ * Shared object refs require the object ID, mutability, and initial shared version.
  */
 export const getSuiSharedObject = async (
   { objectId, mutable = false }: { objectId: string; mutable?: boolean },

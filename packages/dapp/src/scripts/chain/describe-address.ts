@@ -1,8 +1,7 @@
 /**
- * Summarizes a Sui address: SUI balance, other coin balances, owned objects, and stake.
- * Balances on Sui are aggregated from multiple coin objects, not a single ledger entry.
- * If you come from EVM, "balance" is the sum of Coin objects you own, and owned objects are assets too.
- * Use this when you want a holistic view of an account's on-chain footprint.
+ * Summarizes a Sui address: balances, owned objects, and staking status.
+ * Balances are aggregated from multiple Coin objects; objects themselves are assets.
+ * Use this to audit an account's on-chain footprint.
  */
 import type { SuiClient } from "@mysten/sui/client"
 import { normalizeSuiAddress } from "@mysten/sui/utils"

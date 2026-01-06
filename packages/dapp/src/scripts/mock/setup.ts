@@ -1,8 +1,6 @@
 /**
- * Localnet-only bootstrap that publishes mock Move packages (coins, items, Pyth) and seeds initial objects.
- * On Sui, publishing a Move package creates on-chain package objects and capabilities, which this script records.
- * If you come from EVM, this is like deploying several contracts and minting starter assets in one flow.
- * It reuses artifact files so repeated runs are idempotent unless you force a re-publish.
+ * Localnet bootstrap: publishes mock Move packages (coins/items/Pyth) and seeds objects.
+ * Publishes packages, records artifacts, and reuses them to keep runs idempotent.
  */
 import path from "node:path"
 

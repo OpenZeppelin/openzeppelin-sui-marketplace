@@ -1,6 +1,52 @@
 #[allow(lint(public_entry), lint(self_transfer), unused_field)]
 module sui_oracle_market::shop;
 
+// === Concepts used in this module (what/why/how) ===
+// - Shared objects (Shop, ItemListing, AcceptedCurrency, DiscountTemplate): shared objects allow
+//   parallel writes on distinct objects, so each listing/currency/template can mutate without
+//   locking a monolithic map. They are created with obj::new and shared via txf::share_object.
+//   Docs: docs/03-shop-capabilities.md, docs/04-listings-receipts.md, docs/05-currencies-oracles.md,
+//   docs/06-discounts-tickets.md, docs/09-object-ownership.md
+// - Owned objects (ShopOwnerCap, DiscountTicket, ShopItem): ownership enforces authority or user
+//   assets. Passing an owned object by value is a single-use guarantee. Docs: docs/03-shop-capabilities.md,
+//   docs/04-listings-receipts.md, docs/06-discounts-tickets.md, docs/09-object-ownership.md
+// - Capability-based auth (ShopOwnerCap): admin entry points require the capability object, not
+//   tx::sender checks. This replaces Solidity modifiers. Docs: docs/03-shop-capabilities.md
+// - Dynamic fields (markers + per-claimer claims): lightweight membership indices stored under the
+//   Shop or DiscountTemplate. They keep discovery cheap and limit contention to the touched object.
+//   See dynamic_field::add/exists/remove/borrow. Docs: docs/04-listings-receipts.md, docs/06-discounts-tickets.md
+// - Type tags and TypeInfo: item and coin types are stored as TypeInfo so the type system enforces
+//   correctness at compile time (ShopItem<TItem>, Coin<T>). Docs: docs/04-listings-receipts.md,
+//   docs/05-currencies-oracles.md
+// - Phantom types: ShopItem<phantom TItem> records the item type in the type system without storing
+//   the value. Docs: docs/04-listings-receipts.md
+// - Abilities (key, store, copy, drop): key marks objects with identity, store allows storage, copy
+//   and drop allow value semantics. These drive ownership rules. Docs: docs/01-intro.md, docs/08-advanced.md
+// - Option types: opt::Option makes optional IDs and optional limits/expiry explicit instead of
+//   sentinel values. Docs: docs/04-listings-receipts.md, docs/06-discounts-tickets.md
+// - Entry functions vs view functions: public entry fun mutates state; #[ext(view)] functions are
+//   read-only and used for dev-inspect style queries. Docs: docs/08-advanced.md
+// - Events: event::emit writes typed events for indexers and UIs. Docs: docs/08-advanced.md,
+//   docs/11-data-access.md
+// - TxContext and sender: tx::TxContext is required for object creation and coin splits; tx::sender
+//   identifies the signer for access control and receipts. Docs: docs/08-advanced.md
+// - Object IDs and addresses: obj::UID, obj::uid_to_address, obj::id_from_address connect object
+//   identity to addresses for indexing and event payloads. Docs: docs/08-advanced.md
+// - Transfers and sharing: txf::public_transfer moves owned objects; txf::share_object makes shared
+//   objects. Docs: docs/03-shop-capabilities.md, docs/08-advanced.md
+// - Coins and coin registry: Coin<T> is a resource, coin_registry::Currency<T> supplies metadata.
+//   coin::split and coin::destroy_zero manage payment/change. Docs: docs/05-currencies-oracles.md,
+//   docs/10-ptb-gas.md
+// - Clock and time: clock::Clock supplies trusted time for discount windows and oracle freshness.
+//   Docs: docs/05-currencies-oracles.md, docs/06-discounts-tickets.md
+// - Oracle objects (Pyth): price feeds are objects (PriceInfoObject) validated by feed_id and object
+//   ID; guardrails enforce freshness and confidence. Docs: docs/05-currencies-oracles.md
+// - Fixed-point math: prices are stored in USD cents, discounts in basis points, and pow10 tables
+//   are used for scaling. Docs: docs/08-advanced.md
+// - Enums: DiscountRule, DiscountRuleKind, ReferenceKind model variant logic explicitly. Docs: docs/06-discounts-tickets.md
+// - Test-only APIs: #[test_only] functions expose helpers for Move tests without shipping them to
+//   production calls. Docs: docs/08-advanced.md
+
 use pyth::i64 as pyth_i64;
 use pyth::price as pyth_price;
 use pyth::price_feed as pyth_price_feed;
@@ -73,7 +119,7 @@ const BASIS_POINT_DENOMINATOR: u64 = 10_000;
 const DEFAULT_MAX_PRICE_AGE_SECS: u64 = 60;
 const MAX_PRICE_AGE_SECS_CAP: u64 = DEFAULT_MAX_PRICE_AGE_SECS;
 const MAX_DECIMAL_POWER: u64 = 38;
-const DEFAULT_MAX_CONFIDENCE_RATIO_BPS: u64 = 1_000; // Reject price feeds with σ/μ above 10%.
+const DEFAULT_MAX_CONFIDENCE_RATIO_BPS: u64 = 1_000; // Reject price feeds with sigma/mu above 10%.
 const MAX_CONFIDENCE_RATIO_BPS_CAP: u64 = DEFAULT_MAX_CONFIDENCE_RATIO_BPS;
 const PYTH_PRICE_IDENTIFIER_LENGTH: u64 = 32;
 const DEFAULT_MAX_PRICE_STATUS_LAG_SECS: u64 = 5; // Allow small attestation/publish skew without halting checkout.
@@ -223,9 +269,9 @@ public struct DiscountTemplateMarker has copy, drop, store {
   applies_to_listing: opt::Option<obj::ID>,
 }
 
-/// Discount ticket that future buyers will redeem to later use during purchase flow.
-/// Non-transferable: redemption enforces the original claimer, so transferring the object will make
-/// it unusable.
+/// Discount ticket that future buyers will redeem during purchase flow.
+/// Tickets are owned objects. They can be transferred, but redemption enforces the original claimer
+/// so "transferable" does not mean "redeemable."
 public struct DiscountTicket has key, store {
   id: obj::UID,
   discount_template_id: address,
@@ -418,7 +464,7 @@ public entry fun disable_shop(
 /// Sui mindset:
 /// - Access control is explicit: the operator must show the `ShopOwnerCap` rather than relying on
 ///   `tx::sender`. Rotating the cap keeps payouts aligned to the current operator.
-/// - Buyers never handle capabilities—checkout remains permissionless against the shared `Shop`.
+/// - Buyers never handle capabilities--checkout remains permissionless against the shared `Shop`.
 public entry fun update_shop_owner(
   shop: &mut Shop,
   owner_cap: &mut ShopOwnerCap,
@@ -449,7 +495,7 @@ public entry fun update_shop_owner(
 /// Sui mindset:
 /// - Capability-first auth replaces Solidity modifiers: the operator must present `ShopOwnerCap`
 ///   minted during `create_shop`; `tx::sender` alone is never trusted. Losing the cap means losing
-///   control—much like losing a private key—but without implicit global ownership variables.
+///   control--much like losing a private key--but without implicit global ownership variables.
 /// - Listings are shared objects registered via a lightweight marker under the shared `Shop`.
 ///   Admin flows edit the listing object directly while the marker keeps membership checks cheap
 ///   and localized, avoiding a monolithic storage map like Solidity.
@@ -503,6 +549,8 @@ fun add_item_listing_core<T: store>(
     stock,
   });
 
+  // Marker entries act like a membership index: the Shop stays slim while each listing mutates
+  // independently, keeping shared-object contention low.
   add_listing_marker(shop, listing_id);
   (listing, listing_id, listing_address)
 }
@@ -579,9 +627,9 @@ public entry fun remove_item_listing(
 ///
 /// Sui mindset:
 /// - Payment assets are Move resources (`Coin<T>`, `Currency<T>`) instead of ERC-20 balances, so we
-///   register by type—not by interface address—to keep currencies separated at compile time.
+///   register by type--not by interface address--to keep currencies separated at compile time.
 /// - Metadata (symbol/decimals) is fetched from `coin_registry`, a shared on-chain registry, rather
-///   than trusting whatever a token contract returns. This avoids the “fake decimals” risk common in
+///   than trusting whatever a token contract returns. This avoids the "fake decimals" risk common in
 ///   ERC-20 land.
 /// - Operators prove authority with `ShopOwnerCap`; buyers never touch this path. The cap pattern is
 ///   the Sui-native replacement for `onlyOwner`.
@@ -593,7 +641,7 @@ public entry fun remove_item_listing(
 ///   passing calldata plus proofs instead of depending on global storage.
 /// - Sellers can optionally tighten oracle guardrails per currency (`max_price_age_secs_cap`,
 ///   `max_confidence_ratio_bps_cap`, `max_price_status_lag_secs_cap`). Buyers may only tighten
-///   further—never loosen—mirroring “slippage limits” but enforced with object caps instead of
+///   further--never loosen--mirroring "slippage limits" but enforced with object caps instead of
 ///   unbounded calldata.
 public entry fun add_accepted_currency<T>(
   shop: &mut Shop,
@@ -611,6 +659,7 @@ public entry fun add_accepted_currency<T>(
 
   let coin_type = currency_type<T>();
 
+  // Bind this currency to a specific PriceInfoObject to prevent oracle feed spoofing.
   validate_accepted_currency_inputs(
     shop,
     &coin_type,
@@ -751,7 +800,7 @@ fun create_discount_template_core(
 /// Create a discount template anchored under the shop.
 ///
 /// Templates are shared configuration objects indexed by a marker under the shop, so they inherit
-/// the shop’s access control and remain addressable by `obj::ID` for UIs. Claims remain dynamic
+/// the shop's access control and remain addressable by `obj::ID` for UIs. Claims remain dynamic
 /// fields under each template to enforce one-claim-per-address. Callers send primitive args
 /// (`rule_kind` of `0 = fixed` or `1 = percent`), but we immediately convert them into the strongly
 /// typed `DiscountRule` before persisting. For `Fixed` rules the `rule_value` is denominated in USD
@@ -764,7 +813,7 @@ fun create_discount_template_core(
 ///   safety. In EVM you might store raw ints and rely on comments; here the `DiscountRule` enum
 ///   forces exhaustive matching.
 /// - Time windows and limits are stored on-chain and later checked against the shared `Clock`
-///   (milliseconds → seconds). That is more predictable than `block.timestamp`, which can drift by
+///   (milliseconds -> seconds). That is more predictable than `block.timestamp`, which can drift by
 ///   15s+ on EVM and cannot be read in view functions without implicit trust in miners.
 public entry fun create_discount_template(
   shop: &mut Shop,
@@ -904,8 +953,8 @@ public entry fun clear_template_from_listing(
 /// - Discount tickets are owned objects rather than balances in contract storage, so callers can
 ///   compose claim + checkout. Use `claim_and_buy_item_with_discount` to mint and spend in one
 ///   transaction, or call this entry to mint a ticket that the wallet can redeem later.
-/// - Per-wallet claim limits are enforced by writing a child object (keyed by the claimer’s
-///   address) under the template via dynamic fields. This keeps redemptions parallel—each wallet
+/// - Per-wallet claim limits are enforced by writing a child object (keyed by the claimer's
+///   address) under the template via dynamic fields. This keeps redemptions parallel--each wallet
 ///   touches only its own claim marker.
 /// - Time windows are checked against the shared `Clock` (seconds) to avoid surprises when epochs
 ///   are long-lived; passing the clock keeps the function pure from a caller perspective.
@@ -1004,7 +1053,7 @@ public entry fun prune_discount_claims(
 /// - The shared `Shop` remains read-only; only the listing child mutates (stock decrements),
 ///   keeping contention scoped to the listing while other listings and currencies stay parallel.
 /// - Buyers pass explicit `mint_to` and `refund_extra_to` targets so PTBs can gift receipts or route
-///   change without extra hops—common for custody or marketplace flows.
+///   change without extra hops--common for custody or marketplace flows.
 /// - Oracles are first-class objects. Callers supply a refreshed `PriceInfoObject`, and on-chain
 ///   logic verifies identity/freshness against the shared `Clock` and feed metadata.
 /// - Guardrails (`max_price_age_secs`, `max_confidence_ratio_bps`) are caller-tunable only to
@@ -1028,6 +1077,7 @@ public entry fun buy_item<TItem: store, TCoin>(
   assert_shop_active(shop);
   assert_listing_matches_shop(shop, item_listing);
   let base_price_usd_cents: u64 = item_listing.base_price_usd_cents;
+  // Payment is a Coin<T> object; process_purchase splits the payment and returns change.
   process_purchase<TItem, TCoin>(
     shop,
     item_listing,
@@ -1052,7 +1102,7 @@ public entry fun buy_item<TItem: store, TCoin>(
 ///   without external allowlists or signatures.
 /// - The discount template is a shared object anyone can read; this function validates the
 ///   template/listing/shop linkage and increments redemptions to keep limits accurate.
-/// - Refund destination is explicitly provided (`refund_extra_to`) so “gift” flows can return change
+/// - Refund destination is explicitly provided (`refund_extra_to`) so "gift" flows can return change
 ///   to the payer or recipient.
 /// - Oracle guardrails remain caller-tunable; pass `none` to use defaults.
 /// - In EVM you might check a Merkle root or signature each time; here the coupon object plus
@@ -1129,9 +1179,9 @@ public entry fun buy_item_with_discount<TItem: store, TCoin>(
 /// - Emits the same `DiscountClaimed` + `DiscountRedeem` events as the two-step flow so downstream
 ///   analytics remain consistent.
 /// - The ticket is created and consumed inside one PTB, minimizing custody risk while still using
-///   the template’s dynamic fields to enforce one-claim-per-address.
-/// - This pattern highlights Sui’s composability: objects can be created, used, and destroyed in a
-///   single PTB without extra approvals or intermediate transactions—something Solidity flows often
+///   the template's dynamic fields to enforce one-claim-per-address.
+/// - This pattern highlights Sui's composability: objects can be created, used, and destroyed in a
+///   single PTB without extra approvals or intermediate transactions--something Solidity flows often
 ///   approximate with meta-transactions or batching routers.
 public entry fun claim_and_buy_item_with_discount<TItem: store, TCoin>(
   shop: &Shop,
@@ -1794,7 +1844,7 @@ fun positive_price_to_u128(value: &pyth_i64::I64): u128 {
   as_u128_from_u64(pyth_i64::get_magnitude_if_positive(value))
 }
 
-/// Apply μ-σ per Pyth best practices to avoid undercharging when prices are uncertain.
+/// Apply mu-sigma per Pyth best practices to avoid undercharging when prices are uncertain.
 fun conservative_price_mantissa(
   mantissa: u128,
   confidence: u128,
@@ -2416,6 +2466,7 @@ public fun quote_amount_for_price_info_object(
     price_info_object,
     accepted_currency.max_price_status_lag_secs_cap,
   );
+  // View-only quote helper; clients call via dev-inspect instead of storing quotes on-chain.
   quote_amount_with_guardrails(
     accepted_currency,
     price_info_object,

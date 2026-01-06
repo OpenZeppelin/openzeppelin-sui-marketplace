@@ -624,8 +624,8 @@ const finalizeProcess = (exitCode: number) => {
 
 /**
  * Thin wrapper around yargs + Sui config loading to run CLI scripts consistently.
- * Why: Centralizes logging, network resolution, and Sui CLI presence so each script
- * behaves like a Hardhat task equivalent in EVM tooling.
+ * Centralizes logging, network resolution, and Sui CLI presence so scripts behave
+ * like task-style runners with shared defaults.
  */
 export const runSuiScript = <TCliArgument>(
   scriptToExecute: ScriptExecutor<TCliArgument>,

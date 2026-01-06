@@ -1,8 +1,7 @@
 /**
- * Removes an ItemListing from a Shop.
- * Listings are individual objects; removing one updates the shared Shop state.
- * If you come from EVM, this is like deleting a mapping entry, but the listing object is explicitly referenced.
- * Requires the ShopOwnerCap capability to authorize the removal.
+ * Delists an ItemListing by removing its marker under the Shop.
+ * The listing object remains addressable for history and indexers.
+ * Requires the ShopOwnerCap capability.
  */
 import { normalizeSuiObjectId } from "@mysten/sui/utils"
 import yargs from "yargs"

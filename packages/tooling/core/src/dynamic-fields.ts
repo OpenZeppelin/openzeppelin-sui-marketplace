@@ -21,8 +21,8 @@ type DynamicFieldInfo = Awaited<
 
 /**
  * Lists all dynamic field entries under a parent object.
- * Dynamic fields are Sui's on-chain key-value tables attached to an object,
- * unlike EVM storage slots. Pagination is handled internally.
+ * Dynamic fields are object-owned key-value tables attached to a parent object,
+ * and pagination is handled internally.
  */
 export const getAllDynamicFields = async (
   {
@@ -53,8 +53,8 @@ export const getAllDynamicFields = async (
 
 /**
  * Fetches full object data for every dynamic field entry under a parent.
- * Useful when the dynamic field value is itself an object ID and you want
- * to inspect each child object in one pass.
+ * Useful when the dynamic field value is an object ID and you want to inspect
+ * each child object in one pass.
  */
 export const getAllDynamicFieldObjects = async (
   {
@@ -153,8 +153,7 @@ export const dynamicFieldObjectNormalization = (suiObject: SuiObjectData) => ({
 
 /**
  * Fetches a single dynamic field object by parent/child IDs.
- * Dynamic field lookups are keyed by (parent object, name), which is different
- * from EVM storage where you compute a slot; this wraps the RPC call.
+ * Dynamic field lookups are keyed by (parent object, name); this wraps the RPC call.
  */
 export const getSuiDynamicFieldObject = async (
   {

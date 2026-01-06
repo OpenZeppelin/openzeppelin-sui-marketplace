@@ -21,6 +21,9 @@
     },
     {
       "path": "./packages/ui"
+    },
+    {
+      "path": "./packages/learn"
     }
   ]
 }

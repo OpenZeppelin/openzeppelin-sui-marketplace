@@ -91,8 +91,8 @@ const syncLocalnetMoveEnvironmentChainIdForPublish = async ({
 
 /**
  * Builds and publishes a Move package, logging friendly output and persisting artifacts.
- * Why: Publishing on Sui requires bundling compiled modules, dependency addresses, and gas strategy;
- * this helper mirrors common EVM “deploy script” ergonomics while honoring Sui-specific constraints
+ * Publishing on Sui bundles compiled modules, dependency addresses, and gas strategy, so this
+ * helper provides deploy-script ergonomics while honoring Sui-specific constraints
  * (unpublished deps, Move.toml environments/dep-replacements, UpgradeCap transfer).
  *
  * Note: For Sui 1.63+ the package manager expects published dependency addresses
@@ -144,7 +144,7 @@ export const publishPackageWithLog = async (
 }
 /**
  * Publishes a Move package according to a prepared plan (build flags, dep strategy).
- * Returns publish artifacts persisted to disk, similar to an EVM deploy receipt.
+ * Returns publish artifacts persisted to disk (package ID, UpgradeCap, Publisher, deps).
  *
  * Note: For Sui 1.63+ the dependency linkage for shared networks is controlled by
  * Move.toml environment config (dep-replacements) or Move registry (mvr).

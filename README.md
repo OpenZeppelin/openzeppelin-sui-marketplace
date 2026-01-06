@@ -1,16 +1,113 @@
 # Sui Oracle Market – End-to-End Developer Guide
 
-The purpose of this the DApp is to illustrate an end-to-end example of a small online market selling items at a USD-pegged stablecoin but that can be bought in different currencies, using an oracle to get selling price of items in those different available currencies.
+The purpose of this DApp is to illustrate an end-to-end example of a small online market selling items at a USD-pegged stablecoin price but allowing purchases in multiple currencies, using an oracle to fetch prices for those currencies.
 
 A practical onboarding guide for Solidity/EVM developers building and deploying the `sui_oracle_market` Move package. This repo is a pnpm workspace with Move packages, deployment scripts, and a Next.js UI. The README walks from a fresh clone to a full local flow (mock oracles + mock coins), then covers publishing to shared networks.
 
 ---
 
+## Learning Path
+This repo is designed to be read linearly. If you are coming from Solidity, follow the chapters in order and run each step.
+
+1. Mental model shift: `docs/01-intro.md`
+2. Localnet + publish: `docs/02-localnet-publish.md`
+3. Shop object + capability auth: `docs/03-shop-capabilities.md`
+4. Listings + typed receipts: `docs/04-listings-receipts.md`
+5. Currencies + oracles: `docs/05-currencies-oracles.md`
+6. Discounts + tickets: `docs/06-discounts-tickets.md`
+7. Buyer flow + UI: `docs/07-buyer-ui.md`
+8. Owner console + admin flows: `docs/07-owner-ui.md`
+9. Testing + advanced topics: `docs/08-advanced.md`
+10. Object ownership + versioning: `docs/09-object-ownership.md`
+11. PTBs + gas + fees: `docs/10-ptb-gas.md`
+12. Data access + indexing: `docs/11-data-access.md`
+
+Additional docs:
+1. `/docs/README.md`: learning path map + concept map.
+2. `/docs/glossary.md`: core Sui/Move terms used in the repo.
+3. `packages/dapp/move/README.md`: deep dive on shared objects + dynamic-field markers.
+4. `packages/ui/README.md`: UI setup and localnet execution details.
+
+Each chapter includes:
+1. Learning goals
+2. Exact commands
+3. EVM -> Sui translation
+4. Code references
+5. Exercises with expected outcomes
+
+## Docs Index
+1. `docs/README.md`
+2. `docs/09-object-ownership.md`
+3. `docs/10-ptb-gas.md`
+4. `docs/11-data-access.md`
+5. `docs/glossary.md`
+
+## Docs Website
+This repo includes a Nextra-based docs site that renders the Markdown content from `/docs` and the README guides.
+
+Run it:
+```bash
+pnpm --filter learn dev
+```
+
+## Repo Map 
+1. Move packages: `packages/dapp/move/*`
+   - Smart Contract Core logic: `packages/dapp/move/oracle-market/sources/shop.move`
+   - Sui-first module notes: `packages/dapp/move/README.md`
+   - Mocks: `packages/dapp/move/pyth-mock`, `packages/dapp/move/coin-mock`
+   - Vendored Pyth module: `packages/dapp/move/pyth-upstream-patched`, `packages/dapp/move/wormhole-upstream-patched`
+   - Item types (for item listing): `packages/dapp/move/item-examples`
+2. Scripts (CLI): `packages/dapp/src/scripts`
+   - Owner flows: `packages/dapp/src/scripts/owner`
+   - Buyer flows: `packages/dapp/src/scripts/buyer`
+   - Localnet + mocks: `packages/dapp/src/scripts/chain`, `packages/dapp/src/scripts/mock`
+3. Domain SDK: `packages/domain/core` (PTB builders + parsing helpers)
+4. UI: `packages/ui` (Next.js + dapp-kit)
+5. Tooling: `packages/tooling` (localnet harness, script orchestration tooling, testing utilities)
+
+## Concept Index (Solidity -> Sui)
+| Solidity term | Sui/Move equivalent | Code reference | Docs |
+| --- | --- | --- | --- |
+| Contract | Package + shared object instance | `packages/dapp/move/oracle-market/sources/shop.move` (Shop, create_shop) | `docs/03-shop-capabilities.md` |
+| onlyOwner modifier | Capability object | `packages/dapp/move/oracle-market/sources/shop.move` (ShopOwnerCap, update_shop_owner) | `docs/03-shop-capabilities.md` |
+| Mapping | Dynamic fields + markers | `packages/dapp/move/oracle-market/sources/shop.move` (ItemListingMarker, AcceptedCurrencyMarker) | `docs/04-listings-receipts.md` |
+| ERC-20 token | Coin<T> + Coin Registry | `packages/dapp/move/oracle-market/sources/shop.move` (add_accepted_currency) | `docs/05-currencies-oracles.md` |
+| Oracle address | PriceInfoObject ID + feed_id bytes | `packages/dapp/move/oracle-market/sources/shop.move` (AcceptedCurrency) | `docs/05-currencies-oracles.md` |
+| Allowance / approve | Coin<T> objects passed into PTB | `packages/domain/core/src/flows/buy.ts` (buildBuyTransaction) | `docs/07-buyer-ui.md` |
+| Event log | Typed Move events | `packages/dapp/move/oracle-market/sources/shop.move` (PurchaseCompleted, DiscountRedeem) | `docs/08-advanced.md` |
+| Constructor | Entry function that mints objects | `packages/dapp/move/oracle-market/sources/shop.move` (create_shop) | `docs/03-shop-capabilities.md` |
+| Factory + deploy script | Publish + owner scripts | `packages/dapp/src/scripts/move/publish.ts` | `docs/02-localnet-publish.md` |
+
+## Troubleshooting
+1. Localnet refuses to start or keeps regenesis
+   - Check `pnpm script chain:localnet:start --check-only`.
+   - Localnet version handling is in `packages/dapp/src/scripts/chain/localnet-start.ts`.
+2. "No ShopOwnerCap found"
+   - Ensure the owner cap is in your wallet. See `packages/domain/core/src/models/shop.ts`.
+3. "No accepted currency registered for coin type ..."
+   - Register with `pnpm script owner:currency:add` or re-run `pnpm script owner:shop:seed`.
+4. Buying with SUI fails: "requires at least two SUI coin objects"
+   - Split SUI so one coin can be gas and one can be payment. See `packages/domain/core/src/flows/buy.ts`.
+5. Price feed mismatch or stale price
+   - Re-run `pnpm script mock:update-prices` on localnet; guardrails are in `packages/dapp/move/oracle-market/sources/shop.move`.
+
+## Security & Gotchas (Move/Sui)
+1. Shared object contention
+   - Listings/currencies/templates are separate shared objects to reduce contention; avoid putting big mutable maps on `Shop`.
+2. Capabilities are real authority
+   - Anyone holding `ShopOwnerCap` can mutate the shop. Treat it like a private key.
+3. Object ID spoofing protection
+   - The module checks both marker presence and embedded `shop_address` before mutation.
+4. Pyth guardrails are mandatory
+   - Freshness/confidence/status are enforced on-chain; don't bypass these checks in scripts.
+5. Discount tickets are owned objects
+   - Tickets can be transferred, but redemption enforces the original claimer.
+
 ## Prerequisites
 
 - **Node.js 22.19+** and **pnpm** for running scripts and the UI.
 - **Rust toolchain** [`rustup`](https://rustup.rs/) on your `PATH`
-- **Sui CLI** [`sui`](https://docs.sui.io/build/install) (recommanded installation with `suiup`) on your `PATH`.
+- **Sui CLI** [`sui`](https://docs.sui.io/guides/developer/getting-started/sui-install) (recommended installation with `suiup`) on your `PATH`.
 - **Git** for version control.
 
 ### Note
@@ -29,7 +126,7 @@ suiup install sui@testnet --nightly
 ```bash
 # 1) Clone and install
 # (pnpm workspace install from the repo root)
-git clone <your fork url> && cd sui-oracle-market
+git clone git@github.com:OpenZeppelin/sui-oracle-market.git && cd sui-oracle-market
 pnpm install
 
 # 2) Create or reuse an address (this will be your shop owner address)
@@ -79,6 +176,15 @@ Optional toggles:
 - `SUI_IT_WITH_FAUCET=0` disables the local faucet (default on; tests fund via the local faucet unless a funded treasury account is available).
 - `SUI_IT_TREASURY_INDEX=<n>` forces which localnet keystore entry to use for funding.
 Note: Vitest 3 uses pool options for threading; `--minThreads`/`--maxThreads` are not supported.
+
+---
+
+## Unit Tests (Domain + UI)
+
+```bash
+pnpm --filter @sui-oracle-market/domain-core test:unit
+pnpm ui test:unit
+```
 
 ---
 
@@ -267,7 +373,7 @@ expect(records.warn.join(" ")).toContain("warning")
 
 ### 1) Clone and install deps
 ```bash
-git clone <your fork url> sui-oracle-market
+git clone git@github.com:OpenZeppelin/sui-oracle-market.git sui-oracle-market
 cd sui-oracle-market
 pnpm install
 ```
@@ -1013,6 +1119,8 @@ Artifacts land in `packages/dapp/deployments` after running scripts. Use them to
 
 ## Frontend UI
 
+UI-specific setup notes live in `packages/ui/README.md`.
+
 ### Prerequisite
 - Install [Slush Wallet](https://slush.app/) in your browser
 - Create a new key or import a key you have generated with SUI CLI (this will be your buyer address)
@@ -1077,8 +1185,11 @@ Implementation details:
 - **Packages are immutable objects**: Publishing creates a package object; upgrades publish a new package + `UpgradeCap`. No proxy pattern.
 - **Capabilities instead of `msg.sender`**: Auth is proved by owning capability objects (e.g., `ShopOwnerCap`).
 - **Objects, not contract storage**: State is stored as owned/shared objects and dynamic fields, improving parallelism.
+- **Ownership types are explicit**: address-owned, shared, object-owned, and immutable objects are all first-class.
 - **Typed coins**: `Coin<T>` types replace ERC-20 approvals; metadata comes from the Sui coin registry.
 - **Oracles as objects**: Pyth prices are delivered as `PriceInfoObject` + clock checks; no address lookups.
+- **No inheritance; use modules + generics**: Move composition replaces Solidity inheritance and dynamic dispatch.
+- **PTBs for runtime composition**: chains of Move calls are built client-side as a single atomic PTB.
 - **Localnet vs testnet/mainnet**: Localnet is your sandbox with unpublished deps; shared networks require linking dependencies to already-published package IDs via Move.toml `dep-replacements.<env>` (or Move registry/mvr).
 
 ---
@@ -1121,6 +1232,8 @@ type you acquire matches the accepted currency type configured in the store.
 | Oracles | Chainlink contracts queried by address | Pyth `PriceInfoObject` passed into tx; freshness checked with `Clock` |
 | Local dev | Hardhat/Anvil | `sui start` localnet with faucet; dep replacements supply mocks |
 | Migrations | Scripts calling contracts | Publish scripts that build/publish packages and seed objects |
+| Inheritance | Multiple inheritance + polymorphism | No inheritance; reuse via modules + generics |
+| Composition | On-chain router contracts | Client-side PTBs chain calls atomically |
 
 Why this matters:
 - Parallel execution: dynamic fields and owned objects avoid global contention seen in EVM storage maps.
@@ -1129,10 +1242,11 @@ Why this matters:
 
 Docs links:
 - Packages: https://docs.sui.io/concepts/sui-move-concepts/packages
-- Objects & ownership: https://docs.sui.io/concepts/objects
-- Coin registry: https://docs.sui.io/concepts/token#coin-registry
+- Objects & ownership: https://docs.sui.io/guides/developer/objects/object-model
+- Coin registry: https://docs.sui.io/references/framework/sui_sui/coin_registry
 - Clock & oracles: https://docs.sui.io/guides/developer/app-examples/oracle
 - Move overview: https://docs.sui.io/concepts/sui-move-concepts
+- EVM to Sui: https://docs.sui.io/concepts/sui-for-ethereum
 
 ---
 

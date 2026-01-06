@@ -1,8 +1,7 @@
 /**
- * Updates an existing DiscountTemplate's rule, schedule, and redemption limits.
- * The template is a mutable object; changes require the ShopOwnerCap capability.
- * If you come from EVM, you are mutating a stored object rather than editing a struct in contract storage.
- * The Sui Clock shared object is included so time-based rules are enforced on chain.
+ * Updates a DiscountTemplate's rule, schedule, and caps.
+ * On-chain guards block updates after claims/redemptions begin.
+ * Requires the ShopOwnerCap capability and the Clock for time checks.
  */
 import { normalizeSuiObjectId } from "@mysten/sui/utils"
 import yargs from "yargs"

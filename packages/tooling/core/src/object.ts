@@ -50,8 +50,8 @@ const isAddressTypeOwner = (
 
 /**
  * Normalizes Sui owner metadata into an artifact-friendly structure.
- * Why: Sui ownership can be address-owned, object-owned, shared, or immutable,
- * which is a different model from EVM. This helper yields a stable shape for storage.
+ * Sui ownership can be address-owned, object-owned, shared, immutable, or consensus-address,
+ * so this helper yields a stable shape for storage and comparisons.
  */
 export const mapOwnerToArtifact = (
   owner?: ObjectOwner | SuiObjectChangeCreated["owner"]
@@ -255,7 +255,7 @@ export const unwrapMoveObjectFields = <TFields = Record<string, unknown>>(
 
 /**
  * Derives the package ID from a fully qualified Move type string.
- * In Sui, types are scoped by package ID, similar to a contract address in EVM.
+ * On Sui, the package ID scopes the type definition and is embedded in the type tag.
  */
 export const deriveRelevantPackageId = (
   objectType: SuiObjectData["type"]
@@ -282,7 +282,7 @@ export const normalizeIdOrThrow = (
 
 /**
  * Fetches all objects owned by an address (optionally filtered) via pagination.
- * Sui accounts own objects directly; there is no global account state like in EVM.
+ * Sui accounts own objects directly, so this enumerates address-owned objects.
  */
 export const getAllOwnedObjectsByFilter = async (
   {

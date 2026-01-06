@@ -4,7 +4,7 @@ import { SUI_CLOCK_ID } from "./constants.ts"
 import { unwrapMoveObjectFields } from "./object.ts"
 
 /**
- * Reads the current on-chain clock timestamp (ms).
+ * Reads the current on-chain clock timestamp (ms) from the shared Clock object.
  */
 export const getClockTimestampMs = async (
   suiClient: SuiClient

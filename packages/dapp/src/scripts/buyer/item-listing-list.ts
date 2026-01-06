@@ -1,8 +1,7 @@
 /**
- * Lists ItemListing objects for a Shop so buyers can browse inventory.
- * The Shop is a shared object, while each listing is a separate object that can be mutated by the owner.
- * If you come from EVM, imagine a registry of item structs where each entry has its own object ID and version.
- * This script only reads from the network; no transaction is executed.
+ * Lists ItemListing objects for a Shop by enumerating dynamic-field markers.
+ * Listings are shared objects with their own IDs and versions.
+ * Read-only: no transaction is executed.
  */
 import yargs from "yargs"
 

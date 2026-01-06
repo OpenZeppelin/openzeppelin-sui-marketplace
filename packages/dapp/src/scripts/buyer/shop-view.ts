@@ -1,8 +1,7 @@
 /**
- * Displays a full Shop overview: core metadata, listings, accepted currencies, and discount templates.
- * In Sui, these pieces are separate objects referenced from a shared Shop object, not a single storage blob.
- * If you come from EVM, you will see multiple object reads instead of one contract call, which maps to Sui's model.
- * The script is read-only and combines results into a human-friendly snapshot.
+ * Aggregates a Shop snapshot: metadata, listings, currencies, discounts, and receipts/tickets.
+ * The Shop is shared, while listings/currencies/templates are separate shared objects discovered via markers.
+ * This script composes multiple reads into a single human-friendly view.
  */
 import { getShopSnapshot } from "@sui-oracle-market/domain-core/models/shop"
 import { emitJsonOutput } from "@sui-oracle-market/tooling-node/json"

@@ -1,8 +1,7 @@
 /**
- * Lists AcceptedCurrency objects registered on a Shop, including the coin type and pricing config.
- * On Sui, each accepted currency is its own object and coin types are Move type tags, not token addresses.
- * If you come from EVM, treat this like reading a registry where each entry has its own object ID.
- * The Shop shared object anchors the registry, but the data lives in separate objects.
+ * Lists AcceptedCurrency objects registered under a Shop.
+ * Each accepted currency is a shared object indexed via dynamic fields, not a struct in Shop storage.
+ * Coin types are Move type tags and metadata comes from the coin registry.
  */
 import yargs from "yargs"
 

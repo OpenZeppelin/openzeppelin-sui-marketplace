@@ -9,7 +9,7 @@ import { parseBalance } from "./utils/utility.ts"
 
 /**
  * Creates a Transaction and optionally seeds a gas budget.
- * Why: Sui PTBs are built client-side; setting gas early mirrors how wallets prepare PTBs.
+ * PTBs are built client-side in Sui, so setting gas early mirrors wallet behavior.
  */
 export const newTransaction = (gasBudget?: number) => {
   const tx = new Transaction()
@@ -19,7 +19,7 @@ export const newTransaction = (gasBudget?: number) => {
 
 /**
  * Throws if a transaction block did not succeed.
- * Mirrors EVM receipt status checks to keep scripts predictable.
+ * Uses the Sui effects status for a clear success/failure signal.
  */
 export const assertTransactionSuccess = ({
   effects
@@ -60,7 +60,7 @@ const isCreatedWithType = (
 
 /**
  * Collects created object IDs that match a predicate on the Move type.
- * Sui transaction responses include object changes, which replace EVM-style logs for creation.
+ * Sui transaction responses include objectChanges, which describe object diffs directly.
  */
 const findCreatedByMatcher = (
   result: SuiTransactionBlockResponse,

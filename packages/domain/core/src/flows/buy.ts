@@ -211,6 +211,7 @@ const maybeSetDedicatedGasForSuiPayments = async ({
   paymentCoinObjectId: string
   suiClient: SuiClient
 }) => {
+  // When paying with SUI, one coin must cover gas and a different coin must be the payment input.
   const coins = await suiClient.getCoins({
     owner: signerAddress,
     coinType: "0x2::sui::SUI",

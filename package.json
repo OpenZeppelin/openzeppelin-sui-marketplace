@@ -8,6 +8,7 @@
     "ui": "pnpm --filter ui",
     "script": "pnpm --filter dapp",
     "dapp": "pnpm --filter dapp",
+    "learn": "pnpm --filter learn",
     "tooling": "pnpm --filter tooling",
     "typecheck": "tsc -b",
     "lint": "eslint \"packages/**/*.{js,jsx,ts,tsx,mjs,cjs,mts,cts}\"",
