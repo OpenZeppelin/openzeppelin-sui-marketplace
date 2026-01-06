@@ -223,7 +223,9 @@ export const requireCreatedObjectId = (
 
 const normalizeOwnerAddress = (owner: ObjectOwner | null | undefined) => {
   if (!owner) return undefined
-  if (typeof owner === "string") return undefined
+  // Some Sui response types (e.g. balanceChanges entries) may use a plain
+  // address string as the owner at runtime.
+  if (typeof owner === "string") return normalizeSuiAddress(owner)
   if ("AddressOwner" in owner) return normalizeSuiAddress(owner.AddressOwner)
   if ("ObjectOwner" in owner) return normalizeSuiAddress(owner.ObjectOwner)
   if ("ConsensusAddressOwner" in owner)
