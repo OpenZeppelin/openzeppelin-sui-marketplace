@@ -52,6 +52,46 @@ Run it:
 pnpm --filter learn dev
 ```
 
+## Quickstart (TL;DR)
+
+Full setup walkthrough: [docs/00-setup.md](docs/00-setup.md).
+
+```bash
+# 1) Clone and install
+# (pnpm workspace install from the repo root)
+git clone git@github.com:OpenZeppelin/sui-oracle-market.git && cd sui-oracle-market
+pnpm install
+
+# 2) Create or reuse an address (this will be your shop owner address)
+sui client new-address ed25519
+sui client active-address   # ensure the desired address is active
+
+# 3) Configure this address in Sui config file or export
+export SUI_ACCOUNT_ADDRESS=<0x...>
+export SUI_ACCOUNT_PRIVATE_KEY=<base64 or hex>
+
+# 4) Fund your created address
+sui client faucet --address <0x...>
+
+# 5) Start localnet (new terminal) (--with-faucet is recommended as some script auto fund address if fund is missing)
+pnpm script chain:localnet:start --with-faucet
+
+# 6) Seed mocks (coins + Pyth stub + price feeds)
+pnpm script mock:setup --buyer-address <0x...>
+
+# 7) Publish oracle-market (uses localnet dep replacements for mocks)
+pnpm script move:publish --package-path oracle-market
+
+# 8) To continue setting up the shop, listings, discounts, accepted currencies look at the scripts section
+```
+
+Optional run the UI (after publishing + creating a shop + updated UI environment variable config):
+```bash
+pnpm ui dev
+```
+
+---
+
 ## Repo Map 
 1. Move packages: [packages/dapp/move/](packages/dapp/move/)
    - Smart Contract Core logic: [packages/dapp/move/oracle-market/sources/shop.move](packages/dapp/move/oracle-market/sources/shop.move)
@@ -119,46 +159,6 @@ If you need a nightly build (for example, to match newer Move.lock/package-manag
 ```bash
 rustup toolchain install nightly
 suiup install sui@testnet --nightly
-```
-
----
-
-## Quickstart (TL;DR)
-
-Full setup walkthrough: [docs/00-setup.md](docs/00-setup.md).
-
-```bash
-# 1) Clone and install
-# (pnpm workspace install from the repo root)
-git clone git@github.com:OpenZeppelin/sui-oracle-market.git && cd sui-oracle-market
-pnpm install
-
-# 2) Create or reuse an address (this will be your shop owner address)
-sui client new-address ed25519
-sui client active-address   # ensure the desired address is active
-
-# 3) Configure this address in Sui config file or export
-export SUI_ACCOUNT_ADDRESS=<0x...>
-export SUI_ACCOUNT_PRIVATE_KEY=<base64 or hex>
-
-# 4) Fund your created address
-sui client faucet --address <0x...>
-
-# 5) Start localnet (new terminal) (--with-faucet is recommended as some script auto fund address if fund is missing)
-pnpm script chain:localnet:start --with-faucet
-
-# 6) Seed mocks (coins + Pyth stub + price feeds)
-pnpm script mock:setup --buyer-address <0x...>
-
-# 7) Publish oracle-market (uses localnet dep replacements for mocks)
-pnpm script move:publish --package-path oracle-market
-
-# 8) To continue setting up the shop, listings, discounts, accepted currencies look at the scripts section
-```
-
-Optional run the UI (after publishing + creating a shop + updated UI environment variable config):
-```bash
-pnpm ui dev
 ```
 
 ---
@@ -488,8 +488,8 @@ What it does:
 All commands are run from the repo root. These steps create a fully working local environment with mocks, a shop, listings, discounts, and buyer funding. Each script records artifacts so you can re-run without retyping IDs.
 
 Defaults and artifacts:
-- Owner scripts auto-fill `--shop-package-id`, `--shop-id`, and `--owner-cap-id` from [packages/dapp/deployments/deployment.<network>.json](packages/dapp/deployments/) and [packages/dapp/deployments/objects.<network>.json](packages/dapp/deployments/).
-- Buyer scripts that take `--shop-id` will default to the latest Shop object in [packages/dapp/deployments/objects.<network>.json](packages/dapp/deployments/).
+- Owner scripts auto-fill `--shop-package-id`, `--shop-id`, and `--owner-cap-id` from `packages/dapp/deployments/deployment.<network>.json` and `packages/dapp/deployments/objects.<network>.json`.
+- Buyer scripts that take `--shop-id` will default to the latest Shop object in `packages/dapp/deployments/objects.<network>.json`.
 
 ### 0) Prepare owner and buyer accounts
 The scripts sign transactions with the configured account in [packages/dapp/sui.config.ts](packages/dapp/sui.config.ts) (or `SUI_ACCOUNT_ADDRESS` / `SUI_ACCOUNT_PRIVATE_KEY` env vars). Use one address as the shop owner and another as the buyer.
@@ -515,7 +515,7 @@ pnpm script chain:localnet:start --with-faucet
 What it does:
 - Starts `sui start` with a local config directory (default `~/.sui/localnet`) and waits for RPC readiness.
 - Runs a faucet locally and funds the configured signer after any regenesis.
-- Use `--force-regenesis` to reset the chain (clears [packages/dapp/deployments/*.localnet*](packages/dapp/deployments/) and recreates the localnet config dir before starting).
+- Use `--force-regenesis` to reset the chain (clears `packages/dapp/deployments/*.localnet*` and recreates the localnet config dir before starting).
 - If the default config dir is used and the Sui CLI version changes, the script warns and recreates localnet state automatically.
 
 ### 2) Seed local mocks (coins, Pyth feeds, example item types)
@@ -784,7 +784,7 @@ Exceptions:
   - `--check-only`: probe the RPC and exit without starting a node; fails if unreachable.
   - `--wait-seconds <n>`: readiness timeout while waiting for RPC (default `25`).
   - `--with-faucet`: start `sui start --with-faucet` (default `true`).
-  - `--force-regenesis`: clears [packages/dapp/deployments/*.localnet*](packages/dapp/deployments/), deletes the localnet config dir, runs `sui genesis`, then starts `sui start --network.config` (no `--force-regenesis` flag).
+  - `--force-regenesis`: clears `packages/dapp/deployments/*.localnet*`, deletes the localnet config dir, runs `sui genesis`, then starts `sui start --network.config` (no `--force-regenesis` flag).
   - `--config-dir <path>`: localnet config dir passed to `sui start --network.config` (default `~/.sui/localnet`).
 
 #### `pnpm script chain:localnet:stop`
@@ -841,7 +841,7 @@ Exceptions:
 
 ### Shop Owner Scripts (commerce flows)
 
-Owner scripts default `--shop-package-id`, `--shop-id`, and `--owner-cap-id` from the latest entries in [packages/dapp/deployments/objects.<network>.json](packages/dapp/deployments/) when omitted.
+Owner scripts default `--shop-package-id`, `--shop-id`, and `--owner-cap-id` from the latest entries in `packages/dapp/deployments/objects.<network>.json` when omitted.
 
 #### `pnpm script owner:shop:create`
 - Calls `shop::create_shop` to create the shared `Shop` plus `ShopOwnerCap`.
@@ -1085,7 +1085,7 @@ Owner scripts default `--shop-package-id`, `--shop-id`, and `--owner-cap-id` fro
 
 Artifacts land in [packages/dapp/deployments](packages/dapp/deployments) after running scripts. Use them to reuse package IDs, shared objects, and mock assets across runs.
 
-### [packages/dapp/deployments/deployment.<network>.json](packages/dapp/deployments/)
+### `packages/dapp/deployments/deployment.<network>.json`
 - Shape: array of publish artifacts (one per published package).
 - Key fields:
   - `network` / `rpcUrl`: target network name and RPC used at publish time.
@@ -1100,14 +1100,14 @@ Artifacts land in [packages/dapp/deployments](packages/dapp/deployments) after r
   - `withUnpublishedDependencies` / `unpublishedDependencies`: flags and names when unpublished deps were allowed (localnet only).
   - `suiCliVersion`: Sui CLI version used during publish.
 
-### [packages/dapp/deployments/mock.<network>.json](packages/dapp/deployments/)
+### `packages/dapp/deployments/mock.<network>.json`
 - Captures local-only mocks produced by `mock:setup`.
 - Key fields:
   - `pythPackageId` / `coinPackageId`: package IDs for the mock Pyth and coin Move packages.
   - `coins`: array of minted mock coins with `coinType`, `currencyObjectId`, and sample minted coin object IDs.
   - `priceFeeds`: array of mock Pyth feeds with `feedIdHex` and `priceInfoObjectId`.
 
-### [packages/dapp/deployments/objects.<network>.json](packages/dapp/deployments/)
+### `packages/dapp/deployments/objects.<network>.json`
 - List of on-chain objects created by owner scripts (shops, caps, listings, discounts).
 - Key fields per entry:
   - `packageId` / `publisherId`: package that defines the object and its publisher object.
