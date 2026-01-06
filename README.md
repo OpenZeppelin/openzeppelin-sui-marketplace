@@ -9,18 +9,19 @@ A practical onboarding guide for Solidity/EVM developers building and deploying 
 ## Learning Path
 This repo is designed to be read linearly. If you are coming from Solidity, follow the chapters in order and run each step.
 
-1. Mental model shift: `docs/01-intro.md`
-2. Localnet + publish: `docs/02-localnet-publish.md`
-3. Shop object + capability auth: `docs/03-shop-capabilities.md`
-4. Listings + typed receipts: `docs/04-listings-receipts.md`
-5. Currencies + oracles: `docs/05-currencies-oracles.md`
-6. Discounts + tickets: `docs/06-discounts-tickets.md`
-7. Buyer flow + UI: `docs/07-buyer-ui.md`
-8. Owner console + admin flows: `docs/07-owner-ui.md`
-9. Testing + advanced topics: `docs/08-advanced.md`
-10. Object ownership + versioning: `docs/09-object-ownership.md`
-11. PTBs + gas + fees: `docs/10-ptb-gas.md`
-12. Data access + indexing: `docs/11-data-access.md`
+1. Setup + quickstart: `docs/00-setup.md`
+2. Mental model shift: `docs/01-intro.md`
+3. Localnet + publish: `docs/02-localnet-publish.md`
+4. Shop object + capability auth: `docs/03-shop-capabilities.md`
+5. Listings + typed receipts: `docs/04-listings-receipts.md`
+6. Currencies + oracles: `docs/05-currencies-oracles.md`
+7. Discounts + tickets: `docs/06-discounts-tickets.md`
+8. Buyer flow + UI: `docs/07-buyer-ui.md`
+9. Owner console + admin flows: `docs/07-owner-ui.md`
+10. Testing + advanced topics: `docs/08-advanced.md`
+11. Object ownership + versioning: `docs/09-object-ownership.md`
+12. PTBs + gas + fees: `docs/10-ptb-gas.md`
+13. Data access + indexing: `docs/11-data-access.md`
 
 Additional docs:
 1. `/docs/README.md`: learning path map + concept map.
@@ -37,10 +38,11 @@ Each chapter includes:
 
 ## Docs Index
 1. `docs/README.md`
-2. `docs/09-object-ownership.md`
-3. `docs/10-ptb-gas.md`
-4. `docs/11-data-access.md`
-5. `docs/glossary.md`
+2. `docs/00-setup.md`
+3. `docs/09-object-ownership.md`
+4. `docs/10-ptb-gas.md`
+5. `docs/11-data-access.md`
+6. `docs/glossary.md`
 
 ## Docs Website
 This repo includes a Nextra-based docs site that renders the Markdown content from `/docs` and the README guides.
@@ -122,6 +124,8 @@ suiup install sui@testnet --nightly
 ---
 
 ## Quickstart (TL;DR)
+
+Full setup walkthrough: `docs/00-setup.md`.
 
 ```bash
 # 1) Clone and install

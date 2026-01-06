@@ -3,19 +3,20 @@
 Use this page as the navigation hub for the docs. Each chapter ends with Prev/Next links.
 
 ## 1. Start here (linear path)
-1. [01 Mental Model Shift](01-intro.md)
-2. [02 Localnet + Publish](02-localnet-publish.md)
-3. [03 Shop Object + Capability Auth](03-shop-capabilities.md)
-4. [04 Listings + Typed Receipts](04-listings-receipts.md)
-5. [05 Currencies + Oracles](05-currencies-oracles.md)
-6. [06 Discounts + Tickets](06-discounts-tickets.md)
-7. [07 Buyer Flow + UI](07-buyer-ui.md)
-8. [07 Owner Console + Admin Flows](07-owner-ui.md)
-9. [08 Testing + Advanced Topics](08-advanced.md)
-10. [09 Object Ownership + Versioning](09-object-ownership.md)
-11. [10 PTBs + Gas + Fees](10-ptb-gas.md)
-12. [11 Data Access + Indexing](11-data-access.md)
-13. [Glossary](glossary.md)
+1. [00 Setup + Quickstart](00-setup.md)
+2. [01 Mental Model Shift](01-intro.md)
+3. [02 Localnet + Publish](02-localnet-publish.md)
+4. [03 Shop Object + Capability Auth](03-shop-capabilities.md)
+5. [04 Listings + Typed Receipts](04-listings-receipts.md)
+6. [05 Currencies + Oracles](05-currencies-oracles.md)
+7. [06 Discounts + Tickets](06-discounts-tickets.md)
+8. [07 Buyer Flow + UI](07-buyer-ui.md)
+9. [07 Owner Console + Admin Flows](07-owner-ui.md)
+10. [08 Testing + Advanced Topics](08-advanced.md)
+11. [09 Object Ownership + Versioning](09-object-ownership.md)
+12. [10 PTBs + Gas + Fees](10-ptb-gas.md)
+13. [11 Data Access + Indexing](11-data-access.md)
+14. [Glossary](glossary.md)
 
 ## 2. Jump to a goal
 1. I want a local chain and published package -> [02 Localnet + Publish](02-localnet-publish.md)
@@ -26,6 +27,7 @@ Use this page as the navigation hub for the docs. Each chapter ends with Prev/Ne
 6. I want object ownership + versioning -> [09 Object Ownership + Versioning](09-object-ownership.md)
 7. I want PTBs and gas details -> [10 PTBs + Gas + Fees](10-ptb-gas.md)
 8. I want data access and indexing -> [11 Data Access + Indexing](11-data-access.md)
+9. I want a full setup checklist -> [00 Setup + Quickstart](00-setup.md)
 
 ## 3. Related repo guides
 1. `packages/dapp/move/README.md` (shared object + marker deep dive)

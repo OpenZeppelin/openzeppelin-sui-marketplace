@@ -1,5 +1,6 @@
 export default {
   index: "Learning Path Map",
+  "00-setup": "00 Setup + Quickstart",
   "01-intro": "01 Mental Model Shift",
   "02-localnet-publish": "02 Localnet + Publish",
   "03-shop-capabilities": "03 Shop Object + Capability Auth",

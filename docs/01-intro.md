@@ -77,5 +77,6 @@ Sui: objects + dynamic fields
 - https://docs.sui.io/concepts/sui-for-ethereum
 
 ## 10. Navigation
-1. Next: [02 Localnet + Publish](./02-localnet-publish.md)
-2. Back to map: [Learning Path Map](./)
+1. Previous: [00 Setup + Quickstart](./00-setup.md)
+2. Next: [02 Localnet + Publish](./02-localnet-publish.md)
+3. Back to map: [Learning Path Map](./)
