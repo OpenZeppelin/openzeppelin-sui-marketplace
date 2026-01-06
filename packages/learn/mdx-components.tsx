@@ -31,10 +31,13 @@ const normalizeDocHref = (href?: string) => {
   return `/docs/${path}${suffix}`
 }
 
-export const useMDXComponents = (
-  components?: Parameters<typeof useNextraMDXComponents>[0]
-) => {
-  const nextraComponents = useNextraMDXComponents(components)
+type NextraMDXComponents = ReturnType<typeof useNextraMDXComponents>
+
+export const useMDXComponents = (components?: NextraMDXComponents) => {
+  const nextraComponents =
+    components === undefined
+      ? useNextraMDXComponents()
+      : useNextraMDXComponents(components)
   const Anchor = nextraComponents.a ?? "a"
 
   return {
