@@ -22,29 +22,40 @@ pnpm --filter learn dev
 
 ## Quickstart (localnet)
 
-Full walkthrough + troubleshooting: `docs/05-localnet-workflow.md`.
+Full walkthrough: [docs/05-localnet-workflow.md](docs/05-localnet-workflow.md)`.
 
 ```bash
-# 1) Install
+# 1) Clone and install
+git clone git@github.com:OpenZeppelin/sui-oracle-market.git && cd sui-oracle-market
+# (pnpm workspace install from the repo root)
 pnpm install
 
-# 2) Create/fund accounts
+# 2) Create or reuse an address (this will be your shop owner address)
 sui client new-address ed25519
-sui client active-address
+sui client active-address   # ensure the desired address is active
+
+# 3) Configure this address in Sui config file or export
+export SUI_ACCOUNT_ADDRESS=<0x...>
+export SUI_ACCOUNT_PRIVATE_KEY=<base64 or hex>
+
+# 4) Fund your created address
 sui client faucet --address <0x...>
 
-# 3) Start localnet
+# 5) Start localnet (new terminal) (--with-faucet is recommended as some script auto fund address if fund is missing)
 pnpm script chain:localnet:start --with-faucet
 
-# 4) Seed mocks (coins + Pyth feeds)
+# 6) Seed mocks (coins + Pyth stub + price feeds)
 pnpm script mock:setup --buyer-address <0x...>
 
-# 5) Publish + seed a shop
+# 7) Publish oracle-market (uses localnet dep replacements for mocks)
 pnpm script move:publish --package-path oracle-market
-pnpm script owner:shop:seed
 
-# 6) Run the UI
-pnpm ui dev
+# 8) To continue setting up the shop, listings, discounts, accepted currencies look at the scripts section
+```
+
+Optional run the UI (after publishing + creating a shop + updated UI environment variable config):
+```bash
+
 ```
 
 ## Frontend UI
@@ -80,5 +91,3 @@ The detailed docs live under `docs/`:
 - Troubleshooting: `docs/20-troubleshooting.md`
 - Security & gotchas: `docs/19-security.md`
 - EVM → Sui cheatsheet: `docs/03-evm-to-sui.md`
-
-## Troubleshooting

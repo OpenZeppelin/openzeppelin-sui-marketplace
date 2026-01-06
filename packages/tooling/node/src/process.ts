@@ -26,8 +26,24 @@ import {
   getActiveSuiCliEnvironment,
   getSuiCliEnvironmentRpc,
   listSuiCliEnvironments,
+  runSuiCli,
   switchSuiCliEnvironment
 } from "./suiCli.ts"
+
+const runSuiCliVersion = runSuiCli([])
+
+const getSuiCliVersion = async (): Promise<string | undefined> => {
+  try {
+    const { stdout, exitCode } = await runSuiCliVersion(["--version"])
+    if (exitCode && exitCode !== 0) return undefined
+    const firstLine = stdout?.toString().trim().split(/\r?\n/)[0] ?? ""
+    if (!firstLine) return undefined
+    const versionMatch = firstLine.match(/sui\s+([^\s]+)/i)
+    return (versionMatch?.[1] ?? firstLine) || undefined
+  } catch {
+    return undefined
+  }
+}
 
 export type CommonCliArgs = {
   network?: string
@@ -242,10 +258,14 @@ const createToolingForNetwork = async (
     suiConfig
   })
 
-const logScriptStart = (context: ScriptExecutionContext<unknown>) => {
+const logScriptStart = (
+  context: ScriptExecutionContext<unknown>,
+  { suiCliVersion }: { suiCliVersion?: string } = {}
+) => {
   logSimpleBlue("Starting script 🤖")
   logKeyValueBlue("Script")(context.scriptName)
   logKeyValueBlue("Network")(context.networkName)
+  logKeyValueBlue("Sui CLI")(suiCliVersion ?? "<unknown>")
   logEachBlue(context.cliArgumentsToLog)
   console.log("")
 }
@@ -592,7 +612,8 @@ const runScriptAndCaptureExitCode = async <TCliArgument>(
         rpcUrl: context.networkConfig.url
       },
       async () => {
-        logScriptStart(context)
+        const suiCliVersion = await getSuiCliVersion()
+        logScriptStart(context, { suiCliVersion })
 
         const tooling = await createToolingForNetwork(
           context.networkConfig,
