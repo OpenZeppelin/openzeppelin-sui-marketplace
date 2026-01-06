@@ -4,7 +4,7 @@ Sui Oracle Market: EVM Dev Quickstart
 This is a short, Sui-first guide to the `sui_oracle_market::shop` module aimed at Solidity/EVM developers.
 
 Where to start:
-- If you are following the repo learning path, read `docs/04-listings-receipts.md` first, then come back here.
+- If you are following the repo learning path, read `docs/08-listings-receipts.md` first, then come back here.
 - For a concept map that links docs to code, see `docs/README.md`.
 
 Mental Model Shift

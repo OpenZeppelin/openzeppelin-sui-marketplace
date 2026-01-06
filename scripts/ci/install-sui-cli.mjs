@@ -11,32 +11,9 @@ import { promisify } from "node:util"
 const execFileAsync = promisify(execFile)
 
 const version = process.env.SUI_CLI_VERSION || "1.63.0"
-const channel = (
-  process.env.SUI_CLI_CHANNEL ||
-  (process.env.SUI_CLI_NIGHTLY ? "nightly" : "stable")
-).toLowerCase()
-const useSuiup = channel === "nightly" || process.env.SUI_CLI_USE_SUIUP === "1"
 const installDir =
   process.env.SUI_CLI_INSTALL_DIR ||
   path.join(process.env.HOME ?? process.cwd(), ".local", "bin")
-
-const cargoBinDir = (() => {
-  const homeDir = process.env.HOME ?? process.cwd()
-  const cargoHome = process.env.CARGO_HOME || path.join(homeDir, ".cargo")
-  return path.join(cargoHome, "bin")
-})()
-
-const prependPath = (dir) => {
-  if (!dir) return
-  const current = process.env.PATH || ""
-  const parts = current.split(path.delimiter)
-  if (parts.includes(dir)) return
-  process.env.PATH = [dir, current].filter(Boolean).join(path.delimiter)
-}
-
-// Ensure common install locations are discoverable by subsequent execs.
-prependPath(installDir)
-prependPath(cargoBinDir)
 
 const osHints = (() => {
   switch (process.platform) {
@@ -97,21 +74,18 @@ const pickAsset = (assets) => {
   const extensionMatch = (name) =>
     name.endsWith(".tgz") || name.endsWith(".tar.gz") || name.endsWith(".zip")
 
-  const osMatch = (name) =>
-    osHints.some((hint) => name.toLowerCase().includes(hint))
+  const osMatch = (name) => osHints.some((hint) => name.includes(hint))
+  const archMatch = (name) => archHints.some((hint) => name.includes(hint))
 
-  const archMatch = (name) =>
-    archHints.some((hint) => name.toLowerCase().includes(hint))
-
-  const candidates = assets.filter(
-    (asset) =>
-      extensionMatch(asset.name) && osMatch(asset.name) && archMatch(asset.name)
-  )
+  const candidates = assets.filter((asset) => {
+    const name = (asset?.name || "").toLowerCase()
+    return extensionMatch(name) && osMatch(name) && archMatch(name)
+  })
 
   if (!candidates.length) return null
 
   const preferSui = candidates.filter((asset) =>
-    asset.name.toLowerCase().includes("sui")
+    (asset.name || "").toLowerCase().includes("sui")
   )
 
   return (preferSui.length ? preferSui : candidates)[0]
@@ -156,149 +130,7 @@ const findBinary = async (dir) => {
   return null
 }
 
-const commandAvailable = async (command) => {
-  try {
-    await execFileAsync(command, ["--version"])
-    return true
-  } catch {
-    try {
-      await execFileAsync(command, ["--help"])
-      return true
-    } catch {
-      return false
-    }
-  }
-}
-
-const ensureRustupInstalled = async () => {
-  if (await commandAvailable("rustup")) return
-
-  const installScriptUrl =
-    process.env.RUSTUP_INSTALL_SCRIPT_URL || "https://sh.rustup.rs"
-
-  const response = await fetch(installScriptUrl)
-  if (!response.ok) {
-    throw new Error(`Failed to fetch rustup install script: ${response.status}`)
-  }
-
-  const script = await response.text()
-  const tempDir = await mkdtemp(path.join(tmpdir(), "rustup-"))
-  const scriptPath = path.join(tempDir, "install-rustup.sh")
-
-  await mkdir(tempDir, { recursive: true })
-  await pipeline(Readable.from(script), createWriteStream(scriptPath))
-  await chmod(scriptPath, 0o755)
-
-  // Installs rustup/cargo into ~/.cargo/bin by default.
-  await execFileAsync("sh", [scriptPath, "-s", "--", "-y"], {
-    env: process.env
-  })
-
-  prependPath(cargoBinDir)
-
-  if (!(await commandAvailable("rustup"))) {
-    throw new Error(
-      "rustup installation completed but `rustup` is still not on PATH."
-    )
-  }
-}
-
-const ensureVersion = async () => {
-  try {
-    const { stdout } = await execFileAsync("sui", ["--version"])
-    if (channel === "nightly") {
-      if (stdout?.trim()) {
-        console.log("Sui CLI already available.")
-        return true
-      }
-    } else if (stdout?.includes(version)) {
-      console.log(`Sui CLI ${version} already available.`)
-      return true
-    }
-  } catch {
-    return false
-  }
-
-  return false
-}
-
-const ensureSuiupInstalled = async () => {
-  if (await commandAvailable("suiup")) return
-
-  // suiup is not published on crates.io, so install it from the upstream repo.
-  // Prefer the official install script (recommended by Mysten) to avoid compiling Rust in CI.
-  const installScriptUrl =
-    process.env.SUIUP_INSTALL_SCRIPT_URL ||
-    "https://raw.githubusercontent.com/Mystenlabs/suiup/main/install.sh"
-
-  try {
-    const response = await fetch(installScriptUrl)
-    if (!response.ok) {
-      throw new Error(
-        `Failed to fetch suiup install script: ${response.status}`
-      )
-    }
-
-    const script = await response.text()
-    const tempDir = await mkdtemp(path.join(tmpdir(), "suiup-"))
-    const scriptPath = path.join(tempDir, "install-suiup.sh")
-
-    await mkdir(tempDir, { recursive: true })
-    await pipeline(Readable.from(script), createWriteStream(scriptPath))
-    await chmod(scriptPath, 0o755)
-
-    // The installer typically places `suiup` under ~/.local/bin.
-    await execFileAsync("sh", [scriptPath], { env: process.env })
-  } catch {
-    // Fallback: build from source via cargo.
-    if (!(await commandAvailable("cargo"))) {
-      throw new Error(
-        "Failed to install suiup via install script and cargo is unavailable for a source-build fallback."
-      )
-    }
-
-    const gitUrl =
-      process.env.SUIUP_GIT_URL || "https://github.com/Mystenlabs/suiup"
-    const gitRef = process.env.SUIUP_GIT_REF || "main"
-    await execFileAsync(
-      "cargo",
-      ["install", "--locked", "--git", gitUrl, "--branch", gitRef, "suiup"],
-      { env: process.env }
-    )
-  }
-
-  // Ensure the newly installed binary is discoverable.
-  if (!(await commandAvailable("suiup"))) {
-    throw new Error(
-      "suiup installation completed but `suiup` is still not on PATH. Expected it in ~/.local/bin or ~/.cargo/bin."
-    )
-  }
-}
-
-const installWithSuiup = async () => {
-  // Keep CI self-sufficient: rustup is expected to exist whenever we use suiup.
-  await ensureRustupInstalled()
-  await ensureSuiupInstalled()
-
-  if (channel === "nightly") {
-    await execFileAsync("rustup", ["toolchain", "install", "nightly"])
-    // Match docs/00-setup.md: nightly package-manager prototype.
-    await execFileAsync("suiup", ["install", "sui", "--nightly=sui-pkg-alt"])
-    console.log("Installed Sui CLI nightly via suiup.")
-    return
-  }
-
-  await execFileAsync("suiup", ["install", "sui@testnet"])
-  console.log("Installed Sui CLI via suiup.")
-}
-
 const install = async () => {
-  if (await ensureVersion()) return
-  if (useSuiup) {
-    await installWithSuiup()
-    return
-  }
-
   let release = null
   let tag = null
 
@@ -310,7 +142,7 @@ const install = async () => {
     }
   }
 
-  if (!release) {
+  if (!release || !tag) {
     throw new Error(`Unable to find a Sui release for ${version}.`)
   }
 

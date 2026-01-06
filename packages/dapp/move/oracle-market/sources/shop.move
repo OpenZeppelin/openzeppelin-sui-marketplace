@@ -1,52 +1,6 @@
 #[allow(lint(public_entry), lint(self_transfer), unused_field)]
 module sui_oracle_market::shop;
 
-// === Concepts used in this module (what/why/how) ===
-// - Shared objects (Shop, ItemListing, AcceptedCurrency, DiscountTemplate): shared objects allow
-//   parallel writes on distinct objects, so each listing/currency/template can mutate without
-//   locking a monolithic map. They are created with obj::new and shared via txf::share_object.
-//   Docs: docs/03-shop-capabilities.md, docs/04-listings-receipts.md, docs/05-currencies-oracles.md,
-//   docs/06-discounts-tickets.md, docs/09-object-ownership.md
-// - Owned objects (ShopOwnerCap, DiscountTicket, ShopItem): ownership enforces authority or user
-//   assets. Passing an owned object by value is a single-use guarantee. Docs: docs/03-shop-capabilities.md,
-//   docs/04-listings-receipts.md, docs/06-discounts-tickets.md, docs/09-object-ownership.md
-// - Capability-based auth (ShopOwnerCap): admin entry points require the capability object, not
-//   tx::sender checks. This replaces Solidity modifiers. Docs: docs/03-shop-capabilities.md
-// - Dynamic fields (markers + per-claimer claims): lightweight membership indices stored under the
-//   Shop or DiscountTemplate. They keep discovery cheap and limit contention to the touched object.
-//   See dynamic_field::add/exists/remove/borrow. Docs: docs/04-listings-receipts.md, docs/06-discounts-tickets.md
-// - Type tags and TypeInfo: item and coin types are stored as TypeInfo so the type system enforces
-//   correctness at compile time (ShopItem<TItem>, Coin<T>). Docs: docs/04-listings-receipts.md,
-//   docs/05-currencies-oracles.md
-// - Phantom types: ShopItem<phantom TItem> records the item type in the type system without storing
-//   the value. Docs: docs/04-listings-receipts.md
-// - Abilities (key, store, copy, drop): key marks objects with identity, store allows storage, copy
-//   and drop allow value semantics. These drive ownership rules. Docs: docs/01-intro.md, docs/08-advanced.md
-// - Option types: opt::Option makes optional IDs and optional limits/expiry explicit instead of
-//   sentinel values. Docs: docs/04-listings-receipts.md, docs/06-discounts-tickets.md
-// - Entry functions vs view functions: public entry fun mutates state; #[ext(view)] functions are
-//   read-only and used for dev-inspect style queries. Docs: docs/08-advanced.md
-// - Events: event::emit writes typed events for indexers and UIs. Docs: docs/08-advanced.md,
-//   docs/11-data-access.md
-// - TxContext and sender: tx::TxContext is required for object creation and coin splits; tx::sender
-//   identifies the signer for access control and receipts. Docs: docs/08-advanced.md
-// - Object IDs and addresses: obj::UID, obj::uid_to_address, obj::id_from_address connect object
-//   identity to addresses for indexing and event payloads. Docs: docs/08-advanced.md
-// - Transfers and sharing: txf::public_transfer moves owned objects; txf::share_object makes shared
-//   objects. Docs: docs/03-shop-capabilities.md, docs/08-advanced.md
-// - Coins and coin registry: Coin<T> is a resource, coin_registry::Currency<T> supplies metadata.
-//   coin::split and coin::destroy_zero manage payment/change. Docs: docs/05-currencies-oracles.md,
-//   docs/10-ptb-gas.md
-// - Clock and time: clock::Clock supplies trusted time for discount windows and oracle freshness.
-//   Docs: docs/05-currencies-oracles.md, docs/06-discounts-tickets.md
-// - Oracle objects (Pyth): price feeds are objects (PriceInfoObject) validated by feed_id and object
-//   ID; guardrails enforce freshness and confidence. Docs: docs/05-currencies-oracles.md
-// - Fixed-point math: prices are stored in USD cents, discounts in basis points, and pow10 tables
-//   are used for scaling. Docs: docs/08-advanced.md
-// - Enums: DiscountRule, DiscountRuleKind, ReferenceKind model variant logic explicitly. Docs: docs/06-discounts-tickets.md
-// - Test-only APIs: #[test_only] functions expose helpers for Move tests without shipping them to
-//   production calls. Docs: docs/08-advanced.md
-
 use pyth::i64 as pyth_i64;
 use pyth::price as pyth_price;
 use pyth::price_feed as pyth_price_feed;
@@ -67,6 +21,52 @@ use sui::object as obj;
 use sui::package as pkg;
 use sui::transfer as txf;
 use sui::tx_context as tx;
+
+// === Concepts used in this module (what/why/how) ===
+// - Shared objects (Shop, ItemListing, AcceptedCurrency, DiscountTemplate): shared objects allow
+//   parallel writes on distinct objects, so each listing/currency/template can mutate without
+//   locking a monolithic map. They are created with obj::new and shared via txf::share_object.
+//   Docs: docs/07-shop-capabilities.md, docs/08-listings-receipts.md, docs/09-currencies-oracles.md,
+//   docs/10-discounts-tickets.md, docs/16-object-ownership.md
+// - Owned objects (ShopOwnerCap, DiscountTicket, ShopItem): ownership enforces authority or user
+//   assets. Passing an owned object by value is a single-use guarantee. Docs: docs/07-shop-capabilities.md,
+//   docs/08-listings-receipts.md, docs/10-discounts-tickets.md, docs/16-object-ownership.md
+// - Capability-based auth (ShopOwnerCap): admin entry points require the capability object, not
+//   tx::sender checks. This replaces Solidity modifiers. Docs: docs/07-shop-capabilities.md
+// - Dynamic fields (markers + per-claimer claims): lightweight membership indices stored under the
+//   Shop or DiscountTemplate. They keep discovery cheap and limit contention to the touched object.
+//   See dynamic_field::add/exists/remove/borrow. Docs: docs/08-listings-receipts.md, docs/10-discounts-tickets.md
+// - Type tags and TypeInfo: item and coin types are stored as TypeInfo so the type system enforces
+//   correctness at compile time (ShopItem<TItem>, Coin<T>). Docs: docs/08-listings-receipts.md,
+//   docs/09-currencies-oracles.md
+// - Phantom types: ShopItem<phantom TItem> records the item type in the type system without storing
+//   the value. Docs: docs/08-listings-receipts.md
+// - Abilities (key, store, copy, drop): key marks objects with identity, store allows storage, copy
+//   and drop allow value semantics. These drive ownership rules. Docs: docs/02-mental-model-shift.md, docs/16-object-ownership.md
+// - Option types: opt::Option makes optional IDs and optional limits/expiry explicit instead of
+//   sentinel values. Docs: docs/08-listings-receipts.md, docs/10-discounts-tickets.md
+// - Entry functions vs view functions: public entry fun mutates state; #[ext(view)] functions are
+//   read-only and used for dev-inspect style queries. Docs: docs/14-advanced.md
+// - Events: event::emit writes typed events for indexers and UIs. Docs: docs/08-advanced.md,
+//   docs/18-data-access.md
+// - TxContext and sender: tx::TxContext is required for object creation and coin splits; tx::sender
+//   identifies the signer for access control and receipts. Docs: docs/14-advanced.md
+// - Object IDs and addresses: obj::UID, obj::uid_to_address, obj::id_from_address connect object
+//   identity to addresses for indexing and event payloads. Docs: docs/14-advanced.md
+// - Transfers and sharing: txf::public_transfer moves owned objects; txf::share_object makes shared
+//   objects. Docs: docs/07-shop-capabilities.md, docs/14-advanced.md
+// - Coins and coin registry: Coin<T> is a resource, coin_registry::Currency<T> supplies metadata.
+//   coin::split and coin::destroy_zero manage payment/change. Docs: docs/05-currencies-oracles.md,
+//   docs/09-currencies-oracles.md, docs/17-ptb-gas.md
+// - Clock and time: clock::Clock supplies trusted time for discount windows and oracle freshness.
+//   Docs: docs/09-currencies-oracles.md, docs/10-discounts-tickets.md
+// - Oracle objects (Pyth): price feeds are objects (PriceInfoObject) validated by feed_id and object
+//   ID; guardrails enforce freshness and confidence. Docs: docs/09-currencies-oracles.md
+// - Fixed-point math: prices are stored in USD cents, discounts in basis points, and pow10 tables
+//   are used for scaling. Docs: docs/14-advanced.md
+// - Enums: DiscountRule, DiscountRuleKind, ReferenceKind model variant logic explicitly. Docs: docs/10-discounts-tickets.md
+// - Test-only APIs: #[test_only] functions expose helpers for Move tests without shipping them to
+//   production calls. Docs: docs/15-testing.md
 
 /// =======///
 /// Errors ///

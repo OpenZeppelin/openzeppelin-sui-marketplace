@@ -1,5 +1,5 @@
 const config = {
-  logo: "<span>Sui Oracle Market - Learning Guide</span>",
+  logo: "Sui Oracle Market - Learning Guide",
   project: {
     link: "https://github.com/OpenZeppelin/sui-oracle-market"
   },

@@ -118,5 +118,5 @@ pnpm script buyer:item-listing:list --shop-id <shopId>
 - https://docs.sui.io/guides/developer/objects/object-model
 
 ## 15. Navigation
-1. Next: [01 Mental Model Shift](./01-intro.md)
+1. Next: [01 Repo Layout + How to Navigate](./01-repo-layout.md)
 2. Back to map: [Learning Path Map](./)
