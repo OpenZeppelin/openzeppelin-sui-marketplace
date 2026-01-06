@@ -14,7 +14,7 @@ permissions:
   contents: read
 
 env:
-  NODE_VERSION: "22.19.0"
+  NODE_VERSION: "22.21.1"
   PNPM_VERSION: "10"
   SUI_CLI_VERSION: "1.63.0"
   SUI_CLI_CHANNEL: "nightly"
@@ -48,11 +48,13 @@ jobs:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup
       - name: Run unit tests
-        run: pnpm ${{ matrix.suite }} test:unit \
-          --reporter=default \
-          --reporter=junit \
-          --outputFile=reports/vitest-unit-pnpm ${{ matrix.suite }} test:unit.xml \
-          --coverage
+        run: |
+          mkdir -p reports
+          pnpm --filter ${{ matrix.suite }} test:unit -- \
+            --reporter=default \
+            --reporter=junit \
+            --outputFile=reports/vitest-unit-${{ matrix.suite }}.xml \
+            --coverage
 
       - name: Upload unit test artifacts on failure
         if: failure()
