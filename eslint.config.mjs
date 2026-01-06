@@ -62,6 +62,16 @@ export default typescriptEslint.config(
     }
   },
   {
+    files: ["scripts/ci/install-sui-cli.mjs"],
+    languageOptions: {
+      globals: {
+        console: "readonly",
+        process: "readonly",
+        fetch: "readonly"
+      }
+    }
+  },
+  {
     files: ["packages/domain/core/**/*.{ts,tsx,mts,cts}"],
     rules: {
       "no-restricted-imports": [
