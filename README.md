@@ -9,25 +9,25 @@ A practical onboarding guide for Solidity/EVM developers building and deploying 
 ## Learning Path
 This repo is designed to be read linearly. If you are coming from Solidity, follow the chapters in order and run each step.
 
-1. Setup + quickstart: `docs/00-setup.md`
-2. Mental model shift: `docs/01-intro.md`
-3. Localnet + publish: `docs/02-localnet-publish.md`
-4. Shop object + capability auth: `docs/03-shop-capabilities.md`
-5. Listings + typed receipts: `docs/04-listings-receipts.md`
-6. Currencies + oracles: `docs/05-currencies-oracles.md`
-7. Discounts + tickets: `docs/06-discounts-tickets.md`
-8. Buyer flow + UI: `docs/07-buyer-ui.md`
-9. Owner console + admin flows: `docs/07-owner-ui.md`
-10. Testing + advanced topics: `docs/08-advanced.md`
-11. Object ownership + versioning: `docs/09-object-ownership.md`
-12. PTBs + gas + fees: `docs/10-ptb-gas.md`
-13. Data access + indexing: `docs/11-data-access.md`
+1. [Setup + quickstart:](docs/00-setup.md)
+2. [Mental model shift:](docs/01-intro.md)
+3. [Localnet + publish:](docs/02-localnet-publish.md)
+4. [Shop object + capability auth:](docs/03-shop-capabilities.md)
+5. [Listings + typed receipts:](docs/04-listings-receipts.md)
+6. [Currencies + oracles:](docs/05-currencies-oracles.md)
+7. [Discounts + tickets:](docs/06-discounts-tickets.md)
+8. [Buyer flow + UI:](docs/07-buyer-ui.md)
+9. [Owner console + admin flows:](docs/07-owner-ui.md)
+10. [Testing + advanced topics:](docs/08-advanced.md)
+11. [Object ownership + versioning:](docs/09-object-ownership.md)
+12. [PTBs + gas + fees:](docs/10-ptb-gas.md)
+13. [Data access + indexing:](docs/11-data-access.md)
 
 Additional docs:
-1. `/docs/README.md`: learning path map + concept map.
-2. `/docs/glossary.md`: core Sui/Move terms used in the repo.
-3. `packages/dapp/move/README.md`: deep dive on shared objects + dynamic-field markers.
-4. `packages/ui/README.md`: UI setup and localnet execution details.
+1. [docs/README.md](docs/README.md): learning path map + concept map.
+2. [docs/glossary.md](docs/glossary.md): core Sui/Move terms used in the repo.
+3. [packages/dapp/move/README.md](packages/dapp/move/README.md): deep dive on shared objects + dynamic-field markers.
+4. [packages/ui/README.md](packages/ui/README.md): UI setup and localnet execution details.
 
 Each chapter includes:
 1. Learning goals
@@ -37,12 +37,12 @@ Each chapter includes:
 5. Exercises with expected outcomes
 
 ## Docs Index
-1. `docs/README.md`
-2. `docs/00-setup.md`
-3. `docs/09-object-ownership.md`
-4. `docs/10-ptb-gas.md`
-5. `docs/11-data-access.md`
-6. `docs/glossary.md`
+1. [docs/README.md](docs/README.md)
+2. [docs/00-setup.md](docs/00-setup.md)
+3. [docs/09-object-ownership.md](docs/09-object-ownership.md)
+4. [docs/10-ptb-gas.md](docs/10-ptb-gas.md)
+5. [docs/11-data-access.md](docs/11-data-access.md)
+6. [docs/glossary.md](docs/glossary.md)
 
 ## Docs Website
 This repo includes a Nextra-based docs site that renders the Markdown content from `/docs` and the README guides.
@@ -52,46 +52,86 @@ Run it:
 pnpm --filter learn dev
 ```
 
+## Quickstart (TL;DR)
+
+Full setup walkthrough: [docs/00-setup.md](docs/00-setup.md).
+
+```bash
+# 1) Clone and install
+# (pnpm workspace install from the repo root)
+git clone git@github.com:OpenZeppelin/sui-oracle-market.git && cd sui-oracle-market
+pnpm install
+
+# 2) Create or reuse an address (this will be your shop owner address)
+sui client new-address ed25519
+sui client active-address   # ensure the desired address is active
+
+# 3) Configure this address in Sui config file or export
+export SUI_ACCOUNT_ADDRESS=<0x...>
+export SUI_ACCOUNT_PRIVATE_KEY=<base64 or hex>
+
+# 4) Start localnet (new terminal) (--with-faucet is recommended as some script auto fund address if fund is missing)
+pnpm script chain:localnet:start --with-faucet
+
+# 5) Fund your created address
+sui client faucet --address <0x...>
+
+# 6) Seed mocks (coins + Pyth stub + price feeds)
+pnpm script mock:setup --buyer-address <0x...>
+
+# 7) Publish oracle-market (uses localnet dep replacements for mocks)
+pnpm script move:publish --package-path oracle-market
+
+# 8) To continue setting up the shop, listings, discounts, accepted currencies look at the scripts section
+```
+
+Optional run the UI (after publishing + creating a shop + updated UI environment variable config):
+```bash
+pnpm ui dev
+```
+
+---
+
 ## Repo Map 
-1. Move packages: `packages/dapp/move/*`
-   - Smart Contract Core logic: `packages/dapp/move/oracle-market/sources/shop.move`
-   - Sui-first module notes: `packages/dapp/move/README.md`
-   - Mocks: `packages/dapp/move/pyth-mock`, `packages/dapp/move/coin-mock`
-   - Vendored Pyth module: `packages/dapp/move/pyth-upstream-patched`, `packages/dapp/move/wormhole-upstream-patched`
-   - Item types (for item listing): `packages/dapp/move/item-examples`
-2. Scripts (CLI): `packages/dapp/src/scripts`
-   - Owner flows: `packages/dapp/src/scripts/owner`
-   - Buyer flows: `packages/dapp/src/scripts/buyer`
-   - Localnet + mocks: `packages/dapp/src/scripts/chain`, `packages/dapp/src/scripts/mock`
-3. Domain SDK: `packages/domain/core` (PTB builders + parsing helpers)
-4. UI: `packages/ui` (Next.js + dapp-kit)
-5. Tooling: `packages/tooling` (localnet harness, script orchestration tooling, testing utilities)
+1. Move packages: [packages/dapp/move/](packages/dapp/move/)
+   - Smart Contract Core logic: [packages/dapp/move/oracle-market/sources/shop.move](packages/dapp/move/oracle-market/sources/shop.move)
+   - Sui-first module notes: [packages/dapp/move/README.md](packages/dapp/move/README.md)
+   - Mocks: [packages/dapp/move/pyth-mock](packages/dapp/move/pyth-mock), [packages/dapp/move/coin-mock](packages/dapp/move/coin-mock)
+   - Vendored Pyth module: [packages/dapp/move/pyth-upstream-patched](packages/dapp/move/pyth-upstream-patched), [packages/dapp/move/wormhole-upstream-patched](packages/dapp/move/wormhole-upstream-patched)
+   - Item types (for item listing): [packages/dapp/move/item-examples](packages/dapp/move/item-examples)
+2. Scripts (CLI): [packages/dapp/src/scripts](packages/dapp/src/scripts)
+   - Owner flows: [packages/dapp/src/scripts/owner](packages/dapp/src/scripts/owner)
+   - Buyer flows: [packages/dapp/src/scripts/buyer](packages/dapp/src/scripts/buyer)
+   - Localnet + mocks: [packages/dapp/src/scripts/chain](packages/dapp/src/scripts/chain), [packages/dapp/src/scripts/mock](packages/dapp/src/scripts/mock)
+3. Domain SDK: [packages/domain/core](packages/domain/core) (PTB builders + parsing helpers)
+4. UI: [packages/ui](packages/ui) (Next.js + dapp-kit)
+5. Tooling: [packages/tooling](packages/tooling) (localnet harness, script orchestration tooling, testing utilities)
 
 ## Concept Index (Solidity -> Sui)
 | Solidity term | Sui/Move equivalent | Code reference | Docs |
 | --- | --- | --- | --- |
-| Contract | Package + shared object instance | `packages/dapp/move/oracle-market/sources/shop.move` (Shop, create_shop) | `docs/03-shop-capabilities.md` |
-| onlyOwner modifier | Capability object | `packages/dapp/move/oracle-market/sources/shop.move` (ShopOwnerCap, update_shop_owner) | `docs/03-shop-capabilities.md` |
-| Mapping | Dynamic fields + markers | `packages/dapp/move/oracle-market/sources/shop.move` (ItemListingMarker, AcceptedCurrencyMarker) | `docs/04-listings-receipts.md` |
-| ERC-20 token | Coin<T> + Coin Registry | `packages/dapp/move/oracle-market/sources/shop.move` (add_accepted_currency) | `docs/05-currencies-oracles.md` |
-| Oracle address | PriceInfoObject ID + feed_id bytes | `packages/dapp/move/oracle-market/sources/shop.move` (AcceptedCurrency) | `docs/05-currencies-oracles.md` |
-| Allowance / approve | Coin<T> objects passed into PTB | `packages/domain/core/src/flows/buy.ts` (buildBuyTransaction) | `docs/07-buyer-ui.md` |
-| Event log | Typed Move events | `packages/dapp/move/oracle-market/sources/shop.move` (PurchaseCompleted, DiscountRedeem) | `docs/08-advanced.md` |
-| Constructor | Entry function that mints objects | `packages/dapp/move/oracle-market/sources/shop.move` (create_shop) | `docs/03-shop-capabilities.md` |
-| Factory + deploy script | Publish + owner scripts | `packages/dapp/src/scripts/move/publish.ts` | `docs/02-localnet-publish.md` |
+| Contract | Package + shared object instance | [packages/dapp/move/oracle-market/sources/shop.move](packages/dapp/move/oracle-market/sources/shop.move) (Shop, create_shop) | [docs/03-shop-capabilities.md](docs/03-shop-capabilities.md) |
+| onlyOwner modifier | Capability object | [packages/dapp/move/oracle-market/sources/shop.move](packages/dapp/move/oracle-market/sources/shop.move) (ShopOwnerCap, update_shop_owner) | [docs/03-shop-capabilities.md](docs/03-shop-capabilities.md) |
+| Mapping | Dynamic fields + markers | [packages/dapp/move/oracle-market/sources/shop.move](packages/dapp/move/oracle-market/sources/shop.move) (ItemListingMarker, AcceptedCurrencyMarker) | [docs/04-listings-receipts.md](docs/04-listings-receipts.md) |
+| ERC-20 token | Coin<T> + Coin Registry | [packages/dapp/move/oracle-market/sources/shop.move](packages/dapp/move/oracle-market/sources/shop.move) (add_accepted_currency) | [docs/05-currencies-oracles.md](docs/05-currencies-oracles.md) |
+| Oracle address | PriceInfoObject ID + feed_id bytes | [packages/dapp/move/oracle-market/sources/shop.move](packages/dapp/move/oracle-market/sources/shop.move) (AcceptedCurrency) | [docs/05-currencies-oracles.md](docs/05-currencies-oracles.md) |
+| Allowance / approve | Coin<T> objects passed into PTB | [packages/domain/core/src/flows/buy.ts](packages/domain/core/src/flows/buy.ts) (buildBuyTransaction) | [docs/07-buyer-ui.md](docs/07-buyer-ui.md) |
+| Event log | Typed Move events | [packages/dapp/move/oracle-market/sources/shop.move](packages/dapp/move/oracle-market/sources/shop.move) (PurchaseCompleted, DiscountRedeem) | [docs/08-advanced.md](docs/08-advanced.md) |
+| Constructor | Entry function that mints objects | [packages/dapp/move/oracle-market/sources/shop.move](packages/dapp/move/oracle-market/sources/shop.move) (create_shop) | [docs/03-shop-capabilities.md](docs/03-shop-capabilities.md) |
+| Factory + deploy script | Publish + owner scripts | [packages/dapp/src/scripts/move/publish.ts](packages/dapp/src/scripts/move/publish.ts) | [docs/02-localnet-publish.md](docs/02-localnet-publish.md) |
 
 ## Troubleshooting
 1. Localnet refuses to start or keeps regenesis
    - Check `pnpm script chain:localnet:start --check-only`.
-   - Localnet version handling is in `packages/dapp/src/scripts/chain/localnet-start.ts`.
+   - Localnet version handling is in [packages/dapp/src/scripts/chain/localnet-start.ts](packages/dapp/src/scripts/chain/localnet-start.ts).
 2. "No ShopOwnerCap found"
-   - Ensure the owner cap is in your wallet. See `packages/domain/core/src/models/shop.ts`.
+   - Ensure the owner cap is in your wallet. See [packages/domain/core/src/models/shop.ts](packages/domain/core/src/models/shop.ts).
 3. "No accepted currency registered for coin type ..."
    - Register with `pnpm script owner:currency:add` or re-run `pnpm script owner:shop:seed`.
 4. Buying with SUI fails: "requires at least two SUI coin objects"
-   - Split SUI so one coin can be gas and one can be payment. See `packages/domain/core/src/flows/buy.ts`.
+   - Split SUI so one coin can be gas and one can be payment. See [packages/domain/core/src/flows/buy.ts](packages/domain/core/src/flows/buy.ts).
 5. Price feed mismatch or stale price
-   - Re-run `pnpm script mock:update-prices` on localnet; guardrails are in `packages/dapp/move/oracle-market/sources/shop.move`.
+   - Re-run `pnpm script mock:update-prices` on localnet; guardrails are in [packages/dapp/move/oracle-market/sources/shop.move](packages/dapp/move/oracle-market/sources/shop.move).
 
 ## Security & Gotchas (Move/Sui)
 1. Shared object contention
@@ -119,46 +159,6 @@ If you need a nightly build (for example, to match newer Move.lock/package-manag
 ```bash
 rustup toolchain install nightly
 suiup install sui@testnet --nightly
-```
-
----
-
-## Quickstart (TL;DR)
-
-Full setup walkthrough: `docs/00-setup.md`.
-
-```bash
-# 1) Clone and install
-# (pnpm workspace install from the repo root)
-git clone git@github.com:OpenZeppelin/sui-oracle-market.git && cd sui-oracle-market
-pnpm install
-
-# 2) Create or reuse an address (this will be your shop owner address)
-sui client new-address ed25519
-sui client active-address   # ensure the desired address is active
-
-# 3) Configure this address in Sui config file or export
-export SUI_ACCOUNT_ADDRESS=<0x...>
-export SUI_ACCOUNT_PRIVATE_KEY=<base64 or hex>
-
-# 4) Fund your created address
-sui client faucet --address <0x...>
-
-# 5) Start localnet (new terminal) (--with-faucet is recommended as some script auto fund address if fund is missing)
-pnpm script chain:localnet:start --with-faucet
-
-# 6) Seed mocks (coins + Pyth stub + price feeds)
-pnpm script mock:setup --buyer-address <0x...>
-
-# 7) Publish oracle-market (uses localnet dep replacements for mocks)
-pnpm script move:publish --package-path oracle-market
-
-# 8) To continue setting up the shop, listings, discounts, accepted currencies look at the scripts section
-```
-
-Optional run the UI (after publishing + creating a shop + updated UI environment variable config):
-```bash
-pnpm ui dev
 ```
 
 ---
@@ -204,10 +204,10 @@ This repo ships a reusable testing layer in `@sui-oracle-market/tooling-node/tes
 - **Observability utilities** to capture logs and inspect failures without ad-hoc console hacks.
 
 ### Directory layout (dapp)
-- `packages/dapp/src/scripts/owner/test-integration/` → owner script integration tests and helpers.
-- `packages/dapp/src/scripts/buyer/test-integration/` → buyer script integration tests and helpers.
-- `packages/dapp/src/utils/test/helpers/helpers.ts` → shared test utilities and fixtures used by both owner/buyer suites.
-- `packages/dapp/src/scripts/utils/test/` → unit tests for script utilities.
+- [packages/dapp/src/scripts/owner/test-integration/](packages/dapp/src/scripts/owner/test-integration/) → owner script integration tests and helpers.
+- [packages/dapp/src/scripts/buyer/test-integration/](packages/dapp/src/scripts/buyer/test-integration/) → buyer script integration tests and helpers.
+- [packages/dapp/src/utils/test/helpers/helpers.ts](packages/dapp/src/utils/test/helpers/helpers.ts) → shared test utilities and fixtures used by both owner/buyer suites.
+- [packages/dapp/src/scripts/utils/test/](packages/dapp/src/scripts/utils/test/) → unit tests for script utilities.
 
 ### Vitest configuration
 Use the tooling Vitest plugin to keep test defaults consistent across packages. Example config:
@@ -394,7 +394,7 @@ pnpm install
   export SUI_ACCOUNT_ADDRESS=<0x...>
   export SUI_ACCOUNT_PRIVATE_KEY=<base64 or hex>
   ```
-- The script config lives at `packages/dapp/sui.config.ts` (loaded automatically when you run `pnpm script ...`).
+- The script config lives at [packages/dapp/sui.config.ts](packages/dapp/sui.config.ts) (loaded automatically when you run `pnpm script ...`).
   - `defaultNetwork`: default network name used when `--network` is not passed (localnet by default).
   - `networks[networkName]`: per-network settings:
     - `url`: RPC endpoint for the fullnode. If omitted, tooling auto-resolves from `networkName`.
@@ -416,7 +416,7 @@ pnpm install
       - `accountMnemonic`: mnemonic for the signer.
     - `accounts`: optional named account map (same shape as `account`) for scripts that switch signer roles.
   - `paths`:
-    - `move`: Move root (defaults to `packages/dapp/move` at runtime).
+    - `move`: Move root (defaults to [packages/dapp/move](packages/dapp/move) at runtime).
     - `deployments`: publish artifacts output directory.
     - `objects`: object artifacts output directory.
     - `artifacts`: alias for deployments (kept for compatibility).
@@ -429,16 +429,16 @@ Move environments (localnet/devnet/testnet/mainnet):
   sui client switch --env localnet
   sui client chain-identifier
   ```
-  Then update `localnet = "<chain-id>"` in `packages/dapp/move/oracle-market/Move.toml` if it changed.
+  Then update `localnet = "<chain-id>"` in [packages/dapp/move/oracle-market/Move.toml](packages/dapp/move/oracle-market/Move.toml) if it changed.
 
 Environment overrides (optional):
 - Network selection precedence: `--network` > `SUI_NETWORK` > `defaultNetwork` > `localnet`.
 - `SUI_KEYSTORE_PATH`, `SUI_ACCOUNT_INDEX`, `SUI_ACCOUNT_ADDRESS`, `SUI_ACCOUNT_PRIVATE_KEY`, `SUI_ACCOUNT_MNEMONIC`: override the `account` fields above.
 
 How it’s used:
-- Scripts load `sui.config.ts` to decide RPC URL, account, and artifact paths.
+- Scripts load [sui.config.ts](packages/dapp/sui.config.ts) to decide RPC URL, account, and artifact paths.
 - `--network <name>` switches networks without editing files; `SUI_NETWORK` applies when `--network` is omitted.
-- Deploy artifacts are written under `packages/dapp/deployments`.
+- Deploy artifacts are written under [packages/dapp/deployments](packages/dapp/deployments).
 
 Quick decision table:
 | Goal | Example command | Resulting network |
@@ -453,7 +453,7 @@ Quick decision table:
 pnpm script chain:localnet:start --with-faucet
 ```
 - Spawns `sui start --with-faucet` and waits for RPC readiness.
-- Uses the `localnet` RPC from `sui.config.ts` (or `--network localnet`).
+- Uses the `localnet` RPC from [sui.config.ts](packages/dapp/sui.config.ts) (or `--network localnet`).
 - Initializes/uses a persistent localnet config dir (default `~/.sui/localnet`) so state survives restarts.
 - If the config dir is missing, it runs `sui genesis --with-faucet --working-dir <dir>` once before starting.
 - Records the Sui CLI version in the config dir (`sui-cli-version-<version>.txt`) for mismatch detection.
@@ -467,10 +467,10 @@ Note: running `sui start` without a stable config dir can regenesis and wipe loc
 pnpm script mock:setup --buyer-address <0x...>
 ```
 What it does:
-- Publishes `packages/dapp/move/pyth-mock` and `packages/dapp/move/coin-mock` if needed.
+- Publishes [packages/dapp/move/pyth-mock](packages/dapp/move/pyth-mock) and [packages/dapp/move/coin-mock](packages/dapp/move/coin-mock) if needed.
 - Mints mock coins via the coin registry, funds your signer, and transfers half of each minted coin to the buyer address.
 - Publishes mock Pyth price feeds with fresh timestamps.
-- Writes artifacts to `packages/dapp/deployments/mock.localnet.json` for reuse.
+- Writes artifacts to [packages/dapp/deployments/mock.localnet.json](packages/dapp/deployments/mock.localnet.json) for reuse.
 
 ### 5) Publish oracle-market (localnet)
 ```bash
@@ -479,7 +479,7 @@ pnpm script move:publish --package-path oracle-market
 What it does:
 - Builds against the localnet dependency replacements and unpublished deps.
 - Publishes via the Sui CLI.
-- Writes results to `packages/dapp/deployments/deployment.localnet.json`.
+- Writes results to [packages/dapp/deployments/deployment.localnet.json](packages/dapp/deployments/deployment.localnet.json).
 
 ---
 
@@ -492,7 +492,7 @@ Defaults and artifacts:
 - Buyer scripts that take `--shop-id` will default to the latest Shop object in `packages/dapp/deployments/objects.<network>.json`.
 
 ### 0) Prepare owner and buyer accounts
-The scripts sign transactions with the configured account in `packages/dapp/sui.config.ts` (or `SUI_ACCOUNT_ADDRESS` / `SUI_ACCOUNT_PRIVATE_KEY` env vars). Use one address as the shop owner and another as the buyer.
+The scripts sign transactions with the configured account in [packages/dapp/sui.config.ts](packages/dapp/sui.config.ts) (or `SUI_ACCOUNT_ADDRESS` / `SUI_ACCOUNT_PRIVATE_KEY` env vars). Use one address as the shop owner and another as the buyer.
 
 ```bash
 # Create two addresses in the Sui CLI keystore (owner + buyer).
@@ -525,7 +525,7 @@ pnpm script mock:setup --buyer-address <0x...>
 What it does:
 - Publishes mock Move packages (`pyth-mock`, `coin-mock`, and `item-examples`) on localnet.
 - Mints mock coins to the signer, transfers half of each minted coin to the buyer address, and creates two mock Pyth `PriceInfoObject`s.
-- Writes mock artifacts to `packages/dapp/deployments/mock.localnet.json`.
+- Writes mock artifacts to [packages/dapp/deployments/mock.localnet.json](packages/dapp/deployments/mock.localnet.json).
 
 Where to find values:
 - `pythPackageId`, `coinPackageId`, `itemPackageId`: top-level fields in `mock.localnet.json`.
@@ -539,7 +539,7 @@ pnpm script move:publish --package-path oracle-market
 ```
 What it does:
 - Publishes the main `sui_oracle_market` Move package to localnet using dep replacements (no dev-mode flags).
-- Records publish artifacts in `packages/dapp/deployments/deployment.localnet.json`.
+- Records publish artifacts in [packages/dapp/deployments/deployment.localnet.json](packages/dapp/deployments/deployment.localnet.json).
 
 Where to find values:
 - `deployment.localnet.json` entries include `packageId`, `packagePath`, and `packageName`.
@@ -553,7 +553,7 @@ Optional:
 
 What it does:
 - Calls `shop::create_shop` and creates a shared `Shop` plus a `ShopOwnerCap` capability.
-- Records object artifacts in `packages/dapp/deployments/objects.localnet.json`.
+- Records object artifacts in [packages/dapp/deployments/objects.localnet.json](packages/dapp/deployments/objects.localnet.json).
 
 Where to find values:
 - `shopId`: look for `objectType` ending in `::shop::Shop` in `objects.localnet.json`.
@@ -578,11 +578,11 @@ What it does:
 - Links your coin type to a Pyth `PriceInfoObject` for oracle pricing.
 
 Where to find values:
-- `COIN_TYPE`: `packages/dapp/deployments/mock.localnet.json` -> `coins[].coinType`
-- `FEED_ID_HEX`: `mock.localnet.json` -> `priceFeeds[].feedIdHex`
-- `PRICE_INFO_OBJECT_ID`: `mock.localnet.json` -> `priceFeeds[].priceInfoObjectId`
-- Optional `--currency-object-id`: `mock.localnet.json` -> `coins[].currencyObjectId` (otherwise derived automatically)
-- The resulting `AcceptedCurrency` ID is stored in `packages/dapp/deployments/objects.localnet.json` with `objectType` ending in `::shop::AcceptedCurrency`
+- `COIN_TYPE`: [packages/dapp/deployments/mock.localnet.json](packages/dapp/deployments/mock.localnet.json) -> `coins[].coinType`
+- `FEED_ID_HEX`: [mock.localnet.json](packages/dapp/deployments/mock.localnet.json) -> `priceFeeds[].feedIdHex`
+- `PRICE_INFO_OBJECT_ID`: [mock.localnet.json](packages/dapp/deployments/mock.localnet.json) -> `priceFeeds[].priceInfoObjectId`
+- Optional `--currency-object-id`: [mock.localnet.json](packages/dapp/deployments/mock.localnet.json) -> `coins[].currencyObjectId` (otherwise derived automatically)
+- The resulting `AcceptedCurrency` ID is stored in [packages/dapp/deployments/objects.localnet.json](packages/dapp/deployments/objects.localnet.json) with `objectType` ending in `::shop::AcceptedCurrency`
 
 ### 6) Create a listing
 ```bash
@@ -594,11 +594,11 @@ pnpm script owner:item-listing:add \
 ```
 What it does:
 - Creates a new `ItemListing` object with price (USD cents), stock, and item type metadata.
-- Records the listing in `packages/dapp/deployments/objects.localnet.json`.
+- Records the listing in [packages/dapp/deployments/objects.localnet.json](packages/dapp/deployments/objects.localnet.json).
 
 Where to find values:
-- `ITEM_TYPE`: `packages/dapp/deployments/mock.localnet.json` -> `itemTypes[].itemType`
-- `itemListingId`: `objects.localnet.json` entry with `objectType` ending in `::shop::ItemListing`
+- `ITEM_TYPE`: [packages/dapp/deployments/mock.localnet.json](packages/dapp/deployments/mock.localnet.json) -> `itemTypes[].itemType`
+- `itemListingId`: [objects.localnet.json](packages/dapp/deployments/objects.localnet.json) entry with `objectType` ending in `::shop::ItemListing`
 - The script logs the listing ID and its marker (dynamic field) ID.
 
 ### 7) Create a discount template
@@ -649,7 +649,7 @@ pnpm script mock:update-prices
 ```
 What it does:
 - Updates the mock Pyth `PriceInfoObject` timestamps so oracle freshness checks pass.
-- Uses `packages/dapp/deployments/mock.localnet.json` to locate feeds.
+- Uses [packages/dapp/deployments/mock.localnet.json](packages/dapp/deployments/mock.localnet.json) to locate feeds.
 
 ### 11) View the full shop snapshot
 ```bash
@@ -660,7 +660,7 @@ What it does:
 - Uses the latest Shop artifact if `--shop-id` is omitted.
 
 Where to find values:
-- `shopId`: `packages/dapp/deployments/objects.localnet.json` entry with `objectType` ending in `::shop::Shop`
+- `shopId`: [packages/dapp/deployments/objects.localnet.json](packages/dapp/deployments/objects.localnet.json) entry with `objectType` ending in `::shop::Shop`
 
 ### Other useful scripts while iterating
 - `pnpm script owner:pyth:list --quote USD`: list Pyth feeds for a quote currency and surface feed IDs + PriceInfoObject IDs.
@@ -715,10 +715,10 @@ Where to find values:
 ```
 
 What this means in practice:
-- **`packages/dapp`** is the backend automation package. It owns the Move packages, the CLI scripts, and the artifact output in `packages/dapp/deployments`.
-- **`packages/domain/*`** contains shared domain models and read/query helpers (split into browser-safe `core` and Node-only `node`).
-- **`packages/tooling/*`** contains shared infrastructure helpers (split into browser-safe `core` and Node-only `node`).
-- **`packages/ui`** is a static-exported Next.js UI that connects to the same Move package and shop objects created by the scripts.
+- **[packages/dapp](packages/dapp)** is the backend automation package. It owns the Move packages, the CLI scripts, and the artifact output in [packages/dapp/deployments](packages/dapp/deployments).
+- **[packages/domain/](packages/domain/)** contains shared domain models and read/query helpers (split into browser-safe [core](packages/domain/core) and Node-only [node](packages/domain/node)).
+- **[packages/tooling/](packages/tooling/)** contains shared infrastructure helpers (split into browser-safe [core](packages/tooling/core) and Node-only [node](packages/tooling/node)).
+- **[packages/ui](packages/ui)** is a static-exported Next.js UI that connects to the same Move package and shop objects created by the scripts.
 
 ### Package intent and dependency rules
 
@@ -731,8 +731,8 @@ This repo is structured as a strict layered workspace to keep **high cohesion** 
   - `@sui-oracle-market/domain-core`: domain models, queries, and transaction builders that can be used in both Node and the UI.
   - `@sui-oracle-market/domain-node`: Node-only domain glue (e.g. artifact resolution, filesystem-backed helpers). May depend on `domain-core` and `tooling-*`.
 - **Application layers**
-  - `packages/dapp`: scripts/CLI orchestration. May depend on `tooling-*` and `domain-*`.
-  - `packages/ui`: browser-only app. Must depend only on `@sui-oracle-market/tooling-core` and `@sui-oracle-market/domain-core`.
+  - [packages/dapp](packages/dapp): scripts/CLI orchestration. May depend on `tooling-*` and `domain-*`.
+  - [packages/ui](packages/ui): browser-only app. Must depend only on `@sui-oracle-market/tooling-core` and `@sui-oracle-market/domain-core`.
 
 Enforcement:
 - ESLint is configured to block forbidden cross-layer imports.
@@ -745,7 +745,7 @@ All commands are designed to run from the repo root.
 
 - **Backend scripts (Move + CLI tooling):**
   - `pnpm script <script-name> [--flags]`
-  - This is a thin wrapper for `pnpm --filter dapp <script-name>` and runs inside `packages/dapp`.
+  - This is a thin wrapper for `pnpm --filter dapp <script-name>` and runs inside [packages/dapp](packages/dapp).
 - **Frontend UI scripts:**
   - `pnpm ui <script-name>`
   - This is a wrapper for `pnpm --filter ui <script-name>`.
@@ -762,14 +762,14 @@ pnpm ui dev
 
 ## Script Reference
 
-All backend scripts live under `packages/dapp/src/scripts`; mock chain scripts live under
-`packages/dapp/src/scripts/mock`, and Move scripts live under `packages/dapp/src/scripts/move`. Run with:
+All backend scripts live under [packages/dapp/src/scripts](packages/dapp/src/scripts); mock chain scripts live under
+[packages/dapp/src/scripts/mock](packages/dapp/src/scripts/mock), and Move scripts live under [packages/dapp/src/scripts/move](packages/dapp/src/scripts/move). Run with:
 ```bash
 pnpm script <script-name> [--flags]
 ```
 
 Common flag (applies to all scripts that use the standard runner):
-- `--network <name>`: override the network from `packages/dapp/sui.config.ts` (defaults to `localnet`).
+- `--network <name>`: override the network from [packages/dapp/sui.config.ts](packages/dapp/sui.config.ts) (defaults to `localnet`).
 
 Exceptions:
 - `pnpm script chain:localnet:stop` has no CLI flags.
@@ -791,7 +791,7 @@ Exceptions:
 - Scans the process table for detached `sui start` processes and SIGTERMs them. No flags.
 
 #### `pnpm script mock:setup`
-- Localnet-only seeding. Publishes/reuses `pyth-mock`, `coin-mock`, and `item-examples`, mints mock coins, transfers half of each minted coin to the buyer address, and creates two mock Pyth price feeds. Writes artifacts to `packages/dapp/deployments/mock.localnet.json`.
+- Localnet-only seeding. Publishes/reuses `pyth-mock`, `coin-mock`, and `item-examples`, mints mock coins, transfers half of each minted coin to the buyer address, and creates two mock Pyth price feeds. Writes artifacts to [packages/dapp/deployments/mock.localnet.json](packages/dapp/deployments/mock.localnet.json).
 - Flags:
   - `--buyer-address <0x...>`: buyer address to receive half of each minted mock coin (required; alias `--buyer`).
   - `--coin-package-id <id>` / `--pyth-package-id <id>`: reuse existing mock package IDs instead of publishing.
@@ -799,15 +799,15 @@ Exceptions:
   - `--re-publish`: ignore existing artifacts; republish mocks and recreate feeds.
 
 #### `pnpm script move:publish`
-- Builds and publishes a Move package under `packages/dapp/move`, skipping if a deployment artifact already exists unless `--re-publish` is set.
+- Builds and publishes a Move package under [packages/dapp/move](packages/dapp/move), skipping if a deployment artifact already exists unless `--re-publish` is set.
 - Flags:
-  - `--package-path <path>`: package folder relative to `packages/dapp/move` (required).
+  - `--package-path <path>`: package folder relative to [packages/dapp/move](packages/dapp/move) (required).
   - `--with-unpublished-dependencies`: allow unpublished deps (defaults to `true` on localnet; rejected on shared networks).
   - `--re-publish`: publish even if a deployment artifact already exists.
   - Use `--network <name>` to switch between `localnet`, `testnet`, etc; the script passes the matching Move `--environment` to the CLI.
 
 #### `pnpm script mock:get-currency`
-- Localnet-only coin registry inspection. If `--coin-type` is omitted it reads coin types from `packages/dapp/deployments/mock.localnet.json`.
+- Localnet-only coin registry inspection. If `--coin-type` is omitted it reads coin types from [packages/dapp/deployments/mock.localnet.json](packages/dapp/deployments/mock.localnet.json).
 - Flags:
   - `--registry-id <id>`: coin registry shared object (defaults to Sui registry).
   - `--coin-type <type>`: coin type(s) to inspect (repeatable; defaults to mock artifact coins).
@@ -847,7 +847,7 @@ Owner scripts default `--shop-package-id`, `--shop-id`, and `--owner-cap-id` fro
 - Calls `shop::create_shop` to create the shared `Shop` plus `ShopOwnerCap`.
 - Flags:
   - `--name <string>`: shop name stored on-chain (defaults to `Shop`).
-  - `--shop-package-id <id>`: published `sui_oracle_market` package ID (defaults to the latest `sui_oracle_market` entry in `packages/dapp/deployments/deployment.<network>.json`).
+  - `--shop-package-id <id>`: published `sui_oracle_market` package ID (defaults to the latest `sui_oracle_market` entry in [packages/dapp/deployments/deployment.<network>.json](packages/dapp/deployments/)).
 
 #### `pnpm script owner:shop:seed`
 - Creates a shop if one is missing, then seeds accepted currencies, listings, and discounts for fast UI testing.
@@ -857,7 +857,7 @@ Owner scripts default `--shop-package-id`, `--shop-id`, and `--owner-cap-id` fro
     - USDC PriceInfoObject: `0x9c4dd4008297ffa5e480684b8100ec21cc934405ed9a25d4e4d7b6259aad9c81`
     - WAL feed: `0xa6ba0195b5364be116059e401fb71484ed3400d4d9bfbdf46bd11eab4f9b7cea`
     - WAL PriceInfoObject: `0x52e5fb291bd86ca8bdd3e6d89ef61d860ea02e009a64bcc287bc703907ff3e8a`
-  - **Localnet**: reads `packages/dapp/deployments/mock.localnet.json` for mock coins + feeds (requires `pnpm script mock:setup --buyer-address <0x...>`).
+  - **Localnet**: reads [packages/dapp/deployments/mock.localnet.json](packages/dapp/deployments/mock.localnet.json) for mock coins + feeds (requires `pnpm script mock:setup --buyer-address <0x...>`).
 - Seeded data:
   - 4 low-price listings (Car, Bike, ConcertTicket, DigitalPass).
   - 2 discount templates (10% percent + $2 fixed) and attaches the fixed discount to the Bike listing.
@@ -945,7 +945,7 @@ Owner scripts default `--shop-package-id`, `--shop-id`, and `--owner-cap-id` fro
   - `--name <string>`: item name (required; UTF-8 encoded).
   - `--price <usd-or-cents>`: USD string (`12.50`) or integer cents (`1250`) (required).
   - `--stock <u64>`: initial inventory (>0) (required).
-  - `--item-type <0x...::Type>`: fully qualified item type (required). Can be any published struct (not just from the shop package); see `packages/dapp/move/item-examples/sources/items.move` and `packages/dapp/deployments/mock.localnet.json` `itemTypes` for sample values like `0x...::items::Car`.
+  - `--item-type <0x...::Type>`: fully qualified item type (required). Can be any published struct (not just from the shop package); see [packages/dapp/move/item-examples/sources/items.move](packages/dapp/move/item-examples/sources/items.move) and [packages/dapp/deployments/mock.localnet.json](packages/dapp/deployments/mock.localnet.json) `itemTypes` for sample values like `0x...::items::Car`.
   - `--spotlight-discount-id <id>`: optional discount template to spotlight on creation.
   - `--publisher-id <id>`: optional metadata-only field; not passed on-chain.
   - `--shop-package-id <id>` / `--shop-id <id>` / `--owner-cap-id <id>`: override artifact defaults.
@@ -1073,17 +1073,17 @@ Owner scripts default `--shop-package-id`, `--shop-id`, and `--owner-cap-id` fro
 ### Development Scripts (package-level)
 
 #### `pnpm script lint`
-- Runs ESLint across `packages/dapp`.
+- Runs ESLint across [packages/dapp](packages/dapp).
 
 #### `pnpm script lint:fix`
-- Runs ESLint with `--fix` across `packages/dapp`.
+- Runs ESLint with `--fix` across [packages/dapp](packages/dapp).
 
 ---
 
 
 ## State Deployments
 
-Artifacts land in `packages/dapp/deployments` after running scripts. Use them to reuse package IDs, shared objects, and mock assets across runs.
+Artifacts land in [packages/dapp/deployments](packages/dapp/deployments) after running scripts. Use them to reuse package IDs, shared objects, and mock assets across runs.
 
 ### `packages/dapp/deployments/deployment.<network>.json`
 - Shape: array of publish artifacts (one per published package).
@@ -1123,17 +1123,17 @@ Artifacts land in `packages/dapp/deployments` after running scripts. Use them to
 
 ## Frontend UI
 
-UI-specific setup notes live in `packages/ui/README.md`.
+UI-specific setup notes live in [packages/ui/README.md](packages/ui/README.md).
 
 ### Prerequisite
 - Install [Slush Wallet](https://slush.app/) in your browser
 - Create a new key or import a key you have generated with SUI CLI (this will be your buyer address)
 
-The UI lives in `packages/ui` and is a static-exported Next.js 16 app (`output: "export"`) that renders the shop, listings, discounts, and checkout flows.
+The UI lives in [packages/ui](packages/ui) and is a static-exported Next.js 16 app (`output: "export"`) that renders the shop, listings, discounts, and checkout flows.
 
 Configuration:
-- Network + contract IDs are read from `packages/ui/src/app/config/network.ts`.
-- Use `.env.local` inside `packages/ui` (or env vars) to set package + shop IDs per network:
+- Network + contract IDs are read from [packages/ui/src/app/config/network.ts](packages/ui/src/app/config/network.ts).
+- Use `.env.local` inside [packages/ui](packages/ui) (or env vars) to set package + shop IDs per network:
   ```bash
   NEXT_PUBLIC_LOCALNET_CONTRACT_PACKAGE_ID=0x...
   NEXT_PUBLIC_LOCALNET_SHOP_ID=0x...
@@ -1145,7 +1145,7 @@ Configuration:
 Localnet signing + execution (UI):
 - The UI **always** signs on the wallet and **executes** via the app’s local RPC client when the app network is `localnet`. This avoids wallet execution on whatever network the wallet is configured for.
 - Detection is app-driven (not wallet-driven): `useSuiClientContext()` supplies `network`, and the buy flow checks `network === localnet` before choosing the execution path.
-- Localnet RPC is locked to `http://127.0.0.1:9000` and guarded so only `localhost/127.0.0.1` are accepted. See `packages/ui/src/app/config/network.ts` and `packages/ui/src/app/helpers/localnet.ts`.
+- Localnet RPC is locked to `http://127.0.0.1:9000` and guarded so only `localhost/127.0.0.1` are accepted. See [packages/ui/src/app/config/network.ts](packages/ui/src/app/config/network.ts) and [packages/ui/src/app/helpers/localnet.ts](packages/ui/src/app/helpers/localnet.ts).
 - The buy flow also refreshes local mock Pyth feeds in the same PTB, so UI purchases do not require running `pnpm script mock:update-prices` first.
 
 Why this matters:
@@ -1153,7 +1153,7 @@ Why this matters:
 - For localnet we must ensure **all reads + writes** go to the same local node; otherwise you can sign on localnet but accidentally execute on devnet/testnet.
 
 Implementation details:
-- Buy flow branch is in `packages/ui/src/app/components/BuyFlowModal.tsx`.
+- Buy flow branch is in [packages/ui/src/app/components/BuyFlowModal.tsx](packages/ui/src/app/components/BuyFlowModal.tsx).
   - Localnet uses `useSignTransaction` + `SuiClient.executeTransactionBlock`.
   - Non-local networks keep `useSignAndExecuteTransaction`.
 - The local executor also dry-runs before signature and reports raw effects back to the wallet after execution.
@@ -1164,14 +1164,14 @@ Implementation details:
   - Starts the Next.js dev server (default `http://localhost:3000`).
   - Use this after localnet is running and you have set `NEXT_PUBLIC_*` IDs for the network you want to view.
 - `pnpm ui build`
-  - Creates a static export of the site into `packages/ui/dist`.
+  - Creates a static export of the site into [packages/ui/dist](packages/ui/dist).
   - Required before any of the deployment scripts.
 - `pnpm ui start`
   - Runs `next start` for production-mode preview (useful for sanity checks before deploying).
 - `pnpm ui lint`
   - Runs ESLint across the UI codebase.
 - `pnpm ui format`
-  - Formats `packages/ui/src` with Prettier (JS/TS/TSX).
+  - Formats [packages/ui/src](packages/ui/src) with Prettier (JS/TS/TSX).
 
 ### Deployment scripts:
 - `pnpm ui deploy:walrus:testnet`
@@ -1179,8 +1179,8 @@ Implementation details:
 - `pnpm ui deploy:walrus:mainnet`
   - Builds the UI, then deploys to Walrus mainnet via `walrus-sites-deploy`.
 - `pnpm ui deploy:arweave`
-  - Builds the UI with `ARWEAVE_DEPLOYMENT=true`, then deploys `packages/ui/dist` to Arweave using `arkb`.
-  - Expects an `arweave-keyfile.json` in `packages/ui`.
+  - Builds the UI with `ARWEAVE_DEPLOYMENT=true`, then deploys [packages/ui/dist](packages/ui/dist) to Arweave using `arkb`.
+  - Expects an `arweave-keyfile.json` in [packages/ui](packages/ui).
 
 ---
 
