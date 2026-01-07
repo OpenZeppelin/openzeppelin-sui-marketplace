@@ -39,6 +39,7 @@ import type {
   PublishArtifact
 } from "@sui-oracle-market/tooling-core/types"
 import { pickRootNonDependencyArtifact } from "../artifacts.ts"
+import { DEFAULT_TX_GAS_BUDGET } from "../constants.ts"
 import type { SuiResolvedConfig } from "../config.ts"
 import { createSuiClient } from "../describe-object.ts"
 import { loadKeypair } from "../keypair.ts"
@@ -629,6 +630,7 @@ const buildSuiConfig = ({
     localnet: {
       networkName: "localnet",
       url: rpcUrl,
+      gasBudget: DEFAULT_TX_GAS_BUDGET,
       account: {}
     }
   },
@@ -641,6 +643,7 @@ const buildSuiConfig = ({
   network: {
     networkName: "localnet",
     url: rpcUrl,
+    gasBudget: DEFAULT_TX_GAS_BUDGET,
     account: {}
   }
 })
