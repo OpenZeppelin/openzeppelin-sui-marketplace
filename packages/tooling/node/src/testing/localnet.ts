@@ -11,6 +11,7 @@ import {
   cp,
   mkdtemp,
   mkdir,
+  open,
   readdir,
   readFile,
   rm,
@@ -479,6 +480,96 @@ const parseOptionalNumber = (value: string | undefined) => {
   return parsed
 }
 
+const parsePositiveInteger = (value: string | undefined) => {
+  const parsed = parseOptionalNumber(value)
+  if (parsed === undefined || parsed <= 0) return undefined
+  return parsed
+}
+
+const resolveLocalnetStartLockPath = () =>
+  path.join(os.tmpdir(), "sui-it-localnet-start.lock")
+
+const resolveLocalnetStartLockTimeoutMs = () =>
+  parsePositiveInteger(process.env.SUI_IT_LOCALNET_START_LOCK_TIMEOUT_MS) ??
+  120_000
+
+const resolveLocalnetStartLockIntervalMs = () =>
+  parsePositiveInteger(process.env.SUI_IT_LOCALNET_START_LOCK_INTERVAL_MS) ??
+  250
+
+const shouldSerializeLocalnetStart = () => {
+  if (process.env.SUI_IT_SERIALIZE_LOCALNET_START !== undefined) {
+    return parseBooleanEnv(process.env.SUI_IT_SERIALIZE_LOCALNET_START)
+  }
+  return parseBooleanEnv(process.env.CI)
+}
+
+const resolveLocalnetStartLockOwnerPid = async (lockPath: string) => {
+  try {
+    const contents = await readFile(lockPath, "utf8")
+    const parsed = Number.parseInt(contents.trim(), 10)
+    if (!Number.isInteger(parsed) || parsed <= 0) return undefined
+    return parsed
+  } catch {
+    return undefined
+  }
+}
+
+const isProcessRunning = (pid: number) => {
+  try {
+    process.kill(pid, 0)
+    return true
+  } catch (error) {
+    return resolveErrorCode(error) !== "ESRCH"
+  }
+}
+
+const tryReleaseStaleLocalnetStartLock = async (lockPath: string) => {
+  const pid = await resolveLocalnetStartLockOwnerPid(lockPath)
+  if (!pid) return
+  if (isProcessRunning(pid)) return
+  await rm(lockPath, { force: true })
+}
+
+const tryAcquireLocalnetStartLock = async (lockPath: string) => {
+  try {
+    const handle = await open(lockPath, "wx")
+    await handle.writeFile(`${process.pid}\n`)
+    return handle
+  } catch (error) {
+    if (resolveErrorCode(error) === "EEXIST") return undefined
+    throw error
+  }
+}
+
+const withLocalnetStartLock = async <T>(action: () => Promise<T>) => {
+  if (!shouldSerializeLocalnetStart()) return action()
+
+  const lockPath = resolveLocalnetStartLockPath()
+  const timeoutMs = resolveLocalnetStartLockTimeoutMs()
+  const intervalMs = resolveLocalnetStartLockIntervalMs()
+  const startTime = Date.now()
+
+  while (Date.now() - startTime < timeoutMs) {
+    const handle = await tryAcquireLocalnetStartLock(lockPath)
+    if (handle) {
+      try {
+        return await action()
+      } finally {
+        await handle.close()
+        await rm(lockPath, { force: true })
+      }
+    }
+
+    await tryReleaseStaleLocalnetStartLock(lockPath)
+    await delay(intervalMs)
+  }
+
+  throw new Error(
+    `Timed out while waiting for the localnet start lock at ${lockPath}.`
+  )
+}
+
 const buildTreasuryIndexCandidates = (entryCount: number) => {
   const indices = Array.from({ length: entryCount }, (_, index) => index)
   const overrideIndex = parseOptionalNumber(process.env.SUI_IT_TREASURY_INDEX)
@@ -738,105 +829,107 @@ const startLocalnetProcess = async ({
   rpcWaitTimeoutMs = 30_000
 }: LocalnetStartOptions): Promise<LocalnetInstance> => {
   assertLocalnetEnabled()
-  const tempDir = await createTempDir(buildTempPrefix(testId))
-  const configDir = path.join(tempDir, "localnet-config")
-  const logsDir = path.join(tempDir, "logs")
-  await ensureDirectory(logsDir)
-  await ensureDirectory(configDir)
+  return withLocalnetStartLock(async () => {
+    const tempDir = await createTempDir(buildTempPrefix(testId))
+    const configDir = path.join(tempDir, "localnet-config")
+    const logsDir = path.join(tempDir, "logs")
+    await ensureDirectory(logsDir)
+    await ensureDirectory(configDir)
 
-  const ports = await resolveLocalnetPorts(withFaucet)
-  const logPath = path.join(logsDir, "localnet.log")
-  const logStream = createWriteStream(logPath, { flags: "a" })
-  let processHandle: ChildProcess | undefined
-
-  try {
-    await runSuiCommand([
-      "genesis",
-      "--working-dir",
-      configDir,
-      ...(withFaucet ? ["--with-faucet"] : [])
-    ])
-
-    await patchLocalnetConfigPorts(configDir, ports)
-
-    const args = ["start", "--network.config", configDir]
-    if (withFaucet) args.push("--with-faucet")
-
-    processHandle = spawn("sui", args, {
-      stdio: ["ignore", "pipe", "pipe"],
-      env: {
-        ...process.env,
-        SUI_CONFIG_DIR: configDir
-      }
-    })
-
-    processHandle.stdout?.pipe(logStream)
-    processHandle.stderr?.pipe(logStream)
-
-    const rpcUrl = `http://127.0.0.1:${ports.rpcPort}`
-    await waitForRpcReady(rpcUrl, rpcWaitTimeoutMs, 250, {
-      processHandle,
-      logPath
-    })
-    if (withFaucet && ports.faucetPort !== undefined) {
-      await waitForPortInUse(ports.faucetPort, rpcWaitTimeoutMs, 250)
-    }
-
-    const suiClient = createSuiClient(rpcUrl)
-    const faucetHost = withFaucet
-      ? `http://127.0.0.1:${ports.faucetPort ?? DEFAULT_FAUCET_PORT}`
-      : undefined
-    let treasuryAccount: TestAccount | undefined
+    const ports = await resolveLocalnetPorts(withFaucet)
+    const logPath = path.join(logsDir, "localnet.log")
+    const logStream = createWriteStream(logPath, { flags: "a" })
+    let processHandle: ChildProcess | undefined
 
     try {
-      treasuryAccount = await loadTreasuryAccount(configDir, suiClient)
+      await runSuiCommand([
+        "genesis",
+        "--working-dir",
+        configDir,
+        ...(withFaucet ? ["--with-faucet"] : [])
+      ])
+
+      await patchLocalnetConfigPorts(configDir, ports)
+
+      const args = ["start", "--network.config", configDir]
+      if (withFaucet) args.push("--with-faucet")
+
+      processHandle = spawn("sui", args, {
+        stdio: ["ignore", "pipe", "pipe"],
+        env: {
+          ...process.env,
+          SUI_CONFIG_DIR: configDir
+        }
+      })
+
+      processHandle.stdout?.pipe(logStream)
+      processHandle.stderr?.pipe(logStream)
+
+      const rpcUrl = `http://127.0.0.1:${ports.rpcPort}`
+      await waitForRpcReady(rpcUrl, rpcWaitTimeoutMs, 250, {
+        processHandle,
+        logPath
+      })
+      if (withFaucet && ports.faucetPort !== undefined) {
+        await waitForPortInUse(ports.faucetPort, rpcWaitTimeoutMs, 250)
+      }
+
+      const suiClient = createSuiClient(rpcUrl)
+      const faucetHost = withFaucet
+        ? `http://127.0.0.1:${ports.faucetPort ?? DEFAULT_FAUCET_PORT}`
+        : undefined
+      let treasuryAccount: TestAccount | undefined
+
+      try {
+        treasuryAccount = await loadTreasuryAccount(configDir, suiClient)
+      } catch (error) {
+        if (!withFaucet) {
+          throw error
+        }
+      }
+
+      const stop = async () => {
+        if (processHandle && processHandle.exitCode === null) {
+          processHandle.kill("SIGTERM")
+        }
+
+        if (processHandle) {
+          const exitPromise = once(processHandle, "exit")
+          const timeout = delay(10_000).then(() => {
+            if (processHandle && processHandle.exitCode === null) {
+              processHandle.kill("SIGKILL")
+            }
+          })
+
+          await Promise.race([exitPromise, timeout])
+        }
+
+        if (!keepTemp) {
+          await rm(tempDir, { recursive: true, force: true })
+        }
+      }
+
+      return {
+        rpcUrl,
+        configDir,
+        logsDir,
+        tempDir,
+        process: processHandle,
+        suiClient,
+        treasuryAccount,
+        faucetHost,
+        stop
+      }
     } catch (error) {
-      if (!withFaucet) {
-        throw error
-      }
-    }
-
-    const stop = async () => {
       if (processHandle && processHandle.exitCode === null) {
-        processHandle.kill("SIGTERM")
+        processHandle.kill("SIGKILL")
       }
-
-      if (processHandle) {
-        const exitPromise = once(processHandle, "exit")
-        const timeout = delay(10_000).then(() => {
-          if (processHandle && processHandle.exitCode === null) {
-            processHandle.kill("SIGKILL")
-          }
-        })
-
-        await Promise.race([exitPromise, timeout])
-      }
-
       if (!keepTemp) {
         await rm(tempDir, { recursive: true, force: true })
       }
+      throw error
     }
-
-    return {
-      rpcUrl,
-      configDir,
-      logsDir,
-      tempDir,
-      process: processHandle,
-      suiClient,
-      treasuryAccount,
-      faucetHost,
-      stop
-    }
-  } catch (error) {
-    if (processHandle && processHandle.exitCode === null) {
-      processHandle.kill("SIGKILL")
-    }
-    if (!keepTemp) {
-      await rm(tempDir, { recursive: true, force: true })
-    }
-    throw error
-  }
+  })
 }
 
 const createAccountSeed = (testId: string, label: string) =>
