@@ -244,9 +244,7 @@ const getAvailablePort = async (): Promise<number> =>
     })
   })
 
-const resolveAvailablePortExcluding = async (
-  allocatedPorts: Set<number>
-) => {
+const resolveAvailablePortExcluding = async (allocatedPorts: Set<number>) => {
   let port = await getAvailablePort()
   while (allocatedPorts.has(port)) {
     port = await getAvailablePort()
@@ -266,8 +264,7 @@ const collectMatchedPorts = (contents: string, pattern: RegExp) => {
 
 const collectPortsFromYamlContents = (contents: string) => {
   const ports = new Set<number>()
-  const hostPortPattern =
-    /(?:localhost|127\.0\.0\.1|0\.0\.0\.0):(\d{2,5})\b/g
+  const hostPortPattern = /(?:localhost|127\.0\.0\.1|0\.0\.0\.0):(\d{2,5})\b/g
   const tcpPattern = /\/tcp\/(\d{2,5})\b/g
   const udpPattern = /\/udp\/(\d{2,5})\b/g
   const portFieldPattern =
@@ -322,10 +319,20 @@ const buildPortRemap = async ({
   return portRemap
 }
 
-const resolveRemappedPort = (
-  portRemap: Map<number, number>,
-  port: string
-) => {
+const buildDefaultPortRemap = (ports: LocalnetPorts) => {
+  const entries: Array<[number, number]> = [
+    [DEFAULT_RPC_PORT, ports.rpcPort],
+    [DEFAULT_WEBSOCKET_PORT, ports.websocketPort]
+  ]
+
+  if (ports.faucetPort !== undefined) {
+    entries.push([DEFAULT_FAUCET_PORT, ports.faucetPort])
+  }
+
+  return new Map<number, number>(entries)
+}
+
+const resolveRemappedPort = (portRemap: Map<number, number>, port: string) => {
   const originalPort = Number.parseInt(port, 10)
   if (!Number.isInteger(originalPort)) return port
   return String(portRemap.get(originalPort) ?? originalPort)
@@ -335,8 +342,7 @@ const replacePortsInYamlContents = (
   contents: string,
   portRemap: Map<number, number>
 ) => {
-  const hostPortPattern =
-    /(?:localhost|127\.0\.0\.1|0\.0\.0\.0):(\d{2,5})\b/g
+  const hostPortPattern = /(?:localhost|127\.0\.0\.1|0\.0\.0\.0):(\d{2,5})\b/g
   const tcpPattern = /\/tcp\/(\d{2,5})\b/g
   const udpPattern = /\/udp\/(\d{2,5})\b/g
   const portFieldPattern =
@@ -594,21 +600,15 @@ const patchLocalnetConfigPorts = async (
     yamlFiles.map((filePath) => readFile(filePath, "utf8"))
   )
 
-  const portMap = shouldPatchAllPorts
+  const portRemap = shouldPatchAllPorts
     ? await buildPortRemap({ yamlFileContents, ports })
-    : new Map<number, number>([
-        [DEFAULT_RPC_PORT, ports.rpcPort],
-        [DEFAULT_WEBSOCKET_PORT, ports.websocketPort],
-        ...(ports.faucetPort !== undefined
-          ? [[DEFAULT_FAUCET_PORT, ports.faucetPort]]
-          : [])
-      ])
+    : buildDefaultPortRemap(ports)
 
   await Promise.all(
     yamlFiles.map(async (filePath, index) => {
       const contents = yamlFileContents[index] ?? ""
       const updated = shouldPatchAllPorts
-        ? replacePortsInYamlContents(contents, portMap)
+        ? replacePortsInYamlContents(contents, portRemap)
         : replacePortInYaml(
             contents,
             ports.rpcPort,
