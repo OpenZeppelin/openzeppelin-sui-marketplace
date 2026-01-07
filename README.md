@@ -1,3 +1,7 @@
+
+> [!Warning]
+> This is experimental UN-AUDITED code
+
 # Sui Oracle Market
 
 End-to-end example of a small on-chain market on **Sui**: items are priced in **USD cents** (stablecoin-style), while buyers can pay in **multiple currencies** using **oracle prices**.

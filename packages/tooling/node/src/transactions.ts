@@ -90,6 +90,12 @@ type GasPaymentOptions = {
   excludedObjectIds?: Set<string>
 }
 
+type GasBudgetOptions = {
+  transaction: Transaction
+  gasBudget?: number
+  forceUpdate?: boolean
+}
+
 /**
  * Checks whether a transaction already has gas payment objects attached.
  * Gas is explicit on Sui (Coin<SUI> objects), not an implicit balance.
@@ -97,6 +103,33 @@ type GasPaymentOptions = {
 const hasExistingGasPayment = (transaction: Transaction) => {
   const payment = transaction.getData().gasData.payment
   return Array.isArray(payment) && payment.length > 0
+}
+
+/**
+ * Checks whether a transaction has an explicit gas budget.
+ * When missing, the SDK may attempt a dry-run to estimate it, which can be flaky in CI.
+ */
+const hasExistingGasBudget = (transaction: Transaction) => {
+  const budget = transaction.getData().gasData.budget as unknown
+  if (budget === undefined || budget === null) return false
+  if (typeof budget === "bigint") return budget > 0n
+  if (typeof budget === "number") return Number.isFinite(budget) && budget > 0
+  if (typeof budget === "string") return budget.trim() !== "" && budget !== "0"
+  return true
+}
+
+/**
+ * Ensures an explicit gas budget is present.
+ * Prefer config-driven budgets for determinism.
+ */
+const ensureGasBudget = async ({
+  transaction,
+  gasBudget,
+  forceUpdate = false
+}: GasBudgetOptions) => {
+  if (!gasBudget) return
+  if (!forceUpdate && hasExistingGasBudget(transaction)) return
+  transaction.setGasBudget(gasBudget)
 }
 
 /**
@@ -230,6 +263,13 @@ export const signAndExecute = async (
     transaction,
     signerAddress,
     suiClient: toolingContext.suiClient
+  })
+
+  // If a network gas budget is configured, apply it so execution is deterministic
+  // (and avoids auto-budget estimation via dry-run inside the SDK).
+  await ensureGasBudget({
+    transaction,
+    gasBudget: toolingContext.suiConfig.network.gasBudget
   })
 
   for (let attemptIndex = 0; attemptIndex < maximumAttempts; attemptIndex++) {
