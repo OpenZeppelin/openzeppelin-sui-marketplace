@@ -6,6 +6,7 @@ const integrationRoot = path.dirname(fileURLToPath(import.meta.url))
 const workspaceRoot = path.resolve(integrationRoot, "..", "..", "..")
 const resolveWorkspacePackage = (packagePath: string) =>
   path.join(workspaceRoot, packagePath)
+const runSingleThread = process.env.SUI_IT_SINGLE_THREAD === "1"
 
 export default defineConfig({
   resolve: {
@@ -33,6 +34,11 @@ export default defineConfig({
     unstubEnvs: true,
     testTimeout: 180_000,
     hookTimeout: 180_000,
-    pool: "threads"
+    pool: "threads",
+    poolOptions: {
+      threads: {
+        singleThread: runSingleThread
+      }
+    }
   }
 })

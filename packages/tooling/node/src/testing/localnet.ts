@@ -244,23 +244,130 @@ const getAvailablePort = async (): Promise<number> =>
     })
   })
 
-const resolveDistinctPort = async (usedPorts: Set<number>) => {
+const resolveAvailablePortExcluding = async (
+  allocatedPorts: Set<number>
+) => {
   let port = await getAvailablePort()
-  while (usedPorts.has(port)) {
+  while (allocatedPorts.has(port)) {
     port = await getAvailablePort()
   }
-  usedPorts.add(port)
+  allocatedPorts.add(port)
   return port
+}
+
+const collectMatchedPorts = (contents: string, pattern: RegExp) => {
+  const ports = new Set<number>()
+  for (const match of contents.matchAll(pattern)) {
+    const port = Number.parseInt(match[1] ?? "", 10)
+    if (Number.isInteger(port)) ports.add(port)
+  }
+  return ports
+}
+
+const collectPortsFromYamlContents = (contents: string) => {
+  const ports = new Set<number>()
+  const hostPortPattern =
+    /(?:localhost|127\.0\.0\.1|0\.0\.0\.0):(\d{2,5})\b/g
+  const tcpPattern = /\/tcp\/(\d{2,5})\b/g
+  const udpPattern = /\/udp\/(\d{2,5})\b/g
+  const portFieldPattern =
+    /(?:^|\s)(?:port|[A-Za-z0-9_-]+(?:_|-)port)\s*:\s*(\d{2,5})\b/gm
+
+  collectMatchedPorts(contents, hostPortPattern).forEach((port) =>
+    ports.add(port)
+  )
+  collectMatchedPorts(contents, tcpPattern).forEach((port) => ports.add(port))
+  collectMatchedPorts(contents, udpPattern).forEach((port) => ports.add(port))
+  collectMatchedPorts(contents, portFieldPattern).forEach((port) =>
+    ports.add(port)
+  )
+
+  return ports
+}
+
+const buildPortRemap = async ({
+  yamlFileContents,
+  ports
+}: {
+  yamlFileContents: string[]
+  ports: LocalnetPorts
+}) => {
+  const portRemap = new Map<number, number>()
+  const allocatedPorts = new Set<number>()
+
+  const registerPortMapping = (originalPort: number, mappedPort: number) => {
+    portRemap.set(originalPort, mappedPort)
+    allocatedPorts.add(mappedPort)
+  }
+
+  registerPortMapping(DEFAULT_RPC_PORT, ports.rpcPort)
+  registerPortMapping(DEFAULT_WEBSOCKET_PORT, ports.websocketPort)
+  if (ports.faucetPort !== undefined) {
+    registerPortMapping(DEFAULT_FAUCET_PORT, ports.faucetPort)
+  }
+
+  const discoveredPortsInConfig = new Set<number>()
+  yamlFileContents.forEach((contents) => {
+    collectPortsFromYamlContents(contents).forEach((port) =>
+      discoveredPortsInConfig.add(port)
+    )
+  })
+
+  for (const port of discoveredPortsInConfig) {
+    if (portRemap.has(port)) continue
+    const mappedPort = await resolveAvailablePortExcluding(allocatedPorts)
+    registerPortMapping(port, mappedPort)
+  }
+
+  return portRemap
+}
+
+const resolveRemappedPort = (
+  portRemap: Map<number, number>,
+  port: string
+) => {
+  const originalPort = Number.parseInt(port, 10)
+  if (!Number.isInteger(originalPort)) return port
+  return String(portRemap.get(originalPort) ?? originalPort)
+}
+
+const replacePortsInYamlContents = (
+  contents: string,
+  portRemap: Map<number, number>
+) => {
+  const hostPortPattern =
+    /(?:localhost|127\.0\.0\.1|0\.0\.0\.0):(\d{2,5})\b/g
+  const tcpPattern = /\/tcp\/(\d{2,5})\b/g
+  const udpPattern = /\/udp\/(\d{2,5})\b/g
+  const portFieldPattern =
+    /(^|\s)(port|[A-Za-z0-9_-]+(?:_|-)port)(\s*:\s*)(\d{2,5})\b/gm
+
+  let updated = contents.replace(hostPortPattern, (match, port) =>
+    match.replace(port, resolveRemappedPort(portRemap, port))
+  )
+  updated = updated.replace(tcpPattern, (match, port) =>
+    match.replace(port, resolveRemappedPort(portRemap, port))
+  )
+  updated = updated.replace(udpPattern, (match, port) =>
+    match.replace(port, resolveRemappedPort(portRemap, port))
+  )
+  updated = updated.replace(
+    portFieldPattern,
+    (match, leadingSpace, key, spacing, port) =>
+      `${leadingSpace}${key}${spacing}${resolveRemappedPort(portRemap, port)}`
+  )
+
+  return updated
 }
 
 const resolveRandomPorts = async (
   withFaucet: boolean
 ): Promise<LocalnetPorts> => {
-  const usedPorts = new Set<number>()
-  const rpcPort = await resolveDistinctPort(usedPorts)
-  const websocketPort = await resolveDistinctPort(usedPorts)
+  const allocatedPorts = new Set<number>()
+  const rpcPort = await resolveAvailablePortExcluding(allocatedPorts)
+  const websocketPort = await resolveAvailablePortExcluding(allocatedPorts)
   const faucetPort = withFaucet
-    ? await resolveDistinctPort(usedPorts)
+    ? await resolveAvailablePortExcluding(allocatedPorts)
     : undefined
 
   return faucetPort !== undefined
@@ -469,25 +576,45 @@ const patchLocalnetConfigPorts = async (
   configDir: string,
   ports: LocalnetPorts
 ) => {
-  if (
-    ports.rpcPort === DEFAULT_RPC_PORT &&
-    ports.websocketPort === DEFAULT_WEBSOCKET_PORT &&
-    (ports.faucetPort === undefined || ports.faucetPort === DEFAULT_FAUCET_PORT)
-  ) {
-    return
+  const yamlFiles = await listYamlFiles(configDir)
+  const shouldPatchAllPorts = shouldUseRandomPorts()
+
+  if (!shouldPatchAllPorts) {
+    if (
+      ports.rpcPort === DEFAULT_RPC_PORT &&
+      ports.websocketPort === DEFAULT_WEBSOCKET_PORT &&
+      (ports.faucetPort === undefined ||
+        ports.faucetPort === DEFAULT_FAUCET_PORT)
+    ) {
+      return
+    }
   }
 
-  const yamlFiles = await listYamlFiles(configDir)
+  const yamlFileContents = await Promise.all(
+    yamlFiles.map((filePath) => readFile(filePath, "utf8"))
+  )
+
+  const portMap = shouldPatchAllPorts
+    ? await buildPortRemap({ yamlFileContents, ports })
+    : new Map<number, number>([
+        [DEFAULT_RPC_PORT, ports.rpcPort],
+        [DEFAULT_WEBSOCKET_PORT, ports.websocketPort],
+        ...(ports.faucetPort !== undefined
+          ? [[DEFAULT_FAUCET_PORT, ports.faucetPort]]
+          : [])
+      ])
 
   await Promise.all(
-    yamlFiles.map(async (filePath) => {
-      const contents = await readFile(filePath, "utf8")
-      const updated = replacePortInYaml(
-        contents,
-        ports.rpcPort,
-        ports.websocketPort,
-        ports.faucetPort
-      )
+    yamlFiles.map(async (filePath, index) => {
+      const contents = yamlFileContents[index] ?? ""
+      const updated = shouldPatchAllPorts
+        ? replacePortsInYamlContents(contents, portMap)
+        : replacePortInYaml(
+            contents,
+            ports.rpcPort,
+            ports.websocketPort,
+            ports.faucetPort
+          )
       if (updated !== contents) {
         await writeFile(filePath, updated, "utf8")
       }
