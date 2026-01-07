@@ -36,14 +36,10 @@ public struct OtherItem has store {}
 
 public struct Car has key, store {
   id: obj::UID,
-  wheels: u64,
-  motor_type: vector<u8>,
 }
 
 public struct Bike has key, store {
   id: obj::UID,
-  gears: u8,
-  brand: vector<u8>,
 }
 
 const PRIMARY_FEED_ID: vector<u8> =
@@ -152,7 +148,6 @@ fun create_shop_emits_event_and_records_ids() {
     E_ASSERT_FAILURE,
   );
   assert!(tx::get_ids_created(&ctx) == starting_ids + 2, E_ASSERT_FAILURE);
-
 }
 
 #[test]
@@ -181,7 +176,6 @@ fun create_shop_allows_multiple_shops_per_sender() {
     E_ASSERT_FAILURE,
   );
   assert!(tx::get_ids_created(&ctx) == starting_ids + 4, E_ASSERT_FAILURE);
-
 }
 
 #[test]
@@ -204,7 +198,6 @@ fun create_shop_emits_unique_shop_and_cap_ids() {
             != shop::test_shop_created_owner_cap_id(second),
     E_ASSERT_FAILURE,
   );
-
 }
 
 #[test]
@@ -224,7 +217,6 @@ fun create_shop_records_sender_in_event() {
     shop::test_shop_created_name(shop_created) == DEFAULT_SHOP_NAME,
     E_ASSERT_FAILURE,
   );
-
 }
 
 #[test]
@@ -240,7 +232,6 @@ fun create_shop_handles_existing_id_counts() {
   shop::create_shop(DEFAULT_SHOP_NAME, &mut ctx);
 
   assert!(tx::get_ids_created(&ctx) == starting_ids + 2, E_ASSERT_FAILURE);
-
 }
 
 #[test]
@@ -257,7 +248,6 @@ fun create_shop_shares_shop_and_transfers_owner_cap() {
   let owner_cap_id = obj::id_from_address(
     shop::test_shop_created_owner_cap_id(shop_created),
   );
-
 
   let effects = scenario::next_tx(&mut scn, TEST_OWNER);
   let created_ids = scenario::created(&effects);
@@ -1153,7 +1143,13 @@ fun quote_rejects_attestation_lag_above_currency_cap() {
   abort E_ASSERT_FAILURE
 }
 
-#[test, expected_failure(abort_code = 0, location = ::pyth::pyth)]
+#[
+  test,
+  expected_failure(
+    abort_code = ::pyth::pyth::E_STALE_PRICE_UPDATE,
+    location = ::pyth::pyth,
+  ),
+]
 fun quote_rejects_price_timestamp_older_than_max_age() {
   let mut scn = scenario::begin(TEST_OWNER);
   shop::create_shop(DEFAULT_SHOP_NAME, scenario::ctx(&mut scn));

@@ -30,6 +30,9 @@ const moveMocks = vi.hoisted(() => ({
 const suiCliMocks = vi.hoisted(() => ({
   createSuiCliEnvironment: vi.fn(),
   ensureSuiCli: vi.fn(),
+  runSuiCli: vi.fn(() =>
+    vi.fn(async () => ({ stdout: "", stderr: "", exitCode: 0 }))
+  ),
   getActiveSuiCliEnvironment: vi.fn(),
   getSuiCliEnvironmentRpc: vi.fn(),
   listSuiCliEnvironments: vi.fn(),
@@ -65,6 +68,7 @@ vi.mock("../../src/move.ts", () => ({
 vi.mock("../../src/suiCli.ts", () => ({
   createSuiCliEnvironment: suiCliMocks.createSuiCliEnvironment,
   ensureSuiCli: suiCliMocks.ensureSuiCli,
+  runSuiCli: suiCliMocks.runSuiCli,
   getActiveSuiCliEnvironment: suiCliMocks.getActiveSuiCliEnvironment,
   getSuiCliEnvironmentRpc: suiCliMocks.getSuiCliEnvironmentRpc,
   listSuiCliEnvironments: suiCliMocks.listSuiCliEnvironments,
