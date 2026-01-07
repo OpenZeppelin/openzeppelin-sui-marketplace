@@ -124,6 +124,8 @@ const DEFAULT_WEBSOCKET_PORT = 9001
 const DEFAULT_FAUCET_PORT = 9123
 const DEFAULT_MINIMUM_COIN_OBJECTS = 2
 const DEFAULT_MINIMUM_GAS_COIN_BALANCE = 500_000_000n
+const DEFAULT_FAUCET_REQUEST_ATTEMPTS = 3
+const DEFAULT_FAUCET_REQUEST_DELAY_MS = 500
 
 const createTempDir = async (prefix = "tooling-test-") =>
   mkdtemp(path.join(os.tmpdir(), prefix))
@@ -171,6 +173,10 @@ const parseBooleanEnv = (value: string | undefined) => {
   if (!value) return false
   return ["1", "true", "yes", "on"].includes(value.toLowerCase())
 }
+
+const shouldUseRandomPorts = () =>
+  parseBooleanEnv(process.env.SUI_IT_RANDOM_PORTS) ||
+  parseBooleanEnv(process.env.CI)
 
 const resolveSkipLocalnetEnvKey = () =>
   LOCALNET_SKIP_ENV_KEYS.find((key) => parseBooleanEnv(process.env[key]))
@@ -238,9 +244,37 @@ const getAvailablePort = async (): Promise<number> =>
     })
   })
 
+const resolveDistinctPort = async (usedPorts: Set<number>) => {
+  let port = await getAvailablePort()
+  while (usedPorts.has(port)) {
+    port = await getAvailablePort()
+  }
+  usedPorts.add(port)
+  return port
+}
+
+const resolveRandomPorts = async (
+  withFaucet: boolean
+): Promise<LocalnetPorts> => {
+  const usedPorts = new Set<number>()
+  const rpcPort = await resolveDistinctPort(usedPorts)
+  const websocketPort = await resolveDistinctPort(usedPorts)
+  const faucetPort = withFaucet
+    ? await resolveDistinctPort(usedPorts)
+    : undefined
+
+  return faucetPort !== undefined
+    ? { rpcPort, websocketPort, faucetPort }
+    : { rpcPort, websocketPort }
+}
+
 const resolveLocalnetPorts = async (
   withFaucet: boolean
 ): Promise<LocalnetPorts> => {
+  if (shouldUseRandomPorts()) {
+    return resolveRandomPorts(withFaucet)
+  }
+
   const defaultRpcFree = await isPortAvailable(DEFAULT_RPC_PORT)
   const defaultWebsocketFree = await isPortAvailable(DEFAULT_WEBSOCKET_PORT)
 
@@ -510,6 +544,24 @@ const waitForRpcReady = async (
   )
 }
 
+const waitForPortInUse = async (
+  port: number,
+  timeoutMs: number,
+  intervalMs: number
+) => {
+  const start = Date.now()
+
+  while (Date.now() - start < timeoutMs) {
+    const isAvailable = await isPortAvailable(port)
+    if (!isAvailable) return
+    await delay(intervalMs)
+  }
+
+  throw new Error(
+    `Localnet port ${port} did not become ready within ${timeoutMs}ms.`
+  )
+}
+
 const startLocalnetProcess = async ({
   testId,
   withFaucet = false,
@@ -554,6 +606,9 @@ const startLocalnetProcess = async ({
 
     const rpcUrl = `http://127.0.0.1:${ports.rpcPort}`
     await waitForRpcReady(rpcUrl, rpcWaitTimeoutMs, 250)
+    if (withFaucet && ports.faucetPort !== undefined) {
+      await waitForPortInUse(ports.faucetPort, rpcWaitTimeoutMs, 250)
+    }
 
     const suiClient = createSuiClient(rpcUrl)
     const faucetHost = withFaucet
@@ -902,6 +957,44 @@ const waitForFundingReady = async ({
   return { ready: false, snapshot }
 }
 
+const formatFaucetErrorMessage = (error: unknown) =>
+  error instanceof Error ? error.message : String(error)
+
+const requestFaucetFundingWithRetry = async ({
+  faucetHost,
+  recipientAddress,
+  attempts = DEFAULT_FAUCET_REQUEST_ATTEMPTS,
+  delayMs = DEFAULT_FAUCET_REQUEST_DELAY_MS
+}: {
+  faucetHost: string
+  recipientAddress: string
+  attempts?: number
+  delayMs?: number
+}) => {
+  let lastError: unknown
+
+  for (let attemptIndex = 0; attemptIndex < attempts; attemptIndex += 1) {
+    try {
+      await requestSuiFromFaucetV2({
+        host: faucetHost,
+        recipient: recipientAddress
+      })
+      return
+    } catch (error) {
+      lastError = error
+      if (attemptIndex < attempts - 1) {
+        await delay(delayMs)
+      }
+    }
+  }
+
+  throw new Error(
+    `Faucet request failed after ${attempts} attempts: ${formatFaucetErrorMessage(
+      lastError
+    )}`
+  )
+}
+
 const fundAccountWithFaucet = async ({
   suiClient,
   recipientAddress,
@@ -923,6 +1016,7 @@ const fundAccountWithFaucet = async ({
 
   let lastSnapshot = existing
   let attempts = 0
+  let lastError: unknown
 
   while (attempts < 5) {
     const missingCoins = Math.max(
@@ -930,11 +1024,18 @@ const fundAccountWithFaucet = async ({
       requirements.minimumCoinObjects - lastSnapshot.coinCount
     )
 
-    for (let i = 0; i < missingCoins; i += 1) {
-      await requestSuiFromFaucetV2({
-        host: faucetHost,
-        recipient: recipientAddress
-      })
+    try {
+      for (let i = 0; i < missingCoins; i += 1) {
+        await requestFaucetFundingWithRetry({
+          faucetHost,
+          recipientAddress
+        })
+      }
+    } catch (error) {
+      lastError = error
+      attempts += 1
+      await delay(DEFAULT_FAUCET_REQUEST_DELAY_MS)
+      continue
     }
 
     const result = await waitForFundingReady({
@@ -951,8 +1052,12 @@ const fundAccountWithFaucet = async ({
     attempts += 1
   }
 
+  const errorDetails = lastError
+    ? ` ${formatFaucetErrorMessage(lastError)}`
+    : ""
+
   throw new Error(
-    `Failed to fund ${recipientAddress} from local faucet at ${faucetHost}.`
+    `Failed to fund ${recipientAddress} from local faucet at ${faucetHost}.${errorDetails}`
   )
 }
 

@@ -31,6 +31,30 @@ const resolveKeepTemp = (explicit?: boolean) =>
 const resolveWithFaucet = (explicit?: boolean) =>
   explicit ?? process.env.SUI_IT_WITH_FAUCET !== "0"
 
+const parsePositiveInteger = (value: string | undefined) => {
+  if (!value) return undefined
+  const parsed = Number.parseInt(value, 10)
+  if (!Number.isFinite(parsed) || parsed <= 0) return undefined
+  return parsed
+}
+
+const resolveRpcWaitTimeoutMs = (explicit?: number) => {
+  if (
+    typeof explicit === "number" &&
+    Number.isFinite(explicit) &&
+    explicit > 0
+  ) {
+    return explicit
+  }
+
+  const override = parsePositiveInteger(process.env.SUI_IT_RPC_WAIT_TIMEOUT_MS)
+  if (override !== undefined) return override
+
+  if (process.env.CI) return 60_000
+
+  return undefined
+}
+
 const resolveStartOptions = (
   testId: string,
   options?: SuiLocalnetTestEnvOptions
@@ -38,7 +62,7 @@ const resolveStartOptions = (
   testId,
   keepTemp: resolveKeepTemp(options?.keepTemp),
   withFaucet: resolveWithFaucet(options?.withFaucet),
-  rpcWaitTimeoutMs: options?.rpcWaitTimeoutMs
+  rpcWaitTimeoutMs: resolveRpcWaitTimeoutMs(options?.rpcWaitTimeoutMs)
 })
 
 const buildScopedTestId = (suiteId: string | undefined, testId: string) => {
