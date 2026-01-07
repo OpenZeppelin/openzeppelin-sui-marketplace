@@ -50,7 +50,7 @@ const resolveRpcWaitTimeoutMs = (explicit?: number) => {
   const override = parsePositiveInteger(process.env.SUI_IT_RPC_WAIT_TIMEOUT_MS)
   if (override !== undefined) return override
 
-  if (process.env.CI) return 60_000
+  if (process.env.CI) return 120_000
 
   return undefined
 }

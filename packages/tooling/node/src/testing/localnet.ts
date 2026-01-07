@@ -522,15 +522,51 @@ const ensureDirectory = async (dir: string) => {
   await mkdir(dir, { recursive: true })
 }
 
+const readLogTail = async (logPath?: string, maxLines = 200) => {
+  if (!logPath) return ""
+
+  try {
+    const contents = await readFile(logPath, "utf8")
+    if (!contents) return ""
+    const lines = contents.trimEnd().split(/\r?\n/)
+    return lines.slice(-maxLines).join("\n")
+  } catch {
+    return ""
+  }
+}
+
 const waitForRpcReady = async (
   rpcUrl: string,
   timeoutMs: number,
-  intervalMs: number
+  intervalMs: number,
+  options?: { processHandle?: ChildProcess; logPath?: string }
 ) => {
   const start = Date.now()
   let lastError = "RPC probe failed"
 
   while (Date.now() - start < timeoutMs) {
+    if (options?.processHandle) {
+      const exitCode = options.processHandle.exitCode
+      const signalCode = options.processHandle.signalCode
+      if (exitCode !== null || signalCode) {
+        const logTail = await readLogTail(options.logPath)
+        const exitSummary = [
+          exitCode !== null ? `code ${exitCode}` : null,
+          signalCode ? `signal ${signalCode}` : null
+        ]
+          .filter(Boolean)
+          .join(", ")
+        throw new Error(
+          [
+            `Localnet process exited (${exitSummary || "unknown exit"}).`,
+            logTail ? `Localnet log tail:\n${logTail}` : ""
+          ]
+            .filter(Boolean)
+            .join("\n")
+        )
+      }
+    }
+
     const probe = await probeRpcHealth(rpcUrl)
     if (probe.status === "running") {
       return probe.snapshot
@@ -539,8 +575,14 @@ const waitForRpcReady = async (
     await delay(intervalMs)
   }
 
+  const logTail = await readLogTail(options?.logPath)
   throw new Error(
-    `Localnet RPC did not become ready within ${timeoutMs}ms at ${rpcUrl}: ${lastError}`
+    [
+      `Localnet RPC did not become ready within ${timeoutMs}ms at ${rpcUrl}: ${lastError}`,
+      logTail ? `Localnet log tail:\n${logTail}` : ""
+    ]
+      .filter(Boolean)
+      .join("\n")
   )
 }
 
@@ -605,7 +647,10 @@ const startLocalnetProcess = async ({
     processHandle.stderr?.pipe(logStream)
 
     const rpcUrl = `http://127.0.0.1:${ports.rpcPort}`
-    await waitForRpcReady(rpcUrl, rpcWaitTimeoutMs, 250)
+    await waitForRpcReady(rpcUrl, rpcWaitTimeoutMs, 250, {
+      processHandle,
+      logPath
+    })
     if (withFaucet && ports.faucetPort !== undefined) {
       await waitForPortInUse(ports.faucetPort, rpcWaitTimeoutMs, 250)
     }
