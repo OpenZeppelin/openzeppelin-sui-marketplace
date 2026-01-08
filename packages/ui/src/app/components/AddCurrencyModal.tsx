@@ -4,6 +4,7 @@ import type { AcceptedCurrencySummary } from "@sui-oracle-market/domain-core/mod
 import clsx from "clsx"
 import { resolveCurrencyRegistryId } from "../helpers/currencyRegistry"
 import { getStructLabel, shortenId } from "../helpers/format"
+import { WALLET_REQUIRED_TOOLTIP } from "../helpers/wallet"
 import {
   useAddCurrencyModalState,
   type CurrencyTransactionSummary
@@ -325,6 +326,7 @@ const AddCurrencyModal = ({
     isSuccessState,
     isErrorState,
     canSubmit,
+    walletConnected,
     explorerUrl,
     handleAddCurrency,
     handleInputChange,
@@ -335,6 +337,7 @@ const AddCurrencyModal = ({
   } = useAddCurrencyModalState({ open, shopId, onCurrencyCreated })
   const errorState =
     transactionState.status === "error" ? transactionState : undefined
+  const walletTooltip = walletConnected ? undefined : WALLET_REQUIRED_TOOLTIP
 
   if (!open) return <></>
 
@@ -721,7 +724,11 @@ const AddCurrencyModal = ({
                   : "Ready to register the currency."}
               </div>
               <div className="flex flex-wrap items-center gap-3">
-                <Button onClick={handleAddCurrency} disabled={!canSubmit}>
+                <Button
+                  onClick={handleAddCurrency}
+                  disabled={!canSubmit}
+                  tooltip={walletTooltip}
+                >
                   {transactionState.status === "processing"
                     ? "Processing..."
                     : "Add currency"}

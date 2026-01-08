@@ -14,7 +14,7 @@ type CustomNetworkState = {
 type CustomNetworkListener = () => void
 
 let state: CustomNetworkState = { networks: [] }
-let initialized = false
+let hasHydrated = false
 const listeners = new Set<CustomNetworkListener>()
 
 const notifyListeners = () => {
@@ -48,20 +48,21 @@ const writeToStorage = (nextNetworks: TCustomNetworkConfig[]) => {
   }
 }
 
-const initializeStore = () => {
-  if (initialized) return
-  initialized = true
+const hydrateFromStorage = () => {
+  if (hasHydrated || typeof window === "undefined") return
+  hasHydrated = true
   readFromStorage()
+  notifyListeners()
 }
 
 export const customNetworkStore = {
   getSnapshot: (): CustomNetworkState => {
-    initializeStore()
     return state
   },
+  getServerSnapshot: (): CustomNetworkState => state,
   subscribe: (listener: CustomNetworkListener) => {
-    initializeStore()
     listeners.add(listener)
+    hydrateFromStorage()
     return () => listeners.delete(listener)
   },
   setNetworks: (nextNetworks: TCustomNetworkConfig[]) => {

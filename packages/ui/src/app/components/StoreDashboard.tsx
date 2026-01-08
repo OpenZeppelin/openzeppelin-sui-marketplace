@@ -16,6 +16,7 @@ import {
   getStructLabel,
   shortenId
 } from "../helpers/format"
+import { WALLET_REQUIRED_TOOLTIP } from "../helpers/wallet"
 import useExplorerUrl from "../hooks/useExplorerUrl"
 import { useStoreDashboardViewModel } from "../hooks/useStoreDashboardViewModel"
 import AddCurrencyModal from "./AddCurrencyModal"
@@ -695,7 +696,7 @@ const DiscountsPanel = ({
                       claimingTemplateId === template.discountTemplateId
                     const showDisable = canManageDiscounts
                     const claimBlockingReason = !walletConfigured
-                      ? "Connect a wallet to claim."
+                      ? WALLET_REQUIRED_TOOLTIP
                       : !onClaimDiscount
                         ? "Claim action unavailable."
                         : isClaimingTemplate

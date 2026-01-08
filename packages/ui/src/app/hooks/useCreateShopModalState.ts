@@ -68,6 +68,7 @@ type CreateShopModalState = {
   isSuccessState: boolean
   isErrorState: boolean
   canSubmit: boolean
+  walletConnected: boolean
   explorerUrl?: string
   handleCreateShop: () => Promise<void>
   handleInputChange: <K extends keyof ShopFormState>(
@@ -138,6 +139,7 @@ export const useCreateShopModalState = ({
     Boolean(walletAddress && packageId && !hasFieldErrors) &&
     transactionState.status !== "processing" &&
     isSubmissionPending !== true
+  const walletConnected = Boolean(walletAddress)
 
   const resetForm = useCallback(() => {
     setFormState(emptyFormState())
@@ -335,6 +337,7 @@ export const useCreateShopModalState = ({
     isSuccessState,
     isErrorState,
     canSubmit,
+    walletConnected,
     explorerUrl,
     handleCreateShop,
     handleInputChange,

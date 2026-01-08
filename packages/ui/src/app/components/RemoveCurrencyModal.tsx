@@ -3,6 +3,7 @@
 import type { AcceptedCurrencySummary } from "@sui-oracle-market/domain-core/models/currency"
 import { resolveCurrencyRegistryId } from "../helpers/currencyRegistry"
 import { getStructLabel, shortenId } from "../helpers/format"
+import { WALLET_REQUIRED_TOOLTIP } from "../helpers/wallet"
 import {
   useRemoveCurrencyModalState,
   type RemoveCurrencyTransactionSummary
@@ -198,6 +199,7 @@ const RemoveCurrencyModal = ({
     isSuccessState,
     isErrorState,
     canSubmit,
+    walletConnected,
     explorerUrl,
     handleRemoveCurrency,
     resetState
@@ -209,6 +211,7 @@ const RemoveCurrencyModal = ({
   })
   const errorState =
     transactionState.status === "error" ? transactionState : undefined
+  const walletTooltip = walletConnected ? undefined : WALLET_REQUIRED_TOOLTIP
 
   if (!open || !currency) return <></>
 
@@ -267,6 +270,7 @@ const RemoveCurrencyModal = ({
                   variant="danger"
                   onClick={handleRemoveCurrency}
                   disabled={!canSubmit}
+                  tooltip={walletTooltip}
                 >
                   {transactionState.status === "processing"
                     ? "Processing..."

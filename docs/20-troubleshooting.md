@@ -37,6 +37,9 @@ if (checkOnly) {
     -d '{"FixedAmountRequest":{"recipient":"<0x...>"}}'
   ```
 
+## "Failed to publish the Move module(s), reason: No modules found in the package" on publish
+- You need to re publish the package with --re-publish
+
 ## "No ShopOwnerCap found"
 - Ensure the owner cap is in your wallet. See `packages/domain/core/src/models/shop.ts`.
 

@@ -3,7 +3,8 @@
 import { useSuiClient } from "@mysten/dapp-kit"
 import type { ShopCreatedSummary } from "@sui-oracle-market/domain-core/models/shop"
 import { getShopCreatedSummaries } from "@sui-oracle-market/domain-core/models/shop"
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { normalizeOptionalId } from "@sui-oracle-market/tooling-core/object"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 
 export type ShopSelectionStatus = "idle" | "loading" | "success" | "error"
 
@@ -17,6 +18,13 @@ const emptySelectionState = (): ShopSelectionState => ({
   status: "idle",
   shops: []
 })
+
+const shopSelectionRetryDelaysMs = [200, 400, 800]
+
+const waitMs = (delayMs: number) =>
+  new Promise<void>((resolve) => {
+    setTimeout(resolve, delayMs)
+  })
 
 const normalizeSearchValue = (value?: string) => value?.toLowerCase() ?? ""
 
@@ -55,9 +63,13 @@ export const useShopSelectionViewModel = ({
   const [state, setState] = useState<ShopSelectionState>(emptySelectionState())
   const [refreshIndex, setRefreshIndex] = useState(0)
   const [selectedShopId, setSelectedShopId] = useState<string | undefined>()
+  const awaitedShopIdRef = useRef<string | undefined>(undefined)
   const [searchQuery, setSearchQuery] = useState("")
 
-  const refresh = useCallback(() => {
+  const refresh = useCallback((options?: { expectedShopId?: string }) => {
+    if (options?.expectedShopId) {
+      awaitedShopIdRef.current = normalizeOptionalId(options.expectedShopId)
+    }
     setRefreshIndex((current) => current + 1)
   }, [])
 
@@ -72,6 +84,7 @@ export const useShopSelectionViewModel = ({
   useEffect(() => {
     setSelectedShopId(undefined)
     setSearchQuery("")
+    awaitedShopIdRef.current = undefined
   }, [packageId])
 
   useEffect(() => {
@@ -96,12 +109,40 @@ export const useShopSelectionViewModel = ({
 
     const load = async () => {
       try {
-        const shops = await getShopCreatedSummaries({
-          shopPackageId: packageId,
-          suiClient
-        })
+        const expectedShopId = awaitedShopIdRef.current
+        let shops: ShopCreatedSummary[] = []
+
+        for (
+          let attempt = 0;
+          attempt <= shopSelectionRetryDelaysMs.length;
+          attempt += 1
+        ) {
+          shops = await getShopCreatedSummaries({
+            shopPackageId: packageId,
+            suiClient
+          })
+          if (!active) return
+
+          const shouldRetry =
+            Boolean(expectedShopId) &&
+            !shops.some((shop) => shop.shopId === expectedShopId) &&
+            attempt < shopSelectionRetryDelaysMs.length
+
+          if (!shouldRetry) break
+
+          await waitMs(shopSelectionRetryDelaysMs[attempt])
+          if (!active) return
+        }
+
         if (!active) return
         setState({ status: "success", shops })
+
+        if (
+          expectedShopId &&
+          shops.some((shop) => shop.shopId === expectedShopId)
+        ) {
+          awaitedShopIdRef.current = undefined
+        }
       } catch (error) {
         if (!active) return
         const message =

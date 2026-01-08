@@ -32,6 +32,10 @@ Optional UI metadata:
 Key implementation notes:
 - The network selection is **app-driven** (not wallet-driven): `useSuiClientContext()` supplies the app `network`, and the buy flow chooses the execution path when `network === localnet`.
 - The localnet guards live in `packages/ui/src/app/helpers/localnet.ts` and `packages/ui/src/app/config/network.ts`.
+- For localnet you'll see a `Unable to process transaction
+No data returned for operation `ApproveTransactionQuery`, got error(s):
+Variable "$input" got invalid value "localnet" at "input.signTransaction.network"; Value "localnet" does not exist in "Network" enum.
+` error message this is because the wallet can not be configured for localnet but it can be ignored as the execution is app-driven and will go through
 
 Why this matters:
 - Wallet Standard distinguishes **sign-only** from **sign+execute**. Using `signTransaction` keeps the wallet from choosing an RPC endpoint.

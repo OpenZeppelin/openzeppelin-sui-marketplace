@@ -372,9 +372,6 @@ const buildPublishPlan = async ({
 
   const cliPublish = useCliPublish
 
-  const suiCliVersion = await getSuiCliVersion()
-  warnIfUnsupportedSuiCliVersion(suiCliVersion)
-
   return {
     network,
     packagePath,
@@ -386,7 +383,7 @@ const buildPublishPlan = async ({
     buildFlags,
     useCliPublish: cliPublish,
     keystorePath: network.account?.keystorePath,
-    suiCliVersion,
+    suiCliVersion: await getSuiCliVersion(),
     packageNames: await resolvePackageNames(
       packagePath,
       unpublishedDependencies
@@ -1023,37 +1020,6 @@ const parseSuiCliVersionOutput = (stdout: string): string | undefined => {
   const firstLine = stdout.trim().split(/\r?\n/)[0] ?? ""
   const versionMatch = firstLine.match(/sui\s+([^\s]+)/i)
   return (versionMatch?.[1] ?? firstLine) || undefined
-}
-
-const MIN_RECOMMENDED_SUI_CLI = { major: 1, minor: 63 }
-
-const parseSemverPrefix = (
-  version: string
-): { major: number; minor: number; patch: number } | undefined => {
-  const match = version.match(/(\d+)\.(\d+)\.(\d+)/)
-  if (!match) return undefined
-  return {
-    major: Number(match[1]),
-    minor: Number(match[2]),
-    patch: Number(match[3])
-  }
-}
-
-const warnIfUnsupportedSuiCliVersion = (version?: string) => {
-  if (!version) return
-  const parsed = parseSemverPrefix(version)
-  if (!parsed) return
-
-  const isTooOld =
-    parsed.major < MIN_RECOMMENDED_SUI_CLI.major ||
-    (parsed.major === MIN_RECOMMENDED_SUI_CLI.major &&
-      parsed.minor < MIN_RECOMMENDED_SUI_CLI.minor)
-
-  if (!isTooOld) return
-
-  logWarning(
-    `Detected Sui CLI ${version}. This repo is tested against Sui CLI ${MIN_RECOMMENDED_SUI_CLI.major}.${MIN_RECOMMENDED_SUI_CLI.minor}.x; older CLIs may fail to publish with errors like "Unknown warning filter 'lint(public_entry)'" or "No modules found in the package". See docs/00-setup.md for install instructions.`
-  )
 }
 
 /**

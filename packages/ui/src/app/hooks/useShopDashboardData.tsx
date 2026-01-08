@@ -60,6 +60,22 @@ const emptyWalletState = (): WalletState => ({
   discountTickets: []
 })
 
+const storefrontRetryDelaysMs = [200, 400, 800]
+
+const waitMs = (delayMs: number) =>
+  new Promise<void>((resolve) => {
+    setTimeout(resolve, delayMs)
+  })
+
+const isTransientStorefrontError = (error: unknown) => {
+  const message = error instanceof Error ? error.message : String(error)
+  const normalizedMessage = message.toLowerCase()
+  return (
+    normalizedMessage.includes("could not find object") ||
+    normalizedMessage.includes("notexists")
+  )
+}
+
 const getStorefrontData = async ({
   shopId,
   suiClient
@@ -80,6 +96,34 @@ const getStorefrontData = async ({
     shopOwnerAddress: snapshot.shopOverview.ownerAddress,
     clockTimestampMs
   }
+}
+
+const getStorefrontDataWithRetry = async ({
+  shopId,
+  suiClient,
+  retryDelaysMs = storefrontRetryDelaysMs
+}: {
+  shopId: string
+  suiClient: SuiClient
+  retryDelaysMs?: number[]
+}) => {
+  let lastError: unknown
+
+  for (let attempt = 0; attempt <= retryDelaysMs.length; attempt += 1) {
+    try {
+      return await getStorefrontData({ shopId, suiClient })
+    } catch (error) {
+      lastError = error
+      const shouldRetry =
+        isTransientStorefrontError(error) && attempt < retryDelaysMs.length
+
+      if (!shouldRetry) throw error
+
+      await waitMs(retryDelaysMs[attempt])
+    }
+  }
+
+  throw lastError instanceof Error ? lastError : new Error(String(lastError))
 }
 
 const resolveShopPackageId = async ({
@@ -338,7 +382,7 @@ export const useShopDashboardData = ({
       }))
 
       try {
-        const data = await getStorefrontData({
+        const data = await getStorefrontDataWithRetry({
           shopId: currentShopId,
           suiClient
         })
@@ -354,7 +398,6 @@ export const useShopDashboardData = ({
           clockTimestampMs: data.clockTimestampMs
         })
       } catch (error) {
-        console.log("HERE", error)
         if (!isSubscribed) return
         setStorefrontState((previous) => ({
           ...previous,

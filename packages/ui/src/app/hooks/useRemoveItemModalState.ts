@@ -50,6 +50,7 @@ type RemoveItemModalState = {
   isSuccessState: boolean
   isErrorState: boolean
   canSubmit: boolean
+  walletConnected: boolean
   explorerUrl?: string
   handleRemoveListing: () => Promise<void>
   resetState: () => void
@@ -102,6 +103,7 @@ export const useRemoveItemModalState = ({
     Boolean(walletAddress && shopId && listing?.itemListingId) &&
     transactionState.status !== "processing" &&
     isSubmissionPending !== true
+  const walletConnected = Boolean(walletAddress)
 
   const resetState = useCallback(() => {
     setTransactionState({ status: "idle" })
@@ -282,6 +284,7 @@ export const useRemoveItemModalState = ({
     isSuccessState,
     isErrorState,
     canSubmit,
+    walletConnected,
     explorerUrl,
     handleRemoveListing,
     resetState

@@ -118,6 +118,7 @@ type BalanceStatus =
 type BuyFlowModalState = {
   explorerUrl?: string
   walletAddress?: string
+  walletConnected: boolean
   balanceStatus: BalanceStatus
   availableCurrencies: CurrencyBalance[]
   discountOptions: DiscountOption[]
@@ -216,6 +217,7 @@ export const useBuyFlowModalState = ({
     useState<Record<string, unknown>>()
 
   const walletAddress = currentAccount?.address
+  const walletConnected = Boolean(walletAddress)
 
   const currencyBalances = useMemo<CurrencyBalance[]>(
     () =>
@@ -711,6 +713,7 @@ export const useBuyFlowModalState = ({
   return {
     explorerUrl,
     walletAddress,
+    walletConnected,
     balanceStatus,
     availableCurrencies,
     discountOptions,

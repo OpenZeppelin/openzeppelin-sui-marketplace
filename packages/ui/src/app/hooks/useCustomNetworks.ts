@@ -17,7 +17,7 @@ const useCustomNetworks = () => {
   const state = useSyncExternalStore(
     customNetworkStore.subscribe,
     customNetworkStore.getSnapshot,
-    customNetworkStore.getSnapshot
+    customNetworkStore.getServerSnapshot
   )
 
   const addNetwork = useCallback(

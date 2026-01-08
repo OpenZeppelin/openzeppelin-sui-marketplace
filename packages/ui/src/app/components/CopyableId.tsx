@@ -3,7 +3,7 @@
 import clsx from "clsx"
 import { CopyIcon, ExternalLinkIcon } from "lucide-react"
 import type { MouseEvent } from "react"
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { copyToClipboard } from "../helpers/clipboard"
 import { shortenId } from "../helpers/format"
 import { isLocalExplorerUrl, objectUrl } from "../helpers/network"
@@ -34,22 +34,32 @@ const CopyableId = ({
   explorerUrl?: string
   showExplorer?: boolean
 }) => {
-  const resolvedDisplayValue = displayValue ?? shortenId(value)
+  const [isHydrated, setIsHydrated] = useState(false)
+  const resolvedDisplayValue = isHydrated
+    ? displayValue ?? shortenId(value)
+    : "..."
   const localnetCommand = useMemo(
     () => `pnpm script chain:describe-object --object-id ${value}`,
     [value]
   )
   const [isLocalnetModalOpen, setLocalnetModalOpen] = useState(false)
-  const isLocalExplorer = explorerUrl ? isLocalExplorerUrl(explorerUrl) : false
-  const canOpenExplorer = Boolean(showExplorer && explorerUrl)
+  const canOpenExplorer = Boolean(isHydrated && showExplorer && explorerUrl)
+  const isLocalExplorer =
+    isHydrated && explorerUrl ? isLocalExplorerUrl(explorerUrl) : false
+
+  useEffect(() => {
+    setIsHydrated(true)
+  }, [])
 
   const handleCopy = (event: MouseEvent<HTMLButtonElement>) => {
     event.stopPropagation()
+    if (!isHydrated) return
     copyToClipboard(value)
   }
 
   const handleOpenExplorer = (event: MouseEvent<HTMLButtonElement>) => {
     event.stopPropagation()
+    if (!isHydrated) return
     if (!explorerUrl) return
 
     if (isLocalExplorer) {
@@ -77,7 +87,7 @@ const CopyableId = ({
             "min-w-0 truncate font-medium text-slate-700 dark:text-slate-100",
             valueClassName
           )}
-          title={value}
+          title={isHydrated ? value : undefined}
         >
           {resolvedDisplayValue}
         </span>
@@ -88,8 +98,11 @@ const CopyableId = ({
           size="compact"
           className="h-6 w-6 justify-center px-0 text-slate-400/70 hover:text-slate-600 dark:text-slate-200/40 dark:hover:text-slate-100"
           onClick={handleCopy}
-          title={title ?? "Copy object id"}
-          aria-label={title ?? "Copy object id"}
+          title={isHydrated ? title ?? "Copy object id" : "Loading object id"}
+          aria-label={
+            isHydrated ? title ?? "Copy object id" : "Loading object id"
+          }
+          disabled={!isHydrated}
         >
           <CopyIcon className="h-3.5 w-3.5" />
         </Button>

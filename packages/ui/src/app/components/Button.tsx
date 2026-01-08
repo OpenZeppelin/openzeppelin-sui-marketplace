@@ -45,6 +45,7 @@ const buttonVariantClassNameMap: Record<
 type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
   variant?: ButtonVariant
   size?: ButtonSize
+  tooltip?: string
 }
 
 const Button = ({
@@ -53,18 +54,31 @@ const Button = ({
   type = "button",
   className,
   disabled,
+  tooltip,
+  title,
   ...props
-}: ButtonProps) => (
-  <button
-    type={type}
-    disabled={disabled}
-    className={clsx(
-      buttonVariantClassNameMap[variant][size],
-      disabled ? "cursor-not-allowed opacity-50" : "",
-      className
-    )}
-    {...props}
-  />
-)
+}: ButtonProps) => {
+  const button = (
+    <button
+      type={type}
+      disabled={disabled}
+      title={tooltip ? undefined : title}
+      className={clsx(
+        buttonVariantClassNameMap[variant][size],
+        disabled ? "cursor-not-allowed opacity-50" : "",
+        className
+      )}
+      {...props}
+    />
+  )
+
+  if (!tooltip) return button
+
+  return (
+    <span title={tooltip} className="inline-flex">
+      {button}
+    </span>
+  )
+}
 
 export default Button

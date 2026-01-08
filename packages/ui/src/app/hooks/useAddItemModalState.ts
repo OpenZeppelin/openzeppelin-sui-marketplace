@@ -167,6 +167,7 @@ type AddItemModalState = {
   isSuccessState: boolean
   isErrorState: boolean
   canSubmit: boolean
+  walletConnected: boolean
   explorerUrl?: string
   handleAddItem: () => Promise<void>
   handleInputChange: <K extends keyof ListingFormState>(
@@ -263,6 +264,7 @@ export const useAddItemModalState = ({
     Boolean(walletAddress && shopId && !hasFieldErrors) &&
     transactionState.status !== "processing" &&
     isSubmissionPending !== true
+  const walletConnected = Boolean(walletAddress)
 
   const resetForm = useCallback(() => {
     setFormState(emptyFormState())
@@ -410,14 +412,18 @@ export const useAddItemModalState = ({
         transactionBlock = await waitForTransactionBlock(suiClient, digest)
       }
 
-      const listingId = extractCreatedObjects(transactionBlock).find((change) =>
-        change.objectType.includes("::shop::ItemListing")
+      const createdObjects = extractCreatedObjects(transactionBlock)
+      const listingId = createdObjects.find((change) =>
+        change.objectType.includes("::shop::ItemListing<")
+      )?.objectId
+      const markerObjectId = createdObjects.find((change) =>
+        change.objectType.endsWith("::shop::ItemListingMarker")
       )?.objectId
 
       const optimisticListing = listingId
         ? {
             itemListingId: listingId,
-            markerObjectId: listingId,
+            markerObjectId: markerObjectId ?? listingId,
             name: listingInputs.itemName,
             itemType: listingInputs.itemType,
             basePriceUsdCents: listingInputs.basePriceUsdCents.toString(),
@@ -501,6 +507,7 @@ export const useAddItemModalState = ({
     isSuccessState,
     isErrorState,
     canSubmit,
+    walletConnected,
     explorerUrl,
     handleAddItem,
     handleInputChange,

@@ -14,10 +14,10 @@ This repo is a pnpm workspace containing:
 
 ## Start here
 
-- **Learning path hub:** `docs/README.md`
-- **Setup + quickstart:** `docs/00-setup.md`
-- **Learning chapter:** `docs/01-repo-layout.md`
-- **Glossary:** `docs/21-glossary.md`
+- **Learning path hub:** [docs/README.md](docs/README.md)
+- **Setup + quickstart:** [docs/00-setup.md](docs/00-setup.md)
+- **Learning chapter:** [docs/01-repo-layout.md](docs/01-repo-layout.md)
+- **Glossary:** [docs/21-glossary.md](docs/21-glossary.md)
 
 Docs website (renders `/docs` and selected guides):
 ```bash
@@ -26,7 +26,7 @@ pnpm --filter learn dev
 
 ## Quickstart (localnet)
 
-Full walkthrough: [docs/05-localnet-workflow.md](docs/05-localnet-workflow.md)`.
+Full walkthrough: [docs/05-localnet-workflow.md](docs/05-localnet-workflow.md).
 
 ```bash
 # 1) Clone and install
@@ -63,15 +63,15 @@ pnpm ui dev
 
 ## Frontend UI
 
-- UI setup + localnet execution notes: `packages/ui/README.md`
-- UI docs chapters: `docs/12-buyer-ui.md` and `docs/13-owner-ui.md`
-- Additional UI reference notes: `docs/11-ui-reference.md`
+- UI setup + localnet execution notes: [packages/ui/README.md](packages/ui/README.md)
+- UI docs chapters: [docs/12-buyer-ui.md](docs/12-buyer-ui.md) and [docs/13-owner-ui.md](docs/13-owner-ui.md)
+- Additional UI reference notes: [docs/11-ui-reference.md](docs/11-ui-reference.md)
 
 ## Tests
 
 - Integration (localnet): `pnpm test:integration`
 - Unit (domain + UI): `pnpm --filter @sui-oracle-market/domain-core test:unit` and `pnpm ui test:unit`
-- Full testing guide: `docs/15-testing.md`
+- Full testing guide: [docs/15-testing.md](docs/15-testing.md)
 
 ## Repo map (high level)
 
@@ -87,10 +87,10 @@ More detail (workspace layering rules, folder layout): `docs/01-repo-layout.md`.
 ## Docs (detailed)
 
 The detailed docs live under `docs/`:
-- Localnet end-to-end: `docs/05-localnet-workflow.md`
-- Script/CLI reference + artifacts: `docs/06-scripts-reference.md`
-- UI reference notes: `docs/11-ui-reference.md`
-- Testing + script testing framework: `docs/15-testing.md`
-- Troubleshooting: `docs/20-troubleshooting.md`
-- Security & gotchas: `docs/19-security.md`
-- EVM → Sui cheatsheet: `docs/03-evm-to-sui.md`
+- Localnet end-to-end: [docs/05-localnet-workflow.md](docs/05-localnet-workflow.md)
+- Script/CLI reference + artifacts: [docs/06-scripts-reference.md](docs/06-scripts-reference.md)
+- UI reference notes: [docs/11-ui-reference.md](docs/11-ui-reference.md)
+- Testing + script testing framework: [docs/15-testing.md](docs/15-testing.md)
+- Troubleshooting: [docs/20-troubleshooting.md](docs/20-troubleshooting.md)
+- Security & gotchas: [docs/19-security.md](docs/19-security.md)
+- EVM → Sui cheatsheet: [docs/03-evm-to-sui.md](docs/03-evm-to-sui.md)

@@ -2,6 +2,7 @@
 
 import clsx from "clsx"
 import type { SuiTransactionBlockResponse } from "@mysten/sui/client"
+import { WALLET_REQUIRED_TOOLTIP } from "../helpers/wallet"
 import { useCreateShopModalState } from "../hooks/useCreateShopModalState"
 import CopyableId from "./CopyableId"
 import TransactionRecap from "./TransactionRecap"
@@ -173,6 +174,7 @@ const CreateShopModal = ({
     isSuccessState,
     isErrorState,
     canSubmit,
+    walletConnected,
     explorerUrl,
     handleCreateShop,
     handleInputChange,
@@ -182,6 +184,7 @@ const CreateShopModal = ({
   } = useCreateShopModalState({ open, packageId, onShopCreated })
   const errorState =
     transactionState.status === "error" ? transactionState : undefined
+  const walletTooltip = walletConnected ? undefined : WALLET_REQUIRED_TOOLTIP
 
   if (!open) return <></>
 
@@ -294,7 +297,11 @@ const CreateShopModal = ({
                   : "Ready to create the shop."}
               </div>
               <div className="flex flex-wrap items-center gap-3">
-                <Button onClick={handleCreateShop} disabled={!canSubmit}>
+                <Button
+                  onClick={handleCreateShop}
+                  disabled={!canSubmit}
+                  tooltip={walletTooltip}
+                >
                   {transactionState.status === "processing"
                     ? "Processing..."
                     : "Create shop"}

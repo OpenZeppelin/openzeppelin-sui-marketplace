@@ -7,6 +7,7 @@ import {
   getStructLabel,
   shortenId
 } from "../helpers/format"
+import { WALLET_REQUIRED_TOOLTIP } from "../helpers/wallet"
 import {
   useAddItemModalState,
   type ListingTransactionSummary
@@ -203,6 +204,7 @@ const AddItemModal = ({
     isSuccessState,
     isErrorState,
     canSubmit,
+    walletConnected,
     explorerUrl,
     handleAddItem,
     handleInputChange,
@@ -212,6 +214,7 @@ const AddItemModal = ({
   } = useAddItemModalState({ open, shopId, onListingCreated })
   const errorState =
     transactionState.status === "error" ? transactionState : undefined
+  const walletTooltip = walletConnected ? undefined : WALLET_REQUIRED_TOOLTIP
 
   if (!open) return <></>
 
@@ -295,7 +298,7 @@ const AddItemModal = ({
                       handleInputChange("itemType", event.target.value)
                     }
                     onBlur={() => markFieldBlur("itemType")}
-                    placeholder="0x...::items::Bike"
+                    placeholder="0x2::kiosk::Item"
                     className={clsx(
                       modalFieldInputClassName,
                       shouldShowFieldError("itemType", fieldErrors.itemType) &&
@@ -476,7 +479,11 @@ const AddItemModal = ({
                   : "Ready to create the listing."}
               </div>
               <div className="flex flex-wrap items-center gap-3">
-                <Button onClick={handleAddItem} disabled={!canSubmit}>
+                <Button
+                  onClick={handleAddItem}
+                  disabled={!canSubmit}
+                  tooltip={walletTooltip}
+                >
                   {transactionState.status === "processing"
                     ? "Processing..."
                     : "Add listing"}

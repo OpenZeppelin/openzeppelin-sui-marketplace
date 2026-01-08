@@ -26,6 +26,7 @@ const ShopSelection = ({
   onSearchChange,
   onCreateShop,
   canCreateShop,
+  walletConnected,
   onSelectShop,
   onRefresh
 }: {
@@ -38,12 +39,14 @@ const ShopSelection = ({
   onSearchChange: (nextQuery: string) => void
   onCreateShop: () => void
   canCreateShop: boolean
+  walletConnected: boolean
   onSelectShop: (shopId: string) => void
   onRefresh: () => void
 }) => {
   const isLoading = status === "loading" || status === "idle"
   const hasQuery = searchQuery.trim().length > 0
   const explorerUrl = useExplorerUrl()
+  const createShopDisabled = !canCreateShop || !walletConnected
 
   return (
     <div className="w-full max-w-5xl space-y-6 px-4">
@@ -58,9 +61,11 @@ const ShopSelection = ({
             </p>
           </div>
           <div className="ml-auto flex items-center gap-2">
-            <Button onClick={onCreateShop} disabled={!canCreateShop}>
-              Create shop
-            </Button>
+            {walletConnected ? (
+              <Button onClick={onCreateShop} disabled={createShopDisabled}>
+                Create shop
+              </Button>
+            ) : undefined}
             <Button
               variant="secondary"
               size="compact"

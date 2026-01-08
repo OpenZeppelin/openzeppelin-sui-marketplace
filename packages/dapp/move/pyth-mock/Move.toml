@@ -3,4 +3,4 @@ name = "Pyth"
 edition = "2024"
 
 [environments]
-localnet = "47de2974"
+localnet = "42db6d64"

@@ -2,6 +2,7 @@
 
 import type { ItemListingSummary } from "@sui-oracle-market/domain-core/models/item-listing"
 import { formatUsdFromCents, getStructLabel } from "../helpers/format"
+import { WALLET_REQUIRED_TOOLTIP } from "../helpers/wallet"
 import {
   useRemoveItemModalState,
   type RemoveListingTransactionSummary
@@ -171,6 +172,7 @@ const RemoveItemModal = ({
     isSuccessState,
     isErrorState,
     canSubmit,
+    walletConnected,
     explorerUrl,
     handleRemoveListing,
     resetState
@@ -182,6 +184,7 @@ const RemoveItemModal = ({
   })
   const errorState =
     transactionState.status === "error" ? transactionState : undefined
+  const walletTooltip = walletConnected ? undefined : WALLET_REQUIRED_TOOLTIP
 
   if (!open || !listing) return <></>
 
@@ -240,6 +243,7 @@ const RemoveItemModal = ({
                   variant="danger"
                   onClick={handleRemoveListing}
                   disabled={!canSubmit}
+                  tooltip={walletTooltip}
                 >
                   {transactionState.status === "processing"
                     ? "Processing..."

@@ -256,6 +256,7 @@ type AddCurrencyModalState = {
   isSuccessState: boolean
   isErrorState: boolean
   canSubmit: boolean
+  walletConnected: boolean
   explorerUrl?: string
   handleAddCurrency: () => Promise<void>
   handleInputChange: <K extends keyof CurrencyFormState>(
@@ -383,6 +384,7 @@ export const useAddCurrencyModalState = ({
     Boolean(walletAddress && shopId && !hasFieldErrors) &&
     transactionState.status !== "processing" &&
     isSubmissionPending !== true
+  const walletConnected = Boolean(walletAddress)
 
   const resetForm = useCallback(() => {
     setFormState(emptyFormState())
@@ -668,6 +670,7 @@ export const useAddCurrencyModalState = ({
     isSuccessState,
     isErrorState,
     canSubmit,
+    walletConnected,
     explorerUrl,
     handleAddCurrency,
     handleInputChange,

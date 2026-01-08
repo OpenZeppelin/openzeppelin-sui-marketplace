@@ -224,6 +224,7 @@ type AddDiscountModalState = {
   isSuccessState: boolean
   isErrorState: boolean
   canSubmit: boolean
+  walletConnected: boolean
   explorerUrl?: string
   handleAddDiscount: () => Promise<void>
   handleInputChange: <K extends keyof DiscountFormState>(
@@ -295,6 +296,7 @@ export const useAddDiscountModalState = ({
     Boolean(walletAddress && shopId && !hasFieldErrors) &&
     transactionState.status !== "processing" &&
     isSubmissionPending !== true
+  const walletConnected = Boolean(walletAddress)
 
   const resetForm = useCallback(() => {
     setFormState(emptyFormState())
@@ -551,6 +553,7 @@ export const useAddDiscountModalState = ({
     isSuccessState,
     isErrorState,
     canSubmit,
+    walletConnected,
     explorerUrl,
     handleAddDiscount,
     handleInputChange,

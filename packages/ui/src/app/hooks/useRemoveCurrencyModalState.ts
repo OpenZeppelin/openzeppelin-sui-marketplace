@@ -50,6 +50,7 @@ type RemoveCurrencyModalState = {
   isSuccessState: boolean
   isErrorState: boolean
   canSubmit: boolean
+  walletConnected: boolean
   explorerUrl?: string
   handleRemoveCurrency: () => Promise<void>
   resetState: () => void
@@ -98,6 +99,7 @@ export const useRemoveCurrencyModalState = ({
     Boolean(walletAddress && shopId && currency?.acceptedCurrencyId) &&
     transactionState.status !== "processing" &&
     isSubmissionPending !== true
+  const walletConnected = Boolean(walletAddress)
 
   const resetState = useCallback(() => {
     setTransactionState({ status: "idle" })
@@ -278,6 +280,7 @@ export const useRemoveCurrencyModalState = ({
     isSuccessState,
     isErrorState,
     canSubmit,
+    walletConnected,
     explorerUrl,
     handleRemoveCurrency,
     resetState

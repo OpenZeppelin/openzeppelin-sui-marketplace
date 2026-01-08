@@ -51,6 +51,7 @@ type RemoveDiscountModalState = {
   isSuccessState: boolean
   isErrorState: boolean
   canSubmit: boolean
+  walletConnected: boolean
   explorerUrl?: string
   handleDisableDiscount: () => Promise<void>
   resetState: () => void
@@ -112,6 +113,7 @@ export const useRemoveDiscountModalState = ({
     ) &&
     transactionState.status !== "processing" &&
     isSubmissionPending !== true
+  const walletConnected = Boolean(walletAddress)
 
   const resetState = useCallback(() => {
     setTransactionState({ status: "idle" })
@@ -311,6 +313,7 @@ export const useRemoveDiscountModalState = ({
     isSuccessState,
     isErrorState,
     canSubmit,
+    walletConnected,
     explorerUrl,
     handleDisableDiscount,
     resetState

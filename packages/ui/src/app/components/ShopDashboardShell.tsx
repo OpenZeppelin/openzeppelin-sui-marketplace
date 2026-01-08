@@ -1,5 +1,6 @@
 "use client"
 
+import { useCurrentAccount } from "@mysten/dapp-kit"
 import { useCallback, useEffect, useState } from "react"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import ShopSelection from "./ShopSelection"
@@ -16,6 +17,7 @@ const ShopDashboardShell = () => {
   const searchParams = useSearchParams()
   const urlShopId = searchParams.get("shopId") ?? undefined
   const packageId = useResolvedPackageId()
+  const currentAccount = useCurrentAccount()
   const [isCreateOpen, setIsCreateOpen] = useState(false)
   const {
     status,
@@ -82,11 +84,13 @@ const ShopDashboardShell = () => {
   const handleShopCreated = useCallback(
     (shopId: string) => {
       handleSelectShop(shopId)
-      refresh()
+      refresh({ expectedShopId: shopId })
       setIsCreateOpen(false)
     },
     [handleSelectShop, refresh]
   )
+
+  const walletConnected = Boolean(currentAccount?.address)
 
   return (
     <>
@@ -112,8 +116,9 @@ const ShopDashboardShell = () => {
             onSearchChange={(value) => setSearchQuery(value)}
             onCreateShop={openCreateShop}
             canCreateShop={Boolean(packageId)}
+            walletConnected={walletConnected}
             onSelectShop={handleSelectShop}
-            onRefresh={refresh}
+            onRefresh={() => refresh()}
           />
         )}
       </div>
