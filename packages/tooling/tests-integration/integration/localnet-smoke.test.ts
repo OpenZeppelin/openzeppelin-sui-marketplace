@@ -1,6 +1,9 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest"
 
-import { newTransaction } from "@sui-oracle-market/tooling-core/transactions"
+import {
+  newTransaction,
+  resolveSplitCoinResult
+} from "@sui-oracle-market/tooling-core/transactions"
 
 import { createSuiLocalnetTestEnv } from "@sui-oracle-market/tooling-node/testing/env"
 
@@ -12,8 +15,8 @@ const testEnv = createSuiLocalnetTestEnv({
   withFaucet
 })
 
-const unwrapSplitCoin = <T>(value: T | T[]) =>
-  Array.isArray(value) ? value[0] : value
+const unwrapSplitCoin = (value: Parameters<typeof resolveSplitCoinResult>[0]) =>
+  resolveSplitCoinResult(value, 0)
 
 describe("localnet smoke", () => {
   beforeAll(async () => {

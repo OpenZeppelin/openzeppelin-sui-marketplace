@@ -82,7 +82,7 @@ jobs:
       matrix:
         include:
           - name: tooling
-            command: pnpm tooling test:integration:parallel
+            command: pnpm tooling test:integration
             report: reports/vitest-tooling-integration.xml
           - name: dapp
             command: pnpm dapp test:integration

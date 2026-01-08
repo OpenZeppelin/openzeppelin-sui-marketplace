@@ -5,8 +5,7 @@
   "type": "module",
   "scripts": {
     "test:unit": "vitest --config ./vitest.config.ts",
-    "test:integration": "pnpm --filter ./tests-integration test",
-    "test:integration:parallel": "pnpm --filter ./tests-integration test:parallel"
+    "test:integration": "pnpm --filter ./tests-integration test"
   },
   "devDependencies": {
     "@types/node": "^22.19.2",

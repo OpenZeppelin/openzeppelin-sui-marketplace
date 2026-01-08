@@ -22,6 +22,21 @@ if (checkOnly) {
 }
 ```
 
+## Auto-funding fails on localnet ("Faucet request failed" / "Failed to execute transaction after 2 retries")
+- This means the local faucet cannot execute its funding transaction, so auto-funding will fail too.
+- Fix by regenesis (resets faucet treasury objects):
+  - `pnpm script chain:localnet:stop`
+  - `pnpm script chain:localnet:start --with-faucet --force-regenesis`
+  - Re-run your script (e.g. `pnpm script mock:setup --buyer-address <0x...>`).
+- If you need to preserve state, start localnet with a fresh config dir instead:
+  - `SUI_LOCALNET_CONFIG_DIR=~/.sui/localnet-fresh pnpm script chain:localnet:start --with-faucet`
+- Optional sanity check for the local faucet endpoint:
+  ```bash
+  curl -s -X POST http://127.0.0.1:9123/v2/gas \
+    -H 'Content-Type: application/json' \
+    -d '{"FixedAmountRequest":{"recipient":"<0x...>"}}'
+  ```
+
 ## "No ShopOwnerCap found"
 - Ensure the owner cap is in your wallet. See `packages/domain/core/src/models/shop.ts`.
 

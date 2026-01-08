@@ -6,7 +6,7 @@ const integrationRoot = path.dirname(fileURLToPath(import.meta.url))
 const workspaceRoot = path.resolve(integrationRoot, "..", "..", "..")
 const resolveWorkspacePackage = (packagePath: string) =>
   path.join(workspaceRoot, packagePath)
-const runSingleThread = process.env.SUI_IT_SINGLE_THREAD === "1"
+const runSingleThread = process.env.SUI_IT_SINGLE_THREAD !== "0"
 
 export default defineConfig({
   resolve: {

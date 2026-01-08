@@ -4,7 +4,10 @@ import {
   buildCreateShopTransaction,
   buildUpdateShopOwnerTransaction
 } from "@sui-oracle-market/domain-core/ptb/shop"
-import { newTransaction } from "@sui-oracle-market/tooling-core/transactions"
+import {
+  newTransaction,
+  resolveSplitCoinResult
+} from "@sui-oracle-market/tooling-core/transactions"
 import { getSuiSharedObject } from "@sui-oracle-market/tooling-core/shared-object"
 import { pickRootNonDependencyArtifact } from "@sui-oracle-market/tooling-node/artifacts"
 import { signAndExecute } from "@sui-oracle-market/tooling-node/transactions"
@@ -25,8 +28,8 @@ const testEnv = createSuiLocalnetTestEnv({
   withFaucet
 })
 
-const unwrapSplitCoin = <T>(value: T | T[]) =>
-  Array.isArray(value) ? value[0] : value
+const unwrapSplitCoin = (value: Parameters<typeof resolveSplitCoinResult>[0]) =>
+  resolveSplitCoinResult(value, 0)
 
 const publishOracleMarket = async (
   context: TestContext,

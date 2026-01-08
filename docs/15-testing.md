@@ -7,15 +7,18 @@ This chapter is the detailed testing reference (commands, env toggles, and the s
 ## 1. Integration tests (localnet)
 ```bash
 pnpm test:integration
-pnpm test:integration:parallel
 ```
 
 Optional toggles:
 - `SUI_IT_KEEP_TEMP=1` keeps temp dirs + logs for debugging.
 - `SUI_IT_WITH_FAUCET=0` disables the local faucet (default on; tests fund via the local faucet unless a funded treasury account is available).
 - `SUI_IT_TREASURY_INDEX=<n>` forces which localnet keystore entry to use for funding.
+- `SUI_IT_RPC_WAIT_TIMEOUT_MS=<ms>` adjusts localnet RPC/faucet readiness timeout (default `10000`, CI default `120000`).
+- `SUI_IT_RANDOM_PORTS=0` opts out of random ports (default on) when you want to bind to the standard localnet ports.
+- `SUI_IT_SINGLE_THREAD=0` enables parallel Vitest workers (default single-thread to avoid localnet port conflicts).
 
-Note: Vitest 3 uses pool options for threading; `--minThreads`/`--maxThreads` are not supported.
+Note: integration tests run single-threaded to avoid localnet port conflicts.
+Localnet used by tests is isolated in a temp dir and does not reuse `~/.sui` or any running localnet.
 
 ## 2. Unit tests (domain + UI)
 ```bash
@@ -270,6 +273,10 @@ expect(records.warn.join(" ")).toContain("warning")
 ### 3.9 Environment toggles for localnet tests
 - `SUI_IT_KEEP_TEMP=1` keep temp dirs/logs for debugging.
 - `SUI_IT_WITH_FAUCET=0` disable local faucet.
+- `SUI_IT_TREASURY_INDEX=<n>` choose the keystore entry used for funding.
+- `SUI_IT_RPC_WAIT_TIMEOUT_MS=<ms>` override localnet RPC/faucet readiness timeout.
+- `SUI_IT_RANDOM_PORTS=0` opt out of random ports.
+- `SUI_IT_SINGLE_THREAD=0` allow parallel Vitest workers.
 - `SUI_IT_SKIP_LOCALNET=1` or `SKIP_LOCALNET=1` skip localnet tests entirely (localnet guard).
 
 ### 3.10 Best practices checklist

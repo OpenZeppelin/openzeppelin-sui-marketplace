@@ -4,8 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "vitest --config ./vitest.integration.config.ts --poolOptions.threads.singleThread=true",
-    "test:parallel": "vitest --config ./vitest.integration.config.ts"
+    "test": "vitest --config ./vitest.integration.config.ts --poolOptions.threads.singleThread=true"
   },
   "devDependencies": {
     "@mysten/sui": "^1.45.2",

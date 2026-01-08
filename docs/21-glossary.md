@@ -8,7 +8,7 @@
 4. **Capability**: An owned object that proves authority. Example: `ShopOwnerCap`.
 5. **Dynamic field**: A key-value table attached to an object. Used to index listings and currencies under `Shop`.
 6. **PTB (Programmable Transaction Block)**: A multi-call transaction that sequences Move calls. See `packages/domain/core/src/flows/buy.ts`.
-7. **Coin<T>**: A Move resource representing fungible tokens. No allowances; the coin object is passed into transactions.
+7. **`Coin<T>`**: A Move resource representing fungible tokens. No allowances; the coin object is passed into transactions.
 8. **PriceInfoObject**: Pyth's on-chain price object. Identifies a feed + price data.
 9. **Guardrail**: On-chain validation rule for oracle freshness, confidence, or status.
 10. **TypeInfo / type tag**: On-chain representation of a Move type used for typed listings and coin types.

@@ -9,8 +9,8 @@ import { once } from "node:events"
 import { createWriteStream } from "node:fs"
 import {
   cp,
-  mkdtemp,
   mkdir,
+  mkdtemp,
   open,
   readdir,
   readFile,
@@ -34,14 +34,17 @@ import { requestSuiFromFaucetV2 } from "@mysten/sui/faucet"
 import { Ed25519Keypair } from "@mysten/sui/keypairs/ed25519"
 import type { Transaction } from "@mysten/sui/transactions"
 
-import { newTransaction } from "@sui-oracle-market/tooling-core/transactions"
+import {
+  newTransaction,
+  resolveSplitCoinResult
+} from "@sui-oracle-market/tooling-core/transactions"
 import type {
   BuildOutput,
   PublishArtifact
 } from "@sui-oracle-market/tooling-core/types"
 import { pickRootNonDependencyArtifact } from "../artifacts.ts"
-import { DEFAULT_TX_GAS_BUDGET } from "../constants.ts"
 import type { SuiResolvedConfig } from "../config.ts"
+import { DEFAULT_TX_GAS_BUDGET } from "../constants.ts"
 import { createSuiClient } from "../describe-object.ts"
 import { loadKeypair } from "../keypair.ts"
 import { probeRpcHealth } from "../localnet.ts"
@@ -125,8 +128,8 @@ const DEFAULT_WEBSOCKET_PORT = 9001
 const DEFAULT_FAUCET_PORT = 9123
 const DEFAULT_MINIMUM_COIN_OBJECTS = 2
 const DEFAULT_MINIMUM_GAS_COIN_BALANCE = 500_000_000n
-const DEFAULT_FAUCET_REQUEST_ATTEMPTS = 3
-const DEFAULT_FAUCET_REQUEST_DELAY_MS = 500
+const DEFAULT_FAUCET_REQUEST_ATTEMPTS = 1
+const DEFAULT_FAUCET_REQUEST_DELAY_MS = 50
 
 const createTempDir = async (prefix = "tooling-test-") =>
   mkdtemp(path.join(os.tmpdir(), prefix))
@@ -175,9 +178,12 @@ const parseBooleanEnv = (value: string | undefined) => {
   return ["1", "true", "yes", "on"].includes(value.toLowerCase())
 }
 
-const shouldUseRandomPorts = () =>
-  parseBooleanEnv(process.env.SUI_IT_RANDOM_PORTS) ||
-  parseBooleanEnv(process.env.CI)
+const shouldUseRandomPorts = () => {
+  if (process.env.SUI_IT_RANDOM_PORTS !== undefined) {
+    return parseBooleanEnv(process.env.SUI_IT_RANDOM_PORTS)
+  }
+  return true
+}
 
 const resolveSkipLocalnetEnvKey = () =>
   LOCALNET_SKIP_ENV_KEYS.find((key) => parseBooleanEnv(process.env[key]))
@@ -413,24 +419,6 @@ const resolveLocalnetPorts = async (
   }
 
   return { rpcPort, websocketPort, faucetPort }
-}
-
-const listYamlFiles = async (rootDir: string): Promise<string[]> => {
-  const entries = await readdir(rootDir, { withFileTypes: true })
-  const files: string[] = []
-
-  await Promise.all(
-    entries.map(async (entry) => {
-      const fullPath = path.join(rootDir, entry.name)
-      if (entry.isDirectory()) {
-        files.push(...(await listYamlFiles(fullPath)))
-      } else if (entry.isFile() && entry.name.endsWith(".yaml")) {
-        files.push(fullPath)
-      }
-    })
-  )
-
-  return files
 }
 
 const pathExists = async (candidatePath: string) => {
@@ -669,12 +657,20 @@ const replacePortInYaml = (
   return withFaucetHost.replace(/(port:\s*)(9123)\b/g, `$1${faucetPort}`)
 }
 
-const patchLocalnetConfigPorts = async (
-  configDir: string,
+const patchLocalnetPortsInYamlFiles = async (
+  yamlFilePaths: string[],
   ports: LocalnetPorts
 ) => {
-  const yamlFiles = await listYamlFiles(configDir)
-  const shouldPatchAllPorts = shouldUseRandomPorts()
+  if (yamlFilePaths.length === 0) return
+  const hasCustomRpcPort = ports.rpcPort !== DEFAULT_RPC_PORT
+  const hasCustomWebsocketPort = ports.websocketPort !== DEFAULT_WEBSOCKET_PORT
+  const hasCustomFaucetPort =
+    ports.faucetPort !== undefined && ports.faucetPort !== DEFAULT_FAUCET_PORT
+  const shouldPatchAllPorts =
+    shouldUseRandomPorts() ||
+    hasCustomRpcPort ||
+    hasCustomWebsocketPort ||
+    hasCustomFaucetPort
 
   if (!shouldPatchAllPorts) {
     if (
@@ -688,7 +684,7 @@ const patchLocalnetConfigPorts = async (
   }
 
   const yamlFileContents = await Promise.all(
-    yamlFiles.map((filePath) => readFile(filePath, "utf8"))
+    yamlFilePaths.map((filePath) => readFile(filePath, "utf8"))
   )
 
   const portRemap = shouldPatchAllPorts
@@ -696,7 +692,7 @@ const patchLocalnetConfigPorts = async (
     : buildDefaultPortRemap(ports)
 
   await Promise.all(
-    yamlFiles.map(async (filePath, index) => {
+    yamlFilePaths.map(async (filePath, index) => {
       const contents = yamlFileContents[index] ?? ""
       const updated = shouldPatchAllPorts
         ? replacePortsInYamlContents(contents, portRemap)
@@ -735,6 +731,12 @@ const runSuiCommand = async (args: string[], env?: NodeJS.ProcessEnv) => {
     )
   }
 }
+
+const buildIsolatedSuiEnv = (configDir: string) => ({
+  ...process.env,
+  SUI_CONFIG_DIR: configDir,
+  SUI_LOCALNET_CONFIG_DIR: configDir
+})
 
 const ensureDirectory = async (dir: string) => {
   await mkdir(dir, { recursive: true })
@@ -807,32 +809,92 @@ const waitForRpcReady = async (
 const waitForPortInUse = async (
   port: number,
   timeoutMs: number,
-  intervalMs: number
+  intervalMs: number,
+  options?: { processHandle?: ChildProcess; logPath?: string }
 ) => {
   const start = Date.now()
 
   while (Date.now() - start < timeoutMs) {
+    if (options?.processHandle) {
+      const exitCode = options.processHandle.exitCode
+      const signalCode = options.processHandle.signalCode
+      if (exitCode !== null || signalCode) {
+        const logTail = await readLogTail(options.logPath)
+        const exitSummary = [
+          exitCode !== null ? `code ${exitCode}` : null,
+          signalCode ? `signal ${signalCode}` : null
+        ]
+          .filter(Boolean)
+          .join(", ")
+        throw new Error(
+          [
+            `Localnet process exited (${exitSummary || "unknown exit"}).`,
+            logTail ? `Localnet log tail:\n${logTail}` : ""
+          ]
+            .filter(Boolean)
+            .join("\n")
+        )
+      }
+    }
+
     const isAvailable = await isPortAvailable(port)
     if (!isAvailable) return
     await delay(intervalMs)
   }
 
+  const logTail = await readLogTail(options?.logPath)
   throw new Error(
-    `Localnet port ${port} did not become ready within ${timeoutMs}ms.`
+    [
+      `Localnet port ${port} did not become ready within ${timeoutMs}ms.`,
+      logTail ? `Localnet log tail:\n${logTail}` : ""
+    ]
+      .filter(Boolean)
+      .join("\n")
   )
+}
+
+const buildFaucetHostPort = (ports: LocalnetPorts) => {
+  if (ports.faucetPort === undefined) return undefined
+  return `127.0.0.1:${ports.faucetPort}`
+}
+
+const buildLocalnetStartArgs = (
+  configDir: string,
+  ports: LocalnetPorts,
+  withFaucet: boolean
+) => {
+  const args = [
+    "start",
+    "--network.config",
+    configDir,
+    "--fullnode-rpc-port",
+    String(ports.rpcPort)
+  ]
+  if (withFaucet) {
+    const faucetHostPort = buildFaucetHostPort(ports)
+    if (faucetHostPort) {
+      args.push(`--with-faucet=${faucetHostPort}`)
+    } else {
+      args.push("--with-faucet")
+    }
+  }
+
+  return args
 }
 
 const startLocalnetProcess = async ({
   testId,
   withFaucet = false,
   keepTemp = false,
-  rpcWaitTimeoutMs = 30_000
+  rpcWaitTimeoutMs = 10_000
 }: LocalnetStartOptions): Promise<LocalnetInstance> => {
   assertLocalnetEnabled()
   return withLocalnetStartLock(async () => {
     const tempDir = await createTempDir(buildTempPrefix(testId))
     const configDir = path.join(tempDir, "localnet-config")
     const logsDir = path.join(tempDir, "logs")
+    const configSeedPath = path.join(tempDir, "genesis-config.yaml")
+    const localnetEnv = buildIsolatedSuiEnv(configDir)
     await ensureDirectory(logsDir)
     await ensureDirectory(configDir)
 
@@ -842,24 +904,38 @@ const startLocalnetProcess = async ({
     let processHandle: ChildProcess | undefined
 
     try {
-      await runSuiCommand([
-        "genesis",
-        "--working-dir",
-        configDir,
-        ...(withFaucet ? ["--with-faucet"] : [])
-      ])
+      logStream.write(
+        `[tooling] localnet ports rpc=${ports.rpcPort} ws=${ports.websocketPort} faucet=${ports.faucetPort ?? "disabled"}\n`
+      )
 
-      await patchLocalnetConfigPorts(configDir, ports)
+      await runSuiCommand(
+        [
+          "genesis",
+          "--write-config",
+          configSeedPath,
+          ...(withFaucet ? ["--with-faucet"] : [])
+        ],
+        localnetEnv
+      )
 
-      const args = ["start", "--network.config", configDir]
-      if (withFaucet) args.push("--with-faucet")
+      await patchLocalnetPortsInYamlFiles([configSeedPath], ports)
+
+      await runSuiCommand(
+        [
+          "genesis",
+          "--from-config",
+          configSeedPath,
+          "--working-dir",
+          configDir
+        ],
+        localnetEnv
+      )
+
+      const args = buildLocalnetStartArgs(configDir, ports, withFaucet)
 
       processHandle = spawn("sui", args, {
         stdio: ["ignore", "pipe", "pipe"],
-        env: {
-          ...process.env,
-          SUI_CONFIG_DIR: configDir
-        }
+        env: localnetEnv
       })
 
       processHandle.stdout?.pipe(logStream)
@@ -871,13 +947,16 @@ const startLocalnetProcess = async ({
         logPath
       })
       if (withFaucet && ports.faucetPort !== undefined) {
-        await waitForPortInUse(ports.faucetPort, rpcWaitTimeoutMs, 250)
+        await waitForPortInUse(ports.faucetPort, rpcWaitTimeoutMs, 250, {
+          processHandle,
+          logPath
+        })
       }
 
       const suiClient = createSuiClient(rpcUrl)
-      const faucetHost = withFaucet
-        ? `http://127.0.0.1:${ports.faucetPort ?? DEFAULT_FAUCET_PORT}`
-        : undefined
+      const faucetHostPort = buildFaucetHostPort(ports)
+      const faucetHost =
+        withFaucet && faucetHostPort ? `http://${faucetHostPort}` : undefined
       let treasuryAccount: TestAccount | undefined
 
       try {
@@ -1164,7 +1243,9 @@ const fundAccountFromTreasury = async ({
     transaction.pure.u64(fundingAmount)
   )
   const splitCoins = transaction.splitCoins(transaction.gas, splitAmounts)
-  const coins = Array.isArray(splitCoins) ? splitCoins : [splitCoins]
+  const coins = Array.from({ length: coinCount }, (_, index) =>
+    resolveSplitCoinResult(splitCoins, index)
+  )
 
   coins.forEach((coin) => {
     transaction.transferObjects(

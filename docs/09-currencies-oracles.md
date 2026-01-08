@@ -35,7 +35,7 @@ pnpm script buyer:currency:list --shop-id <shopId>
 3. **Staleness checks -> guardrails**: guardrails are enforced on-chain and can be tightened by buyers. See `quote_amount_for_price_info_object` in `packages/dapp/move/oracle-market/sources/shop.move`.
 
 ## 5. Concept deep dive: coins, registry, and oracles
-- **Coin<T> as a resource**: payment is a `Coin<T>` object, not a balance. The buyer moves a coin
+- **`Coin<T>` as a resource**: payment is a `Coin<T>` object, not a balance. The buyer moves a coin
   into the transaction, the module splits what it needs, and returns change as a new coin. This
   makes the transfer explicit and eliminates allowance races.
   Code: `packages/dapp/move/oracle-market/sources/shop.move` (`process_payment`, `refund_or_destroy`)

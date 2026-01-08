@@ -1,7 +1,6 @@
-import type { TransactionObjectArgument } from "@mysten/sui/transactions"
 import type { ToolingCoreContext } from "./context.ts"
 import { extractOwnerAddress, getSuiObject } from "./object.ts"
-import { newTransaction } from "./transactions.ts"
+import { newTransaction, resolveSplitCoinResult } from "./transactions.ts"
 import { formatTypeName, parseTypeNameFromString } from "./utils/type-name.ts"
 
 /**
@@ -21,7 +20,7 @@ export const buildCoinTransferTransaction = ({
   const splitResult = transaction.splitCoins(coinArgument, [
     transaction.pure.u64(amount)
   ])
-  const transferCoin = unwrapSplitCoin(splitResult)
+  const transferCoin = resolveSplitCoinResult(splitResult, 0)
 
   transaction.transferObjects(
     [transferCoin],
@@ -30,10 +29,6 @@ export const buildCoinTransferTransaction = ({
 
   return transaction
 }
-
-const unwrapSplitCoin = (
-  splitResult: TransactionObjectArgument | TransactionObjectArgument[]
-) => (Array.isArray(splitResult) ? splitResult[0] : splitResult)
 
 export type CoinOwnershipSnapshot = {
   coinType: string

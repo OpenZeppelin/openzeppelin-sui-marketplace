@@ -54,8 +54,8 @@ Use this page as the navigation hub for the docs. Each chapter ends with Prev/Ne
 | Capabilities | Explicit admin auth via owned objects | `packages/dapp/move/oracle-market/sources/shop.move` (ShopOwnerCap) | `docs/07-shop-capabilities.md` |
 | Dynamic fields | Membership index and discovery without monolithic maps | `packages/dapp/move/oracle-market/sources/shop.move` (ItemListingMarker, DiscountClaim) | `docs/08-listings-receipts.md`, `docs/10-discounts-tickets.md` |
 | Type tags / TypeInfo | Compile-time safety for listings and coins | `packages/dapp/move/oracle-market/sources/shop.move` (item_type, coin_type) | `docs/08-listings-receipts.md`, `docs/09-currencies-oracles.md` |
-| Phantom types | Typed receipts without storing the value | `packages/dapp/move/oracle-market/sources/shop.move` (ShopItem<phantom TItem>) | `docs/08-listings-receipts.md` |
-| Coin<T> resources | Payment as objects, not allowances | `packages/dapp/move/oracle-market/sources/shop.move` (process_payment) | `docs/09-currencies-oracles.md` |
+| Phantom types | Typed receipts without storing the value | `packages/dapp/move/oracle-market/sources/shop.move` (`ShopItem<phantom TItem>`) | `docs/08-listings-receipts.md` |
+| `Coin<T>` resources | Payment as objects, not allowances | `packages/dapp/move/oracle-market/sources/shop.move` (process_payment) | `docs/09-currencies-oracles.md` |
 | Coin registry | Trusted metadata for decimals/symbols | `packages/dapp/move/oracle-market/sources/shop.move` (add_accepted_currency) | `docs/09-currencies-oracles.md` |
 | Oracle objects (Pyth) | Price feeds are objects with guardrails | `packages/dapp/move/oracle-market/sources/shop.move` (quote_amount_for_price_info_object) | `docs/09-currencies-oracles.md` |
 | Clock | Trusted time for windows and freshness | `packages/dapp/move/oracle-market/sources/shop.move` (now_secs) | `docs/09-currencies-oracles.md`, `docs/10-discounts-tickets.md` |

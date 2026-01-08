@@ -3,6 +3,7 @@ import type {
   SuiObjectChangeCreated,
   SuiTransactionBlockResponse
 } from "@mysten/sui/client"
+import type { TransactionObjectArgument } from "@mysten/sui/transactions"
 import { Transaction } from "@mysten/sui/transactions"
 import { getStructLabel } from "./utils/formatters.ts"
 import { parseBalance } from "./utils/utility.ts"
@@ -15,6 +16,21 @@ export const newTransaction = (gasBudget?: number) => {
   const tx = new Transaction()
   if (gasBudget) tx.setGasBudget(gasBudget)
   return tx
+}
+
+/**
+ * Resolves a SplitCoins result to the requested index, supporting both
+ * array returns and TransactionResult proxies.
+ */
+export const resolveSplitCoinResult = (
+  splitResult: TransactionObjectArgument | TransactionObjectArgument[],
+  index: number
+) => {
+  if (Array.isArray(splitResult)) return splitResult[index]
+  const resultByIndex = (
+    splitResult as Record<number, TransactionObjectArgument>
+  )[index]
+  return resultByIndex ?? splitResult
 }
 
 /**

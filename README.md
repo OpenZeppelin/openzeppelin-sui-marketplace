@@ -55,10 +55,9 @@ pnpm script mock:setup --buyer-address <0x...>
 pnpm script move:publish --package-path oracle-market
 
 # 8) To continue setting up the shop, listings, discounts, accepted currencies look at the scripts section
-```
 
-Optional run the UI (after publishing + creating a shop + updated UI environment variable config):
-```bash
+# 9) Run the UI
+pnpm ui dev
 
 ```
 
