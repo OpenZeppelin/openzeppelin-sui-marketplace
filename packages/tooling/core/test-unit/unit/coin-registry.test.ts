@@ -100,6 +100,24 @@ describe("coin registry helpers", () => {
     expect(resolved).toBe(normalizeSuiObjectId("0x2"))
   })
 
+  it("resolves currency object id when registry uses short address types", async () => {
+    const { client } = createSuiClientMock({
+      getObject: vi.fn().mockResolvedValue({
+        data: {
+          objectId: "0x2",
+          type: "0x2::coin_registry::Currency<0x2::sui::SUI>"
+        }
+      })
+    })
+
+    const resolved = await resolveCurrencyObjectId(
+      { coinType: "0x2::sui::SUI" },
+      { suiClient: client }
+    )
+
+    expect(resolved).toBe(normalizeSuiObjectId("0x2"))
+  })
+
   it("returns undefined when derived lookup fails and fallback is disabled", async () => {
     const { client } = createSuiClientMock({
       getObject: vi.fn().mockResolvedValue({ data: { type: "0x2::other::X" } })

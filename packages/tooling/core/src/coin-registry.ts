@@ -47,6 +47,24 @@ export type CurrencyRegistryEntry = {
 
 const CURRENCY_TYPE_REGEX = /^0x2::coin_registry::Currency<(.+)>$/i
 
+const isCurrencyTypeMatch = (
+  objectType: string | undefined,
+  normalizedCoinType: string
+) => {
+  if (!objectType) return false
+  const match = objectType.match(CURRENCY_TYPE_REGEX)
+  if (!match?.[1]) return false
+
+  try {
+    const normalizedCandidate = formatTypeName(
+      parseTypeNameFromString(match[1])
+    )
+    return normalizedCandidate.toLowerCase() === normalizedCoinType.toLowerCase()
+  } catch {
+    return false
+  }
+}
+
 const parseCurrencyDecimals = (value: unknown): number | undefined => {
   if (typeof value === "number" && Number.isFinite(value)) return value
   if (typeof value === "string") {
@@ -171,7 +189,6 @@ export const resolveCurrencyObjectId = async (
 ): Promise<string | undefined> => {
   const normalizedRegistryId = normalizeSuiObjectId(registryId)
   const normalizedCoinType = formatTypeName(parseTypeNameFromString(coinType))
-  const expectedType = `0x2::coin_registry::Currency<${normalizedCoinType}>`
   const derivedCandidate = deriveCurrencyObjectId(
     normalizedCoinType,
     normalizedRegistryId
@@ -183,8 +200,8 @@ export const resolveCurrencyObjectId = async (
   })
 
   if (
-    derivedObject.data?.type?.toLowerCase() === expectedType.toLowerCase() &&
-    derivedObject.data?.objectId
+    derivedObject.data?.objectId &&
+    isCurrencyTypeMatch(derivedObject.data.type, normalizedCoinType)
   ) {
     return normalizeSuiObjectId(derivedObject.data.objectId)
   }
@@ -209,9 +226,8 @@ export const resolveCurrencyObjectId = async (
       options: { showType: true }
     })
 
-    const match = objects.find(
-      (object) =>
-        object.data?.type?.toLowerCase() === expectedType.toLowerCase()
+    const match = objects.find((object) =>
+      isCurrencyTypeMatch(object.data?.type, normalizedCoinType)
     )
 
     if (match?.data?.objectId) {

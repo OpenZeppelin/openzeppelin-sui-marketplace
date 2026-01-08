@@ -218,9 +218,16 @@ const maybeSetDedicatedGasForSuiPayments = async ({
     limit: 50
   })
 
-  const gasCandidate = coins.data.find(
-    (coin) => normalizeSuiObjectId(coin.coinObjectId) !== paymentCoinObjectId
-  )
+  const gasCandidate = coins.data.reduce<{
+    coinObjectId: string
+    balance: bigint
+  } | null>((current, coin) => {
+    const coinObjectId = normalizeSuiObjectId(coin.coinObjectId)
+    if (coinObjectId === paymentCoinObjectId) return current
+    const balance = BigInt(coin.balance)
+    if (!current) return { coinObjectId, balance }
+    return balance > current.balance ? { coinObjectId, balance } : current
+  }, null)
 
   if (!gasCandidate)
     throw new Error(
@@ -255,6 +262,32 @@ const maybeUpdatePythPriceFeed = async ({
   const connection = new SuiPriceServiceConnection(hermesUrl)
 
   const updateData = await connection.getPriceFeedsUpdateData([feedIdHex])
+  // pyth-sui-js expects Buffer-style readUint* helpers; add shims for browser Uint8Array.
+  const normalizedUpdateData = updateData.map((message) => {
+    const messageWithReads = message as Uint8Array & {
+      readUint8?: (offset: number) => number
+      readUint16BE?: (offset: number) => number
+    }
+
+    if (
+      typeof messageWithReads.readUint8 === "function" &&
+      typeof messageWithReads.readUint16BE === "function"
+    ) {
+      return message
+    }
+
+    const dataView = new DataView(
+      message.buffer,
+      message.byteOffset,
+      message.byteLength
+    )
+
+    messageWithReads.readUint8 = (offset: number) => dataView.getUint8(offset)
+    messageWithReads.readUint16BE = (offset: number) =>
+      dataView.getUint16(offset, false)
+
+    return message
+  })
 
   const pythClient = new SuiPythClient(
     suiClient,
@@ -262,7 +295,9 @@ const maybeUpdatePythPriceFeed = async ({
     config.wormholeStateId
   )
 
-  await pythClient.updatePriceFeeds(transaction, updateData, [feedIdHex])
+  await pythClient.updatePriceFeeds(transaction, normalizedUpdateData, [
+    feedIdHex
+  ])
 
   return true
 }
@@ -367,17 +402,21 @@ export const resolvePaymentCoinObjectId = async ({
   providedCoinObjectId,
   coinType,
   signerAddress,
-  suiClient
+  suiClient,
+  minimumBalance
 }: {
   providedCoinObjectId?: string
   coinType: string
   signerAddress: string
   suiClient: SuiClient
+  minimumBalance?: bigint
 }): Promise<string> => {
   if (providedCoinObjectId) return providedCoinObjectId
 
   let cursor: string | null | undefined = undefined
   let richest: { coinObjectId: string; balance: bigint } | null = null
+  let smallestSufficient: { coinObjectId: string; balance: bigint } | null =
+    null
 
   do {
     const page = await suiClient.getCoins({
@@ -387,16 +426,20 @@ export const resolvePaymentCoinObjectId = async ({
       cursor
     })
 
-    richest = page.data.reduce<{
-      coinObjectId: string
-      balance: bigint
-    } | null>((current, coin) => {
+    page.data.forEach((coin) => {
       const balance = BigInt(coin.balance)
-      if (!current) return { coinObjectId: coin.coinObjectId, balance }
-      return balance > current.balance
-        ? { coinObjectId: coin.coinObjectId, balance }
-        : current
-    }, richest)
+      const coinObjectId = normalizeSuiObjectId(coin.coinObjectId)
+
+      if (!richest || balance > richest.balance) {
+        richest = { coinObjectId, balance }
+      }
+
+      if (minimumBalance !== undefined && balance >= minimumBalance) {
+        if (!smallestSufficient || balance < smallestSufficient.balance) {
+          smallestSufficient = { coinObjectId, balance }
+        }
+      }
+    })
 
     cursor = page.hasNextPage ? page.nextCursor : undefined
   } while (cursor)
@@ -406,7 +449,14 @@ export const resolvePaymentCoinObjectId = async ({
       `No coin objects of type ${coinType} found for ${signerAddress}. Provide --payment-coin-object-id or mint/fund the account.`
     )
 
-  return normalizeSuiObjectId(richest.coinObjectId)
+  if (minimumBalance !== undefined && !smallestSufficient)
+    throw new Error(
+      `No single coin object of type ${coinType} has at least ${minimumBalance}. Merge coins or split from a larger balance, then retry.`
+    )
+
+  return normalizeSuiObjectId(
+    (smallestSufficient ?? richest).coinObjectId
+  )
 }
 
 export const buildBuyTransaction = async (
@@ -499,7 +549,10 @@ export const buildBuyTransaction = async (
     resolvedPriceUpdatePolicy !== "skip" &&
     networkName === "localnet" &&
     !pythConfig
-  const pythPriceInfoSharedRef = usesMockUpdate
+  const shouldUseMutablePriceInfo =
+    resolvedPriceUpdatePolicy !== "skip" &&
+    (usesMockUpdate || Boolean(pythConfig))
+  const pythPriceInfoSharedRef = shouldUseMutablePriceInfo
     ? { ...pythPriceInfoShared.sharedRef, mutable: true }
     : pythPriceInfoShared.sharedRef
   const pythPriceInfoArgument = transaction.sharedObjectRef(

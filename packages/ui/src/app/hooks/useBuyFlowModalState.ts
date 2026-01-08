@@ -17,7 +17,10 @@ import {
   resolveDiscountedPriceUsdCents,
   resolvePaymentCoinObjectId
 } from "@sui-oracle-market/domain-core/flows/buy"
-import type { AcceptedCurrencySummary } from "@sui-oracle-market/domain-core/models/currency"
+import {
+  normalizeCoinType,
+  type AcceptedCurrencySummary
+} from "@sui-oracle-market/domain-core/models/currency"
 import type {
   DiscountContext,
   DiscountOption,
@@ -531,6 +534,7 @@ export const useBuyFlowModalState = ({
         discountSelection,
         discountTemplateLookup
       })
+      let paymentCoinMinimumBalance: bigint | undefined = undefined
 
       if (discountedPriceUsdCents !== undefined) {
         try {
@@ -547,9 +551,10 @@ export const useBuyFlowModalState = ({
             suiClient
           })
 
-          if (requiredAmount !== undefined) {
-            const balance = selectedCurrency.balance
-            if (balance < requiredAmount) {
+            if (requiredAmount !== undefined) {
+              paymentCoinMinimumBalance = requiredAmount
+              const balance = selectedCurrency.balance
+              if (balance < requiredAmount) {
               const shortfall = requiredAmount - balance
               const symbolLabel =
                 selectedCurrency.symbol ??
@@ -577,11 +582,16 @@ export const useBuyFlowModalState = ({
         }
       }
 
+      const shouldPreferSmallestPaymentCoin =
+        normalizeCoinType(currencySnapshot.coinType) === "0x2::sui::SUI"
       const paymentCoinObjectId = await resolvePaymentCoinObjectId({
         providedCoinObjectId: undefined,
         coinType: currencySnapshot.coinType,
         signerAddress: walletAddress,
-        suiClient
+        suiClient,
+        minimumBalance: shouldPreferSmallestPaymentCoin
+          ? paymentCoinMinimumBalance
+          : undefined
       })
 
       const buyTransaction = await buildBuyTransaction(
