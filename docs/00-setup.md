@@ -69,11 +69,6 @@ Localnet (after starting localnet with faucet enabled):
 sui client faucet --address <0x...>
 ```
 
-Testnet:
-```bash
-sui client faucet --address <0x...>
-```
-
 ## 9. Seed mocks (localnet only)
 This publishes mock coins and Pyth packages, then seeds price feeds.
 ```bash

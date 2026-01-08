@@ -22,7 +22,6 @@ pnpm install
   ```bash
   sui client new-address ed25519
   sui client active-address   # ensure the desired address is active
-  sui client faucet --address <0x...> # ensure your address has some funds
   ```
 - Optional: export keys as env vars (used by scripts):
   ```bash
@@ -138,7 +137,7 @@ sui client new-address ed25519
 # Check which one is active (the active address is the signer for scripts).
 sui client active-address
 
-# Fund the 2 addresses
+# Fund the 2 addresses (ensure your localnet is started with faucet)
 sui client faucet --address <0x...>
 ```
 

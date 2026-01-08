@@ -12,6 +12,8 @@ deployments/
 **/move/**/.trace
 **/move/**/.coverage*
 **/move/**/Pub.localnet.toml
+**/Move.lock
+**/Published.toml
 
 patches/pyth-crosschain/
 

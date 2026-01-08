@@ -42,11 +42,11 @@ sui client active-address   # ensure the desired address is active
 export SUI_ACCOUNT_ADDRESS=<0x...>
 export SUI_ACCOUNT_PRIVATE_KEY=<base64 or hex>
 
-# 4) Fund your created address
-sui client faucet --address <0x...>
-
-# 5) Start localnet (new terminal) (--with-faucet is recommended as some script auto fund address if fund is missing)
+# 4) Start localnet (new terminal) (--with-faucet is recommended as some script auto fund address if fund is missing)
 pnpm script chain:localnet:start --with-faucet
+
+# 5) Fund your created address
+sui client faucet --address <0x...>
 
 # 6) Seed mocks (coins + Pyth stub + price feeds)
 pnpm script mock:setup --buyer-address <0x...>
