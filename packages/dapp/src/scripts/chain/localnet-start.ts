@@ -14,6 +14,7 @@ import {
   unlink,
   writeFile
 } from "node:fs/promises"
+import net from "node:net"
 import path from "node:path"
 import { setTimeout as delay } from "node:timers/promises"
 
@@ -44,6 +45,7 @@ process.env.SUI_NETWORK = "localnet"
 const LEGACY_SUI_CLI_VERSION_FILE = "sui-cli-version.txt"
 const SUI_CLI_VERSION_FILE_PREFIX = "sui-cli-version-"
 const SUI_CLI_VERSION_FILE_SUFFIX = ".txt"
+const FAUCET_READINESS_WAIT_SECONDS = 10
 const runSuiCliVersion = runSuiCli([])
 
 runSuiScript<{
@@ -266,6 +268,66 @@ const parsePortFromUrl = (rpcUrl: string | undefined) => {
   }
 }
 
+const parseHostPortFromUrl = (
+  rawUrl: string
+): { host: string; port: number } | undefined => {
+  try {
+    const parsed = new URL(rawUrl)
+    const port = parsed.port
+      ? Number(parsed.port)
+      : parsed.protocol === "https:"
+        ? 443
+        : 80
+    if (!Number.isInteger(port) || port <= 0 || port > 65535) return undefined
+    return { host: parsed.hostname, port }
+  } catch {
+    return undefined
+  }
+}
+
+const canConnectToHost = async ({
+  host,
+  port
+}: {
+  host: string
+  port: number
+}) =>
+  new Promise<boolean>((resolve) => {
+    const socket = net.createConnection({ host, port })
+    const cleanup = () => {
+      socket.removeAllListeners()
+      socket.destroy()
+    }
+
+    socket.once("connect", () => {
+      cleanup()
+      resolve(true)
+    })
+    socket.once("error", () => {
+      cleanup()
+      resolve(false)
+    })
+  })
+
+const waitForFaucetReadiness = async ({
+  faucetUrl,
+  waitSeconds
+}: {
+  faucetUrl: string
+  waitSeconds: number
+}) => {
+  const target = parseHostPortFromUrl(faucetUrl)
+  if (!target) return false
+
+  const deadline = Date.now() + waitSeconds * 1000
+  while (Date.now() <= deadline) {
+    if (await canConnectToHost(target)) return true
+    await delay(250)
+  }
+
+  return false
+}
+
 const buildPortTargets = (rpcUrl: string, withFaucet: boolean) => {
   const rpcPort = parsePortFromUrl(rpcUrl)
   const faucetPort = withFaucet
@@ -400,6 +462,18 @@ const maybeFundAfterRegenesis = async ({
   if (!withFaucet) {
     logKeyValueYellow("Faucet")(
       "Skipping auto-funding; faucet not started (--with-faucet=false)"
+    )
+    return
+  }
+
+  const faucetUrl = deriveFaucetUrl(tooling.network.url)
+  const faucetReady = await waitForFaucetReadiness({
+    faucetUrl,
+    waitSeconds: FAUCET_READINESS_WAIT_SECONDS
+  })
+  if (!faucetReady) {
+    logWarning(
+      `Skipping faucet funding; faucet not reachable at ${faucetUrl} yet.`
     )
     return
   }
