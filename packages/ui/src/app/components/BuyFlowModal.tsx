@@ -11,7 +11,6 @@ import { mapOwnerToLabel } from "@sui-oracle-market/tooling-core/object-info"
 import { summarizeGasUsed } from "@sui-oracle-market/tooling-core/transactions"
 import clsx from "clsx"
 import { parseBalance } from "../helpers/balance"
-import { WALLET_REQUIRED_TOOLTIP } from "../helpers/wallet"
 import {
   formatCoinBalance,
   formatUsdFromCents,
@@ -379,7 +378,6 @@ const BuyFlowModal = ({
   const {
     explorerUrl,
     walletAddress,
-    walletConnected,
     balanceStatus,
     availableCurrencies,
     discountOptions,
@@ -417,7 +415,6 @@ const BuyFlowModal = ({
   })
   const errorState =
     transactionState.status === "error" ? transactionState : undefined
-  const walletTooltip = walletConnected ? undefined : WALLET_REQUIRED_TOOLTIP
 
   if (!open) return <></>
 
@@ -752,7 +749,6 @@ const BuyFlowModal = ({
                 <Button
                   onClick={handlePurchase}
                   disabled={!canSubmit}
-                  tooltip={walletTooltip}
                 >
                   {transactionState.status === "processing"
                     ? "Processing..."

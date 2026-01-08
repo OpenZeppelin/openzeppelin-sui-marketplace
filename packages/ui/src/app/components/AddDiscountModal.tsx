@@ -12,7 +12,6 @@ import {
 } from "@sui-oracle-market/domain-core/models/discount"
 import type { ItemListingSummary } from "@sui-oracle-market/domain-core/models/item-listing"
 import { parseNonNegativeU64 } from "@sui-oracle-market/tooling-core/utils/utility"
-import { WALLET_REQUIRED_TOOLTIP } from "../helpers/wallet"
 import {
   formatDiscountRulePreview,
   resolveRuleValuePreview
@@ -243,7 +242,6 @@ const AddDiscountModal = ({
     isSuccessState,
     isErrorState,
     canSubmit,
-    walletConnected,
     explorerUrl,
     handleAddDiscount,
     handleInputChange,
@@ -253,7 +251,6 @@ const AddDiscountModal = ({
   } = useAddDiscountModalState({ open, shopId, onDiscountCreated })
   const errorState =
     transactionState.status === "error" ? transactionState : undefined
-  const walletTooltip = walletConnected ? undefined : WALLET_REQUIRED_TOOLTIP
 
   const listingLookup = useMemo(
     () => buildListingLookup(itemListings),
@@ -652,7 +649,6 @@ const AddDiscountModal = ({
                 <Button
                   onClick={handleAddDiscount}
                   disabled={!canSubmit}
-                  tooltip={walletTooltip}
                 >
                   {transactionState.status === "processing"
                     ? "Processing..."

@@ -7,7 +7,6 @@ import {
   getStructLabel,
   shortenId
 } from "../helpers/format"
-import { WALLET_REQUIRED_TOOLTIP } from "../helpers/wallet"
 import {
   useAddItemModalState,
   type ListingTransactionSummary
@@ -204,7 +203,6 @@ const AddItemModal = ({
     isSuccessState,
     isErrorState,
     canSubmit,
-    walletConnected,
     explorerUrl,
     handleAddItem,
     handleInputChange,
@@ -214,7 +212,6 @@ const AddItemModal = ({
   } = useAddItemModalState({ open, shopId, onListingCreated })
   const errorState =
     transactionState.status === "error" ? transactionState : undefined
-  const walletTooltip = walletConnected ? undefined : WALLET_REQUIRED_TOOLTIP
 
   if (!open) return <></>
 
@@ -482,7 +479,6 @@ const AddItemModal = ({
                 <Button
                   onClick={handleAddItem}
                   disabled={!canSubmit}
-                  tooltip={walletTooltip}
                 >
                   {transactionState.status === "processing"
                     ? "Processing..."

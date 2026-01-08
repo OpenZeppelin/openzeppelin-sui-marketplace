@@ -13,7 +13,10 @@ import type { IdentifierString } from "@mysten/wallet-standard"
 import { buildCreateShopTransaction } from "@sui-oracle-market/domain-core/ptb/shop"
 import { ENetwork } from "@sui-oracle-market/tooling-core/types"
 import { useCallback, useEffect, useMemo, useState } from "react"
-import { EXPLORER_URL_VARIABLE_NAME } from "../config/network"
+import {
+  EXPLORER_URL_VARIABLE_NAME,
+  LOCALNET_RPC_URL
+} from "../config/network"
 import {
   getLocalnetClient,
   makeLocalnetExecutor,
@@ -106,9 +109,12 @@ export const useCreateShopModalState = ({
     () =>
       makeLocalnetExecutor({
         client: localnetClient,
-        signTransaction: signTransaction.mutateAsync
+        signTransaction: (input) =>
+          signTransaction.mutateAsync(
+            currentAccount ? { ...input, account: currentAccount } : input
+          )
       }),
-    [localnetClient, signTransaction.mutateAsync]
+    [currentAccount, localnetClient, signTransaction.mutateAsync]
   )
 
   const [formState, setFormState] = useState<ShopFormState>(emptyFormState())
@@ -231,12 +237,25 @@ export const useCreateShopModalState = ({
       return
     }
 
+    const appOrigin =
+      typeof window === "undefined" ? undefined : window.location.origin
+    const shopName = formState.shopName.trim()
+    const requestContext = {
+      action: "create_shop",
+      shopName,
+      packageId,
+      appNetwork: network,
+      expectedChain,
+      isLocalnet,
+      appOrigin,
+      localnetRpcUrl: isLocalnet ? LOCALNET_RPC_URL : undefined
+    }
+
     setTransactionState({ status: "processing" })
 
     let failureStage: "prepare" | "execute" | "fetch" = "prepare"
 
     try {
-      const shopName = formState.shopName.trim()
       const createShopTransaction = buildCreateShopTransaction({
         packageId,
         shopName
@@ -288,20 +307,20 @@ export const useCreateShopModalState = ({
         isLocalnet && !localnetSupported && failureStage === "execute"
           ? "Wallet may not support sui:localnet signing."
           : undefined
-      const errorDetailsRaw = safeJsonStringify(
-        {
-          summary: errorDetails,
-          raw: serializeForJson(error),
-          failureStage,
-          localnetSupportNote,
-          walletContext
-        },
-        2
-      )
+      const errorPayload = {
+        summary: errorDetails,
+        raw: serializeForJson(error),
+        failureStage,
+        localnetSupportNote,
+        walletContext,
+        requestContext
+      }
+      const errorDetailsRaw = safeJsonStringify(errorPayload, 2)
       const formattedError = formatErrorMessage(error)
       const errorMessage = localnetSupportNote
         ? `${formattedError} ${localnetSupportNote}`
         : formattedError
+      console.error("Create shop transaction failed", errorPayload)
       setTransactionState({
         status: "error",
         error: errorMessage,

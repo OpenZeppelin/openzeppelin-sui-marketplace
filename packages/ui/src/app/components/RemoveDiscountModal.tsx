@@ -2,7 +2,6 @@
 
 import type { DiscountTemplateSummary } from "@sui-oracle-market/domain-core/models/discount"
 import { formatEpochSeconds, shortenId } from "../helpers/format"
-import { WALLET_REQUIRED_TOOLTIP } from "../helpers/wallet"
 import {
   useRemoveDiscountModalState,
   type RemoveDiscountTransactionSummary
@@ -197,7 +196,6 @@ const RemoveDiscountModal = ({
     isSuccessState,
     isErrorState,
     canSubmit,
-    walletConnected,
     explorerUrl,
     handleDisableDiscount,
     resetState
@@ -209,7 +207,6 @@ const RemoveDiscountModal = ({
   })
   const errorState =
     transactionState.status === "error" ? transactionState : undefined
-  const walletTooltip = walletConnected ? undefined : WALLET_REQUIRED_TOOLTIP
 
   if (!open || !template) return <></>
 
@@ -268,7 +265,6 @@ const RemoveDiscountModal = ({
                   variant="danger"
                   onClick={handleDisableDiscount}
                   disabled={!canSubmit}
-                  tooltip={walletTooltip}
                 >
                   {transactionState.status === "processing"
                     ? "Processing..."

@@ -36,7 +36,7 @@ const CopyableId = ({
 }) => {
   const [isHydrated, setIsHydrated] = useState(false)
   const resolvedDisplayValue = isHydrated
-    ? displayValue ?? shortenId(value)
+    ? (displayValue ?? shortenId(value))
     : "..."
   const localnetCommand = useMemo(
     () => `pnpm script chain:describe-object --object-id ${value}`,
@@ -98,9 +98,9 @@ const CopyableId = ({
           size="compact"
           className="h-6 w-6 justify-center px-0 text-slate-400/70 hover:text-slate-600 dark:text-slate-200/40 dark:hover:text-slate-100"
           onClick={handleCopy}
-          title={isHydrated ? title ?? "Copy object id" : "Loading object id"}
+          title={isHydrated ? (title ?? "Copy object id") : "Loading object id"}
           aria-label={
-            isHydrated ? title ?? "Copy object id" : "Loading object id"
+            isHydrated ? (title ?? "Copy object id") : "Loading object id"
           }
           disabled={!isHydrated}
         >

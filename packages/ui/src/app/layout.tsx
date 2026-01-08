@@ -1,5 +1,6 @@
 import { type Metadata } from "next"
 import Header from "~~/components/layout/Header"
+import WalletRequiredBanner from "~~/components/layout/WalletRequiredBanner"
 import Body from "./components/layout/Body"
 import Extra from "./components/layout/Extra"
 import Footer from "./components/layout/Footer"
@@ -23,6 +24,7 @@ export default function RootLayout({
         <ClientProviders>
           <div className="flex min-h-screen flex-col items-center justify-center gap-6">
             <Header />
+            <WalletRequiredBanner />
             <Body>{children}</Body>
             <Footer />
             <Extra />

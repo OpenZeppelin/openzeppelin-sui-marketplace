@@ -39,7 +39,7 @@ cd sui-oracle-market
 pnpm install
 ```
 
-## 5. Create or reuse an address
+## 5. Create or reuse an address (note the private key to import it later in your browser wallet)
 ```bash
 sui client new-address ed25519
 sui client active-address

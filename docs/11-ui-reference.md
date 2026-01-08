@@ -6,7 +6,7 @@ UI-specific setup notes also live in `packages/ui/README.md`.
 
 ## 1. Prerequisite
 - Install [Slush Wallet](https://slush.app/) in your browser.
-- Create a new key or import a key you have generated with Sui CLI (this will be your buyer address).
+- Create a new key or import a key you have generated.
 
 The UI lives in `packages/ui` and is a static-exported Next.js app (`output: "export"`) that renders the shop, listings, discounts, and checkout flows.
 

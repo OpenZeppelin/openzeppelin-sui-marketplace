@@ -34,7 +34,7 @@ git clone git@github.com:OpenZeppelin/sui-oracle-market.git && cd sui-oracle-mar
 # (pnpm workspace install from the repo root)
 pnpm install
 
-# 2) Create or reuse an address (this will be your shop owner address)
+# 2) Create or reuse an address (this will be your shop owner address) (note the private key to import it later in your browser wallet)
 sui client new-address ed25519
 sui client active-address   # ensure the desired address is active
 

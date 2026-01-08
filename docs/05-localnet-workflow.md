@@ -18,7 +18,7 @@ pnpm install
 ```
 
 ### 2) Configure Sui CLI and config file
-- Create or reuse an address:
+- Create or reuse an address (note the private key to import it later in your browser wallet):
   ```bash
   sui client new-address ed25519
   sui client active-address   # ensure the desired address is active
@@ -130,7 +130,7 @@ Defaults and artifacts:
 The scripts sign transactions with the configured account in `packages/dapp/sui.config.ts` (or `SUI_ACCOUNT_ADDRESS` / `SUI_ACCOUNT_PRIVATE_KEY` env vars). Use one address as the shop owner and another as the buyer.
 
 ```bash
-# Create two addresses in the Sui CLI keystore (owner + buyer).
+# Create two addresses in the Sui CLI keystore (owner + buyer) (note the private keys to import them later in your browser wallet).
 sui client new-address ed25519
 sui client new-address ed25519
 

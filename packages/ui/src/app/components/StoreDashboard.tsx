@@ -16,7 +16,6 @@ import {
   getStructLabel,
   shortenId
 } from "../helpers/format"
-import { WALLET_REQUIRED_TOOLTIP } from "../helpers/wallet"
 import useExplorerUrl from "../hooks/useExplorerUrl"
 import { useStoreDashboardViewModel } from "../hooks/useStoreDashboardViewModel"
 import AddCurrencyModal from "./AddCurrencyModal"
@@ -695,20 +694,19 @@ const DiscountsPanel = ({
                       isClaiming === true &&
                       claimingTemplateId === template.discountTemplateId
                     const showDisable = canManageDiscounts
-                    const claimBlockingReason = !walletConfigured
-                      ? WALLET_REQUIRED_TOOLTIP
-                      : !onClaimDiscount
-                        ? "Claim action unavailable."
-                        : isClaimingTemplate
-                          ? "Claiming in progress."
-                          : isClaiming === true
-                            ? "Another claim is already in progress."
-                            : !isTemplateActive
-                              ? `Template is ${templateStatus}.`
-                              : hasTicket
-                                ? "This wallet already claimed the discount."
-                                : undefined
-                    const isClaimDisabled = Boolean(claimBlockingReason)
+                    const claimBlockingReason = !onClaimDiscount
+                      ? "Claim action unavailable."
+                      : isClaimingTemplate
+                        ? "Claiming in progress."
+                        : isClaiming === true
+                          ? "Another claim is already in progress."
+                          : !isTemplateActive
+                            ? `Template is ${templateStatus}.`
+                            : hasTicket
+                              ? "This wallet already claimed the discount."
+                              : undefined
+                    const isClaimDisabled =
+                      !walletConfigured || Boolean(claimBlockingReason)
                     const actionAlignment = showDisable
                       ? "justify-between"
                       : "justify-end"
@@ -717,7 +715,9 @@ const DiscountsPanel = ({
                       : hasTicket
                         ? "Claimed"
                         : "Claim"
-                    const claimTitle = claimBlockingReason
+                    const claimTitle = walletConfigured
+                      ? claimBlockingReason
+                      : undefined
                     const isClaimable = !isClaimDisabled
 
                     return (
@@ -727,7 +727,7 @@ const DiscountsPanel = ({
                           "flex h-full flex-col rounded-xl border border-slate-300/80 bg-white/95 p-4 shadow-[0_12px_30px_-22px_rgba(15,23,42,0.35)] transition dark:border-slate-50/25 dark:bg-slate-950/60",
                           isClaimable ? "" : "opacity-60"
                         )}
-                        title={claimBlockingReason}
+                        title={claimTitle}
                       >
                         <div className="flex flex-1 flex-col gap-3">
                           <div className="flex items-start justify-between gap-3">
