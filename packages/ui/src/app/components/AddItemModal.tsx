@@ -476,10 +476,7 @@ const AddItemModal = ({
                   : "Ready to create the listing."}
               </div>
               <div className="flex flex-wrap items-center gap-3">
-                <Button
-                  onClick={handleAddItem}
-                  disabled={!canSubmit}
-                >
+                <Button onClick={handleAddItem} disabled={!canSubmit}>
                   {transactionState.status === "processing"
                     ? "Processing..."
                     : "Add listing"}

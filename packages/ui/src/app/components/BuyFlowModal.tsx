@@ -746,10 +746,7 @@ const BuyFlowModal = ({
                   : "Ready when you are."}
               </div>
               <div className="flex flex-wrap items-center gap-3">
-                <Button
-                  onClick={handlePurchase}
-                  disabled={!canSubmit}
-                >
+                <Button onClick={handlePurchase} disabled={!canSubmit}>
                   {transactionState.status === "processing"
                     ? "Processing..."
                     : "Confirm purchase"}

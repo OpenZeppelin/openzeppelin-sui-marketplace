@@ -721,10 +721,7 @@ const AddCurrencyModal = ({
                   : "Ready to register the currency."}
               </div>
               <div className="flex flex-wrap items-center gap-3">
-                <Button
-                  onClick={handleAddCurrency}
-                  disabled={!canSubmit}
-                >
+                <Button onClick={handleAddCurrency} disabled={!canSubmit}>
                   {transactionState.status === "processing"
                     ? "Processing..."
                     : "Add currency"}

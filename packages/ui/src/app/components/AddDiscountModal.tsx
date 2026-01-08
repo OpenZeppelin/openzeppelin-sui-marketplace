@@ -646,10 +646,7 @@ const AddDiscountModal = ({
                   : "Ready to create the discount."}
               </div>
               <div className="flex flex-wrap items-center gap-3">
-                <Button
-                  onClick={handleAddDiscount}
-                  disabled={!canSubmit}
-                >
+                <Button onClick={handleAddDiscount} disabled={!canSubmit}>
                   {transactionState.status === "processing"
                     ? "Processing..."
                     : "Create discount"}

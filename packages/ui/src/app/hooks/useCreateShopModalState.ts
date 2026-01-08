@@ -13,10 +13,7 @@ import type { IdentifierString } from "@mysten/wallet-standard"
 import { buildCreateShopTransaction } from "@sui-oracle-market/domain-core/ptb/shop"
 import { ENetwork } from "@sui-oracle-market/tooling-core/types"
 import { useCallback, useEffect, useMemo, useState } from "react"
-import {
-  EXPLORER_URL_VARIABLE_NAME,
-  LOCALNET_RPC_URL
-} from "../config/network"
+import { EXPLORER_URL_VARIABLE_NAME, LOCALNET_RPC_URL } from "../config/network"
 import {
   getLocalnetClient,
   makeLocalnetExecutor,

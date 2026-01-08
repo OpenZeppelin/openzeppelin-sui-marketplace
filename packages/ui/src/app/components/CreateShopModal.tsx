@@ -294,10 +294,7 @@ const CreateShopModal = ({
                   : "Ready to create the shop."}
               </div>
               <div className="flex flex-wrap items-center gap-3">
-                <Button
-                  onClick={handleCreateShop}
-                  disabled={!canSubmit}
-                >
+                <Button onClick={handleCreateShop} disabled={!canSubmit}>
                   {transactionState.status === "processing"
                     ? "Processing..."
                     : "Create shop"}
