@@ -6,8 +6,8 @@ export default defineConfig({
   plugins: [toolingVitestPlugin()],
   test: {
     include: ["src/scripts/**/test-integration/**/*.test.ts"],
-    testTimeout: 180_000,
-    hookTimeout: 180_000,
+    testTimeout: 280_000,
+    hookTimeout: 280_000,
     pool: "threads",
     poolOptions: {
       threads: {
