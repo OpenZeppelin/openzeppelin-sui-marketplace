@@ -413,10 +413,11 @@ export const resolvePaymentCoinObjectId = async ({
 }): Promise<string> => {
   if (providedCoinObjectId) return providedCoinObjectId
 
-  let cursor: string | null | undefined = undefined
-  let richest: { coinObjectId: string; balance: bigint } | null = null
-  let smallestSufficient: { coinObjectId: string; balance: bigint } | null =
-    null
+  type CoinCandidate = { coinObjectId: string; balance: bigint }
+
+  let cursor: string | undefined = undefined
+  let richest: CoinCandidate | undefined
+  let smallestSufficient: CoinCandidate | undefined
 
   do {
     const page = await suiClient.getCoins({
@@ -441,22 +442,20 @@ export const resolvePaymentCoinObjectId = async ({
       }
     })
 
-    cursor = page.hasNextPage ? page.nextCursor : undefined
+    cursor = page.hasNextPage ? page.nextCursor ?? undefined : undefined
   } while (cursor)
 
-  if (!richest)
-    throw new Error(
-      `No coin objects of type ${coinType} found for ${signerAddress}. Provide --payment-coin-object-id or mint/fund the account.`
-    )
+  const selectedCoin = requireValue<CoinCandidate>(
+    smallestSufficient ?? richest,
+    `No coin objects of type ${coinType} found for ${signerAddress}. Provide --payment-coin-object-id or mint/fund the account.`
+  )
 
   if (minimumBalance !== undefined && !smallestSufficient)
     throw new Error(
       `No single coin object of type ${coinType} has at least ${minimumBalance}. Merge coins or split from a larger balance, then retry.`
     )
 
-  return normalizeSuiObjectId(
-    (smallestSufficient ?? richest).coinObjectId
-  )
+  return normalizeSuiObjectId(selectedCoin.coinObjectId)
 }
 
 export const buildBuyTransaction = async (

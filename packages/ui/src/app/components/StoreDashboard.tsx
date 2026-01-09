@@ -563,41 +563,51 @@ const PurchasedItemsPanel = ({
           <div className="grid gap-4 lg:grid-cols-2">
             {purchasedItems.map((item) => {
               const itemTypeLabel = getStructLabel(item.itemType)
+              const purchasedAtLabel = formatEpochSeconds(item.acquiredAt)
+              const itemName = item.name || itemTypeLabel
               return (
                 <div
                   key={item.shopItemId}
-                  className="rounded-xl border border-slate-300/80 bg-white/95 p-4 shadow-[0_12px_30px_-22px_rgba(15,23,42,0.35)] dark:border-slate-50/25 dark:bg-slate-950/60"
+                  className="flex h-full flex-col rounded-xl border border-slate-300/80 bg-white/95 p-4 shadow-[0_12px_30px_-22px_rgba(15,23,42,0.35)] dark:border-slate-50/25 dark:bg-slate-950/60"
                 >
                   <div className="flex items-start justify-between gap-3">
-                    <div>
+                    <div className="min-w-0">
                       <div className="text-lg font-semibold text-sds-dark dark:text-sds-light">
-                        {item.name || itemTypeLabel}
+                        {itemName}
                       </div>
                       <div className="mt-1 text-sm font-semibold text-slate-500 dark:text-slate-200/70">
                         {itemTypeLabel}
                       </div>
-                      <div className="mt-2">
-                        <CopyableId
-                          value={item.shopItemId}
-                          label="Receipt ID"
-                          className="whitespace-nowrap"
-                          explorerUrl={explorerUrl}
-                        />
-                      </div>
                     </div>
-                    <div className="text-xs uppercase tracking-[0.12em] text-slate-500 dark:text-slate-200/60">
-                      Purchased {formatEpochSeconds(item.acquiredAt)}
+                    <span className="rounded-full bg-sds-blue/15 px-3 py-1 text-xs font-semibold uppercase tracking-[0.12em] text-sds-dark dark:text-sds-light">
+                      {purchasedAtLabel}
+                    </span>
+                  </div>
+                  <div className="mt-4 grid gap-4 text-[0.65rem] text-slate-500 sm:grid-cols-2 sm:gap-x-8 dark:text-slate-200/70">
+                    <div>
+                      <div className="text-[0.6rem] uppercase tracking-[0.18em]">
+                        Receipt
+                      </div>
+                      <CopyableId
+                        value={item.shopItemId}
+                        title="Copy receipt id"
+                        className="mt-1 w-full justify-start text-[0.65rem] text-slate-500 dark:text-slate-200/70"
+                        valueClassName="truncate font-semibold text-sds-dark dark:text-sds-light"
+                        explorerUrl={explorerUrl}
+                      />
                     </div>
                   </div>
-                  <div className="mt-4 flex flex-wrap items-center gap-4 text-xs">
+                  <div className="mt-4 flex flex-col gap-2 text-[0.65rem]">
                     <CopyableId
                       value={item.itemListingAddress}
-                      label="Listing ID"
+                      label="Listing"
+                      className="w-full justify-start"
                       explorerUrl={explorerUrl}
                     />
                     <CopyableId
                       value={item.shopAddress}
-                      label="Shop ID"
+                      label="Shop"
+                      className="w-full justify-start"
                       explorerUrl={explorerUrl}
                     />
                   </div>

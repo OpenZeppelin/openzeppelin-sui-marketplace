@@ -59,7 +59,9 @@ const isCurrencyTypeMatch = (
     const normalizedCandidate = formatTypeName(
       parseTypeNameFromString(match[1])
     )
-    return normalizedCandidate.toLowerCase() === normalizedCoinType.toLowerCase()
+    return (
+      normalizedCandidate.toLowerCase() === normalizedCoinType.toLowerCase()
+    )
   } catch {
     return false
   }
@@ -201,7 +203,10 @@ export const resolveCurrencyObjectId = async (
 
   if (
     derivedObject.data?.objectId &&
-    isCurrencyTypeMatch(derivedObject.data.type, normalizedCoinType)
+    isCurrencyTypeMatch(
+      derivedObject.data.type || undefined,
+      normalizedCoinType
+    )
   ) {
     return normalizeSuiObjectId(derivedObject.data.objectId)
   }
@@ -227,7 +232,7 @@ export const resolveCurrencyObjectId = async (
     })
 
     const match = objects.find((object) =>
-      isCurrencyTypeMatch(object.data?.type, normalizedCoinType)
+      isCurrencyTypeMatch(object.data?.type || undefined, normalizedCoinType)
     )
 
     if (match?.data?.objectId) {
