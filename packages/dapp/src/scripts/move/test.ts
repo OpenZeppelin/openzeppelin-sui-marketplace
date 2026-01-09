@@ -16,7 +16,6 @@ import {
   buildMoveTestArguments,
   resolveFullPackagePath,
   runMoveTest,
-  syncLocalnetMoveEnvironmentChainId,
   type MoveTestFlagOptions
 } from "@sui-oracle-market/tooling-node/move"
 import { runSuiScript } from "@sui-oracle-market/tooling-node/process"
@@ -40,13 +39,12 @@ const logMoveTestPlan = (
 }
 
 const syncMoveEnvironmentForTests = async (
-  tooling: Pick<Tooling, "suiClient" | "suiConfig">
+  tooling: Pick<Tooling, "syncLocalnetMoveEnvironmentChainId" | "suiConfig">
 ) => {
   const { chainId, updatedFiles, didAttempt } =
-    await syncLocalnetMoveEnvironmentChainId({
+    await tooling.syncLocalnetMoveEnvironmentChainId({
       moveRootPath: path.resolve(tooling.suiConfig.paths.move),
-      environmentName: tooling.suiConfig.network.networkName,
-      suiClient: tooling.suiClient
+      environmentName: tooling.suiConfig.network.networkName
     })
 
   if (didAttempt && !chainId) {

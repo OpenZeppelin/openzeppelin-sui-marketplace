@@ -4,7 +4,6 @@ import type {
   SuiObjectData,
   SuiObjectDataOptions
 } from "@mysten/sui/client"
-import { SuiClient } from "@mysten/sui/client"
 import { normalizeSuiObjectId } from "@mysten/sui/utils"
 
 import {
@@ -18,6 +17,7 @@ import {
   logKeyValueYellow,
   logStructuredJson
 } from "./log.ts"
+export { createSuiClient } from "./sui-client.ts"
 
 export type ObjectContentSummary =
   | {
@@ -61,12 +61,6 @@ export const OBJECT_REQUEST_OPTIONS: SuiObjectDataOptions = {
   showStorageRebate: true,
   showType: true
 }
-
-/**
- * Creates a Sui client bound to the provided RPC URL.
- */
-export const createSuiClient = (rpcUrl: string) =>
-  new SuiClient({ url: rpcUrl })
 
 /**
  * Normalizes an object ID for consistent lookups.

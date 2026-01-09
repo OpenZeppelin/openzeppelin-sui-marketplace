@@ -1,13 +1,13 @@
-import type { SuiClient } from "@mysten/sui/client"
-
 import { SUI_CLOCK_ID } from "./constants.ts"
+import type { ToolingCoreContext } from "./context.ts"
 import { unwrapMoveObjectFields } from "./object.ts"
 
 /**
  * Reads the current on-chain clock timestamp (ms) from the shared Clock object.
  */
 export const getClockTimestampMs = async (
-  suiClient: SuiClient
+  _options: Record<string, never>,
+  { suiClient }: ToolingCoreContext
 ): Promise<number | undefined> => {
   try {
     const response = await suiClient.getObject({

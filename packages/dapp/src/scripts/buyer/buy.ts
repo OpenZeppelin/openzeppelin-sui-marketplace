@@ -164,14 +164,16 @@ runSuiScript(
         throw new Error("Oracle quote unavailable for SUI payment.")
       }
 
-      const splitPlan = await planSuiPaymentSplitTransaction({
-        owner: signerAddress,
-        paymentMinimum: paymentCoinMinimumBalance,
-        gasBudget: BigInt(DEFAULT_TX_GAS_BUDGET),
-        splitGasBudget: DEFAULT_TX_GAS_BUDGET,
-        paymentCoinObjectId: inputs.paymentCoinObjectId,
-        suiClient: tooling.suiClient
-      })
+      const splitPlan = await planSuiPaymentSplitTransaction(
+        {
+          owner: signerAddress,
+          paymentMinimum: paymentCoinMinimumBalance,
+          gasBudget: BigInt(DEFAULT_TX_GAS_BUDGET),
+          splitGasBudget: DEFAULT_TX_GAS_BUDGET,
+          paymentCoinObjectId: inputs.paymentCoinObjectId
+        },
+        { suiClient: tooling.suiClient }
+      )
 
       if (splitPlan.needsSplit && splitPlan.transaction) {
         if (!cliArguments.json) {

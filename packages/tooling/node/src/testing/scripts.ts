@@ -1,8 +1,13 @@
 import { spawn } from "node:child_process"
 import path from "node:path"
-import { fileURLToPath } from "node:url"
 
 import type { TestAccount, TestContext } from "./localnet.ts"
+import { parseJsonFromOutput } from "../json.ts"
+import {
+  resolveDappConfigPath,
+  resolveDappRoot,
+  resolveTsNodeEsmPath
+} from "./paths.ts"
 
 export type ScriptRunResult = {
   exitCode: number
@@ -45,40 +50,11 @@ export type SuiScriptRunner = {
   ) => Promise<ScriptRunResult>
 }
 
-const resolveWorkspaceRoot = () =>
-  path.resolve(
-    path.dirname(fileURLToPath(import.meta.url)),
-    "..",
-    "..",
-    "..",
-    "..",
-    ".."
-  )
-
-const resolveDappRoot = () =>
-  path.join(resolveWorkspaceRoot(), "packages", "dapp")
-
-const resolveDappConfigPath = () =>
-  path.join(resolveDappRoot(), "sui.config.ts")
-
-const resolveTsNodeEsmPath = () => {
-  const binaryName =
-    process.platform === "win32" ? "ts-node-esm.cmd" : "ts-node-esm"
-  return path.join(resolveWorkspaceRoot(), "node_modules", ".bin", binaryName)
-}
-
 const normalizeScriptName = (scriptName: string) =>
   scriptName.endsWith(".ts") ? scriptName : `${scriptName}.ts`
 
 const resolveScriptPath = (segments: string[]) =>
-  path.join(
-    resolveWorkspaceRoot(),
-    "packages",
-    "dapp",
-    "src",
-    "scripts",
-    ...segments
-  )
+  path.join(resolveDappRoot(), "src", "scripts", ...segments)
 
 export const resolveBuyerScriptPath = (scriptName: string) =>
   resolveScriptPath(["buyer", normalizeScriptName(scriptName)])
@@ -113,31 +89,6 @@ export const buildScriptArguments = (args: ScriptArgumentMap = {}) =>
     buildArgumentEntries(key, value)
   )
 
-const tryParseJson = <T>(value: string): { parsed?: T } => {
-  try {
-    return { parsed: JSON.parse(value) as T }
-  } catch {
-    return {}
-  }
-}
-
-const findJsonCandidate = (output: string) => {
-  const trimmed = output.trim()
-  if (!trimmed) return ""
-
-  const lastLine = trimmed.split(/\r?\n/).at(-1) ?? ""
-  const normalizedLastLine = lastLine.trimStart()
-  if (normalizedLastLine.startsWith("{") || normalizedLastLine.startsWith("["))
-    return normalizedLastLine
-
-  const firstObject = trimmed.indexOf("{")
-  const firstArray = trimmed.indexOf("[")
-  const candidates = [firstObject, firstArray].filter((index) => index >= 0)
-  if (candidates.length === 0) return trimmed
-
-  return trimmed.slice(Math.min(...candidates))
-}
-
 export const parseJsonFromScriptOutput = <T = unknown>(
   stdout: string,
   label = "script output"
@@ -146,11 +97,7 @@ export const parseJsonFromScriptOutput = <T = unknown>(
   if (!trimmed)
     throw new Error(`Expected ${label} to contain JSON output, but got none.`)
 
-  const direct = tryParseJson<T>(trimmed).parsed
-  if (direct !== undefined) return direct
-
-  const candidate = findJsonCandidate(trimmed)
-  const parsed = tryParseJson<T>(candidate).parsed
+  const parsed = parseJsonFromOutput<T>(trimmed)
   if (parsed !== undefined) return parsed
 
   throw new Error(`Unable to parse JSON from ${label}.`)

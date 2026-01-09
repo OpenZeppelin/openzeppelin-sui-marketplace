@@ -4,6 +4,7 @@ import {
   createTestContext as createLocalnetTestContext,
   withTestContext as withLocalnetTestContext
 } from "./localnet.ts"
+import { parsePositiveInteger } from "./numbers.ts"
 
 export type SuiLocalnetTestEnvMode = "suite" | "test"
 
@@ -30,13 +31,6 @@ const resolveKeepTemp = (explicit?: boolean) =>
 
 const resolveWithFaucet = (explicit?: boolean) =>
   explicit ?? process.env.SUI_IT_WITH_FAUCET !== "0"
-
-const parsePositiveInteger = (value: string | undefined) => {
-  if (!value) return undefined
-  const parsed = Number.parseInt(value, 10)
-  if (!Number.isFinite(parsed) || parsed <= 0) return undefined
-  return parsed
-}
 
 const resolveRpcWaitTimeoutMs = (explicit?: number) => {
   if (

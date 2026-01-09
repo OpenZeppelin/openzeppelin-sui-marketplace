@@ -86,7 +86,7 @@ const getStorefrontData = async ({
   // Storefront reads shared objects (listings/currencies/templates), not wallet-owned objects.
   const [snapshot, clockTimestampMs] = await Promise.all([
     getShopSnapshot(shopId, suiClient),
-    getClockTimestampMs(suiClient)
+    getClockTimestampMs({}, { suiClient })
   ])
 
   return {

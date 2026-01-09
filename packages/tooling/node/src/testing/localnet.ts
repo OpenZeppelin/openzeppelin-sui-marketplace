@@ -22,7 +22,6 @@ import net from "node:net"
 import os from "node:os"
 import path from "node:path"
 import { setTimeout as delay } from "node:timers/promises"
-import { fileURLToPath } from "node:url"
 import { promisify } from "node:util"
 
 import type {
@@ -38,6 +37,7 @@ import {
   newTransaction,
   resolveSplitCoinResult
 } from "@sui-oracle-market/tooling-core/transactions"
+import { formatErrorMessage } from "@sui-oracle-market/tooling-core/utils/errors"
 import type {
   BuildOutput,
   PublishArtifact
@@ -45,12 +45,17 @@ import type {
 import { pickRootNonDependencyArtifact } from "../artifacts.ts"
 import type { SuiResolvedConfig } from "../config.ts"
 import { DEFAULT_TX_GAS_BUDGET } from "../constants.ts"
-import { createSuiClient } from "../describe-object.ts"
-import { loadKeypair } from "../keypair.ts"
+import { createSuiClient } from "../sui-client.ts"
+import { loadKeypair, readKeystoreEntries } from "../keypair.ts"
 import { probeRpcHealth } from "../localnet.ts"
 import { buildMovePackage, clearPublishedEntryForNetwork } from "../move.ts"
 import { publishPackageWithLog } from "../publish.ts"
 import { signAndExecute } from "../transactions.ts"
+import { getErrnoCode } from "../utils/fs.ts"
+import { parseBooleanEnv } from "./booleans.ts"
+import { parseNonNegativeInteger, parsePositiveInteger } from "./numbers.ts"
+import { resolveDappMoveRoot } from "./paths.ts"
+import { pollWithTimeout } from "./poll.ts"
 
 export type LocalnetStartOptions = {
   testId: string
@@ -173,11 +178,6 @@ const buildTempPrefix = (label: string) => `sui-it-${sanitizeLabel(label)}-`
 
 const LOCALNET_SKIP_ENV_KEYS = ["SUI_IT_SKIP_LOCALNET", "SKIP_LOCALNET"]
 
-const parseBooleanEnv = (value: string | undefined) => {
-  if (!value) return false
-  return ["1", "true", "yes", "on"].includes(value.toLowerCase())
-}
-
 const shouldUseRandomPorts = () => {
   if (process.env.SUI_IT_RANDOM_PORTS !== undefined) {
     return parseBooleanEnv(process.env.SUI_IT_RANDOM_PORTS)
@@ -196,19 +196,13 @@ const assertLocalnetEnabled = () => {
   )
 }
 
-const resolveErrorCode = (error: unknown) => {
-  if (!error || typeof error !== "object") return undefined
-  const code = (error as { code?: string }).code
-  return typeof code === "string" ? code : undefined
-}
-
 const isPortPermissionError = (error: unknown) => {
-  const code = resolveErrorCode(error)
+  const code = getErrnoCode(error)
   return code === "EPERM" || code === "EACCES"
 }
 
 const createLocalnetPortPermissionError = (action: string, error: unknown) => {
-  const code = resolveErrorCode(error) ?? "unknown"
+  const code = getErrnoCode(error) ?? "unknown"
   return new Error(
     `Localnet could not ${action} a port on 127.0.0.1 (${code}). This environment may block localnet networking. Re-run with elevated permissions or set SUI_IT_SKIP_LOCALNET=1 to skip localnet tests.`
   )
@@ -448,32 +442,6 @@ const listKeystoreFiles = async (rootDir: string): Promise<string[]> => {
   return files
 }
 
-const readKeystoreEntries = async (keystorePath: string): Promise<string[]> => {
-  const contents = await readFile(keystorePath, "utf8")
-  const parsed = JSON.parse(contents)
-
-  if (!Array.isArray(parsed)) {
-    throw new Error(
-      `Unexpected keystore format at ${keystorePath}; expected JSON array.`
-    )
-  }
-
-  return parsed
-}
-
-const parseOptionalNumber = (value: string | undefined) => {
-  if (!value) return undefined
-  const parsed = Number(value)
-  if (!Number.isInteger(parsed) || parsed < 0) return undefined
-  return parsed
-}
-
-const parsePositiveInteger = (value: string | undefined) => {
-  const parsed = parseOptionalNumber(value)
-  if (parsed === undefined || parsed <= 0) return undefined
-  return parsed
-}
-
 const resolveLocalnetStartLockPath = () =>
   path.join(os.tmpdir(), "sui-it-localnet-start.lock")
 
@@ -508,7 +476,7 @@ const isProcessRunning = (pid: number) => {
     process.kill(pid, 0)
     return true
   } catch (error) {
-    return resolveErrorCode(error) !== "ESRCH"
+    return getErrnoCode(error) !== "ESRCH"
   }
 }
 
@@ -525,7 +493,7 @@ const tryAcquireLocalnetStartLock = async (lockPath: string) => {
     await handle.writeFile(`${process.pid}\n`)
     return handle
   } catch (error) {
-    if (resolveErrorCode(error) === "EEXIST") return undefined
+    if (getErrnoCode(error) === "EEXIST") return undefined
     throw error
   }
 }
@@ -560,7 +528,9 @@ const withLocalnetStartLock = async <T>(action: () => Promise<T>) => {
 
 const buildTreasuryIndexCandidates = (entryCount: number) => {
   const indices = Array.from({ length: entryCount }, (_, index) => index)
-  const overrideIndex = parseOptionalNumber(process.env.SUI_IT_TREASURY_INDEX)
+  const overrideIndex = parseNonNegativeInteger(
+    process.env.SUI_IT_TREASURY_INDEX
+  )
   if (overrideIndex === undefined) return indices
 
   return [overrideIndex, ...indices.filter((index) => index !== overrideIndex)]
@@ -623,7 +593,7 @@ const loadTreasuryAccount = async (
   }
 
   const overrideHint =
-    parseOptionalNumber(process.env.SUI_IT_TREASURY_INDEX) === undefined
+    parseNonNegativeInteger(process.env.SUI_IT_TREASURY_INDEX) === undefined
       ? " Set SUI_IT_TREASURY_INDEX to force a specific keystore entry."
       : ""
 
@@ -755,47 +725,63 @@ const readLogTail = async (logPath?: string, maxLines = 200) => {
   }
 }
 
+const ensureProcessRunning = async (
+  processHandle?: ChildProcess,
+  logPath?: string
+) => {
+  if (!processHandle) return
+
+  const exitCode = processHandle.exitCode
+  const signalCode = processHandle.signalCode
+  if (exitCode === null && !signalCode) return
+
+  const logTail = await readLogTail(logPath)
+  const exitSummary = [
+    exitCode !== null ? `code ${exitCode}` : null,
+    signalCode ? `signal ${signalCode}` : null
+  ]
+    .filter(Boolean)
+    .join(", ")
+
+  throw new Error(
+    [
+      `Localnet process exited (${exitSummary || "unknown exit"}).`,
+      logTail ? `Localnet log tail:\n${logTail}` : ""
+    ]
+      .filter(Boolean)
+      .join("\n")
+  )
+}
+
 const waitForRpcReady = async (
   rpcUrl: string,
   timeoutMs: number,
   intervalMs: number,
   options?: { processHandle?: ChildProcess; logPath?: string }
 ) => {
-  const start = Date.now()
-  let lastError = "RPC probe failed"
+  const defaultError = "RPC probe failed"
+  const pollResult = await pollWithTimeout({
+    timeoutMs,
+    intervalMs,
+    shouldAbortOnError: () => true,
+    attempt: async () => {
+      await ensureProcessRunning(options?.processHandle, options?.logPath)
 
-  while (Date.now() - start < timeoutMs) {
-    if (options?.processHandle) {
-      const exitCode = options.processHandle.exitCode
-      const signalCode = options.processHandle.signalCode
-      if (exitCode !== null || signalCode) {
-        const logTail = await readLogTail(options.logPath)
-        const exitSummary = [
-          exitCode !== null ? `code ${exitCode}` : null,
-          signalCode ? `signal ${signalCode}` : null
-        ]
-          .filter(Boolean)
-          .join(", ")
-        throw new Error(
-          [
-            `Localnet process exited (${exitSummary || "unknown exit"}).`,
-            logTail ? `Localnet log tail:\n${logTail}` : ""
-          ]
-            .filter(Boolean)
-            .join("\n")
-        )
+      const probe = await probeRpcHealth(rpcUrl)
+      if (probe.status === "running") {
+        return { done: true, result: probe.snapshot }
       }
-    }
 
-    const probe = await probeRpcHealth(rpcUrl)
-    if (probe.status === "running") {
-      return probe.snapshot
+      return { done: false, errorMessage: probe.error }
     }
-    lastError = probe.error
-    await delay(intervalMs)
+  })
+
+  if (!pollResult.timedOut && pollResult.result) {
+    return pollResult.result
   }
 
   const logTail = await readLogTail(options?.logPath)
+  const lastError = pollResult.errorMessage ?? defaultError
   throw new Error(
     [
       `Localnet RPC did not become ready within ${timeoutMs}ms at ${rpcUrl}: ${lastError}`,
@@ -812,35 +798,21 @@ const waitForPortInUse = async (
   intervalMs: number,
   options?: { processHandle?: ChildProcess; logPath?: string }
 ) => {
-  const start = Date.now()
+  const pollResult = await pollWithTimeout({
+    timeoutMs,
+    intervalMs,
+    shouldAbortOnError: () => true,
+    attempt: async () => {
+      await ensureProcessRunning(options?.processHandle, options?.logPath)
 
-  while (Date.now() - start < timeoutMs) {
-    if (options?.processHandle) {
-      const exitCode = options.processHandle.exitCode
-      const signalCode = options.processHandle.signalCode
-      if (exitCode !== null || signalCode) {
-        const logTail = await readLogTail(options.logPath)
-        const exitSummary = [
-          exitCode !== null ? `code ${exitCode}` : null,
-          signalCode ? `signal ${signalCode}` : null
-        ]
-          .filter(Boolean)
-          .join(", ")
-        throw new Error(
-          [
-            `Localnet process exited (${exitSummary || "unknown exit"}).`,
-            logTail ? `Localnet log tail:\n${logTail}` : ""
-          ]
-            .filter(Boolean)
-            .join("\n")
-        )
-      }
+      const isAvailable = await isPortAvailable(port)
+      if (!isAvailable) return { done: true }
+
+      return { done: false }
     }
+  })
 
-    const isAvailable = await isPortAvailable(port)
-    if (!isAvailable) return
-    await delay(intervalMs)
-  }
+  if (!pollResult.timedOut) return
 
   const logTail = await readLogTail(options?.logPath)
   throw new Error(
@@ -1048,15 +1020,7 @@ const buildSuiConfig = ({
 })
 
 const copyMoveSources = async (destinationRoot: string) => {
-  const repoRoot = path.resolve(
-    path.dirname(fileURLToPath(import.meta.url)),
-    "..",
-    "..",
-    "..",
-    "..",
-    ".."
-  )
-  const sourceRoot = path.join(repoRoot, "packages", "dapp", "move")
+  const sourceRoot = resolveDappMoveRoot()
   await cp(sourceRoot, destinationRoot, { recursive: true })
   await removeMoveBuildArtifacts(destinationRoot)
 }
@@ -1094,11 +1058,11 @@ const waitForTransactionFinality = async (
   timeoutMs: number,
   intervalMs: number
 ) => {
-  const start = Date.now()
-  let lastError = "Transaction not found"
-
-  while (Date.now() - start < timeoutMs) {
-    try {
+  const defaultError = "Transaction not found"
+  const pollResult = await pollWithTimeout({
+    timeoutMs,
+    intervalMs,
+    attempt: async () => {
       const response = await suiClient.getTransactionBlock({
         digest,
         options: {
@@ -1109,15 +1073,16 @@ const waitForTransactionFinality = async (
           showInput: true
         }
       })
-      if (response.effects) return response
-      lastError = "Transaction missing effects"
-    } catch (error) {
-      lastError = error instanceof Error ? error.message : String(error)
+      if (response.effects) return { done: true, result: response }
+      return { done: false, errorMessage: "Transaction missing effects" }
     }
+  })
 
-    await delay(intervalMs)
+  if (!pollResult.timedOut && pollResult.result) {
+    return pollResult.result
   }
 
+  const lastError = pollResult.errorMessage ?? defaultError
   throw new Error(`Transaction ${digest} not finalized: ${lastError}`)
 }
 
@@ -1132,25 +1097,24 @@ const waitForPackageAvailability = async ({
   timeoutMs: number
   intervalMs: number
 }) => {
-  const start = Date.now()
-  let lastError = "package not found"
-
-  while (Date.now() - start < timeoutMs) {
-    try {
+  const defaultError = "package not found"
+  const pollResult = await pollWithTimeout({
+    timeoutMs,
+    intervalMs,
+    attempt: async () => {
       const response = await suiClient.getObject({
         id: packageId,
         options: { showContent: true, showType: true }
       })
       const content = response.data?.content
-      if (content?.dataType === "package") return
-      lastError = "package content not available"
-    } catch (error) {
-      lastError = error instanceof Error ? error.message : String(error)
+      if (content?.dataType === "package") return { done: true }
+      return { done: false, errorMessage: "package content not available" }
     }
+  })
 
-    await delay(intervalMs)
-  }
+  if (!pollResult.timedOut) return
 
+  const lastError = pollResult.errorMessage ?? defaultError
   throw new Error(
     `Package ${packageId} not available on-chain within ${timeoutMs}ms: ${lastError}`
   )
@@ -1281,30 +1245,39 @@ const waitForFundingReady = async ({
   timeoutMs: number
   intervalMs: number
 }) => {
-  const start = Date.now()
-  let snapshot = await getAccountFundingSnapshot(
+  const initialSnapshot = await getAccountFundingSnapshot(
     suiClient,
     recipientAddress,
     requirements.minimumGasCoinBalance
   )
 
-  while (Date.now() - start < timeoutMs) {
-    if (isFundingSufficient(snapshot, requirements)) {
-      return { ready: true, snapshot }
-    }
-    await delay(intervalMs)
-    snapshot = await getAccountFundingSnapshot(
-      suiClient,
-      recipientAddress,
-      requirements.minimumGasCoinBalance
-    )
+  if (isFundingSufficient(initialSnapshot, requirements)) {
+    return { ready: true, snapshot: initialSnapshot }
   }
 
-  return { ready: false, snapshot }
-}
+  const pollResult = await pollWithTimeout({
+    timeoutMs,
+    intervalMs,
+    attempt: async () => {
+      const snapshot = await getAccountFundingSnapshot(
+        suiClient,
+        recipientAddress,
+        requirements.minimumGasCoinBalance
+      )
+      const ready = isFundingSufficient(snapshot, requirements)
+      return { done: ready, result: snapshot }
+    }
+  })
 
-const formatFaucetErrorMessage = (error: unknown) =>
-  error instanceof Error ? error.message : String(error)
+  if (!pollResult.timedOut && pollResult.result) {
+    return { ready: true, snapshot: pollResult.result }
+  }
+
+  return {
+    ready: false,
+    snapshot: pollResult.result ?? initialSnapshot
+  }
+}
 
 const requestFaucetFundingWithRetry = async ({
   faucetHost,
@@ -1334,10 +1307,11 @@ const requestFaucetFundingWithRetry = async ({
     }
   }
 
+  const errorMessage = lastError
+    ? formatErrorMessage(lastError)
+    : "Unknown error"
   throw new Error(
-    `Faucet request failed after ${attempts} attempts: ${formatFaucetErrorMessage(
-      lastError
-    )}`
+    `Faucet request failed after ${attempts} attempts: ${errorMessage}`
   )
 }
 
@@ -1398,9 +1372,7 @@ const fundAccountWithFaucet = async ({
     attempts += 1
   }
 
-  const errorDetails = lastError
-    ? ` ${formatFaucetErrorMessage(lastError)}`
-    : ""
+  const errorDetails = lastError ? ` ${formatErrorMessage(lastError)}` : ""
 
   throw new Error(
     `Failed to fund ${recipientAddress} from local faucet at ${faucetHost}.${errorDetails}`

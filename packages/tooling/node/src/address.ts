@@ -9,9 +9,15 @@ import type { Transaction } from "@mysten/sui/transactions"
 import { normalizeSuiAddress } from "@mysten/sui/utils"
 import { asMinimumBalanceOf } from "@sui-oracle-market/tooling-core/address"
 import { newTransaction } from "@sui-oracle-market/tooling-core/transactions"
+import { formatErrorMessage } from "@sui-oracle-market/tooling-core/utils/errors"
 import { wait } from "@sui-oracle-market/tooling-core/utils/utility"
 
 import type { ToolingContext } from "./factory.ts"
+import {
+  asFaucetNetwork,
+  isFaucetSupportedNetwork,
+  type FaucetNetworkName
+} from "./faucet.ts"
 
 type CoinBalance = NonNullable<
   Awaited<ReturnType<SuiClient["getCoins"]>>["data"]
@@ -66,18 +72,6 @@ const DEFAULT_MINIMUM_BALANCE =
   DEFAULT_MINIMUM_GAS_COIN_BALANCE * BigInt(DEFAULT_MINIMUM_COIN_OBJECTS)
 const DEFAULT_SPLIT_GAS_BUDGET = 10_000_000
 
-type FaucetNetworkName = "localnet" | "devnet" | "testnet"
-
-/**
- * Narrows a network name to the faucet-supported subset.
- */
-const asFaucetNetwork = (networkName: string): FaucetNetworkName | undefined =>
-  networkName === "localnet" ||
-  networkName === "devnet" ||
-  networkName === "testnet"
-    ? networkName
-    : undefined
-
 /**
  * Fetches a list of SUI coin objects for an address.
  * Sui balances are comprised of discrete coin objects, not an account balance.
@@ -113,9 +107,6 @@ const deriveEffectiveMinimumBalance = ({
 /**
  * Returns true when the network supports the public Sui faucet.
  */
-const isFaucetSupported = (networkName: string) =>
-  Boolean(asFaucetNetwork(networkName))
-
 /**
  * Captures coin counts and balance readiness for an address.
  * This is useful because Sui requires a *coin object* for gas, not just total balance.
@@ -246,11 +237,7 @@ const requestFunding = async ({
 const fundingFailure = (address: string, network: string, lastError: unknown) =>
   new Error(
     `Failed to fund ${address} on ${network}: not enough SUI coin objects after funding attempts${
-      lastError
-        ? ` (last error: ${
-            lastError instanceof Error ? lastError.message : String(lastError)
-          })`
-        : ""
+      lastError ? ` (last error: ${formatErrorMessage(lastError)})` : ""
     }.`
   )
 
@@ -270,7 +257,7 @@ export const ensureFoundedAddress = async (
   }: EnsureFoundedAddressOptions,
   toolingContext: ToolingContext
 ) => {
-  const faucetSupported = isFaucetSupported(
+  const faucetSupported = isFaucetSupportedNetwork(
     toolingContext.suiConfig.network.networkName
   )
   const faucetNetwork = asFaucetNetwork(
@@ -514,7 +501,7 @@ export const withTestnetFaucetRetry = async <T>(
   transactionRun: () => Promise<T>,
   toolingContext: ToolingContext
 ): Promise<T> => {
-  const faucetSupported = isFaucetSupported(
+  const faucetSupported = isFaucetSupportedNetwork(
     toolingContext.suiConfig.network.networkName
   )
   const ensureOptions = {
@@ -537,9 +524,9 @@ export const withTestnetFaucetRetry = async <T>(
       throw error
 
     onWarning?.(
-      `Gas funding issue detected (${
-        error instanceof Error ? error.message : String(error)
-      }); requesting faucet and retrying.`
+      `Gas funding issue detected (${formatErrorMessage(
+        error
+      )}); requesting faucet and retrying.`
     )
     await ensureFoundedAddress(ensureOptions, toolingContext)
 

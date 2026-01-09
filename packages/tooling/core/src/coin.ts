@@ -1,9 +1,12 @@
-import type { SuiClient } from "@mysten/sui/client"
 import type { Transaction } from "@mysten/sui/transactions"
 import { normalizeSuiObjectId } from "@mysten/sui/utils"
 import { DEFAULT_TX_GAS_BUDGET } from "./constants.ts"
 import type { ToolingCoreContext } from "./context.ts"
-import { extractOwnerAddress, getSuiObject } from "./object.ts"
+import {
+  buildSuiObjectRef,
+  extractOwnerAddress,
+  getSuiObject
+} from "./object.ts"
 import { newTransaction, resolveSplitCoinResult } from "./transactions.ts"
 import { formatTypeName, parseTypeNameFromString } from "./utils/type-name.ts"
 import { parseBalance } from "./utils/utility.ts"
@@ -90,47 +93,16 @@ type SuiCoinBalance = {
   balance: bigint
 }
 
-type SuiObjectRef = {
-  objectId: string
-  version: string | number
-  digest: string
-}
-
 const selectRichestCoin = (coins: SuiCoinBalance[]) =>
   coins.reduce<SuiCoinBalance | undefined>((richest, coin) => {
     if (!richest) return coin
     return coin.balance > richest.balance ? coin : richest
   }, undefined)
 
-const fetchObjectRef = async ({
-  objectId,
-  suiClient
-}: {
-  objectId: string
-  suiClient: SuiClient
-}): Promise<SuiObjectRef> => {
-  const response = await suiClient.getObject({
-    id: normalizeSuiObjectId(objectId),
-    options: { showContent: false, showOwner: false, showType: false }
-  })
-
-  if (!response.data)
-    throw new Error(`Unable to fetch object ref for ${objectId}.`)
-
-  return {
-    objectId: normalizeSuiObjectId(response.data.objectId),
-    version: response.data.version,
-    digest: response.data.digest
-  }
-}
-
-const fetchSuiCoinBalances = async ({
-  owner,
-  suiClient
-}: {
-  owner: string
-  suiClient: SuiClient
-}): Promise<SuiCoinBalance[]> => {
+const fetchSuiCoinBalances = async (
+  { owner }: { owner: string },
+  { suiClient }: ToolingCoreContext
+): Promise<SuiCoinBalance[]> => {
   const coins: SuiCoinBalance[] = []
   let cursor: string | undefined = undefined
 
@@ -213,21 +185,22 @@ const buildSplitSuiCoinsTransaction = ({
   return transaction
 }
 
-export const planSuiPaymentSplitTransaction = async ({
-  owner,
-  paymentMinimum,
-  gasBudget,
-  splitGasBudget = DEFAULT_TX_GAS_BUDGET,
-  paymentCoinObjectId,
-  suiClient
-}: {
-  owner: string
-  paymentMinimum: bigint
-  gasBudget: bigint
-  splitGasBudget?: number
-  paymentCoinObjectId?: string
-  suiClient: SuiClient
-}): Promise<{
+export const planSuiPaymentSplitTransaction = async (
+  {
+    owner,
+    paymentMinimum,
+    gasBudget,
+    splitGasBudget = DEFAULT_TX_GAS_BUDGET,
+    paymentCoinObjectId
+  }: {
+    owner: string
+    paymentMinimum: bigint
+    gasBudget: bigint
+    splitGasBudget?: number
+    paymentCoinObjectId?: string
+  },
+  { suiClient }: ToolingCoreContext
+): Promise<{
   needsSplit: boolean
   coinCount: number
   totalBalance: bigint
@@ -239,7 +212,7 @@ export const planSuiPaymentSplitTransaction = async ({
   if (gasBudget <= 0n)
     throw new Error("Gas budget must be a positive non-zero value.")
 
-  const coins = await fetchSuiCoinBalances({ owner, suiClient })
+  const coins = await fetchSuiCoinBalances({ owner }, { suiClient })
   const totalBalance = coins.reduce((total, coin) => total + coin.balance, 0n)
   const normalizedPaymentCoinObjectId = paymentCoinObjectId
     ? normalizeSuiObjectId(paymentCoinObjectId)
@@ -289,10 +262,14 @@ export const planSuiPaymentSplitTransaction = async ({
     splitAmounts: [gasBudget],
     gasBudget: splitGasBudget
   })
-  const gasPaymentRef = await fetchObjectRef({
-    objectId: paymentCoin.coinObjectId,
-    suiClient
-  })
+  const { object: gasPaymentObject } = await getSuiObject(
+    {
+      objectId: paymentCoin.coinObjectId,
+      options: { showContent: false, showType: false }
+    },
+    { suiClient }
+  )
+  const gasPaymentRef = buildSuiObjectRef(gasPaymentObject)
   transaction.setGasOwner(owner)
   transaction.setGasPayment([gasPaymentRef])
 

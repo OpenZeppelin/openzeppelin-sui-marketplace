@@ -5,6 +5,8 @@ import type {
   SuiObjectDataOptions,
   SuiObjectResponse
 } from "@mysten/sui/client"
+import { formatErrorMessage } from "@sui-oracle-market/tooling-core/utils/errors"
+import { formatObjectResponseError } from "./object-response.ts"
 
 export type ObjectStateWaitOptions = {
   suiClient: SuiClient
@@ -28,19 +30,7 @@ const resolveObjectOptions = (options?: SuiObjectDataOptions) => ({
 
 const resolveLastErrorMessage = (response?: SuiObjectResponse) => {
   if (!response?.error) return "Object state did not match expected predicate."
-  switch (response.error.code) {
-    case "displayError":
-      return response.error.error
-    case "notExists":
-      return `Object ${response.error.object_id} does not exist.`
-    case "deleted":
-      return `Object ${response.error.object_id} was deleted at version ${response.error.version}.`
-    case "dynamicFieldNotFound":
-      return `Dynamic field parent ${response.error.parent_object_id} was not found.`
-    case "unknown":
-    default:
-      return "Unknown object error."
-  }
+  return formatObjectResponseError(response.error) ?? "Unknown object error."
 }
 
 const shouldReturnResponse = (
@@ -81,7 +71,7 @@ export const waitForObjectState = async ({
       if (shouldReturnResponse(response, predicate)) return response
       lastError = resolveLastErrorMessage(response)
     } catch (error) {
-      lastError = error instanceof Error ? error.message : String(error)
+      lastError = formatErrorMessage(error)
     }
 
     if (Date.now() - start >= timeoutMs) break

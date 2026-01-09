@@ -1,9 +1,6 @@
-import { tryParseBigInt } from "./utility.ts"
+import { isRecord, tryParseBigInt } from "./utility.ts"
 
 type MoveFieldRecord = Record<string, unknown>
-
-const isRecord = (value: unknown): value is MoveFieldRecord =>
-  Boolean(value) && typeof value === "object"
 
 /**
  * Unwraps a Move-like value into its fields record when present.

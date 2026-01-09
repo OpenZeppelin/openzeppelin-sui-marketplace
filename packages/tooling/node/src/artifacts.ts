@@ -1,6 +1,7 @@
 import { normalizeSuiObjectId } from "@mysten/sui/utils"
 import type { ObjectArtifact } from "@sui-oracle-market/tooling-core/object"
 import type { PublishArtifact } from "@sui-oracle-market/tooling-core/types"
+import { formatErrorMessage } from "@sui-oracle-market/tooling-core/utils/errors"
 import { mkdir, readFile, writeFile } from "node:fs/promises"
 import path, { dirname } from "node:path"
 
@@ -68,9 +69,7 @@ export const writeArtifact =
       return updatedArtifacts as unknown as TArtifact
     } catch (error) {
       throw new Error(
-        `Failed to write artifact at ${filePath}: ${
-          error instanceof Error ? error.message : String(error)
-        }`
+        `Failed to write artifact at ${filePath}: ${formatErrorMessage(error)}`
       )
     }
   }
@@ -103,9 +102,9 @@ export const rewriteUpdatedArtifacts = async <TArtifact>({
     )
   } catch (error) {
     throw new Error(
-      `Failed to persist updated object artifacts at ${objectArtifactPath}: ${
-        error instanceof Error ? error.message : String(error)
-      }`
+      `Failed to persist updated object artifacts at ${objectArtifactPath}: ${formatErrorMessage(
+        error
+      )}`
     )
   }
 }
@@ -133,9 +132,7 @@ export const readArtifact = async <TArtifact>(
     }
 
     throw new Error(
-      `Failed to read artifact at ${filePath}: ${
-        error instanceof Error ? error.message : String(error)
-      }`
+      `Failed to read artifact at ${filePath}: ${formatErrorMessage(error)}`
     )
   }
 }

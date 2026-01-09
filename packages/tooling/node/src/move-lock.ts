@@ -1,3 +1,5 @@
+import { escapeRegExp } from "./utils/regex.ts"
+
 export type MoveLockFormat = "pinned" | "legacy" | "unknown"
 
 export type SuiFrameworkPinnedEntry = {
@@ -12,9 +14,6 @@ export type SuiFrameworkPinnedEntry = {
   /** Optional subdir from the inline table */
   subdir?: string
 }
-
-const escapeRegExp = (value: string) =>
-  value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
 
 const detectMoveLockFormat = (lockContents: string): MoveLockFormat => {
   if (/^\s*\[move\]\s*$/m.test(lockContents)) return "pinned"

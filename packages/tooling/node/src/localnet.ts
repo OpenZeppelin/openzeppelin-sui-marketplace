@@ -2,9 +2,8 @@ import os from "node:os"
 import path from "node:path"
 
 import { getFaucetHost } from "@mysten/sui/faucet"
-import { createSuiClient } from "./describe-object.ts"
-
-const FAUCET_SUPPORTED_NETWORKS = ["localnet", "devnet", "testnet"] as const
+import { createSuiClient } from "./sui-client.ts"
+export { isFaucetSupportedNetwork } from "./faucet.ts"
 
 /**
  * Resolves a localnet config directory path.
@@ -30,14 +29,6 @@ export const resolveLocalnetConfigDir = (candidate?: string) => {
   const resolved = expanded && expanded.length ? expanded : defaultDir
   return path.resolve(resolved)
 }
-
-/**
- * Type guard for networks that expose the Sui faucet.
- */
-export const isFaucetSupportedNetwork = (
-  networkName: string
-): networkName is "localnet" | "devnet" | "testnet" =>
-  (FAUCET_SUPPORTED_NETWORKS as readonly string[]).includes(networkName)
 
 /**
  * Derives a faucet URL that matches the provided localnet RPC host.

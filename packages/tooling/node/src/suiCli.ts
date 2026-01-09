@@ -49,6 +49,29 @@ export const runSuiCli =
   }
 
 const runSuiClientCli = runSuiCli(["client"])
+const runSuiCliVersion = runSuiCli([])
+
+export const parseSuiCliVersionOutput = (
+  stdout: string
+): string | undefined => {
+  if (!stdout?.trim()) return undefined
+  const firstLine = stdout.trim().split(/\r?\n/)[0] ?? ""
+  const versionMatch = firstLine.match(/sui\s+([^\s]+)/i)
+  return (versionMatch?.[1] ?? firstLine) || undefined
+}
+
+/**
+ * Returns the installed Sui CLI version, if available.
+ */
+export const getSuiCliVersion = async (): Promise<string | undefined> => {
+  try {
+    const { stdout, exitCode } = await runSuiCliVersion(["--version"])
+    if (exitCode && exitCode !== 0) return undefined
+    return parseSuiCliVersionOutput(stdout.toString())
+  } catch {
+    return undefined
+  }
+}
 
 type SuiCliEnvironmentJsonEntry = {
   alias: string

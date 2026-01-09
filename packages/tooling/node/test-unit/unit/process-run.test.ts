@@ -7,7 +7,7 @@ const configMocks = vi.hoisted(() => ({
   getNetworkConfig: vi.fn()
 }))
 
-const describeObjectMocks = vi.hoisted(() => ({
+const suiClientMocks = vi.hoisted(() => ({
   createSuiClient: vi.fn()
 }))
 
@@ -21,10 +21,6 @@ const logMocks = vi.hoisted(() => ({
   logKeyValueBlue: vi.fn(() => vi.fn()),
   logSimpleBlue: vi.fn(),
   logWarning: vi.fn()
-}))
-
-const moveMocks = vi.hoisted(() => ({
-  syncLocalnetMoveEnvironmentChainId: vi.fn()
 }))
 
 const suiCliMocks = vi.hoisted(() => ({
@@ -44,8 +40,8 @@ vi.mock("../../src/config.ts", () => ({
   getNetworkConfig: configMocks.getNetworkConfig
 }))
 
-vi.mock("../../src/describe-object.ts", () => ({
-  createSuiClient: describeObjectMocks.createSuiClient
+vi.mock("../../src/sui-client.ts", () => ({
+  createSuiClient: suiClientMocks.createSuiClient
 }))
 
 vi.mock("../../src/factory.ts", () => ({
@@ -58,11 +54,6 @@ vi.mock("../../src/log.ts", () => ({
   logKeyValueBlue: logMocks.logKeyValueBlue,
   logSimpleBlue: logMocks.logSimpleBlue,
   logWarning: logMocks.logWarning
-}))
-
-vi.mock("../../src/move.ts", () => ({
-  syncLocalnetMoveEnvironmentChainId:
-    moveMocks.syncLocalnetMoveEnvironmentChainId
 }))
 
 vi.mock("../../src/suiCli.ts", () => ({
@@ -121,19 +112,20 @@ describe("runSuiScript", () => {
     const resolvedConfig = buildResolvedConfig()
     const resolvedNetwork = resolvedConfig.network
     const suiClientStub = { rpc: resolvedNetwork.url }
-
-    configMocks.loadSuiConfig.mockResolvedValue(resolvedConfig)
-    configMocks.getNetworkConfig.mockReturnValue(resolvedNetwork)
-    describeObjectMocks.createSuiClient.mockReturnValue(suiClientStub)
-    factoryMocks.createTooling.mockImplementation(async (input) => ({
-      suiClient: input.suiClient,
-      suiConfig: input.suiConfig
-    }))
-    moveMocks.syncLocalnetMoveEnvironmentChainId.mockResolvedValue({
+    const syncLocalnetMoveEnvironmentChainId = vi.fn().mockResolvedValue({
       chainId: "0x0",
       updatedFiles: [],
       didAttempt: false
     })
+
+    configMocks.loadSuiConfig.mockResolvedValue(resolvedConfig)
+    configMocks.getNetworkConfig.mockReturnValue(resolvedNetwork)
+    suiClientMocks.createSuiClient.mockReturnValue(suiClientStub)
+    factoryMocks.createTooling.mockImplementation(async (input) => ({
+      suiClient: input.suiClient,
+      suiConfig: input.suiConfig,
+      syncLocalnetMoveEnvironmentChainId
+    }))
     suiCliMocks.ensureSuiCli.mockResolvedValue(undefined)
     suiCliMocks.getActiveSuiCliEnvironment.mockResolvedValue(
       resolvedNetwork.networkName

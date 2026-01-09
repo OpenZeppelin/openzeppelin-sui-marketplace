@@ -3,12 +3,12 @@ import path from "node:path"
 import { describe, expect, it, vi } from "vitest"
 import { withEnv } from "../../../tests-integration/helpers/env.ts"
 
-const describeObjectMocks = vi.hoisted(() => ({
+const suiClientMocks = vi.hoisted(() => ({
   createSuiClient: vi.fn()
 }))
 
-vi.mock("../../src/describe-object.ts", () => ({
-  createSuiClient: describeObjectMocks.createSuiClient
+vi.mock("../../src/sui-client.ts", () => ({
+  createSuiClient: suiClientMocks.createSuiClient
 }))
 
 import {
@@ -69,7 +69,7 @@ describe("tooling localnet helpers", () => {
   })
 
   it("returns rpc snapshots when the node is healthy", async () => {
-    describeObjectMocks.createSuiClient.mockReturnValue({
+    suiClientMocks.createSuiClient.mockReturnValue({
       getLatestSuiSystemState: vi.fn().mockResolvedValue({
         epoch: "1",
         protocolVersion: "1",
@@ -86,7 +86,7 @@ describe("tooling localnet helpers", () => {
   })
 
   it("reports offline status when rpc snapshot fails", async () => {
-    describeObjectMocks.createSuiClient.mockReturnValue({
+    suiClientMocks.createSuiClient.mockReturnValue({
       getLatestSuiSystemState: vi.fn().mockRejectedValue(new Error("down"))
     })
 

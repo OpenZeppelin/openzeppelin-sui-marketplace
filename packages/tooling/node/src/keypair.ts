@@ -76,8 +76,20 @@ const getKeystoreEntry = (
 /**
  * Reads and parses the Sui keystore JSON file.
  */
-const readKeystoreEntries = async (keystorePath: string): Promise<string[]> =>
-  JSON.parse(await readFile(keystorePath, "utf8"))
+export const readKeystoreEntries = async (
+  keystorePath: string
+): Promise<string[]> => {
+  const contents = await readFile(keystorePath, "utf8")
+  const parsed = JSON.parse(contents)
+
+  if (!Array.isArray(parsed)) {
+    throw new Error(
+      `Unexpected keystore format at ${keystorePath}; expected JSON array.`
+    )
+  }
+
+  return parsed
+}
 
 /**
  * Finds a keystore entry matching a target Sui address.

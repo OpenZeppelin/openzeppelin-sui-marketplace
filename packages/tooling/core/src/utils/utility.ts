@@ -1,5 +1,8 @@
 type SafeObject = Record<string, unknown>
 
+export const isRecord = (value: unknown): value is Record<string, unknown> =>
+  Boolean(value) && typeof value === "object"
+
 /**
  * Guards against prototype-pollution keys when merging objects.
  */

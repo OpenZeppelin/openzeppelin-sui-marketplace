@@ -20,7 +20,9 @@ describe("getClockTimestampMs", () => {
       })
     })
 
-    await expect(getClockTimestampMs(client)).resolves.toBe(1234)
+    await expect(getClockTimestampMs({}, { suiClient: client })).resolves.toBe(
+      1234
+    )
   })
 
   it("returns bigint timestamps as numbers when finite", async () => {
@@ -30,7 +32,9 @@ describe("getClockTimestampMs", () => {
       })
     })
 
-    await expect(getClockTimestampMs(client)).resolves.toBe(9007199254740991)
+    await expect(getClockTimestampMs({}, { suiClient: client })).resolves.toBe(
+      9007199254740991
+    )
   })
 
   it("returns numeric strings parsed from timestamps", async () => {
@@ -40,7 +44,9 @@ describe("getClockTimestampMs", () => {
       })
     })
 
-    await expect(getClockTimestampMs(client)).resolves.toBe(4567)
+    await expect(getClockTimestampMs({}, { suiClient: client })).resolves.toBe(
+      4567
+    )
   })
 
   it("returns undefined for non-numeric timestamps", async () => {
@@ -50,7 +56,9 @@ describe("getClockTimestampMs", () => {
       })
     })
 
-    await expect(getClockTimestampMs(client)).resolves.toBeUndefined()
+    await expect(
+      getClockTimestampMs({}, { suiClient: client })
+    ).resolves.toBeUndefined()
   })
 
   it("returns undefined when the clock object is missing", async () => {
@@ -58,7 +66,9 @@ describe("getClockTimestampMs", () => {
       getObject: vi.fn().mockResolvedValue({ data: undefined })
     })
 
-    await expect(getClockTimestampMs(client)).resolves.toBeUndefined()
+    await expect(
+      getClockTimestampMs({}, { suiClient: client })
+    ).resolves.toBeUndefined()
   })
 
   it("returns undefined on client errors", async () => {
@@ -66,6 +76,8 @@ describe("getClockTimestampMs", () => {
       getObject: vi.fn().mockRejectedValue(new Error("rpc failed"))
     })
 
-    await expect(getClockTimestampMs(client)).resolves.toBeUndefined()
+    await expect(
+      getClockTimestampMs({}, { suiClient: client })
+    ).resolves.toBeUndefined()
   })
 })

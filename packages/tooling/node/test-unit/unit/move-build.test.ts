@@ -25,6 +25,23 @@ import {
   resolveChainIdentifier,
   syncLocalnetMoveEnvironmentChainId
 } from "../../src/move.ts"
+import type { SuiResolvedConfig } from "../../src/config.ts"
+
+const buildSuiConfig = (networkName: string): SuiResolvedConfig => ({
+  currentNetwork: networkName,
+  networks: {},
+  paths: {
+    move: "/tmp/move",
+    deployments: "/tmp/deployments",
+    objects: "/tmp/objects",
+    artifacts: "/tmp/artifacts"
+  },
+  network: {
+    networkName,
+    url: "http://localhost:9000",
+    account: {}
+  }
+})
 
 const buildBuildInfoYaml = ({
   packageName,
@@ -52,7 +69,10 @@ describe("resolveChainIdentifier", () => {
     })
 
     await expect(
-      resolveChainIdentifier({ suiClient: client, environmentName: "localnet" })
+      resolveChainIdentifier(
+        { environmentName: "localnet" },
+        { suiClient: client, suiConfig: buildSuiConfig("localnet") }
+      )
     ).resolves.toBe("0xrpc")
 
     expect(getSuiCliEnvironmentChainIdMock).not.toHaveBeenCalled()
@@ -65,7 +85,10 @@ describe("resolveChainIdentifier", () => {
     getSuiCliEnvironmentChainIdMock.mockResolvedValue("0xcli")
 
     await expect(
-      resolveChainIdentifier({ suiClient: client, environmentName: "localnet" })
+      resolveChainIdentifier(
+        { environmentName: "localnet" },
+        { suiClient: client, suiConfig: buildSuiConfig("localnet") }
+      )
     ).resolves.toBe("0xcli")
   })
 })
@@ -76,11 +99,13 @@ describe("syncLocalnetMoveEnvironmentChainId", () => {
       getChainIdentifier: vi.fn().mockResolvedValue("0xignored")
     })
 
-    const result = await syncLocalnetMoveEnvironmentChainId({
-      moveRootPath: "/tmp",
-      environmentName: "testnet",
-      suiClient: client
-    })
+    const result = await syncLocalnetMoveEnvironmentChainId(
+      {
+        moveRootPath: "/tmp",
+        environmentName: "testnet"
+      },
+      { suiClient: client, suiConfig: buildSuiConfig("testnet") }
+    )
 
     expect(result).toEqual({ updatedFiles: [], didAttempt: false })
   })
@@ -94,11 +119,13 @@ describe("syncLocalnetMoveEnvironmentChainId", () => {
       const moveToml = `[package]\nname = "fixture"\nversion = "0.0.1"\n\n[dep-replacements.localnet]\nSui = { local = "../sui" }\n`
       await writeFileTree(dir, { "Move.toml": moveToml })
 
-      const result = await syncLocalnetMoveEnvironmentChainId({
-        moveRootPath: dir,
-        environmentName: "localnet",
-        suiClient: client
-      })
+      const result = await syncLocalnetMoveEnvironmentChainId(
+        {
+          moveRootPath: dir,
+          environmentName: "localnet"
+        },
+        { suiClient: client, suiConfig: buildSuiConfig("localnet") }
+      )
 
       expect(result.didAttempt).toBe(true)
       expect(result.updatedFiles).toEqual([path.join(dir, "Move.toml")])

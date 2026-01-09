@@ -1,6 +1,7 @@
 import { resolveRpcUrl } from "@sui-oracle-market/tooling-core/network"
 import type { DeepPartial } from "@sui-oracle-market/tooling-core/type-utils"
 import type { NetworkName } from "@sui-oracle-market/tooling-core/types"
+import { formatErrorMessage } from "@sui-oracle-market/tooling-core/utils/errors"
 import { mergeDeepObjects } from "@sui-oracle-market/tooling-core/utils/utility"
 import { existsSync } from "node:fs"
 import path from "node:path"
@@ -193,9 +194,9 @@ export const loadSuiConfig = async (): Promise<SuiResolvedConfig> => {
     return resolveConfig(config)
   } catch (error) {
     throw new Error(
-      `Failed to load Sui config from ${configPath}: ${
-        error instanceof Error ? error.message : String(error)
-      }`
+      `Failed to load Sui config from ${configPath}: ${formatErrorMessage(
+        error
+      )}`
     )
   }
 }

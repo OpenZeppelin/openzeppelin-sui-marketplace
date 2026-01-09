@@ -1,7 +1,7 @@
 import fs from "node:fs/promises"
 import path from "node:path"
 
-import type { SuiClient, SuiTransactionBlockResponse } from "@mysten/sui/client"
+import type { SuiTransactionBlockResponse } from "@mysten/sui/client"
 import type { Ed25519Keypair } from "@mysten/sui/keypairs/ed25519"
 import { buildExplorerUrl } from "@sui-oracle-market/tooling-core/network"
 import { newTransaction } from "@sui-oracle-market/tooling-core/transactions"
@@ -13,6 +13,7 @@ import type {
   PublishResult
 } from "@sui-oracle-market/tooling-core/types"
 
+import { withTestnetFaucetRetry } from "./address.ts"
 import {
   getDeploymentArtifactPath,
   pickRootNonDependencyArtifact,
@@ -20,7 +21,9 @@ import {
 } from "./artifacts.ts"
 import type { SuiNetworkConfig } from "./config.ts"
 import { DEFAULT_PUBLISH_GAS_BUDGET } from "./constants.ts"
-import type { Tooling, ToolingContext } from "./factory.ts"
+import type { ToolingContext } from "./factory.ts"
+import { collectJsonCandidates, tryParseJson } from "./json.ts"
+import { loadKeypair } from "./keypair.ts"
 import {
   logKeyValueBlue,
   logKeyValueGreen,
@@ -39,7 +42,7 @@ import {
   clearPublishedEntryForNetwork,
   syncLocalnetMoveEnvironmentChainId
 } from "./move.ts"
-import { runSuiCli } from "./suiCli.ts"
+import { getSuiCliVersion, runSuiCli } from "./suiCli.ts"
 
 type PackageNames = { root?: string; dependencies: string[] }
 type DependencyAddressMap = Record<string, string>
@@ -60,21 +63,24 @@ type PublishPlan = {
   allowAutoUnpublishedDependencies?: boolean
 }
 
-const syncLocalnetMoveEnvironmentChainIdForPublish = async ({
-  network,
-  packagePath,
-  suiClient
-}: {
-  network: SuiNetworkConfig
-  packagePath: string
-  suiClient: SuiClient
-}) => {
+const syncLocalnetMoveEnvironmentChainIdForPublish = async (
+  {
+    network,
+    packagePath
+  }: {
+    network: SuiNetworkConfig
+    packagePath: string
+  },
+  toolingContext: ToolingContext
+) => {
   const { chainId, updatedFiles, didAttempt } =
-    await syncLocalnetMoveEnvironmentChainId({
-      moveRootPath: packagePath,
-      environmentName: network.networkName,
-      suiClient
-    })
+    await syncLocalnetMoveEnvironmentChainId(
+      {
+        moveRootPath: packagePath,
+        environmentName: network.networkName
+      },
+      toolingContext
+    )
 
   if (didAttempt && !chainId) {
     logWarning(
@@ -122,17 +128,19 @@ export const publishPackageWithLog = async (
   if (!resolvedFullNodeUrl)
     throw new Error("Missing network.url in ToolingContext.network.")
 
-  const publishPlan = await buildPublishPlan({
-    network: suiContext.suiConfig.network,
-    fullNodeUrl: resolvedFullNodeUrl,
-    packagePath,
-    keypair,
-    suiClient: suiContext.suiClient,
-    gasBudget,
-    withUnpublishedDependencies,
-    useCliPublish,
-    allowAutoUnpublishedDependencies
-  })
+  const publishPlan = await buildPublishPlan(
+    {
+      network: suiContext.suiConfig.network,
+      fullNodeUrl: resolvedFullNodeUrl,
+      packagePath,
+      keypair,
+      gasBudget,
+      withUnpublishedDependencies,
+      useCliPublish,
+      allowAutoUnpublishedDependencies
+    },
+    suiContext
+  )
 
   logPublishStart(publishPlan)
 
@@ -286,44 +294,42 @@ const createPublishTransaction = (
  */
 export const runClientPublish = runSuiCli(["client", "publish"])
 /**
- * CLI runner for `sui --version`.
- */
-const runSuiCliVersion = runSuiCli([])
-
-/**
  * Builds the full plan for a publish, including flags, dependency strategy, and package naming.
  */
-const buildPublishPlan = async ({
-  network,
-  fullNodeUrl,
-  packagePath,
-  keypair,
-  suiClient,
-  gasBudget,
-  withUnpublishedDependencies = false,
-  useCliPublish = true,
-  allowAutoUnpublishedDependencies = true
-}: {
-  network: SuiNetworkConfig
-  packagePath: string
-  fullNodeUrl: string
-  keypair: Ed25519Keypair
-  suiClient: SuiClient
-  gasBudget: number
-  withUnpublishedDependencies?: boolean
-  useCliPublish?: boolean
-  allowAutoUnpublishedDependencies?: boolean
-}): Promise<PublishPlan> => {
+const buildPublishPlan = async (
+  {
+    network,
+    fullNodeUrl,
+    packagePath,
+    keypair,
+    gasBudget,
+    withUnpublishedDependencies = false,
+    useCliPublish = true,
+    allowAutoUnpublishedDependencies = true
+  }: {
+    network: SuiNetworkConfig
+    packagePath: string
+    fullNodeUrl: string
+    keypair: Ed25519Keypair
+    gasBudget: number
+    withUnpublishedDependencies?: boolean
+    useCliPublish?: boolean
+    allowAutoUnpublishedDependencies?: boolean
+  },
+  toolingContext: ToolingContext
+): Promise<PublishPlan> => {
   if (network.networkName !== "localnet" && withUnpublishedDependencies)
     throw new Error(
       "--with-unpublished-dependencies is reserved for localnet. For shared networks, link to published packages via Move.toml dep-replacements (or Move registry/mvr)."
     )
 
-  await syncLocalnetMoveEnvironmentChainIdForPublish({
-    network,
-    packagePath,
-    suiClient
-  })
+  await syncLocalnetMoveEnvironmentChainIdForPublish(
+    {
+      network,
+      packagePath
+    },
+    toolingContext
+  )
 
   const allowImplicitUnpublishedDependencies =
     network.networkName === "localnet"
@@ -543,35 +549,12 @@ const parseCliJson = (stdout: string) => {
   if (!trimmed)
     throw new Error("Failed to parse JSON from Sui CLI publish output.")
 
-  const tryParse = (candidate: string) => {
-    try {
-      return JSON.parse(candidate)
-    } catch {
-      return undefined
-    }
+  for (const candidate of collectJsonCandidates(trimmed)) {
+    const parsed = tryParseJson(candidate)
+    if (parsed !== undefined) return parsed
   }
 
-  const direct = tryParse(trimmed)
-  if (direct) return direct
-
-  const lines = trimmed.split(/\r?\n/)
-  for (let idx = lines.length - 1; idx >= 0; idx -= 1) {
-    const line = lines[idx]?.trimStart()
-    if (!line || (!line.startsWith("{") && !line.startsWith("["))) continue
-
-    const candidate = lines.slice(idx).join("\n").trim()
-    const parsed = tryParse(candidate)
-    if (parsed) return parsed
-  }
-
-  const trailingBlockMatch = trimmed.match(/(\{[\s\S]*\}|\[[\s\S]*\])\s*$/)
-  const trailingJson = trailingBlockMatch?.[1]?.trim()
-  if (trailingJson) {
-    const parsed = tryParse(trailingJson)
-    if (parsed) return parsed
-  }
-
-  const tail = lines.slice(-20).join("\n")
+  const tail = trimmed.split(/\r?\n/).slice(-20).join("\n")
   throw new Error(
     `Failed to parse JSON from Sui CLI publish output. stdout tail:\n${tail}`
   )
@@ -1000,29 +983,6 @@ const readSingleFrameworkRevisionForPackage = async (
 }
 
 /**
- * Returns the installed Sui CLI version, if available.
- */
-const getSuiCliVersion = async (): Promise<string | undefined> => {
-  try {
-    const { stdout, exitCode } = await runSuiCliVersion(["--version"])
-    if (exitCode && exitCode !== 0) return undefined
-    return parseSuiCliVersionOutput(stdout.toString())
-  } catch {
-    return undefined
-  }
-}
-
-/**
- * Parses `sui --version` output into a version string.
- */
-const parseSuiCliVersionOutput = (stdout: string): string | undefined => {
-  if (!stdout?.trim()) return undefined
-  const firstLine = stdout.trim().split(/\r?\n/)[0] ?? ""
-  const versionMatch = firstLine.match(/sui\s+([^\s]+)/i)
-  return (versionMatch?.[1] ?? firstLine) || undefined
-}
-
-/**
  * Detects publish errors caused by transaction size limits.
  */
 const isSizeLimitError = (error: unknown) => {
@@ -1040,50 +1000,59 @@ const isSizeLimitError = (error: unknown) => {
 const shouldRetryWithCli = (plan: PublishPlan, error: unknown) =>
   !plan.useCliPublish && isSizeLimitError(error)
 
-export const publishMovePackageWithFunding = async ({
-  tooling,
-  packagePath,
-  gasBudget,
-  withUnpublishedDependencies,
-  allowAutoUnpublishedDependencies,
-  useCliPublish = true,
-  clearPublishedEntry = false
-}: {
-  tooling: Tooling
-  packagePath: string
-  gasBudget?: number
-  withUnpublishedDependencies?: boolean
-  allowAutoUnpublishedDependencies?: boolean
-  useCliPublish?: boolean
-  clearPublishedEntry?: boolean
-}): Promise<PublishArtifact> => {
+export const publishMovePackageWithFunding = async (
+  {
+    packagePath,
+    gasBudget,
+    withUnpublishedDependencies,
+    allowAutoUnpublishedDependencies,
+    useCliPublish = true,
+    clearPublishedEntry = false
+  }: {
+    packagePath: string
+    gasBudget?: number
+    withUnpublishedDependencies?: boolean
+    allowAutoUnpublishedDependencies?: boolean
+    useCliPublish?: boolean
+    clearPublishedEntry?: boolean
+  },
+  toolingContext: ToolingContext
+): Promise<PublishArtifact> => {
   const resolvedPackagePath = path.resolve(packagePath)
   if (clearPublishedEntry) {
     const { didUpdate } = await clearPublishedEntryForNetwork({
       packagePath: resolvedPackagePath,
-      networkName: tooling.suiConfig.network.networkName
+      networkName: toolingContext.suiConfig.network.networkName
     })
     if (didUpdate) {
       logKeyValueBlue("Published.toml")(
-        `cleared ${tooling.suiConfig.network.networkName} entry`
+        `cleared ${toolingContext.suiConfig.network.networkName} entry`
       )
     }
   }
 
-  const artifacts = await tooling.withTestnetFaucetRetry(
+  const loadedEd25519KeyPair = await loadKeypair(
+    toolingContext.suiConfig.network.account
+  )
+
+  const artifacts = await withTestnetFaucetRetry(
     {
-      signerAddress: tooling.loadedEd25519KeyPair.toSuiAddress(),
-      signer: tooling.loadedEd25519KeyPair
+      signerAddress: loadedEd25519KeyPair.toSuiAddress(),
+      signer: loadedEd25519KeyPair
     },
     async () =>
-      tooling.publishPackageWithLog({
-        packagePath: resolvedPackagePath,
-        keypair: tooling.loadedEd25519KeyPair,
-        gasBudget,
-        withUnpublishedDependencies,
-        useCliPublish,
-        allowAutoUnpublishedDependencies
-      })
+      publishPackageWithLog(
+        {
+          packagePath: resolvedPackagePath,
+          keypair: loadedEd25519KeyPair,
+          gasBudget,
+          withUnpublishedDependencies,
+          useCliPublish,
+          allowAutoUnpublishedDependencies
+        },
+        toolingContext
+      ),
+    toolingContext
   )
 
   return pickRootNonDependencyArtifact(artifacts)

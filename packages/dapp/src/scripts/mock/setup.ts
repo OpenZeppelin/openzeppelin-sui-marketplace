@@ -37,7 +37,6 @@ import {
   logWarning
 } from "@sui-oracle-market/tooling-node/log"
 import { runSuiScript } from "@sui-oracle-market/tooling-node/process"
-import { publishMovePackageWithFunding } from "@sui-oracle-market/tooling-node/publish"
 import {
   findCreatedObjectIds,
   newTransaction
@@ -331,8 +330,7 @@ const publishMockPackages = async (
   const pythPackageId =
     existingState.existingPythPackageId ||
     (
-      await publishMovePackageWithFunding({
-        tooling,
+      await tooling.publishMovePackageWithFunding({
         packagePath: cliArguments.pythContractPath,
         withUnpublishedDependencies: true,
         clearPublishedEntry: true,
@@ -356,8 +354,7 @@ const publishMockPackages = async (
   const coinPackageId =
     existingState.existingCoinPackageId ||
     (
-      await publishMovePackageWithFunding({
-        tooling,
+      await tooling.publishMovePackageWithFunding({
         packagePath: cliArguments.coinContractPath,
         clearPublishedEntry: true,
         useCliPublish: cliArguments.useCliPublish
@@ -379,8 +376,7 @@ const publishMockPackages = async (
   const itemPackageId =
     existingState.existingItemPackageId ||
     (
-      await publishMovePackageWithFunding({
-        tooling,
+      await tooling.publishMovePackageWithFunding({
         packagePath: cliArguments.itemContractPath,
         clearPublishedEntry: true,
         useCliPublish: cliArguments.useCliPublish

@@ -3,6 +3,7 @@
  */
 import type { SuiObjectResponse } from "@mysten/sui/client"
 import { isValidSuiObjectId } from "@mysten/sui/utils"
+import { formatOptionalNumericValue } from "./utils/formatters.ts"
 
 export type OwnedObjectSummary = {
   objectId: string
@@ -40,7 +41,7 @@ export const mapOwnerToLabel = (owner?: unknown): string | undefined => {
  * Sui RPCs sometimes return numeric-like fields as strings; this normalizes them.
  */
 export const formatOptionalNumber = (value?: string | number) =>
-  value !== undefined ? value.toString() : "Unknown"
+  formatOptionalNumericValue(value) ?? "Unknown"
 
 /**
  * Counts the unique Move object types in the provided summaries.

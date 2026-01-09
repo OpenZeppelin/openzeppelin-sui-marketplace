@@ -1,6 +1,5 @@
 import type {
   ObjectOwner,
-  ObjectResponseError,
   SuiClient,
   SuiEvent,
   SuiTransactionBlockResponse
@@ -11,6 +10,7 @@ import {
   assertTransactionSuccess,
   findCreatedObjectIds
 } from "@sui-oracle-market/tooling-core/transactions"
+import { formatObjectResponseError } from "./object-response.ts"
 
 export const assertTransactionSucceeded = (
   result: SuiTransactionBlockResponse
@@ -30,25 +30,6 @@ export const assertTransactionFailed = (
 
 const formatObjectMissingError = (label: string, objectId: string) =>
   `Expected ${label} ${objectId} to exist, but it was not found.`
-
-const formatObjectResponseError = (
-  error: ObjectResponseError | null | undefined
-) => {
-  if (!error) return undefined
-  switch (error.code) {
-    case "displayError":
-      return error.error
-    case "notExists":
-      return `Object ${error.object_id} does not exist.`
-    case "deleted":
-      return `Object ${error.object_id} was deleted at version ${error.version}.`
-    case "dynamicFieldNotFound":
-      return `Dynamic field parent ${error.parent_object_id} was not found.`
-    case "unknown":
-    default:
-      return "Unknown object error."
-  }
-}
 
 export const assertObjectOwnerById = async ({
   suiClient,

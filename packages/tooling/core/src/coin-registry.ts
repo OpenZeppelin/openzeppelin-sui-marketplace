@@ -4,6 +4,7 @@ import { deriveObjectID, normalizeSuiObjectId } from "@mysten/sui/utils"
 import { SUI_COIN_REGISTRY_ID } from "./constants.ts"
 import type { ToolingCoreContext } from "./context.ts"
 import { getAllDynamicFields } from "./dynamic-fields.ts"
+import { normalizeOptionalIdSafe } from "./object.ts"
 import { readMoveString } from "./utils/formatters.ts"
 import { formatTypeName, parseTypeNameFromString } from "./utils/type-name.ts"
 
@@ -13,15 +14,8 @@ type DynamicFieldName = {
   }
 }
 
-const extractClaimedObjectId = (fieldName: DynamicFieldName) => {
-  const candidate = fieldName.value?.pos0
-  if (!candidate) return undefined
-  try {
-    return normalizeSuiObjectId(candidate)
-  } catch {
-    return undefined
-  }
-}
+const extractClaimedObjectId = (fieldName: DynamicFieldName) =>
+  normalizeOptionalIdSafe(fieldName.value?.pos0)
 
 /**
  * Derives the shared Currency object ID for a coin type and registry.

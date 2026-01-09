@@ -96,7 +96,6 @@ import {
   logWarning
 } from "@sui-oracle-market/tooling-node/log"
 import { runSuiScript } from "@sui-oracle-market/tooling-node/process"
-import { publishMovePackageWithFunding } from "@sui-oracle-market/tooling-node/publish"
 import {
   ensureCreatedObject,
   findCreatedArtifactIdBySuffix,
@@ -611,8 +610,7 @@ const publishItemExamplesPackage = async ({
     `Missing item types detected on ${networkName}; publishing item-examples.`
   )
 
-  const publishArtifact = await publishMovePackageWithFunding({
-    tooling,
+  const publishArtifact = await tooling.publishMovePackageWithFunding({
     packagePath: resolveItemExamplesPackagePath(tooling),
     clearPublishedEntry: true,
     useCliPublish: false

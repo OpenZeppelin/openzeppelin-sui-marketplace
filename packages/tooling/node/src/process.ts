@@ -7,9 +7,10 @@ import { fileURLToPath } from "node:url"
 
 import { type Argv } from "yargs"
 import { hideBin } from "yargs/helpers"
+import { formatErrorMessage } from "@sui-oracle-market/tooling-core/utils/errors"
 import type { SuiResolvedConfig } from "./config.ts"
 import { getNetworkConfig, loadSuiConfig } from "./config.ts"
-import { createSuiClient } from "./describe-object.ts"
+import { createSuiClient } from "./sui-client.ts"
 import type { Tooling } from "./factory.ts"
 import { createTooling } from "./factory.ts"
 import {
@@ -19,31 +20,15 @@ import {
   logSimpleBlue,
   logWarning
 } from "./log.ts"
-import { syncLocalnetMoveEnvironmentChainId } from "./move.ts"
 import {
   createSuiCliEnvironment,
   ensureSuiCli,
   getActiveSuiCliEnvironment,
   getSuiCliEnvironmentRpc,
+  getSuiCliVersion,
   listSuiCliEnvironments,
-  runSuiCli,
   switchSuiCliEnvironment
 } from "./suiCli.ts"
-
-const runSuiCliVersion = runSuiCli([])
-
-const getSuiCliVersion = async (): Promise<string | undefined> => {
-  try {
-    const { stdout, exitCode } = await runSuiCliVersion(["--version"])
-    if (exitCode && exitCode !== 0) return undefined
-    const firstLine = stdout?.toString().trim().split(/\r?\n/)[0] ?? ""
-    if (!firstLine) return undefined
-    const versionMatch = firstLine.match(/sui\s+([^\s]+)/i)
-    return (versionMatch?.[1] ?? firstLine) || undefined
-  } catch {
-    return undefined
-  }
-}
 
 export type CommonCliArgs = {
   network?: string
@@ -273,12 +258,9 @@ const logScriptStart = (
 const logScriptFailure = (error: unknown) => {
   console.log("")
   logError("Script failed ❌")
-  logError(
-    `${error instanceof Error ? error.message : String(error)}\n${
-      error instanceof Error ? error.stack : ""
-    }`
-  )
-  logError(`${error instanceof Error ? error.message : String(error)}\n`)
+  const message = formatErrorMessage(error)
+  logError(`${message}\n${error instanceof Error ? error.stack : ""}`)
+  logError(`${message}\n`)
 }
 
 const syncLocalnetMoveEnvironmentChainIdForTooling = async (
@@ -287,10 +269,9 @@ const syncLocalnetMoveEnvironmentChainIdForTooling = async (
   if (process.env.SUI_SKIP_MOVE_CHAIN_ID_SYNC === "1") return
 
   const { chainId, updatedFiles, didAttempt } =
-    await syncLocalnetMoveEnvironmentChainId({
+    await tooling.syncLocalnetMoveEnvironmentChainId({
       moveRootPath: tooling.suiConfig.paths.move,
-      environmentName: tooling.suiConfig.network.networkName,
-      suiClient: tooling.suiClient
+      environmentName: tooling.suiConfig.network.networkName
     })
 
   if (didAttempt && !chainId) {

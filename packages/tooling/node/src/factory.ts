@@ -21,13 +21,18 @@ import { ensureFoundedAddress, withTestnetFaucetRetry } from "./address.ts"
 import type { SuiNetworkConfig, SuiResolvedConfig } from "./config.ts"
 import { maybeLogDevInspect } from "./dev-inspect.ts"
 import { loadKeypair } from "./keypair.ts"
-import { publishPackage, publishPackageWithLog } from "./publish.ts"
+import { syncLocalnetMoveEnvironmentChainId } from "./move.ts"
+import {
+  publishMovePackageWithFunding,
+  publishPackage,
+  publishPackageWithLog
+} from "./publish.ts"
 import {
   getImmutableSharedObject,
   getMutableSharedObject
 } from "./shared-objects.ts"
-import { executeTransactionOnce, signAndExecute } from "./transactions.ts"
 import { executeTransactionWithSummary } from "./transactions-execution.ts"
+import { executeTransactionOnce, signAndExecute } from "./transactions.ts"
 
 export type ToolingContext = {
   suiClient: SuiClient
@@ -95,9 +100,15 @@ export type Tooling = ToolingContext & {
     args: WithTestnetFaucetRetryArgs,
     transactionRun: () => Promise<T>
   ) => Promise<T>
+  syncLocalnetMoveEnvironmentChainId: (
+    args: Parameters<typeof syncLocalnetMoveEnvironmentChainId>[0]
+  ) => ReturnType<typeof syncLocalnetMoveEnvironmentChainId>
   publishPackageWithLog: (
     args: Parameters<typeof publishPackageWithLog>[0]
   ) => ReturnType<typeof publishPackageWithLog>
+  publishMovePackageWithFunding: (
+    args: Parameters<typeof publishMovePackageWithFunding>[0]
+  ) => ReturnType<typeof publishMovePackageWithFunding>
   publishPackage: (
     publishPlan: Parameters<typeof publishPackage>[0]
   ) => ReturnType<typeof publishPackage>
@@ -194,7 +205,7 @@ export const createTooling = async ({
     hasKeypair: Boolean(loadedEd25519KeyPair)
   })
 
-  return {
+  const tooling: Tooling = {
     suiClient,
     suiConfig,
     loadedEd25519KeyPair,
@@ -239,9 +250,15 @@ export const createTooling = async ({
       ensureFoundedAddress(args, { suiClient, suiConfig }),
     withTestnetFaucetRetry: async (args, transactionRun) =>
       withTestnetFaucetRetry(args, transactionRun, { suiClient, suiConfig }),
+    syncLocalnetMoveEnvironmentChainId: async (args) =>
+      syncLocalnetMoveEnvironmentChainId(args, { suiClient, suiConfig }),
     publishPackageWithLog: async (args) =>
       publishPackageWithLog(args, { suiClient, suiConfig }),
+    publishMovePackageWithFunding: async (args) =>
+      publishMovePackageWithFunding(args, { suiClient, suiConfig }),
     publishPackage: async (publishPlan) =>
       publishPackage(publishPlan, { suiClient, suiConfig })
   }
+
+  return tooling
 }

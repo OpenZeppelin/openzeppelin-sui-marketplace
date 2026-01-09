@@ -137,6 +137,18 @@ export const normalizeOptionalId = (value?: string) =>
   value ? normalizeSuiObjectId(value) : value
 
 /**
+ * Normalizes a Sui object ID if present, returning undefined on invalid input.
+ */
+export const normalizeOptionalIdSafe = (value?: string): string | undefined => {
+  if (!value) return undefined
+  try {
+    return normalizeSuiObjectId(value)
+  } catch {
+    return undefined
+  }
+}
+
+/**
  * Normalizes a Sui address if present.
  */
 export const normalizeOptionalAddress = (value?: string) =>
@@ -185,6 +197,30 @@ export const getSuiObject = async (
 export type WrappedSuiObject = {
   object: SuiObjectData
   error?: ObjectResponseError
+}
+
+export type SuiObjectRef = {
+  objectId: string
+  version: string | number
+  digest: string
+}
+
+/**
+ * Builds a normalized object reference from fetched object data.
+ * Useful when a transaction needs explicit object refs (id/version/digest).
+ */
+export const buildSuiObjectRef = (object: SuiObjectData): SuiObjectRef => {
+  if (!object.objectId) throw new Error("Object is missing its objectId.")
+  if (object.version === undefined || object.version === null)
+    throw new Error(`Object ${object.objectId} is missing its version.`)
+  if (!object.digest)
+    throw new Error(`Object ${object.objectId} is missing its digest.`)
+
+  return {
+    objectId: normalizeSuiObjectId(object.objectId),
+    version: object.version,
+    digest: object.digest
+  }
 }
 
 /**

@@ -760,13 +760,15 @@ export const useBuyFlowModalState = ({
           paymentCoinMinimumBalance,
           "Missing payment amount."
         )
-        const splitPlan = await planSuiPaymentSplitTransaction({
-          owner: walletAddress,
-          paymentMinimum,
-          gasBudget,
-          splitGasBudget: DEFAULT_TX_GAS_BUDGET,
-          suiClient
-        })
+        const splitPlan = await planSuiPaymentSplitTransaction(
+          {
+            owner: walletAddress,
+            paymentMinimum,
+            gasBudget,
+            splitGasBudget: DEFAULT_TX_GAS_BUDGET
+          },
+          { suiClient }
+        )
 
         debugContext = {
           ...(debugContext ?? {}),

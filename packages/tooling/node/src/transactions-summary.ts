@@ -6,6 +6,8 @@ import {
   type GasSummary,
   type ObjectChangeDetail
 } from "@sui-oracle-market/tooling-core/transactions"
+import { safeJsonStringify } from "@sui-oracle-market/tooling-core/utils/errors"
+import { formatOptionalNumericValue } from "@sui-oracle-market/tooling-core/utils/formatters"
 
 export type GasSummaryView = {
   computation: string
@@ -41,10 +43,12 @@ const toGasSummaryView = (summary?: GasSummary): GasSummaryView | undefined => {
 }
 
 const normalizeBalanceChangeOwner = (owner: unknown) =>
-  typeof owner === "string" ? owner : JSON.stringify(owner)
+  typeof owner === "string"
+    ? owner
+    : (safeJsonStringify(owner) ?? String(owner))
 
 const normalizeBalanceAmount = (amount: unknown) =>
-  typeof amount === "string" ? amount : String(amount)
+  formatOptionalNumericValue(amount) ?? String(amount)
 
 const summarizeBalanceChanges = (
   balanceChanges: SuiTransactionBlockResponse["balanceChanges"]

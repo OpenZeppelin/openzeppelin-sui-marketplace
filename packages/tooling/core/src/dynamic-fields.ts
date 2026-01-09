@@ -8,6 +8,7 @@ import { normalizeSuiObjectId } from "@mysten/sui/utils"
 import type { ToolingCoreContext } from "./context.ts"
 import type { WrappedSuiObject } from "./object.ts"
 import { getSuiObject } from "./object.ts"
+import { isRecord } from "./utils/utility.ts"
 
 export type WrappedSuiDynamicFieldObject = WrappedSuiObject & {
   childObjectId: string
@@ -83,12 +84,6 @@ export const getAllDynamicFieldObjects = async (
     )
   )
 }
-
-/**
- * Narrowing helper for plain object records.
- */
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  Boolean(value) && typeof value === "object"
 
 type DynamicFieldValueIdContent = {
   fields: {

@@ -17,6 +17,7 @@ import {
   getSuiObject,
   mapOwnerToArtifact,
   normalizeIdOrThrow,
+  normalizeOptionalIdSafe,
   normalizeVersion
 } from "@sui-oracle-market/tooling-core/object"
 import { extractInitialSharedVersion } from "@sui-oracle-market/tooling-core/shared-object"
@@ -581,15 +582,7 @@ const groupObjectChanges = (
  * Normalizes a candidate object ID, returning undefined if invalid.
  */
 const normalizeObjectIdSafe = (candidate?: string): string | undefined =>
-  candidate
-    ? (() => {
-        try {
-          return normalizeSuiObjectId(candidate)
-        } catch {
-          return undefined
-        }
-      })()
-    : undefined
+  normalizeOptionalIdSafe(candidate)
 
 /**
  * Builds a set of normalized object IDs for quick lookup.
