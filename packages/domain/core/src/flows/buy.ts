@@ -442,7 +442,7 @@ export const resolvePaymentCoinObjectId = async ({
       }
     })
 
-    cursor = page.hasNextPage ? page.nextCursor ?? undefined : undefined
+    cursor = page.hasNextPage ? (page.nextCursor ?? undefined) : undefined
   } while (cursor)
 
   const selectedCoin = requireValue<CoinCandidate>(

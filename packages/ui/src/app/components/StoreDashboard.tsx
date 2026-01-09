@@ -579,7 +579,7 @@ const PurchasedItemsPanel = ({
                         {itemTypeLabel}
                       </div>
                     </div>
-                    <span className="rounded-full bg-sds-blue/15 px-3 py-1 text-xs font-semibold uppercase tracking-[0.12em] text-sds-dark dark:text-sds-light">
+                    <span className="bg-sds-blue/15 rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.12em] text-sds-dark dark:text-sds-light">
                       {purchasedAtLabel}
                     </span>
                   </div>

@@ -551,10 +551,10 @@ export const useBuyFlowModalState = ({
             suiClient
           })
 
-            if (requiredAmount !== undefined) {
-              paymentCoinMinimumBalance = requiredAmount
-              const balance = selectedCurrency.balance
-              if (balance < requiredAmount) {
+          if (requiredAmount !== undefined) {
+            paymentCoinMinimumBalance = requiredAmount
+            const balance = selectedCurrency.balance
+            if (balance < requiredAmount) {
               const shortfall = requiredAmount - balance
               const symbolLabel =
                 selectedCurrency.symbol ??
