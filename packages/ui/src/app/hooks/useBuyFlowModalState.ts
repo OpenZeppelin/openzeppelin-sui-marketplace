@@ -17,10 +17,7 @@ import {
   resolveDiscountedPriceUsdCents,
   resolvePaymentCoinObjectId
 } from "@sui-oracle-market/domain-core/flows/buy"
-import {
-  normalizeCoinType,
-  type AcceptedCurrencySummary
-} from "@sui-oracle-market/domain-core/models/currency"
+import { type AcceptedCurrencySummary } from "@sui-oracle-market/domain-core/models/currency"
 import type {
   DiscountContext,
   DiscountOption,
@@ -45,12 +42,12 @@ import { EXPLORER_URL_VARIABLE_NAME } from "../config/network"
 import { parseBalance } from "../helpers/balance"
 import { buildDiscountTemplateLookup } from "../helpers/discountTemplates"
 import { formatCoinBalance, getStructLabel } from "../helpers/format"
+import { validateOptionalSuiAddress } from "../helpers/inputValidation"
 import {
   getLocalnetClient,
   makeLocalnetExecutor,
   walletSupportsChain
 } from "../helpers/localnet"
-import { validateOptionalSuiAddress } from "../helpers/inputValidation"
 import {
   extractErrorDetails,
   formatErrorMessage,
@@ -58,8 +55,8 @@ import {
   serializeForJson
 } from "../helpers/transactionErrors"
 import { waitForTransactionBlock } from "../helpers/transactionWait"
-import useNetworkConfig from "./useNetworkConfig"
 import { useIdleFieldValidation } from "./useIdleFieldValidation"
+import useNetworkConfig from "./useNetworkConfig"
 
 type CurrencyBalance = AcceptedCurrencySummary & {
   balance: bigint
@@ -118,6 +115,12 @@ type BalanceStatus =
   | { status: "success" }
   | { status: "error"; error: string }
 
+type OracleQuoteState =
+  | { status: "idle" }
+  | { status: "loading" }
+  | { status: "success"; amount: bigint }
+  | { status: "error"; error: string }
+
 type BuyFlowModalState = {
   explorerUrl?: string
   walletAddress?: string
@@ -139,6 +142,7 @@ type BuyFlowModalState = {
   isErrorState: boolean
   canSubmit: boolean
   oracleWarning?: string
+  oracleQuote: OracleQuoteState
   handlePurchase: () => Promise<void>
   resetTransactionState: () => void
   setSelectedCurrencyId: (value?: string) => void
@@ -156,6 +160,7 @@ type BuyFlowModalState = {
 export const useBuyFlowModalState = ({
   open,
   onClose,
+  onPurchaseSuccess,
   shopId,
   listing,
   acceptedCurrencies,
@@ -164,6 +169,7 @@ export const useBuyFlowModalState = ({
 }: {
   open: boolean
   onClose: () => void
+  onPurchaseSuccess?: () => void
   shopId?: string
   listing?: ItemListingSummary
   acceptedCurrencies: AcceptedCurrencySummary[]
@@ -216,6 +222,9 @@ export const useBuyFlowModalState = ({
     shouldShowFieldFeedback
   } = useIdleFieldValidation<keyof BuyFieldErrors>({ idleDelayMs: 600 })
   const [oracleWarning, setOracleWarning] = useState<string>()
+  const [oracleQuote, setOracleQuote] = useState<OracleQuoteState>({
+    status: "idle"
+  })
   const [lastWalletContext, setLastWalletContext] =
     useState<Record<string, unknown>>()
 
@@ -313,6 +322,7 @@ export const useBuyFlowModalState = ({
     if (!open) return
     setTransactionState({ status: "idle" })
     setOracleWarning(undefined)
+    setOracleQuote({ status: "idle" })
     setMintTo(walletAddress ?? "")
     setRefundTo(walletAddress ?? "")
     setHasAttemptedSubmit(false)
@@ -395,6 +405,115 @@ export const useBuyFlowModalState = ({
     if (!isSelectionValid)
       setSelectedDiscountId(pickDefaultDiscountOptionId(discountOptions))
   }, [discountOptions, open, selectedDiscountId])
+
+  useEffect(() => {
+    if (!open) {
+      setOracleQuote({ status: "idle" })
+      return
+    }
+
+    if (
+      !walletAddress ||
+      !shopId ||
+      !listing ||
+      !selectedCurrency ||
+      !selectedDiscount
+    ) {
+      setOracleQuote({ status: "idle" })
+      return
+    }
+
+    const discountedPriceUsdCents = resolveDiscountedPriceUsdCents({
+      basePriceUsdCents: listing.basePriceUsdCents,
+      discountSelection: selectedDiscount.selection,
+      discountTemplateLookup
+    })
+
+    if (discountedPriceUsdCents === undefined) {
+      setOracleQuote({
+        status: "error",
+        error: "Missing listing price to quote."
+      })
+      return
+    }
+
+    let isActive = true
+    setOracleQuote({ status: "loading" })
+
+    const loadQuote = async () => {
+      try {
+        const shopShared = await getSuiSharedObject(
+          { objectId: shopId, mutable: false },
+          { suiClient }
+        )
+        const acceptedCurrencyShared = await getSuiSharedObject(
+          {
+            objectId: selectedCurrency.acceptedCurrencyId,
+            mutable: false
+          },
+          { suiClient }
+        )
+        const pythObjectId = normalizeIdOrThrow(
+          selectedCurrency.pythObjectId,
+          `AcceptedCurrency ${selectedCurrency.acceptedCurrencyId} is missing a pyth_object_id.`
+        )
+        const pythPriceInfoShared = await getSuiSharedObject(
+          { objectId: pythObjectId, mutable: false },
+          { suiClient }
+        )
+        const shopPackageId = deriveRelevantPackageId(shopShared.object.type)
+        const clockShared = await getSuiSharedObject(
+          { objectId: SUI_CLOCK_ID, mutable: false },
+          { suiClient }
+        )
+        const requiredAmount = await estimateRequiredAmount({
+          shopPackageId,
+          shopShared,
+          acceptedCurrencyShared,
+          pythPriceInfoShared,
+          priceUsdCents: discountedPriceUsdCents,
+          maxPriceAgeSecs: undefined,
+          maxConfidenceRatioBps: undefined,
+          clockShared,
+          signerAddress: walletAddress,
+          suiClient
+        })
+
+        if (!isActive) return
+
+        if (requiredAmount === undefined) {
+          setOracleQuote({
+            status: "error",
+            error: "Oracle quote unavailable for the selected currency."
+          })
+          return
+        }
+
+        setOracleQuote({ status: "success", amount: requiredAmount })
+      } catch (error) {
+        if (!isActive) return
+        setOracleQuote({
+          status: "error",
+          error: formatErrorMessage(error)
+        })
+      }
+    }
+
+    loadQuote()
+
+    return () => {
+      isActive = false
+    }
+  }, [
+    discountTemplateLookup,
+    listing,
+    open,
+    selectedCurrency,
+    selectedDiscount,
+    shopId,
+    suiClient,
+    walletAddress
+  ])
 
   useEffect(() => {
     if (!open) return
@@ -582,16 +701,12 @@ export const useBuyFlowModalState = ({
         }
       }
 
-      const shouldPreferSmallestPaymentCoin =
-        normalizeCoinType(currencySnapshot.coinType) === "0x2::sui::SUI"
       const paymentCoinObjectId = await resolvePaymentCoinObjectId({
         providedCoinObjectId: undefined,
         coinType: currencySnapshot.coinType,
         signerAddress: walletAddress,
         suiClient,
-        minimumBalance: shouldPreferSmallestPaymentCoin
-          ? paymentCoinMinimumBalance
-          : undefined
+        minimumBalance: paymentCoinMinimumBalance
       })
 
       const buyTransaction = await buildBuyTransaction(
@@ -654,6 +769,8 @@ export const useBuyFlowModalState = ({
           refundTo: normalizedRefundTo
         }
       })
+
+      onPurchaseSuccess?.()
     } catch (error) {
       const errorDetails = extractErrorDetails(error)
       const localnetSupportNote =
@@ -693,6 +810,7 @@ export const useBuyFlowModalState = ({
     listing,
     localnetExecutor,
     mintTo,
+    onPurchaseSuccess,
     priceUpdatePolicy,
     network,
     refundTo,
@@ -741,6 +859,7 @@ export const useBuyFlowModalState = ({
     isErrorState,
     canSubmit,
     oracleWarning,
+    oracleQuote,
     handlePurchase,
     resetTransactionState,
     setSelectedCurrencyId,

@@ -129,6 +129,10 @@ export const useStoreDashboardViewModel = ({
     }))
   }, [])
 
+  const handlePurchaseSuccess = useCallback(() => {
+    refreshWallet()
+  }, [refreshWallet])
+
   const openAddItemModal = useCallback(() => {
     setModalState((previous) => ({ ...previous, isAddItemModalOpen: true }))
   }, [])
@@ -311,6 +315,7 @@ export const useStoreDashboardViewModel = ({
     modalState,
     openBuyModal,
     closeBuyModal,
+    handlePurchaseSuccess,
     openAddItemModal,
     closeAddItemModal,
     openAddDiscountModal,

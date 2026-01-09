@@ -54,11 +54,13 @@ const ShopDashboardShell = () => {
 
   useEffect(() => {
     if (urlShopId) {
+      // `packageId` changes (network switch) reset selection in the view model,
+      // so we must re-apply the URL selection after network sync.
       selectShop(urlShopId)
     } else {
       clearSelection()
     }
-  }, [urlShopId, selectShop, clearSelection])
+  }, [urlShopId, packageId, selectShop, clearSelection])
 
   const openCreateShop = useCallback(() => {
     setIsCreateOpen(true)

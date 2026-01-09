@@ -3,8 +3,8 @@
 import type { SuiTransactionBlockResponse } from "@mysten/sui/client"
 import type { AcceptedCurrencySummary } from "@sui-oracle-market/domain-core/models/currency"
 import type {
-  DiscountTemplateSummary,
-  DiscountTicketDetails
+    DiscountTemplateSummary,
+    DiscountTicketDetails
 } from "@sui-oracle-market/domain-core/models/discount"
 import type { ItemListingSummary } from "@sui-oracle-market/domain-core/models/item-listing"
 import { mapOwnerToLabel } from "@sui-oracle-market/tooling-core/object-info"
@@ -12,37 +12,37 @@ import { summarizeGasUsed } from "@sui-oracle-market/tooling-core/transactions"
 import clsx from "clsx"
 import { parseBalance } from "../helpers/balance"
 import {
-  formatCoinBalance,
-  formatUsdFromCents,
-  getStructLabel,
-  shortenId
+    formatCoinBalance,
+    formatUsdFromCents,
+    getStructLabel,
+    shortenId
 } from "../helpers/format"
 import {
-  extractCreatedObjects,
-  formatTimestamp,
-  summarizeObjectChanges
+    extractCreatedObjects,
+    formatTimestamp,
+    summarizeObjectChanges
 } from "../helpers/transactionFormat"
 import {
-  useBuyFlowModalState,
-  type TransactionSummary
+    useBuyFlowModalState,
+    type TransactionSummary
 } from "../hooks/useBuyFlowModalState"
 import Button from "./Button"
 import CopyableId from "./CopyableId"
 import {
-  ModalBody,
-  ModalErrorFooter,
-  ModalErrorNotice,
-  ModalFrame,
-  ModalHeader,
-  ModalSection,
-  ModalStatusHeader,
-  ModalSuccessFooter,
-  modalFieldDescriptionClassName,
-  modalFieldErrorTextClassName,
-  modalFieldInputClassName,
-  modalFieldInputErrorClassName,
-  modalFieldLabelClassName,
-  modalFieldTitleClassName
+    ModalBody,
+    ModalErrorFooter,
+    ModalErrorNotice,
+    ModalFrame,
+    ModalHeader,
+    ModalSection,
+    ModalStatusHeader,
+    ModalSuccessFooter,
+    modalFieldDescriptionClassName,
+    modalFieldErrorTextClassName,
+    modalFieldInputClassName,
+    modalFieldInputErrorClassName,
+    modalFieldLabelClassName,
+    modalFieldTitleClassName
 } from "./ModalPrimitives"
 
 const getCurrencyLabel = (currency: AcceptedCurrencySummary) =>
@@ -361,6 +361,7 @@ const TransactionErrorView = ({
 const BuyFlowModal = ({
   open,
   onClose,
+  onPurchaseSuccess,
   shopId,
   listing,
   acceptedCurrencies,
@@ -369,6 +370,7 @@ const BuyFlowModal = ({
 }: {
   open: boolean
   onClose: () => void
+  onPurchaseSuccess?: () => void
   shopId?: string
   listing?: ItemListingSummary
   acceptedCurrencies: AcceptedCurrencySummary[]
@@ -395,6 +397,7 @@ const BuyFlowModal = ({
     isErrorState,
     canSubmit,
     oracleWarning,
+    oracleQuote,
     handlePurchase,
     resetTransactionState,
     setSelectedCurrencyId,
@@ -407,6 +410,7 @@ const BuyFlowModal = ({
   } = useBuyFlowModalState({
     open,
     onClose,
+    onPurchaseSuccess,
     shopId,
     listing,
     acceptedCurrencies,
@@ -522,18 +526,48 @@ const BuyFlowModal = ({
                   {selectedCurrency ? (
                     <div className="grid gap-3 text-xs sm:grid-cols-2">
                       <div className="rounded-xl border border-slate-200/70 bg-white/80 p-3 dark:border-slate-50/15 dark:bg-slate-950/60">
-                        <div className="text-[0.6rem] uppercase tracking-[0.18em] text-slate-500 dark:text-slate-200/60">
-                          Wallet balance
-                        </div>
-                        <div className="mt-1 text-sm font-semibold text-sds-dark dark:text-sds-light">
-                          {formatCoinBalance({
-                            balance: selectedCurrency.balance,
-                            decimals: selectedCurrency.decimals ?? 9
-                          })}{" "}
-                          {getCurrencyLabel(selectedCurrency)}
-                        </div>
-                        <div className="mt-1 text-[0.65rem] text-slate-500 dark:text-slate-200/60">
-                          {getStructLabel(selectedCurrency.coinType)}
+                        <div className="grid gap-3 sm:grid-cols-2 sm:gap-0">
+                          <div className="sm:pr-3">
+                            <div className="text-[0.6rem] uppercase tracking-[0.18em] text-slate-500 dark:text-slate-200/60">
+                              Oracle quote
+                            </div>
+                            <div className="mt-1 text-sm font-semibold text-sds-dark dark:text-sds-light">
+                              {oracleQuote.status === "loading"
+                                ? "Fetching quote..."
+                                : oracleQuote.status === "success"
+                                  ? `${formatCoinBalance({
+                                      balance: oracleQuote.amount,
+                                      decimals: selectedCurrency.decimals ?? 9
+                                    })} ${getCurrencyLabel(selectedCurrency)}`
+                                  : oracleQuote.status === "error"
+                                    ? "Quote unavailable"
+                                    : "Waiting for quote..."}
+                            </div>
+                            {oracleQuote.status === "success" ? (
+                              <div className="mt-1 text-[0.65rem] text-slate-500 dark:text-slate-200/60">
+                                {getStructLabel(selectedCurrency.coinType)}
+                              </div>
+                            ) : oracleQuote.status === "error" ? (
+                              <div className="mt-1 text-[0.65rem] text-rose-500">
+                                {oracleQuote.error}
+                              </div>
+                            ) : undefined}
+                          </div>
+                          <div className="sm:pl-3">
+                            <div className="text-[0.6rem] uppercase tracking-[0.18em] text-slate-500 dark:text-slate-200/60">
+                              Wallet balance
+                            </div>
+                            <div className="mt-1 text-sm font-semibold text-sds-dark dark:text-sds-light">
+                              {formatCoinBalance({
+                                balance: selectedCurrency.balance,
+                                decimals: selectedCurrency.decimals ?? 9
+                              })}{" "}
+                              {getCurrencyLabel(selectedCurrency)}
+                            </div>
+                            <div className="mt-1 text-[0.65rem] text-slate-500 dark:text-slate-200/60">
+                              {getStructLabel(selectedCurrency.coinType)}
+                            </div>
+                          </div>
                         </div>
                       </div>
                       <div className="rounded-xl border border-slate-200/70 bg-white/80 p-3 dark:border-slate-50/15 dark:bg-slate-950/60">
