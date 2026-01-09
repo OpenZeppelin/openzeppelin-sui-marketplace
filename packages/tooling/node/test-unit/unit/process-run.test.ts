@@ -26,6 +26,7 @@ const logMocks = vi.hoisted(() => ({
 const suiCliMocks = vi.hoisted(() => ({
   createSuiCliEnvironment: vi.fn(),
   ensureSuiCli: vi.fn(),
+  getSuiCliVersion: vi.fn(),
   runSuiCli: vi.fn(() =>
     vi.fn(async () => ({ stdout: "", stderr: "", exitCode: 0 }))
   ),
@@ -59,6 +60,7 @@ vi.mock("../../src/log.ts", () => ({
 vi.mock("../../src/suiCli.ts", () => ({
   createSuiCliEnvironment: suiCliMocks.createSuiCliEnvironment,
   ensureSuiCli: suiCliMocks.ensureSuiCli,
+  getSuiCliVersion: suiCliMocks.getSuiCliVersion,
   runSuiCli: suiCliMocks.runSuiCli,
   getActiveSuiCliEnvironment: suiCliMocks.getActiveSuiCliEnvironment,
   getSuiCliEnvironmentRpc: suiCliMocks.getSuiCliEnvironmentRpc,
@@ -127,6 +129,7 @@ describe("runSuiScript", () => {
       syncLocalnetMoveEnvironmentChainId
     }))
     suiCliMocks.ensureSuiCli.mockResolvedValue(undefined)
+    suiCliMocks.getSuiCliVersion.mockResolvedValue("1.2.3")
     suiCliMocks.getActiveSuiCliEnvironment.mockResolvedValue(
       resolvedNetwork.networkName
     )

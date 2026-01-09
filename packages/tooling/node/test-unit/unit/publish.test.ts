@@ -19,6 +19,9 @@ const moveMocks = vi.hoisted(() => ({
   clearPublishedEntryForNetwork: vi.fn()
 }))
 const runSuiCliMock = vi.hoisted(() => vi.fn())
+const suiCliMocks = vi.hoisted(() => ({
+  getSuiCliVersion: vi.fn()
+}))
 const logMocks = vi.hoisted(() => ({
   logKeyValueBlue: vi.fn(() => vi.fn()),
   logKeyValueGreen: vi.fn(() => vi.fn()),
@@ -45,7 +48,8 @@ vi.mock("../../src/move.ts", async () => {
 })
 
 vi.mock("../../src/suiCli.ts", () => ({
-  runSuiCli: () => runSuiCliMock
+  runSuiCli: () => runSuiCliMock,
+  getSuiCliVersion: suiCliMocks.getSuiCliVersion
 }))
 
 vi.mock("../../src/log.ts", () => ({
@@ -130,12 +134,6 @@ const buildResolvedConfig = ({
   }
 }
 
-const buildCliVersionResponse = (version: string) => ({
-  stdout: `sui ${version}\n`,
-  stderr: "",
-  exitCode: 0
-})
-
 const createPackageFixture = async ({
   rootDir,
   moveTomlContents,
@@ -173,6 +171,7 @@ beforeEach(() => {
     didUpdate: false
   })
   runSuiCliMock.mockReset()
+  suiCliMocks.getSuiCliVersion.mockResolvedValue("1.2.3")
   logMocks.logWarning.mockClear()
   logMocks.logError.mockClear()
   logMocks.logKeyValueBlue.mockClear()
@@ -412,13 +411,11 @@ describe("publishPackageWithLog", () => {
     })
 
     const cliPublishResponse = buildCliPublishResponse()
-    runSuiCliMock
-      .mockResolvedValueOnce(buildCliVersionResponse("1.2.3"))
-      .mockResolvedValueOnce({
-        stdout: JSON.stringify(cliPublishResponse),
-        stderr: "",
-        exitCode: 0
-      })
+    runSuiCliMock.mockResolvedValueOnce({
+      stdout: JSON.stringify(cliPublishResponse),
+      stderr: "",
+      exitCode: 0
+    })
 
     await withTempDir(async (dir) => {
       const packagePath = await createPackageFixture({
@@ -447,7 +444,7 @@ describe("publishPackageWithLog", () => {
         const [, buildFlags] = moveMocks.buildMovePackage.mock.calls[0] ?? []
         expect(buildFlags).toContain("--with-unpublished-dependencies")
         expect(runSuiCliMock).toHaveBeenNthCalledWith(
-          2,
+          1,
           expect.arrayContaining(["--with-unpublished-dependencies"]),
           { env: undefined }
         )
@@ -519,13 +516,11 @@ describe("publishPackageWithLog", () => {
       dependencyAddresses: {}
     })
 
-    runSuiCliMock
-      .mockResolvedValueOnce(buildCliVersionResponse("1.2.3"))
-      .mockResolvedValueOnce({
-        stdout: JSON.stringify(buildCliPublishResponse()),
-        stderr: "",
-        exitCode: 0
-      })
+    runSuiCliMock.mockResolvedValueOnce({
+      stdout: JSON.stringify(buildCliPublishResponse()),
+      stderr: "",
+      exitCode: 0
+    })
 
     const { client } = createSuiClientMock()
 
