@@ -179,14 +179,17 @@ Owner scripts default `--shop-package-id`, `--shop-id`, and `--owner-cap-id` fro
 
 ### `pnpm script owner:pyth:list`
 - Lists available Pyth feeds for the current network and surfaces the fields needed to call `owner:currency:add` (feed id, PriceInfoObject id, coin registry matches).
+	- By default, results are filtered to feeds whose base symbol matches at least one entry in the coin registry.
+	- Use `--include-unregistered` to include feeds without a registry match.
 	- Flags:
 		- `--query <text>`: filter by symbol/description (Hermes query). Coin-type pairs like `0x2::sui::SUI/0x...::usdc::USDC` are parsed locally.
 		- `--asset-type <type>`: filter by asset class (e.g. `crypto`, `fx`, `equity`, `commodity`).
 		- `--quote <symbol>`: filter by quote symbol after Hermes results are loaded (e.g. `USD`).
 		- `--coin <symbol-or-type>`: filter feeds that include a coin (symbol or full coin type).
 		- `--limit <n>`: only show the first `n` feeds.
+		- `--include-unregistered`: include feeds that do not match any coin registry entries.
 		- `--skip-price-info`: skip on-chain PriceInfoObject lookup for faster output.
-		- `--skip-registry`: skip coin registry matching for faster output.
+		- `--skip-registry`: skip coin registry matching for faster output (implies `--include-unregistered` and omits currency ids/coin types).
 		- `--json`: output machine-readable JSON.
 		- `--hermes-url <url>` / `--pyth-state-id <id>` / `--wormhole-state-id <id>`: override Pyth network config (defaults are set for testnet/mainnet).
 	- Example:

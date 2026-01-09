@@ -1,6 +1,8 @@
 /**
  * Lists Pyth feeds and resolves PriceInfoObject IDs for currency registration.
- * Optionally matches feeds to coin registry entries for convenience.
+ * By default, only outputs feeds that match at least one coin in the registry.
+ * (Use --include-unregistered to show all feeds, or --skip-registry to disable
+ * registry matching entirely.)
  */
 import type { SuiClient } from "@mysten/sui/client"
 import { normalizeSuiObjectId } from "@mysten/sui/utils"
@@ -16,8 +18,8 @@ import {
   listPythFeedSummaries,
   resolveCoinFilterSymbol,
   resolveHermesQuery,
-  resolveQuerySymbolFilters,
   resolvePythPriceInfoObjectId,
+  resolveQuerySymbolFilters,
   type PythFeedSummary
 } from "@sui-oracle-market/domain-core/models/pyth-feeds"
 import type { CurrencyRegistryEntry } from "@sui-oracle-market/tooling-core/coin-registry"
@@ -40,6 +42,7 @@ type PythListArguments = {
   quote?: string
   coin?: string
   limit?: number
+  includeUnregistered?: boolean
   skipRegistry?: boolean
   skipPriceInfo?: boolean
   json?: boolean
@@ -100,15 +103,47 @@ runSuiScript(
       filteredSummaries,
       cliArguments.limit
     )
+
+    const registryFilteredFeeds =
+      cliArguments.skipRegistry || cliArguments.includeUnregistered
+        ? limitedFeeds
+        : limitedFeeds.filter((summary) => {
+            const symbolKey = summary.baseSymbol?.trim().toLowerCase()
+            return symbolKey ? currencyIndex.has(symbolKey) : false
+          })
+
+    if (registryFilteredFeeds.length === 0) {
+      if (emitJsonOutput([], cliArguments.json)) return
+      logKeyValueYellow("Pyth feeds")(
+        "No feeds match the coin registry (after filtering)."
+      )
+      return
+    }
+
     const feedRecords = await buildFeedRecords({
-      feedSummaries: limitedFeeds,
+      feedSummaries: registryFilteredFeeds,
       pythPullConfig,
       includePriceInfo: !cliArguments.skipPriceInfo,
       currencyIndex,
       suiClient: tooling.suiClient
     })
 
-    if (emitJsonOutput(feedRecords, cliArguments.json)) return
+    const registryFilteredRecords =
+      cliArguments.skipRegistry || cliArguments.includeUnregistered
+        ? feedRecords
+        : feedRecords.filter(
+            (record) => (record.currencyMatches?.length ?? 0) > 0
+          )
+
+    if (registryFilteredRecords.length === 0) {
+      if (emitJsonOutput([], cliArguments.json)) return
+      logKeyValueYellow("Pyth feeds")(
+        "No feeds match the coin registry (after filtering)."
+      )
+      return
+    }
+
+    if (emitJsonOutput(registryFilteredRecords, cliArguments.json)) return
 
     logHeader({
       networkName: tooling.network.networkName,
@@ -116,10 +151,12 @@ runSuiScript(
       hermesUrl: pythPullConfig.hermesUrl,
       pythStateId: pythPullConfig.pythStateId,
       registryId,
-      feedCount: feedRecords.length
+      feedCount: registryFilteredRecords.length
     })
 
-    feedRecords.forEach((record, index) => logFeedRecord(record, index + 1))
+    registryFilteredRecords.forEach((record, index) =>
+      logFeedRecord(record, index + 1)
+    )
   },
   yargs()
     .option("hermesUrl", {
@@ -175,12 +212,19 @@ runSuiScript(
       type: "number",
       description: "Limit the number of feeds displayed."
     })
+    .option("includeUnregistered", {
+      alias: ["include-unregistered"],
+      type: "boolean",
+      default: false,
+      description:
+        "Include feeds that do not match any coin registry entries (still performs registry matching unless --skip-registry is set)."
+    })
     .option("skipRegistry", {
       alias: ["skip-registry", "no-registry"],
       type: "boolean",
       default: false,
       description:
-        "Skip coin registry matching (faster, but omits currency ids/coin types)."
+        "Skip coin registry matching for faster output (implies --include-unregistered and omits currency ids/coin types)."
     })
     .option("skipPriceInfo", {
       alias: ["skip-price-info"],
