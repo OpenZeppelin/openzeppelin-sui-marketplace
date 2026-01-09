@@ -104,12 +104,24 @@ const ShopDashboardShell = () => {
 
     // Network changed while in shop view: go back to shop selection.
     clearSelection()
-    updateShopIdInUrl(undefined, "replace")
+    {
+      const params = new URLSearchParams(searchParams.toString())
+      params.delete("shopId")
+      params.delete("networ")
+      if (normalizedCurrentNetwork) {
+        params.set("network", normalizedCurrentNetwork)
+      }
+      const query = params.toString()
+      const href = query ? `${pathname}?${query}` : pathname
+      router.replace(href)
+    }
   }, [
     clearSelection,
     currentNetwork,
     selectedShopId,
-    updateShopIdInUrl,
+    pathname,
+    router,
+    searchParams,
     urlShopId
   ])
 

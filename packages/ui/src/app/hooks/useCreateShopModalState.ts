@@ -27,8 +27,8 @@ import {
 } from "../helpers/transactionErrors"
 import { extractCreatedObjects } from "../helpers/transactionFormat"
 import { waitForTransactionBlock } from "../helpers/transactionWait"
-import useNetworkConfig from "./useNetworkConfig"
 import { useIdleFieldValidation } from "./useIdleFieldValidation"
+import useNetworkConfig from "./useNetworkConfig"
 
 type ShopFormState = {
   shopName: string
@@ -111,7 +111,7 @@ export const useCreateShopModalState = ({
             currentAccount ? { ...input, account: currentAccount } : input
           )
       }),
-    [currentAccount, localnetClient, signTransaction.mutateAsync]
+    [currentAccount, localnetClient, signTransaction]
   )
 
   const [formState, setFormState] = useState<ShopFormState>(emptyFormState())

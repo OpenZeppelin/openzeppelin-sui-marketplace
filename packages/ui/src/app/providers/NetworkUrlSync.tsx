@@ -2,7 +2,7 @@
 
 import { useSuiClientContext } from "@mysten/dapp-kit"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
-import { useEffect, useMemo } from "react"
+import { useEffect, useMemo, useRef } from "react"
 import useClientReady from "../hooks/useClientReady"
 import useHostNetworkPolicy from "../hooks/useHostNetworkPolicy"
 
@@ -22,6 +22,8 @@ const NetworkUrlSync = () => {
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
+  const pendingUrlNetworkRef = useRef<string | undefined>(undefined)
+  const pendingAppNetworkRef = useRef<string | undefined>(undefined)
 
   const networkFromUrl = useMemo(() => {
     return normalizeNetworkKey(
@@ -41,6 +43,16 @@ const NetworkUrlSync = () => {
     if (!networkFromUrl) return
     if (networkFromUrl === normalizedCurrentNetwork) return
 
+    // If the app already switched (e.g. via UI) and we're waiting for the URL
+    // to catch up, don't revert the app based on a stale URL value.
+    if (
+      pendingAppNetworkRef.current &&
+      pendingAppNetworkRef.current !== networkFromUrl
+    ) {
+      return
+    }
+
+    pendingUrlNetworkRef.current = networkFromUrl
     selectNetwork(networkFromUrl)
   }, [
     allowNetworkSwitching,
@@ -60,12 +72,24 @@ const NetworkUrlSync = () => {
         searchParams.get(LEGACY_NETWORK_QUERY_PARAM)
     )
 
-    // If the URL explicitly requests a different network and switching is allowed,
+    const pendingUrlNetwork = pendingUrlNetworkRef.current
+
+    const pendingAppNetwork = pendingAppNetworkRef.current
+    if (pendingAppNetwork && currentUrlNetwork === pendingAppNetwork) {
+      pendingAppNetworkRef.current = undefined
+    }
+
+    if (pendingUrlNetwork && normalizedCurrentNetwork === pendingUrlNetwork) {
+      pendingUrlNetworkRef.current = undefined
+    }
+
+    // If a network switch is in progress because the URL requested it,
     // don't fight it (wait for the app network to catch up).
     if (
       allowNetworkSwitching &&
-      currentUrlNetwork &&
-      currentUrlNetwork !== normalizedCurrentNetwork
+      pendingUrlNetwork &&
+      currentUrlNetwork === pendingUrlNetwork &&
+      normalizedCurrentNetwork !== pendingUrlNetwork
     ) {
       return
     }
@@ -85,6 +109,9 @@ const NetworkUrlSync = () => {
 
     const query = params.toString()
     const href = query ? `${pathname}?${query}` : pathname
+
+    // Mark that the URL update is pending so URL->app sync doesn't "bounce".
+    pendingAppNetworkRef.current = normalizedCurrentNetwork
     router.replace(href)
   }, [
     allowNetworkSwitching,

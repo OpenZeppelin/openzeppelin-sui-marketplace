@@ -87,7 +87,7 @@ export const useRemoveItemModalState = ({
             chain: input.chain as IdentifierString | undefined
           })
       }),
-    [localnetClient, signTransaction.mutateAsync]
+    [localnetClient, signTransaction]
   )
 
   const [transactionState, setTransactionState] = useState<TransactionState>({

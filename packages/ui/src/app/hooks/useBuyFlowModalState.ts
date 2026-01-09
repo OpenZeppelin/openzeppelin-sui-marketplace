@@ -798,12 +798,9 @@ export const useBuyFlowModalState = ({
       })
     }
   }, [
-    acceptedCurrencies,
     currentAccount,
     currentWallet,
     discountTemplateLookup,
-    discountOptions,
-    discountTickets,
     hasFieldErrors,
     isLocalnet,
     lastWalletContext,

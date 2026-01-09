@@ -1,6 +1,7 @@
 "use client"
 
 import { useSuiClientContext } from "@mysten/dapp-kit"
+import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import { useCallback } from "react"
 import useClientReady from "../hooks/useClientReady"
 import useCustomNetworkManager from "../hooks/useCustomNetworkManager"
@@ -14,6 +15,9 @@ const NetworkControls = () => {
   const isClientReady = useClientReady()
   const { allowNetworkSwitching } = useHostNetworkPolicy()
   const { network: currentNetwork, selectNetwork } = useSuiClientContext()
+  const router = useRouter()
+  const pathname = usePathname()
+  const searchParams = useSearchParams()
   const options = useNetworkOptions(currentNetwork)
   const {
     networks,
@@ -30,8 +34,15 @@ const NetworkControls = () => {
   const handleNetworkChange = useCallback(
     (nextNetwork: string) => {
       selectNetwork(nextNetwork)
+
+      const params = new URLSearchParams(searchParams.toString())
+      params.set("network", nextNetwork)
+      params.delete("networ")
+      const query = params.toString()
+      const href = query ? `${pathname}?${query}` : pathname
+      router.replace(href)
     },
-    [selectNetwork]
+    [pathname, router, searchParams, selectNetwork]
   )
 
   const handleDelete = useCallback(
