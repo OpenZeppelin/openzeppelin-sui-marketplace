@@ -2,8 +2,8 @@
 
 import type { AcceptedCurrencySummary } from "@sui-oracle-market/domain-core/models/currency"
 import type {
-    DiscountTemplateSummary,
-    DiscountTicketDetails
+  DiscountTemplateSummary,
+  DiscountTicketDetails
 } from "@sui-oracle-market/domain-core/models/discount"
 import type { ItemListingSummary } from "@sui-oracle-market/domain-core/models/item-listing"
 import type { ShopItemReceiptSummary } from "@sui-oracle-market/domain-core/models/shop-item"
@@ -11,10 +11,10 @@ import clsx from "clsx"
 import type { ReactNode } from "react"
 import { resolveCurrencyRegistryId } from "../helpers/currencyRegistry"
 import {
-    formatEpochSeconds,
-    formatUsdFromCents,
-    getStructLabel,
-    shortenId
+  formatEpochSeconds,
+  formatUsdFromCents,
+  getStructLabel,
+  shortenId
 } from "../helpers/format"
 import useExplorerUrl from "../hooks/useExplorerUrl"
 import { useStoreDashboardViewModel } from "../hooks/useStoreDashboardViewModel"

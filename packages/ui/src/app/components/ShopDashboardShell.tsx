@@ -1,24 +1,39 @@
 "use client"
 
-import { useCurrentAccount } from "@mysten/dapp-kit"
-import { useCallback, useEffect, useState } from "react"
+import { useCurrentAccount, useSuiClientContext } from "@mysten/dapp-kit"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
-import ShopSelection from "./ShopSelection"
-import StoreDashboard from "./StoreDashboard"
-import NetworkSupportChecker from "./NetworkSupportChecker"
-import SelectedShopHeader from "./SelectedShopHeader"
-import CreateShopModal from "./CreateShopModal"
+import { useCallback, useEffect, useRef, useState } from "react"
 import useResolvedPackageId from "../hooks/useResolvedPackageId"
 import { useShopSelectionViewModel } from "../hooks/useShopSelectionViewModel"
+import CreateShopModal from "./CreateShopModal"
+import NetworkSupportChecker from "./NetworkSupportChecker"
+import SelectedShopHeader from "./SelectedShopHeader"
+import ShopSelection from "./ShopSelection"
+import StoreDashboard from "./StoreDashboard"
+
+const normalizeNetworkKey = (value: string | null | undefined) => {
+  const normalized = value?.trim().toLowerCase()
+  return normalized ? normalized : undefined
+}
 
 const ShopDashboardShell = () => {
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
   const urlShopId = searchParams.get("shopId") ?? undefined
+  const urlNetwork = normalizeNetworkKey(
+    searchParams.get("network") ?? searchParams.get("networ")
+  )
   const packageId = useResolvedPackageId()
   const currentAccount = useCurrentAccount()
+  const { network: currentNetwork } = useSuiClientContext()
   const [isCreateOpen, setIsCreateOpen] = useState(false)
+  const previousNetworkRef = useRef<string | undefined>(undefined)
+  const initialDeepLinkRef = useRef<{ network?: string; shopId?: string }>({
+    network: urlNetwork,
+    shopId: urlShopId
+  })
+  const initialDeepLinkHandledRef = useRef(false)
   const {
     status,
     error,
@@ -61,6 +76,42 @@ const ShopDashboardShell = () => {
       clearSelection()
     }
   }, [urlShopId, packageId, selectShop, clearSelection])
+
+  useEffect(() => {
+    const normalizedCurrentNetwork = normalizeNetworkKey(currentNetwork)
+    const previousNetwork = previousNetworkRef.current
+    previousNetworkRef.current = normalizedCurrentNetwork
+
+    // Skip until we can compare an actual change.
+    if (!previousNetwork || !normalizedCurrentNetwork) return
+    if (previousNetwork === normalizedCurrentNetwork) return
+    if (!selectedShopId) return
+
+    // Allow one "initial deep link" case:
+    // visiting with both `?network=...` and `?shopId=...` should switch network
+    // without losing the intended shop selection.
+    const initial = initialDeepLinkRef.current
+    if (
+      !initialDeepLinkHandledRef.current &&
+      initial.shopId &&
+      initial.network &&
+      normalizeNetworkKey(initial.network) === normalizedCurrentNetwork &&
+      urlShopId === initial.shopId
+    ) {
+      initialDeepLinkHandledRef.current = true
+      return
+    }
+
+    // Network changed while in shop view: go back to shop selection.
+    clearSelection()
+    updateShopIdInUrl(undefined, "replace")
+  }, [
+    clearSelection,
+    currentNetwork,
+    selectedShopId,
+    updateShopIdInUrl,
+    urlShopId
+  ])
 
   const openCreateShop = useCallback(() => {
     setIsCreateOpen(true)
