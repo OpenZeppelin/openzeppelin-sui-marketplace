@@ -31,7 +31,9 @@ export const deriveCurrencyObjectId = (coinType: string, registryId: string) =>
     deriveObjectID(
       registryId,
       `0x2::coin_registry::CurrencyKey<${coinType}>`,
-      new Uint8Array()
+      // CurrencyKey<T> has a single `bool` dummy field. The registry uses the
+      // default value (`false`) for the key, so the BCS bytes are `0x00`.
+      new Uint8Array([0])
     )
   )
 

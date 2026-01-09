@@ -26,9 +26,9 @@ type CoinBalanceSummary = {
 }
 
 runSuiScript<CoinBalancesCliArgs>(
-  async (tooling, cliArguments) => {
+  async (tooling, _cliArguments) => {
     const addressToInspect = await resolveOwnerAddress(
-      cliArguments.address,
+      _cliArguments.address,
       tooling.network
     )
 
@@ -41,6 +41,7 @@ runSuiScript<CoinBalancesCliArgs>(
     const balances = await tooling.getCoinBalances({
       address: addressToInspect
     })
+
     logCoinBalances(balances)
   },
   yargs()

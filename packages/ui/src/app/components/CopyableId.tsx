@@ -7,7 +7,6 @@ import { useEffect, useMemo, useState } from "react"
 import { copyToClipboard } from "../helpers/clipboard"
 import { shortenId } from "../helpers/format"
 import { isLocalExplorerUrl, objectUrl } from "../helpers/network"
-import Button from "./Button"
 import {
   ModalBody,
   ModalFrame,
@@ -35,6 +34,7 @@ const CopyableId = ({
   showExplorer?: boolean
 }) => {
   const [isHydrated, setIsHydrated] = useState(false)
+
   const resolvedDisplayValue = isHydrated
     ? (displayValue ?? shortenId(value))
     : "..."
@@ -92,25 +92,22 @@ const CopyableId = ({
           {resolvedDisplayValue}
         </span>
       </div>
-      <div className="flex shrink-0 items-center gap-0">
-        <Button
-          variant="ghost"
-          size="compact"
-          className="h-6 w-6 justify-center px-0 text-slate-400/70 hover:text-slate-600 dark:text-slate-200/40 dark:hover:text-slate-100"
+      <div className="flex shrink-0 items-center gap-0.5">
+        <button
+          type="button"
           onClick={handleCopy}
           title={isHydrated ? (title ?? "Copy object id") : "Loading object id"}
           aria-label={
             isHydrated ? (title ?? "Copy object id") : "Loading object id"
           }
           disabled={!isHydrated}
+          className="focus-visible:ring-sds-blue/40 inline-flex h-4 w-4 items-center justify-center rounded text-slate-400 transition hover:bg-slate-100 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 disabled:cursor-not-allowed disabled:opacity-50 dark:text-slate-500 dark:hover:bg-slate-800 dark:hover:text-slate-50"
         >
-          <CopyIcon className="h-3.5 w-3.5" />
-        </Button>
+          <CopyIcon className="h-3 w-3" />
+        </button>
         {canOpenExplorer ? (
-          <Button
-            variant="ghost"
-            size="compact"
-            className="-ml-1 h-6 w-6 justify-center px-0 text-slate-400/70 hover:text-slate-600 dark:text-slate-200/40 dark:hover:text-slate-100"
+          <button
+            type="button"
             onClick={handleOpenExplorer}
             title={
               isLocalExplorer
@@ -122,9 +119,10 @@ const CopyableId = ({
                 ? "Show localnetwork object inspection steps"
                 : "View object on explorer"
             }
+            className="focus-visible:ring-sds-blue/40 inline-flex h-4 w-4 items-center justify-center rounded text-slate-400 transition hover:bg-slate-100 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 dark:text-slate-500 dark:hover:bg-slate-800 dark:hover:text-slate-50"
           >
-            <ExternalLinkIcon className="h-3.5 w-3.5" />
-          </Button>
+            <ExternalLinkIcon className="h-3 w-3" />
+          </button>
         ) : undefined}
       </div>
       {isLocalExplorer && isLocalnetModalOpen ? (

@@ -56,6 +56,7 @@ const Button = ({
   disabled,
   tooltip,
   title,
+  children,
   ...props
 }: ButtonProps) => {
   const button = (
@@ -69,7 +70,9 @@ const Button = ({
         className
       )}
       {...props}
-    />
+    >
+      {children}
+    </button>
   )
 
   if (!tooltip) return button

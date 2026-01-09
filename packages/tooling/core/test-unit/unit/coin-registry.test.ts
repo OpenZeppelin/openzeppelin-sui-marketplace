@@ -1,11 +1,11 @@
+import { deriveObjectID, normalizeSuiObjectId } from "@mysten/sui/utils"
 import { describe, expect, it, vi } from "vitest"
-import { normalizeSuiObjectId } from "@mysten/sui/utils"
+import { createSuiClientMock } from "../../../tests-integration/helpers/sui.ts"
 import {
   deriveCurrencyObjectId,
   listCurrencyRegistryEntries,
   resolveCurrencyObjectId
 } from "../../src/coin-registry.ts"
-import { createSuiClientMock } from "../../../tests-integration/helpers/sui.ts"
 
 const dynamicFieldMock = vi.hoisted(() => ({
   getAllDynamicFields: vi.fn()
@@ -17,12 +17,19 @@ vi.mock("../../src/dynamic-fields.ts", () => ({
 
 describe("coin registry helpers", () => {
   it("derives currency object ids", () => {
-    const derived = deriveCurrencyObjectId(
-      "0x2::sui::SUI",
-      normalizeSuiObjectId("0x1")
+    const registryId = normalizeSuiObjectId("0x1")
+    const coinType = "0x2::sui::SUI"
+
+    const derived = deriveCurrencyObjectId(coinType, registryId)
+    const expected = normalizeSuiObjectId(
+      deriveObjectID(
+        registryId,
+        `0x2::coin_registry::CurrencyKey<${coinType}>`,
+        new Uint8Array([0])
+      )
     )
 
-    expect(derived).toMatch(/^0x[0-9a-f]{64}$/)
+    expect(derived).toBe(expected)
   })
 
   it("returns empty entries when no dynamic fields exist", async () => {

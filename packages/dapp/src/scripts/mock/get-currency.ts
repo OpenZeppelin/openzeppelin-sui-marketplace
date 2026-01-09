@@ -239,7 +239,7 @@ const deriveCurrencyId = (coinInput: CoinInput, registryId: string) =>
       deriveObjectID(
         registryId,
         `0x2::coin_registry::CurrencyKey<${coinInput.coinType}>`,
-        new Uint8Array()
+        new Uint8Array([0])
       )
   )
 

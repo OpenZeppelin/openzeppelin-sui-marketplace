@@ -151,6 +151,23 @@ export const formatEpochSeconds = (rawSeconds?: string | number): string => {
 }
 
 /**
+ * Formats epoch seconds into a locale time string.
+ */
+export const formatEpochSecondsTime = (
+  rawSeconds?: string | number
+): string => {
+  if (rawSeconds === undefined) return "Unknown"
+  const seconds =
+    typeof rawSeconds === "string" ? Number(rawSeconds) : rawSeconds
+  if (!Number.isFinite(seconds)) return "Unknown"
+
+  return new Intl.DateTimeFormat("en-US", {
+    hour: "numeric",
+    minute: "2-digit"
+  }).format(new Date(seconds * 1000))
+}
+
+/**
  * Formats a timestamp (ms) into a locale datetime string.
  */
 export const formatTimestamp = (timestampMs?: string | number): string => {

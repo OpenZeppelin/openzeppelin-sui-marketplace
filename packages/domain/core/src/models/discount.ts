@@ -185,12 +185,19 @@ export const parseDiscountRuleFromField = (
   return { kind: "unknown", raw: ruleField }
 }
 
+export const centsToUnit = (cents: number | string) =>
+  Number.isInteger(Number(cents)) && Number(cents) >= 0
+    ? Number(cents) / 100
+    : (() => {
+        throw new TypeError("cents must be a non-negative integer")
+      })()
+
 export const formatOnChainDiscountRule = (
   discountRule: DiscountRuleOnChain
 ): string => {
   if (discountRule.kind === "fixed")
     return discountRule.amountCents !== undefined
-      ? `${discountRule.amountCents.toString()} cents off`
+      ? `${centsToUnit(discountRule.amountCents.toString())}$ off`
       : "Fixed discount (amount unknown)"
 
   if (discountRule.kind === "percent") {
@@ -198,9 +205,7 @@ export const formatOnChainDiscountRule = (
       return "Percent discount (bps unknown)"
 
     const percentage = Number(discountRule.basisPoints) / 100
-    return `${percentage.toFixed(
-      2
-    )}% off (${discountRule.basisPoints.toString()} bps)`
+    return `${percentage.toFixed(2)}% off`
   }
 
   return "Unknown rule"

@@ -9,6 +9,8 @@ import yargs from "yargs"
 
 import {
   buildBuyTransaction,
+  estimateRequiredAmount,
+  resolveDiscountedPriceUsdCents,
   resolveDiscountContext,
   resolvePaymentCoinObjectId
 } from "@sui-oracle-market/domain-core/flows/buy"
@@ -17,10 +19,19 @@ import {
   normalizeCoinType,
   requireAcceptedCurrencyByCoinType
 } from "@sui-oracle-market/domain-core/models/currency"
-import type { DiscountContext } from "@sui-oracle-market/domain-core/models/discount"
+import {
+  buildDiscountTemplateLookup,
+  getDiscountTemplateSummary,
+  type DiscountContext
+} from "@sui-oracle-market/domain-core/models/discount"
 import { getItemListingSummary } from "@sui-oracle-market/domain-core/models/item-listing"
 import type { PriceUpdatePolicy } from "@sui-oracle-market/domain-core/models/pyth"
 import { findCreatedShopItemIds } from "@sui-oracle-market/domain-core/models/shop-item"
+import { planSuiPaymentSplitTransaction } from "@sui-oracle-market/tooling-core/coin"
+import {
+  DEFAULT_TX_GAS_BUDGET,
+  SUI_CLOCK_ID
+} from "@sui-oracle-market/tooling-core/constants"
 import type { ObjectArtifact } from "@sui-oracle-market/tooling-core/object"
 import {
   deriveRelevantPackageId,
@@ -56,6 +67,8 @@ type BuyArguments = {
   json?: boolean
 }
 
+const SUI_COIN_TYPE = normalizeCoinType("0x2::sui::SUI")
+
 runSuiScript(
   async (tooling, cliArguments: BuyArguments) => {
     const inputs = await normalizeInputs(
@@ -63,9 +76,9 @@ runSuiScript(
       tooling.suiConfig.network.networkName
     )
 
-    const mintTo = inputs.mintTo ?? tooling.loadedEd25519KeyPair.toSuiAddress()
-    const refundTo =
-      inputs.refundTo ?? tooling.loadedEd25519KeyPair.toSuiAddress()
+    const signerAddress = tooling.loadedEd25519KeyPair.toSuiAddress()
+    const mintTo = inputs.mintTo ?? signerAddress
+    const refundTo = inputs.refundTo ?? signerAddress
 
     const shopShared = await tooling.getImmutableSharedObject({
       objectId: inputs.shopId
@@ -106,19 +119,90 @@ runSuiScript(
       tooling.suiClient
     )
 
-    const paymentCoinObjectId = await resolvePaymentCoinObjectId({
-      providedCoinObjectId: inputs.paymentCoinObjectId,
-      coinType: inputs.coinType,
-      signerAddress: tooling.loadedEd25519KeyPair.toSuiAddress(),
-      suiClient: tooling.suiClient
-    })
-
     const discountContext = await resolveDiscountContext({
       claimDiscount: inputs.claimDiscount,
       discountTicketId: inputs.discountTicketId,
       discountTemplateId: inputs.discountTemplateId,
       suiClient: tooling.suiClient
     })
+
+    const isSuiPayment = inputs.coinType === SUI_COIN_TYPE
+    let paymentCoinMinimumBalance: bigint | undefined = undefined
+    let paymentCoinObjectId: string | undefined = undefined
+
+    if (isSuiPayment) {
+      const discountedPriceUsdCents =
+        await resolveDiscountedPriceUsdCentsForPurchase({
+          shopId: inputs.shopId,
+          listingSummary,
+          discountContext,
+          suiClient: tooling.suiClient
+        })
+
+      if (discountedPriceUsdCents === undefined) {
+        throw new Error("Missing listing price; unable to quote SUI payment.")
+      }
+
+      const clockShared = await tooling.getImmutableSharedObject({
+        objectId: SUI_CLOCK_ID
+      })
+
+      paymentCoinMinimumBalance = await estimateRequiredAmount({
+        shopPackageId,
+        shopShared,
+        acceptedCurrencyShared,
+        pythPriceInfoShared,
+        priceUsdCents: discountedPriceUsdCents,
+        maxPriceAgeSecs: inputs.maxPriceAgeSecs,
+        maxConfidenceRatioBps: inputs.maxConfidenceRatioBps,
+        clockShared,
+        signerAddress,
+        suiClient: tooling.suiClient
+      })
+
+      if (paymentCoinMinimumBalance === undefined) {
+        throw new Error("Oracle quote unavailable for SUI payment.")
+      }
+
+      const splitPlan = await planSuiPaymentSplitTransaction({
+        owner: signerAddress,
+        paymentMinimum: paymentCoinMinimumBalance,
+        gasBudget: BigInt(DEFAULT_TX_GAS_BUDGET),
+        splitGasBudget: DEFAULT_TX_GAS_BUDGET,
+        paymentCoinObjectId: inputs.paymentCoinObjectId,
+        suiClient: tooling.suiClient
+      })
+
+      if (splitPlan.needsSplit && splitPlan.transaction) {
+        if (!cliArguments.json) {
+          logKeyValueYellow("SUI-split")(
+            "Creating payment and gas coins for SUI checkout."
+          )
+        }
+
+        const splitExecution = await tooling.executeTransactionWithSummary({
+          transaction: splitPlan.transaction,
+          signer: tooling.loadedEd25519KeyPair,
+          summaryLabel: "sui-split",
+          devInspect: cliArguments.devInspect,
+          dryRun: cliArguments.dryRun
+        })
+
+        if (cliArguments.dryRun || !splitExecution.execution) return
+      }
+
+      paymentCoinObjectId = splitPlan.paymentCoinObjectId
+    }
+
+    if (!paymentCoinObjectId) {
+      paymentCoinObjectId = await resolvePaymentCoinObjectId({
+        providedCoinObjectId: inputs.paymentCoinObjectId,
+        coinType: inputs.coinType,
+        signerAddress,
+        suiClient: tooling.suiClient,
+        minimumBalance: paymentCoinMinimumBalance
+      })
+    }
 
     if (!cliArguments.json) {
       logBuyContext({
@@ -152,19 +236,22 @@ runSuiScript(
         refundTo,
         maxPriceAgeSecs: inputs.maxPriceAgeSecs,
         maxConfidenceRatioBps: inputs.maxConfidenceRatioBps,
+        gasBudget: DEFAULT_TX_GAS_BUDGET,
         discountContext,
         skipPriceUpdate: inputs.skipPriceUpdate,
         priceUpdatePolicy: inputs.priceUpdatePolicy,
         hermesUrlOverride: inputs.hermesUrl,
         pythConfigOverride: tooling.suiConfig.network.pyth,
         networkName: tooling.suiConfig.network.networkName,
-        signerAddress: tooling.loadedEd25519KeyPair.toSuiAddress(),
+        signerAddress,
         onWarning: cliArguments.json
           ? undefined
           : (message) => logKeyValueYellow("Oracle")(message)
       },
       tooling.suiClient
     )
+
+    buyTransaction.setGasBudget(DEFAULT_TX_GAS_BUDGET)
 
     const { execution, summary } = await tooling.executeTransactionWithSummary({
       transaction: buyTransaction,
@@ -311,6 +398,38 @@ runSuiScript(
     })
     .strict()
 )
+
+const resolveDiscountedPriceUsdCentsForPurchase = async ({
+  shopId,
+  listingSummary,
+  discountContext,
+  suiClient
+}: {
+  shopId: string
+  listingSummary: Awaited<ReturnType<typeof getItemListingSummary>>
+  discountContext: DiscountContext
+  suiClient: Parameters<typeof getItemListingSummary>[2]
+}): Promise<bigint | undefined> => {
+  if (!listingSummary.basePriceUsdCents) return undefined
+
+  const templateSummary =
+    discountContext.mode === "none"
+      ? undefined
+      : await getDiscountTemplateSummary(
+          shopId,
+          discountContext.discountTemplateId,
+          suiClient
+        )
+  const discountTemplateLookup = templateSummary
+    ? buildDiscountTemplateLookup([templateSummary])
+    : {}
+
+  return resolveDiscountedPriceUsdCents({
+    basePriceUsdCents: listingSummary.basePriceUsdCents,
+    discountSelection: discountContext,
+    discountTemplateLookup
+  })
+}
 
 const normalizeInputs = async (
   cliArguments: BuyArguments,

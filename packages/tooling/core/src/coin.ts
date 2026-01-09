@@ -1,7 +1,12 @@
+import type { SuiClient } from "@mysten/sui/client"
+import type { Transaction } from "@mysten/sui/transactions"
+import { normalizeSuiObjectId } from "@mysten/sui/utils"
+import { DEFAULT_TX_GAS_BUDGET } from "./constants.ts"
 import type { ToolingCoreContext } from "./context.ts"
 import { extractOwnerAddress, getSuiObject } from "./object.ts"
 import { newTransaction, resolveSplitCoinResult } from "./transactions.ts"
 import { formatTypeName, parseTypeNameFromString } from "./utils/type-name.ts"
+import { parseBalance } from "./utils/utility.ts"
 
 /**
  * Builds a transaction that splits a Coin object and transfers the split amount.
@@ -77,5 +82,225 @@ export const resolveCoinOwnership = async (
   return {
     coinType,
     ownerAddress
+  }
+}
+
+type SuiCoinBalance = {
+  coinObjectId: string
+  balance: bigint
+}
+
+type SuiObjectRef = {
+  objectId: string
+  version: string | number
+  digest: string
+}
+
+const selectRichestCoin = (coins: SuiCoinBalance[]) =>
+  coins.reduce<SuiCoinBalance | undefined>((richest, coin) => {
+    if (!richest) return coin
+    return coin.balance > richest.balance ? coin : richest
+  }, undefined)
+
+const fetchObjectRef = async ({
+  objectId,
+  suiClient
+}: {
+  objectId: string
+  suiClient: SuiClient
+}): Promise<SuiObjectRef> => {
+  const response = await suiClient.getObject({
+    id: normalizeSuiObjectId(objectId),
+    options: { showContent: false, showOwner: false, showType: false }
+  })
+
+  if (!response.data)
+    throw new Error(`Unable to fetch object ref for ${objectId}.`)
+
+  return {
+    objectId: normalizeSuiObjectId(response.data.objectId),
+    version: response.data.version,
+    digest: response.data.digest
+  }
+}
+
+const fetchSuiCoinBalances = async ({
+  owner,
+  suiClient
+}: {
+  owner: string
+  suiClient: SuiClient
+}): Promise<SuiCoinBalance[]> => {
+  const coins: SuiCoinBalance[] = []
+  let cursor: string | undefined = undefined
+
+  do {
+    const page = await suiClient.getCoins({
+      owner,
+      coinType: "0x2::sui::SUI",
+      limit: 50,
+      cursor
+    })
+
+    page.data.forEach((coin) => {
+      coins.push({
+        coinObjectId: normalizeSuiObjectId(coin.coinObjectId),
+        balance: parseBalance(coin.balance)
+      })
+    })
+
+    cursor = page.hasNextPage ? (page.nextCursor ?? undefined) : undefined
+  } while (cursor)
+
+  return coins
+}
+
+const hasDistinctGasCoin = ({
+  coins,
+  paymentMinimum,
+  gasBudget,
+  paymentCoinObjectId
+}: {
+  coins: SuiCoinBalance[]
+  paymentMinimum: bigint
+  gasBudget: bigint
+  paymentCoinObjectId: string
+}) => {
+  const paymentCoin = coins.find(
+    (coin) => coin.coinObjectId === paymentCoinObjectId
+  )
+  if (!paymentCoin || paymentCoin.balance < paymentMinimum) return false
+
+  return coins.some(
+    (gasCoin) =>
+      gasCoin.coinObjectId !== paymentCoinObjectId &&
+      gasCoin.balance >= gasBudget
+  )
+}
+
+const buildSplitSuiCoinsTransaction = ({
+  owner,
+  splitAmounts,
+  gasBudget
+}: {
+  owner: string
+  splitAmounts: bigint[]
+  gasBudget: number
+}) => {
+  if (splitAmounts.length === 0)
+    throw new Error("Split transaction requires at least one split amount.")
+
+  const amounts = splitAmounts.map((amount) => {
+    if (amount <= 0n)
+      throw new Error("Split amounts must be positive, non-zero values.")
+    return amount
+  })
+
+  const transaction = newTransaction(gasBudget)
+  transaction.setSender(owner)
+  transaction.setGasOwner(owner)
+
+  const splitResult = transaction.splitCoins(
+    transaction.gas,
+    amounts.map((amount) => transaction.pure.u64(amount))
+  )
+
+  amounts.forEach((_, index) => {
+    const splitCoin = resolveSplitCoinResult(splitResult, index)
+    transaction.transferObjects([splitCoin], transaction.pure.address(owner))
+  })
+
+  return transaction
+}
+
+export const planSuiPaymentSplitTransaction = async ({
+  owner,
+  paymentMinimum,
+  gasBudget,
+  splitGasBudget = DEFAULT_TX_GAS_BUDGET,
+  paymentCoinObjectId,
+  suiClient
+}: {
+  owner: string
+  paymentMinimum: bigint
+  gasBudget: bigint
+  splitGasBudget?: number
+  paymentCoinObjectId?: string
+  suiClient: SuiClient
+}): Promise<{
+  needsSplit: boolean
+  coinCount: number
+  totalBalance: bigint
+  paymentCoinObjectId: string
+  transaction?: Transaction
+}> => {
+  if (paymentMinimum <= 0n)
+    throw new Error("Payment amount must be a positive non-zero value.")
+  if (gasBudget <= 0n)
+    throw new Error("Gas budget must be a positive non-zero value.")
+
+  const coins = await fetchSuiCoinBalances({ owner, suiClient })
+  const totalBalance = coins.reduce((total, coin) => total + coin.balance, 0n)
+  const normalizedPaymentCoinObjectId = paymentCoinObjectId
+    ? normalizeSuiObjectId(paymentCoinObjectId)
+    : undefined
+  const paymentCoin = normalizedPaymentCoinObjectId
+    ? coins.find((coin) => coin.coinObjectId === normalizedPaymentCoinObjectId)
+    : selectRichestCoin(coins)
+
+  if (normalizedPaymentCoinObjectId && !paymentCoin)
+    throw new Error(
+      `Payment coin ${normalizedPaymentCoinObjectId} not found for the signer.`
+    )
+
+  if (!paymentCoin) throw new Error("No SUI coin objects found for the signer.")
+
+  if (paymentCoin.balance < paymentMinimum) {
+    throw new Error(
+      "No single SUI coin can cover the payment amount. Merge coins or fund a larger coin, then retry."
+    )
+  }
+
+  if (
+    hasDistinctGasCoin({
+      coins,
+      paymentMinimum,
+      gasBudget,
+      paymentCoinObjectId: paymentCoin.coinObjectId
+    })
+  ) {
+    return {
+      needsSplit: false,
+      coinCount: coins.length,
+      totalBalance,
+      paymentCoinObjectId: paymentCoin.coinObjectId
+    }
+  }
+
+  const requiredBalance = paymentMinimum + gasBudget + BigInt(splitGasBudget)
+  if (paymentCoin.balance < requiredBalance) {
+    throw new Error(
+      "Insufficient SUI balance to cover payment plus gas. Fund more SUI, then retry."
+    )
+  }
+
+  const transaction = buildSplitSuiCoinsTransaction({
+    owner,
+    splitAmounts: [gasBudget],
+    gasBudget: splitGasBudget
+  })
+  const gasPaymentRef = await fetchObjectRef({
+    objectId: paymentCoin.coinObjectId,
+    suiClient
+  })
+  transaction.setGasOwner(owner)
+  transaction.setGasPayment([gasPaymentRef])
+
+  return {
+    needsSplit: true,
+    coinCount: coins.length,
+    totalBalance,
+    paymentCoinObjectId: paymentCoin.coinObjectId,
+    transaction
   }
 }

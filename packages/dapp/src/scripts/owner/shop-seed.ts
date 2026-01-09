@@ -11,8 +11,8 @@ import yargs from "yargs"
 
 import {
   findAcceptedCurrencyByCoinType,
-  getAcceptedCurrencySummary,
   getAcceptedCurrencySummaries,
+  getAcceptedCurrencySummary,
   normalizeCoinType,
   requireAcceptedCurrencyByCoinType,
   type AcceptedCurrencyMatch
@@ -64,13 +64,15 @@ import {
   resolveShopDependencyIds,
   resolveShopPackageId
 } from "@sui-oracle-market/domain-node/shop"
+import { deriveCurrencyObjectId } from "@sui-oracle-market/tooling-core/coin-registry"
 import {
   assertBytesLength,
   hexToBytes
 } from "@sui-oracle-market/tooling-core/hex"
-import { isStaleObjectVersionError } from "@sui-oracle-market/tooling-core/transactions"
 import { normalizeIdOrThrow } from "@sui-oracle-market/tooling-core/object"
+import { isStaleObjectVersionError } from "@sui-oracle-market/tooling-core/transactions"
 import { readMoveString } from "@sui-oracle-market/tooling-core/utils/formatters"
+import { retryWithDelay } from "@sui-oracle-market/tooling-core/utils/retry"
 import { extractStructNameFromType } from "@sui-oracle-market/tooling-core/utils/type-name"
 import {
   parseNonNegativeU64,
@@ -79,7 +81,6 @@ import {
   parsePositiveU64,
   wait
 } from "@sui-oracle-market/tooling-core/utils/utility"
-import { retryWithDelay } from "@sui-oracle-market/tooling-core/utils/retry"
 import { readArtifact } from "@sui-oracle-market/tooling-node/artifacts"
 import { withMutedConsole } from "@sui-oracle-market/tooling-node/console"
 import {
@@ -219,7 +220,7 @@ type DiscountTemplateEntry = Awaited<
 const LISTING_SEEDS: ItemListingSeedDefinition[] = [
   {
     name: "City Commuter Car",
-    priceUsd: "12.5",
+    priceUsd: "10",
     stock: "3",
     itemTypeName: "Car"
   },
@@ -231,13 +232,13 @@ const LISTING_SEEDS: ItemListingSeedDefinition[] = [
   },
   {
     name: "Live Concert Ticket",
-    priceUsd: "10",
+    priceUsd: "0.02",
     stock: "20",
     itemTypeName: "ConcertTicket"
   },
   {
     name: "Digital Pass",
-    priceUsd: "4.5",
+    priceUsd: "0.01",
     stock: "40",
     itemTypeName: "DigitalPass"
   }
@@ -250,7 +251,7 @@ const DISCOUNT_SEEDS: DiscountSeedDefinition[] = [
   },
   {
     ruleKind: "fixed",
-    value: "2",
+    value: "1",
     maxRedemptions: "25"
   }
 ]
@@ -413,6 +414,7 @@ const resolveOrCreateShopIdentifiers = async ({
     networkName,
     allowMissing: !hasExplicitShopInputs
   })
+
   if (
     existingIdentifiers?.packageId &&
     existingIdentifiers?.shopId &&
@@ -825,7 +827,7 @@ const buildLocalnetAcceptedCurrencySeeds = async (): Promise<
     usedFeedIds: Set<string>
   } = { seeds: [], usedFeedIds: new Set<string>() }
 
-  return coins.reduce((state, coin) => {
+  const coinSeeds = coins.reduce((state, coin) => {
     const feed = pickMockFeedForCoin({
       coin,
       priceFeeds,
@@ -851,7 +853,50 @@ const buildLocalnetAcceptedCurrencySeeds = async (): Promise<
       ],
       usedFeedIds: nextUsedFeedIds
     }
-  }, initialState).seeds
+  }, initialState)
+
+  const suiFeed = pickMockFeedByKey({
+    priceFeeds,
+    usedFeedIds: coinSeeds.usedFeedIds,
+    key: "sui"
+  })
+
+  if (!suiFeed)
+    throw new Error(
+      "Missing SUI mock price feed. Run `pnpm --filter dapp mock:setup` to seed MOCK_SUI_FEED first."
+    )
+
+  return [
+    ...coinSeeds.seeds,
+    {
+      coinType: DEFAULT_SUI_COIN_TYPE,
+      feedId: suiFeed.feedIdHex,
+      priceInfoObjectId: suiFeed.priceInfoObjectId,
+      currencyId: deriveCurrencyObjectId(
+        DEFAULT_SUI_COIN_TYPE,
+        SUI_COIN_REGISTRY_ID
+      )
+    }
+  ]
+}
+
+const pickMockFeedByKey = ({
+  priceFeeds,
+  usedFeedIds,
+  key
+}: {
+  priceFeeds: MockPriceFeedArtifact[]
+  usedFeedIds: Set<string>
+  key: string
+}): MockPriceFeedArtifact | undefined => {
+  const normalizedKey = resolveMockLabelKey(key)
+  if (!normalizedKey) return undefined
+
+  return priceFeeds.find((feed) => {
+    if (usedFeedIds.has(feed.feedIdHex)) return false
+    const feedKey = resolveMockLabelKey(feed.label)
+    return feedKey === normalizedKey
+  })
 }
 
 const pickMockFeedForCoin = ({
@@ -881,6 +926,7 @@ const resolveMockLabelKey = (label?: string): string | undefined => {
   if (!normalized) return undefined
   if (normalized.includes("usd")) return "usd"
   if (normalized.includes("btc")) return "btc"
+  if (normalized.includes("sui")) return "sui"
   return normalized
 }
 

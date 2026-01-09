@@ -198,6 +198,27 @@ const getWalletQueryConfig = ({
 }): WalletQueryConfig | undefined =>
   ownerAddress && shopId ? { ownerAddress, shopId, packageId } : undefined
 
+const parseOptionalBigInt = (value?: string) => {
+  if (!value) return undefined
+  try {
+    return BigInt(value)
+  } catch {
+    return undefined
+  }
+}
+
+const sortPurchasedItemsLatestFirst = (items: ShopItemReceiptSummary[]) =>
+  items
+    .map((item, index) => ({ item, index }))
+    .sort((a, b) => {
+      const aTimestamp = parseOptionalBigInt(a.item.acquiredAt) ?? 0n
+      const bTimestamp = parseOptionalBigInt(b.item.acquiredAt) ?? 0n
+
+      if (aTimestamp !== bTimestamp) return aTimestamp > bTimestamp ? -1 : 1
+      return a.index - b.index
+    })
+    .map(({ item }) => item)
+
 /**
  * Fetches storefront + wallet data from Sui for the dashboard.
  * Sui state lives in objects, so we query object summaries and owned objects
@@ -440,7 +461,7 @@ export const useShopDashboardData = ({
         setWalletState({
           status: "success",
           error: undefined,
-          purchasedItems: data.purchasedItems,
+          purchasedItems: sortPurchasedItemsLatestFirst(data.purchasedItems),
           discountTickets: data.discountTickets
         })
       } catch (error) {

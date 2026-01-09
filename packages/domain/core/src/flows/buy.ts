@@ -7,7 +7,10 @@ import {
   SuiPythClient
 } from "@pythnetwork/pyth-sui-js"
 
-import { SUI_CLOCK_ID } from "@sui-oracle-market/tooling-core/constants"
+import {
+  DEFAULT_TX_GAS_BUDGET,
+  SUI_CLOCK_ID
+} from "@sui-oracle-market/tooling-core/constants"
 import {
   deriveRelevantPackageId,
   getSuiObject,
@@ -22,7 +25,10 @@ import {
   parseI64FromMoveValue,
   unwrapMoveFields
 } from "@sui-oracle-market/tooling-core/utils/move-values"
-import { requireValue } from "@sui-oracle-market/tooling-core/utils/utility"
+import {
+  parseBalance,
+  requireValue
+} from "@sui-oracle-market/tooling-core/utils/utility"
 import { normalizeCoinType } from "../models/currency.ts"
 import type {
   DiscountContext,
@@ -204,11 +210,13 @@ const maybeSetDedicatedGasForSuiPayments = async ({
   transaction,
   signerAddress,
   paymentCoinObjectId,
+  gasBudget,
   suiClient
 }: {
   transaction: Transaction
   signerAddress: string
   paymentCoinObjectId: string
+  gasBudget?: number
   suiClient: SuiClient
 }) => {
   // When paying with SUI, one coin must cover gas and a different coin must be the payment input.
@@ -218,20 +226,28 @@ const maybeSetDedicatedGasForSuiPayments = async ({
     limit: 50
   })
 
-  const gasCandidate = coins.data.reduce<{
-    coinObjectId: string
-    balance: bigint
-  } | null>((current, coin) => {
-    const coinObjectId = normalizeSuiObjectId(coin.coinObjectId)
-    if (coinObjectId === paymentCoinObjectId) return current
-    const balance = BigInt(coin.balance)
-    if (!current) return { coinObjectId, balance }
-    return balance > current.balance ? { coinObjectId, balance } : current
-  }, null)
+  const minimumGasBalance = BigInt(gasBudget ?? DEFAULT_TX_GAS_BUDGET)
+  const gasCandidate = coins.data
+    .map((coin) => ({
+      coinObjectId: normalizeSuiObjectId(coin.coinObjectId),
+      balance: parseBalance(coin.balance)
+    }))
+    .filter(
+      (coin) =>
+        coin.coinObjectId !== paymentCoinObjectId &&
+        coin.balance >= minimumGasBalance
+    )
+    .reduce<{
+      coinObjectId: string
+      balance: bigint
+    } | null>((current, coin) => {
+      if (!current) return coin
+      return coin.balance < current.balance ? coin : current
+    }, null)
 
   if (!gasCandidate)
     throw new Error(
-      "Paying with SUI requires at least two SUI coin objects (one for gas, one for payment). Create an extra coin object (e.g., by splitting coins) or provide --payment-coin-object-id for a non-gas coin."
+      `Paying with SUI requires a non-payment SUI coin with at least ${minimumGasBalance}. Split a gas coin or fund a larger balance, then retry.`
     )
 
   const gasRef = await getObjectRef(gasCandidate.coinObjectId, suiClient)
@@ -473,6 +489,7 @@ export const buildBuyTransaction = async (
     refundTo,
     maxPriceAgeSecs,
     maxConfidenceRatioBps,
+    gasBudget,
     discountContext,
     skipPriceUpdate,
     priceUpdatePolicy,
@@ -495,6 +512,7 @@ export const buildBuyTransaction = async (
     refundTo: string
     maxPriceAgeSecs?: bigint
     maxConfidenceRatioBps?: bigint
+    gasBudget?: number
     discountContext: DiscountContext
     skipPriceUpdate?: boolean
     priceUpdatePolicy?: PriceUpdatePolicy
@@ -515,6 +533,7 @@ export const buildBuyTransaction = async (
       transaction,
       signerAddress,
       paymentCoinObjectId,
+      gasBudget,
       suiClient
     })
   }

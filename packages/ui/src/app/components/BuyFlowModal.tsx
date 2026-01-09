@@ -91,7 +91,9 @@ const TransactionRecap = ({
               {status}
             </div>
             {error ? (
-              <div className="mt-2 text-xs text-rose-500">{error}</div>
+              <div className="mt-2 break-all text-xs text-rose-500">
+                {error}
+              </div>
             ) : undefined}
           </div>
           <div className="rounded-xl border border-slate-200/70 bg-white/80 p-3 dark:border-slate-50/15 dark:bg-slate-950/60">

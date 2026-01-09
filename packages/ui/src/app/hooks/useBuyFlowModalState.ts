@@ -9,6 +9,7 @@ import {
   useSuiClientContext
 } from "@mysten/dapp-kit"
 import type { SuiTransactionBlockResponse } from "@mysten/sui/client"
+import type { Transaction } from "@mysten/sui/transactions"
 import { normalizeSuiAddress } from "@mysten/sui/utils"
 import type { IdentifierString } from "@mysten/wallet-standard"
 import {
@@ -17,7 +18,10 @@ import {
   resolveDiscountedPriceUsdCents,
   resolvePaymentCoinObjectId
 } from "@sui-oracle-market/domain-core/flows/buy"
-import { type AcceptedCurrencySummary } from "@sui-oracle-market/domain-core/models/currency"
+import {
+  normalizeCoinType,
+  type AcceptedCurrencySummary
+} from "@sui-oracle-market/domain-core/models/currency"
 import type {
   DiscountContext,
   DiscountOption,
@@ -30,13 +34,18 @@ import {
 } from "@sui-oracle-market/domain-core/models/discount"
 import type { ItemListingSummary } from "@sui-oracle-market/domain-core/models/item-listing"
 import type { PriceUpdatePolicy } from "@sui-oracle-market/domain-core/models/pyth"
-import { SUI_CLOCK_ID } from "@sui-oracle-market/tooling-core/constants"
+import { planSuiPaymentSplitTransaction } from "@sui-oracle-market/tooling-core/coin"
+import {
+  DEFAULT_TX_GAS_BUDGET,
+  SUI_CLOCK_ID
+} from "@sui-oracle-market/tooling-core/constants"
 import {
   deriveRelevantPackageId,
   normalizeIdOrThrow
 } from "@sui-oracle-market/tooling-core/object"
 import { getSuiSharedObject } from "@sui-oracle-market/tooling-core/shared-object"
 import { ENetwork } from "@sui-oracle-market/tooling-core/types"
+import { requireValue } from "@sui-oracle-market/tooling-core/utils/utility"
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { EXPLORER_URL_VARIABLE_NAME } from "../config/network"
 import { parseBalance } from "../helpers/balance"
@@ -68,6 +77,8 @@ type BuyFieldErrors = {
   refundTo?: string
 }
 
+const SUI_COIN_TYPE = normalizeCoinType("0x2::sui::SUI")
+
 const buildBuyFieldErrors = ({
   selectedCurrencyId,
   availableCurrencyCount,
@@ -96,7 +107,7 @@ const buildBuyFieldErrors = ({
 export type TransactionSummary = {
   digest: string
   transactionBlock: SuiTransactionBlockResponse
-  paymentCoinObjectId: string
+  paymentCoinObjectId?: string
   selectedCurrency: CurrencyBalance
   discountSelection: DiscountContext
   mintTo: string
@@ -613,6 +624,8 @@ export const useBuyFlowModalState = ({
 
     let failureStage: "prepare" | "execute" | "fetch" = "prepare"
 
+    let debugContext: Record<string, unknown> | undefined
+
     try {
       const normalizedMintTo = normalizeSuiAddress(
         mintTo.trim() || walletAddress
@@ -701,13 +714,84 @@ export const useBuyFlowModalState = ({
         }
       }
 
-      const paymentCoinObjectId = await resolvePaymentCoinObjectId({
-        providedCoinObjectId: undefined,
-        coinType: currencySnapshot.coinType,
-        signerAddress: walletAddress,
-        suiClient,
-        minimumBalance: paymentCoinMinimumBalance
-      })
+      const isSuiPayment =
+        normalizeCoinType(currencySnapshot.coinType) === SUI_COIN_TYPE
+      const gasBudget = BigInt(DEFAULT_TX_GAS_BUDGET)
+      if (isSuiPayment && paymentCoinMinimumBalance === undefined) {
+        setTransactionState({
+          status: "error",
+          error:
+            "Unable to estimate the SUI payment amount for gas-split checkout. Try again or switch to a non-SUI payment."
+        })
+        return
+      }
+
+      const executeTransaction = async (transaction: Transaction) => {
+        let digest = ""
+        let transactionBlock: SuiTransactionBlockResponse
+
+        if (isLocalnet) {
+          // Localnet signs in-wallet but executes via the app RPC to avoid wallet network mismatches.
+          failureStage = "execute"
+          const result = await localnetExecutor(transaction, {
+            chain: expectedChain
+          })
+          digest = result.digest
+          transactionBlock = result
+        } else {
+          failureStage = "execute"
+          const result = await signAndExecuteTransaction.mutateAsync({
+            transaction,
+            chain: expectedChain
+          })
+
+          failureStage = "fetch"
+          digest = result.digest
+          transactionBlock = await waitForTransactionBlock(suiClient, digest)
+        }
+
+        return { digest, transactionBlock }
+      }
+
+      let paymentCoinObjectId: string
+
+      if (isSuiPayment) {
+        const paymentMinimum = requireValue(
+          paymentCoinMinimumBalance,
+          "Missing payment amount."
+        )
+        const splitPlan = await planSuiPaymentSplitTransaction({
+          owner: walletAddress,
+          paymentMinimum,
+          gasBudget,
+          splitGasBudget: DEFAULT_TX_GAS_BUDGET,
+          suiClient
+        })
+
+        debugContext = {
+          ...(debugContext ?? {}),
+          suiPaymentSplitPlan: {
+            needsSplit: splitPlan.needsSplit,
+            coinCount: splitPlan.coinCount,
+            totalBalance: splitPlan.totalBalance.toString(),
+            paymentCoinObjectId: splitPlan.paymentCoinObjectId
+          }
+        }
+
+        if (splitPlan.needsSplit && splitPlan.transaction) {
+          failureStage = "execute"
+          await executeTransaction(splitPlan.transaction)
+        }
+        paymentCoinObjectId = splitPlan.paymentCoinObjectId
+      } else {
+        paymentCoinObjectId = await resolvePaymentCoinObjectId({
+          providedCoinObjectId: undefined,
+          coinType: currencySnapshot.coinType,
+          signerAddress: walletAddress,
+          suiClient,
+          minimumBalance: paymentCoinMinimumBalance
+        })
+      }
 
       const buyTransaction = await buildBuyTransaction(
         {
@@ -724,6 +808,7 @@ export const useBuyFlowModalState = ({
           refundTo: normalizedRefundTo,
           maxPriceAgeSecs: undefined,
           maxConfidenceRatioBps: undefined,
+          gasBudget: DEFAULT_TX_GAS_BUDGET,
           discountContext: discountSelection,
           priceUpdatePolicy,
           hermesUrlOverride: undefined,
@@ -734,28 +819,21 @@ export const useBuyFlowModalState = ({
         suiClient
       )
 
-      let digest = ""
-      let transactionBlock: SuiTransactionBlockResponse
+      buyTransaction.setGasBudget(DEFAULT_TX_GAS_BUDGET)
 
-      if (isLocalnet) {
-        // Localnet signs in-wallet but executes via the app RPC to avoid wallet network mismatches.
-        failureStage = "execute"
-        const result = await localnetExecutor(buyTransaction, {
-          chain: expectedChain
-        })
-        digest = result.digest
-        transactionBlock = result
-      } else {
-        failureStage = "execute"
-        const result = await signAndExecuteTransaction.mutateAsync({
-          transaction: buyTransaction,
-          chain: expectedChain
-        })
-
-        failureStage = "fetch"
-        digest = result.digest
-        transactionBlock = await waitForTransactionBlock(suiClient, digest)
+      const preSignGasData = (
+        buyTransaction as { getData?: () => { gasData?: unknown } }
+      ).getData?.()?.gasData
+      if (preSignGasData) {
+        debugContext = {
+          ...(debugContext ?? {}),
+          preSignGasData: serializeForJson(preSignGasData)
+        }
       }
+
+      failureStage = "execute"
+      const { digest, transactionBlock } =
+        await executeTransaction(buyTransaction)
 
       setTransactionState({
         status: "success",
@@ -783,7 +861,8 @@ export const useBuyFlowModalState = ({
           raw: serializeForJson(error),
           failureStage,
           localnetSupportNote,
-          walletContext: lastWalletContext ?? walletContext
+          walletContext: lastWalletContext ?? walletContext,
+          debugContext
         },
         2
       )

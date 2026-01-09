@@ -12,6 +12,7 @@ import yargs from "yargs"
 import { ensureSignerOwnsCoin } from "@sui-oracle-market/domain-core/models/currency"
 import {
   DEFAULT_MOCK_PRICE_FEEDS,
+  deriveMockPriceComponents,
   getPythPriceInfoType,
   isMatchingMockPriceFeedConfig,
   publishMockPriceFeed,
@@ -224,6 +225,17 @@ runSuiScript(
         },
         tooling
       ))
+
+    // Keep all mock feeds aligned with the configured values (even when reusing existing objects).
+    await refreshPriceFeeds(
+      {
+        pythPackageId,
+        signer: tooling.loadedEd25519KeyPair,
+        clockObject,
+        priceFeeds
+      },
+      tooling
+    )
 
     // Persist price feed artifacts for reuse.
     await writeMockArtifact(mockArtifactPath, {
@@ -752,6 +764,92 @@ const ensurePriceFeeds = async (
 
   return feeds
 }
+
+const refreshPriceFeeds = async (
+  {
+    pythPackageId,
+    signer,
+    clockObject,
+    priceFeeds
+  }: {
+    pythPackageId: string
+    signer: Ed25519Keypair
+    clockObject: WrappedSuiSharedObject
+    priceFeeds: PriceFeedArtifact[]
+  },
+  tooling: Tooling
+) => {
+  const updateTransaction = newTransaction(DEFAULT_TX_GAS_BUDGET)
+  const clockArgument = updateTransaction.sharedObjectRef(clockObject.sharedRef)
+
+  let updatedCount = 0
+
+  for (const priceFeed of priceFeeds) {
+    const feedConfig = findMatchingFeedConfig(priceFeed)
+    if (!feedConfig) {
+      logWarning(
+        `No matching feed configuration found for ${priceFeed.label}; skipping update.`
+      )
+      continue
+    }
+
+    const priceInfoSharedObject = await tooling.getSuiSharedObject({
+      objectId: priceFeed.priceInfoObjectId,
+      mutable: true
+    })
+
+    const priceInfoArgument = updateTransaction.sharedObjectRef(
+      priceInfoSharedObject.sharedRef
+    )
+
+    const {
+      priceMagnitude,
+      priceIsNegative,
+      exponentMagnitude,
+      exponentIsNegative
+    } = deriveMockPriceComponents(feedConfig)
+
+    updateTransaction.moveCall({
+      target: `${pythPackageId}::price_info::update_price_feed`,
+      arguments: [
+        priceInfoArgument,
+        updateTransaction.pure.u64(priceMagnitude),
+        updateTransaction.pure.bool(priceIsNegative),
+        updateTransaction.pure.u64(feedConfig.confidence),
+        updateTransaction.pure.u64(exponentMagnitude),
+        updateTransaction.pure.bool(exponentIsNegative),
+        clockArgument
+      ]
+    })
+
+    updatedCount += 1
+  }
+
+  if (updatedCount === 0) return
+
+  const { transactionResult } = await tooling.withTestnetFaucetRetry(
+    {
+      signerAddress: signer.toSuiAddress(),
+      signer
+    },
+    async () =>
+      await tooling.signAndExecute({
+        transaction: updateTransaction,
+        signer
+      })
+  )
+
+  if (transactionResult.digest)
+    logKeyValueGreen("refreshed-feeds")(transactionResult.digest)
+  logKeyValueGreen("refreshed-feed-count")(String(updatedCount))
+}
+
+const findMatchingFeedConfig = (
+  priceFeed: PriceFeedArtifact
+): LabeledPriceFeedConfig | undefined =>
+  DEFAULT_FEEDS.find((feedConfig) =>
+    isMatchingMockPriceFeedConfig(feedConfig, priceFeed)
+  )
 
 const publishPriceFeed = async (
   {

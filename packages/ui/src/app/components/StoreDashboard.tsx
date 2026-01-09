@@ -12,6 +12,7 @@ import type { ReactNode } from "react"
 import { resolveCurrencyRegistryId } from "../helpers/currencyRegistry"
 import {
   formatEpochSeconds,
+  formatEpochSecondsTime,
   formatUsdFromCents,
   getStructLabel,
   shortenId
@@ -563,7 +564,10 @@ const PurchasedItemsPanel = ({
           <div className="grid gap-4 lg:grid-cols-2">
             {purchasedItems.map((item) => {
               const itemTypeLabel = getStructLabel(item.itemType)
-              const purchasedAtLabel = formatEpochSeconds(item.acquiredAt)
+              const purchasedAtDateLabel = formatEpochSeconds(item.acquiredAt)
+              const purchasedAtTimeLabel = formatEpochSecondsTime(
+                item.acquiredAt
+              )
               const itemName = item.name || itemTypeLabel
               return (
                 <div
@@ -579,8 +583,11 @@ const PurchasedItemsPanel = ({
                         {itemTypeLabel}
                       </div>
                     </div>
-                    <span className="bg-sds-blue/15 rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.12em] text-sds-dark dark:text-sds-light">
-                      {purchasedAtLabel}
+                    <span className="bg-sds-blue/15 inline-flex flex-col items-end rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.12em] text-sds-dark dark:text-sds-light">
+                      <span>{purchasedAtDateLabel}</span>
+                      <span className="mt-0.5 text-[0.65rem] font-semibold normal-case tracking-normal">
+                        {purchasedAtTimeLabel}
+                      </span>
                     </span>
                   </div>
                   <div className="mt-4 grid gap-4 text-[0.65rem] text-slate-500 sm:grid-cols-2 sm:gap-x-8 dark:text-slate-200/70">
@@ -729,7 +736,7 @@ const DiscountsPanel = ({
                       ? claimBlockingReason
                       : undefined
                     const isClaimable = !isClaimDisabled
-
+                    console.log(claimTitle)
                     return (
                       <div
                         key={template.discountTemplateId}

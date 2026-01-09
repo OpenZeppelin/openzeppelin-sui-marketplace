@@ -98,16 +98,27 @@ export const DEFAULT_MOCK_PRICE_FEEDS: LabeledMockPriceFeedConfig[] = [
     label: "MOCK_USD_FEED",
     feedIdHex:
       "0x000102030405060708090a0b0c0d0e0f000102030405060708090a0b0c0d0e0f",
-    price: 1_000n,
-    confidence: 10n,
+    // $1.00 with exponent -2.
+    price: 100n,
+    confidence: 1n,
     exponent: -2
   },
   {
     label: "MOCK_BTC_FEED",
     feedIdHex:
       "0x101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f",
-    price: 25_000n,
-    confidence: 50n,
+    // Approx BTC/USD (Jan 2026). $91,389.00 with exponent -2.
+    price: 9_138_900n,
+    confidence: 5_000n,
+    exponent: -2
+  },
+  {
+    label: "MOCK_SUI_FEED",
+    feedIdHex:
+      "0x202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f",
+    // Approx SUI/USD (Jan 2026). $1.84 with exponent -2.
+    price: 184n,
+    confidence: 2n,
     exponent: -2
   }
 ]

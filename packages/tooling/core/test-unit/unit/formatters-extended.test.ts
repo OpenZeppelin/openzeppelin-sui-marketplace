@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 import {
   formatEpochSeconds,
+  formatEpochSecondsTime,
   formatOptionalNumericValue,
   formatTimestamp,
   parseOptionalNumber,
@@ -15,12 +16,14 @@ describe("formatters edge cases", () => {
 
   it("returns Unknown for invalid timestamps", () => {
     expect(formatEpochSeconds("not-a-number")).toBe("Unknown")
+    expect(formatEpochSecondsTime("not-a-number")).toBe("Unknown")
     expect(formatTimestamp("not-a-number")).toBe("Unknown")
     expect(formatTimestamp(undefined)).toBe("Unknown")
   })
 
   it("returns formatted strings for valid timestamps", () => {
     expect(formatEpochSeconds(1)).not.toBe("Unknown")
+    expect(formatEpochSecondsTime(1)).toContain(":")
     expect(formatTimestamp(1)).not.toBe("Unknown")
   })
 
