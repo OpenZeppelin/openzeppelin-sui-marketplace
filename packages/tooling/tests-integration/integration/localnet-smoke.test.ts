@@ -47,24 +47,11 @@ describe("localnet smoke", () => {
     )
   })
 
-  it("allocates unique directories per test context", async () => {
-    const firstPaths = await testEnv.withTestContext(
-      "localnet-smoke-paths-a",
-      async (context) => ({
-        artifactsDir: context.artifactsDir,
-        tempDir: context.tempDir
-      })
-    )
-
-    const secondPaths = await testEnv.withTestContext(
-      "localnet-smoke-paths-b",
-      async (context) => ({
-        artifactsDir: context.artifactsDir,
-        tempDir: context.tempDir
-      })
-    )
-
-    expect(secondPaths.artifactsDir).not.toBe(firstPaths.artifactsDir)
-    expect(secondPaths.tempDir).not.toBe(firstPaths.tempDir)
+  it("scopes temp and artifact directories to the test id", async () => {
+    await testEnv.withTestContext("localnet-smoke-paths", async (context) => {
+      expect(context.tempDir).toContain("localnet-smoke-paths")
+      expect(context.artifactsDir).toContain("localnet-smoke-paths")
+      expect(context.artifactsDir.startsWith(context.tempDir)).toBe(true)
+    })
   })
 })
