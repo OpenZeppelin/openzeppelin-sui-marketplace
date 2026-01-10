@@ -1621,9 +1621,16 @@ export const createTestContext = async (
   }
 
   const buildPackage = async (packageRelativePath: string) =>
-    buildMovePackage(
-      resolvePackagePath(moveRootPath, packageRelativePath),
-      buildEnvironmentFlags
+    withEnv(
+      {
+        SUI_CONFIG_DIR: localnet.configDir,
+        SUI_LOCALNET_CONFIG_DIR: localnet.configDir
+      },
+      () =>
+        buildMovePackage(
+          resolvePackagePath(moveRootPath, packageRelativePath),
+          buildEnvironmentFlags
+        )
     )
 
   const publishPackage = async (
