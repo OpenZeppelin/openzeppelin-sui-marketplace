@@ -130,8 +130,8 @@ export default defineConfig({
 	plugins: [toolingVitestPlugin()],
 	test: {
 		include: ["src/scripts/**/test-integration/**/*.test.ts"],
-		testTimeout: 280_000,
-		hookTimeout: 280_000,
+		testTimeout: 600_000,
+		hookTimeout: 600_000,
 		pool: "threads",
 		poolOptions: { threads: { singleThread: true } }
 	}

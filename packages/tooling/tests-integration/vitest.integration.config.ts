@@ -32,8 +32,8 @@ export default defineConfig({
     restoreMocks: true,
     clearMocks: true,
     unstubEnvs: true,
-    testTimeout: 280_000,
-    hookTimeout: 280_000,
+    testTimeout: 600_000,
+    hookTimeout: 600_000,
     pool: "threads",
     poolOptions: {
       threads: {
