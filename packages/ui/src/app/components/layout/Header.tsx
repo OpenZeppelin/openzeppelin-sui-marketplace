@@ -4,8 +4,13 @@ import { ConnectButton } from "@mysten/dapp-kit"
 import { Link } from "@radix-ui/themes"
 import Balance from "@suiware/kit/Balance"
 import Image from "next/image"
-import type { CSSProperties } from "react"
-import { useEffect, useRef, useState } from "react"
+import {
+  Suspense,
+  useEffect,
+  useRef,
+  useState,
+  type CSSProperties
+} from "react"
 import Logo from "../../assets/logo.svg"
 import { APP_NAME } from "../../config/main"
 import NetworkControls from "../NetworkControls"
@@ -78,7 +83,9 @@ const Header = () => {
           <div className="sds-balance-wrapper sds-match-wallet-height flex justify-center">
             <Balance />
           </div>
-          <NetworkControls />
+          <Suspense fallback={null}>
+            <NetworkControls />
+          </Suspense>
         </div>
 
         {/* @todo: Find a better way to style ConnectButton for example through className, which is currently not supported. */}

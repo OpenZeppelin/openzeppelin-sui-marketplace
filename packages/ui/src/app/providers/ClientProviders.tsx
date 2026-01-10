@@ -5,7 +5,7 @@ import "@radix-ui/themes/styles.css"
 import "@suiware/kit/main.css"
 import SuiProvider from "@suiware/kit/SuiProvider"
 import { ThemeProvider as NextThemeProvider } from "next-themes"
-import type { ReactNode } from "react"
+import { Suspense, type ReactNode } from "react"
 import useNetworkConfig from "~~/hooks/useNetworkConfig"
 import { APP_NAME } from "../config/main"
 import { getThemeSettings } from "../helpers/theme"
@@ -30,7 +30,9 @@ export default function ClientProviders({ children }: { children: ReactNode }) {
           walletStashedName={APP_NAME}
           themeSettings={themeSettings}
         >
-          <NetworkUrlSync />
+          <Suspense fallback={null}>
+            <NetworkUrlSync />
+          </Suspense>
           <WalletAccountGuard />
           {children}
         </SuiProvider>
