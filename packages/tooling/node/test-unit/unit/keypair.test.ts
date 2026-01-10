@@ -6,7 +6,7 @@ import {
   withTempDir,
   writeFileTree
 } from "../../../tests-integration/helpers/fs.ts"
-import { loadKeypair } from "../../src/keypair.ts"
+import { buildKeystoreEntry, loadKeypair } from "../../src/keypair.ts"
 
 const buildBase64Secret = (seed: number) => {
   const secretKey = new Uint8Array(32).fill(seed)
@@ -44,6 +44,25 @@ describe("loadKeypair", () => {
       })
 
       expect(keypair.toSuiAddress()).toMatch(/^0x[0-9a-fA-F]{64}$/)
+    })
+  })
+
+  it("builds a keystore entry that loads back into a keypair", async () => {
+    const secretKey = new Uint8Array(32).fill(13)
+    const keypair = Ed25519Keypair.fromSecretKey(secretKey)
+    const entry = buildKeystoreEntry(keypair)
+
+    await withTempDir(async (dir) => {
+      const keystorePath = `${dir}/sui.keystore`
+      await writeFileTree(dir, {
+        "sui.keystore": JSON.stringify([entry], undefined, 2)
+      })
+
+      const loaded = await loadKeypair({ keystorePath, accountIndex: 0 })
+
+      expect(normalizeSuiAddress(loaded.toSuiAddress())).toBe(
+        normalizeSuiAddress(keypair.toSuiAddress())
+      )
     })
   })
 

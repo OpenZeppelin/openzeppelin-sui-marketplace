@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it } from "vitest"
+import { describe, expect, it } from "vitest"
 
 import {
   newTransaction,
@@ -10,7 +10,7 @@ import { createSuiLocalnetTestEnv } from "@sui-oracle-market/tooling-node/testin
 const keepTemp = process.env.SUI_IT_KEEP_TEMP === "1"
 const withFaucet = process.env.SUI_IT_WITH_FAUCET !== "0"
 const testEnv = createSuiLocalnetTestEnv({
-  mode: "suite",
+  mode: "test",
   keepTemp,
   withFaucet
 })
@@ -19,14 +19,6 @@ const unwrapSplitCoin = (value: Parameters<typeof resolveSplitCoinResult>[0]) =>
   resolveSplitCoinResult(value, 0)
 
 describe("localnet smoke", () => {
-  beforeAll(async () => {
-    await testEnv.startSuite("localnet-smoke")
-  })
-
-  afterAll(async () => {
-    await testEnv.stopSuite()
-  })
-
   it("funds an account and transfers SUI", async () => {
     await testEnv.withTestContext(
       "localnet-smoke-transfer",

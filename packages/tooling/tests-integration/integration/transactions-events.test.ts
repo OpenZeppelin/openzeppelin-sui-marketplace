@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, it } from "vitest"
+import { describe, it } from "vitest"
 
 import {
   buildCreateShopTransaction,
@@ -17,7 +17,7 @@ import { createSuiLocalnetTestEnv } from "@sui-oracle-market/tooling-node/testin
 const keepTemp = process.env.SUI_IT_KEEP_TEMP === "1"
 const withFaucet = process.env.SUI_IT_WITH_FAUCET !== "0"
 const testEnv = createSuiLocalnetTestEnv({
-  mode: "suite",
+  mode: "test",
   keepTemp,
   withFaucet
 })
@@ -26,14 +26,6 @@ const eventTypeEndsWith = (eventType: string, suffix: string) =>
   eventType.toLowerCase().endsWith(suffix.toLowerCase())
 
 describe("transactions and events", () => {
-  beforeAll(async () => {
-    await testEnv.startSuite("transactions-events")
-  })
-
-  afterAll(async () => {
-    await testEnv.stopSuite()
-  })
-
   it("creates a shop and updates the owner with event assertions", async () => {
     await testEnv.withTestContext(
       "transactions-create-shop",

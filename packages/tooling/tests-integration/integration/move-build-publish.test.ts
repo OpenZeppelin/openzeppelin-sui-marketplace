@@ -1,6 +1,6 @@
-import { afterAll, beforeAll, describe, expect, it } from "vitest"
 import { readFile } from "node:fs/promises"
 import path from "node:path"
+import { describe, expect, it } from "vitest"
 
 import { pickRootNonDependencyArtifact } from "@sui-oracle-market/tooling-node/artifacts"
 
@@ -9,20 +9,12 @@ import { createSuiLocalnetTestEnv } from "@sui-oracle-market/tooling-node/testin
 const keepTemp = process.env.SUI_IT_KEEP_TEMP === "1"
 const withFaucet = process.env.SUI_IT_WITH_FAUCET !== "0"
 const testEnv = createSuiLocalnetTestEnv({
-  mode: "suite",
+  mode: "test",
   keepTemp,
   withFaucet
 })
 
 describe("move build and publish", () => {
-  beforeAll(async () => {
-    await testEnv.startSuite("move-build-publish")
-  })
-
-  afterAll(async () => {
-    await testEnv.stopSuite()
-  })
-
   it("builds the oracle-market Move package", async () => {
     await testEnv.withTestContext(
       "move-build-oracle-market",

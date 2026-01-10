@@ -1,4 +1,9 @@
 import { pickRootNonDependencyArtifact } from "@sui-oracle-market/tooling-node/artifacts"
+import { createSuiLocalnetTestEnv } from "@sui-oracle-market/tooling-node/testing/env"
+import type {
+  TestAccount,
+  TestContext
+} from "@sui-oracle-market/tooling-node/testing/localnet"
 import {
   createSuiScriptRunner,
   parseJsonFromScriptOutput,
@@ -7,11 +12,6 @@ import {
   type ScriptRunResult,
   type SuiScriptRunner
 } from "@sui-oracle-market/tooling-node/testing/scripts"
-import { createSuiLocalnetTestEnv } from "@sui-oracle-market/tooling-node/testing/env"
-import type {
-  TestAccount,
-  TestContext
-} from "@sui-oracle-market/tooling-node/testing/localnet"
 
 export type ScriptJsonOptions = Omit<ScriptRunOptions, "args"> & {
   args?: ScriptArgumentMap
@@ -23,7 +23,7 @@ const resolveWithFaucet = () => process.env.SUI_IT_WITH_FAUCET !== "0"
 
 export const createDappIntegrationTestEnv = () =>
   createSuiLocalnetTestEnv({
-    mode: "suite",
+    mode: "test",
     keepTemp: resolveKeepTemp(),
     withFaucet: resolveWithFaucet()
   })
@@ -178,6 +178,11 @@ export const createShopFixture = async (
     context,
     publisher,
     "oracle-market"
+  )
+  // Ensure publish gas usage doesn't leave the publisher below the 500M script budget.
+  await context.fundAccount(
+    publisher,
+    options.funding ?? DEFAULT_FUNDING_OPTIONS
   )
   const shopName = resolveShopName(context, options.shopName)
   const shopCreateOutput = await runOwnerScriptJson<ShopCreateOutput>(

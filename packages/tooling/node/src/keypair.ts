@@ -92,6 +92,23 @@ export const readKeystoreEntries = async (
 }
 
 /**
+ * Builds a base64 keystore entry for the provided keypair.
+ */
+export const buildKeystoreEntry = (keypair: Ed25519Keypair): string => {
+  const decoded = decodeSuiPrivateKey(keypair.getSecretKey())
+  const schemeFlag = SIGNATURE_SCHEME_TO_FLAG[decoded.scheme]
+
+  if (typeof schemeFlag !== "number")
+    throw new Error(`Unsupported key scheme ${decoded.scheme}.`)
+
+  const payload = new Uint8Array(decoded.secretKey.length + 1)
+  payload[0] = schemeFlag
+  payload.set(decoded.secretKey, 1)
+
+  return Buffer.from(payload).toString("base64")
+}
+
+/**
  * Finds a keystore entry matching a target Sui address.
  */
 const getKeystoreKeypairByAddress = async (

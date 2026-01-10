@@ -1,8 +1,9 @@
 import { spawn } from "node:child_process"
+import { access, writeFile } from "node:fs/promises"
 import path from "node:path"
 
-import type { TestAccount, TestContext } from "./localnet.ts"
 import { parseJsonFromOutput } from "../json.ts"
+import type { TestAccount, TestContext } from "./localnet.ts"
 import {
   resolveDappConfigPath,
   resolveDappRoot,
@@ -125,6 +126,8 @@ const resolveBaseEnvironment = ({
     SUI_NETWORK: "localnet",
     SUI_RPC_URL: context.localnet.rpcUrl,
     SUI_ARTIFACTS_DIR: context.artifactsDir,
+    SUI_CONFIG_DIR: context.localnet.configDir,
+    SUI_LOCALNET_CONFIG_DIR: context.localnet.configDir,
     SUI_SKIP_MOVE_CHAIN_ID_SYNC: "1",
     TS_NODE_SKIP_IGNORE: "1",
     NODE_OPTIONS: "--no-warnings"
@@ -143,6 +146,44 @@ const resolveBaseEnvironment = ({
 
 const resolveWorkingDirectory = (candidate?: string) =>
   candidate ?? resolveDappRoot()
+
+const ensureTestSuiConfigPath = async (context: TestContext) => {
+  const configPath = path.join(context.tempDir, "sui.config.ts")
+
+  try {
+    await access(configPath)
+    return configPath
+  } catch {
+    // Fall through to create the config.
+  }
+
+  const gasBudget = context.suiConfig.network.gasBudget
+  if (!gasBudget)
+    throw new Error(
+      "Test context is missing a configured network gas budget; unable to generate sui.config.ts for script runner."
+    )
+
+  const content = `export default {
+  defaultNetwork: "localnet",
+  networks: {
+    localnet: {
+      url: ${JSON.stringify(context.localnet.rpcUrl)},
+      gasBudget: ${gasBudget},
+      account: {}
+    }
+  },
+  paths: {
+    move: ${JSON.stringify(context.moveRootPath)},
+    deployments: ${JSON.stringify(context.artifactsDir)},
+    objects: ${JSON.stringify(context.artifactsDir)},
+    artifacts: ${JSON.stringify(context.artifactsDir)}
+  }
+}
+`
+
+  await writeFile(configPath, content)
+  return configPath
+}
 
 const collectOutput = (stream?: NodeJS.ReadableStream) =>
   new Promise<string>((resolve) => {
@@ -219,14 +260,18 @@ const runCommand = async ({
 export const createSuiScriptRunner = (
   context: TestContext
 ): SuiScriptRunner => {
+  const defaultConfigPathPromise = ensureTestSuiConfigPath(context)
+
   const runScript = async (scriptPath: string, options?: ScriptRunOptions) => {
+    const resolvedConfigPath =
+      options?.configPath ?? (await defaultConfigPathPromise)
     const scriptArguments = normalizeScriptArguments(options?.args)
     const command = resolveTsNodeEsmPath()
     const args = ["--transpile-only", scriptPath, ...scriptArguments]
     const env = resolveBaseEnvironment({
       context,
       account: options?.account,
-      configPath: options?.configPath,
+      configPath: resolvedConfigPath,
       env: options?.env
     }) as NodeJS.ProcessEnv
     const cwd = resolveWorkingDirectory(options?.cwd)

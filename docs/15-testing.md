@@ -138,21 +138,13 @@ export default defineConfig({
 })
 ```
 
-### 3.4 Localnet lifecycle (suite mode)
-Use a single localnet per test file for speed, but isolate test state via new accounts and artifacts per test:
+### 3.4 Localnet lifecycle (test mode)
+Each test file can share a lazily created harness, but every `withTestContext` call now starts its own fully isolated localnet + temp directory. No suite hooks or shared artifacts are required:
 ```ts
-import { afterAll, beforeAll, it } from "vitest"
+import { it } from "vitest"
 import { createDappIntegrationTestEnv } from "packages/dapp/src/utils/test/helpers/helpers"
 
 const testEnv = createDappIntegrationTestEnv()
-
-beforeAll(async () => {
-	await testEnv.startSuite("owner-scripts")
-})
-
-afterAll(async () => {
-	await testEnv.stopSuite()
-})
 
 it("runs a script with a clean context", async () => {
 	await testEnv.withTestContext("example", async (context) => {

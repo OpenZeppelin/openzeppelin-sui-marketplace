@@ -445,7 +445,10 @@ describe("publishPackageWithLog", () => {
         expect(buildFlags).toContain("--with-unpublished-dependencies")
         expect(runSuiCliMock).toHaveBeenNthCalledWith(
           1,
-          expect.arrayContaining(["--with-unpublished-dependencies"]),
+          expect.arrayContaining([
+            "--with-unpublished-dependencies",
+            "--skip-dependency-verification"
+          ]),
           { env: undefined }
         )
         expect(logMocks.logWarning).toHaveBeenCalledWith(

@@ -37,19 +37,26 @@ import {
   newTransaction,
   resolveSplitCoinResult
 } from "@sui-oracle-market/tooling-core/transactions"
-import { formatErrorMessage } from "@sui-oracle-market/tooling-core/utils/errors"
 import type {
   BuildOutput,
   PublishArtifact
 } from "@sui-oracle-market/tooling-core/types"
-import { pickRootNonDependencyArtifact } from "../artifacts.ts"
+import { formatErrorMessage } from "@sui-oracle-market/tooling-core/utils/errors"
+import {
+  pickRootNonDependencyArtifact,
+  withArtifactsRoot
+} from "../artifacts.ts"
 import type { SuiResolvedConfig } from "../config.ts"
 import { DEFAULT_TX_GAS_BUDGET } from "../constants.ts"
-import { createSuiClient } from "../sui-client.ts"
-import { loadKeypair, readKeystoreEntries } from "../keypair.ts"
+import {
+  buildKeystoreEntry,
+  loadKeypair,
+  readKeystoreEntries
+} from "../keypair.ts"
 import { probeRpcHealth } from "../localnet.ts"
 import { buildMovePackage, clearPublishedEntryForNetwork } from "../move.ts"
 import { publishPackageWithLog } from "../publish.ts"
+import { createSuiClient } from "../sui-client.ts"
 import { signAndExecute } from "../transactions.ts"
 import { getErrnoCode } from "../utils/fs.ts"
 import { parseBooleanEnv } from "./booleans.ts"
@@ -139,33 +146,78 @@ const DEFAULT_FAUCET_REQUEST_DELAY_MS = 50
 const createTempDir = async (prefix = "tooling-test-") =>
   mkdtemp(path.join(os.tmpdir(), prefix))
 
+type EnvOverrideEntry = {
+  token: symbol
+  value: string | undefined
+}
+
+type EnvOverrideState = {
+  baseline: string | undefined
+  overrides: EnvOverrideEntry[]
+}
+
+const envOverrideStacks = new Map<string, EnvOverrideState>()
+
+const setEnvValue = (key: string, value: string | undefined) => {
+  if (value === undefined) {
+    // eslint-disable-next-line @typescript-eslint/no-dynamic-delete
+    delete process.env[key]
+    return
+  }
+  process.env[key] = value
+}
+
+const applyEnvOverride = (key: string, value: string | undefined) => {
+  const token = Symbol(key)
+  const existing = envOverrideStacks.get(key)
+  if (!existing) {
+    envOverrideStacks.set(key, {
+      baseline: process.env[key],
+      overrides: [{ token, value }]
+    })
+  } else {
+    existing.overrides.push({ token, value })
+  }
+
+  setEnvValue(key, value)
+  return token
+}
+
+const releaseEnvOverride = (key: string, token: symbol) => {
+  const state = envOverrideStacks.get(key)
+  if (!state) return
+
+  const index = state.overrides.findIndex((entry) => entry.token === token)
+  if (index === -1) return
+
+  state.overrides.splice(index, 1)
+
+  const next = state.overrides[state.overrides.length - 1]
+  if (next) {
+    setEnvValue(key, next.value)
+    return
+  }
+
+  envOverrideStacks.delete(key)
+  setEnvValue(key, state.baseline)
+}
+
 const withEnv = async <T>(
   updates: Record<string, string | undefined>,
   action: () => Promise<T> | T
 ): Promise<T> => {
-  const previous = new Map<string, string | undefined>()
-
-  Object.entries(updates).forEach(([key, value]) => {
-    previous.set(key, process.env[key])
-    if (value === undefined) {
-      // eslint-disable-next-line @typescript-eslint/no-dynamic-delete
-      delete process.env[key]
-    } else {
-      process.env[key] = value
-    }
-  })
+  const applied = Object.entries(updates).map(([key, value]) => ({
+    key,
+    token: applyEnvOverride(key, value)
+  }))
 
   try {
     return await action()
   } finally {
-    previous.forEach((value, key) => {
-      if (value === undefined) {
-        // eslint-disable-next-line @typescript-eslint/no-dynamic-delete
-        delete process.env[key]
-      } else {
-        process.env[key] = value
-      }
-    })
+    for (let index = applied.length - 1; index >= 0; index -= 1) {
+      const entry = applied[index]
+      releaseEnvOverride(entry.key, entry.token)
+    }
   }
 }
 
@@ -1019,6 +1071,71 @@ const buildSuiConfig = ({
   }
 })
 
+const buildAccountKeystorePath = (artifactsDir: string, account: TestAccount) =>
+  path.join(
+    artifactsDir,
+    "keystore",
+    `${sanitizeLabel(account.label)}.keystore`
+  )
+
+const ensureAccountKeystore = async (
+  artifactsDir: string,
+  account: TestAccount
+) => {
+  const keystoreDir = path.join(artifactsDir, "keystore")
+  await ensureDirectory(keystoreDir)
+  const keystorePath = buildAccountKeystorePath(artifactsDir, account)
+  const entry = buildKeystoreEntry(account.keypair)
+  await writeFile(keystorePath, JSON.stringify([entry], undefined, 2))
+  return { keystorePath, entry }
+}
+
+const ensureAccountRegisteredInLocalnetKeystore = async (
+  configDir: string,
+  entry: string
+) => {
+  const keystorePath = await resolveLocalnetKeystorePath(configDir)
+  const entries = await readKeystoreEntries(keystorePath)
+  if (entries.includes(entry)) return keystorePath
+
+  await writeFile(
+    keystorePath,
+    JSON.stringify([...entries, entry], undefined, 2)
+  )
+
+  return keystorePath
+}
+
+const withKeystoreConfig = (
+  suiConfig: SuiResolvedConfig,
+  keystorePath: string
+): SuiResolvedConfig => {
+  const networkName = suiConfig.network.networkName
+  const baseNetwork = suiConfig.networks[networkName] ?? suiConfig.network
+  const networkWithKeystore = {
+    ...baseNetwork,
+    account: {
+      ...(baseNetwork.account ?? {}),
+      keystorePath
+    }
+  }
+
+  return {
+    ...suiConfig,
+    network: {
+      ...suiConfig.network,
+      account: {
+        ...(suiConfig.network.account ?? {}),
+        keystorePath
+      }
+    },
+    networks: {
+      ...suiConfig.networks,
+      [networkName]: networkWithKeystore
+    }
+  }
+}
+
 const copyMoveSources = async (destinationRoot: string) => {
   const sourceRoot = resolveDappMoveRoot()
   await cp(sourceRoot, destinationRoot, { recursive: true })
@@ -1042,6 +1159,30 @@ const removeMoveBuildArtifacts = async (rootDir: string) => {
   )
 }
 
+const clearPublishedMetadataForNetwork = async (
+  rootDir: string,
+  networkName: string
+) => {
+  const entries = await readdir(rootDir, { withFileTypes: true })
+
+  await Promise.all(
+    entries.map(async (entry) => {
+      const entryPath = path.join(rootDir, entry.name)
+      if (entry.isDirectory()) {
+        await clearPublishedMetadataForNetwork(entryPath, networkName)
+        return
+      }
+
+      if (!entry.isFile() || entry.name !== "Published.toml") return
+
+      await clearPublishedEntryForNetwork({
+        packagePath: path.dirname(entryPath),
+        networkName
+      })
+    })
+  )
+}
+
 const resolvePackagePath = (moveRootPath: string, packagePath: string) =>
   path.isAbsolute(packagePath)
     ? packagePath
@@ -1050,7 +1191,7 @@ const resolvePackagePath = (moveRootPath: string, packagePath: string) =>
 const withArtifactsDir = async <T>(
   artifactsDir: string,
   action: () => Promise<T>
-) => withEnv({ SUI_ARTIFACTS_DIR: artifactsDir }, action)
+) => withArtifactsRoot(artifactsDir, action)
 
 const waitForTransactionFinality = async (
   suiClient: SuiClient,
@@ -1421,6 +1562,11 @@ export const createTestContext = async (
     artifactsDir
   })
 
+  await clearPublishedMetadataForNetwork(
+    moveRootPath,
+    suiConfig.network.networkName
+  )
+
   const createAccount = (label: string): TestAccount => {
     const seed = createAccountSeed(testId, label)
     const keypair = Ed25519Keypair.fromSecretKey(seed)
@@ -1475,41 +1621,58 @@ export const createTestContext = async (
     account: TestAccount,
     options?: { gasBudget?: number; withUnpublishedDependencies?: boolean }
   ) =>
-    withArtifactsDir(artifactsDir, () =>
-      (async () => {
-        const packagePath = resolvePackagePath(
-          moveRootPath,
-          packageRelativePath
-        )
-        await clearPublishedEntryForNetwork({
-          packagePath,
-          networkName: suiConfig.network.networkName
-        })
+    withArtifactsDir(artifactsDir, async () => {
+      const { keystorePath, entry } = await ensureAccountKeystore(
+        artifactsDir,
+        account
+      )
+      const cliKeystorePath = await ensureAccountRegisteredInLocalnetKeystore(
+        localnet.configDir,
+        entry
+      )
 
-        const artifacts = await publishPackageWithLog(
-          {
+      return withEnv(
+        {
+          SUI_CONFIG_DIR: localnet.configDir,
+          SUI_LOCALNET_CONFIG_DIR: localnet.configDir,
+          SUI_KEYSTORE_PATH: keystorePath
+        },
+        async () => {
+          const packagePath = resolvePackagePath(
+            moveRootPath,
+            packageRelativePath
+          )
+          await clearPublishedEntryForNetwork({
             packagePath,
-            keypair: account.keypair,
-            gasBudget: options?.gasBudget,
-            withUnpublishedDependencies:
-              options?.withUnpublishedDependencies ?? true,
-            useCliPublish: false,
-            allowAutoUnpublishedDependencies: true
-          },
-          { suiClient: localnet.suiClient, suiConfig }
-        )
+            networkName: suiConfig.network.networkName
+          })
+          const publishConfig = withKeystoreConfig(suiConfig, cliKeystorePath)
 
-        const rootArtifact = pickRootNonDependencyArtifact(artifacts)
-        await waitForPackageAvailability({
-          suiClient: localnet.suiClient,
-          packageId: rootArtifact.packageId,
-          timeoutMs: 20_000,
-          intervalMs: 250
-        })
+          const artifacts = await publishPackageWithLog(
+            {
+              packagePath,
+              keypair: account.keypair,
+              gasBudget: options?.gasBudget,
+              withUnpublishedDependencies:
+                options?.withUnpublishedDependencies ?? true,
+              useCliPublish: true,
+              allowAutoUnpublishedDependencies: true
+            },
+            { suiClient: localnet.suiClient, suiConfig: publishConfig }
+          )
 
-        return artifacts
-      })()
-    )
+          const rootArtifact = pickRootNonDependencyArtifact(artifacts)
+          await waitForPackageAvailability({
+            suiClient: localnet.suiClient,
+            packageId: rootArtifact.packageId,
+            timeoutMs: 20_000,
+            intervalMs: 250
+          })
+
+          return artifacts
+        }
+      )
+    })
 
   const signAndExecuteTransaction = async (
     transaction: Transaction,

@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises"
 import path from "node:path"
-import { afterAll, beforeAll, describe, expect, it } from "vitest"
+import { describe, expect, it } from "vitest"
 
 import { pickRootNonDependencyArtifact } from "@sui-oracle-market/tooling-node/artifacts"
 import { createSuiLocalnetTestEnv } from "@sui-oracle-market/tooling-node/testing/env"
@@ -12,20 +12,12 @@ import {
 const keepTemp = process.env.SUI_IT_KEEP_TEMP === "1"
 const withFaucet = process.env.SUI_IT_WITH_FAUCET !== "0"
 const testEnv = createSuiLocalnetTestEnv({
-  mode: "suite",
+  mode: "test",
   keepTemp,
   withFaucet
 })
 
 describe("script runner", () => {
-  beforeAll(async () => {
-    await testEnv.startSuite("script-runner")
-  })
-
-  afterAll(async () => {
-    await testEnv.stopSuite()
-  })
-
   it("runs owner shop-create script on localnet", async () => {
     await testEnv.withTestContext("owner-shop-create", async (context) => {
       const publisher = context.createAccount("publisher")

@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it } from "vitest"
+import { describe, expect, it } from "vitest"
 
 import {
   createDappIntegrationTestEnv,
@@ -20,14 +20,6 @@ type ItemListingListOutput = {
 const testEnv = createDappIntegrationTestEnv()
 
 describe("buyer scripts integration", () => {
-  beforeAll(async () => {
-    await testEnv.startSuite("dapp-buyer-scripts")
-  })
-
-  afterAll(async () => {
-    await testEnv.stopSuite()
-  })
-
   it("lists item listings created by owner scripts", async () => {
     await testEnv.withTestContext("buyer-item-listings", async (context) => {
       const { publisher, scriptRunner, shopId, itemExamplesPackageId } =

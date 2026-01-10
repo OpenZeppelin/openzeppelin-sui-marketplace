@@ -50,6 +50,7 @@ type DependencyAddressMap = Record<string, string>
 type PublishPlan = {
   network: SuiNetworkConfig
   packagePath: string
+  moveRootPath?: string
   fullNodeUrl: string
   keypair: Ed25519Keypair
   gasBudget: number
@@ -61,22 +62,45 @@ type PublishPlan = {
   keystorePath?: string
   suiCliVersion?: string
   allowAutoUnpublishedDependencies?: boolean
+  skipDependencyVerification?: boolean
+}
+
+const resolveMoveRootForPublish = (
+  packagePath: string,
+  moveRootPath?: string
+) => {
+  if (!moveRootPath) return packagePath
+
+  const resolvedPackagePath = path.resolve(packagePath)
+  const resolvedMoveRootPath = path.resolve(moveRootPath)
+  const relative = path.relative(resolvedMoveRootPath, resolvedPackagePath)
+  const isUnderMoveRoot =
+    relative === "" ||
+    (!relative.startsWith("..") && !path.isAbsolute(relative))
+
+  return isUnderMoveRoot ? resolvedMoveRootPath : packagePath
 }
 
 const syncLocalnetMoveEnvironmentChainIdForPublish = async (
   {
     network,
-    packagePath
+    packagePath,
+    moveRootPath
   }: {
     network: SuiNetworkConfig
     packagePath: string
+    moveRootPath?: string
   },
   toolingContext: ToolingContext
 ) => {
+  const resolvedMoveRootPath = resolveMoveRootForPublish(
+    packagePath,
+    moveRootPath
+  )
   const { chainId, updatedFiles, didAttempt } =
     await syncLocalnetMoveEnvironmentChainId(
       {
-        moveRootPath: packagePath,
+        moveRootPath: resolvedMoveRootPath,
         environmentName: network.networkName
       },
       toolingContext
@@ -326,7 +350,8 @@ const buildPublishPlan = async (
   await syncLocalnetMoveEnvironmentChainIdForPublish(
     {
       network,
-      packagePath
+      packagePath,
+      moveRootPath: toolingContext.suiConfig.paths.move
     },
     toolingContext
   )
@@ -381,6 +406,7 @@ const buildPublishPlan = async (
   return {
     network,
     packagePath,
+    moveRootPath: toolingContext.suiConfig.paths.move,
     fullNodeUrl,
     keypair,
     gasBudget,
@@ -390,6 +416,9 @@ const buildPublishPlan = async (
     useCliPublish: cliPublish,
     keystorePath: network.account?.keystorePath,
     suiCliVersion: await getSuiCliVersion(),
+    skipDependencyVerification:
+      network.networkName === "localnet" &&
+      Boolean(shouldUseUnpublishedDependencies),
     packageNames: await resolvePackageNames(
       packagePath,
       unpublishedDependencies
@@ -490,6 +519,8 @@ const buildCliPublishArguments = (plan: PublishPlan): string[] => {
 
   if (plan.shouldUseUnpublishedDependencies)
     args.push("--with-unpublished-dependencies")
+  if (plan.skipDependencyVerification)
+    args.push("--skip-dependency-verification")
 
   return args
 }

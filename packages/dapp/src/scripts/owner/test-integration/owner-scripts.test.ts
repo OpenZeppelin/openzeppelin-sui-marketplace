@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it } from "vitest"
+import { describe, expect, it } from "vitest"
 
 import {
   createDappIntegrationTestEnv,
@@ -20,14 +20,6 @@ type ShopOverviewPayload = {
 const testEnv = createDappIntegrationTestEnv()
 
 describe("owner scripts integration", () => {
-  beforeAll(async () => {
-    await testEnv.startSuite("dapp-owner-scripts")
-  })
-
-  afterAll(async () => {
-    await testEnv.stopSuite()
-  })
-
   it("creates a shop and updates the owner", async () => {
     await testEnv.withTestContext(
       "shop-create-update-owner",

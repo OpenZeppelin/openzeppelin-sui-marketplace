@@ -1,20 +1,22 @@
-import { afterAll, beforeAll, describe, expect, it } from "vitest"
+import { describe, expect, it } from "vitest"
 
 import {
   buildCreateShopTransaction,
   buildUpdateShopOwnerTransaction
 } from "@sui-oracle-market/domain-core/ptb/shop"
+import { getSuiSharedObject } from "@sui-oracle-market/tooling-core/shared-object"
 import {
   newTransaction,
   resolveSplitCoinResult
 } from "@sui-oracle-market/tooling-core/transactions"
-import { getSuiSharedObject } from "@sui-oracle-market/tooling-core/shared-object"
-import { pickRootNonDependencyArtifact } from "@sui-oracle-market/tooling-node/artifacts"
+import {
+  pickRootNonDependencyArtifact,
+  withArtifactsRoot
+} from "@sui-oracle-market/tooling-node/artifacts"
 import { signAndExecute } from "@sui-oracle-market/tooling-node/transactions"
 
-import { withEnv } from "../helpers/env"
-import { createSuiLocalnetTestEnv } from "@sui-oracle-market/tooling-node/testing/env"
 import { requireCreatedObjectId } from "@sui-oracle-market/tooling-node/testing/assert"
+import { createSuiLocalnetTestEnv } from "@sui-oracle-market/tooling-node/testing/env"
 import type {
   TestAccount,
   TestContext
@@ -23,7 +25,7 @@ import type {
 const keepTemp = process.env.SUI_IT_KEEP_TEMP === "1"
 const withFaucet = process.env.SUI_IT_WITH_FAUCET !== "0"
 const testEnv = createSuiLocalnetTestEnv({
-  mode: "suite",
+  mode: "test",
   keepTemp,
   withFaucet
 })
@@ -78,14 +80,6 @@ const createShop = async (
 }
 
 describe("security and concurrency", () => {
-  beforeAll(async () => {
-    await testEnv.startSuite("security-concurrency")
-  })
-
-  afterAll(async () => {
-    await testEnv.stopSuite()
-  })
-
   it("rejects owner-cap misuse between shops", async () => {
     await testEnv.withTestContext("security-owner-cap", async (context) => {
       const { publisher, packageId } = await publishOracleMarket(
@@ -131,7 +125,7 @@ describe("security and concurrency", () => {
         transaction.setSender(sender.address)
 
         await expect(
-          withEnv({ SUI_ARTIFACTS_DIR: context.artifactsDir }, () =>
+          withArtifactsRoot(context.artifactsDir, () =>
             signAndExecute(
               { transaction, signer: signer.keypair },
               { suiClient: context.suiClient, suiConfig: context.suiConfig }

@@ -2,11 +2,22 @@ import { normalizeSuiObjectId } from "@mysten/sui/utils"
 import type { ObjectArtifact } from "@sui-oracle-market/tooling-core/object"
 import type { PublishArtifact } from "@sui-oracle-market/tooling-core/types"
 import { formatErrorMessage } from "@sui-oracle-market/tooling-core/utils/errors"
+import { AsyncLocalStorage } from "node:async_hooks"
 import { mkdir, readFile, writeFile } from "node:fs/promises"
 import path, { dirname } from "node:path"
 
 export const ARTIFACTS_FILES = ["mock", "deployment", "objects"] as const
 export type ArtifactFile = (typeof ARTIFACTS_FILES)[number]
+
+const artifactsRootStore = new AsyncLocalStorage<string>()
+
+export const withArtifactsRoot = async <T>(
+  artifactsDir: string,
+  action: () => Promise<T> | T
+): Promise<T> => {
+  const resolved = path.resolve(artifactsDir)
+  return await artifactsRootStore.run(resolved, action)
+}
 
 export const pickRootNonDependencyArtifact = (artifacts: PublishArtifact[]) => {
   const artifact =
@@ -141,8 +152,12 @@ export const readArtifact = async <TArtifact>(
  * Builds a path resolver for artifact files by network name.
  */
 const resolveArtifactsRoot = () => {
+  const scoped = artifactsRootStore.getStore()
+  if (scoped) return scoped
+
   const override = process.env.SUI_ARTIFACTS_DIR?.trim()
   if (override) return path.resolve(override)
+
   return path.join(process.cwd(), "deployments")
 }
 
