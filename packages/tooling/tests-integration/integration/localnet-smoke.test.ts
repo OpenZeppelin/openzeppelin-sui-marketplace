@@ -5,15 +5,9 @@ import {
   resolveSplitCoinResult
 } from "@sui-oracle-market/tooling-core/transactions"
 
-import { createSuiLocalnetTestEnv } from "@sui-oracle-market/tooling-node/testing/env"
+import { createToolingIntegrationTestEnv } from "../helpers/env.ts"
 
-const keepTemp = process.env.SUI_IT_KEEP_TEMP === "1"
-const withFaucet = process.env.SUI_IT_WITH_FAUCET !== "0"
-const testEnv = createSuiLocalnetTestEnv({
-  mode: "test",
-  keepTemp,
-  withFaucet
-})
+const testEnv = createToolingIntegrationTestEnv()
 
 const unwrapSplitCoin = (value: Parameters<typeof resolveSplitCoinResult>[0]) =>
   resolveSplitCoinResult(value, 0)
@@ -51,5 +45,26 @@ describe("localnet smoke", () => {
         expect(BigInt(balance.totalBalance)).toBeGreaterThan(0n)
       }
     )
+  })
+
+  it("allocates unique directories per test context", async () => {
+    const firstPaths = await testEnv.withTestContext(
+      "localnet-smoke-paths-a",
+      async (context) => ({
+        artifactsDir: context.artifactsDir,
+        tempDir: context.tempDir
+      })
+    )
+
+    const secondPaths = await testEnv.withTestContext(
+      "localnet-smoke-paths-b",
+      async (context) => ({
+        artifactsDir: context.artifactsDir,
+        tempDir: context.tempDir
+      })
+    )
+
+    expect(secondPaths.artifactsDir).not.toBe(firstPaths.artifactsDir)
+    expect(secondPaths.tempDir).not.toBe(firstPaths.tempDir)
   })
 })

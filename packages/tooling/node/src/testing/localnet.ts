@@ -54,7 +54,11 @@ import {
   readKeystoreEntries
 } from "../keypair.ts"
 import { probeRpcHealth } from "../localnet.ts"
-import { buildMovePackage, clearPublishedEntryForNetwork } from "../move.ts"
+import {
+  buildMoveEnvironmentFlags,
+  buildMovePackage,
+  clearPublishedEntryForNetwork
+} from "../move.ts"
 import { publishPackageWithLog } from "../publish.ts"
 import { createSuiClient } from "../sui-client.ts"
 import { signAndExecute } from "../transactions.ts"
@@ -1561,6 +1565,9 @@ export const createTestContext = async (
     moveRootPath,
     artifactsDir
   })
+  const buildEnvironmentFlags = buildMoveEnvironmentFlags({
+    environmentName: suiConfig.network.networkName
+  })
 
   await clearPublishedMetadataForNetwork(
     moveRootPath,
@@ -1614,7 +1621,10 @@ export const createTestContext = async (
   }
 
   const buildPackage = async (packageRelativePath: string) =>
-    buildMovePackage(resolvePackagePath(moveRootPath, packageRelativePath))
+    buildMovePackage(
+      resolvePackagePath(moveRootPath, packageRelativePath),
+      buildEnvironmentFlags
+    )
 
   const publishPackage = async (
     packageRelativePath: string,

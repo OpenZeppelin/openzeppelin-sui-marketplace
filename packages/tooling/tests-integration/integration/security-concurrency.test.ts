@@ -16,19 +16,14 @@ import {
 import { signAndExecute } from "@sui-oracle-market/tooling-node/transactions"
 
 import { requireCreatedObjectId } from "@sui-oracle-market/tooling-node/testing/assert"
-import { createSuiLocalnetTestEnv } from "@sui-oracle-market/tooling-node/testing/env"
+
 import type {
   TestAccount,
   TestContext
 } from "@sui-oracle-market/tooling-node/testing/localnet"
+import { createToolingIntegrationTestEnv } from "../helpers/env.ts"
 
-const keepTemp = process.env.SUI_IT_KEEP_TEMP === "1"
-const withFaucet = process.env.SUI_IT_WITH_FAUCET !== "0"
-const testEnv = createSuiLocalnetTestEnv({
-  mode: "test",
-  keepTemp,
-  withFaucet
-})
+const testEnv = createToolingIntegrationTestEnv()
 
 const unwrapSplitCoin = (value: Parameters<typeof resolveSplitCoinResult>[0]) =>
   resolveSplitCoinResult(value, 0)

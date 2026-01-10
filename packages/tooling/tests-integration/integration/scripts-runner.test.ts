@@ -3,19 +3,14 @@ import path from "node:path"
 import { describe, expect, it } from "vitest"
 
 import { pickRootNonDependencyArtifact } from "@sui-oracle-market/tooling-node/artifacts"
-import { createSuiLocalnetTestEnv } from "@sui-oracle-market/tooling-node/testing/env"
 import {
   createSuiScriptRunner,
   parseJsonFromScriptOutput
 } from "@sui-oracle-market/tooling-node/testing/scripts"
 
-const keepTemp = process.env.SUI_IT_KEEP_TEMP === "1"
-const withFaucet = process.env.SUI_IT_WITH_FAUCET !== "0"
-const testEnv = createSuiLocalnetTestEnv({
-  mode: "test",
-  keepTemp,
-  withFaucet
-})
+import { createToolingIntegrationTestEnv } from "../helpers/env.ts"
+
+const testEnv = createToolingIntegrationTestEnv()
 
 describe("script runner", () => {
   it("runs owner shop-create script on localnet", async () => {

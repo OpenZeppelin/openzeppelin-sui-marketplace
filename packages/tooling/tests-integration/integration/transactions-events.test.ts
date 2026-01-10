@@ -12,15 +12,10 @@ import {
   assertObjectOwnerById,
   requireCreatedObjectId
 } from "@sui-oracle-market/tooling-node/testing/assert"
-import { createSuiLocalnetTestEnv } from "@sui-oracle-market/tooling-node/testing/env"
 
-const keepTemp = process.env.SUI_IT_KEEP_TEMP === "1"
-const withFaucet = process.env.SUI_IT_WITH_FAUCET !== "0"
-const testEnv = createSuiLocalnetTestEnv({
-  mode: "test",
-  keepTemp,
-  withFaucet
-})
+import { createToolingIntegrationTestEnv } from "../helpers/env.ts"
+
+const testEnv = createToolingIntegrationTestEnv()
 
 const eventTypeEndsWith = (eventType: string, suffix: string) =>
   eventType.toLowerCase().endsWith(suffix.toLowerCase())
