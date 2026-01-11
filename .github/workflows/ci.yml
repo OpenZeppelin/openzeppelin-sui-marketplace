@@ -128,7 +128,7 @@ jobs:
       - uses: ./.github/actions/setup
       - uses: ./.github/actions/setup-sui
       - name: Run Move tests (${{ matrix.package }})
-        run: pnpm dapp move:test --package-path ${{ matrix.package }}
+        run: sui move test --path ./packages/dapp/move/oracle-market --environment localnet
 
   security-audit:
     if: github.event_name != 'pull_request'
