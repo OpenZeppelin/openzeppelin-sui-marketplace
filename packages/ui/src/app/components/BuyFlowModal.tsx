@@ -3,8 +3,8 @@
 import type { SuiTransactionBlockResponse } from "@mysten/sui/client"
 import type { AcceptedCurrencySummary } from "@sui-oracle-market/domain-core/models/currency"
 import type {
-    DiscountTemplateSummary,
-    DiscountTicketDetails
+  DiscountTemplateSummary,
+  DiscountTicketDetails
 } from "@sui-oracle-market/domain-core/models/discount"
 import type { ItemListingSummary } from "@sui-oracle-market/domain-core/models/item-listing"
 import { mapOwnerToLabel } from "@sui-oracle-market/tooling-core/object-info"
@@ -12,37 +12,37 @@ import { summarizeGasUsed } from "@sui-oracle-market/tooling-core/transactions"
 import clsx from "clsx"
 import { parseBalance } from "../helpers/balance"
 import {
-    formatCoinBalance,
-    formatUsdFromCents,
-    getStructLabel,
-    shortenId
+  formatCoinBalance,
+  formatUsdFromCents,
+  getStructLabel,
+  shortenId
 } from "../helpers/format"
 import {
-    extractCreatedObjects,
-    formatTimestamp,
-    summarizeObjectChanges
+  extractCreatedObjects,
+  formatTimestamp,
+  summarizeObjectChanges
 } from "../helpers/transactionFormat"
 import {
-    useBuyFlowModalState,
-    type TransactionSummary
+  useBuyFlowModalState,
+  type TransactionSummary
 } from "../hooks/useBuyFlowModalState"
 import Button from "./Button"
 import CopyableId from "./CopyableId"
 import {
-    ModalBody,
-    ModalErrorFooter,
-    ModalErrorNotice,
-    ModalFrame,
-    ModalHeader,
-    ModalSection,
-    ModalStatusHeader,
-    ModalSuccessFooter,
-    modalFieldDescriptionClassName,
-    modalFieldErrorTextClassName,
-    modalFieldInputClassName,
-    modalFieldInputErrorClassName,
-    modalFieldLabelClassName,
-    modalFieldTitleClassName
+  ModalBody,
+  ModalErrorFooter,
+  ModalErrorNotice,
+  ModalFrame,
+  ModalHeader,
+  ModalSection,
+  ModalStatusHeader,
+  ModalSuccessFooter,
+  modalFieldDescriptionClassName,
+  modalFieldErrorTextClassName,
+  modalFieldInputClassName,
+  modalFieldInputErrorClassName,
+  modalFieldLabelClassName,
+  modalFieldTitleClassName
 } from "./ModalPrimitives"
 
 const getCurrencyLabel = (currency: AcceptedCurrencySummary) =>
@@ -434,7 +434,8 @@ const BuyFlowModal = ({
 
   const paymentCardErrorMessage =
     oracleQuote.status === "error"
-      ? oracleQuote.error || "Oracle quote unavailable for the selected currency."
+      ? oracleQuote.error ||
+        "Oracle quote unavailable for the selected currency."
       : shortfallMessage
 
   const paymentCardHasError = Boolean(paymentCardErrorMessage)
