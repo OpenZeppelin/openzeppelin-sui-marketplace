@@ -78,7 +78,7 @@ const SpotlightTemplateCard = ({
     className={clsx(
       "rounded-2xl border border-rose-200/80 bg-rose-50/70 p-3 text-left transition dark:border-rose-500/30 dark:bg-rose-500/10",
       selected
-        ? "border-rose-400/90 shadow-rose-200/70 shadow-lg dark:border-rose-400/60"
+        ? "border-rose-400/90 shadow-lg shadow-rose-200/70 dark:border-rose-400/60"
         : "hover:border-rose-300/80 dark:hover:border-rose-400/40"
     )}
   >
