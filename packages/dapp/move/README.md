@@ -74,7 +74,8 @@ Sui Move Principles, Applied
 - Resource-first design: coins, tickets, receipts, and capabilities are owned objects moved in/out of entry functions instead of balances in contract storage.
 - Capability-based auth: every admin path requires `ShopOwnerCap`.
 - Shared-object composition: the `Shop` is shared; listings, currencies, and templates are shared objects indexed by lightweight markers (plus the coin-type index). PTBs lock only the touched listing/template/currency object.
-- Strong typing over metadata: listings embed `TypeInfo`, and checkout asserts the `TItem` type to mint the correct `ShopItem<TItem>`—no opaque “token type” ints.
+- Strong typing over metadata: listings embed `TypeName` for runtime checks and UI metadata, while
+  checkout asserts the `TItem` type to mint the correct `ShopItem<TItem>` with no opaque "token type" ints.
 - Explicit data freshness: time comes from `Clock`, price data from `PriceInfoObject`, and both are validated inline so view-only RPC calls are unnecessary.
 - Event-driven observability: analytics and UIs follow events instead of reading append-only storage arrays, keeping state lean.
 
@@ -88,7 +89,10 @@ Sui Fundamentals (EVM contrasts)
 - **Upgrading with UpgradeCap:** New versions are published alongside the old one; data migrations are explicit, gated by `UpgradeCap`, and callers opt into the new package ID. Solidity-style in-place proxy upgrades aren’t available. Docs: https://docs.sui.io/concepts/sui-move-concepts/packages/upgrade.
 - **No inheritance, compose with modules/generics:** Move has no inheritance or dynamic dispatch; reuse is via modules, functions, and type parameters (e.g., `ShopItem<phantom TItem>`). Docs: https://docs.sui.io/concepts/sui-move-concepts
 - **Coin registry integration instead of ERC-20 metadata:** `add_accepted_currency` pulls decimals/symbol from the shared `coin_registry` and stores them on the `AcceptedCurrency` object, avoiding the spoofed-decimals risk of unverified ERC-20s. See registry calls inside `move/sources/shop.move`. Docs: https://docs.sui.io/references/framework/sui_sui/coin_registry.
-- **Oracle feeds as objects:** Prices come from a `pyth::PriceInfoObject` passed into the PTB; `quote_amount_with_guardrails` wraps `pyth::get_price_no_older_than` and enforces status/σ guards before converting. Unlike Chainlink address lookups, callers must present the feed object and recent VAA bytes. Docs: https://docs.sui.io/guides/developer/app-examples/oracle.
+- **Oracle feeds as objects:** Prices come from a `price_info::PriceInfoObject` passed into the PTB;
+  `quote_amount_with_guardrails` wraps `pyth::get_price_no_older_than` and enforces status/σ guards
+  before converting. Unlike Chainlink address lookups, callers must present the feed object and
+  recent update data. Docs: https://docs.sui.io/guides/developer/app-examples/oracle.
 - **Data access stack (gRPC, indexer, custom):** Sui exposes fullnode gRPC/WebSocket streams plus a GraphQL indexer; custom indexers can process events like `PurchaseCompleted` without managing RPC trace reorgs common on EVM. Docs: https://docs.sui.io/concepts/data-access/data-serving.
 - **Transaction DAG and lifecycle:** Objects record the digest that last mutated them, forming a DAG that clients can traverse to reason about causality; combined with fast-path execution for owned objects, this removes many reentrancy patterns seen on EVM. Docs: https://docs.sui.io/concepts/transactions/transaction-lifecycle.
 - **Consensus (Mysticeti) characteristics:** Shared-object transactions go through Sui’s consensus, which targets sub-second finality and high throughput by ordering a DAG of certificates rather than serial block mining. For this shop, shared writes (listing updates) wait for consensus while owned-coin spends in checkout can still batch in the same PTB. Docs: https://docs.sui.io/concepts/sui-architecture/consensus.

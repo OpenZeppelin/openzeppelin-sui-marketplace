@@ -33,16 +33,16 @@ pnpm script buyer:item-listing:list --shop-id <shopId>
 - **Dynamic fields as a membership index**: a dynamic field is a key-value table attached to an
   object. This module stores lightweight marker objects under the shared Shop, keyed by listing ID.
   The marker proves membership without storing the full listing under the Shop, so listing updates
-  do not contend on a single shared map. Lookups use `dynamic_field::exists_with_type` and
-  `dynamic_field::borrow` for membership checks.
+  do not contend on a single shared map. Membership checks use `dynamic_field::exists_with_type`;
+  `dynamic_field::borrow` is only needed when you actually read the stored value.
   Code: `packages/dapp/move/oracle-market/sources/shop.move` (`ItemListingMarker`, `add_listing_marker`,
   `assert_listing_registered`)
 - **Object-owned children**: dynamic-field children are owned by their parent object, not a wallet.
   That is why you can list/verify membership without relying on address ownership.
   Code: `packages/dapp/move/oracle-market/sources/shop.move` (marker structs + dynamic_field usage)
-- **TypeInfo and type tags**: listing types are stored as `TypeInfo` so the Move type system can
-  enforce what gets minted. This prevents mismatched item types at compile time and lets receipts
-  be strongly typed without relying on strings.
+- **TypeName and type tags**: listing types are stored as `TypeName` for runtime checks, events,
+  and UI metadata. Compile-time safety still comes from generics (`ShopItem<TItem>`), not from the
+  stored value.
   Code: `packages/dapp/move/oracle-market/sources/shop.move` (`ItemListing.item_type`, `ShopItem`)
 - **Phantom types for receipts**: `ShopItem<phantom TItem>` records the item type without storing
   the item value. The receipt is a typed proof, not a generic blob, and it guarantees that any
@@ -51,8 +51,9 @@ pnpm script buyer:item-listing:list --shop-id <shopId>
 - **Receipts are transferable, not the asset**: `ShopItem<TItem>` is an owned receipt. It can be
   transferred like any owned object, but it is a proof of purchase, not the actual item itself.
   Code: `packages/dapp/move/oracle-market/sources/shop.move` (`ShopItem`, `mint_and_transfer_item`)
-- **Object IDs vs addresses**: the marker stores an object ID, while events and off-chain code often
-  use the address form. Conversion uses `obj::uid_to_address` and `obj::id_from_address`.
+- **Object IDs vs addresses**: on Sui, the address *is* the object ID, but you still convert between
+  `UID` and address forms for events and off-chain tooling. Conversion uses `obj::uid_to_address`
+  and `obj::id_from_address`.
   Code: `packages/dapp/move/oracle-market/sources/shop.move` (`listing_id`, events)
 
 ## 6. Code references
@@ -67,20 +68,20 @@ pnpm script buyer:item-listing:list --shop-id <shopId>
 ```move
 public entry fun add_item_listing<T: store>(
   shop: &mut Shop,
+  owner_cap: &ShopOwnerCap,
   name: vector<u8>,
   base_price_usd_cents: u64,
   stock: u64,
   spotlight_discount_template_id: opt::Option<obj::ID>,
-  owner_cap: &ShopOwnerCap,
   ctx: &mut tx::TxContext,
 ) {
   let (listing, _listing_id, _listing_address) = add_item_listing_core<T>(
     shop,
+    owner_cap,
     name,
     base_price_usd_cents,
     stock,
     spotlight_discount_template_id,
-    owner_cap,
     ctx,
   );
   txf::share_object(listing);

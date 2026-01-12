@@ -35,8 +35,9 @@ pnpm script buyer:buy --help
 3. **Blocks -> object DAG**: each object records the last transaction digest that mutated it, giving you causal history per object instead of global block history.
 
 ## 5. Concept deep dive: Move execution surface
-- **Entry functions vs view functions**: `public entry fun` mutates state and can be called by
-  transactions. `#[ext(view)]` functions are read-only and are typically called via dev-inspect.
+- **Entry functions vs view functions**: entry functions are PTB-callable and can be read-only or
+  mutating. A *non-public* `entry fun` cannot be called by other Move modules; `public entry` can.
+  `#[ext(view)]` functions are read-only and are typically called via dev-inspect.
   Code: `packages/dapp/move/oracle-market/sources/shop.move` (`create_shop`, `quote_amount_for_price_info_object`)
 - **PTB limits**: a PTB can include up to 1,024 commands, which shapes how much work you can bundle
   into a single transaction. This matters most when you try to batch “admin seeding” or enumerate
@@ -44,14 +45,15 @@ pnpm script buyer:buy --help
 - **Events**: events are typed structs emitted via `event::emit`. Indexers and UIs rely on them
   instead of scanning contract storage arrays.
   Code: `packages/dapp/move/oracle-market/sources/shop.move` (ShopCreated, PurchaseCompleted)
-- **Object IDs and addresses**: objects have IDs (`obj::UID`), but off-chain tooling often wants
-  addresses. The module converts via `obj::uid_to_address` and `obj::id_from_address`.
+- **Object IDs and addresses**: on Sui, the address *is* the object ID. We still convert between
+  `UID` and address forms for events and off-chain tooling via `obj::uid_to_address` and
+  `obj::id_from_address`.
   Code: `packages/dapp/move/oracle-market/sources/shop.move` (helper functions and events)
 - **Transfers and sharing**: `txf::public_transfer` moves owned resources, and `txf::share_object`
   creates shared objects. This pattern replaces EVM-style factory deployments.
   Code: `packages/dapp/move/oracle-market/sources/shop.move` (`create_shop`, `refund_or_destroy`)
 - **TxContext usage**: `tx::TxContext` is needed for object creation (`obj::new`) and coin splits.
-  Code: `packages/dapp/move/oracle-market/sources/shop.move` (`process_payment`, `create_shop`)
+  Code: `packages/dapp/move/oracle-market/sources/shop.move` (`pay_shop`, `create_shop`)
 - **Fixed-point math**: prices are stored in USD cents; discounts use basis points; conversion uses
   u128 scaling and a pow10 table to avoid floating point math.
   Code: `packages/dapp/move/oracle-market/sources/shop.move` (`POW10_U128`, `quote_amount_with_guardrails`)
@@ -76,19 +78,29 @@ pnpm script buyer:buy --help
 ```move
 #[ext(view)]
 public fun listing_exists(shop: &Shop, listing_id: obj::ID): bool {
-  dynamic_field::exists_with_type<obj::ID, ItemListingMarker>(
+  dynamic_field::exists_with_type<ItemListingKey, ItemListingMarker>(
     &shop.id,
-    listing_id,
+    ItemListingKey(listing_id),
   )
 }
 
 #[ext(view)]
 public fun accepted_currency_id_for_type(
   shop: &Shop,
-  coin_type: TypeInfo,
+  coin_type: TypeName,
 ): opt::Option<obj::ID> {
-  if (dynamic_field::exists_with_type<TypeInfo, obj::ID>(&shop.id, coin_type)) {
-    opt::some(*dynamic_field::borrow<TypeInfo, obj::ID>(&shop.id, coin_type))
+  if (
+    dynamic_field::exists_with_type<AcceptedCurrencyTypeKey, obj::ID>(
+      &shop.id,
+      AcceptedCurrencyTypeKey(coin_type),
+    )
+  ) {
+    opt::some(
+      *dynamic_field::borrow<AcceptedCurrencyTypeKey, obj::ID>(
+        &shop.id,
+        AcceptedCurrencyTypeKey(coin_type),
+      )
+    )
   } else {
     opt::none()
   }
@@ -117,7 +129,7 @@ public entry fun buy_item<TItem: store, TCoin>(
   shop: &Shop,
   listing: &mut ItemListing,
   accepted_currency: &AcceptedCurrency,
-  price_info: &pyth::PriceInfoObject,
+  price_info: &price_info::PriceInfoObject,
   payment_coin: coin::Coin<TCoin>,
   mint_to: address,
   refund_to: address,
@@ -135,7 +147,7 @@ public entry fun buy_item<TItem: store, TCoin>(
 ```
 **Key differences**
 1. Payment is a `Coin<TCoin>` object, not an allowance.
-2. Oracle input is a `PriceInfoObject` object ID, not an address.
+2. Oracle input is a `PriceInfoObject` object (its ID is verified on-chain), not a contract address.
 3. The receipt is a typed object, not an event-only proof.
 
 ## 9. Diagram: shared vs owned objects in tests

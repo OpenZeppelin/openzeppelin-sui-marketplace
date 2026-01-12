@@ -19,7 +19,9 @@ None. This is a conceptual chapter that builds on earlier examples.
 
 ## 4. Concept deep dive: ownership types
 - **Address-owned objects (fastpath)**: owned by a wallet address. These can execute on the fastpath with low latency. Examples here: `ShopOwnerCap`, `DiscountTicket`, and `ShopItem`.
-- **Shared objects (consensus)**: mutable by anyone, sequenced by consensus. Examples here: `Shop`, `ItemListing`, `AcceptedCurrency`, `DiscountTemplate`, and the Pyth `PriceInfoObject`.
+- **Shared objects (consensus)**: anyone can include them in a transaction, and mutations are
+  sequenced by consensus, but module checks still gate what can change. Examples here: `Shop`,
+  `ItemListing`, `AcceptedCurrency`, `DiscountTemplate`, and the Pyth `PriceInfoObject`.
 - **Object-owned objects**: children owned by another object. This is how dynamic-field markers and per-claimer claims work.
 - **Immutable objects**: globally readable, never mutable. Common for package-published constants or registry-like data.
 - **Party objects (advanced)**: consensus-owned by a defined party. This repo does not use them, but they can replace some fastpath patterns when multiple parties need coordinated access (the Sui docs recommend party objects over fastpath in multi-party workflows).

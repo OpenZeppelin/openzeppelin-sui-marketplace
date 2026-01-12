@@ -165,11 +165,11 @@ export const buildAddItemListingTransaction = ({
     typeArguments: [itemType],
     arguments: [
       shopArgument,
+      transaction.object(ownerCapId),
       transaction.pure.vector("u8", encodeItemName(itemName)),
       transaction.pure.u64(basePriceUsdCents),
       transaction.pure.u64(stock),
-      transaction.pure.option("address", spotlightDiscountId ?? null),
-      transaction.object(ownerCapId)
+      transaction.pure.option("address", spotlightDiscountId ?? null)
     ]
   })
 
@@ -193,7 +193,7 @@ export const buildRemoveItemListingTransaction = ({
 
   transaction.moveCall({
     target: `${packageId}::shop::remove_item_listing`,
-    arguments: [shopArgument, listingArgument, transaction.object(ownerCapId)]
+    arguments: [shopArgument, transaction.object(ownerCapId), listingArgument]
   })
 
   return transaction
@@ -220,9 +220,9 @@ export const buildUpdateItemListingStockTransaction = ({
     target: `${packageId}::shop::update_item_listing_stock`,
     arguments: [
       shopArgument,
+      transaction.object(ownerCapId),
       listingArgument,
-      transaction.pure.u64(newStock),
-      transaction.object(ownerCapId)
+      transaction.pure.u64(newStock)
     ]
   })
 
@@ -253,9 +253,9 @@ export const buildAttachDiscountTemplateTransaction = ({
     target: `${packageId}::shop::attach_template_to_listing`,
     arguments: [
       shopArgument,
+      transaction.object(ownerCapId),
       listingArgument,
-      templateArgument,
-      transaction.object(ownerCapId)
+      templateArgument
     ]
   })
 
@@ -279,7 +279,7 @@ export const buildClearDiscountTemplateTransaction = ({
 
   transaction.moveCall({
     target: `${packageId}::shop::clear_template_from_listing`,
-    arguments: [shopArgument, listingArgument, transaction.object(ownerCapId)]
+    arguments: [shopArgument, transaction.object(ownerCapId), listingArgument]
   })
 
   return transaction

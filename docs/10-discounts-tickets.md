@@ -67,17 +67,22 @@ pnpm script buyer:discount-ticket:list
 ```move
 public entry fun create_discount_template(
   shop: &mut Shop,
+  owner_cap: &ShopOwnerCap,
   applies_to_listing: opt::Option<obj::ID>,
   rule_kind: u8,
   rule_value: u64,
   starts_at: u64,
   expires_at: opt::Option<u64>,
   max_redemptions: opt::Option<u64>,
-  owner_cap: &ShopOwnerCap,
   ctx: &mut tx::TxContext,
 ) {
   assert_owner_cap(shop, owner_cap);
-  let (discount_template, _, discount_rule, _) = create_discount_template_core(
+  let (
+    discount_template,
+    _discount_template_id,
+    discount_rule,
+    discount_template_address,
+  ) = create_discount_template_core(
     shop,
     applies_to_listing,
     rule_kind,

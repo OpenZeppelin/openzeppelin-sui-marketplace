@@ -41,14 +41,14 @@ export const buildAddAcceptedCurrencyTransaction = ({
     typeArguments: [coinType],
     arguments: [
       shopArgument,
+      transaction.object(ownerCapId),
       currencyArgument,
+      priceInfoArgument,
       transaction.pure.vector("u8", feedIdBytes),
       transaction.pure.id(pythObjectId),
-      priceInfoArgument,
       transaction.pure.option("u64", maxPriceAgeSecsCap ?? null),
       transaction.pure.option("u64", maxConfidenceRatioBpsCap ?? null),
-      transaction.pure.option("u64", maxPriceStatusLagSecsCap ?? null),
-      transaction.object(ownerCapId)
+      transaction.pure.option("u64", maxPriceStatusLagSecsCap ?? null)
     ]
   })
 
@@ -76,8 +76,8 @@ export const buildRemoveAcceptedCurrencyTransaction = ({
     target: `${packageId}::shop::remove_accepted_currency`,
     arguments: [
       shopArgument,
-      acceptedCurrencyArgument,
-      transaction.object(ownerCapId)
+      transaction.object(ownerCapId),
+      acceptedCurrencyArgument
     ]
   })
 

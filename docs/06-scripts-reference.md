@@ -223,7 +223,8 @@ Owner scripts default `--shop-package-id`, `--shop-id`, and `--owner-cap-id` fro
 	- `--shop-package-id <id>` / `--shop-id <id>` / `--owner-cap-id <id>`: override artifact defaults.
 
 ### `pnpm script owner:item-listing:remove`
-- Removes an `ItemListing` object.
+- Delists the item by removing its marker under the Shop. The shared `ItemListing` object remains
+  addressable for history and analytics.
 - Flags:
 	- `--item-listing-id <id>`: listing object ID to remove (required).
 	- `--shop-package-id <id>` / `--shop-id <id>` / `--owner-cap-id <id>`: override artifact defaults.

@@ -68,19 +68,19 @@ From `assert_price_info_identity` in `packages/dapp/move/oracle-market/sources/s
 fun assert_price_info_identity(
    expected_feed_id: &vector<u8>,
    expected_pyth_object_id: &obj::ID,
-   price_info_object: &pyth_price_info::PriceInfoObject,
+   price_info_object: &price_info::PriceInfoObject,
 ) {
-   let confirmed_price_object = pyth_price_info::uid_to_inner(price_info_object);
+   let confirmed_price_object = price_info::uid_to_inner(price_info_object);
    assert!(
       confirmed_price_object == *expected_pyth_object_id,
       EPythObjectMismatch,
    );
 
-   let price_info = pyth_price_info::get_price_info_from_price_info_object(
+   let price_info = price_info::get_price_info_from_price_info_object(
       price_info_object,
    );
-   let identifier = pyth_price_info::get_price_identifier(&price_info);
-   let identifier_bytes = pyth_price_identifier::get_bytes(&identifier);
+   let identifier = price_info::get_price_identifier(&price_info);
+   let identifier_bytes = price_identifier::get_bytes(&identifier);
    assert!(
       bytes_equal(expected_feed_id, &identifier_bytes),
       EFeedIdentifierMismatch,
@@ -153,12 +153,12 @@ If you need enumeration, prefer:
 - off-chain enumeration + on-chain membership checks, or
 - bounded admin-only maintenance functions (like pruning claims) that accept explicit lists.
 
-## 6. Discount tickets: owned objects, single-use, and (intentionally) non-transferable
+## 6. Discount tickets: owned objects, single-use, and redemption-bound
 Tickets are owned objects, which is great for modeling a one-time right.
 But owned objects can be transferred, so you must explicitly define whether transfer should
 preserve redemption rights.
 
-This shop chooses a “non-transferable coupon” semantics:
+This shop chooses a “transferable but redemption-bound” semantics:
 - the ticket can move between wallets,
 - but redemption checks enforce the original claimer.
 

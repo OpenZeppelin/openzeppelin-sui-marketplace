@@ -82,7 +82,7 @@ public entry fun buy_item<TItem: store, TCoin>(
   shop: &Shop,
   item_listing: &mut ItemListing,
   accepted_currency: &AcceptedCurrency,
-  price_info_object: &pyth_price_info::PriceInfoObject,
+  price_info_object: &price_info::PriceInfoObject,
   payment: coin::Coin<TCoin>,
   mint_to: address,
   refund_extra_to: address,

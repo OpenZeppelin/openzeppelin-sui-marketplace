@@ -3,4 +3,4 @@ name = "item_examples"
 edition = "2024"
 
 [environments]
-localnet = "bace5cdf"
+localnet = "58157b31"

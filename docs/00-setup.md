@@ -15,8 +15,8 @@ This chapter gets your environment ready and walks through a complete localnet r
 2. **Rust toolchain** (`rustup`) for nightly installs.
 3. **Sui CLI** on your `PATH`.
 
-## 3. Install Sui CLI (1.63.x, nightly optional)
-This repo is tested against Sui CLI **1.63.x**. Use nightly only if you need pre-release Move package manager behavior.
+## 3. Install Sui CLI (1.63.x)
+This repo is tested against Sui CLI **1.63.x**.
 
 ```bash
 curl -sSfL https://raw.githubusercontent.com/Mystenlabs/suiup/main/install.sh | sh
@@ -26,11 +26,10 @@ sui --version
 
 If you need the nightly package-manager prototype (requires Rust toolchain and builds from a branch):
 ```bash
-rustup toolchain install nightly
-suiup install sui --nightly=sui-pkg-alt
+rustup toolchain install
+suiup install sui@testnet
 sui --version
 ```
-Confirm the output reports **1.63.x** (or newer) before proceeding.
 
 ## 4. Clone + install dependencies
 ```bash

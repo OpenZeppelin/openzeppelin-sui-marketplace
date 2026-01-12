@@ -35,7 +35,7 @@ One coin type currently registered in the Sui coin registry is `0xa7f7382f67ef48
 ## 5. Buyer + oracle validation
 1. Run `pnpm script buyer:shop:view --network <testnet|mainnet>` and ensure every listing resolves.
 2. Execute `pnpm script buyer:item-listing:quote` with the same coin/oracle pair the UI will use; the PTB should succeed via dev-inspect even before real buys.
-3. Trigger a price update via your oracle feed (or rely on upstream testnet cadence) and confirm `pyth_price_info::PriceInfoObject` freshness in logs.
+3. Trigger a price update via your oracle feed (or rely on upstream testnet cadence) and confirm `price_info::PriceInfoObject` freshness in logs.
 
 ## 6. Navigation
 1. Previous: [18 Data Access + Indexing](./18-data-access.md)

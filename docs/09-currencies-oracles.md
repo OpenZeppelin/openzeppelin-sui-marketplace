@@ -36,9 +36,9 @@ pnpm script buyer:currency:list --shop-id <shopId>
 
 ## 5. Concept deep dive: coins, registry, and oracles
 - **`Coin<T>` as a resource**: payment is a `Coin<T>` object, not a balance. The buyer moves a coin
-  into the transaction, the module splits what it needs, and returns change as a new coin. This
-  makes the transfer explicit and eliminates allowance races.
-  Code: `packages/dapp/move/oracle-market/sources/shop.move` (`process_payment`, `refund_or_destroy`)
+  into the transaction, the module splits what it needs (`pay_shop`), and returns change as a new
+  coin (`refund_or_destroy`). This makes the transfer explicit and eliminates allowance races.
+  Code: `packages/dapp/move/oracle-market/sources/shop.move` (`process_purchase`, `pay_shop`, `refund_or_destroy`)
 - **Coin registry metadata**: `coin_registry::Currency<T>` provides trusted decimals/symbols.
   This avoids spoofed ERC-20 metadata. The module copies metadata into `AcceptedCurrency`.
   Code: `packages/dapp/move/oracle-market/sources/shop.move` (`add_accepted_currency`)
@@ -54,7 +54,7 @@ pnpm script buyer:currency:list --shop-id <shopId>
   Code: `packages/dapp/move/oracle-market/sources/shop.move` (`quote_amount_for_price_info_object`)
 - **Guardrail caps**: sellers set per-currency caps; buyers can only tighten them. This is a
   protocol-level safety check, not just a UI preference.
-  Code: `packages/dapp/move/oracle-market/sources/shop.move` (`assert_guardrail_within_cap`)
+  Code: `packages/dapp/move/oracle-market/sources/shop.move` (`resolve_guardrail_cap`, `resolve_effective_guardrails`)
 - **Conservative pricing**: price conversion uses mu-sigma (price minus confidence interval) and
   enforces a max confidence ratio in basis points to avoid undercharging on noisy feeds.
   Code: `packages/dapp/move/oracle-market/sources/shop.move` (`conservative_price_mantissa`)
@@ -71,14 +71,14 @@ pnpm script buyer:currency:list --shop-id <shopId>
 ```move
 public entry fun add_accepted_currency<T>(
   shop: &mut Shop,
-  currency: &registry::Currency<T>,
+  owner_cap: &ShopOwnerCap,
+  currency: &coin_registry::Currency<T>,
+  price_info_object: &price_info::PriceInfoObject,
   feed_id: vector<u8>,
   pyth_object_id: obj::ID,
-  price_info_object: &pyth_price_info::PriceInfoObject,
   max_price_age_secs_cap: opt::Option<u64>,
   max_confidence_ratio_bps_cap: opt::Option<u64>,
   max_price_status_lag_secs_cap: opt::Option<u64>,
-  owner_cap: &ShopOwnerCap,
   ctx: &mut tx::TxContext,
 ) {
   assert_owner_cap(shop, owner_cap);
@@ -99,18 +99,18 @@ public entry fun add_accepted_currency<T>(
 fun assert_price_info_identity(
   expected_feed_id: &vector<u8>,
   expected_pyth_object_id: &obj::ID,
-  price_info_object: &pyth_price_info::PriceInfoObject,
+  price_info_object: &price_info::PriceInfoObject,
 ) {
-  let confirmed_price_object = pyth_price_info::uid_to_inner(price_info_object);
+  let confirmed_price_object = price_info::uid_to_inner(price_info_object);
   assert!(
     confirmed_price_object == *expected_pyth_object_id,
     EPythObjectMismatch,
   );
-  let price_info = pyth_price_info::get_price_info_from_price_info_object(
+  let price_info = price_info::get_price_info_from_price_info_object(
     price_info_object,
   );
-  let identifier = pyth_price_info::get_price_identifier(&price_info);
-  let identifier_bytes = pyth_price_identifier::get_bytes(&identifier);
+  let identifier = price_info::get_price_identifier(&price_info);
+  let identifier_bytes = price_identifier::get_bytes(&identifier);
   assert!(bytes_equal(expected_feed_id, &identifier_bytes), EFeedIdentifierMismatch);
 }
 ```

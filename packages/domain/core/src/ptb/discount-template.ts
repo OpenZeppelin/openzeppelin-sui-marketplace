@@ -30,13 +30,13 @@ export const buildCreateDiscountTemplateTransaction = ({
     target: `${packageId}::shop::create_discount_template`,
     arguments: [
       shopArgument,
+      transaction.object(ownerCapId),
       transaction.pure.option("address", appliesToListingId ?? null),
       transaction.pure.u8(ruleKind),
       transaction.pure.u64(ruleValue),
       transaction.pure.u64(startsAt),
       transaction.pure.option("u64", expiresAt ?? null),
-      transaction.pure.option("u64", maxRedemptions ?? null),
-      transaction.object(ownerCapId)
+      transaction.pure.option("u64", maxRedemptions ?? null)
     ]
   })
 
@@ -77,13 +77,13 @@ export const buildUpdateDiscountTemplateTransaction = ({
     target: `${packageId}::shop::update_discount_template`,
     arguments: [
       shopArgument,
+      transaction.object(ownerCapId),
       discountTemplateArgument,
       transaction.pure.u8(ruleKind),
       transaction.pure.u64(ruleValue),
       transaction.pure.u64(startsAt),
       transaction.pure.option("u64", expiresAt ?? null),
       transaction.pure.option("u64", maxRedemptions ?? null),
-      transaction.object(ownerCapId),
       clockArgument
     ]
   })
@@ -114,9 +114,9 @@ export const buildToggleDiscountTemplateTransaction = ({
     target: `${packageId}::shop::toggle_discount_template`,
     arguments: [
       shopArgument,
+      transaction.object(ownerCapId),
       discountTemplateArgument,
-      transaction.pure.bool(active),
-      transaction.object(ownerCapId)
+      transaction.pure.bool(active)
     ]
   })
 
@@ -149,9 +149,9 @@ export const buildPruneDiscountClaimsTransaction = ({
     target: `${packageId}::shop::prune_discount_claims`,
     arguments: [
       shopArgument,
+      transaction.object(ownerCapId),
       discountTemplateArgument,
       transaction.pure.vector("address", claimers),
-      transaction.object(ownerCapId),
       clockArgument
     ]
   })

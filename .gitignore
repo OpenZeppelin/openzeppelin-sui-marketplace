@@ -20,3 +20,5 @@ patches/pyth-crosschain/
 tmp.json
 
 .pnpm-store 
+
+tmp*

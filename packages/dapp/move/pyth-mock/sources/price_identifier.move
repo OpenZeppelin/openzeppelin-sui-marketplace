@@ -1,7 +1,7 @@
 module Pyth::price_identifier;
 
 const IDENTIFIER_BYTES_LENGTH: u64 = 32;
-const E_INCORRECT_IDENTIFIER_LENGTH: u64 = 0;
+const EIncorrectIdentifierLength: u64 = 0;
 
 /// Identifier for a Pyth price feed (32 bytes).
 public struct PriceIdentifier has copy, drop, store {
@@ -9,7 +9,7 @@ public struct PriceIdentifier has copy, drop, store {
 }
 
 public fun from_byte_vec(bytes: vector<u8>): PriceIdentifier {
-    assert!(vector::length(&bytes) == IDENTIFIER_BYTES_LENGTH, E_INCORRECT_IDENTIFIER_LENGTH);
+    assert!(bytes.length() == IDENTIFIER_BYTES_LENGTH, EIncorrectIdentifierLength);
     PriceIdentifier { bytes }
 }
 
