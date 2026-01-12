@@ -46,10 +46,12 @@
     "lint": "../../node_modules/.bin/eslint .",
     "test:integration": "vitest --config ./vitest.integration.config.ts",
     "test:unit": "vitest --config ./vitest.config.ts",
-    "lint:fix": "../../node_modules/.bin/eslint . --fix"
+    "lint:fix": "../../node_modules/.bin/eslint . --fix",
+    "format:move": "prettier --write 'move/**/*.move' '!move/**/**-patched/**/*.move'"
   },
   "dependencies": {
     "@mysten/sui": "^1.45.2",
+    "@mysten/prettier-plugin-move": "^0.3.4",
     "@pythnetwork/pyth-sui-js": "^2.4.0",
     "@sui-oracle-market/domain-core": "workspace:*",
     "@sui-oracle-market/domain-node": "workspace:*",

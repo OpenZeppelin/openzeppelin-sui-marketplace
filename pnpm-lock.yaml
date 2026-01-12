@@ -44,6 +44,9 @@ importers:
 
   packages/dapp:
     dependencies:
+      '@mysten/prettier-plugin-move':
+        specifier: ^0.3.4
+        version: 0.3.4
       '@mysten/sui':
         specifier: ^1.45.2
         version: 1.45.2(typescript@5.9.3)
@@ -889,6 +892,10 @@ packages:
     peerDependencies:
       '@tanstack/react-query': ^5.0.0
       react: '*'
+
+  '@mysten/prettier-plugin-move@0.3.4':
+    resolution: {integrity: sha512-WwL00Kijf1iFCoagEIDgKcFQ7uTASS/zTc9fgXr9oiV1nTxufMA1V8SqcU4c6cXy+YKbsvP7Nf2cErFrxfd+qw==}
+    hasBin: true
 
   '@mysten/slush-wallet@0.2.12':
     resolution: {integrity: sha512-OVIQbADqUVZCTps3MGvVI90nczTbwepAb75x+jZuH2W2p8lXoYIuvuuP4KlwwalR9QgpqOqptdpYFVAKi8ncLQ==}
@@ -5090,6 +5097,9 @@ packages:
   web-namespaces@2.0.1:
     resolution: {integrity: sha512-bKr1DkiNa2krS7qxNtdrtHAmzuYGFQLiQ13TsorsdT6ULTkPLKuu5+GsFpDlg6JFjUTwX2DyhMPG2be8uPrqsQ==}
 
+  web-tree-sitter@0.20.8:
+    resolution: {integrity: sha512-weOVgZ3aAARgdnb220GqYuh7+rZU0Ka9k9yfKtGAzEYMa6GgiCzW9JjQRJyCJakvibQW+dfjJdihjInKuuCAUQ==}
+
   which@2.0.2:
     resolution: {integrity: sha512-BLI3Tl1TW3Pvl70l3yq3Y64i+awpwXqsGBYWkkqMtnbXgrMD+yj7rhW0kuEDxzJaYXGjEW5ogapKNMEKNMjibA==}
     engines: {node: '>= 8'}
@@ -5754,6 +5764,11 @@ snapshots:
       - immer
       - react-dom
       - typescript
+
+  '@mysten/prettier-plugin-move@0.3.4':
+    dependencies:
+      prettier: 3.7.4
+      web-tree-sitter: 0.20.8
 
   '@mysten/slush-wallet@0.2.12(typescript@5.9.3)':
     dependencies:
@@ -10658,6 +10673,8 @@ snapshots:
   vscode-uri@3.0.8: {}
 
   web-namespaces@2.0.1: {}
+
+  web-tree-sitter@0.20.8: {}
 
   which@2.0.2:
     dependencies:

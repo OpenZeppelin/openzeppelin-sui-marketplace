@@ -1,18 +1,18 @@
-module Pyth::price_identifier {
-    const IDENTIFIER_BYTES_LENGTH: u64 = 32;
-    const E_INCORRECT_IDENTIFIER_LENGTH: u64 = 0;
+module Pyth::price_identifier;
 
-    /// Identifier for a Pyth price feed (32 bytes).
-    public struct PriceIdentifier has copy, drop, store {
-        bytes: vector<u8>,
-    }
+const IDENTIFIER_BYTES_LENGTH: u64 = 32;
+const E_INCORRECT_IDENTIFIER_LENGTH: u64 = 0;
 
-    public fun from_byte_vec(bytes: vector<u8>): PriceIdentifier {
-        assert!(vector::length(&bytes) == IDENTIFIER_BYTES_LENGTH, E_INCORRECT_IDENTIFIER_LENGTH);
-        PriceIdentifier { bytes }
-    }
+/// Identifier for a Pyth price feed (32 bytes).
+public struct PriceIdentifier has copy, drop, store {
+    bytes: vector<u8>,
+}
 
-    public fun get_bytes(price_identifier: &PriceIdentifier): vector<u8> {
-        price_identifier.bytes
-    }
+public fun from_byte_vec(bytes: vector<u8>): PriceIdentifier {
+    assert!(vector::length(&bytes) == IDENTIFIER_BYTES_LENGTH, E_INCORRECT_IDENTIFIER_LENGTH);
+    PriceIdentifier { bytes }
+}
+
+public fun get_bytes(price_identifier: &PriceIdentifier): vector<u8> {
+    price_identifier.bytes
 }
