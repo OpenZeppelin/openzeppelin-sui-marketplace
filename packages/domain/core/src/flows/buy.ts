@@ -204,8 +204,10 @@ export const estimateRequiredAmount = async ({
   )
   const clockArgument = quoteTransaction.sharedObjectRef(clockShared.sharedRef)
 
+  let didInjectMockPriceUpdate = false
+
   if (priceUpdateMode === "localnet-mock") {
-    const didMockUpdate = maybeUpdateMockPriceFeed({
+    didInjectMockPriceUpdate = maybeUpdateMockPriceFeed({
       transaction: quoteTransaction,
       priceInfoArgument: pythPriceInfoArgument,
       priceInfoObject: pythPriceInfoShared.object,
@@ -213,7 +215,7 @@ export const estimateRequiredAmount = async ({
       onWarning: onPriceUpdateWarning
     })
 
-    if (!didMockUpdate)
+    if (!didInjectMockPriceUpdate)
       onPriceUpdateWarning?.(
         "Unable to refresh localnet mock price feed before quoting."
       )
@@ -237,7 +239,10 @@ export const estimateRequiredAmount = async ({
     transactionBlock: quoteTransaction
   })
 
-  return parseU64ReturnValue(inspection.results?.[0]?.returnValues)
+  const quoteResultIndex = didInjectMockPriceUpdate ? 1 : 0
+  return parseU64ReturnValue(
+    inspection.results?.[quoteResultIndex]?.returnValues
+  )
 }
 
 const maybeSetDedicatedGasForSuiPayments = async ({

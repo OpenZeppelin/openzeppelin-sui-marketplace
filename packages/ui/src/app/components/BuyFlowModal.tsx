@@ -3,8 +3,8 @@
 import type { SuiTransactionBlockResponse } from "@mysten/sui/client"
 import type { AcceptedCurrencySummary } from "@sui-oracle-market/domain-core/models/currency"
 import type {
-  DiscountTemplateSummary,
-  DiscountTicketDetails
+    DiscountTemplateSummary,
+    DiscountTicketDetails
 } from "@sui-oracle-market/domain-core/models/discount"
 import type { ItemListingSummary } from "@sui-oracle-market/domain-core/models/item-listing"
 import { mapOwnerToLabel } from "@sui-oracle-market/tooling-core/object-info"
@@ -12,37 +12,37 @@ import { summarizeGasUsed } from "@sui-oracle-market/tooling-core/transactions"
 import clsx from "clsx"
 import { parseBalance } from "../helpers/balance"
 import {
-  formatCoinBalance,
-  formatUsdFromCents,
-  getStructLabel,
-  shortenId
+    formatCoinBalance,
+    formatUsdFromCents,
+    getStructLabel,
+    shortenId
 } from "../helpers/format"
 import {
-  extractCreatedObjects,
-  formatTimestamp,
-  summarizeObjectChanges
+    extractCreatedObjects,
+    formatTimestamp,
+    summarizeObjectChanges
 } from "../helpers/transactionFormat"
 import {
-  useBuyFlowModalState,
-  type TransactionSummary
+    useBuyFlowModalState,
+    type TransactionSummary
 } from "../hooks/useBuyFlowModalState"
 import Button from "./Button"
 import CopyableId from "./CopyableId"
 import {
-  ModalBody,
-  ModalErrorFooter,
-  ModalErrorNotice,
-  ModalFrame,
-  ModalHeader,
-  ModalSection,
-  ModalStatusHeader,
-  ModalSuccessFooter,
-  modalFieldDescriptionClassName,
-  modalFieldErrorTextClassName,
-  modalFieldInputClassName,
-  modalFieldInputErrorClassName,
-  modalFieldLabelClassName,
-  modalFieldTitleClassName
+    ModalBody,
+    ModalErrorFooter,
+    ModalErrorNotice,
+    ModalFrame,
+    ModalHeader,
+    ModalSection,
+    ModalStatusHeader,
+    ModalSuccessFooter,
+    modalFieldDescriptionClassName,
+    modalFieldErrorTextClassName,
+    modalFieldInputClassName,
+    modalFieldInputErrorClassName,
+    modalFieldLabelClassName,
+    modalFieldTitleClassName
 } from "./ModalPrimitives"
 
 const getCurrencyLabel = (currency: AcceptedCurrencySummary) =>
@@ -424,6 +424,21 @@ const BuyFlowModal = ({
   const errorState =
     transactionState.status === "error" ? transactionState : undefined
 
+  const shortfallMessage =
+    !hasSufficientBalance && oracleShortfall && selectedCurrency
+      ? `Need ${formatCoinBalance({
+          balance: oracleShortfall,
+          decimals: selectedCurrency.decimals ?? 9
+        })} ${getCurrencyLabel(selectedCurrency)} more to complete checkout.`
+      : undefined
+
+  const paymentCardErrorMessage =
+    oracleQuote.status === "error"
+      ? oracleQuote.error || "Oracle quote unavailable for the selected currency."
+      : shortfallMessage
+
+  const paymentCardHasError = Boolean(paymentCardErrorMessage)
+
   if (!open) return <></>
 
   const listingLabel = getListingLabel(listing)
@@ -531,9 +546,10 @@ const BuyFlowModal = ({
                     <div className="grid gap-3 text-xs sm:grid-cols-2">
                       <div
                         className={clsx(
-                          "rounded-xl border border-slate-200/70 bg-white/80 p-3 dark:border-slate-50/15 dark:bg-slate-950/60",
-                          !hasSufficientBalance &&
-                            "border-rose-200/70 bg-rose-50/60 dark:border-rose-500/30 dark:bg-rose-500/10"
+                          "rounded-xl border p-3 transition",
+                          paymentCardHasError
+                            ? "border-rose-300/80 bg-rose-50/80 dark:border-rose-500/40 dark:bg-rose-500/10"
+                            : "border-slate-200/70 bg-white/80 dark:border-slate-50/15 dark:bg-slate-950/60"
                         )}
                       >
                         <div className="grid gap-3 sm:grid-cols-2 sm:gap-0">
@@ -557,10 +573,6 @@ const BuyFlowModal = ({
                               <div className="mt-1 text-[0.65rem] text-slate-500 dark:text-slate-200/60">
                                 {getStructLabel(selectedCurrency.coinType)}
                               </div>
-                            ) : oracleQuote.status === "error" ? (
-                              <div className="mt-1 text-[0.65rem] text-rose-500">
-                                {oracleQuote.error}
-                              </div>
                             ) : undefined}
                           </div>
                           <div className="sm:pl-3">
@@ -577,19 +589,13 @@ const BuyFlowModal = ({
                             <div className="mt-1 text-[0.65rem] text-slate-500 dark:text-slate-200/60">
                               {getStructLabel(selectedCurrency.coinType)}
                             </div>
-                            {!hasSufficientBalance && oracleShortfall ? (
-                              <div className="mt-2 text-[0.65rem] text-rose-600 dark:text-rose-200">
-                                Need{" "}
-                                {formatCoinBalance({
-                                  balance: oracleShortfall,
-                                  decimals: selectedCurrency.decimals ?? 9
-                                })}{" "}
-                                {getCurrencyLabel(selectedCurrency)} more to
-                                complete checkout.
-                              </div>
-                            ) : undefined}
                           </div>
                         </div>
+                        {paymentCardHasError && paymentCardErrorMessage ? (
+                          <div className="mt-3 rounded-xl border border-rose-200/70 bg-rose-50/80 px-3 py-2 text-[0.7rem] font-medium text-rose-700 dark:border-rose-500/40 dark:bg-rose-500/20 dark:text-rose-100">
+                            {paymentCardErrorMessage}
+                          </div>
+                        ) : undefined}
                       </div>
                       <div className="rounded-xl border border-slate-200/70 bg-white/80 p-3 dark:border-slate-50/15 dark:bg-slate-950/60">
                         <div className="text-[0.6rem] uppercase tracking-[0.18em] text-slate-500 dark:text-slate-200/60">

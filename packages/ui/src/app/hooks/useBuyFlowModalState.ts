@@ -331,7 +331,8 @@ export const useBuyFlowModalState = ({
       listing &&
       selectedCurrency &&
       selectedDiscount &&
-      !hasFieldErrors
+      !hasFieldErrors &&
+      hasSufficientBalance
     ) &&
     transactionState.status !== "processing" &&
     isSubmissionPending !== true
