@@ -1,6 +1,6 @@
-# 19 - Security & Gotchas (Move/Sui)
+# 20 - Security & Gotchas (Move/Sui)
 
-**Path:** [Learning Path](./) > 19 Security & Gotchas
+**Path:** [Learning Path](./) > 20 Security & Gotchas
 
 This chapter is a practical security pass over this repo’s design. It’s not a general-purpose
 Sui security checklist; it’s the set of mistakes that become likely once you start modifying
@@ -195,6 +195,6 @@ Before you ship a modification to the Move module:
 3. `docs/16-object-ownership.md` (ownership types and how they affect execution)
 
 ## 10. Navigation
-1. Previous: [18 Data Access + Indexing](./18-data-access.md)
-2. Next: [20 Troubleshooting](./20-troubleshooting.md)
+1. Previous: [19 Moving to Testnet/Mainnet](./19-moving-to-testnet.md)
+2. Next: [21 Troubleshooting](./21-troubleshooting.md)
 3. Back to map: [Learning Path Map](./)

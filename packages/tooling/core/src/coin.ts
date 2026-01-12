@@ -1,6 +1,6 @@
 import type { Transaction } from "@mysten/sui/transactions"
 import { normalizeSuiObjectId } from "@mysten/sui/utils"
-import { DEFAULT_TX_GAS_BUDGET } from "./constants.ts"
+import { DEFAULT_TX_GAS_BUDGET, MINIMUM_GAS_COIN_BALANCE } from "./constants.ts"
 import type { ToolingCoreContext } from "./context.ts"
 import {
   buildSuiObjectRef,
@@ -130,12 +130,12 @@ const fetchSuiCoinBalances = async (
 const hasDistinctGasCoin = ({
   coins,
   paymentMinimum,
-  gasBudget,
+  gasCoinMinimumBalance,
   paymentCoinObjectId
 }: {
   coins: SuiCoinBalance[]
   paymentMinimum: bigint
-  gasBudget: bigint
+  gasCoinMinimumBalance: bigint
   paymentCoinObjectId: string
 }) => {
   const paymentCoin = coins.find(
@@ -146,9 +146,14 @@ const hasDistinctGasCoin = ({
   return coins.some(
     (gasCoin) =>
       gasCoin.coinObjectId !== paymentCoinObjectId &&
-      gasCoin.balance >= gasBudget
+      gasCoin.balance >= gasCoinMinimumBalance
   )
 }
+
+const resolveGasCoinMinimumBalance = (desiredGasBudget: bigint) =>
+  desiredGasBudget > MINIMUM_GAS_COIN_BALANCE
+    ? desiredGasBudget
+    : MINIMUM_GAS_COIN_BALANCE
 
 const buildSplitSuiCoinsTransaction = ({
   owner,
@@ -214,6 +219,7 @@ export const planSuiPaymentSplitTransaction = async (
 
   const coins = await fetchSuiCoinBalances({ owner }, { suiClient })
   const totalBalance = coins.reduce((total, coin) => total + coin.balance, 0n)
+  const gasCoinMinimumBalance = resolveGasCoinMinimumBalance(gasBudget)
   const normalizedPaymentCoinObjectId = paymentCoinObjectId
     ? normalizeSuiObjectId(paymentCoinObjectId)
     : undefined
@@ -238,7 +244,7 @@ export const planSuiPaymentSplitTransaction = async (
     hasDistinctGasCoin({
       coins,
       paymentMinimum,
-      gasBudget,
+      gasCoinMinimumBalance,
       paymentCoinObjectId: paymentCoin.coinObjectId
     })
   ) {
@@ -250,7 +256,8 @@ export const planSuiPaymentSplitTransaction = async (
     }
   }
 
-  const requiredBalance = paymentMinimum + gasBudget + BigInt(splitGasBudget)
+  const requiredBalance =
+    paymentMinimum + gasCoinMinimumBalance + BigInt(splitGasBudget)
   if (paymentCoin.balance < requiredBalance) {
     throw new Error(
       "Insufficient SUI balance to cover payment plus gas. Fund more SUI, then retry."
@@ -259,7 +266,7 @@ export const planSuiPaymentSplitTransaction = async (
 
   const transaction = buildSplitSuiCoinsTransaction({
     owner,
-    splitAmounts: [gasBudget],
+    splitAmounts: [gasCoinMinimumBalance],
     gasBudget: splitGasBudget
   })
   const { object: gasPaymentObject } = await getSuiObject(

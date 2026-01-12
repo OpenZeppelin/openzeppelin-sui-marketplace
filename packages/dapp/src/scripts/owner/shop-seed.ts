@@ -101,6 +101,7 @@ import {
   findCreatedArtifactIdBySuffix,
   requireCreatedArtifactIdBySuffix
 } from "@sui-oracle-market/tooling-node/transactions"
+import { ensureNativeSuiCurrencyRegistration } from "../../utils/coin-registry.ts"
 import {
   logAcceptedCurrencySummary,
   logDiscountTemplateSummary,
@@ -564,8 +565,8 @@ const buildMissingItemTypesError = ({
       : missingItemTypes.join(", ")
   const publishCommand =
     networkName === "localnet"
-      ? "pnpm --filter dapp mock:setup -- --re-publish"
-      : "pnpm --filter dapp move:publish -- --package-path item-examples --re-publish"
+      ? "pnpm script mock:setup -- --re-publish"
+      : "pnpm script move:publish -- --package-path item-examples --re-publish"
 
   return new Error(
     `Failed to locate ${missingTypeSummary} on ${networkName}. Ensure the item-examples package is published and recorded in ${artifactPath} (run \`${publishCommand}\`).`
@@ -686,7 +687,10 @@ const resolveAcceptedCurrencySeeds = async ({
       shopPackageId,
       tooling
     })
-  if (networkName === "localnet") return buildLocalnetAcceptedCurrencySeeds()
+  if (networkName === "localnet") {
+    await ensureNativeSuiCurrencyRegistration(tooling)
+    return buildLocalnetAcceptedCurrencySeeds()
+  }
 
   throw new Error(
     `shop-seed only supports testnet and localnet networks (received ${networkName}).`

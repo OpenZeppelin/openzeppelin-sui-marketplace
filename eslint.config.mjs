@@ -144,7 +144,8 @@ export default typescriptEslint.config(
     ignores: [
       "**/node_modules/**",
       "packages/**/dist/**",
-      "packages/**/.next/**"
+      "packages/**/.next/**",
+      "packages/learn/out/**"
     ]
   }
 )

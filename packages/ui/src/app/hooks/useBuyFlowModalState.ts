@@ -12,6 +12,7 @@ import type { SuiTransactionBlockResponse } from "@mysten/sui/client"
 import type { Transaction } from "@mysten/sui/transactions"
 import { normalizeSuiAddress } from "@mysten/sui/utils"
 import type { IdentifierString } from "@mysten/wallet-standard"
+import type { EstimateRequiredAmountPriceUpdateMode } from "@sui-oracle-market/domain-core/flows/buy"
 import {
   buildBuyTransaction,
   estimateRequiredAmount,
@@ -154,6 +155,8 @@ type BuyFlowModalState = {
   canSubmit: boolean
   oracleWarning?: string
   oracleQuote: OracleQuoteState
+  hasSufficientBalance: boolean
+  oracleShortfall?: bigint
   handlePurchase: () => Promise<void>
   resetTransactionState: () => void
   setSelectedCurrencyId: (value?: string) => void
@@ -211,6 +214,8 @@ export const useBuyFlowModalState = ({
     network === ENetwork.MAINNET
       ? "required"
       : "auto"
+  const quotePriceUpdateMode: EstimateRequiredAmountPriceUpdateMode =
+    network === ENetwork.LOCALNET ? "localnet-mock" : "none"
 
   const [balancesByType, setBalancesByType] = useState<Record<string, bigint>>(
     {}
@@ -289,6 +294,19 @@ export const useBuyFlowModalState = ({
       discountOptions[0],
     [discountOptions, selectedDiscountId]
   )
+
+  const { hasSufficientBalance, oracleShortfall } = useMemo(() => {
+    if (oracleQuote.status !== "success" || !selectedCurrency)
+      return { hasSufficientBalance: true, oracleShortfall: undefined }
+
+    if (selectedCurrency.balance >= oracleQuote.amount)
+      return { hasSufficientBalance: true, oracleShortfall: undefined }
+
+    return {
+      hasSufficientBalance: false,
+      oracleShortfall: oracleQuote.amount - selectedCurrency.balance
+    }
+  }, [oracleQuote, selectedCurrency])
 
   const fieldErrors = useMemo(
     () =>
@@ -487,7 +505,8 @@ export const useBuyFlowModalState = ({
           maxConfidenceRatioBps: undefined,
           clockShared,
           signerAddress: walletAddress,
-          suiClient
+          suiClient,
+          priceUpdateMode: quotePriceUpdateMode
         })
 
         if (!isActive) return
@@ -519,6 +538,7 @@ export const useBuyFlowModalState = ({
     discountTemplateLookup,
     listing,
     open,
+    quotePriceUpdateMode,
     selectedCurrency,
     selectedDiscount,
     shopId,
@@ -680,7 +700,8 @@ export const useBuyFlowModalState = ({
             maxConfidenceRatioBps: undefined,
             clockShared,
             signerAddress: walletAddress,
-            suiClient
+            suiClient,
+            priceUpdateMode: quotePriceUpdateMode
           })
 
           if (requiredAmount !== undefined) {
@@ -890,6 +911,7 @@ export const useBuyFlowModalState = ({
     mintTo,
     onPurchaseSuccess,
     priceUpdatePolicy,
+    quotePriceUpdateMode,
     network,
     refundTo,
     selectedCurrency,
@@ -938,6 +960,8 @@ export const useBuyFlowModalState = ({
     canSubmit,
     oracleWarning,
     oracleQuote,
+    hasSufficientBalance,
+    oracleShortfall,
     handlePurchase,
     resetTransactionState,
     setSelectedCurrencyId,

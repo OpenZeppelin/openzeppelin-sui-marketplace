@@ -23,9 +23,10 @@ Use this page as the navigation hub for the docs. Each chapter ends with Prev/Ne
 17. [14 Advanced (execution model + upgrades)](14-advanced.md)
 18. [15 Testing (integration + unit + script framework)](15-testing.md)
 19. [18 Data Access + Indexing](18-data-access.md)
-20. [19 Security & Gotchas](19-security.md)
-21. [20 Troubleshooting](20-troubleshooting.md)
-22. [21 Glossary](21-glossary.md)
+20. [19 Moving to Testnet/Mainnet](19-moving-to-testnet.md)
+21. [20 Security & Gotchas](20-security.md)
+22. [21 Troubleshooting](21-troubleshooting.md)
+23. [22 Glossary](22-glossary.md)
 
 ## 2. Jump to a goal
 1. I want a local chain and published package -> [05 Localnet workflow (end-to-end)](05-localnet-workflow.md)

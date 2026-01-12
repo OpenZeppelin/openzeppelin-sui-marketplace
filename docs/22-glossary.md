@@ -1,6 +1,6 @@
-# Glossary: Quick Reference
+# 22 - Glossary: Quick Reference
 
-**Path:** [Learning Path](./) > Glossary
+**Path:** [Learning Path](./) > 22 Glossary
 
 1. **Object**: On-chain data with an ID. Objects can be owned or shared. See `packages/dapp/move/oracle-market/sources/shop.move`.
 2. **Owned object**: An object tied to an address; transfers are explicit. Example: `ShopOwnerCap`.
@@ -39,5 +39,6 @@ public struct Shop has key, store {
 ```
 
 ## Navigation
-1. Start the path: [00 Setup + Quickstart](./00-setup.md)
-2. Back to map: [Learning Path Map](./)
+1. Previous: [21 Troubleshooting](./21-troubleshooting.md)
+2. Start the path: [00 Setup + Quickstart](./00-setup.md)
+3. Back to map: [Learning Path Map](./)

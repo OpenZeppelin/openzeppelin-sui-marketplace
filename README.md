@@ -17,7 +17,7 @@ This repo is a pnpm workspace containing:
 - **Learning path hub:** [docs/README.md](docs/README.md)
 - **Setup + quickstart:** [docs/00-setup.md](docs/00-setup.md)
 - **Learning chapter:** [docs/01-repo-layout.md](docs/01-repo-layout.md)
-- **Glossary:** [docs/21-glossary.md](docs/21-glossary.md)
+- **Glossary:** [docs/22-glossary.md](docs/22-glossary.md)
 
 Docs website (renders `/docs` and selected guides):
 ```bash
@@ -91,6 +91,7 @@ The detailed docs live under `docs/`:
 - Script/CLI reference + artifacts: [docs/06-scripts-reference.md](docs/06-scripts-reference.md)
 - UI reference notes: [docs/11-ui-reference.md](docs/11-ui-reference.md)
 - Testing + script testing framework: [docs/15-testing.md](docs/15-testing.md)
-- Troubleshooting: [docs/20-troubleshooting.md](docs/20-troubleshooting.md)
-- Security & gotchas: [docs/19-security.md](docs/19-security.md)
+- Troubleshooting: [docs/21-troubleshooting.md](docs/21-troubleshooting.md)
+- Security & gotchas: [docs/20-security.md](docs/20-security.md)
+- Moving to testnet/mainnet: [docs/19-moving-to-testnet.md](docs/19-moving-to-testnet.md)
 - EVM → Sui cheatsheet: [docs/03-evm-to-sui.md](docs/03-evm-to-sui.md)

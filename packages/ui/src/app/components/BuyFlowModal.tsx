@@ -3,8 +3,8 @@
 import type { SuiTransactionBlockResponse } from "@mysten/sui/client"
 import type { AcceptedCurrencySummary } from "@sui-oracle-market/domain-core/models/currency"
 import type {
-  DiscountTemplateSummary,
-  DiscountTicketDetails
+    DiscountTemplateSummary,
+    DiscountTicketDetails
 } from "@sui-oracle-market/domain-core/models/discount"
 import type { ItemListingSummary } from "@sui-oracle-market/domain-core/models/item-listing"
 import { mapOwnerToLabel } from "@sui-oracle-market/tooling-core/object-info"
@@ -12,37 +12,37 @@ import { summarizeGasUsed } from "@sui-oracle-market/tooling-core/transactions"
 import clsx from "clsx"
 import { parseBalance } from "../helpers/balance"
 import {
-  formatCoinBalance,
-  formatUsdFromCents,
-  getStructLabel,
-  shortenId
+    formatCoinBalance,
+    formatUsdFromCents,
+    getStructLabel,
+    shortenId
 } from "../helpers/format"
 import {
-  extractCreatedObjects,
-  formatTimestamp,
-  summarizeObjectChanges
+    extractCreatedObjects,
+    formatTimestamp,
+    summarizeObjectChanges
 } from "../helpers/transactionFormat"
 import {
-  useBuyFlowModalState,
-  type TransactionSummary
+    useBuyFlowModalState,
+    type TransactionSummary
 } from "../hooks/useBuyFlowModalState"
 import Button from "./Button"
 import CopyableId from "./CopyableId"
 import {
-  ModalBody,
-  ModalErrorFooter,
-  ModalErrorNotice,
-  ModalFrame,
-  ModalHeader,
-  ModalSection,
-  ModalStatusHeader,
-  ModalSuccessFooter,
-  modalFieldDescriptionClassName,
-  modalFieldErrorTextClassName,
-  modalFieldInputClassName,
-  modalFieldInputErrorClassName,
-  modalFieldLabelClassName,
-  modalFieldTitleClassName
+    ModalBody,
+    ModalErrorFooter,
+    ModalErrorNotice,
+    ModalFrame,
+    ModalHeader,
+    ModalSection,
+    ModalStatusHeader,
+    ModalSuccessFooter,
+    modalFieldDescriptionClassName,
+    modalFieldErrorTextClassName,
+    modalFieldInputClassName,
+    modalFieldInputErrorClassName,
+    modalFieldLabelClassName,
+    modalFieldTitleClassName
 } from "./ModalPrimitives"
 
 const getCurrencyLabel = (currency: AcceptedCurrencySummary) =>
@@ -400,6 +400,8 @@ const BuyFlowModal = ({
     canSubmit,
     oracleWarning,
     oracleQuote,
+    hasSufficientBalance,
+    oracleShortfall,
     handlePurchase,
     resetTransactionState,
     setSelectedCurrencyId,
@@ -527,7 +529,13 @@ const BuyFlowModal = ({
 
                   {selectedCurrency ? (
                     <div className="grid gap-3 text-xs sm:grid-cols-2">
-                      <div className="rounded-xl border border-slate-200/70 bg-white/80 p-3 dark:border-slate-50/15 dark:bg-slate-950/60">
+                      <div
+                        className={clsx(
+                          "rounded-xl border border-slate-200/70 bg-white/80 p-3 dark:border-slate-50/15 dark:bg-slate-950/60",
+                          !hasSufficientBalance &&
+                            "border-rose-200/70 bg-rose-50/60 dark:border-rose-500/30 dark:bg-rose-500/10"
+                        )}
+                      >
                         <div className="grid gap-3 sm:grid-cols-2 sm:gap-0">
                           <div className="sm:pr-3">
                             <div className="text-[0.6rem] uppercase tracking-[0.18em] text-slate-500 dark:text-slate-200/60">
@@ -569,6 +577,17 @@ const BuyFlowModal = ({
                             <div className="mt-1 text-[0.65rem] text-slate-500 dark:text-slate-200/60">
                               {getStructLabel(selectedCurrency.coinType)}
                             </div>
+                            {!hasSufficientBalance && oracleShortfall ? (
+                              <div className="mt-2 text-[0.65rem] text-rose-600 dark:text-rose-200">
+                                Need{" "}
+                                {formatCoinBalance({
+                                  balance: oracleShortfall,
+                                  decimals: selectedCurrency.decimals ?? 9
+                                })}{" "}
+                                {getCurrencyLabel(selectedCurrency)} more to
+                                complete checkout.
+                              </div>
+                            ) : undefined}
                           </div>
                         </div>
                       </div>

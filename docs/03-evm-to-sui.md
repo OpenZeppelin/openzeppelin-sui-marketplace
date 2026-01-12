@@ -16,25 +16,7 @@ This is a compact reference for common EVM-to-Sui translation points, plus a che
 - **PTBs for runtime composition**: you compose workflows client-side into a single atomic transaction.
 - **Localnet vs testnet/mainnet**: localnet can use unpublished deps and dep replacements; shared networks require real dependency package IDs.
 
-## 2. Moving to testnet/mainnet
-
-### Get testnet SUI
-- Official Sui faucet: https://faucet.sui.io/
-- Community faucets:
-  - http://faucet.n1stake.com/
-  - http://faucet.suilearn.io/
-
-### Swap for testnet tokens
-- FlowX (testnet): https://testnet.flowx.finance/
-
-We recommend swapping some SUI into USDC on testnet.
-
-One coin type currently registered in the Sui coin registry is:
-`0xa7f7382f67ef48972ad6a92677f2a764201041f5e29c7a9e0389b75e61038cdf::usdc::USDC`.
-
-Note: testnet coin package IDs can change over time. Ensure the coin type you acquire matches the accepted currency configured in the shop.
-
-## 3. Deep dive: how it maps to EVM mental models
+## 2. Deep dive: how it maps to EVM mental models
 
 | Topic | EVM | Sui |
 | --- | --- | --- |
@@ -48,7 +30,7 @@ Note: testnet coin package IDs can change over time. Ensure the coin type you ac
 | Inheritance | Multiple inheritance + polymorphism | Modules + generics |
 | Composition | On-chain router contracts | Client-side PTBs chain calls atomically |
 
-## 4. Further reading
+## 3. Further reading
 - https://docs.sui.io
 - https://docs.sui.io/concepts/sui-move-concepts
 - https://docs.sui.io/guides/developer/objects/object-model
@@ -56,7 +38,7 @@ Note: testnet coin package IDs can change over time. Ensure the coin type you ac
 - https://docs.sui.io/guides/developer/app-examples/oracle
 - https://docs.sui.io/concepts/sui-for-ethereum
 
-## 5. Navigation
+## 4. Navigation
 1. Previous: [02 Mental Model Shift](./02-mental-model-shift.md)
 2. Next: [16 Object Ownership + Versioning](./16-object-ownership.md)
 3. Back to map: [Learning Path Map](./)

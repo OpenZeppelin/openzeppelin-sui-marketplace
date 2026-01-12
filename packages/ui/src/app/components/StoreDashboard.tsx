@@ -1039,6 +1039,7 @@ const StoreDashboard = ({
         open={modalState.isAddItemModalOpen}
         onClose={closeAddItemModal}
         shopId={resolvedShopId}
+        discountTemplates={storefront.discountTemplates}
         onListingCreated={handleListingCreated}
       />
 

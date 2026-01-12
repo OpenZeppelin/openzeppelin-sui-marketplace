@@ -19,7 +19,8 @@ export default {
   "14-advanced": "14 Advanced (execution model + upgrades)",
   "15-testing": "15 Testing (integration + unit + script framework)",
   "18-data-access": "18 Data Access + Indexing",
-  "19-security": "19 Security & Gotchas",
-  "20-troubleshooting": "20 Troubleshooting",
-  "21-glossary": "21 Glossary"
+  "19-moving-to-testnet": "19 Moving to Testnet/Mainnet",
+  "20-security": "20 Security & Gotchas",
+  "21-troubleshooting": "21 Troubleshooting",
+  "22-glossary": "22 Glossary"
 }

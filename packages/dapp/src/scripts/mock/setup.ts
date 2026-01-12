@@ -41,6 +41,7 @@ import {
   findCreatedObjectIds,
   newTransaction
 } from "@sui-oracle-market/tooling-node/transactions"
+import { ensureNativeSuiCurrencyRegistration } from "../../utils/coin-registry.ts"
 import type { MockArtifact } from "../../utils/mocks.ts"
 import { mockArtifactPath, writeMockArtifact } from "../../utils/mocks.ts"
 
@@ -172,6 +173,11 @@ runSuiScript(
     // Fetch shared Coin Registry and Clock objects; required for minting coins and timestamp price feeds.
     const { coinRegistryObject, clockObject } =
       await resolveRegistryAndClockRefs(tooling)
+
+    await ensureNativeSuiCurrencyRegistration(tooling, {
+      signer: tooling.loadedEd25519KeyPair,
+      coinRegistryObject
+    })
 
     // Ensure mock coins exist (mint + register in coin registry if missing); reuse if already minted.
     const seededCoins =

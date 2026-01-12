@@ -1,6 +1,6 @@
-# 20 - Troubleshooting
+# 21 - Troubleshooting
 
-**Path:** [Learning Path](./) > 20 Troubleshooting
+**Path:** [Learning Path](./) > 21 Troubleshooting
 
 ## Localnet refuses to start or keeps regenesis
 - Check `pnpm script chain:localnet:start --check-only`.
@@ -82,6 +82,6 @@ fun resolve_effective_guardrails(
 ```
 
 ## 2. Navigation
-1. Previous: [19 Security & Gotchas](./19-security.md)
-2. Next: [21 Glossary](./21-glossary.md)
+1. Previous: [20 Security & Gotchas](./20-security.md)
+2. Next: [22 Glossary](./22-glossary.md)
 3. Back to map: [Learning Path Map](./)

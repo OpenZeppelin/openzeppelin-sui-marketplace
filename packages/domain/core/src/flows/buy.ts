@@ -156,6 +156,8 @@ const parseU64ReturnValue = (
   }
 }
 
+export type EstimateRequiredAmountPriceUpdateMode = "none" | "localnet-mock"
+
 /**
  * Estimates the required payment amount for a USD price using the oracle quote.
  */
@@ -169,7 +171,9 @@ export const estimateRequiredAmount = async ({
   maxConfidenceRatioBps,
   clockShared,
   signerAddress,
-  suiClient
+  suiClient,
+  priceUpdateMode = "none",
+  onPriceUpdateWarning
 }: {
   shopPackageId: string
   shopShared: Awaited<ReturnType<typeof getSuiSharedObject>>
@@ -181,20 +185,50 @@ export const estimateRequiredAmount = async ({
   clockShared: Awaited<ReturnType<typeof getSuiSharedObject>>
   signerAddress: string
   suiClient: SuiClient
+  priceUpdateMode?: EstimateRequiredAmountPriceUpdateMode
+  onPriceUpdateWarning?: (message: string) => void
 }): Promise<bigint | undefined> => {
   const quoteTransaction = newTransaction()
   quoteTransaction.setSender(signerAddress)
 
+  const shopArgument = quoteTransaction.sharedObjectRef(shopShared.sharedRef)
+  const acceptedCurrencyArgument = quoteTransaction.sharedObjectRef(
+    acceptedCurrencyShared.sharedRef
+  )
+  const pythPriceInfoSharedRef =
+    priceUpdateMode === "localnet-mock"
+      ? { ...pythPriceInfoShared.sharedRef, mutable: true }
+      : pythPriceInfoShared.sharedRef
+  const pythPriceInfoArgument = quoteTransaction.sharedObjectRef(
+    pythPriceInfoSharedRef
+  )
+  const clockArgument = quoteTransaction.sharedObjectRef(clockShared.sharedRef)
+
+  if (priceUpdateMode === "localnet-mock") {
+    const didMockUpdate = maybeUpdateMockPriceFeed({
+      transaction: quoteTransaction,
+      priceInfoArgument: pythPriceInfoArgument,
+      priceInfoObject: pythPriceInfoShared.object,
+      clockArgument,
+      onWarning: onPriceUpdateWarning
+    })
+
+    if (!didMockUpdate)
+      onPriceUpdateWarning?.(
+        "Unable to refresh localnet mock price feed before quoting."
+      )
+  }
+
   quoteTransaction.moveCall({
     target: `${shopPackageId}::shop::quote_amount_for_price_info_object`,
     arguments: [
-      quoteTransaction.sharedObjectRef(shopShared.sharedRef),
-      quoteTransaction.sharedObjectRef(acceptedCurrencyShared.sharedRef),
-      quoteTransaction.sharedObjectRef(pythPriceInfoShared.sharedRef),
+      shopArgument,
+      acceptedCurrencyArgument,
+      pythPriceInfoArgument,
       quoteTransaction.pure.u64(priceUsdCents),
       quoteTransaction.pure.option("u64", maxPriceAgeSecs ?? null),
       quoteTransaction.pure.option("u64", maxConfidenceRatioBps ?? null),
-      quoteTransaction.sharedObjectRef(clockShared.sharedRef)
+      clockArgument
     ]
   })
 

@@ -25,16 +25,16 @@ import { useCallback, useEffect, useMemo, useState } from "react"
 import { EXPLORER_URL_VARIABLE_NAME } from "../config/network"
 import { formatUsdFromCents, getStructLabel } from "../helpers/format"
 import {
+  resolveValidationMessage,
+  validateItemType,
+  validateOptionalSuiObjectId
+} from "../helpers/inputValidation"
+import {
   getLocalnetClient,
   makeLocalnetExecutor,
   walletSupportsChain
 } from "../helpers/localnet"
 import { resolveOwnerCapabilityId } from "../helpers/ownerCapabilities"
-import {
-  resolveValidationMessage,
-  validateItemType,
-  validateOptionalSuiObjectId
-} from "../helpers/inputValidation"
 import {
   extractErrorDetails,
   formatErrorMessage,
@@ -43,8 +43,8 @@ import {
 } from "../helpers/transactionErrors"
 import { extractCreatedObjects } from "../helpers/transactionFormat"
 import { waitForTransactionBlock } from "../helpers/transactionWait"
-import useNetworkConfig from "./useNetworkConfig"
 import { useIdleFieldValidation } from "./useIdleFieldValidation"
+import useNetworkConfig from "./useNetworkConfig"
 
 type ListingFormState = {
   itemName: string
@@ -66,6 +66,21 @@ export type ListingTransactionSummary = ListingInputs & {
   digest: string
   transactionBlock: SuiTransactionBlockResponse
   listingId?: string
+}
+
+const stripGenericType = (objectType: string) => {
+  const genericStartIndex = objectType.indexOf("<")
+  return genericStartIndex === -1
+    ? objectType
+    : objectType.slice(0, genericStartIndex)
+}
+
+const matchesShopStructType = (
+  objectType: string | undefined,
+  structName: string
+) => {
+  if (!objectType) return false
+  return stripGenericType(objectType).endsWith(`::shop::${structName}`)
 }
 
 type TransactionState =
@@ -414,10 +429,10 @@ export const useAddItemModalState = ({
 
       const createdObjects = extractCreatedObjects(transactionBlock)
       const listingId = createdObjects.find((change) =>
-        change.objectType.includes("::shop::ItemListing<")
+        matchesShopStructType(change.objectType, "ItemListing")
       )?.objectId
       const markerObjectId = createdObjects.find((change) =>
-        change.objectType.endsWith("::shop::ItemListingMarker")
+        matchesShopStructType(change.objectType, "ItemListingMarker")
       )?.objectId
 
       const optimisticListing = listingId

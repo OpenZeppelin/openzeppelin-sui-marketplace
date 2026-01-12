@@ -30,7 +30,7 @@ const PYTH_CONFIG = {
 } as const
 
 export default defineSuiConfig({
-  defaultNetwork: "localnet",
+  defaultNetwork: "testnet",
   networks: {
     localnet: {
       url: "http://127.0.0.1:9000",

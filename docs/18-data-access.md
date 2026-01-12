@@ -54,5 +54,5 @@ Code:
 
 ## 9. Navigation
 1. Previous: [15 Testing (integration + unit + script framework)](./15-testing.md)
-2. Next: [19 Security & Gotchas](./19-security.md)
+2. Next: [19 Moving to Testnet/Mainnet](./19-moving-to-testnet.md)
 3. Back to map: [Learning Path Map](./)
