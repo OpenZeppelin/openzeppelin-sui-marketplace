@@ -78,7 +78,7 @@ const SpotlightTemplateCard = ({
     className={clsx(
       "rounded-2xl border border-slate-200/80 bg-white/85 p-3 text-left transition dark:border-slate-50/20 dark:bg-slate-900/40",
       selected
-        ? "border-sds-primary shadow-lg shadow-sds-primary/10 dark:border-sds-primary"
+        ? "border-sds-primary shadow-sds-primary/10 dark:border-sds-primary shadow-lg"
         : "hover:border-slate-300/80 dark:hover:border-slate-50/30"
     )}
   >
@@ -549,9 +549,9 @@ const AddItemModal = ({
                   </div>
                   <label className="mt-4 block">
                     <span className={modalFieldDescriptionClassName}>
-                      Custom template ID  
+                      Custom template ID
                     </span>
-                    <br/>
+                    <br />
                     <input
                       type="text"
                       value={formState.spotlightDiscountId}
