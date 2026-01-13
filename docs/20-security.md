@@ -112,8 +112,8 @@ From `resolve_effective_guardrails` in `packages/dapp/move/oracle-market/sources
 
 ```move
 fun resolve_effective_guardrails(
-   max_price_age_secs: &opt::Option<u64>,
-   max_confidence_ratio_bps: &opt::Option<u64>,
+   max_price_age_secs: &Option<u64>,
+   max_confidence_ratio_bps: &Option<u64>,
    accepted_currency: &AcceptedCurrency,
 ): (u64, u64) {
    let requested_max_age = unwrap_or_default(

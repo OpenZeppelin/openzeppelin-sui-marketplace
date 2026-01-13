@@ -86,8 +86,8 @@ public entry fun buy_item<TItem: store, TCoin>(
   payment: coin::Coin<TCoin>,
   mint_to: address,
   refund_extra_to: address,
-  max_price_age_secs: opt::Option<u64>,
-  max_confidence_ratio_bps: opt::Option<u64>,
+  max_price_age_secs: Option<u64>,
+  max_confidence_ratio_bps: Option<u64>,
   clock: &clock::Clock,
   ctx: &mut tx::TxContext,
 ) {

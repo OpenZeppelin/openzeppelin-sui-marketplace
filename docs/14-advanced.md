@@ -88,7 +88,7 @@ public fun listing_exists(shop: &Shop, listing_id: obj::ID): bool {
 public fun accepted_currency_id_for_type(
   shop: &Shop,
   coin_type: TypeName,
-): opt::Option<obj::ID> {
+): Option<obj::ID> {
   if (
     dynamic_field::exists_with_type<AcceptedCurrencyTypeKey, obj::ID>(
       &shop.id,
@@ -133,8 +133,8 @@ public entry fun buy_item<TItem: store, TCoin>(
   payment_coin: coin::Coin<TCoin>,
   mint_to: address,
   refund_to: address,
-  max_price_age_secs: option::Option<u64>,
-  max_confidence_ratio_bps: option::Option<u64>,
+  max_price_age_secs: Option<u64>,
+  max_confidence_ratio_bps: Option<u64>,
   clock: &clock::Clock,
   ctx: &mut tx::TxContext
 ) {

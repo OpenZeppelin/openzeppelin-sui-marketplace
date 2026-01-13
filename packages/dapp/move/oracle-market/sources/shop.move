@@ -55,7 +55,7 @@ use sui::package;
 //   treats these as non-mutating. Docs: docs/14-advanced.md
 // - Events: event::emit writes typed events for indexers and UIs. Docs: docs/08-advanced.md,
 //   docs/18-data-access.md
-// - TxContext and sender: tx_context::TxContext is required for object creation and coin splits; tx_context::sender
+// - TxContext and sender: TxContext is required for object creation and coin splits; tx_context::sender
 //   identifies the signer for access control and receipts. Docs: docs/14-advanced.md
 // - Object IDs and addresses: on Sui, addresses *are* object IDs. object::UID holds that ID,
 //   and object::uid_to_address / object::id_from_address convert between UID and address for
@@ -154,20 +154,17 @@ const POW10_U128: vector<u128> = vector[
 /// Claims and returns the module's Publisher object during publish.
 public struct SHOP has drop {}
 
-fun init(publisher_witness: SHOP, ctx: &mut sui::tx_context::TxContext) {
+fun init(publisher_witness: SHOP, ctx: &mut TxContext) {
     let publisher: package::Publisher = claim_publisher(publisher_witness, ctx);
     transfer_publisher_to_sender(publisher, ctx);
 }
 
-fun claim_publisher(
-    publisher_witness: SHOP,
-    ctx: &mut sui::tx_context::TxContext,
-): package::Publisher {
+fun claim_publisher(publisher_witness: SHOP, ctx: &mut TxContext): package::Publisher {
     package::claim<SHOP>(publisher_witness, ctx)
 }
 
 #[allow(lint(self_transfer))]
-fun transfer_publisher_to_sender(publisher: package::Publisher, ctx: &tx_context::TxContext) {
+fun transfer_publisher_to_sender(publisher: package::Publisher, ctx: &TxContext) {
     transfer::public_transfer(publisher, ctx.sender());
 }
 
@@ -436,7 +433,7 @@ public struct MintingCompleted has copy, drop {
 ///   siblings indexed by lightweight markers under the shop (plus a coin-type index for currencies).
 ///   State is sharded into per-object locks so PTBs only touch the listing/template/currency they
 ///   mutate instead of contending on a monolithic storage map as in Solidity.
-entry fun create_shop(name: vector<u8>, ctx: &mut sui::tx_context::TxContext) {
+entry fun create_shop(name: vector<u8>, ctx: &mut TxContext) {
     let owner: address = ctx.sender();
     let shop: Shop = new_shop(name, owner, ctx);
     let shop_name_for_event: vector<u8> = clone_bytes(&shop.name);
@@ -459,7 +456,7 @@ entry fun create_shop(name: vector<u8>, ctx: &mut sui::tx_context::TxContext) {
 }
 
 /// Disable a shop permanently (buyer flows will reject new checkouts).
-entry fun disable_shop(shop: &mut Shop, owner_cap: &ShopOwnerCap, ctx: &tx_context::TxContext) {
+entry fun disable_shop(shop: &mut Shop, owner_cap: &ShopOwnerCap, ctx: &TxContext) {
     assert_owner_cap(shop, owner_cap);
     shop.disabled = true;
 
@@ -482,7 +479,7 @@ entry fun update_shop_owner(
     shop: &mut Shop,
     owner_cap: &mut ShopOwnerCap,
     new_owner: address,
-    ctx: &tx_context::TxContext,
+    ctx: &TxContext,
 ) {
     assert_owner_cap(shop, owner_cap);
 
@@ -521,7 +518,7 @@ fun add_item_listing_core<T: store>(
     base_price_usd_cents: u64,
     stock: u64,
     spotlight_discount_template_id: option::Option<object::ID>,
-    ctx: &mut tx_context::TxContext,
+    ctx: &mut TxContext,
 ): (ItemListing, object::ID, address) {
     assert_owner_cap(shop, owner_cap);
     validate_listing_inputs(
@@ -576,7 +573,7 @@ entry fun add_item_listing<T: store>(
     base_price_usd_cents: u64,
     stock: u64,
     spotlight_discount_template_id: option::Option<object::ID>,
-    ctx: &mut tx_context::TxContext,
+    ctx: &mut TxContext,
 ) {
     let (listing, _listing_id, _listing_address) = add_item_listing_core<T>(
         shop,
@@ -596,7 +593,7 @@ entry fun update_item_listing_stock(
     owner_cap: &ShopOwnerCap,
     item_listing: &mut ItemListing,
     new_stock: u64,
-    _ctx: &tx_context::TxContext,
+    _ctx: &TxContext,
 ) {
     assert_owner_cap(shop, owner_cap);
     assert_listing_matches_shop(shop, item_listing);
@@ -619,7 +616,7 @@ entry fun remove_item_listing(
     shop: &mut Shop,
     owner_cap: &ShopOwnerCap,
     item_listing: &ItemListing,
-    _ctx: &tx_context::TxContext,
+    _ctx: &TxContext,
 ) {
     assert_owner_cap(shop, owner_cap);
     assert_listing_matches_shop(shop, item_listing);
@@ -668,7 +665,7 @@ entry fun add_accepted_currency<T>(
     max_price_age_secs_cap: option::Option<u64>,
     max_confidence_ratio_bps_cap: option::Option<u64>,
     max_price_status_lag_secs_cap: option::Option<u64>,
-    ctx: &mut sui::tx_context::TxContext,
+    ctx: &mut TxContext,
 ) {
     assert_owner_cap(shop, owner_cap);
 
@@ -737,7 +734,7 @@ entry fun remove_accepted_currency(
     shop: &mut Shop,
     owner_cap: &ShopOwnerCap,
     accepted_currency: &AcceptedCurrency,
-    _ctx: &tx_context::TxContext,
+    _ctx: &TxContext,
 ) {
     assert_owner_cap(shop, owner_cap);
     assert_currency_matches_shop(shop, accepted_currency);
@@ -778,7 +775,7 @@ fun create_discount_template_core(
     starts_at: u64,
     expires_at: option::Option<u64>,
     max_redemptions: option::Option<u64>,
-    ctx: &mut sui::tx_context::TxContext,
+    ctx: &mut TxContext,
 ): (DiscountTemplate, object::ID, DiscountRule, address) {
     validate_discount_template_inputs(
         shop,
@@ -837,7 +834,7 @@ entry fun create_discount_template(
     starts_at: u64,
     expires_at: option::Option<u64>,
     max_redemptions: option::Option<u64>,
-    ctx: &mut sui::tx_context::TxContext,
+    ctx: &mut TxContext,
 ) {
     assert_owner_cap(shop, owner_cap);
     let (
@@ -912,7 +909,7 @@ entry fun toggle_discount_template(
     owner_cap: &ShopOwnerCap,
     discount_template: &mut DiscountTemplate,
     active: bool,
-    _ctx: &tx_context::TxContext,
+    _ctx: &TxContext,
 ) {
     assert_owner_cap(shop, owner_cap);
     assert_template_matches_shop(shop, discount_template);
@@ -932,7 +929,7 @@ entry fun attach_template_to_listing(
     owner_cap: &ShopOwnerCap,
     item_listing: &mut ItemListing,
     discount_template: &DiscountTemplate,
-    _ctx: &tx_context::TxContext,
+    _ctx: &TxContext,
 ) {
     assert_owner_cap(shop, owner_cap);
     assert_template_matches_shop(shop, discount_template);
@@ -951,7 +948,7 @@ entry fun clear_template_from_listing(
     shop: &Shop,
     owner_cap: &ShopOwnerCap,
     item_listing: &mut ItemListing,
-    _ctx: &tx_context::TxContext,
+    _ctx: &TxContext,
 ) {
     assert_owner_cap(shop, owner_cap);
     assert_listing_matches_shop(shop, item_listing);
@@ -982,7 +979,7 @@ entry fun claim_discount_ticket(
     shop: &Shop,
     discount_template: &mut DiscountTemplate,
     clock: &clock::Clock,
-    ctx: &mut sui::tx_context::TxContext,
+    ctx: &mut TxContext,
 ): () {
     assert_shop_active(shop);
     assert_template_matches_shop(shop, discount_template);
@@ -1004,7 +1001,7 @@ entry fun claim_discount_ticket(
 public fun claim_discount_ticket_inline(
     discount_template: &mut DiscountTemplate,
     now_secs: u64,
-    ctx: &mut sui::tx_context::TxContext,
+    ctx: &mut TxContext,
 ): DiscountTicket {
     let claimer = ctx.sender();
     assert_template_claimable(discount_template, claimer, now_secs);
@@ -1021,7 +1018,7 @@ public fun claim_discount_ticket_inline(
 fun claim_discount_ticket_with_event(
     discount_template: &mut DiscountTemplate,
     now_secs: u64,
-    ctx: &mut sui::tx_context::TxContext,
+    ctx: &mut TxContext,
 ): (DiscountTicket, address) {
     let discount_ticket = claim_discount_ticket_inline(
         discount_template,
@@ -1086,7 +1083,7 @@ entry fun buy_item<TItem: store, TCoin>(
     max_price_age_secs: option::Option<u64>,
     max_confidence_ratio_bps: option::Option<u64>,
     clock: &clock::Clock,
-    ctx: &mut sui::tx_context::TxContext,
+    ctx: &mut TxContext,
 ) {
     assert_shop_active(shop);
     assert_listing_matches_shop(shop, item_listing);
@@ -1134,7 +1131,7 @@ entry fun buy_item_with_discount<TItem: store, TCoin>(
     max_price_age_secs: option::Option<u64>,
     max_confidence_ratio_bps: option::Option<u64>,
     clock: &clock::Clock,
-    ctx: &mut sui::tx_context::TxContext,
+    ctx: &mut TxContext,
 ) {
     assert_shop_active(shop);
     let buyer = ctx.sender();
@@ -1209,7 +1206,7 @@ entry fun claim_and_buy_item_with_discount<TItem: store, TCoin>(
     max_price_age_secs: option::Option<u64>,
     max_confidence_ratio_bps: option::Option<u64>,
     clock: &clock::Clock,
-    ctx: &mut sui::tx_context::TxContext,
+    ctx: &mut TxContext,
 ) {
     assert_shop_active(shop);
     assert_template_matches_shop(shop, discount_template);
@@ -1242,7 +1239,7 @@ entry fun claim_and_buy_item_with_discount<TItem: store, TCoin>(
 // Data //
 // ==== //
 
-fun new_shop(name: vector<u8>, owner: address, ctx: &mut sui::tx_context::TxContext): Shop {
+fun new_shop(name: vector<u8>, owner: address, ctx: &mut TxContext): Shop {
     validate_shop_name(&name);
     Shop {
         id: object::new(ctx),
@@ -1262,7 +1259,7 @@ fun new_accepted_currency(
     max_price_age_secs_cap: u64,
     max_confidence_ratio_bps_cap: u64,
     max_price_status_lag_secs_cap: u64,
-    ctx: &mut sui::tx_context::TxContext,
+    ctx: &mut TxContext,
 ): (AcceptedCurrency, address) {
     assert_supported_decimals(decimals);
 
@@ -1291,7 +1288,7 @@ fun new_item_listing<T: store>(
     base_price_usd_cents: u64,
     stock: u64,
     spotlight_discount_template_id: option::Option<object::ID>,
-    ctx: &mut sui::tx_context::TxContext,
+    ctx: &mut TxContext,
 ): (ItemListing, address) {
     let listing: ItemListing = ItemListing {
         id: object::new(ctx),
@@ -1314,7 +1311,7 @@ fun new_discount_template(
     starts_at: u64,
     expires_at: option::Option<u64>,
     max_redemptions: option::Option<u64>,
-    ctx: &mut sui::tx_context::TxContext,
+    ctx: &mut TxContext,
 ): (DiscountTemplate, address) {
     let discount_template: DiscountTemplate = DiscountTemplate {
         id: object::new(ctx),
@@ -1338,7 +1335,7 @@ fun new_discount_template(
 fun new_discount_ticket(
     template: &DiscountTemplate,
     claimer: address,
-    ctx: &mut sui::tx_context::TxContext,
+    ctx: &mut TxContext,
 ): DiscountTicket {
     DiscountTicket {
         id: object::new(ctx),
@@ -1349,11 +1346,7 @@ fun new_discount_ticket(
     }
 }
 
-fun record_discount_claim(
-    template: &mut DiscountTemplate,
-    claimer: address,
-    ctx: &mut sui::tx_context::TxContext,
-) {
+fun record_discount_claim(template: &mut DiscountTemplate, claimer: address, ctx: &mut TxContext) {
     // Track issued tickets; actual uses are counted at redemption time.
     template.claims_issued = template.claims_issued + 1;
 
@@ -1613,7 +1606,7 @@ fun process_purchase<TItem: store, TCoin>(
     max_price_age_secs: option::Option<u64>,
     max_confidence_ratio_bps: option::Option<u64>,
     clock: &clock::Clock,
-    ctx: &mut sui::tx_context::TxContext,
+    ctx: &mut TxContext,
 ): () {
     assert_listing_type_matches<TItem>(item_listing);
     let accepted_currency = borrow_registered_accepted_currency(
@@ -1654,7 +1647,7 @@ fun process_purchase_core<TItem: store, TCoin>(
     max_price_age_secs: option::Option<u64>,
     max_confidence_ratio_bps: option::Option<u64>,
     clock: &clock::Clock,
-    ctx: &mut sui::tx_context::TxContext,
+    ctx: &mut TxContext,
 ): () {
     ensure_price_info_matches_currency(accepted_currency, price_info_object);
     assert_price_status_trading(
@@ -1844,7 +1837,7 @@ fun pay_shop<TCoin>(
     payment: &mut coin::Coin<TCoin>,
     amount_due: u64,
     owner: address,
-    ctx: &mut sui::tx_context::TxContext,
+    ctx: &mut TxContext,
 ) {
     if (amount_due == 0) {
         return
@@ -1871,7 +1864,7 @@ fun decrement_stock(item_listing: &mut ItemListing) {
 fun mint_shop_item<TItem: store>(
     item_listing: &ItemListing,
     clock: &clock::Clock,
-    ctx: &mut sui::tx_context::TxContext,
+    ctx: &mut TxContext,
 ): ShopItem<TItem> {
     assert_listing_type_matches<TItem>(item_listing);
 
@@ -1889,7 +1882,7 @@ fun mint_and_transfer_item<TItem: store>(
     item_listing: &ItemListing,
     mint_to: address,
     clock: &clock::Clock,
-    ctx: &mut sui::tx_context::TxContext,
+    ctx: &mut TxContext,
 ): address {
     // Receipts are typed per listing to preserve downstream type safety.
     let item = mint_shop_item<TItem>(item_listing, clock, ctx);
@@ -2436,12 +2429,12 @@ fun clone_bytes(data: &vector<u8>): vector<u8> {
 public struct TestPublisherOTW has drop {}
 
 #[test_only]
-public fun test_claim_publisher(ctx: &mut tx_context::TxContext): package::Publisher {
+public fun test_claim_publisher(ctx: &mut TxContext): package::Publisher {
     package::test_claim<TestPublisherOTW>(TestPublisherOTW {}, ctx)
 }
 
 #[test_only]
-public fun test_setup_shop(owner: address, ctx: &mut tx_context::TxContext): (Shop, ShopOwnerCap) {
+public fun test_setup_shop(owner: address, ctx: &mut TxContext): (Shop, ShopOwnerCap) {
     let shop = new_shop(b"Shop", owner, ctx);
     let owner_cap = ShopOwnerCap {
         id: object::new(ctx),
@@ -2465,7 +2458,7 @@ public fun test_create_discount_template_local(
     starts_at: u64,
     expires_at: option::Option<u64>,
     max_redemptions: option::Option<u64>,
-    ctx: &mut sui::tx_context::TxContext,
+    ctx: &mut TxContext,
 ): (DiscountTemplate, object::ID) {
     let (template, template_id, discount_rule, template_address) = create_discount_template_core(
         shop,
@@ -2622,7 +2615,7 @@ public fun test_claim_discount_ticket(
     shop: &Shop,
     template: &mut DiscountTemplate,
     clock: &clock::Clock,
-    ctx: &mut sui::tx_context::TxContext,
+    ctx: &mut TxContext,
 ): () {
     claim_discount_ticket(shop, template, clock, ctx)
 }
@@ -2632,7 +2625,7 @@ public fun test_claim_discount_ticket_inline(
     shop: &Shop,
     template: &mut DiscountTemplate,
     now_secs: u64,
-    ctx: &mut sui::tx_context::TxContext,
+    ctx: &mut TxContext,
 ): DiscountTicket {
     assert_template_matches_shop(shop, template);
     claim_discount_ticket_inline(template, now_secs, ctx)
@@ -2651,7 +2644,7 @@ public fun test_claim_and_buy_with_ids<TItem: store, TCoin>(
     max_price_age_secs: option::Option<u64>,
     max_confidence_ratio_bps: option::Option<u64>,
     clock: &clock::Clock,
-    ctx: &mut sui::tx_context::TxContext,
+    ctx: &mut TxContext,
 ) {
     let shop_owner = shop.owner;
     let shop_address = shop_address(shop);
@@ -2921,7 +2914,7 @@ public fun test_discount_ticket_values(
 }
 
 #[test_only]
-public fun test_last_created_id(ctx: &tx_context::TxContext): object::ID {
+public fun test_last_created_id(ctx: &TxContext): object::ID {
     object::id_from_address(tx_context::last_created_object_id(ctx))
 }
 
@@ -2933,7 +2926,7 @@ public fun test_add_item_listing_local<T: store>(
     base_price_usd_cents: u64,
     stock: u64,
     spotlight_discount_template_id: option::Option<object::ID>,
-    ctx: &mut sui::tx_context::TxContext,
+    ctx: &mut TxContext,
 ): (ItemListing, object::ID) {
     let (listing, listing_id, _listing_address) = add_item_listing_core<T>(
         shop,

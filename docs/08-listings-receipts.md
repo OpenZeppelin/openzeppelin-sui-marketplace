@@ -72,7 +72,7 @@ public entry fun add_item_listing<T: store>(
   name: vector<u8>,
   base_price_usd_cents: u64,
   stock: u64,
-  spotlight_discount_template_id: opt::Option<obj::ID>,
+  spotlight_discount_template_id: Option<obj::ID>,
   ctx: &mut tx::TxContext,
 ) {
   let (listing, _listing_id, _listing_address) = add_item_listing_core<T>(

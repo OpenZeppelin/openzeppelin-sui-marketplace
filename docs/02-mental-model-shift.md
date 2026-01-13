@@ -9,17 +9,7 @@ This repo assumes you already think in Solidity. The goal here is not to re-teac
 2. Know how this repo is laid out for a linear learning path.
 3. Run a quick environment sanity check before touching code.
 
-## 2. Prereqs
-1. Node.js 22+ and pnpm.
-2. Sui CLI 1.63+.
-
-## 3. Run it (sanity checks)
-```bash
-pnpm --version
-sui client --version
-```
-
-## 4. EVM -> Sui translation
+## 2. EVM -> Sui translation
 1. **Contract storage -> objects**: your state lives in owned/shared objects, not in a single contract storage map. See `packages/dapp/move/oracle-market/sources/shop.move` (`Shop`, `ItemListing`, `AcceptedCurrency`).
 2. **onlyOwner -> capability**: authority is proved by holding a capability object. See `ShopOwnerCap` in `packages/dapp/move/oracle-market/sources/shop.move`.
 3. **Deployment -> publish + instantiate**: publishing creates a package object; stateful instances are created later as shared objects. See publish flow in `packages/dapp/src/scripts/move/publish.ts` and shop creation in `packages/dapp/src/scripts/owner/shop-create.ts`.
@@ -27,7 +17,7 @@ sui client --version
 5. **Composability -> PTBs**: you compose calls at runtime in a programmable transaction block (PTB), rather than writing a single on-chain "router" contract for every workflow.
 6. **Upgrades -> new package + UpgradeCap**: upgrades publish a new package ID gated by an `UpgradeCap`. Callers opt into new package IDs explicitly.
 
-## 5. Concept deep dive: abilities and resources
+## 3. Concept deep dive: abilities and resources
 - **Abilities (`key`, `store`, `copy`, `drop`)**: abilities declare how values can be stored and
   moved. `key` turns a struct into an object with identity. `store` lets it live on-chain. `copy`
   and `drop` opt into value semantics. In this repo, objects like `Shop` and `ShopOwnerCap` are
@@ -45,11 +35,11 @@ sui client --version
   to keep serialization explicit and avoid runtime string dependencies. Convert from UTF-8 at the
   edges (UI/CLI) when needed.
   Code: `packages/dapp/move/oracle-market/sources/shop.move` (Shop.name, ItemListing.name)
-- **Options instead of sentinels**: optional values use `opt::Option` instead of magic constants.
+- **Options instead of sentinels**: optional values use `Option` instead of magic constants.
   This is used for optional listing links, template expiry, and max-redemption caps.
   Code: `packages/dapp/move/oracle-market/sources/shop.move` (Option fields)
 
-## 6. Code references
+## 4. Code references
 1. `packages/dapp/move/oracle-market/sources/shop.move` (Shop, ShopOwnerCap, entry functions)
 2. `packages/dapp/src/scripts/move/publish.ts` (publish flow + artifacts)
 3. `packages/dapp/src/scripts/owner/shop-create.ts` (shop instantiation)

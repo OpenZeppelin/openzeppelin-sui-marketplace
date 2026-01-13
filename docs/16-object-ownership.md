@@ -49,7 +49,7 @@ public struct DiscountTicket has key, store {
   id: obj::UID,
   discount_template_id: address,
   shop_address: address,
-  listing_id: opt::Option<obj::ID>,
+  listing_id: Option<obj::ID>,
   claimer: address,
 }
 

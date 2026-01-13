@@ -76,9 +76,9 @@ public entry fun add_accepted_currency<T>(
   price_info_object: &price_info::PriceInfoObject,
   feed_id: vector<u8>,
   pyth_object_id: obj::ID,
-  max_price_age_secs_cap: opt::Option<u64>,
-  max_confidence_ratio_bps_cap: opt::Option<u64>,
-  max_price_status_lag_secs_cap: opt::Option<u64>,
+  max_price_age_secs_cap: Option<u64>,
+  max_confidence_ratio_bps_cap: Option<u64>,
+  max_price_status_lag_secs_cap: Option<u64>,
   ctx: &mut tx::TxContext,
 ) {
   assert_owner_cap(shop, owner_cap);

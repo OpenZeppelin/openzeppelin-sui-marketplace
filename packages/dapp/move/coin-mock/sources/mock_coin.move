@@ -18,7 +18,7 @@ const MOCK_COIN_SUPPLY: u64 = 1_000_000_000_000_000_000;
 entry fun init_local_mock_usd(
     registry: &mut coin_registry::CoinRegistry,
     recipient: address,
-    ctx: &mut tx_context::TxContext,
+    ctx: &mut TxContext,
 ) {
     let (init, treasury_cap) = coin_registry::new_currency<LocalMockUsd>(
         registry,
@@ -35,7 +35,7 @@ entry fun init_local_mock_usd(
 entry fun init_local_mock_btc(
     registry: &mut coin_registry::CoinRegistry,
     recipient: address,
-    ctx: &mut tx_context::TxContext,
+    ctx: &mut TxContext,
 ) {
     let (init, treasury_cap) = coin_registry::new_currency<LocalMockBtc>(
         registry,
@@ -53,7 +53,7 @@ fun finalize_and_fund_coin<T: key + store>(
     mut treasury_cap: coin::TreasuryCap<T>,
     init: coin_registry::CurrencyInitializer<T>,
     recipient: address,
-    ctx: &mut tx_context::TxContext,
+    ctx: &mut TxContext,
 ) {
     let metadata_cap = coin_registry::finalize(init, ctx);
     let minted = treasury_cap.mint(MOCK_COIN_SUPPLY, ctx);
