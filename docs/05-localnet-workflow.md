@@ -18,7 +18,7 @@ pnpm install
 ```
 
 ### 2) Configure Sui CLI and config file
-- Create or reuse an address (note the private key to import it later in your browser wallet):
+- Create or reuse an address (note the recovery phrase to import it later in your browser wallet):
   ```bash
   sui client new-address ed25519
   sui client active-address   # ensure the desired address is active
@@ -150,7 +150,7 @@ pnpm script chain:localnet:start --with-faucet
 
 What it does:
 - Starts `sui start` with a local config directory (default `~/.sui/localnet`) and waits for RPC readiness.
-- Runs a faucet locally and funds the configured signer after any regenesis.
+- The signer will get funded after any regenesis.
 - Use `--force-regenesis` to reset the chain (clears `packages/dapp/deployments/*.localnet*` and recreates the localnet config dir before starting).
 - If the default config dir is used and the Sui CLI version changes, the script warns and recreates localnet state automatically.
 

@@ -34,9 +34,8 @@ git clone git@github.com:OpenZeppelin/sui-oracle-market.git && cd sui-oracle-mar
 # (pnpm workspace install from the repo root)
 pnpm install
 
-# 2) Create or reuse an address (this will be your shop owner address) (note the private key to import it later in your browser wallet)
+# 2) Create or reuse an address (this will be your shop owner address) (note the recovery phrase to import it later in your browser wallet)
 sui client new-address ed25519
-sui client active-address   # ensure the desired address is active
 
 # 3) Configure this address in Sui config file or export
 export SUI_ACCOUNT_ADDRESS=<0x...>
@@ -45,18 +44,15 @@ export SUI_ACCOUNT_PRIVATE_KEY=<base64 or hex>
 # 4) Start localnet (new terminal) (--with-faucet is recommended as some script auto fund address if fund is missing)
 pnpm script chain:localnet:start --with-faucet
 
-# 5) Fund your created address
-sui client faucet --address <0x...>
-
-# 6) Seed mocks (coins + Pyth stub + price feeds)
+# 5) Seed mocks (coins + Pyth stub + price feeds)
 pnpm script mock:setup --buyer-address <0x...>
 
-# 7) Publish oracle-market (uses localnet dep replacements for mocks)
+# 6) Publish oracle-market (uses localnet dep replacements for mocks)
 pnpm script move:publish --package-path oracle-market
 
-# 8) To continue setting up the shop, listings, discounts, accepted currencies look at the scripts section
+# 7) To continue setting up the shop, listings, discounts, accepted currencies look at the scripts section
 
-# 9) Run the UI
+# 8) Run the UI
 pnpm ui dev
 
 ```

@@ -24,13 +24,6 @@ suiup install sui@testnet
 sui --version
 ```
 
-If you need the nightly package-manager prototype (requires Rust toolchain and builds from a branch):
-```bash
-rustup toolchain install
-suiup install sui@testnet
-sui --version
-```
-
 ## 4. Clone + install dependencies
 ```bash
 git clone git@github.com:OpenZeppelin/sui-oracle-market.git
@@ -38,7 +31,7 @@ cd sui-oracle-market
 pnpm install
 ```
 
-## 5. Create or reuse an address (note the private key to import it later in your browser wallet)
+## 5. Create or reuse an address (note the recovery phrase to import it later in your browser wallet)
 ```bash
 sui client new-address ed25519
 sui client active-address
@@ -62,19 +55,13 @@ If you do not set these, scripts fall back to the Sui CLI keystore.
 pnpm script chain:localnet:start --with-faucet
 ```
 
-## 8. Fund your address
-Localnet (after starting localnet with faucet enabled):
-```bash
-sui client faucet --address <0x...>
-```
-
-## 9. Seed mocks (localnet only)
+## 8. Seed mocks (localnet only)
 This publishes mock coins and Pyth packages, then seeds price feeds.
 ```bash
 pnpm script mock:setup --buyer-address <0x...>
 ```
 
-## 10. Publish the Move package
+## 9. Publish the Move package
 ```bash
 pnpm script move:publish --package-path oracle-market
 ```
@@ -82,13 +69,13 @@ pnpm script move:publish --package-path oracle-market
 The package ID is written to:
 `packages/dapp/deployments/deployment.localnet.json`
 
-## 11. Create a shop (and optionally seed data)
+## 10. Create a shop (and optionally seed data)
 ```bash
 pnpm script owner:shop:create --name "Oracle Shop"
 pnpm script owner:shop:seed
 ```
 
-## 12. Run the UI
+## 11. Run the UI
 Create `packages/ui/.env.local` with IDs from your deployments:
 ```bash
 NEXT_PUBLIC_LOCALNET_CONTRACT_PACKAGE_ID=0x...
@@ -100,17 +87,17 @@ Start the app:
 pnpm ui dev
 ```
 
-## 13. Sanity checks
+## 12. Sanity checks
 ```bash
 pnpm script buyer:shop:view
 pnpm script buyer:item-listing:list --shop-id <shopId>
 ```
 
-## 14. Further reading
+## 13. Further reading
 - https://docs.sui.io/guides/developer/getting-started/sui-install
 - https://docs.sui.io/concepts/transactions/prog-txn-blocks
 - https://docs.sui.io/guides/developer/objects/object-model
 
-## 15. Navigation
+## 14. Navigation
 1. Next: [01 Repo Layout + How to Navigate](./01-repo-layout.md)
 2. Back to map: [Learning Path Map](./)
