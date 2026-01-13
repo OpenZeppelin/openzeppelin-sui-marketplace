@@ -129,7 +129,7 @@ return {
 ```
 
 ## 6.1 Read this next (deep dive)
-- `packages/dapp/move/README.md` -> "Shared Object + Marker Pattern (deep dive)"
+- [/reading/move-readme](/reading/move-readme) -> "Shared Object + Marker Pattern (deep dive)"
 
 ## 7. Exercises
 1. Update stock with `pnpm script owner:item-listing:update-stock --item-listing-id <id> --stock 1`. Expected outcome: stock changes on-chain.

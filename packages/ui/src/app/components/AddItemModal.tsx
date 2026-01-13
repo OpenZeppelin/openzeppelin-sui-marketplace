@@ -76,10 +76,10 @@ const SpotlightTemplateCard = ({
 }) => (
   <div
     className={clsx(
-      "rounded-2xl border border-rose-200/80 bg-rose-50/70 p-3 text-left transition dark:border-rose-500/30 dark:bg-rose-500/10",
+      "rounded-2xl border border-slate-200/80 bg-white/85 p-3 text-left transition dark:border-slate-50/20 dark:bg-slate-900/40",
       selected
-        ? "border-rose-400/90 shadow-lg shadow-rose-200/70 dark:border-rose-400/60"
-        : "hover:border-rose-300/80 dark:hover:border-rose-400/40"
+        ? "border-sds-primary shadow-lg shadow-sds-primary/10 dark:border-sds-primary"
+        : "hover:border-slate-300/80 dark:hover:border-slate-50/30"
     )}
   >
     <button
@@ -101,12 +101,6 @@ const SpotlightTemplateCard = ({
       </div>
     </button>
     <div className="mt-3 border-t border-slate-200/70 pt-3 text-xs dark:border-slate-50/15">
-      <div className="text-[0.6rem] uppercase tracking-[0.18em] text-slate-500 dark:text-slate-200/60">
-        Template ID
-      </div>
-      <div className="mt-1 font-mono text-[0.75rem] text-slate-600 dark:text-slate-100/80">
-        {shortenId(template.discountTemplateId)}
-      </div>
       <div className="mt-2">
         <CopyableId
           value={template.discountTemplateId}
@@ -555,8 +549,9 @@ const AddItemModal = ({
                   </div>
                   <label className="mt-4 block">
                     <span className={modalFieldDescriptionClassName}>
-                      Custom template ID (overrides selection)
+                      Custom template ID  
                     </span>
+                    <br/>
                     <input
                       type="text"
                       value={formState.spotlightDiscountId}

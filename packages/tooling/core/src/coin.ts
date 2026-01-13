@@ -196,13 +196,15 @@ export const planSuiPaymentSplitTransaction = async (
     paymentMinimum,
     gasBudget,
     splitGasBudget = DEFAULT_TX_GAS_BUDGET,
-    paymentCoinObjectId
+    paymentCoinObjectId,
+    forceSplit = false
   }: {
     owner: string
     paymentMinimum: bigint
     gasBudget: bigint
     splitGasBudget?: number
     paymentCoinObjectId?: string
+    forceSplit?: boolean
   },
   { suiClient }: ToolingCoreContext
 ): Promise<{
@@ -240,14 +242,17 @@ export const planSuiPaymentSplitTransaction = async (
     )
   }
 
-  if (
-    hasDistinctGasCoin({
-      coins,
-      paymentMinimum,
-      gasCoinMinimumBalance,
-      paymentCoinObjectId: paymentCoin.coinObjectId
-    })
-  ) {
+  const shouldSplit =
+    forceSplit === true
+      ? true
+      : !hasDistinctGasCoin({
+          coins,
+          paymentMinimum,
+          gasCoinMinimumBalance,
+          paymentCoinObjectId: paymentCoin.coinObjectId
+        })
+
+  if (!shouldSplit) {
     return {
       needsSplit: false,
       coinCount: coins.length,

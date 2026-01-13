@@ -94,20 +94,42 @@ export const findAcceptedCurrencyByCoinType = async ({
     { suiClient }
   )
 
+  const resolveFromSummaries = async () => {
+    const acceptedCurrencySummaries = await getAcceptedCurrencySummaries(
+      shopId,
+      suiClient
+    )
+    const matchedSummary = acceptedCurrencySummaries.find((summary) => {
+      try {
+        return normalizeCoinType(summary.coinType) === normalizedCoinType
+      } catch {
+        return false
+      }
+    })
+
+    if (!matchedSummary) return undefined
+
+    return {
+      coinType: normalizedCoinType,
+      acceptedCurrencyId: matchedSummary.acceptedCurrencyId,
+      acceptedCurrencyFieldId: matchedSummary.markerObjectId
+    }
+  }
+
   const typeIndexField = dynamicFields.find(
     (dynamicField) =>
       dynamicField.name.type === TYPE_NAME_STRUCT &&
       isMatchingTypeName(expectedTypeName, dynamicField.name.value)
   )
 
-  if (!typeIndexField) return undefined
+  if (!typeIndexField) return resolveFromSummaries()
 
   const acceptedCurrencyId = await extractAcceptedCurrencyIdFromTypeIndexField(
     typeIndexField.objectId,
     suiClient
   )
 
-  if (!acceptedCurrencyId) return undefined
+  if (!acceptedCurrencyId) return resolveFromSummaries()
 
   const acceptedCurrencyMarker = dynamicFields.find(
     (dynamicField) =>

@@ -2,7 +2,7 @@
 
 **Path:** [Learning Path](./) > 11 UI Reference
 
-UI-specific setup notes also live in `packages/ui/README.md`.
+UI-specific setup notes also live in [/reading/ui-readme](/reading/ui-readme).
 
 ## 1. Prerequisite
 - Install [Slush Wallet](https://slush.app/) in your browser.

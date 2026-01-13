@@ -233,23 +233,69 @@ export const normalizeOptionalIdFromValue = (
   if (!value) return undefined
 
   const attemptNormalize = (candidate: unknown): string | undefined => {
-    if (typeof candidate === "string") return normalizeSuiObjectId(candidate)
-    if (
-      candidate &&
-      typeof candidate === "object" &&
-      "id" in candidate &&
-      typeof (candidate as { id?: unknown }).id === "string"
-    )
-      return normalizeSuiObjectId((candidate as { id: string }).id)
+    if (typeof candidate === "string") {
+      try {
+        return normalizeSuiObjectId(candidate)
+      } catch {
+        return undefined
+      }
+    }
+    if (candidate && typeof candidate === "object" && "id" in candidate) {
+      const idValue = (candidate as { id?: unknown }).id
+      if (typeof idValue === "string") {
+        try {
+          return normalizeSuiObjectId(idValue)
+        } catch {
+          return undefined
+        }
+      }
+      if (idValue && typeof idValue === "object") {
+        if (
+          "id" in idValue &&
+          typeof (idValue as { id?: unknown }).id === "string"
+        )
+          try {
+            return normalizeSuiObjectId((idValue as { id: string }).id)
+          } catch {
+            return undefined
+          }
+        if (
+          "bytes" in idValue &&
+          typeof (idValue as { bytes?: unknown }).bytes === "string"
+        )
+          try {
+            return normalizeSuiObjectId((idValue as { bytes: string }).bytes)
+          } catch {
+            return undefined
+          }
+        if ("fields" in idValue)
+          return attemptNormalize((idValue as { fields?: unknown }).fields)
+      }
+    }
     if (
       candidate &&
       typeof candidate === "object" &&
       "bytes" in candidate &&
       typeof (candidate as { bytes?: unknown }).bytes === "string"
     )
-      return normalizeSuiObjectId((candidate as { bytes: string }).bytes)
+      try {
+        return normalizeSuiObjectId((candidate as { bytes: string }).bytes)
+      } catch {
+        return undefined
+      }
     if (candidate && typeof candidate === "object" && "fields" in candidate)
       return attemptNormalize((candidate as { fields?: unknown }).fields)
+    if (Array.isArray(candidate)) {
+      for (const entry of candidate) {
+        const normalized = attemptNormalize(entry)
+        if (normalized) return normalized
+      }
+      return undefined
+    }
+    if (candidate && typeof candidate === "object") {
+      const entries = Object.entries(candidate as Record<string, unknown>)
+      if (entries.length === 1) return attemptNormalize(entries[0][1])
+    }
     return undefined
   }
 

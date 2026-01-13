@@ -381,6 +381,26 @@ export const useShopDashboardData = ({
     })
   }, [])
 
+  const upsertPurchasedItem = useCallback((receipt: ShopItemReceiptSummary) => {
+    setWalletState((previous) => {
+      const existingIndex = previous.purchasedItems.findIndex(
+        (item) => item.shopItemId === receipt.shopItemId
+      )
+
+      const mergedItems =
+        existingIndex === -1
+          ? [receipt, ...previous.purchasedItems]
+          : previous.purchasedItems.map((item, index) =>
+              index === existingIndex ? { ...item, ...receipt } : item
+            )
+
+      return {
+        ...previous,
+        purchasedItems: sortPurchasedItemsLatestFirst(mergedItems)
+      }
+    })
+  }, [])
+
   const hasStorefrontConfig = useMemo(() => Boolean(shopId), [shopId])
   const walletQueryConfig = useMemo(
     () => getWalletQueryConfig({ ownerAddress, shopId, packageId }),
@@ -488,6 +508,7 @@ export const useShopDashboardData = ({
     refreshWallet,
     upsertAcceptedCurrency,
     upsertItemListing,
+    upsertPurchasedItem,
     upsertDiscountTemplate,
     upsertDiscountTicket,
     removeItemListing,

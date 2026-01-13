@@ -35,6 +35,11 @@ import {
 } from "@sui-oracle-market/domain-core/models/discount"
 import type { ItemListingSummary } from "@sui-oracle-market/domain-core/models/item-listing"
 import type { PriceUpdatePolicy } from "@sui-oracle-market/domain-core/models/pyth"
+import type { ShopItemReceiptSummary } from "@sui-oracle-market/domain-core/models/shop-item"
+import {
+  findCreatedShopItemIds,
+  parseShopItemReceiptFromObject
+} from "@sui-oracle-market/domain-core/models/shop-item"
 import { planSuiPaymentSplitTransaction } from "@sui-oracle-market/tooling-core/coin"
 import {
   DEFAULT_TX_GAS_BUDGET,
@@ -42,6 +47,7 @@ import {
 } from "@sui-oracle-market/tooling-core/constants"
 import {
   deriveRelevantPackageId,
+  getSuiObject,
   normalizeIdOrThrow
 } from "@sui-oracle-market/tooling-core/object"
 import { getSuiSharedObject } from "@sui-oracle-market/tooling-core/shared-object"
@@ -64,6 +70,7 @@ import {
   safeJsonStringify,
   serializeForJson
 } from "../helpers/transactionErrors"
+import { extractCreatedObjects } from "../helpers/transactionFormat"
 import { waitForTransactionBlock } from "../helpers/transactionWait"
 import { useIdleFieldValidation } from "./useIdleFieldValidation"
 import useNetworkConfig from "./useNetworkConfig"
@@ -113,6 +120,11 @@ export type TransactionSummary = {
   discountSelection: DiscountContext
   mintTo: string
   refundTo: string
+}
+
+export type PurchaseSuccessPayload = {
+  receipts: ShopItemReceiptSummary[]
+  receiptIds: string[]
 }
 
 type TransactionState =
@@ -183,7 +195,7 @@ export const useBuyFlowModalState = ({
 }: {
   open: boolean
   onClose: () => void
-  onPurchaseSuccess?: () => void
+  onPurchaseSuccess?: (payload: PurchaseSuccessPayload) => void
   shopId?: string
   listing?: ItemListingSummary
   acceptedCurrencies: AcceptedCurrencySummary[]
@@ -243,6 +255,35 @@ export const useBuyFlowModalState = ({
   })
   const [lastWalletContext, setLastWalletContext] =
     useState<Record<string, unknown>>()
+
+  const hydrateShopItemReceipts = useCallback(
+    async (receiptIds: string[]): Promise<ShopItemReceiptSummary[]> => {
+      if (receiptIds.length === 0) return []
+
+      const receipts = await Promise.all(
+        receiptIds.map(async (receiptId) => {
+          try {
+            const { object } = await getSuiObject(
+              { objectId: receiptId, options: { showContent: true } },
+              { suiClient }
+            )
+            return parseShopItemReceiptFromObject(object)
+          } catch (error) {
+            console.warn(
+              `Unable to hydrate ShopItem receipt ${receiptId}`,
+              error
+            )
+            return undefined
+          }
+        })
+      )
+
+      return receipts.filter((receipt): receipt is ShopItemReceiptSummary =>
+        Boolean(receipt)
+      )
+    },
+    [suiClient]
+  )
 
   const walletAddress = currentAccount?.address
   const walletConnected = Boolean(walletAddress)
@@ -787,7 +828,8 @@ export const useBuyFlowModalState = ({
             owner: walletAddress,
             paymentMinimum,
             gasBudget,
-            splitGasBudget: DEFAULT_TX_GAS_BUDGET
+            splitGasBudget: DEFAULT_TX_GAS_BUDGET,
+            forceSplit: isLocalnet
           },
           { suiClient }
         )
@@ -872,7 +914,15 @@ export const useBuyFlowModalState = ({
         }
       })
 
-      onPurchaseSuccess?.()
+      const receiptIds = findCreatedShopItemIds(
+        extractCreatedObjects(transactionBlock)
+      )
+      const hydratedReceipts = await hydrateShopItemReceipts(receiptIds)
+
+      onPurchaseSuccess?.({
+        receiptIds,
+        receipts: hydratedReceipts
+      })
     } catch (error) {
       const errorDetails = extractErrorDetails(error)
       const localnetSupportNote =
@@ -910,6 +960,7 @@ export const useBuyFlowModalState = ({
     listing,
     localnetExecutor,
     mintTo,
+    hydrateShopItemReceipts,
     onPurchaseSuccess,
     priceUpdatePolicy,
     quotePriceUpdateMode,

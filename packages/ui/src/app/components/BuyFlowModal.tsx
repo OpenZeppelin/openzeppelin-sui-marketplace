@@ -24,6 +24,7 @@ import {
 } from "../helpers/transactionFormat"
 import {
   useBuyFlowModalState,
+  type PurchaseSuccessPayload,
   type TransactionSummary
 } from "../hooks/useBuyFlowModalState"
 import Button from "./Button"
@@ -372,7 +373,7 @@ const BuyFlowModal = ({
 }: {
   open: boolean
   onClose: () => void
-  onPurchaseSuccess?: () => void
+  onPurchaseSuccess?: (payload: PurchaseSuccessPayload) => void
   shopId?: string
   listing?: ItemListingSummary
   acceptedCurrencies: AcceptedCurrencySummary[]

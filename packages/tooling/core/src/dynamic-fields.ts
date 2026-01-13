@@ -7,7 +7,7 @@ import { normalizeSuiObjectId } from "@mysten/sui/utils"
 
 import type { ToolingCoreContext } from "./context.ts"
 import type { WrappedSuiObject } from "./object.ts"
-import { getSuiObject } from "./object.ts"
+import { getSuiObject, normalizeOptionalIdFromValue } from "./object.ts"
 import { isRecord } from "./utils/utility.ts"
 
 export type WrappedSuiDynamicFieldObject = WrappedSuiObject & {
@@ -160,22 +160,53 @@ export const getSuiDynamicFieldObject = async (
   },
   { suiClient }: ToolingCoreContext
 ): Promise<WrappedSuiDynamicFieldObject> => {
+  const normalizedChildObjectId = normalizeSuiObjectId(childObjectId)
   const { data: dynamicFieldObject, error } =
     await suiClient.getDynamicFieldObject({
       parentId: normalizeSuiObjectId(parentObjectId),
       name: {
         type: "0x2::object::ID",
-        value: normalizeSuiObjectId(childObjectId)
+        value: normalizedChildObjectId
       }
     })
 
-  if (!dynamicFieldObject)
-    throw new Error(`Could not fetch dynamic field for ${childObjectId}`)
+  if (!dynamicFieldObject) {
+    const dynamicFields = await getAllDynamicFields(
+      { parentObjectId },
+      { suiClient }
+    )
+    const matchingField = dynamicFields.find(
+      (dynamicField) =>
+        normalizeOptionalIdFromValue(dynamicField.name.value) ===
+        normalizedChildObjectId
+    )
+
+    if (!matchingField)
+      throw new Error(
+        `Could not fetch dynamic field for ${normalizedChildObjectId}`
+      )
+
+    const { object, error: objectError } = await getSuiObject(
+      {
+        objectId: matchingField.objectId,
+        options: { showContent: true, showType: true }
+      },
+      { suiClient }
+    )
+
+    return {
+      object,
+      parentObjectId,
+      childObjectId: normalizedChildObjectId,
+      dynamicFieldId: matchingField.objectId,
+      error: objectError || undefined
+    }
+  }
 
   return {
     object: dynamicFieldObject,
     parentObjectId,
-    childObjectId,
+    childObjectId: normalizedChildObjectId,
     dynamicFieldId: dynamicFieldObject.objectId,
     error: error || undefined
   }

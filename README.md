@@ -63,7 +63,7 @@ pnpm ui dev
 
 ## Frontend UI
 
-- UI setup + localnet execution notes: [packages/ui/README.md](packages/ui/README.md)
+- UI setup + localnet execution notes: [/reading/ui-readme](/reading/ui-readme)
 - UI docs chapters: [docs/12-buyer-ui.md](docs/12-buyer-ui.md) and [docs/13-owner-ui.md](docs/13-owner-ui.md)
 - Additional UI reference notes: [docs/11-ui-reference.md](docs/11-ui-reference.md)
 

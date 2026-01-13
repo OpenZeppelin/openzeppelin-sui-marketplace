@@ -12,6 +12,7 @@ import { useCallback, useMemo, useState } from "react"
 import { CONTRACT_PACKAGE_ID_NOT_DEFINED } from "../config/network"
 import { buildDiscountTemplateLookup } from "../helpers/discountTemplates"
 import { resolveConfiguredId } from "../helpers/network"
+import type { PurchaseSuccessPayload } from "./useBuyFlowModalState"
 import { useClaimDiscountTicketAction } from "./useClaimDiscountTicketAction"
 import { useShopDashboardData } from "./useShopDashboardData"
 
@@ -66,6 +67,7 @@ export const useStoreDashboardViewModel = ({
     refreshWallet,
     upsertAcceptedCurrency,
     upsertItemListing,
+    upsertPurchasedItem,
     upsertDiscountTemplate,
     upsertDiscountTicket,
     removeItemListing,
@@ -129,9 +131,15 @@ export const useStoreDashboardViewModel = ({
     }))
   }, [])
 
-  const handlePurchaseSuccess = useCallback(() => {
-    refreshWallet()
-  }, [refreshWallet])
+  const handlePurchaseSuccess = useCallback(
+    ({ receipts }: PurchaseSuccessPayload) => {
+      if (receipts.length > 0) {
+        receipts.forEach(upsertPurchasedItem)
+      }
+      refreshWallet()
+    },
+    [refreshWallet, upsertPurchasedItem]
+  )
 
   const openAddItemModal = useCallback(() => {
     setModalState((previous) => ({ ...previous, isAddItemModalOpen: true }))

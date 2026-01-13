@@ -166,7 +166,7 @@ const sharedClockObject = await tooling.getImmutableSharedObject({
 ```
 
 ## 6.1 Read this next (deep dive)
-- `packages/dapp/move/README.md` -> "Shared Object + Marker Pattern (deep dive)"
+- [/reading/move-readme](/reading/move-readme) -> "Shared Object + Marker Pattern (deep dive)"
 
 ## 7. Exercises
 1. Try claiming the same template twice. Expected outcome: a Move abort with `EDiscountAlreadyClaimed`.

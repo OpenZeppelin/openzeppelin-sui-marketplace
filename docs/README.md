@@ -40,8 +40,8 @@ Use this page as the navigation hub for the docs. Each chapter ends with Prev/Ne
 9. I want a full setup checklist -> [00 Setup + Quickstart](00-setup.md)
 
 ## 3. Related repo guides
-1. `packages/dapp/move/README.md` (shared object + marker deep dive)
-2. `packages/ui/README.md` (UI setup and localnet execution)
+1. [/reading/move-readme](/reading/move-readme) (shared object + marker deep dive)
+2. [/reading/ui-readme](/reading/ui-readme) (UI setup and localnet execution)
 3. `README.md` (repo overview + scripts)
 
 ## 4. Concept map (where concepts show up in code)
