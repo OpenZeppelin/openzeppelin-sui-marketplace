@@ -98,8 +98,8 @@ describe("transactions and events", () => {
           suiClient: context.suiClient,
           digest: createResult.digest,
           predicate: (event) =>
-            eventTypeEndsWith(event.type, "::shop::ShopCreated"),
-          label: "ShopCreated"
+            eventTypeEndsWith(event.type, "::shop::ShopCreatedEvent"),
+          label: "ShopCreatedEvent"
         })
 
         const newOwner = context.createAccount("new-owner")
@@ -124,8 +124,8 @@ describe("transactions and events", () => {
           suiClient: context.suiClient,
           digest: updateResult.digest,
           predicate: (event) =>
-            eventTypeEndsWith(event.type, "::shop::ShopOwnerUpdated"),
-          label: "ShopOwnerUpdated"
+            eventTypeEndsWith(event.type, "::shop::ShopOwnerUpdatedEvent"),
+          label: "ShopOwnerUpdatedEvent"
         })
       }
     )
