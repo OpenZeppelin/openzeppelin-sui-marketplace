@@ -7,7 +7,7 @@ use pyth::price_identifier;
 use pyth::price_info;
 use pyth::pyth;
 use std::string;
-use std::type_name::{Self, TypeName};
+use std::type_name::TypeName;
 use std::u128;
 use sui::clock;
 use sui::coin;
@@ -75,9 +75,7 @@ use sui::package;
 // - Test-only APIs: #[test_only] functions expose helpers for Move tests without shipping them to
 //   production calls. Docs: docs/15-testing.md
 
-/// =======///
-/// Errors ///
-/// =======///
+// === Errors ===
 const EInvalidOwnerCap: u64 = 2;
 const EEmptyItemName: u64 = 3;
 const EInvalidPrice: u64 = 4;
@@ -156,9 +154,7 @@ fun init(publisher_witness: SHOP, ctx: &mut TxContext) {
     package::claim_and_keep<SHOP>(publisher_witness, ctx);
 }
 
-///====================///
-/// Capability & Core ///
-///====================///
+// === Capability & Core ===
 
 /// Capability that proves the caller can administer a specific `Shop`.
 /// Holding and using this object is the Sui-native equivalent of matching `onlyOwner` criteria in Solidity.
@@ -189,7 +185,9 @@ public struct ItemListing has key, store {
 }
 
 /// Dynamic field key for item listing markers stored under a shop.
-public struct ItemListingKey(ID) has copy, drop, store;
+public struct ItemListingKey has copy, drop, store {
+    listing_id: ID,
+}
 
 /// Marker stored under the shop to record listing membership.
 public struct ItemListingMarker has copy, drop, store {
@@ -222,10 +220,14 @@ public struct AcceptedCurrency has key, store {
 }
 
 /// Dynamic field key for accepted currency markers stored under a shop.
-public struct AcceptedCurrencyKey(ID) has copy, drop, store;
+public struct AcceptedCurrencyKey has copy, drop, store {
+    accepted_currency_id: ID,
+}
 
 /// Dynamic field key for mapping a coin type to its accepted currency object.
-public struct AcceptedCurrencyTypeKey(TypeName) has copy, drop, store;
+public struct AcceptedCurrencyTypeKey has copy, drop, store {
+    coin_type: TypeName,
+}
 
 /// Marker stored under the shop to record accepted currency membership.
 public struct AcceptedCurrencyMarker has copy, drop, store {
@@ -260,7 +262,9 @@ public struct DiscountTemplate has key, store {
 }
 
 /// Dynamic field key for discount template markers stored under a shop.
-public struct DiscountTemplateKey(ID) has copy, drop, store;
+public struct DiscountTemplateKey has copy, drop, store {
+    template_id: ID,
+}
 
 /// Marker stored under the shop to record template membership.
 public struct DiscountTemplateMarker has copy, drop, store {
@@ -280,7 +284,9 @@ public struct DiscountTicket has key, store {
 }
 
 /// Dynamic field key for recorded discount claims stored under a template.
-public struct DiscountClaimKey(address) has copy, drop, store;
+public struct DiscountClaimKey has copy, drop, store {
+    claimer: address,
+}
 
 /// Tracks which addresses already claimed a discount from a template.
 public struct DiscountClaim has key, store {
@@ -288,17 +294,17 @@ public struct DiscountClaim has key, store {
     claimer: address,
 }
 
-///====================///
-/// Event Definitions ///
-///====================///
-public struct ShopCreated has copy, drop {
+// === Event Definitions ===
+/// Event emitted when a shop is created.
+public struct ShopCreatedEvent has copy, drop {
     shop_address: address,
     owner: address,
     name: vector<u8>,
     shop_owner_cap_id: address,
 }
 
-public struct ShopOwnerUpdated has copy, drop {
+/// Event emitted when a shop owner is updated.
+public struct ShopOwnerUpdatedEvent has copy, drop {
     shop_address: address,
     previous_owner: address,
     new_owner: address,
@@ -306,14 +312,16 @@ public struct ShopOwnerUpdated has copy, drop {
     rotated_by: address,
 }
 
-public struct ShopDisabled has copy, drop {
+/// Event emitted when a shop is disabled.
+public struct ShopDisabledEvent has copy, drop {
     shop_address: address,
     owner: address,
     shop_owner_cap_id: address,
     disabled_by: address,
 }
 
-public struct ItemListingAdded has copy, drop {
+/// Event emitted when an item listing is added.
+public struct ItemListingAddedEvent has copy, drop {
     shop_address: address,
     item_listing_address: address,
     name: vector<u8>,
@@ -322,35 +330,41 @@ public struct ItemListingAdded has copy, drop {
     stock: u64,
 }
 
-public struct ItemListingStockUpdated has copy, drop {
+/// Event emitted when listing stock is updated.
+public struct ItemListingStockUpdatedEvent has copy, drop {
     shop_address: address,
     item_listing_address: address,
     new_stock: u64,
 }
 
-public struct ItemListingRemoved has copy, drop {
+/// Event emitted when an item listing is removed.
+public struct ItemListingRemovedEvent has copy, drop {
     shop_address: address,
     item_listing_address: address,
 }
 
-public struct DiscountTemplateCreated has copy, drop {
+/// Event emitted when a discount template is created.
+public struct DiscountTemplateCreatedEvent has copy, drop {
     shop_address: address,
     discount_template_id: address,
     rule: DiscountRule,
 }
 
-public struct DiscountTemplateUpdated has copy, drop {
+/// Event emitted when a discount template is updated.
+public struct DiscountTemplateUpdatedEvent has copy, drop {
     shop_address: address,
     discount_template_id: address,
 }
 
-public struct DiscountTemplateToggled has copy, drop {
+/// Event emitted when a discount template is toggled.
+public struct DiscountTemplateToggledEvent has copy, drop {
     shop_address: address,
     discount_template_id: address,
     active: bool,
 }
 
-public struct AcceptedCoinAdded has copy, drop {
+/// Event emitted when an accepted coin is added.
+public struct AcceptedCoinAddedEvent has copy, drop {
     shop_address: address,
     coin_type: TypeName,
     feed_id: vector<u8>,
@@ -358,19 +372,22 @@ public struct AcceptedCoinAdded has copy, drop {
     decimals: u8,
 }
 
-public struct AcceptedCoinRemoved has copy, drop {
+/// Event emitted when an accepted coin is removed.
+public struct AcceptedCoinRemovedEvent has copy, drop {
     shop_address: address,
     coin_type: TypeName,
 }
 
-public struct DiscountClaimed has copy, drop {
+/// Event emitted when a discount ticket is claimed.
+public struct DiscountClaimedEvent has copy, drop {
     shop_address: address,
     discount_template_id: address,
     claimer: address,
     discount_id: address,
 }
 
-public struct DiscountRedeemed has copy, drop {
+/// Event emitted when a discount ticket is redeemed.
+public struct DiscountRedeemedEvent has copy, drop {
     shop_address: address,
     discount_template_id: address,
     discount_id: address,
@@ -378,7 +395,8 @@ public struct DiscountRedeemed has copy, drop {
     buyer: address,
 }
 
-public struct PurchaseCompleted has copy, drop {
+/// Event emitted when a purchase completes.
+public struct PurchaseCompletedEvent has copy, drop {
     shop_address: address,
     item_listing_address: address,
     buyer: address,
@@ -393,7 +411,8 @@ public struct PurchaseCompleted has copy, drop {
     quote_amount: u64,
 }
 
-public struct MintingCompleted has copy, drop {
+/// Event emitted when minting completes.
+public struct MintingCompletedEvent has copy, drop {
     shop_address: address,
     item_listing_address: address,
     buyer: address,
@@ -404,11 +423,9 @@ public struct MintingCompleted has copy, drop {
     coin_type: TypeName,
 }
 
-///======================///
-/// Entry Point Methods ///
-///======================///
+// === Entry Point Methods ===
 
-/// * Shop * ///
+// === Shop ===
 
 /// Create a new shop and its owner capability.
 ///
@@ -432,7 +449,7 @@ entry fun create_shop(name: vector<u8>, ctx: &mut TxContext) {
         owner,
     };
 
-    event::emit(ShopCreated {
+    event::emit(ShopCreatedEvent {
         shop_address: shop_address(&shop),
         owner,
         name: shop_name_for_event,
@@ -448,7 +465,7 @@ entry fun disable_shop(shop: &mut Shop, owner_cap: &ShopOwnerCap, ctx: &TxContex
     assert_owner_cap(shop, owner_cap);
     shop.disabled = true;
 
-    event::emit(ShopDisabled {
+    event::emit(ShopDisabledEvent {
         shop_address: shop_address(shop),
         owner: shop.owner,
         shop_owner_cap_id: object::uid_to_address(&owner_cap.id),
@@ -475,7 +492,7 @@ entry fun update_shop_owner(
     shop.owner = new_owner;
     owner_cap.owner = new_owner;
 
-    event::emit(ShopOwnerUpdated {
+    event::emit(ShopOwnerUpdatedEvent {
         shop_address: shop_address(shop),
         previous_owner,
         new_owner,
@@ -484,7 +501,7 @@ entry fun update_shop_owner(
     });
 }
 
-/// * Item Listing * ///
+// === Item Listing ===
 
 /// Add an `ItemListing` attached to the `Shop`. The generic `T` encodes what will eventually be
 /// minted when a buyer completes checkout. Prices are provided in USD cents (e.g. $12.50 -> 1_250)
@@ -536,7 +553,7 @@ fun add_item_listing_core<T: store>(
 
     let listing_name_for_event: vector<u8> = clone_bytes(&listing.name);
 
-    event::emit(ItemListingAdded {
+    event::emit(ItemListingAddedEvent {
         shop_address,
         item_listing_address: listing_address,
         name: listing_name_for_event,
@@ -588,7 +605,7 @@ entry fun update_item_listing_stock(
 
     item_listing.stock = new_stock;
 
-    event::emit(ItemListingStockUpdated {
+    event::emit(ItemListingStockUpdatedEvent {
         shop_address: item_listing.shop_address,
         item_listing_address: object::uid_to_address(&item_listing.id),
         new_stock,
@@ -611,16 +628,16 @@ entry fun remove_item_listing(
     let item_listing_id = listing_id(item_listing);
     let _marker: ItemListingMarker = dynamic_field::remove(
         &mut shop.id,
-        ItemListingKey(item_listing_id),
+        ItemListingKey { listing_id: item_listing_id },
     );
 
-    event::emit(ItemListingRemoved {
+    event::emit(ItemListingRemovedEvent {
         shop_address: shop_address(shop),
         item_listing_address: object::uid_to_address(&item_listing.id),
     });
 }
 
-/// * Accepted currencies * ///
+// === Accepted Currencies ===
 
 /// Register a coin type that the shop will price through an oracle feed.
 ///
@@ -703,12 +720,12 @@ entry fun add_accepted_currency<T>(
     add_currency_marker(shop, accepted_currency_id, coin_type);
     dynamic_field::add(
         &mut shop.id,
-        AcceptedCurrencyTypeKey(coin_type),
+        AcceptedCurrencyTypeKey { coin_type },
         accepted_currency_id,
     );
     transfer::share_object(accepted_currency);
 
-    event::emit(AcceptedCoinAdded {
+    event::emit(AcceptedCoinAddedEvent {
         shop_address,
         coin_type,
         feed_id: feed_for_event,
@@ -738,22 +755,26 @@ entry fun remove_accepted_currency(
     if (
         dynamic_field::exists_with_type<AcceptedCurrencyKey, AcceptedCurrencyMarker>(
             &shop.id,
-            AcceptedCurrencyKey(accepted_currency_id),
+            AcceptedCurrencyKey {
+                accepted_currency_id,
+            },
         )
     ) {
         let _marker: AcceptedCurrencyMarker = dynamic_field::remove(
             &mut shop.id,
-            AcceptedCurrencyKey(accepted_currency_id),
+            AcceptedCurrencyKey {
+                accepted_currency_id,
+            },
         );
     };
 
-    event::emit(AcceptedCoinRemoved {
+    event::emit(AcceptedCoinRemovedEvent {
         shop_address: accepted_currency.shop_address,
         coin_type: accepted_currency.coin_type,
     });
 }
 
-/// * Discount * ///
+// === Discount ===
 
 fun create_discount_template_core(
     shop: &mut Shop,
@@ -843,7 +864,7 @@ entry fun create_discount_template(
     transfer::share_object(discount_template);
 
     let shop_address: address = shop_address(shop);
-    event::emit(DiscountTemplateCreated {
+    event::emit(DiscountTemplateCreatedEvent {
         shop_address,
         discount_template_id: discount_template_address,
         rule: discount_rule,
@@ -885,7 +906,7 @@ entry fun update_discount_template(
         max_redemptions,
     );
 
-    event::emit(DiscountTemplateUpdated {
+    event::emit(DiscountTemplateUpdatedEvent {
         shop_address: discount_template.shop_address,
         discount_template_id: template_address(discount_template),
     });
@@ -904,7 +925,7 @@ entry fun toggle_discount_template(
 
     discount_template.active = active;
 
-    event::emit(DiscountTemplateToggled {
+    event::emit(DiscountTemplateToggledEvent {
         shop_address: discount_template.shop_address,
         discount_template_id: template_address(discount_template),
         active,
@@ -1015,7 +1036,7 @@ fun claim_discount_ticket_with_event(
     );
     let claimer = ctx.sender();
 
-    event::emit(DiscountClaimed {
+    event::emit(DiscountClaimedEvent {
         shop_address: discount_template.shop_address,
         discount_template_id: template_address(discount_template),
         claimer,
@@ -1042,7 +1063,7 @@ entry fun prune_discount_claims(
     prune_claim_markers(discount_template, claimers);
 }
 
-/// * Checkout * ///
+// === Checkout ===
 
 /// Execute a purchase priced in USD cents but settled with any previously registered `AcceptedCurrency`.
 ///
@@ -1077,7 +1098,7 @@ entry fun buy_item<TItem: store, TCoin>(
     assert_listing_matches_shop(shop, item_listing);
     let base_price_usd_cents: u64 = item_listing.base_price_usd_cents;
     // Payment is a Coin<T> object; process_purchase splits the payment and returns change.
-    process_purchase<TItem, TCoin>(
+    let (owed_coin_opt, change_coin, minted_item) = process_purchase<TItem, TCoin>(
         shop,
         item_listing,
         accepted_currency,
@@ -1092,6 +1113,18 @@ entry fun buy_item<TItem: store, TCoin>(
         clock,
         ctx,
     );
+    if (option::is_some(&owed_coin_opt)) {
+        let owed_coin = option::destroy_some(owed_coin_opt);
+        transfer::public_transfer(owed_coin, shop.owner);
+    } else {
+        option::destroy_none(owed_coin_opt);
+    };
+    if (change_coin.value() == 0) {
+        change_coin.destroy_zero();
+    } else {
+        transfer::public_transfer(change_coin, refund_extra_to);
+    };
+    transfer::public_transfer(minted_item, mint_to);
 }
 
 /// Same as `buy_item` but also validates and burns a `DiscountTicket`.
@@ -1142,7 +1175,7 @@ entry fun buy_item_with_discount<TItem: store, TCoin>(
     let ticket_id = object::uid_to_address(&discount_ticket.id);
     discount_template.redemptions = discount_template.redemptions + 1;
 
-    process_purchase<TItem, TCoin>(
+    let (owed_coin_opt, change_coin, minted_item) = process_purchase<TItem, TCoin>(
         shop,
         item_listing,
         accepted_currency,
@@ -1157,8 +1190,20 @@ entry fun buy_item_with_discount<TItem: store, TCoin>(
         clock,
         ctx,
     );
+    if (option::is_some(&owed_coin_opt)) {
+        let owed_coin = option::destroy_some(owed_coin_opt);
+        transfer::public_transfer(owed_coin, shop.owner);
+    } else {
+        option::destroy_none(owed_coin_opt);
+    };
+    if (change_coin.value() == 0) {
+        change_coin.destroy_zero();
+    } else {
+        transfer::public_transfer(change_coin, refund_extra_to);
+    };
+    transfer::public_transfer(minted_item, mint_to);
 
-    event::emit(DiscountRedeemed {
+    event::emit(DiscountRedeemedEvent {
         shop_address: item_listing.shop_address,
         discount_template_id: template_address(discount_template),
         discount_id: ticket_id,
@@ -1175,7 +1220,7 @@ entry fun buy_item_with_discount<TItem: store, TCoin>(
 /// Sui mindset:
 /// - Reduces front-end friction: callers do not need to manage a temporary `DiscountTicket`
 ///   transfer between separate transactions or commands.
-/// - Emits the same `DiscountClaimed` + `DiscountRedeemed` events as the two-step flow so downstream
+/// - Emits the same `DiscountClaimedEvent` + `DiscountRedeemedEvent` events as the two-step flow so downstream
 ///   analytics remain consistent.
 /// - The ticket is created and consumed inside one PTB, minimizing custody risk while still using
 ///   the template's dynamic fields to enforce one-claim-per-address.
@@ -1223,9 +1268,7 @@ entry fun claim_and_buy_item_with_discount<TItem: store, TCoin>(
     );
 }
 
-// ==== //
-// Data //
-// ==== //
+// === Data ===
 
 fun new_shop(name: vector<u8>, owner: address, ctx: &mut TxContext): Shop {
     validate_shop_name(&name);
@@ -1340,7 +1383,7 @@ fun record_discount_claim(template: &mut DiscountTemplate, claimer: address, ctx
 
     dynamic_field::add(
         &mut template.id,
-        DiscountClaimKey(claimer),
+        DiscountClaimKey { claimer },
         DiscountClaim {
             id: object::new(ctx),
             claimer,
@@ -1352,12 +1395,12 @@ fun remove_discount_claim_if_exists(template: &mut DiscountTemplate, claimer: ad
     if (
         dynamic_field::exists_with_type<DiscountClaimKey, DiscountClaim>(
             &template.id,
-            DiscountClaimKey(claimer),
+            DiscountClaimKey { claimer },
         )
     ) {
         let DiscountClaim { id, .. } = dynamic_field::remove(
             &mut template.id,
-            DiscountClaimKey(claimer),
+            DiscountClaimKey { claimer },
         );
         id.delete();
     };
@@ -1383,7 +1426,7 @@ fun apply_discount_template_updates(
 fun remove_currency_field(shop: &mut Shop, coin_type: TypeName) {
     dynamic_field::remove_if_exists<AcceptedCurrencyTypeKey, object::ID>(
         &mut shop.id,
-        AcceptedCurrencyTypeKey(coin_type),
+        AcceptedCurrencyTypeKey { coin_type },
     );
 }
 
@@ -1396,9 +1439,7 @@ fun assert_listing_type_matches<TItem: store>(item_listing: &ItemListing) {
     assert!(item_listing.item_type == expected, EItemTypeMismatch);
 }
 
-// ======= //
-// Helpers //
-// ======= //
+// === Helpers ===
 
 fun shop_address(shop: &Shop): address {
     object::uid_to_address(&shop.id)
@@ -1419,7 +1460,7 @@ fun template_id(template: &DiscountTemplate): object::ID {
 fun add_listing_marker(shop: &mut Shop, listing_id: object::ID) {
     dynamic_field::add(
         &mut shop.id,
-        ItemListingKey(listing_id),
+        ItemListingKey { listing_id },
         ItemListingMarker {
             listing_id,
         },
@@ -1433,7 +1474,7 @@ fun add_template_marker(
 ) {
     dynamic_field::add(
         &mut shop.id,
-        DiscountTemplateKey(template_id),
+        DiscountTemplateKey { template_id },
         DiscountTemplateMarker {
             template_id,
             applies_to_listing,
@@ -1444,7 +1485,9 @@ fun add_template_marker(
 fun add_currency_marker(shop: &mut Shop, accepted_currency_id: object::ID, coin_type: TypeName) {
     dynamic_field::add(
         &mut shop.id,
-        AcceptedCurrencyKey(accepted_currency_id),
+        AcceptedCurrencyKey {
+            accepted_currency_id,
+        },
         AcceptedCurrencyMarker {
             accepted_currency_id,
             coin_type,
@@ -1456,7 +1499,7 @@ fun assert_template_registered(shop: &Shop, template_id: object::ID) {
     assert!(
         dynamic_field::exists_with_type<DiscountTemplateKey, DiscountTemplateMarker>(
             &shop.id,
-            DiscountTemplateKey(template_id),
+            DiscountTemplateKey { template_id },
         ),
         ETemplateShopMismatch,
     );
@@ -1466,7 +1509,9 @@ fun assert_currency_registered(shop: &Shop, accepted_currency_id: object::ID) {
     assert!(
         dynamic_field::exists_with_type<AcceptedCurrencyKey, AcceptedCurrencyMarker>(
             &shop.id,
-            AcceptedCurrencyKey(accepted_currency_id),
+            AcceptedCurrencyKey {
+                accepted_currency_id,
+            },
         ),
         EAcceptedCurrencyMissing,
     );
@@ -1476,7 +1521,7 @@ fun assert_listing_registered(shop: &Shop, listing_id: object::ID) {
     assert!(
         dynamic_field::exists_with_type<ItemListingKey, ItemListingMarker>(
             &shop.id,
-            ItemListingKey(listing_id),
+            ItemListingKey { listing_id },
         ),
         EListingShopMismatch,
     );
@@ -1595,7 +1640,7 @@ fun process_purchase<TItem: store, TCoin>(
     max_confidence_ratio_bps: option::Option<u64>,
     clock: &clock::Clock,
     ctx: &mut TxContext,
-): () {
+): (option::Option<coin::Coin<TCoin>>, coin::Coin<TCoin>, ShopItem<TItem>) {
     assert_listing_type_matches<TItem>(item_listing);
     let accepted_currency = borrow_registered_accepted_currency(
         shop,
@@ -1608,7 +1653,6 @@ fun process_purchase<TItem: store, TCoin>(
         accepted_currency,
         price_info_object,
         payment,
-        shop.owner,
         shop_address(shop),
         mint_to,
         refund_extra_to,
@@ -1618,7 +1662,7 @@ fun process_purchase<TItem: store, TCoin>(
         max_confidence_ratio_bps,
         clock,
         ctx,
-    );
+    )
 }
 
 fun process_purchase_core<TItem: store, TCoin>(
@@ -1626,7 +1670,6 @@ fun process_purchase_core<TItem: store, TCoin>(
     accepted_currency: &AcceptedCurrency,
     price_info_object: &price_info::PriceInfoObject,
     mut payment: coin::Coin<TCoin>,
-    shop_owner: address,
     shop_address: address,
     mint_to: address,
     refund_extra_to: address,
@@ -1636,7 +1679,7 @@ fun process_purchase_core<TItem: store, TCoin>(
     max_confidence_ratio_bps: option::Option<u64>,
     clock: &clock::Clock,
     ctx: &mut TxContext,
-): () {
+): (option::Option<coin::Coin<TCoin>>, coin::Coin<TCoin>, ShopItem<TItem>) {
     ensure_price_info_matches_currency(accepted_currency, price_info_object);
     assert_price_status_trading(
         price_info_object,
@@ -1653,15 +1696,14 @@ fun process_purchase_core<TItem: store, TCoin>(
         clock,
     );
 
-    pay_shop(&mut payment, quote_amount, shop_owner, ctx);
+    let owed_coin_opt = split_payment(&mut payment, quote_amount, ctx);
 
     let buyer: address = ctx.sender();
     let change_amount = payment.value();
-    refund_or_destroy(payment, refund_extra_to);
 
     decrement_stock(item_listing);
 
-    event::emit(PurchaseCompleted {
+    event::emit(PurchaseCompletedEvent {
         shop_address,
         item_listing_address: object::uid_to_address(&item_listing.id),
         buyer,
@@ -1676,20 +1718,16 @@ fun process_purchase_core<TItem: store, TCoin>(
         quote_amount,
     });
 
-    event::emit(ItemListingStockUpdated {
+    event::emit(ItemListingStockUpdatedEvent {
         shop_address,
         item_listing_address: object::uid_to_address(&item_listing.id),
         new_stock: item_listing.stock,
     });
 
-    let minted_item_id = mint_and_transfer_item<TItem>(
-        item_listing,
-        mint_to,
-        clock,
-        ctx,
-    );
+    let minted_item = mint_shop_item<TItem>(item_listing, clock, ctx);
+    let minted_item_id = object::uid_to_address(&minted_item.id);
 
-    event::emit(MintingCompleted {
+    event::emit(MintingCompletedEvent {
         shop_address,
         item_listing_address: object::uid_to_address(&item_listing.id),
         buyer,
@@ -1699,6 +1737,7 @@ fun process_purchase_core<TItem: store, TCoin>(
         change_amount,
         coin_type: accepted_currency.coin_type,
     });
+    (owed_coin_opt, payment, minted_item)
 }
 
 fun parse_rule_kind(raw_kind: u8): DiscountRuleKind {
@@ -1821,28 +1860,19 @@ fun conservative_price_mantissa(
     mantissa - confidence
 }
 
-fun pay_shop<TCoin>(
+fun split_payment<TCoin>(
     payment: &mut coin::Coin<TCoin>,
     amount_due: u64,
-    owner: address,
     ctx: &mut TxContext,
-) {
+): option::Option<coin::Coin<TCoin>> {
     if (amount_due == 0) {
-        return
+        return option::none()
     };
 
     let available = payment.value();
     assert!(available >= amount_due, EInsufficientPayment);
     let owed = payment.split(amount_due, ctx);
-    transfer::public_transfer(owed, owner);
-}
-
-fun refund_or_destroy<TCoin>(payment: coin::Coin<TCoin>, recipient: address) {
-    if (payment.value() == 0) {
-        payment.destroy_zero();
-    } else {
-        transfer::public_transfer(payment, recipient);
-    };
+    option::some(owed)
 }
 
 fun decrement_stock(item_listing: &mut ItemListing) {
@@ -1864,19 +1894,6 @@ fun mint_shop_item<TItem: store>(
         name: clone_bytes(&item_listing.name),
         acquired_at: now_secs(clock),
     }
-}
-
-fun mint_and_transfer_item<TItem: store>(
-    item_listing: &ItemListing,
-    mint_to: address,
-    clock: &clock::Clock,
-    ctx: &mut TxContext,
-): address {
-    // Receipts are typed per listing to preserve downstream type safety.
-    let item = mint_shop_item<TItem>(item_listing, clock, ctx);
-    let item_address = object::uid_to_address(&item.id);
-    transfer::public_transfer(item, mint_to);
-    item_address
 }
 
 fun apply_discount(base_price_usd_cents: u64, rule: &DiscountRule): u64 {
@@ -1935,9 +1952,7 @@ fun as_u128_from_u64(value: u64): u128 {
     value as u128
 }
 
-// ======================= //
-// Asserts and validations //
-// ======================= //
+// === Asserts and validations ===
 
 fun assert_owner_cap(shop: &Shop, owner_cap: &ShopOwnerCap) {
     assert!(owner_cap.shop_address == object::uid_to_address(&shop.id), EInvalidOwnerCap);
@@ -2113,7 +2128,7 @@ fun assert_currency_not_registered(shop: &Shop, coin_type: &TypeName) {
     assert!(
         !dynamic_field::exists_<AcceptedCurrencyTypeKey>(
             &shop.id,
-            AcceptedCurrencyTypeKey(*coin_type),
+            AcceptedCurrencyTypeKey { coin_type: *coin_type },
         ),
         EAcceptedCurrencyExists,
     );
@@ -2204,7 +2219,7 @@ fun assert_spotlight_template_matches_listing(
         assert_template_belongs_to_shop(shop, template_id);
         let marker: &DiscountTemplateMarker = dynamic_field::borrow(
             &shop.id,
-            DiscountTemplateKey(template_id),
+            DiscountTemplateKey { template_id },
         );
         let applies_to_listing = map_id_option_to_address(
             &marker.applies_to_listing,
@@ -2232,37 +2247,41 @@ fun assert_template_claimable(template: &DiscountTemplate, claimer: address, now
     assert!(
         !dynamic_field::exists_with_type<DiscountClaimKey, DiscountClaim>(
             &template.id,
-            DiscountClaimKey(claimer),
+            DiscountClaimKey { claimer },
         ),
         EDiscountAlreadyClaimed,
     );
 }
 
-///================///
-/// View helpers   ///
-///================///
+// === View helpers ===
 
+/// Returns true if the listing is registered under the shop.
 public fun listing_exists(shop: &Shop, listing_id: object::ID): bool {
     dynamic_field::exists_with_type<ItemListingKey, ItemListingMarker>(
         &shop.id,
-        ItemListingKey(listing_id),
+        ItemListingKey { listing_id },
     )
 }
 
+/// Returns true if the discount template is registered under the shop.
 public fun discount_template_exists(shop: &Shop, template_id: object::ID): bool {
     dynamic_field::exists_with_type<DiscountTemplateKey, DiscountTemplateMarker>(
         &shop.id,
-        DiscountTemplateKey(template_id),
+        DiscountTemplateKey { template_id },
     )
 }
 
+/// Returns true if the accepted currency is registered under the shop.
 public fun accepted_currency_exists(shop: &Shop, accepted_currency_id: object::ID): bool {
     dynamic_field::exists_with_type<AcceptedCurrencyKey, AcceptedCurrencyMarker>(
         &shop.id,
-        AcceptedCurrencyKey(accepted_currency_id),
+        AcceptedCurrencyKey {
+            accepted_currency_id,
+        },
     )
 }
 
+/// Returns the accepted currency ID for a coin type if registered.
 public fun accepted_currency_id_for_type(
     shop: &Shop,
     coin_type: TypeName,
@@ -2270,13 +2289,13 @@ public fun accepted_currency_id_for_type(
     if (
         dynamic_field::exists_with_type<AcceptedCurrencyTypeKey, object::ID>(
             &shop.id,
-            AcceptedCurrencyTypeKey(coin_type),
+            AcceptedCurrencyTypeKey { coin_type },
         )
     ) {
         option::some(
             *dynamic_field::borrow<AcceptedCurrencyTypeKey, object::ID>(
                 &shop.id,
-                AcceptedCurrencyTypeKey(coin_type),
+                AcceptedCurrencyTypeKey { coin_type },
             ),
         )
     } else {
@@ -2284,6 +2303,7 @@ public fun accepted_currency_id_for_type(
     }
 }
 
+/// Returns the listing ID for a listing address if registered.
 public fun listing_id_for_address(
     shop: &Shop,
     listing_address: address,
@@ -2296,6 +2316,7 @@ public fun listing_id_for_address(
     }
 }
 
+/// Returns the template ID for a template address if registered.
 public fun discount_template_id_for_address(
     shop: &Shop,
     template_address: address,
@@ -2308,6 +2329,7 @@ public fun discount_template_id_for_address(
     }
 }
 
+/// Returns listing fields after validating shop membership.
 public fun listing_values(
     shop: &Shop,
     listing: &ItemListing,
@@ -2322,6 +2344,7 @@ public fun listing_values(
     )
 }
 
+/// Returns accepted currency fields after validating shop membership.
 public fun accepted_currency_values(
     shop: &Shop,
     accepted_currency: &AcceptedCurrency,
@@ -2340,6 +2363,7 @@ public fun accepted_currency_values(
     )
 }
 
+/// Returns discount template fields after validating shop membership.
 public fun discount_template_values(
     shop: &Shop,
     template: &DiscountTemplate,
@@ -2368,6 +2392,7 @@ public fun discount_template_values(
     )
 }
 
+/// Quotes the coin amount for a price info object with guardrails.
 entry fun quote_amount_for_price_info_object(
     shop: &Shop,
     accepted_currency: &AcceptedCurrency,
@@ -2399,9 +2424,7 @@ fun clone_bytes(data: &vector<u8>): vector<u8> {
     vector::tabulate!(len, |i| data[i])
 }
 
-///==================///
-/// #[test_only] API ///
-///==================///
+// === #[test_only] API ===
 
 #[test_only]
 public struct TestPublisherOTW has drop {}
@@ -2449,7 +2472,7 @@ public fun test_create_discount_template_local(
         ctx,
     );
 
-    event::emit(DiscountTemplateCreated {
+    event::emit(DiscountTemplateCreatedEvent {
         shop_address: shop_address(shop),
         discount_template_id: template_address,
         rule: discount_rule,
@@ -2595,7 +2618,7 @@ public fun test_discount_template_values(
 public fun test_discount_claim_exists(template: &DiscountTemplate, claimer: address): bool {
     dynamic_field::exists_with_type<DiscountClaimKey, DiscountClaim>(
         &template.id,
-        DiscountClaimKey(claimer),
+        DiscountClaimKey { claimer },
     )
 }
 
@@ -2666,12 +2689,11 @@ public fun test_claim_and_buy_with_ids<TItem: store, TCoin>(
     let ticket_id = object::uid_to_address(&discount_ticket.id);
     discount_template.redemptions = discount_template.redemptions + 1;
 
-    process_purchase_core<TItem, TCoin>(
+    let (owed_coin_opt, change_coin, minted_item) = process_purchase_core<TItem, TCoin>(
         item_listing,
         accepted_currency,
         price_info_object,
         payment,
-        shop_owner,
         shop_address,
         mint_to,
         refund_extra_to,
@@ -2682,8 +2704,20 @@ public fun test_claim_and_buy_with_ids<TItem: store, TCoin>(
         clock,
         ctx,
     );
+    if (option::is_some(&owed_coin_opt)) {
+        let owed_coin = option::destroy_some(owed_coin_opt);
+        transfer::public_transfer(owed_coin, shop_owner);
+    } else {
+        option::destroy_none(owed_coin_opt);
+    };
+    if (change_coin.value() == 0) {
+        change_coin.destroy_zero();
+    } else {
+        transfer::public_transfer(change_coin, refund_extra_to);
+    };
+    transfer::public_transfer(minted_item, mint_to);
 
-    event::emit(DiscountRedeemed {
+    event::emit(DiscountRedeemedEvent {
         shop_address,
         discount_template_id: template_address(discount_template),
         discount_id: ticket_id,
@@ -2719,189 +2753,189 @@ public fun test_apply_percent_discount(base_price_usd_cents: u64, bps: u16): u64
 }
 
 #[test_only]
-public fun test_discount_template_created_shop(event: &DiscountTemplateCreated): address {
+public fun test_discount_template_created_shop(event: &DiscountTemplateCreatedEvent): address {
     event.shop_address
 }
 
 #[test_only]
-public fun test_discount_template_created_id(event: &DiscountTemplateCreated): address {
+public fun test_discount_template_created_id(event: &DiscountTemplateCreatedEvent): address {
     event.discount_template_id
 }
 
 #[test_only]
-public fun test_discount_template_created_rule(event: &DiscountTemplateCreated): DiscountRule {
+public fun test_discount_template_created_rule(event: &DiscountTemplateCreatedEvent): DiscountRule {
     event.rule
 }
 
 #[test_only]
-public fun test_discount_template_updated_shop(event: &DiscountTemplateUpdated): address {
+public fun test_discount_template_updated_shop(event: &DiscountTemplateUpdatedEvent): address {
     event.shop_address
 }
 
 #[test_only]
-public fun test_discount_template_updated_id(event: &DiscountTemplateUpdated): address {
+public fun test_discount_template_updated_id(event: &DiscountTemplateUpdatedEvent): address {
     event.discount_template_id
 }
 
 #[test_only]
-public fun test_discount_template_toggled_shop(event: &DiscountTemplateToggled): address {
+public fun test_discount_template_toggled_shop(event: &DiscountTemplateToggledEvent): address {
     event.shop_address
 }
 
 #[test_only]
-public fun test_discount_template_toggled_id(event: &DiscountTemplateToggled): address {
+public fun test_discount_template_toggled_id(event: &DiscountTemplateToggledEvent): address {
     event.discount_template_id
 }
 
 #[test_only]
-public fun test_discount_template_toggled_active(event: &DiscountTemplateToggled): bool {
+public fun test_discount_template_toggled_active(event: &DiscountTemplateToggledEvent): bool {
     event.active
 }
 
 #[test_only]
-public fun test_purchase_completed_discounted_price(event: &PurchaseCompleted): u64 {
+public fun test_purchase_completed_discounted_price(event: &PurchaseCompletedEvent): u64 {
     event.discounted_price_usd_cents
 }
 
 #[test_only]
-public fun test_purchase_completed_shop(event: &PurchaseCompleted): address {
+public fun test_purchase_completed_shop(event: &PurchaseCompletedEvent): address {
     event.shop_address
 }
 
 #[test_only]
-public fun test_purchase_completed_listing(event: &PurchaseCompleted): address {
+public fun test_purchase_completed_listing(event: &PurchaseCompletedEvent): address {
     event.item_listing_address
 }
 
 #[test_only]
-public fun test_purchase_completed_buyer(event: &PurchaseCompleted): address {
+public fun test_purchase_completed_buyer(event: &PurchaseCompletedEvent): address {
     event.buyer
 }
 
 #[test_only]
-public fun test_purchase_completed_mint_to(event: &PurchaseCompleted): address {
+public fun test_purchase_completed_mint_to(event: &PurchaseCompletedEvent): address {
     event.mint_to
 }
 
 #[test_only]
-public fun test_purchase_completed_coin_type(event: &PurchaseCompleted): TypeName {
+public fun test_purchase_completed_coin_type(event: &PurchaseCompletedEvent): TypeName {
     event.coin_type
 }
 
 #[test_only]
-public fun test_purchase_completed_amount_paid(event: &PurchaseCompleted): u64 {
+public fun test_purchase_completed_amount_paid(event: &PurchaseCompletedEvent): u64 {
     event.amount_paid
 }
 
 #[test_only]
 public fun test_purchase_completed_discount_template_id(
-    event: &PurchaseCompleted,
+    event: &PurchaseCompletedEvent,
 ): option::Option<address> {
     event.discount_template_id
 }
 
 #[test_only]
-public fun test_purchase_completed_accepted_currency_id(event: &PurchaseCompleted): address {
+public fun test_purchase_completed_accepted_currency_id(event: &PurchaseCompletedEvent): address {
     event.accepted_currency_id
 }
 
 #[test_only]
-public fun test_purchase_completed_feed_id(event: &PurchaseCompleted): vector<u8> {
+public fun test_purchase_completed_feed_id(event: &PurchaseCompletedEvent): vector<u8> {
     clone_bytes(&event.feed_id)
 }
 
 #[test_only]
-public fun test_purchase_completed_base_price_usd_cents(event: &PurchaseCompleted): u64 {
+public fun test_purchase_completed_base_price_usd_cents(event: &PurchaseCompletedEvent): u64 {
     event.base_price_usd_cents
 }
 
 #[test_only]
-public fun test_purchase_completed_quote_amount(event: &PurchaseCompleted): u64 {
+public fun test_purchase_completed_quote_amount(event: &PurchaseCompletedEvent): u64 {
     event.quote_amount
 }
 
 #[test_only]
-public fun test_minting_completed_shop(event: &MintingCompleted): address {
+public fun test_minting_completed_shop(event: &MintingCompletedEvent): address {
     event.shop_address
 }
 
 #[test_only]
-public fun test_minting_completed_listing(event: &MintingCompleted): address {
+public fun test_minting_completed_listing(event: &MintingCompletedEvent): address {
     event.item_listing_address
 }
 
 #[test_only]
-public fun test_minting_completed_buyer(event: &MintingCompleted): address {
+public fun test_minting_completed_buyer(event: &MintingCompletedEvent): address {
     event.buyer
 }
 
 #[test_only]
-public fun test_minting_completed_minted_item_id(event: &MintingCompleted): address {
+public fun test_minting_completed_minted_item_id(event: &MintingCompletedEvent): address {
     event.minted_item_id
 }
 
 #[test_only]
-public fun test_minting_completed_mint_to(event: &MintingCompleted): address {
+public fun test_minting_completed_mint_to(event: &MintingCompletedEvent): address {
     event.mint_to
 }
 
 #[test_only]
-public fun test_minting_completed_refund_to(event: &MintingCompleted): address {
+public fun test_minting_completed_refund_to(event: &MintingCompletedEvent): address {
     event.refund_to
 }
 
 #[test_only]
-public fun test_minting_completed_change_amount(event: &MintingCompleted): u64 {
+public fun test_minting_completed_change_amount(event: &MintingCompletedEvent): u64 {
     event.change_amount
 }
 
 #[test_only]
-public fun test_minting_completed_coin_type(event: &MintingCompleted): TypeName {
+public fun test_minting_completed_coin_type(event: &MintingCompletedEvent): TypeName {
     event.coin_type
 }
 
 #[test_only]
-public fun test_discount_redeemed_shop(event: &DiscountRedeemed): address {
+public fun test_discount_redeemed_shop(event: &DiscountRedeemedEvent): address {
     event.shop_address
 }
 
 #[test_only]
-public fun test_discount_redeemed_template_id(event: &DiscountRedeemed): address {
+public fun test_discount_redeemed_template_id(event: &DiscountRedeemedEvent): address {
     event.discount_template_id
 }
 
 #[test_only]
-public fun test_discount_redeemed_discount_id(event: &DiscountRedeemed): address {
+public fun test_discount_redeemed_discount_id(event: &DiscountRedeemedEvent): address {
     event.discount_id
 }
 
 #[test_only]
-public fun test_discount_redeemed_listing_id(event: &DiscountRedeemed): address {
+public fun test_discount_redeemed_listing_id(event: &DiscountRedeemedEvent): address {
     event.listing_id
 }
 
 #[test_only]
-public fun test_discount_redeemed_buyer(event: &DiscountRedeemed): address {
+public fun test_discount_redeemed_buyer(event: &DiscountRedeemedEvent): address {
     event.buyer
 }
 
 #[test_only]
-public fun test_discount_claimed_shop(event: &DiscountClaimed): address {
+public fun test_discount_claimed_shop(event: &DiscountClaimedEvent): address {
     event.shop_address
 }
 
 #[test_only]
-public fun test_discount_claimed_template_id(event: &DiscountClaimed): address {
+public fun test_discount_claimed_template_id(event: &DiscountClaimedEvent): address {
     event.discount_template_id
 }
 
 #[test_only]
-public fun test_discount_claimed_claimer(event: &DiscountClaimed): address {
+public fun test_discount_claimed_claimer(event: &DiscountClaimedEvent): address {
     event.claimer
 }
 
 #[test_only]
-public fun test_discount_claimed_discount_id(event: &DiscountClaimed): address {
+public fun test_discount_claimed_discount_id(event: &DiscountClaimedEvent): address {
     event.discount_id
 }
 
@@ -2957,12 +2991,12 @@ public fun test_remove_listing(shop: &mut Shop, listing_id: object::ID) {
     if (
         dynamic_field::exists_with_type<ItemListingKey, ItemListingMarker>(
             &shop.id,
-            ItemListingKey(listing_id),
+            ItemListingKey { listing_id },
         )
     ) {
         let _marker: ItemListingMarker = dynamic_field::remove(
             &mut shop.id,
-            ItemListingKey(listing_id),
+            ItemListingKey { listing_id },
         );
     };
 }
@@ -2972,12 +3006,12 @@ public fun test_remove_template(shop: &mut Shop, template_id: object::ID) {
     if (
         dynamic_field::exists_with_type<DiscountTemplateKey, DiscountTemplateMarker>(
             &shop.id,
-            DiscountTemplateKey(template_id),
+            DiscountTemplateKey { template_id },
         )
     ) {
         let _marker: DiscountTemplateMarker = dynamic_field::remove(
             &mut shop.id,
-            DiscountTemplateKey(template_id),
+            DiscountTemplateKey { template_id },
         );
     };
 }
@@ -3018,158 +3052,158 @@ public fun test_shop_owner_cap_shop_address(owner_cap: &ShopOwnerCap): address {
 }
 
 #[test_only]
-public fun test_shop_created_owner(event: &ShopCreated): address {
+public fun test_shop_created_owner(event: &ShopCreatedEvent): address {
     event.owner
 }
 
 #[test_only]
-public fun test_shop_created_name(event: &ShopCreated): vector<u8> {
+public fun test_shop_created_name(event: &ShopCreatedEvent): vector<u8> {
     clone_bytes(&event.name)
 }
 
 #[test_only]
-public fun test_shop_created_owner_cap_id(event: &ShopCreated): address {
+public fun test_shop_created_owner_cap_id(event: &ShopCreatedEvent): address {
     event.shop_owner_cap_id
 }
 
 #[test_only]
-public fun test_shop_created_shop_address(event: &ShopCreated): address {
+public fun test_shop_created_shop_address(event: &ShopCreatedEvent): address {
     event.shop_address
 }
 
 #[test_only]
-public fun test_shop_owner_updated_shop(event: &ShopOwnerUpdated): address {
+public fun test_shop_owner_updated_shop(event: &ShopOwnerUpdatedEvent): address {
     event.shop_address
 }
 
 #[test_only]
-public fun test_shop_owner_updated_previous(event: &ShopOwnerUpdated): address {
+public fun test_shop_owner_updated_previous(event: &ShopOwnerUpdatedEvent): address {
     event.previous_owner
 }
 
 #[test_only]
-public fun test_shop_owner_updated_new(event: &ShopOwnerUpdated): address {
+public fun test_shop_owner_updated_new(event: &ShopOwnerUpdatedEvent): address {
     event.new_owner
 }
 
 #[test_only]
-public fun test_shop_owner_updated_cap_id(event: &ShopOwnerUpdated): address {
+public fun test_shop_owner_updated_cap_id(event: &ShopOwnerUpdatedEvent): address {
     event.shop_owner_cap_id
 }
 
 #[test_only]
-public fun test_shop_owner_updated_rotated_by(event: &ShopOwnerUpdated): address {
+public fun test_shop_owner_updated_rotated_by(event: &ShopOwnerUpdatedEvent): address {
     event.rotated_by
 }
 
 #[test_only]
-public fun test_shop_disabled_shop(event: &ShopDisabled): address {
+public fun test_shop_disabled_shop(event: &ShopDisabledEvent): address {
     event.shop_address
 }
 
 #[test_only]
-public fun test_shop_disabled_owner(event: &ShopDisabled): address {
+public fun test_shop_disabled_owner(event: &ShopDisabledEvent): address {
     event.owner
 }
 
 #[test_only]
-public fun test_shop_disabled_cap_id(event: &ShopDisabled): address {
+public fun test_shop_disabled_cap_id(event: &ShopDisabledEvent): address {
     event.shop_owner_cap_id
 }
 
 #[test_only]
-public fun test_shop_disabled_by(event: &ShopDisabled): address {
+public fun test_shop_disabled_by(event: &ShopDisabledEvent): address {
     event.disabled_by
 }
 
 #[test_only]
-public fun test_item_listing_stock_updated_shop(event: &ItemListingStockUpdated): address {
+public fun test_item_listing_stock_updated_shop(event: &ItemListingStockUpdatedEvent): address {
     event.shop_address
 }
 
 #[test_only]
-public fun test_item_listing_stock_updated_listing(event: &ItemListingStockUpdated): address {
+public fun test_item_listing_stock_updated_listing(event: &ItemListingStockUpdatedEvent): address {
     event.item_listing_address
 }
 
 #[test_only]
-public fun test_item_listing_stock_updated_new_stock(event: &ItemListingStockUpdated): u64 {
+public fun test_item_listing_stock_updated_new_stock(event: &ItemListingStockUpdatedEvent): u64 {
     event.new_stock
 }
 
 #[test_only]
-public fun test_item_listing_added_shop(event: &ItemListingAdded): address {
+public fun test_item_listing_added_shop(event: &ItemListingAddedEvent): address {
     event.shop_address
 }
 
 #[test_only]
-public fun test_item_listing_added_listing(event: &ItemListingAdded): address {
+public fun test_item_listing_added_listing(event: &ItemListingAddedEvent): address {
     event.item_listing_address
 }
 
 #[test_only]
-public fun test_item_listing_added_name(event: &ItemListingAdded): vector<u8> {
+public fun test_item_listing_added_name(event: &ItemListingAddedEvent): vector<u8> {
     clone_bytes(&event.name)
 }
 
 #[test_only]
-public fun test_item_listing_added_base_price_usd_cents(event: &ItemListingAdded): u64 {
+public fun test_item_listing_added_base_price_usd_cents(event: &ItemListingAddedEvent): u64 {
     event.base_price_usd_cents
 }
 
 #[test_only]
 public fun test_item_listing_added_spotlight_template(
-    event: &ItemListingAdded,
+    event: &ItemListingAddedEvent,
 ): option::Option<address> {
     event.spotlight_discount_template_id
 }
 
 #[test_only]
-public fun test_item_listing_added_stock(event: &ItemListingAdded): u64 {
+public fun test_item_listing_added_stock(event: &ItemListingAddedEvent): u64 {
     event.stock
 }
 
 #[test_only]
-public fun test_item_listing_removed_shop(event: &ItemListingRemoved): address {
+public fun test_item_listing_removed_shop(event: &ItemListingRemovedEvent): address {
     event.shop_address
 }
 
 #[test_only]
-public fun test_item_listing_removed_listing(event: &ItemListingRemoved): address {
+public fun test_item_listing_removed_listing(event: &ItemListingRemovedEvent): address {
     event.item_listing_address
 }
 
 #[test_only]
-public fun test_accepted_coin_added_shop(event: &AcceptedCoinAdded): address {
+public fun test_accepted_coin_added_shop(event: &AcceptedCoinAddedEvent): address {
     event.shop_address
 }
 
 #[test_only]
-public fun test_accepted_coin_added_coin_type(event: &AcceptedCoinAdded): TypeName {
+public fun test_accepted_coin_added_coin_type(event: &AcceptedCoinAddedEvent): TypeName {
     event.coin_type
 }
 
 #[test_only]
-public fun test_accepted_coin_added_feed_id(event: &AcceptedCoinAdded): vector<u8> {
+public fun test_accepted_coin_added_feed_id(event: &AcceptedCoinAddedEvent): vector<u8> {
     clone_bytes(&event.feed_id)
 }
 
 #[test_only]
-public fun test_accepted_coin_added_pyth_object_id(event: &AcceptedCoinAdded): object::ID {
+public fun test_accepted_coin_added_pyth_object_id(event: &AcceptedCoinAddedEvent): object::ID {
     event.pyth_object_id
 }
 
 #[test_only]
-public fun test_accepted_coin_added_decimals(event: &AcceptedCoinAdded): u8 {
+public fun test_accepted_coin_added_decimals(event: &AcceptedCoinAddedEvent): u8 {
     event.decimals
 }
 
 #[test_only]
-public fun test_accepted_coin_removed_shop(event: &AcceptedCoinRemoved): address {
+public fun test_accepted_coin_removed_shop(event: &AcceptedCoinRemovedEvent): address {
     event.shop_address
 }
 
 #[test_only]
-public fun test_accepted_coin_removed_coin_type(event: &AcceptedCoinRemoved): TypeName {
+public fun test_accepted_coin_removed_coin_type(event: &AcceptedCoinRemovedEvent): TypeName {
     event.coin_type
 }
