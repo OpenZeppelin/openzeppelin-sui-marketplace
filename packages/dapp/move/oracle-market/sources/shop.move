@@ -30,7 +30,7 @@ use sui::package;
 //   assets. Passing an owned object by value is a single-use guarantee. Docs: docs/07-shop-capabilities.md,
 //   docs/08-listings-receipts.md, docs/10-discounts-tickets.md, docs/16-object-ownership.md
 // - Capability-based auth (ShopOwnerCap): admin entry points require the capability object, not
-//   tx_context::sender checks. This replaces Solidity modifiers. Docs: docs/07-shop-capabilities.md
+//   ctx.sender() checks. This replaces Solidity modifiers. Docs: docs/07-shop-capabilities.md
 // - Dynamic fields (markers + per-claimer claims): keyed child storage stored under the Shop or
 //   DiscountTemplate. Lookups by key are cheap, but dynamic fields are not enumerable on-chain,
 //   so discovery still relies on indexing/off-chain queries. This keeps parent objects small and
@@ -52,7 +52,7 @@ use sui::package;
 //   `public`. Prefer `public` for composable helpers and `entry` for PTB-only calls.
 // - Events: event::emit writes typed events for indexers and UIs. Docs: docs/08-advanced.md,
 //   docs/18-data-access.md
-// - TxContext and sender: TxContext is required for object creation and coin splits; tx_context::sender
+// - TxContext and sender: TxContext is required for object creation and coin splits; ctx.sender()
 //   identifies the signer for access control and receipts. Docs: docs/14-advanced.md
 // - Object IDs and addresses: on Sui, object IDs are addresses (but not every address is an object ID).
 //   object::UID holds that ID,
@@ -422,7 +422,7 @@ public struct MintingCompleted has copy, drop {
 ///   State is sharded into per-object locks so PTBs only touch the listing/template/currency they
 ///   mutate instead of contending on a monolithic storage map as in Solidity.
 entry fun create_shop(name: vector<u8>, ctx: &mut TxContext) {
-    let owner: address = tx_context::sender(ctx);
+    let owner: address = ctx.sender();
     let shop: Shop = new_shop(name, owner, ctx);
     let shop_name_for_event: vector<u8> = clone_bytes(&shop.name);
 
@@ -452,7 +452,7 @@ entry fun disable_shop(shop: &mut Shop, owner_cap: &ShopOwnerCap, ctx: &TxContex
         shop_address: shop_address(shop),
         owner: shop.owner,
         shop_owner_cap_id: object::uid_to_address(&owner_cap.id),
-        disabled_by: tx_context::sender(ctx),
+        disabled_by: ctx.sender(),
     });
 }
 
@@ -461,7 +461,7 @@ entry fun disable_shop(shop: &mut Shop, owner_cap: &ShopOwnerCap, ctx: &TxContex
 /// Payouts should follow the current operator, not the address that originally created the shop.
 /// Sui mindset:
 /// - Access control is explicit: the operator must show the `ShopOwnerCap` rather than relying on
-///   `tx_context::sender`. Rotating the cap keeps payouts aligned to the current operator.
+///   `ctx.sender()`. Rotating the cap keeps payouts aligned to the current operator.
 /// - Buyers never handle capabilities--checkout remains permissionless against the shared `Shop`.
 entry fun update_shop_owner(
     shop: &mut Shop,
@@ -480,7 +480,7 @@ entry fun update_shop_owner(
         previous_owner,
         new_owner,
         shop_owner_cap_id: object::uid_to_address(&owner_cap.id),
-        rotated_by: tx_context::sender(ctx),
+        rotated_by: ctx.sender(),
     });
 }
 
@@ -492,7 +492,7 @@ entry fun update_shop_owner(
 ///
 /// Sui mindset:
 /// - Capability-first auth replaces Solidity modifiers: the operator must present `ShopOwnerCap`
-///   minted during `create_shop`; `tx_context::sender` alone is never trusted. Losing the cap means losing
+///   minted during `create_shop`; `ctx.sender()` alone is never trusted. Losing the cap means losing
 ///   control--much like losing a private key--but without implicit global ownership variables.
 /// - Listings are shared objects registered via a lightweight marker under the shared `Shop`.
 ///   Admin flows edit the listing object directly while the marker keeps membership checks cheap
@@ -961,7 +961,7 @@ entry fun clear_template_from_listing(
 ///   still serialize.
 /// - Tickets are transferable as objects, but redemption is bound to the original claimer. If a
 ///   ticket is moved to another address, it cannot be redeemed by the recipient. In EVM you might
-///   airdrop ERC-1155 coupons; here the object identity plus `tx_context::sender` check guarantee
+///   airdrop ERC-1155 coupons; here the object identity plus `ctx.sender()` check guarantee
 ///   single-claimer semantics without extra storage.
 entry fun claim_discount_ticket(
     shop: &Shop,
@@ -984,14 +984,14 @@ entry fun claim_discount_ticket(
 
 /// Non-entry helper that returns the owned ticket so callers can inline claim + buy in one PTB.
 /// Intended to be composed inside future `buy_item` logic or higher-level scripts.
-/// The claimer is always bound to `tx_context::sender` to prevent third parties from minting on behalf of
+/// The claimer is always bound to `ctx.sender()` to prevent third parties from minting on behalf of
 /// other addresses and exhausting template quotas.
 public fun claim_discount_ticket_inline(
     discount_template: &mut DiscountTemplate,
     now_secs: u64,
     ctx: &mut TxContext,
 ): DiscountTicket {
-    let claimer = tx_context::sender(ctx);
+    let claimer = ctx.sender();
     assert_template_claimable(discount_template, claimer, now_secs);
 
     let discount_ticket: DiscountTicket = new_discount_ticket(
@@ -1013,7 +1013,7 @@ fun claim_discount_ticket_with_event(
         now_secs,
         ctx,
     );
-    let claimer = tx_context::sender(ctx);
+    let claimer = ctx.sender();
 
     event::emit(DiscountClaimed {
         shop_address: discount_template.shop_address,
@@ -1122,7 +1122,7 @@ entry fun buy_item_with_discount<TItem: store, TCoin>(
     ctx: &mut TxContext,
 ) {
     assert_shop_active(shop);
-    let buyer = tx_context::sender(ctx);
+    let buyer = ctx.sender();
     assert_template_matches_shop(shop, discount_template);
     assert_listing_matches_shop(shop, item_listing);
     let now = now_secs(clock);
@@ -1604,12 +1604,12 @@ fun process_purchase<TItem: store, TCoin>(
 
     assert_listing_currency_match(shop, item_listing, accepted_currency);
     process_purchase_core<TItem, TCoin>(
-        shop.owner,
-        shop_address(shop),
         item_listing,
         accepted_currency,
         price_info_object,
         payment,
+        shop.owner,
+        shop_address(shop),
         mint_to,
         refund_extra_to,
         discounted_price_usd_cents,
@@ -1622,12 +1622,12 @@ fun process_purchase<TItem: store, TCoin>(
 }
 
 fun process_purchase_core<TItem: store, TCoin>(
-    shop_owner: address,
-    shop_address: address,
     item_listing: &mut ItemListing,
     accepted_currency: &AcceptedCurrency,
     price_info_object: &price_info::PriceInfoObject,
     mut payment: coin::Coin<TCoin>,
+    shop_owner: address,
+    shop_address: address,
     mint_to: address,
     refund_extra_to: address,
     discounted_price_usd_cents: u64,
@@ -1655,7 +1655,7 @@ fun process_purchase_core<TItem: store, TCoin>(
 
     pay_shop(&mut payment, quote_amount, shop_owner, ctx);
 
-    let buyer: address = tx_context::sender(ctx);
+    let buyer: address = ctx.sender();
     let change_amount = payment.value();
     refund_or_destroy(payment, refund_extra_to);
 
@@ -1973,8 +1973,8 @@ fun validate_listing_inputs(
     assert!(base_price_usd_cents > 0, EInvalidPrice);
 
     assert_belongs_to_shop_if_some(
-        ReferenceKind::Template,
         shop,
+        ReferenceKind::Template,
         spotlight_discount_template_id,
     );
 }
@@ -1991,8 +1991,8 @@ fun validate_discount_template_inputs(
 ) {
     assert_schedule(starts_at, expires_at);
     assert_belongs_to_shop_if_some(
-        ReferenceKind::Listing,
         shop,
+        ReferenceKind::Listing,
         applies_to_listing,
     );
 }
@@ -2180,8 +2180,8 @@ public enum ReferenceKind has copy, drop {
 }
 
 fun assert_belongs_to_shop_if_some(
-    kind: ReferenceKind,
     shop: &Shop,
+    kind: ReferenceKind,
     maybe_id: &option::Option<object::ID>,
 ) {
     if (option::is_some(maybe_id)) {
@@ -2667,12 +2667,12 @@ public fun test_claim_and_buy_with_ids<TItem: store, TCoin>(
     discount_template.redemptions = discount_template.redemptions + 1;
 
     process_purchase_core<TItem, TCoin>(
-        shop_owner,
-        shop_address,
         item_listing,
         accepted_currency,
         price_info_object,
         payment,
+        shop_owner,
+        shop_address,
         mint_to,
         refund_extra_to,
         discounted_price_usd_cents,

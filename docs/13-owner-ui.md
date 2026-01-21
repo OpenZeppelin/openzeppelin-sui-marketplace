@@ -78,7 +78,7 @@ entry fun update_shop_owner(
     previous_owner,
     new_owner,
     shop_owner_cap_id: obj::uid_to_address(&owner_cap.id),
-    rotated_by: tx_context::sender(ctx),
+    rotated_by: ctx.sender(),
   });
 }
 ```

@@ -30,7 +30,7 @@ public struct ShopOwnerUpdated has copy, drop {
 }
 
 entry fun create_shop(name: vector<u8>, ctx: &mut TxContext) {
-  let owner = tx_context::sender(ctx);
+  let owner = ctx.sender();
   let shop = Shop {
     id: object::new(ctx),
     name: string::utf8(name),
