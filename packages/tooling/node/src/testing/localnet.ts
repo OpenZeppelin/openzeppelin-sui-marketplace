@@ -249,12 +249,11 @@ const shouldUseRandomPorts = () => {
 const resolveSkipLocalnetEnvKey = () =>
   LOCALNET_SKIP_ENV_KEYS.find((key) => parseBooleanEnv(process.env[key]))
 
-const shouldDebugMove = () =>
-  parseBooleanEnv(process.env.SUI_IT_DEBUG_MOVE)
+const shouldDebugMove = () => parseBooleanEnv(process.env.SUI_IT_DEBUG_MOVE)
 
 const logMoveDebug = (message: string) => {
   if (!shouldDebugMove()) return
-  // eslint-disable-next-line no-console
+
   console.warn(`[move-debug] ${message}`)
 }
 
@@ -269,10 +268,7 @@ const extractMoveEnvironmentBlock = (contents: string) => {
   const blockLines: string[] = []
   for (let index = headerIndex; index < lines.length; index += 1) {
     const line = lines[index] ?? ""
-    if (
-      index !== headerIndex &&
-      /^\s*\[[^\]]+\]\s*(#.*)?$/.test(line)
-    ) {
+    if (index !== headerIndex && /^\s*\[[^\]]+\]\s*(#.*)?$/.test(line)) {
       break
     }
     blockLines.push(line)
@@ -292,14 +288,17 @@ const logMovePackageDebug = async (label: string, packagePath: string) => {
   try {
     const moveTomlContents = await readFile(moveTomlPath, "utf8")
     const environmentBlock = extractMoveEnvironmentBlock(moveTomlContents)
-    const hasLocalnetEnvironment =
-      /^\s*localnet\s*=\s*"[^"]*"/m.test(moveTomlContents)
+    const hasLocalnetEnvironment = /^\s*localnet\s*=\s*"[^"]*"/m.test(
+      moveTomlContents
+    )
     logMoveDebug(`${label} Move.toml environments:\n${environmentBlock}`)
     logMoveDebug(
       `${label} Move.toml localnet entry=${hasLocalnetEnvironment ? "present" : "missing"}`
     )
   } catch (error) {
-    logMoveDebug(`${label} Move.toml read failed (${formatErrorMessage(error)})`)
+    logMoveDebug(
+      `${label} Move.toml read failed (${formatErrorMessage(error)})`
+    )
   }
 
   try {
@@ -309,7 +308,9 @@ const logMovePackageDebug = async (label: string, packagePath: string) => {
       `${label} Move.lock localnet pinned sections=${hasLocalnetPinned ? "present" : "missing"}`
     )
   } catch (error) {
-    logMoveDebug(`${label} Move.lock read failed (${formatErrorMessage(error)})`)
+    logMoveDebug(
+      `${label} Move.lock read failed (${formatErrorMessage(error)})`
+    )
   }
 }
 
