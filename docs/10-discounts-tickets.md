@@ -9,9 +9,10 @@ Discounts are first-class objects. Claiming a discount mints an owned `DiscountT
 2. Attach a template to a listing for UI spotlight.
 3. Claim a ticket and understand one-claim semantics.
 
-## 2. Prereqs
+## 2. Prerequisites
 1. Localnet running.
-2. A Shop ID and a Listing ID.
+2. `sui_oracle_market` published.
+3. A Shop ID and a Listing ID.
 
 ## 3. Run it
 ```bash

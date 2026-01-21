@@ -2,7 +2,7 @@
 
 This UI is a Next.js 16 app that talks directly to Sui via Mysten dapp-kit. It mirrors the on-chain object model: shared objects for storefront data, owned objects for wallet receipts and tickets.
 
-## 1. Prereqs
+## 1. Prerequisites
 1. Localnet running (or a target network RPC).
 2. A published `sui_oracle_market` package and a Shop ID.
 3. A wallet with the right network selected.

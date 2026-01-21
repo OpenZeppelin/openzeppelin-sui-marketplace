@@ -9,10 +9,11 @@ This chapter shows the PTB buy flow and the UI path that mirrors it.
 2. Understand coin objects as payment inputs.
 3. Run the UI and see shared vs owned data in the dashboard.
 
-## 2. Prereqs
+## 2. Prerequisites
 1. Localnet running.
-2. A Shop with listings and at least one accepted currency.
-3. Optionally, a discount template to test the discount path.
+2. `sui_oracle_market` published.
+3. A Shop with listings and at least one accepted currency.
+4. Optionally, a discount template to test the discount path.
 
 ## 3. Run it (CLI buy)
 ```bash

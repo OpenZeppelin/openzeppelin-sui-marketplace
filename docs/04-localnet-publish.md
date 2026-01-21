@@ -9,7 +9,7 @@ This chapter gets a local chain running, seeds mocks, and publishes the Move pac
 2. Seed mock Pyth + coin packages for local development.
 3. Publish `sui_oracle_market` and understand artifacts.
 
-## 2. Prereqs
+## 2. Prerequisites
 1. Sui CLI installed and on PATH.
 2. A funded local address in the Sui CLI keystore.
 

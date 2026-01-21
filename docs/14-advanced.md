@@ -11,9 +11,10 @@ concurrency, upgrades/package IDs, and the fixed-point math patterns used by the
 3. Understand package immutability + upgrade mechanics (new package IDs).
 4. Recognize the fixed-point patterns used for prices/discounts.
 
-## 2. Prereqs
-1. Sui CLI installed.
-2. Optional: localnet running if you want to run examples.
+## 2. Prerequisites
+1. Localnet running.
+2. `sui_oracle_market` published.
+3. A Shop created
 
 ## 3. Run it (quick inspection)
 These are “read-only” workflows that help you build intuition without mutating state.
@@ -37,7 +38,6 @@ pnpm script buyer:buy --help
 ## 5. Concept deep dive: Move execution surface
 - **Entry functions vs view functions**: entry functions are PTB-callable and can be read-only or
   mutating. A *non-public* `entry fun` cannot be called by other Move modules; `public entry` can.
-  `#[ext(view)]` functions are read-only and are typically called via dev-inspect.
   Code: `packages/dapp/move/oracle-market/sources/shop.move` (`create_shop`, `quote_amount_for_price_info_object`)
 - **PTB limits**: a PTB can include up to 1,024 commands, which shapes how much work you can bundle
   into a single transaction. This matters most when you try to batch “admin seeding” or enumerate
@@ -76,7 +76,6 @@ pnpm script buyer:buy --help
 **Code spotlight: view helpers used by dev-inspect**
 `packages/dapp/move/oracle-market/sources/shop.move`
 ```move
-#[ext(view)]
 public fun listing_exists(shop: &Shop, listing_id: obj::ID): bool {
   dynamic_field::exists_with_type<ItemListingKey, ItemListingMarker>(
     &shop.id,
@@ -84,7 +83,6 @@ public fun listing_exists(shop: &Shop, listing_id: obj::ID): bool {
   )
 }
 
-#[ext(view)]
 public fun accepted_currency_id_for_type(
   shop: &Shop,
   coin_type: TypeName,

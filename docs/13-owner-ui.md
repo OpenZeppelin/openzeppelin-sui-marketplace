@@ -10,10 +10,11 @@ The UI includes owner-only flows to create and manage shops, listings, currencie
 3. See which UI components own each management flow.
 4. Find the buyer flow doc for checkout and receipts.
 
-## 2. Prereqs
+## 2. Prerequisites
 1. Localnet running.
-2. A Shop ID and an owner wallet that holds the ShopOwnerCap.
-3. `packages/ui/.env.local` configured.
+2. `sui_oracle_market` published.
+3. A Shop ID and an owner wallet that holds the ShopOwnerCap.
+4. `packages/ui/.env.local` configured.
 
 ## 3. Run it
 ```bash

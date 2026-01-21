@@ -9,7 +9,7 @@ This chapter clarifies Sui ownership types, how versioning works, and how this r
 2. Learn the difference between fastpath (single-owner) and consensus objects.
 3. Map ownership and versioning to the Shop, listings, currencies, and tickets.
 
-## 2. Prereqs
+## 2. Prerequisites
 None. This is a conceptual chapter that builds on earlier examples.
 
 ## 3. EVM -> Sui translation

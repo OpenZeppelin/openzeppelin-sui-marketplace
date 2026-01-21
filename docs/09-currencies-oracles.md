@@ -9,10 +9,9 @@ This chapter wires accepted currencies to Pyth feeds and guardrails.
 2. Bind each currency to a Pyth PriceInfoObject.
 3. Understand freshness and confidence guardrails.
 
-## 2. Prereqs
+## 2. Prerequisites
 1. Localnet running.
-2. A Shop ID and owner cap.
-3. Mock artifacts from `mock:setup` (localnet) or real Pyth feed IDs on testnet.
+2. `sui_oracle_market` published.
 
 ## 3. Run it
 ```bash

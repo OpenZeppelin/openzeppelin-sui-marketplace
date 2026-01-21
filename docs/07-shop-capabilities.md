@@ -9,7 +9,7 @@ This chapter creates a Shop and ties authority to a capability object.
 2. Understand `ShopOwnerCap` as the authorization token.
 3. Rotate the shop owner address without touching listings.
 
-## 2. Prereqs
+## 2. Prerequisites
 1. Localnet running.
 2. `sui_oracle_market` published.
 

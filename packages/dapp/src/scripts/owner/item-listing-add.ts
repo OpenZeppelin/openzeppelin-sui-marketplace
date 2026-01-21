@@ -1,6 +1,6 @@
 /**
  * Adds a new ItemListing shared object and registers its marker under the Shop.
- * Uses the listing's TypeInfo to enforce typed receipts.
+ * Uses the listing's TypeName to enforce typed receipts.
  * Requires the ShopOwnerCap capability.
  */
 import { normalizeSuiObjectId } from "@mysten/sui/utils"

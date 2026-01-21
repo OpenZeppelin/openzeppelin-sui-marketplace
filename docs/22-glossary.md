@@ -16,17 +16,16 @@
 11. **Ability**: A keyword that describes how a type can be stored and moved (`key`, `store`, `copy`, `drop`).
 12. **TxContext**: Transaction context passed to entry functions for object creation and coin splits.
 13. **Entry function**: A Move function callable by a transaction (PTB). It can be read-only or mutating.
-14. **View function**: A read-only Move function (often via `#[ext(view)]`) used with dev-inspect.
-15. **Publisher**: A publish-time object created by `init` that identifies the package publisher.
-16. **Address-owned object**: An object owned by a specific address; only that address can use it in a transaction.
-17. **Object-owned object**: An object owned by another object (common for dynamic-field children).
-18. **Immutable object**: An object with no mutable owner; it can be read by anyone but cannot be mutated.
-19. **UpgradeCap**: An owned object that authorizes package upgrades.
-20. **Object version**: The version number recorded on an object after each mutation; used to verify freshness.
-21. **Storage rebate**: A refund of storage fees when an object is deleted (e.g., `coin::destroy_zero`).
-22. **Party object**: An object owned by a defined party and versioned by consensus.
-23. **Fastpath**: The low-latency execution path used by address-owned or immutable objects when no consensus objects are involved.
-24. **Consensus object**: A shared or party-owned object that must be sequenced by consensus.
+14. **Publisher**: A publish-time object created by `init` that identifies the package publisher.
+15. **Address-owned object**: An object owned by a specific address; only that address can use it in a transaction.
+16. **Object-owned object**: An object owned by another object (common for dynamic-field children).
+17. **Immutable object**: An object with no mutable owner; it can be read by anyone but cannot be mutated.
+18. **UpgradeCap**: An owned object that authorizes package upgrades.
+19. **Object version**: The version number recorded on an object after each mutation; used to verify freshness.
+20. **Storage rebate**: A refund of storage fees when an object is deleted (e.g., `coin::destroy_zero`).
+21. **Party object**: An object owned by a defined party and versioned by consensus.
+22. **Fastpath**: The low-latency execution path used by address-owned or immutable objects when no consensus objects are involved.
+23. **Consensus object**: A shared or party-owned object that must be sequenced by consensus.
 
 **Code spotlight: objects are structs with `key`**
 `packages/dapp/move/oracle-market/sources/shop.move`

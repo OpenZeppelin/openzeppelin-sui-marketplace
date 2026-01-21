@@ -9,7 +9,7 @@ This chapter explains how to read Sui data for apps: object queries, dynamic fie
 2. Learn how objects, dynamic fields, and events map to UI reads.
 3. Trace how this repo loads storefront data vs wallet-owned data.
 
-## 2. Prereqs
+## 2. Prerequisites
 1. Familiarity with `docs/07-shop-capabilities.md` and `docs/08-listings-receipts.md`.
 
 ## 3. EVM -> Sui translation

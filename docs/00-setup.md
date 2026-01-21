@@ -10,7 +10,7 @@ This chapter gets your environment ready and walks through a complete localnet r
 3. Install dependencies and publish the Move package.
 4. Seed mock coins + Pyth data and run the UI.
 
-## 2. Prereqs
+## 2. Prerequisites
 1. **Node.js 22+** and **pnpm**.
 2. **Rust toolchain** (`rustup`) for nightly installs.
 3. **Sui CLI** on your `PATH`.

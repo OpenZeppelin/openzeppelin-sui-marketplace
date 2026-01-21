@@ -9,9 +9,9 @@ Listings are separate shared objects, and purchases mint typed receipts (`ShopIt
 2. Add listings with type metadata and inventory.
 3. Understand typed receipts as Move resources.
 
-## 2. Prereqs
+## 2. Prerequisites
 1. Localnet running.
-2. A Shop ID and owner cap.
+2. `sui_oracle_market` published.
 
 ## 3. Run it
 ```bash

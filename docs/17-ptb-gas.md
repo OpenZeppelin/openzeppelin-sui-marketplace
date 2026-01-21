@@ -9,7 +9,7 @@ This chapter explains programmable transaction blocks (PTBs), gas coin handling,
 2. Learn why gas coins are separate objects and how SUI payments affect gas selection.
 3. Connect storage fees and rebates to how the shop handles change and coin cleanup.
 
-## 2. Prereqs
+## 2. Prerequisites
 1. A basic understanding of the buyer flow in `docs/12-buyer-ui.md`.
 2. Localnet optional if you want to run examples.
 

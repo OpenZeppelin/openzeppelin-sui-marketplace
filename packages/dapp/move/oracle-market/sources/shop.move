@@ -50,9 +50,7 @@ use sui::package;
 //   sentinel values. Docs: docs/08-listings-receipts.md, docs/10-discounts-tickets.md
 // - Entry functions vs view functions: on Sui, *non-public* `entry fun` are callable from PTBs but
 //   not from other Move modules. `public entry` functions can be called by other modules as well
-//   as from PTBs. Entry functions can be read-only or mutating. `#[ext(view)]` is a Sui-specific
-//   view annotation used for read-only, dev-inspect style queries; it signals intent and tooling
-//   treats these as non-mutating. Docs: docs/14-advanced.md
+//   as from PTBs. Entry functions can be read-only or mutating.
 // - Events: event::emit writes typed events for indexers and UIs. Docs: docs/08-advanced.md,
 //   docs/18-data-access.md
 // - TxContext and sender: TxContext is required for object creation and coin splits; tx_context::sender
@@ -2254,7 +2252,6 @@ fun assert_template_claimable(template: &DiscountTemplate, claimer: address, now
 /// View helpers   ///
 ///================///
 
-#[ext(view)]
 public fun listing_exists(shop: &Shop, listing_id: object::ID): bool {
     dynamic_field::exists_with_type<ItemListingKey, ItemListingMarker>(
         &shop.id,
@@ -2262,7 +2259,6 @@ public fun listing_exists(shop: &Shop, listing_id: object::ID): bool {
     )
 }
 
-#[ext(view)]
 public fun discount_template_exists(shop: &Shop, template_id: object::ID): bool {
     dynamic_field::exists_with_type<DiscountTemplateKey, DiscountTemplateMarker>(
         &shop.id,
@@ -2270,7 +2266,6 @@ public fun discount_template_exists(shop: &Shop, template_id: object::ID): bool 
     )
 }
 
-#[ext(view)]
 public fun accepted_currency_exists(shop: &Shop, accepted_currency_id: object::ID): bool {
     dynamic_field::exists_with_type<AcceptedCurrencyKey, AcceptedCurrencyMarker>(
         &shop.id,
@@ -2278,7 +2273,6 @@ public fun accepted_currency_exists(shop: &Shop, accepted_currency_id: object::I
     )
 }
 
-#[ext(view)]
 public fun accepted_currency_id_for_type(
     shop: &Shop,
     coin_type: TypeName,
@@ -2300,7 +2294,6 @@ public fun accepted_currency_id_for_type(
     }
 }
 
-#[ext(view)]
 public fun listing_id_for_address(
     shop: &Shop,
     listing_address: address,
@@ -2313,7 +2306,6 @@ public fun listing_id_for_address(
     }
 }
 
-#[ext(view)]
 public fun discount_template_id_for_address(
     shop: &Shop,
     template_address: address,
@@ -2326,7 +2318,6 @@ public fun discount_template_id_for_address(
     }
 }
 
-#[ext(view)]
 public fun listing_values(
     shop: &Shop,
     listing: &ItemListing,
@@ -2341,7 +2332,6 @@ public fun listing_values(
     )
 }
 
-#[ext(view)]
 public fun accepted_currency_values(
     shop: &Shop,
     accepted_currency: &AcceptedCurrency,
@@ -2360,7 +2350,6 @@ public fun accepted_currency_values(
     )
 }
 
-#[ext(view)]
 public fun discount_template_values(
     shop: &Shop,
     template: &DiscountTemplate,
@@ -2389,7 +2378,6 @@ public fun discount_template_values(
     )
 }
 
-#[ext(view)]
 public fun quote_amount_for_price_info_object(
     shop: &Shop,
     accepted_currency: &AcceptedCurrency,

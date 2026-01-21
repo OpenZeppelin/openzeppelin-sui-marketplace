@@ -63,7 +63,6 @@ Use this page as the navigation hub for the docs. Each chapter ends with Prev/Ne
 | PTB composition | Oracle update + buy in one transaction | `packages/domain/core/src/flows/buy.ts` (buildBuyTransaction) | `docs/12-buyer-ui.md` |
 | PTB limits + gas | Batching and gas coin handling | `packages/domain/core/src/flows/buy.ts` (maybeSetDedicatedGasForSuiPayments) | `docs/17-ptb-gas.md` |
 | Events | Typed logs for UI and indexers | `packages/dapp/move/oracle-market/sources/shop.move` (PurchaseCompleted) | `docs/14-advanced.md` |
-| View functions | Read-only inspection via dev-inspect | `packages/dapp/move/oracle-market/sources/shop.move` (#[ext(view)]) | `docs/14-advanced.md` |
 | TxContext | Object creation and coin splits | `packages/dapp/move/oracle-market/sources/shop.move` (obj::new, coin::split) | `docs/14-advanced.md` |
 | Publisher / init | Publish-time metadata | `packages/dapp/move/oracle-market/sources/shop.move` (init, claim_publisher) | `docs/04-localnet-publish.md` |
 | UpgradeCap | Package upgrades and access control | `packages/dapp/deployments/deployment.localnet.json` | `docs/04-localnet-publish.md`, `docs/14-advanced.md` |
