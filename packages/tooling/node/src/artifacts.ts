@@ -267,10 +267,6 @@ export const isPublishArtifactNamed =
     const normalizedPackageName = artifact.packageName?.trim().toLowerCase()
     if (normalizedPackageName === artifactName) return true
 
-    const packagePath = (artifact.packagePath ?? "").replace(/\\/g, "/")
-    if (packagePath.endsWith("/oracle-market")) return true
-    if (packagePath.includes("/move/oracle-market")) return true
-
     return false
   }
 

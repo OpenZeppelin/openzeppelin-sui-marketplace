@@ -1,10 +1,8 @@
 import { describe, it } from "vitest"
 
-import {
-  buildCreateShopTransaction,
-  buildUpdateShopOwnerTransaction
-} from "@sui-oracle-market/domain-core/ptb/shop"
+import type { WrappedSuiSharedObject } from "@sui-oracle-market/tooling-core/shared-object"
 import { getSuiSharedObject } from "@sui-oracle-market/tooling-core/shared-object"
+import { newTransaction } from "@sui-oracle-market/tooling-core/transactions"
 import { pickRootNonDependencyArtifact } from "@sui-oracle-market/tooling-node/artifacts"
 
 import {
@@ -20,6 +18,39 @@ const testEnv = createToolingIntegrationTestEnv()
 const eventTypeEndsWith = (eventType: string, suffix: string) =>
   eventType.toLowerCase().endsWith(suffix.toLowerCase())
 
+const encodeShopName = (name: string) => {
+  if (!name.trim()) throw new Error("Shop name cannot be empty.")
+  return new TextEncoder().encode(name)
+}
+
+const buildCreateShopTransaction = (packageId: string, shopName: string) => {
+  const transaction = newTransaction()
+  transaction.moveCall({
+    target: `${packageId}::shop::create_shop`,
+    arguments: [transaction.pure.vector("u8", encodeShopName(shopName))]
+  })
+  return transaction
+}
+
+const buildUpdateShopOwnerTransaction = (
+  packageId: string,
+  shop: WrappedSuiSharedObject,
+  ownerCapId: string,
+  newOwner: string
+) => {
+  const transaction = newTransaction()
+  const shopArgument = transaction.sharedObjectRef(shop.sharedRef)
+  transaction.moveCall({
+    target: `${packageId}::shop::update_shop_owner`,
+    arguments: [
+      shopArgument,
+      transaction.object(ownerCapId),
+      transaction.pure.address(newOwner)
+    ]
+  })
+  return transaction
+}
+
 describe("transactions and events", () => {
   it("creates a shop and updates the owner with event assertions", async () => {
     await testEnv.withTestContext(
@@ -29,16 +60,16 @@ describe("transactions and events", () => {
         await context.fundAccount(publisher, { minimumCoinObjects: 2 })
 
         const artifacts = await context.publishPackage(
-          "oracle-market",
+          "simple-contract",
           publisher,
           { withUnpublishedDependencies: true }
         )
         const rootArtifact = pickRootNonDependencyArtifact(artifacts)
 
-        const createShopTransaction = buildCreateShopTransaction({
-          packageId: rootArtifact.packageId,
-          shopName: "Integration Shop"
-        })
+        const createShopTransaction = buildCreateShopTransaction(
+          rootArtifact.packageId,
+          "Integration Shop"
+        )
         const createResult = await context.signAndExecuteTransaction(
           createShopTransaction,
           publisher
@@ -77,12 +108,12 @@ describe("transactions and events", () => {
           { suiClient: context.suiClient }
         )
 
-        const updateOwnerTransaction = buildUpdateShopOwnerTransaction({
-          packageId: rootArtifact.packageId,
-          shop: shopShared,
+        const updateOwnerTransaction = buildUpdateShopOwnerTransaction(
+          rootArtifact.packageId,
+          shopShared,
           ownerCapId,
-          newOwner: newOwner.address
-        })
+          newOwner.address
+        )
         const updateResult = await context.signAndExecuteTransaction(
           updateOwnerTransaction,
           publisher

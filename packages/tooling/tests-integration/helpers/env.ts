@@ -1,5 +1,7 @@
 import { createSuiLocalnetTestEnv } from "@sui-oracle-market/tooling-node/testing/env"
 
+import { fixturePath } from "./fs.ts"
+
 const resolveKeepTemp = () => process.env.SUI_IT_KEEP_TEMP === "1"
 
 const resolveWithFaucet = () => process.env.SUI_IT_WITH_FAUCET !== "0"
@@ -8,7 +10,8 @@ export const createToolingIntegrationTestEnv = () =>
   createSuiLocalnetTestEnv({
     mode: "test",
     keepTemp: resolveKeepTemp(),
-    withFaucet: resolveWithFaucet()
+    withFaucet: resolveWithFaucet(),
+    moveSourceRootPath: fixturePath("localnet-move")
   })
 
 type EnvOverrideEntry = {

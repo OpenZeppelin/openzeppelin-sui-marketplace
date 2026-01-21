@@ -9,11 +9,11 @@ import { createToolingIntegrationTestEnv } from "../helpers/env.ts"
 const testEnv = createToolingIntegrationTestEnv()
 
 describe("move build and publish", () => {
-  it("builds the oracle-market Move package", async () => {
+  it("builds the simple-contract Move package", async () => {
     await testEnv.withTestContext(
-      "move-build-oracle-market",
+      "move-build-simple-contract",
       async (context) => {
-        const buildOutput = await context.buildMovePackage("oracle-market")
+        const buildOutput = await context.buildMovePackage("simple-contract")
 
         expect(buildOutput.modules.length).toBeGreaterThan(0)
         expect(Array.isArray(buildOutput.dependencies)).toBe(true)
@@ -21,15 +21,15 @@ describe("move build and publish", () => {
     )
   })
 
-  it("publishes the oracle-market Move package and writes artifacts", async () => {
+  it("publishes the simple-contract Move package and writes artifacts", async () => {
     await testEnv.withTestContext(
-      "move-publish-oracle-market",
+      "move-publish-simple-contract",
       async (context) => {
         const publisher = context.createAccount("publisher")
         await context.fundAccount(publisher, { minimumCoinObjects: 2 })
 
         const artifacts = await context.publishPackage(
-          "oracle-market",
+          "simple-contract",
           publisher,
           { withUnpublishedDependencies: true }
         )

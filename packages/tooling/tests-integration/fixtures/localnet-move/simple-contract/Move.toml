@@ -1,0 +1,6 @@
+[package]
+name = "simple_contract"
+edition = "2024"
+
+[environments]
+localnet = "58157b31"

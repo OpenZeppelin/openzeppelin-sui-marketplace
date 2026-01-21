@@ -1,9 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import {
-  buildCreateShopTransaction,
-  buildUpdateShopOwnerTransaction
-} from "@sui-oracle-market/domain-core/ptb/shop"
+import type { WrappedSuiSharedObject } from "@sui-oracle-market/tooling-core/shared-object"
 import { getSuiSharedObject } from "@sui-oracle-market/tooling-core/shared-object"
 import {
   newTransaction,
@@ -28,19 +25,52 @@ const testEnv = createToolingIntegrationTestEnv()
 const unwrapSplitCoin = (value: Parameters<typeof resolveSplitCoinResult>[0]) =>
   resolveSplitCoinResult(value, 0)
 
-const publishOracleMarket = async (
+const publishSimpleContract = async (
   context: TestContext,
   publisherLabel: string
 ) => {
   const publisher = context.createAccount(publisherLabel)
   await context.fundAccount(publisher, { minimumCoinObjects: 2 })
 
-  const artifacts = await context.publishPackage("oracle-market", publisher, {
+  const artifacts = await context.publishPackage("simple-contract", publisher, {
     withUnpublishedDependencies: true
   })
   const rootArtifact = pickRootNonDependencyArtifact(artifacts)
 
   return { publisher, packageId: rootArtifact.packageId }
+}
+
+const encodeShopName = (name: string) => {
+  if (!name.trim()) throw new Error("Shop name cannot be empty.")
+  return new TextEncoder().encode(name)
+}
+
+const buildCreateShopTransaction = (packageId: string, shopName: string) => {
+  const transaction = newTransaction()
+  transaction.moveCall({
+    target: `${packageId}::shop::create_shop`,
+    arguments: [transaction.pure.vector("u8", encodeShopName(shopName))]
+  })
+  return transaction
+}
+
+const buildUpdateShopOwnerTransaction = (
+  packageId: string,
+  shop: WrappedSuiSharedObject,
+  ownerCapId: string,
+  newOwner: string
+) => {
+  const transaction = newTransaction()
+  const shopArgument = transaction.sharedObjectRef(shop.sharedRef)
+  transaction.moveCall({
+    target: `${packageId}::shop::update_shop_owner`,
+    arguments: [
+      shopArgument,
+      transaction.object(ownerCapId),
+      transaction.pure.address(newOwner)
+    ]
+  })
+  return transaction
 }
 
 const createShop = async (
@@ -49,10 +79,7 @@ const createShop = async (
   owner: TestAccount,
   shopName: string
 ) => {
-  const createShopTransaction = buildCreateShopTransaction({
-    packageId,
-    shopName
-  })
+  const createShopTransaction = buildCreateShopTransaction(packageId, shopName)
   const createResult = await context.signAndExecuteTransaction(
     createShopTransaction,
     owner
@@ -77,7 +104,7 @@ const createShop = async (
 describe("security and concurrency", () => {
   it("rejects owner-cap misuse between shops", async () => {
     await testEnv.withTestContext("security-owner-cap", async (context) => {
-      const { publisher, packageId } = await publishOracleMarket(
+      const { publisher, packageId } = await publishSimpleContract(
         context,
         "publisher-a"
       )
@@ -87,12 +114,12 @@ describe("security and concurrency", () => {
       const shopA = await createShop(context, packageId, publisher, "Shop A")
       const shopB = await createShop(context, packageId, secondOwner, "Shop B")
 
-      const updateOwnerTransaction = buildUpdateShopOwnerTransaction({
+      const updateOwnerTransaction = buildUpdateShopOwnerTransaction(
         packageId,
-        shop: shopA.shopShared,
-        ownerCapId: shopB.ownerCapId,
-        newOwner: secondOwner.address
-      })
+        shopA.shopShared,
+        shopB.ownerCapId,
+        secondOwner.address
+      )
 
       await expect(
         context.signAndExecuteTransaction(updateOwnerTransaction, secondOwner)

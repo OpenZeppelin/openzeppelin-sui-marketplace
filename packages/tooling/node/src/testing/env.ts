@@ -1,4 +1,8 @@
-import type { LocalnetStartOptions, TestContext } from "./localnet.ts"
+import type {
+  LocalnetStartOptions,
+  TestContext,
+  TestContextOptions
+} from "./localnet.ts"
 import {
   createLocalnetHarness,
   createTestContext as createLocalnetTestContext,
@@ -13,6 +17,7 @@ export type SuiLocalnetTestEnvOptions = {
   withFaucet?: boolean
   keepTemp?: boolean
   rpcWaitTimeoutMs?: number
+  moveSourceRootPath?: string
 }
 
 export type SuiLocalnetTestEnv = {
@@ -31,6 +36,13 @@ const resolveKeepTemp = (explicit?: boolean) =>
 
 const resolveWithFaucet = (explicit?: boolean) =>
   explicit ?? process.env.SUI_IT_WITH_FAUCET !== "0"
+
+const resolveTestContextOptions = (
+  options?: SuiLocalnetTestEnvOptions
+): TestContextOptions | undefined => {
+  if (!options?.moveSourceRootPath) return undefined
+  return { moveSourceRootPath: options.moveSourceRootPath }
+}
 
 const resolveRpcWaitTimeoutMs = (explicit?: number) => {
   if (
@@ -93,7 +105,8 @@ const createSuiteRunner = (
     ensureSuiteStarted()
     return createLocalnetTestContext(
       harness.get(),
-      buildScopedTestId(suiteId, testId)
+      buildScopedTestId(suiteId, testId),
+      resolveTestContextOptions(options)
     )
   }
 
@@ -105,7 +118,8 @@ const createSuiteRunner = (
     return withLocalnetTestContext(
       harness.get(),
       buildScopedTestId(suiteId, testId),
-      action
+      action,
+      resolveTestContextOptions(options)
     )
   }
 
@@ -132,7 +146,11 @@ const createIsolatedRunner = (
   const createTestContext = async (testId: string) => {
     const harness = createLocalnetHarness()
     await harness.start(resolveStartOptions(testId, options))
-    const context = await createLocalnetTestContext(harness.get(), testId)
+    const context = await createLocalnetTestContext(
+      harness.get(),
+      testId,
+      resolveTestContextOptions(options)
+    )
     const cleanup = async () => {
       await context.cleanup()
       await harness.stop()
@@ -150,7 +168,11 @@ const createIsolatedRunner = (
   ) => {
     const harness = createLocalnetHarness()
     await harness.start(resolveStartOptions(testId, options))
-    const context = await createLocalnetTestContext(harness.get(), testId)
+    const context = await createLocalnetTestContext(
+      harness.get(),
+      testId,
+      resolveTestContextOptions(options)
+    )
 
     try {
       return await action(context)

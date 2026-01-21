@@ -19,7 +19,7 @@ describe("script runner", () => {
       await context.fundAccount(publisher, { minimumCoinObjects: 2 })
 
       const artifacts = await context.publishPackage(
-        "oracle-market",
+        "simple-contract",
         publisher,
         { withUnpublishedDependencies: true }
       )

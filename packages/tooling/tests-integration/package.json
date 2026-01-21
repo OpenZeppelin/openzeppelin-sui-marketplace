@@ -8,7 +8,6 @@
   },
   "devDependencies": {
     "@mysten/sui": "^1.45.2",
-    "@sui-oracle-market/domain-core": "workspace:*",
     "@sui-oracle-market/tooling-core": "workspace:*",
     "@sui-oracle-market/tooling-node": "workspace:*",
     "@types/node": "^22.19.2",

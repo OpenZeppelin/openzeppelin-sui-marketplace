@@ -16,12 +16,6 @@ export default defineConfig({
       ),
       "@sui-oracle-market/tooling-node": resolveWorkspacePackage(
         "packages/tooling/node/src"
-      ),
-      "@sui-oracle-market/domain-core": resolveWorkspacePackage(
-        "packages/domain/core/src"
-      ),
-      "@sui-oracle-market/domain-node": resolveWorkspacePackage(
-        "packages/domain/node/src"
       )
     }
   },

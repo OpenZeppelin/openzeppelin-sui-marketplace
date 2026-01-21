@@ -7,11 +7,6 @@ import {
   MAINNET_CONTRACT_PACKAGE_ID,
   TESTNET_CONTRACT_PACKAGE_ID
 } from "~~/config/network"
-export {
-  getResponseContentField,
-  getResponseDisplayField,
-  getResponseObjectId
-} from "@sui-oracle-market/tooling-core/object-info"
 export { fromBytesToString } from "@sui-oracle-market/tooling-core/utils/formatters"
 
 const normalizeExplorerBaseUrl = (baseExplorerUrl: string) =>

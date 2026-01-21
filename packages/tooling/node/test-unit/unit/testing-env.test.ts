@@ -32,7 +32,11 @@ describe("testing env helpers", () => {
     const context = await env.createTestContext("case")
 
     expect(harness.start).toHaveBeenCalled()
-    expect(createTestContext).toHaveBeenCalledWith(harness.get(), "suite--case")
+    expect(createTestContext).toHaveBeenCalledWith(
+      harness.get(),
+      "suite--case",
+      undefined
+    )
     expect(context).toEqual({ testId: "suite--case" })
 
     await env.stopSuite()
@@ -54,7 +58,8 @@ describe("testing env helpers", () => {
     expect(withTestContext).toHaveBeenCalledWith(
       harness.get(),
       "suite--case",
-      expect.any(Function)
+      expect.any(Function),
+      undefined
     )
   })
 

@@ -3,19 +3,17 @@ import {
   resolveLatestShopIdentifiers
 } from "@sui-oracle-market/domain-node/shop"
 
-export type OwnerShopContextInput = {
-  networkName: string
-  shopPackageId?: string
-  shopId?: string
-  ownerCapId?: string
-}
-
 export const resolveOwnerShopIdentifiers = async ({
   networkName,
   shopPackageId,
   shopId,
   ownerCapId
-}: OwnerShopContextInput) =>
+}: {
+  networkName: string
+  shopPackageId?: string
+  shopId?: string
+  ownerCapId?: string
+}) =>
   resolveLatestShopIdentifiers(
     {
       packageId: shopPackageId,
