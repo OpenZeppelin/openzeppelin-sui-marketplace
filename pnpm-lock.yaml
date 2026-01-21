@@ -191,9 +191,6 @@ importers:
       '@mysten/sui':
         specifier: ^1.45.2
         version: 1.45.2(typescript@5.9.3)
-      '@sui-oracle-market/domain-core':
-        specifier: workspace:*
-        version: link:../../domain/core
       '@sui-oracle-market/tooling-core':
         specifier: workspace:*
         version: link:../core
