@@ -153,17 +153,7 @@ const POW10_U128: vector<u128> = vector[
 public struct SHOP has drop {}
 
 fun init(publisher_witness: SHOP, ctx: &mut TxContext) {
-    let publisher: package::Publisher = claim_publisher(publisher_witness, ctx);
-    transfer_publisher_to_sender(publisher, ctx);
-}
-
-fun claim_publisher(publisher_witness: SHOP, ctx: &mut TxContext): package::Publisher {
-    package::claim<SHOP>(publisher_witness, ctx)
-}
-
-#[allow(lint(self_transfer))]
-fun transfer_publisher_to_sender(publisher: package::Publisher, ctx: &TxContext) {
-    transfer::public_transfer(publisher, ctx.sender());
+    package::claim_and_keep<SHOP>(publisher_witness, ctx);
 }
 
 ///====================///
