@@ -95,8 +95,8 @@ await publishPackageToNetwork(
 **Code spotlight: instantiate a Shop after publish**
 `packages/dapp/move/oracle-market/sources/shop.move`
 ```move
-public entry fun create_shop(name: vector<u8>, ctx: &mut tx::TxContext) {
-  let owner: address = tx::sender(ctx);
+fun create_shop(name: vector<u8>, ctx: &mut tx::TxContext) {
+  let owner: address = tx_context::sender(ctx);
   let shop: Shop = new_shop(name, owner, ctx);
 
   let owner_cap: ShopOwnerCap = ShopOwnerCap {

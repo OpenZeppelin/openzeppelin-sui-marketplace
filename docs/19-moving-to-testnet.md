@@ -21,9 +21,9 @@ This chapter is the checklist for leaving localnet. It covers how to harden your
   - http://faucet.n1stake.com/
   - http://faucet.suilearn.io/
 
-💡 Keep at least two SUI coins in every wallet (one for gas, one for payment) even when paying with another token.
+💡 Keep at least one SUI coin for gas. If you plan to pay with SUI in this repo, keep a second SUI coin for the payment coin.
 
-One coin type currently registered in the Sui coin registry is `0xa7f7382f67ef48972ad6a92677f2a764201041f5e29c7a9e0389b75e61038cdf::usdc::USDC`. Network upgrades can change this ID—double-check it against the registry or your published artifacts before seeding the shop.
+Coin type IDs can vary by network and can change on upgrades. Do not hardcode them; resolve coin types from the on-chain registry or your deployment artifacts before seeding the shop.
 
 ## 4. Publish + seed checklist
 1. Publish packages with real dependencies: remove `--with-unpublished-deps` flags and ensure every dependency already lives on the target network.

@@ -61,7 +61,7 @@ Code:
 **Code spotlight: Shop owner is stored on-chain**
 `packages/dapp/move/oracle-market/sources/shop.move`
 ```move
-public entry fun update_shop_owner(
+entry fun update_shop_owner(
   shop: &mut Shop,
   owner_cap: &mut ShopOwnerCap,
   new_owner: address,
@@ -78,7 +78,7 @@ public entry fun update_shop_owner(
     previous_owner,
     new_owner,
     shop_owner_cap_id: obj::uid_to_address(&owner_cap.id),
-    rotated_by: tx::sender(ctx),
+    rotated_by: tx_context::sender(ctx),
   });
 }
 ```

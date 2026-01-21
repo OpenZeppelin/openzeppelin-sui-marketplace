@@ -5,21 +5,22 @@
 This chapter gets your environment ready and walks through a complete localnet run: install tooling, publish packages, seed mocks, and run the UI.
 
 ## 1. Learning goals
-1. Install the Sui CLI (nightly 1.63.x) and verify it works.
+1. Install the Sui CLI (1.63.x) and verify it works.
 2. Create and fund an address for localnet/testnet use.
 3. Install dependencies and publish the Move package.
 4. Seed mock coins + Pyth data and run the UI.
 
 ## 2. Prerequisites
 1. **Node.js 22+** and **pnpm**.
-2. **Rust toolchain** (`rustup`) for nightly installs.
+2. **Rust toolchain** (`rustup`) only if you plan to build Sui from source (optional).
 3. **Sui CLI** on your `PATH`.
 
 ## 3. Install Sui CLI (1.63.x)
-This repo is tested against Sui CLI **1.63.x**.
+This repo is tested against Sui CLI **1.63.x**. Pin a specific patch version so upgrades do not surprise you.
 
 ```bash
 curl -sSfL https://raw.githubusercontent.com/Mystenlabs/suiup/main/install.sh | sh
+suiup list
 suiup install sui@testnet
 sui --version
 ```

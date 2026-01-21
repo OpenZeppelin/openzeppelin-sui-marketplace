@@ -26,7 +26,7 @@ This chapter explains programmable transaction blocks (PTBs), gas coin handling,
 Code: `packages/domain/core/src/flows/buy.ts` (`buildBuyTransaction`, `estimateRequiredAmount`)
 
 ## 5. Concept deep dive: gas coins and SUI payments
-- **Separate gas coin**: when paying with SUI, you need one coin for gas and a different coin for payment.
+- **Separate gas coin (repo choice)**: when paying with SUI, the flow keeps a dedicated gas coin to avoid mixing payment and gas; custom PTBs can split from the gas coin instead.
 - **Coin splitting**: payments are made by splitting coins inside the PTB; change is returned as a new coin object.
 - **Gas smashing**: Sui can combine gas coins for efficiency, but you still must provide a valid gas coin in the transaction.
 - **Sponsored transactions (optional)**: a sponsor can pay gas for another signer, which is useful for onboarding flows.
@@ -53,7 +53,7 @@ fun refund_or_destroy<TCoin>(payment: coin::Coin<TCoin>, recipient: address) {
 ```
 
 ## 7. Exercises
-1. Buy with SUI and only one SUI coin object. Expected outcome: the script explains you need a second SUI coin for gas.
+1. Buy with SUI and only one SUI coin object. Expected outcome: the script explains this flow expects a dedicated payment coin.
 2. Run a `devInspect` quote with `estimateRequiredAmount` and compare it to the actual purchase. Expected outcome: quote is conservative (mu-sigma) and sufficient for the buy.
 
 ## 8. Diagram: buy PTB

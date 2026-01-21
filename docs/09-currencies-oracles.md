@@ -51,8 +51,9 @@ pnpm script buyer:currency:list --shop-id <shopId>
 - **Clock-based freshness**: `clock::Clock` is a shared object that supplies trusted time for
   guardrails. Price age and status lag are verified on-chain so the UI cannot bypass them.
   Code: `packages/dapp/move/oracle-market/sources/shop.move` (`quote_amount_for_price_info_object`)
-- **Guardrail caps**: sellers set per-currency caps; buyers can only tighten them. This is a
-  protocol-level safety check, not just a UI preference.
+- **Guardrail caps**: sellers set per-currency caps; buyers can only tighten
+  `max_price_age_secs`/`max_confidence_ratio_bps`. Status-lag is enforced on-chain using the seller cap.
+  This is a protocol-level safety check, not just a UI preference.
   Code: `packages/dapp/move/oracle-market/sources/shop.move` (`resolve_guardrail_cap`, `resolve_effective_guardrails`)
 - **Conservative pricing**: price conversion uses mu-sigma (price minus confidence interval) and
   enforces a max confidence ratio in basis points to avoid undercharging on noisy feeds.
@@ -68,7 +69,7 @@ pnpm script buyer:currency:list --shop-id <shopId>
 **Code spotlight: register an AcceptedCurrency**
 `packages/dapp/move/oracle-market/sources/shop.move`
 ```move
-public entry fun add_accepted_currency<T>(
+entry fun add_accepted_currency<T>(
   shop: &mut Shop,
   owner_cap: &ShopOwnerCap,
   currency: &coin_registry::Currency<T>,

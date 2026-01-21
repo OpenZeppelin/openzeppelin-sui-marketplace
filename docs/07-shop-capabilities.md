@@ -53,8 +53,8 @@ pnpm script owner:shop:update-owner --new-owner <0x...>
 **Code spotlight: Shop creation + owner cap mint**
 `packages/dapp/move/oracle-market/sources/shop.move`
 ```move
-public entry fun create_shop(name: vector<u8>, ctx: &mut tx::TxContext) {
-  let owner: address = tx::sender(ctx);
+entry fun create_shop(name: vector<u8>, ctx: &mut tx::TxContext) {
+  let owner: address = tx_context::sender(ctx);
   let shop: Shop = new_shop(name, owner, ctx);
 
   let owner_cap: ShopOwnerCap = ShopOwnerCap {
@@ -71,7 +71,7 @@ public entry fun create_shop(name: vector<u8>, ctx: &mut tx::TxContext) {
 **Code spotlight: rotate shop ownership on-chain**
 `packages/dapp/move/oracle-market/sources/shop.move`
 ```move
-public entry fun update_shop_owner(
+fun update_shop_owner(
   shop: &mut Shop,
   owner_cap: &mut ShopOwnerCap,
   new_owner: address,
@@ -88,7 +88,7 @@ public entry fun update_shop_owner(
     previous_owner,
     new_owner,
     shop_owner_cap_id: obj::uid_to_address(&owner_cap.id),
-    rotated_by: tx::sender(ctx),
+    rotated_by: tx_context::sender(ctx),
   });
 }
 ```

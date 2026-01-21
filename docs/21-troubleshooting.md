@@ -47,7 +47,7 @@ if (checkOnly) {
 - Register with `pnpm script owner:currency:add` or re-run `pnpm script owner:shop:seed`.
 
 ## Buying with SUI fails: "requires at least two SUI coin objects"
-- Split SUI so one coin can be gas and one can be payment. See `packages/domain/core/src/flows/buy.ts`.
+- This repo's buy flow expects a dedicated payment coin when paying with SUI. Split a SUI coin so you have one for gas and one for payment (or adjust the flow to split from gas). See `packages/domain/core/src/flows/buy.ts`.
 
 ## Price feed mismatch or stale price
 - Re-run `pnpm script mock:update-prices` on localnet.

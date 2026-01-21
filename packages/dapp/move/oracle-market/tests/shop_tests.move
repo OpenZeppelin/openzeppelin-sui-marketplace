@@ -898,7 +898,7 @@ fun quote_rejects_attestation_lag_above_currency_cap() {
     let mut clock_obj = clock::create_for_testing(scenario::ctx(&mut scn));
     clock::set_for_testing(&mut clock_obj, (attestation_time + 1) * 1000);
 
-    shop::quote_amount_for_price_info_object(
+    shop::test_quote_amount_for_price_info_object(
         &shared_shop,
         &accepted_currency,
         &scenario::take_shared_by_id(&scn, price_info_id),
@@ -974,7 +974,7 @@ fun quote_rejects_price_timestamp_older_than_max_age() {
     let mut clock_obj = clock::create_for_testing(scenario::ctx(&mut scn));
     clock::set_for_testing(&mut clock_obj, 200_000);
 
-    shop::quote_amount_for_price_info_object(
+    shop::test_quote_amount_for_price_info_object(
         &shared_shop,
         &accepted_currency,
         &scenario::take_shared_by_id(&scn, price_info_id),
@@ -1266,7 +1266,7 @@ fun quote_view_matches_internal_math() {
         &accepted_currency,
     );
 
-    let view_quote = shop::quote_amount_for_price_info_object(
+    let view_quote = shop::test_quote_amount_for_price_info_object(
         &shared_shop,
         &accepted_currency,
         &price_info_obj,
@@ -1378,7 +1378,7 @@ fun quote_view_rejects_mismatched_price_info_object() {
         scenario::ctx(&mut scn),
     );
 
-    shop::quote_amount_for_price_info_object(
+    shop::test_quote_amount_for_price_info_object(
         &shared_shop,
         &accepted_currency,
         &mismatched_price_info_object,
@@ -3925,7 +3925,7 @@ fun buy_item_emits_events_decrements_stock_and_refunds_change() {
     let mut clock_obj = clock::create_for_testing(scenario::ctx(&mut scn));
     clock::set_for_testing(&mut clock_obj, 10);
 
-    let quote_amount = shop::quote_amount_for_price_info_object(
+    let quote_amount = shop::test_quote_amount_for_price_info_object(
         &shared_shop,
         &accepted_currency,
         &price_info_obj,
@@ -4041,7 +4041,7 @@ fun buy_item_supports_example_car_receipts() {
     let mut clock_obj = clock::create_for_testing(scenario::ctx(&mut scn));
     clock::set_for_testing(&mut clock_obj, 10);
 
-    let quote_amount = shop::quote_amount_for_price_info_object(
+    let quote_amount = shop::test_quote_amount_for_price_info_object(
         &shared_shop,
         &accepted_currency,
         &price_info_obj,
@@ -4116,7 +4116,7 @@ fun buy_item_supports_example_bike_receipts() {
     let mut clock_obj = clock::create_for_testing(scenario::ctx(&mut scn));
     clock::set_for_testing(&mut clock_obj, 10);
 
-    let quote_amount = shop::quote_amount_for_price_info_object(
+    let quote_amount = shop::test_quote_amount_for_price_info_object(
         &shared_shop,
         &accepted_currency,
         &price_info_obj,
@@ -4186,7 +4186,7 @@ fun buy_item_emits_events_with_exact_payment_and_zero_change() {
     let mut clock_obj = clock::create_for_testing(scenario::ctx(&mut scn));
     clock::set_for_testing(&mut clock_obj, 10);
 
-    let quote_amount = shop::quote_amount_for_price_info_object(
+    let quote_amount = shop::test_quote_amount_for_price_info_object(
         &shared_shop,
         &accepted_currency,
         &price_info_obj,
@@ -4260,7 +4260,7 @@ fun buy_item_rejects_out_of_stock_after_depletion() {
     let mut clock_obj = clock::create_for_testing(scenario::ctx(&mut scn));
     clock::set_for_testing(&mut clock_obj, 10);
 
-    let quote_amount = shop::quote_amount_for_price_info_object(
+    let quote_amount = shop::test_quote_amount_for_price_info_object(
         &shared_shop,
         &accepted_currency,
         &price_info_obj,
@@ -4525,7 +4525,7 @@ fun buy_item_with_discount_emits_discount_redeemed_and_records_template_id() {
     );
 
     let discounted_price_usd_cents = 1_000 - 250;
-    let quote_amount = shop::quote_amount_for_price_info_object(
+    let quote_amount = shop::test_quote_amount_for_price_info_object(
         &shared_shop,
         &accepted_currency,
         &price_info_obj,
@@ -4795,7 +4795,7 @@ fun buy_item_rejects_insufficient_payment() {
     let mut clock_obj = clock::create_for_testing(scenario::ctx(&mut scn));
     clock::set_for_testing(&mut clock_obj, 10);
 
-    let quote_amount = shop::quote_amount_for_price_info_object(
+    let quote_amount = shop::test_quote_amount_for_price_info_object(
         &shared_shop,
         &accepted_currency,
         &price_info_obj,

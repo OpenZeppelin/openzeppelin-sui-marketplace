@@ -36,8 +36,9 @@ pnpm script buyer:buy --help
 3. **Blocks -> object DAG**: each object records the last transaction digest that mutated it, giving you causal history per object instead of global block history.
 
 ## 5. Concept deep dive: Move execution surface
-- **Entry functions vs view functions**: entry functions are PTB-callable and can be read-only or
-  mutating. A *non-public* `entry fun` cannot be called by other Move modules; `public entry` can.
+- **Entry vs public functions**: PTBs can call `entry` functions; other Move modules can call
+  `public` functions. Keep `entry` as the transaction surface and route into `public` or private
+  helpers for reuse.
   Code: `packages/dapp/move/oracle-market/sources/shop.move` (`create_shop`, `quote_amount_for_price_info_object`)
 - **PTB limits**: a PTB can include up to 1,024 commands, which shapes how much work you can bundle
   into a single transaction. This matters most when you try to batch “admin seeding” or enumerate
@@ -45,9 +46,9 @@ pnpm script buyer:buy --help
 - **Events**: events are typed structs emitted via `event::emit`. Indexers and UIs rely on them
   instead of scanning contract storage arrays.
   Code: `packages/dapp/move/oracle-market/sources/shop.move` (ShopCreated, PurchaseCompleted)
-- **Object IDs and addresses**: on Sui, the address *is* the object ID. We still convert between
-  `UID` and address forms for events and off-chain tooling via `obj::uid_to_address` and
-  `obj::id_from_address`.
+- **Object IDs and addresses**: object IDs are addresses (but not every address is an object ID). We
+  still convert between `UID` and address forms for events and off-chain tooling via
+  `obj::uid_to_address` and `obj::id_from_address`.
   Code: `packages/dapp/move/oracle-market/sources/shop.move` (helper functions and events)
 - **Transfers and sharing**: `txf::public_transfer` moves owned resources, and `txf::share_object`
   creates shared objects. This pattern replaces EVM-style factory deployments.
@@ -123,7 +124,7 @@ function buy(uint256 listingId, address payToken) external {
 ```
 ```move
 // Move (actual shape)
-public entry fun buy_item<TItem: store, TCoin>(
+entry fun buy_item<TItem: store, TCoin>(
   shop: &Shop,
   listing: &mut ItemListing,
   accepted_currency: &AcceptedCurrency,

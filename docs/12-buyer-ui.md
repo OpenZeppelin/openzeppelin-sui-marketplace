@@ -40,7 +40,7 @@ pnpm ui dev
 ```
 
 ## 5. EVM -> Sui translation
-1. **approve + transferFrom -> move a `Coin<T>`**: you pass the coin object into the PTB; change is returned as a new coin object. When paying with SUI, you need a separate SUI coin for gas. See `buildBuyTransaction` in `packages/domain/core/src/flows/buy.ts`.
+1. **approve + transferFrom -> move a `Coin<T>`**: you pass the coin object into the PTB; change is returned as a new coin object. In this repo's flow, SUI payments keep a dedicated SUI coin for gas (custom flows can split from gas instead). See `buildBuyTransaction` in `packages/domain/core/src/flows/buy.ts`.
 2. **Oracle update + buy -> single PTB**: the transaction updates Pyth and buys in one block. See `maybeUpdatePythPriceFeed` in `packages/domain/core/src/flows/buy.ts`.
 3. **Localnet signing**: the UI signs in the wallet but executes through the app RPC client to avoid network mismatches. See `packages/ui/src/app/hooks/useBuyFlowModalState.ts`.
 
@@ -79,7 +79,7 @@ pnpm ui dev
 **Code spotlight: buy entry points accept `Coin<T>` and PriceInfoObject**
 `packages/dapp/move/oracle-market/sources/shop.move`
 ```move
-public entry fun buy_item<TItem: store, TCoin>(
+entry fun buy_item<TItem: store, TCoin>(
   shop: &Shop,
   item_listing: &mut ItemListing,
   accepted_currency: &AcceptedCurrency,

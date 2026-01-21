@@ -100,8 +100,8 @@ frontends cannot bypass them:
 - **Status lag**: rejects feeds whose attestation is too far behind publish time
 
 Design detail worth keeping:
-- Sellers set **caps** per currency. Buyers can only tighten them.
-   This is similar to slippage limits, but enforced with explicit caps.
+- Sellers set **caps** per currency. Buyers can only tighten age/confidence; status-lag is enforced
+  using the seller cap. This is similar to slippage limits, but enforced with explicit caps.
 
 If you build new checkout flows, don’t move these checks “off-chain for performance”.
 They are correctness checks.

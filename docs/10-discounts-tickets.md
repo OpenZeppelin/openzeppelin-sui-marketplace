@@ -66,7 +66,7 @@ pnpm script buyer:discount-ticket:list
 **Code spotlight: create a shared DiscountTemplate**
 `packages/dapp/move/oracle-market/sources/shop.move`
 ```move
-public entry fun create_discount_template(
+entry fun create_discount_template(
   shop: &mut Shop,
   owner_cap: &ShopOwnerCap,
   applies_to_listing: Option<obj::ID>,
@@ -106,7 +106,7 @@ public entry fun create_discount_template(
 **Code spotlight: claim a single-use ticket**
 `packages/dapp/move/oracle-market/sources/shop.move`
 ```move
-public entry fun claim_discount_ticket(
+entry fun claim_discount_ticket(
   shop: &Shop,
   discount_template: &mut DiscountTemplate,
   clock: &clock::Clock,

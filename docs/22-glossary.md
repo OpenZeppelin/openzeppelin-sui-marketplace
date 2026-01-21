@@ -23,9 +23,8 @@
 18. **UpgradeCap**: An owned object that authorizes package upgrades.
 19. **Object version**: The version number recorded on an object after each mutation; used to verify freshness.
 20. **Storage rebate**: A refund of storage fees when an object is deleted (e.g., `coin::destroy_zero`).
-21. **Party object**: An object owned by a defined party and versioned by consensus.
-22. **Fastpath**: The low-latency execution path used by address-owned or immutable objects when no consensus objects are involved.
-23. **Consensus object**: A shared or party-owned object that must be sequenced by consensus.
+21. **Fastpath**: The low-latency execution path used by address-owned objects when no shared objects are involved.
+22. **Consensus object**: A shared object that must be sequenced by consensus.
 
 **Code spotlight: objects are structs with `key`**
 `packages/dapp/move/oracle-market/sources/shop.move`

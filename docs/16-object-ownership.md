@@ -24,11 +24,11 @@ None. This is a conceptual chapter that builds on earlier examples.
   `ItemListing`, `AcceptedCurrency`, `DiscountTemplate`, and the Pyth `PriceInfoObject`.
 - **Object-owned objects**: children owned by another object. This is how dynamic-field markers and per-claimer claims work.
 - **Immutable objects**: globally readable, never mutable. Common for package-published constants or registry-like data.
-- **Party objects (advanced)**: consensus-owned by a defined party. This repo does not use them, but they can replace some fastpath patterns when multiple parties need coordinated access (the Sui docs recommend party objects over fastpath in multi-party workflows).
 
 ## 5. Concept deep dive: versioning paths
-- **Fastpath objects**: address-owned or immutable. They must reference the current version in each transaction input. This provides low latency but requires tighter coordination if many parties touch the same object, or you risk equivocation/locks until epoch boundaries.
-- **Consensus objects**: shared or party-owned. Consensus assigns versions and sequencing, which simplifies coordination at the cost of higher latency.
+- **Fastpath objects**: address-owned objects execute without consensus and require the latest version in each transaction input. Conflicting transactions from the same owner fail, so avoid signing two transactions against the same version.
+- **Immutable objects**: read-only inputs that never change, so they do not participate in version contention.
+- **Consensus objects**: shared objects are sequenced by consensus, which simplifies coordination at the cost of higher latency.
 - **What this repo chooses**: the Shop and its child shared objects use consensus so listings and currencies can be accessed by anyone. Owned capabilities and tickets use fastpath for low-latency user interactions.
 
 ## 6. Code references

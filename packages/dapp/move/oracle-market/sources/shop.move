@@ -48,14 +48,14 @@ use sui::package;
 //   docs/16-object-ownership.md
 // - Option types: option::Option makes optional IDs and optional limits/expiry explicit instead of
 //   sentinel values. Docs: docs/08-listings-receipts.md, docs/10-discounts-tickets.md
-// - Entry functions vs view functions: on Sui, *non-public* `entry fun` are callable from PTBs but
-//   not from other Move modules. `public entry` functions can be called by other modules as well
-//   as from PTBs. Entry functions can be read-only or mutating.
+// - Entry vs public functions: PTBs can call `entry` and `public`, while other Move modules can only call
+//   `public`. Prefer `public` for composable helpers and `entry` for PTB-only calls.
 // - Events: event::emit writes typed events for indexers and UIs. Docs: docs/08-advanced.md,
 //   docs/18-data-access.md
 // - TxContext and sender: TxContext is required for object creation and coin splits; tx_context::sender
 //   identifies the signer for access control and receipts. Docs: docs/14-advanced.md
-// - Object IDs and addresses: on Sui, addresses *are* object IDs. object::UID holds that ID,
+// - Object IDs and addresses: on Sui, object IDs are addresses (but not every address is an object ID).
+//   object::UID holds that ID,
 //   and object::uid_to_address / object::id_from_address convert between UID and address for
 //   indexing and event payloads. Docs: docs/14-advanced.md
 // - Transfers and sharing: transfer::public_transfer moves owned objects; transfer::share_object makes shared
@@ -165,7 +165,7 @@ fun init(publisher_witness: SHOP, ctx: &mut TxContext) {
 public struct ShopOwnerCap has key, store {
     id: UID,
     shop_address: address,
-    owner: address, // Tracks the current payout address for operators rotating the cap.
+    owner: address, // Cached payout address updated by update_shop_owner; may drift if the cap is transferred.
 }
 
 /// Shared shop that stores item listings to sell, accepted currencies, and discount templates via dynamic fields.
@@ -176,7 +176,7 @@ public struct Shop has key, store {
     disabled: bool,
 }
 
-/// Item listing metadata keyed under the shared `Shop`, will be using to mint specific items on purchase.
+/// Item listing metadata keyed under the shared `Shop`, used to mint specific items on purchase.
 /// Discounts can be attached to highlight promotions in the UI.
 public struct ItemListing has key, store {
     id: UID,
@@ -212,7 +212,7 @@ public struct AcceptedCurrency has key, store {
     id: UID,
     shop_address: address,
     coin_type: TypeName,
-    feed_id: vector<u8>, // Pyth price feed identifier (e.g. SUI/USD)
+    feed_id: vector<u8>, // Pyth price feed identifier (32 bytes).
     pyth_object_id: ID, // ID of Pyth PriceInfoObject
     decimals: u8,
     symbol: vector<u8>,
@@ -422,7 +422,7 @@ public struct MintingCompleted has copy, drop {
 ///   State is sharded into per-object locks so PTBs only touch the listing/template/currency they
 ///   mutate instead of contending on a monolithic storage map as in Solidity.
 entry fun create_shop(name: vector<u8>, ctx: &mut TxContext) {
-    let owner: address = ctx.sender();
+    let owner: address = tx_context::sender(ctx);
     let shop: Shop = new_shop(name, owner, ctx);
     let shop_name_for_event: vector<u8> = clone_bytes(&shop.name);
 
@@ -452,7 +452,7 @@ entry fun disable_shop(shop: &mut Shop, owner_cap: &ShopOwnerCap, ctx: &TxContex
         shop_address: shop_address(shop),
         owner: shop.owner,
         shop_owner_cap_id: object::uid_to_address(&owner_cap.id),
-        disabled_by: ctx.sender(),
+        disabled_by: tx_context::sender(ctx),
     });
 }
 
@@ -480,7 +480,7 @@ entry fun update_shop_owner(
         previous_owner,
         new_owner,
         shop_owner_cap_id: object::uid_to_address(&owner_cap.id),
-        rotated_by: ctx.sender(),
+        rotated_by: tx_context::sender(ctx),
     });
 }
 
@@ -641,8 +641,8 @@ entry fun remove_item_listing(
 ///   off-chain metadata, but the caller still must provide the correct on-chain object.
 /// - Sellers can optionally tighten oracle guardrails per currency (`max_price_age_secs_cap`,
 ///   `max_confidence_ratio_bps_cap`, `max_price_status_lag_secs_cap`). Buyers may only tighten
-///   further--never loosen--mirroring "slippage limits" but enforced with object caps instead of
-///   unbounded calldata.
+///   `max_price_age_secs`/`max_confidence_ratio_bps` further--never loosen--mirroring "slippage limits"
+///   but enforced with object caps instead of unbounded calldata.
 entry fun add_accepted_currency<T>(
     shop: &mut Shop,
     owner_cap: &ShopOwnerCap,
@@ -991,7 +991,7 @@ public fun claim_discount_ticket_inline(
     now_secs: u64,
     ctx: &mut TxContext,
 ): DiscountTicket {
-    let claimer = ctx.sender();
+    let claimer = tx_context::sender(ctx);
     assert_template_claimable(discount_template, claimer, now_secs);
 
     let discount_ticket: DiscountTicket = new_discount_ticket(
@@ -1013,7 +1013,7 @@ fun claim_discount_ticket_with_event(
         now_secs,
         ctx,
     );
-    let claimer = ctx.sender();
+    let claimer = tx_context::sender(ctx);
 
     event::emit(DiscountClaimed {
         shop_address: discount_template.shop_address,
@@ -1122,7 +1122,7 @@ entry fun buy_item_with_discount<TItem: store, TCoin>(
     ctx: &mut TxContext,
 ) {
     assert_shop_active(shop);
-    let buyer = ctx.sender();
+    let buyer = tx_context::sender(ctx);
     assert_template_matches_shop(shop, discount_template);
     assert_listing_matches_shop(shop, item_listing);
     let now = now_secs(clock);
@@ -1655,7 +1655,7 @@ fun process_purchase_core<TItem: store, TCoin>(
 
     pay_shop(&mut payment, quote_amount, shop_owner, ctx);
 
-    let buyer: address = ctx.sender();
+    let buyer: address = tx_context::sender(ctx);
     let change_amount = payment.value();
     refund_or_destroy(payment, refund_extra_to);
 
@@ -2368,7 +2368,7 @@ public fun discount_template_values(
     )
 }
 
-public fun quote_amount_for_price_info_object(
+entry fun quote_amount_for_price_info_object(
     shop: &Shop,
     accepted_currency: &AcceptedCurrency,
     price_info_object: &price_info::PriceInfoObject,
@@ -2383,7 +2383,7 @@ public fun quote_amount_for_price_info_object(
         price_info_object,
         accepted_currency.max_price_status_lag_secs_cap,
     );
-    // View-only quote helper; clients call via dev-inspect instead of storing quotes on-chain.
+    // Entry-only quote helper; clients call via dev-inspect instead of storing quotes on-chain.
     quote_amount_with_guardrails(
         accepted_currency,
         price_info_object,
@@ -2470,6 +2470,27 @@ public fun test_quote_amount_from_usd_cents(
         coin_decimals,
         price,
         max_confidence_ratio_bps,
+    )
+}
+
+#[test_only]
+public fun test_quote_amount_for_price_info_object(
+    shop: &Shop,
+    accepted_currency: &AcceptedCurrency,
+    price_info_object: &price_info::PriceInfoObject,
+    price_usd_cents: u64,
+    max_price_age_secs: option::Option<u64>,
+    max_confidence_ratio_bps: option::Option<u64>,
+    clock: &clock::Clock,
+): u64 {
+    quote_amount_for_price_info_object(
+        shop,
+        accepted_currency,
+        price_info_object,
+        price_usd_cents,
+        max_price_age_secs,
+        max_confidence_ratio_bps,
+        clock,
     )
 }
 
