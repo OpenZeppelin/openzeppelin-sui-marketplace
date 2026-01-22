@@ -7,7 +7,7 @@ use pyth::price_identifier;
 use pyth::price_info;
 use pyth::pyth;
 use std::string;
-use std::type_name::{Self, TypeName};
+use std::type_name::TypeName;
 use std::u128;
 use sui::clock;
 use sui::coin;
