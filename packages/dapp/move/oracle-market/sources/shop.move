@@ -1113,18 +1113,14 @@ entry fun buy_item<TItem: store, TCoin>(
         clock,
         ctx,
     );
-    if (option::is_some(&owed_coin_opt)) {
-        let owed_coin = option::destroy_some(owed_coin_opt);
-        transfer::public_transfer(owed_coin, shop.owner);
-    } else {
-        option::destroy_none(owed_coin_opt);
-    };
-    if (change_coin.value() == 0) {
-        change_coin.destroy_zero();
-    } else {
-        transfer::public_transfer(change_coin, refund_extra_to);
-    };
-    transfer::public_transfer(minted_item, mint_to);
+    finalize_purchase_transfers(
+        owed_coin_opt,
+        change_coin,
+        minted_item,
+        shop.owner,
+        refund_extra_to,
+        mint_to,
+    );
 }
 
 /// Same as `buy_item` but also validates and burns a `DiscountTicket`.
@@ -1190,18 +1186,14 @@ entry fun buy_item_with_discount<TItem: store, TCoin>(
         clock,
         ctx,
     );
-    if (option::is_some(&owed_coin_opt)) {
-        let owed_coin = option::destroy_some(owed_coin_opt);
-        transfer::public_transfer(owed_coin, shop.owner);
-    } else {
-        option::destroy_none(owed_coin_opt);
-    };
-    if (change_coin.value() == 0) {
-        change_coin.destroy_zero();
-    } else {
-        transfer::public_transfer(change_coin, refund_extra_to);
-    };
-    transfer::public_transfer(minted_item, mint_to);
+    finalize_purchase_transfers(
+        owed_coin_opt,
+        change_coin,
+        minted_item,
+        shop.owner,
+        refund_extra_to,
+        mint_to,
+    );
 
     event::emit(DiscountRedeemedEvent {
         shop_address: item_listing.shop_address,
@@ -1873,6 +1865,28 @@ fun split_payment<TCoin>(
     assert!(available >= amount_due, EInsufficientPayment);
     let owed = payment.split(amount_due, ctx);
     option::some(owed)
+}
+
+fun finalize_purchase_transfers<TItem: store, TCoin>(
+    owed_coin_opt: option::Option<coin::Coin<TCoin>>,
+    change_coin: coin::Coin<TCoin>,
+    minted_item: ShopItem<TItem>,
+    payout_to: address,
+    refund_extra_to: address,
+    mint_to: address,
+) {
+    if (option::is_some(&owed_coin_opt)) {
+        let owed_coin = option::destroy_some(owed_coin_opt);
+        transfer::public_transfer(owed_coin, payout_to);
+    } else {
+        option::destroy_none(owed_coin_opt);
+    };
+    if (change_coin.value() == 0) {
+        change_coin.destroy_zero();
+    } else {
+        transfer::public_transfer(change_coin, refund_extra_to);
+    };
+    transfer::public_transfer(minted_item, mint_to);
 }
 
 fun decrement_stock(item_listing: &mut ItemListing) {
@@ -2704,18 +2718,14 @@ public fun test_claim_and_buy_with_ids<TItem: store, TCoin>(
         clock,
         ctx,
     );
-    if (option::is_some(&owed_coin_opt)) {
-        let owed_coin = option::destroy_some(owed_coin_opt);
-        transfer::public_transfer(owed_coin, shop_owner);
-    } else {
-        option::destroy_none(owed_coin_opt);
-    };
-    if (change_coin.value() == 0) {
-        change_coin.destroy_zero();
-    } else {
-        transfer::public_transfer(change_coin, refund_extra_to);
-    };
-    transfer::public_transfer(minted_item, mint_to);
+    finalize_purchase_transfers(
+        owed_coin_opt,
+        change_coin,
+        minted_item,
+        shop_owner,
+        refund_extra_to,
+        mint_to,
+    );
 
     event::emit(DiscountRedeemedEvent {
         shop_address,
