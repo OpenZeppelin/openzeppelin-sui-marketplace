@@ -17,14 +17,14 @@ public struct ShopOwnerCap has key {
   shop_id: address,
 }
 
-public struct ShopCreated has copy, drop {
+public struct ShopCreatedEvent has copy, drop {
   shop_id: address,
   shop_owner_cap_id: address,
   owner: address,
   name: vector<u8>,
 }
 
-public struct ShopOwnerUpdated has copy, drop {
+public struct ShopOwnerUpdatedEvent has copy, drop {
   shop_id: address,
   new_owner: address,
 }
@@ -43,7 +43,7 @@ entry fun create_shop(name: vector<u8>, ctx: &mut TxContext) {
 
   transfer::share_object(shop);
   transfer::transfer(owner_cap, owner);
-  event::emit(ShopCreated {
+  event::emit(ShopCreatedEvent {
     shop_id,
     shop_owner_cap_id: owner_cap_id,
     owner,
@@ -60,5 +60,5 @@ entry fun update_shop_owner(
   assert!(owner_cap.shop_id == shop_id, EInvalidOwnerCap);
   shop.owner = new_owner;
   transfer::transfer(owner_cap, new_owner);
-  event::emit(ShopOwnerUpdated { shop_id, new_owner });
+  event::emit(ShopOwnerUpdatedEvent { shop_id, new_owner });
 }
