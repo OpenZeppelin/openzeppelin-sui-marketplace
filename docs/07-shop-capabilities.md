@@ -83,7 +83,7 @@ fun update_shop_owner(
   shop.owner = new_owner;
   owner_cap.owner = new_owner;
 
-  event::emit(ShopOwnerUpdated {
+  event::emit(ShopOwnerUpdatedEvent {
     shop_address: shop_address(shop),
     previous_owner,
     new_owner,

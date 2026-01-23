@@ -50,7 +50,7 @@ pnpm script buyer:item-listing:list --shop-id <shopId>
   Code: `packages/dapp/move/oracle-market/sources/shop.move` (`ShopItem`)
 - **Receipts are transferable, not the asset**: `ShopItem<TItem>` is an owned receipt. It can be
   transferred like any owned object, but it is a proof of purchase, not the actual item itself.
-  Code: `packages/dapp/move/oracle-market/sources/shop.move` (`ShopItem`, `mint_and_transfer_item`)
+  Code: `packages/dapp/move/oracle-market/sources/shop.move` (`ShopItem`, `mint_shop_item`)
 - **Object IDs vs addresses**: on Sui, object IDs are addresses (but not every address is an object ID).
   Convert between `UID` and address forms for events and off-chain tooling using `obj::uid_to_address`
   and `obj::id_from_address`.

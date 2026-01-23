@@ -31,9 +31,10 @@ This repo assumes you already think in Solidity. The goal here is not to re-teac
   objects. This repo uses address-owned capabilities/tickets, shared objects for Shop/listings, and
   object-owned dynamic-field children under the Shop or templates.
   Code: `packages/dapp/move/oracle-market/sources/shop.move` (ShopOwnerCap, Shop, marker structs)
-- **Strings as bytes (`vector<u8>`)**: this module stores user-facing strings as raw `vector<u8>`
-  to keep serialization explicit and avoid runtime string dependencies. Convert from UTF-8 at the
-  edges (UI/CLI) when needed.
+- **Strings (`String`)**: Sui Move conventions prefer `String` for user-facing text. If you follow
+  the conventions, use `String` and only drop down to `vector<u8>` when you have a strong reason.
+  This repo currently stores names as `vector<u8>` for explicit bytes, so convert to/from UTF-8 at
+  the UI/CLI edges if you keep that pattern.
   Code: `packages/dapp/move/oracle-market/sources/shop.move` (Shop.name, ItemListing.name)
 - **Options instead of sentinels**: optional values use `Option` instead of magic constants.
   This is used for optional listing links, template expiry, and max-redemption caps.
