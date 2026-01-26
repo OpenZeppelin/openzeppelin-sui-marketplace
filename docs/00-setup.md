@@ -27,8 +27,8 @@ sui --version
 
 ## 4. Clone + install dependencies
 ```bash
-git clone git@github.com:OpenZeppelin/sui-oracle-market.git
-cd sui-oracle-market
+git clone git@github.com:OpenZeppelin/openzeppelin-sui-marketplace.git
+cd openzeppelin-sui-marketplace
 pnpm install
 ```
 

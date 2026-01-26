@@ -10,7 +10,7 @@ you back!
 
 ## Contribution guidelines
 
-Before starting development, please [create an issue](https://github.com/OpenZeppelin/sui-oracle-market/issues/new/choose) to open the discussion, validate that the PR is wanted, and coordinate overall implementation details.
+Before starting development, please [create an issue](https://github.com/OpenZeppelin/openzeppelin-sui-marketplace/issues/new/choose) to open the discussion, validate that the PR is wanted, and coordinate overall implementation details.
 
 ## Creating Pull Requests (PRs)
 
@@ -49,13 +49,13 @@ Note: `git commit --no-verify` bypasses hooks.
 1. Make sure your fork is up to date with the main repository:
 
    ```sh
-   cd sui-oracle-market
-   git remote add upstream https://github.com/OpenZeppelin/sui-oracle-market.git
+   cd openzeppelin-sui-marketplace
+   git remote add upstream https://github.com/OpenZeppelin/openzeppelin-sui-marketplace.git
    git fetch upstream
    git pull --rebase upstream main
    ```
 
-   > NOTE: The directory `sui-oracle-market` represents your fork's local copy.
+   > NOTE: The directory `openzeppelin-sui-marketplace` represents your fork's local copy.
 
 2. Branch out from `main` into `fix/some-bug-short-description-#123` (ex: `fix/typos-in-docs-#123`):
 
@@ -96,7 +96,7 @@ Note: `git commit --no-verify` bypasses hooks.
    sui move build --doc --path <package>
    ```
 
-5. Go to [OpenZeppelin/sui-oracle-market](https://github.com/OpenZeppelin/sui-oracle-market) in your web browser and issue a new pull request.
+5. Go to [OpenZeppelin/openzeppelin-sui-marketplace](https://github.com/OpenZeppelin/openzeppelin-sui-marketplace) in your web browser and issue a new pull request.
    Begin the body of the PR with "Fixes #123" or "Resolves #123" to link the PR to the issue that it is resolving.
    _IMPORTANT_ Read the PR template very carefully and make sure to follow all the instructions. These instructions
    refer to some very important conditions that your PR must meet in order to be accepted, such as making sure that all PR checks pass.
@@ -111,8 +111,8 @@ If you are introducing a new feature, please add a new test to ensure that it wo
 
 ## All set
 
-If you have any questions, feel free to post them as an [issue](https://github.com/OpenZeppelin/sui-oracle-market/issues).
+If you have any questions, feel free to post them as an [issue](https://github.com/OpenZeppelin/openzeppelin-sui-marketplace/issues).
 
-Finally, if you're looking to collaborate and want to find easy tasks to start, look at the issues we marked as ["Good first issue"](https://github.com/OpenZeppelin/sui-oracle-market/labels/good%20first%20issue).
+Finally, if you're looking to collaborate and want to find easy tasks to start, look at the issues we marked as ["Good first issue"](https://github.com/OpenZeppelin/openzeppelin-sui-marketplace/labels/good%20first%20issue).
 
 Thanks for your time and code!
