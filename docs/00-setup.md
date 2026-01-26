@@ -59,7 +59,7 @@ pnpm script chain:localnet:start --with-faucet
 ## 8. Seed mocks (localnet only)
 This publishes mock coins and Pyth packages, then seeds price feeds.
 ```bash
-pnpm script mock:setup --buyer-address <0x...>
+pnpm script mock:setup --buyer-address <0x...> --network localnet
 ```
 
 ## 9. Publish the Move package

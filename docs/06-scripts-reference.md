@@ -126,7 +126,7 @@ Owner scripts default `--shop-package-id`, `--shop-id`, and `--owner-cap-id` fro
 		- USDC PriceInfoObject: `0x9c4dd4008297ffa5e480684b8100ec21cc934405ed9a25d4e4d7b6259aad9c81`
 		- WAL feed: `0xa6ba0195b5364be116059e401fb71484ed3400d4d9bfbdf46bd11eab4f9b7cea`
 		- WAL PriceInfoObject: `0x52e5fb291bd86ca8bdd3e6d89ef61d860ea02e009a64bcc287bc703907ff3e8a`
-	- **Localnet**: reads `packages/dapp/deployments/mock.localnet.json` for mock coins + feeds (requires `pnpm script mock:setup --buyer-address <0x...>`).
+	- **Localnet**: reads `packages/dapp/deployments/mock.localnet.json` for mock coins + feeds (requires `pnpm script mock:setup --buyer-address <0x...> --network localnet`).
 - Seeded data:
 	- 4 low-price listings (Car, Bike, ConcertTicket, DigitalPass).
 	- 2 discount templates (10% percent + $2 fixed) and attaches the fixed discount to the Bike listing.

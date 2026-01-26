@@ -99,7 +99,7 @@ Note: running `sui start` without a stable config dir can regenesis and wipe loc
 
 ### 4) Seed mocks (coins + Pyth)
 ```bash
-pnpm script mock:setup --buyer-address <0x...>
+pnpm script mock:setup --buyer-address <0x...> --network localnet
 ```
 What it does:
 - Publishes `packages/dapp/move/pyth-mock` and `packages/dapp/move/coin-mock` if needed.
@@ -156,7 +156,7 @@ What it does:
 
 ### 2) Seed local mocks (coins, Pyth feeds, example item types)
 ```bash
-pnpm script mock:setup --buyer-address <0x...>
+pnpm script mock:setup --buyer-address <0x...> --network localnet
 ```
 
 What it does:
