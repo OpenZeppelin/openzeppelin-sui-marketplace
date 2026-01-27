@@ -581,8 +581,7 @@ const BuyFlowModal = ({
                                 {getStructLabel(selectedCurrency.coinType)}
                               </div>
                             ) : undefined}
-                            <div className="mt-2 flex flex-wrap items-center gap-2 text-[0.6rem] text-slate-500 dark:text-slate-200/60">
-                              <span>{oracleQuoteTimestampLabel}</span>
+                            <div className="mt-2 inline-flex items-center gap-2 whitespace-nowrap text-[0.6rem] text-slate-500 dark:text-slate-200/60">
                               <Button
                                 variant="ghost"
                                 size="compact"
@@ -591,6 +590,7 @@ const BuyFlowModal = ({
                               >
                                 Refresh quote
                               </Button>
+                              <span>{oracleQuoteTimestampLabel}</span>
                             </div>
                           </div>
                           <div className="sm:pl-3">

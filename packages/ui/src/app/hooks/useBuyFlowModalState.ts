@@ -230,7 +230,11 @@ export const useBuyFlowModalState = ({
       ? "required"
       : "auto"
   const quotePriceUpdateMode: EstimateRequiredAmountPriceUpdateMode =
-    network === ENetwork.LOCALNET ? "localnet-mock" : "none"
+    network === ENetwork.LOCALNET
+      ? "localnet-mock"
+      : network === ENetwork.TESTNET || network === ENetwork.MAINNET
+        ? "pyth-update"
+        : "none"
 
   const [balancesByType, setBalancesByType] = useState<Record<string, bigint>>(
     {}
@@ -554,13 +558,16 @@ export const useBuyFlowModalState = ({
           shopShared,
           acceptedCurrencyShared,
           pythPriceInfoShared,
+          pythFeedIdHex: selectedCurrency.feedIdHex,
+          networkName: network,
           priceUsdCents: discountedPriceUsdCents,
           maxPriceAgeSecs: undefined,
           maxConfidenceRatioBps: undefined,
           clockShared,
           signerAddress: walletAddress,
           suiClient,
-          priceUpdateMode: quotePriceUpdateMode
+          priceUpdateMode: quotePriceUpdateMode,
+          onPriceUpdateWarning: (message) => setOracleWarning(message)
         })
 
         if (!isActive) return
@@ -598,6 +605,7 @@ export const useBuyFlowModalState = ({
     open,
     oracleQuoteRefreshIndex,
     quotePriceUpdateMode,
+    network,
     selectedCurrency,
     selectedDiscount,
     shopId,
@@ -784,13 +792,16 @@ export const useBuyFlowModalState = ({
             shopShared,
             acceptedCurrencyShared,
             pythPriceInfoShared,
+            pythFeedIdHex: selectedCurrency.feedIdHex,
+            networkName: network,
             priceUsdCents: discountedPriceUsdCents,
             maxPriceAgeSecs: undefined,
             maxConfidenceRatioBps: undefined,
             clockShared,
             signerAddress: walletAddress,
             suiClient,
-            priceUpdateMode: quotePriceUpdateMode
+            priceUpdateMode: quotePriceUpdateMode,
+            onPriceUpdateWarning: (message) => setOracleWarning(message)
           })
 
           if (requiredAmount !== undefined) {
