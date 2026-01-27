@@ -7,55 +7,80 @@
 End-to-end example of a small on-chain market on **Sui**: items are priced in **USD cents** (stablecoin-style), while buyers can pay in **multiple currencies** using **oracle prices**.
 
 This repo is a pnpm workspace containing:
-- a Move package (`sui_oracle_market`),
-- a CLI/script layer for localnet + seeding + owner/buyer flows,
-- a Next.js UI,
-- a docs site + linear learning path (EVM/Solidity → Sui/Move).
+- a Move package `packages/dapp/move/oracle-market`,
+- a CLI/script layer for localnet + seeding + owner/buyer flows `dapp/scripts`
+- state artefact captured in (`packages/dapp/deployments`) 
+- a Next.js UI `packages/ui`,
+- a docs site with learning path to help transition from EVM/Solidity to Sui/Move `packages/learn`.
+- a tooling layer with integration test harness `packages/tooling`
 
-## Start here
+More detail (workspace layering rules, folder layout): `docs/01-repo-layout.md`.
 
-- **Learning path hub:** [docs/README.md](docs/README.md)
-- **Setup + quickstart:** [docs/00-setup.md](docs/00-setup.md)
-- **Learning chapter:** [docs/01-repo-layout.md](docs/01-repo-layout.md)
-- **Glossary:** [docs/22-glossary.md](docs/22-glossary.md)
+## Prerequisites
+- Node.js 22+ [Install](https://nodejs.org/en/download)
+- pnpm [Install](https://pnpm.io/installation)
+- Sui CLI [Install](https://docs.sui.io/guides/developer/getting-started/sui-install)
 
-Docs website (renders `/docs` and selected guides):
-```bash
-pnpm --filter learn dev
-```
 
-## Quickstart (localnet)
+## Environment Setup
+Set up your environment so you have active address and localnet running so you can publish and interact with the oracle-market package
 
 Full walkthrough: [docs/05-localnet-workflow.md](docs/05-localnet-workflow.md).
 
 ```bash
-# 1) Clone and install
+# Clone and install
 git clone git@github.com:OpenZeppelin/sui-oracle-market.git && cd sui-oracle-market
-# (pnpm workspace install from the repo root)
+
+# pnpm workspace install from the repo root
 pnpm install
 
-# 2) Create or reuse an address (this will be your shop owner address) (note the recovery phrase to import it later in your browser wallet)
+# Create an address (this will be your shop owner address) (note the recovery phrase to import it later in your browser wallet)
 sui client new-address ed25519
 
-# 3) Configure this address in Sui config file or export
+# Configure this address in dapp/.env , Sui config file or export
+export SUI_NETWORK=localnet
 export SUI_ACCOUNT_ADDRESS=<0x...>
 export SUI_ACCOUNT_PRIVATE_KEY=<base64 or hex>
 
-# 4) Start localnet (new terminal) (--with-faucet is recommended as some script auto fund address if fund is missing)
+# Optionally create a second address to represent the buyer (the owner address can also buy items) (take note of the recovery phrase)
+sui client new-address ed25519
+
+# Start localnet (new terminal) (--with-faucet is recommended as some script auto fund address if fund is missing, on first start it will fund your configured address)
 pnpm script chain:localnet:start --with-faucet
 
-# 5) Seed mocks (coins + Pyth stub + price feeds)
+# Seed mocks (coins + Pyth stub + price feeds) on localnet as there is no coins or published Pyth oracle on your blank localnet
 pnpm script mock:setup --buyer-address <0x...>
+```
 
-# 6) Publish oracle-market (uses localnet dep replacements for mocks)
+
+## Publish and Seed
+Load some shop data
+
+```bash
+# Publish oracle-market
 pnpm script move:publish --package-path oracle-market
 
-# 7) To continue setting up the shop, listings, discounts, accepted currencies look at the scripts section
+# To continue setting up the shop, listings, discounts, accepted currencies follow appropriate scripts (find the list here docs/06-scripts-reference.md) or run the seed script that will load data for each model
+pnpm script owner:shop:seed
 
-# 8) Run the UI
+# Run the UI
 pnpm ui dev
 
 ```
+
+## Learning path
+
+Start the docs website and follow along based on your goal:
+```bash
+pnpm --filter learn dev
+```
+and navigate to `localhost:30006` on your browser
+
+Quick gotos:
+- **Learning path hub:** [docs/README.md](docs/README.md)
+- **Setup + quickstart:** [docs/00-setup.md](docs/00-setup.md)
+- **Glossary:** [docs/22-glossary.md](docs/22-glossary.md)
+
 
 ## Frontend UI
 
@@ -63,21 +88,11 @@ pnpm ui dev
 - UI docs chapters: [docs/12-buyer-ui.md](docs/12-buyer-ui.md) and [docs/13-owner-ui.md](docs/13-owner-ui.md)
 - Additional UI reference notes: [docs/11-ui-reference.md](docs/11-ui-reference.md)
 
+
 ## Tests
 
-- Integration (localnet): `pnpm test:integration`
-- Unit (domain + UI): `pnpm --filter @sui-oracle-market/domain-core test:unit` and `pnpm ui test:unit`
+- Integration (localnet): `pnpm dapp test:integration`
 - Full testing guide: [docs/15-testing.md](docs/15-testing.md)
-
-## Repo map (high level)
-
-- Move packages: `packages/dapp/move/*`
-- CLI scripts + artifacts: `packages/dapp/src/scripts` and `packages/dapp/deployments`
-- Domain SDK: `packages/domain/core`
-- UI: `packages/ui`
-- Tooling/test harness: `packages/tooling`
-
-More detail (workspace layering rules, folder layout): `docs/01-repo-layout.md`.
 
 
 ## Docs (detailed)
