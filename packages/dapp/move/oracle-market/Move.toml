@@ -7,7 +7,7 @@ edition = "2024"
 local = "../pyth-upstream-patched"
 
 [environments]
-localnet = "d2e469e6"
+localnet = "43bd0c5c"
 testnet_beta = "4c78adac"
 
 [dep-replacements.localnet]

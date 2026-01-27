@@ -118,6 +118,7 @@ const EItemTypeMismatch: u64 = 40;
 const EUnsupportedCurrencyDecimals: u64 = 41;
 const EEmptyShopName: u64 = 42;
 const EShopDisabled: u64 = 43;
+const EPriceTooStale: u64 = 44;
 
 const CENTS_PER_DOLLAR: u64 = 100;
 const BASIS_POINT_DENOMINATOR: u64 = 10_000;
@@ -1605,6 +1606,15 @@ fun quote_amount_with_guardrails(
         max_confidence_ratio_bps,
         accepted_currency,
     );
+    let price_info = price_info::get_price_info_from_price_info_object(
+        price_info_object,
+    );
+    let publish_time = price::get_timestamp(
+        &price_feed::get_price(price_info::get_price_feed(&price_info)),
+    );
+    let now = now_secs(clock);
+    assert!(now >= publish_time, EPriceTooStale);
+    assert!(now - publish_time <= effective_max_age, EPriceTooStale);
     let price: price::Price = pyth::get_price_no_older_than(
         price_info_object,
         clock,
