@@ -22,8 +22,4 @@ localnet = "43bd0c5c"
 testnet_beta = "4c78adac"
 
 [dep-replacements.localnet]
-Pyth = { local = "../pyth-mock", override = true, rename-from = "Pyth" }
-
-[addresses]
-pyth = "0xabf837e98c26087cba0883c0a7a28326b1fa3c5e1e2c5abdb486f9e8f594c837"
-wormhole = "0xf47329f4344f3bf0f8e436e2f7b485466cff300f12a166563995d3888c296a94"
+Pyth = { local = "../pyth-mock", override = true, addr_substitutions = { pyth = "0x2" } }
