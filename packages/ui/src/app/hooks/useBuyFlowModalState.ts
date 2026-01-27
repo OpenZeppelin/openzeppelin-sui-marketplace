@@ -53,7 +53,7 @@ import {
 import { getSuiSharedObject } from "@sui-oracle-market/tooling-core/shared-object"
 import { ENetwork } from "@sui-oracle-market/tooling-core/types"
 import { requireValue } from "@sui-oracle-market/tooling-core/utils/utility"
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { EXPLORER_URL_VARIABLE_NAME } from "../config/network"
 import { parseBalance } from "../helpers/balance"
 import { buildDiscountTemplateLookup } from "../helpers/discountTemplates"
@@ -86,6 +86,7 @@ type BuyFieldErrors = {
 }
 
 const SUI_COIN_TYPE = normalizeCoinType("0x2::sui::SUI")
+const ORACLE_QUOTE_REFRESH_INTERVAL_MS = 15_000
 
 const buildBuyFieldErrors = ({
   selectedCurrencyId,
@@ -167,6 +168,8 @@ type BuyFlowModalState = {
   canSubmit: boolean
   oracleWarning?: string
   oracleQuote: OracleQuoteState
+  oracleQuoteLastUpdatedMs?: number
+  requestOracleQuoteRefresh: () => void
   hasSufficientBalance: boolean
   oracleShortfall?: bigint
   handlePurchase: () => Promise<void>
@@ -253,8 +256,12 @@ export const useBuyFlowModalState = ({
   const [oracleQuote, setOracleQuote] = useState<OracleQuoteState>({
     status: "idle"
   })
+  const [oracleQuoteRefreshIndex, setOracleQuoteRefreshIndex] = useState(0)
+  const [oracleQuoteLastUpdatedMs, setOracleQuoteLastUpdatedMs] =
+    useState<number>()
   const [lastWalletContext, setLastWalletContext] =
     useState<Record<string, unknown>>()
+  const oracleQuoteRequestInFlight = useRef(false)
 
   const hydrateShopItemReceipts = useCallback(
     async (receiptIds: string[]): Promise<ShopItemReceiptSummary[]> => {
@@ -480,6 +487,7 @@ export const useBuyFlowModalState = ({
   useEffect(() => {
     if (!open) {
       setOracleQuote({ status: "idle" })
+      setOracleQuoteLastUpdatedMs(undefined)
       return
     }
 
@@ -491,6 +499,7 @@ export const useBuyFlowModalState = ({
       !selectedDiscount
     ) {
       setOracleQuote({ status: "idle" })
+      setOracleQuoteLastUpdatedMs(undefined)
       return
     }
 
@@ -508,7 +517,10 @@ export const useBuyFlowModalState = ({
       return
     }
 
+    if (oracleQuoteRequestInFlight.current) return
+
     let isActive = true
+    oracleQuoteRequestInFlight.current = true
     setOracleQuote({ status: "loading" })
 
     const loadQuote = async () => {
@@ -562,12 +574,15 @@ export const useBuyFlowModalState = ({
         }
 
         setOracleQuote({ status: "success", amount: requiredAmount })
+        setOracleQuoteLastUpdatedMs(Date.now())
       } catch (error) {
         if (!isActive) return
         setOracleQuote({
           status: "error",
           error: formatErrorMessage(error)
         })
+      } finally {
+        oracleQuoteRequestInFlight.current = false
       }
     }
 
@@ -575,16 +590,48 @@ export const useBuyFlowModalState = ({
 
     return () => {
       isActive = false
+      oracleQuoteRequestInFlight.current = false
     }
   }, [
     discountTemplateLookup,
     listing,
     open,
+    oracleQuoteRefreshIndex,
     quotePriceUpdateMode,
     selectedCurrency,
     selectedDiscount,
     shopId,
     suiClient,
+    walletAddress
+  ])
+
+  const requestOracleQuoteRefresh = useCallback(() => {
+    setOracleQuoteRefreshIndex((current) => current + 1)
+  }, [])
+
+  useEffect(() => {
+    if (!open) return
+    if (
+      !walletAddress ||
+      !shopId ||
+      !listing ||
+      !selectedCurrency ||
+      !selectedDiscount
+    )
+      return
+
+    const intervalId = window.setInterval(() => {
+      requestOracleQuoteRefresh()
+    }, ORACLE_QUOTE_REFRESH_INTERVAL_MS)
+
+    return () => window.clearInterval(intervalId)
+  }, [
+    listing,
+    open,
+    requestOracleQuoteRefresh,
+    selectedCurrency,
+    selectedDiscount,
+    shopId,
     walletAddress
   ])
 
@@ -1012,6 +1059,8 @@ export const useBuyFlowModalState = ({
     canSubmit,
     oracleWarning,
     oracleQuote,
+    oracleQuoteLastUpdatedMs,
+    requestOracleQuoteRefresh,
     hasSufficientBalance,
     oracleShortfall,
     handlePurchase,
