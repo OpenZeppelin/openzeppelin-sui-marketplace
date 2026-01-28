@@ -7,8 +7,6 @@ import useClientReady from "../hooks/useClientReady"
 import useHostNetworkPolicy from "../hooks/useHostNetworkPolicy"
 
 const NETWORK_QUERY_PARAM = "network"
-// Backwards-compatible typo support.
-const LEGACY_NETWORK_QUERY_PARAM = "networ"
 
 const normalizeNetworkKey = (value: string | null | undefined) => {
   const normalized = value?.trim().toLowerCase()
@@ -26,10 +24,7 @@ const NetworkUrlSync = () => {
   const pendingAppNetworkRef = useRef<string | undefined>(undefined)
 
   const networkFromUrl = useMemo(() => {
-    return normalizeNetworkKey(
-      searchParams.get(NETWORK_QUERY_PARAM) ??
-        searchParams.get(LEGACY_NETWORK_QUERY_PARAM)
-    )
+    return normalizeNetworkKey(searchParams.get(NETWORK_QUERY_PARAM))
   }, [searchParams])
 
   const normalizedCurrentNetwork = useMemo(() => {
@@ -68,8 +63,7 @@ const NetworkUrlSync = () => {
     if (!normalizedCurrentNetwork) return
 
     const currentUrlNetwork = normalizeNetworkKey(
-      searchParams.get(NETWORK_QUERY_PARAM) ??
-        searchParams.get(LEGACY_NETWORK_QUERY_PARAM)
+      searchParams.get(NETWORK_QUERY_PARAM)
     )
 
     const pendingUrlNetwork = pendingUrlNetworkRef.current
@@ -97,15 +91,13 @@ const NetworkUrlSync = () => {
     // Nothing to do: correct canonical param is already present.
     if (
       currentUrlNetwork === normalizedCurrentNetwork &&
-      searchParams.has(NETWORK_QUERY_PARAM) &&
-      !searchParams.has(LEGACY_NETWORK_QUERY_PARAM)
+      searchParams.has(NETWORK_QUERY_PARAM)
     ) {
       return
     }
 
     const params = new URLSearchParams(searchParams.toString())
     params.set(NETWORK_QUERY_PARAM, normalizedCurrentNetwork)
-    params.delete(LEGACY_NETWORK_QUERY_PARAM)
 
     const query = params.toString()
     const href = query ? `${pathname}?${query}` : pathname

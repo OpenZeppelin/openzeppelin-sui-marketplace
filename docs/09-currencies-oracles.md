@@ -16,7 +16,7 @@ This chapter wires accepted currencies to Pyth feeds and guardrails.
 ## 3. Run it
 ```bash
 # Localnet mock artifacts
-pnpm script mock:setup --buyer-address <0x...>
+pnpm script mock:setup --buyer-address <0x...> --network localnet
 cat packages/dapp/deployments/mock.localnet.json
 
 # Register a currency

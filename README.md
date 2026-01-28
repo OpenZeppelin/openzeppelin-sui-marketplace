@@ -28,10 +28,9 @@ Set up your environment so you have active address and localnet running so you c
 Full walkthrough: [docs/05-localnet-workflow.md](docs/05-localnet-workflow.md).
 
 ```bash
-# Clone and install
-git clone git@github.com:OpenZeppelin/sui-oracle-market.git && cd sui-oracle-market
-
-# pnpm workspace install from the repo root
+# 1) Clone and install
+git clone git@github.com:OpenZeppelin/openzeppelin-sui-marketplace.git && cd openzeppelin-sui-marketplace
+# (pnpm workspace install from the repo root)
 pnpm install
 
 # Create an address (this will be your shop owner address) (note the recovery phrase to import it later in your browser wallet)
@@ -49,7 +48,7 @@ sui client new-address ed25519
 pnpm script chain:localnet:start --with-faucet
 
 # Seed mocks (coins + Pyth stub + price feeds) on localnet as there is no coins or published Pyth oracle on your blank localnet
-pnpm script mock:setup --buyer-address <0x...>
+pnpm script mock:setup --buyer-address <0x...> --network localnet
 ```
 
 
