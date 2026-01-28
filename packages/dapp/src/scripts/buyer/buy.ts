@@ -10,8 +10,8 @@ import yargs from "yargs"
 import {
   buildBuyTransaction,
   estimateRequiredAmount,
-  resolveDiscountedPriceUsdCents,
   resolveDiscountContext,
+  resolveDiscountedPriceUsdCents,
   resolvePaymentCoinObjectId
 } from "@sui-oracle-market/domain-core/flows/buy"
 import {
@@ -127,6 +127,12 @@ runSuiScript(
     })
 
     const isSuiPayment = inputs.coinType === SUI_COIN_TYPE
+    const quotePriceUpdateMode =
+      tooling.network.networkName === "localnet"
+        ? "localnet-mock"
+        : inputs.skipPriceUpdate
+          ? "none"
+          : "pyth-update"
     let paymentCoinMinimumBalance: bigint | undefined = undefined
     let paymentCoinObjectId: string | undefined = undefined
 
@@ -152,12 +158,17 @@ runSuiScript(
         shopShared,
         acceptedCurrencyShared,
         pythPriceInfoShared,
+        pythFeedIdHex: acceptedCurrencySummary.feedIdHex,
+        networkName: tooling.network.networkName,
         priceUsdCents: discountedPriceUsdCents,
         maxPriceAgeSecs: inputs.maxPriceAgeSecs,
         maxConfidenceRatioBps: inputs.maxConfidenceRatioBps,
         clockShared,
         signerAddress,
-        suiClient: tooling.suiClient
+        suiClient: tooling.suiClient,
+        priceUpdateMode: quotePriceUpdateMode,
+        hermesUrlOverride: inputs.hermesUrl,
+        pythConfigOverride: tooling.suiConfig.network.pyth
       })
 
       if (paymentCoinMinimumBalance === undefined) {

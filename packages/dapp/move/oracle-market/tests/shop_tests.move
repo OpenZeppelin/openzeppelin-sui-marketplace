@@ -923,7 +923,7 @@ fun quote_rejects_attestation_lag_above_currency_cap() {
     abort EAssertFailure
 }
 
-#[test, expected_failure(abort_code = ::pyth::pyth::EStalePriceUpdate, location = ::pyth::pyth)]
+#[test, expected_failure(abort_code = ::sui_oracle_market::shop::EPriceTooStale)]
 fun quote_rejects_price_timestamp_older_than_max_age() {
     let mut scn = scenario::begin(TEST_OWNER);
     shop::create_shop(DEFAULT_SHOP_NAME, scenario::ctx(&mut scn));

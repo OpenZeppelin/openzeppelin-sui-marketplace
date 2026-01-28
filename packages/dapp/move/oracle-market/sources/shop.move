@@ -1,11 +1,11 @@
 module sui_oracle_market::shop;
 
-use pyth::i64;
-use pyth::price;
-use pyth::price_feed;
-use pyth::price_identifier;
-use pyth::price_info;
-use pyth::pyth;
+use Pyth::i64;
+use Pyth::price;
+use Pyth::price_feed;
+use Pyth::price_identifier;
+use Pyth::price_info;
+use Pyth::pyth;
 use std::string;
 use std::type_name::{Self, TypeName};
 use std::u128;
@@ -118,6 +118,7 @@ const EItemTypeMismatch: u64 = 40;
 const EUnsupportedCurrencyDecimals: u64 = 41;
 const EEmptyShopName: u64 = 42;
 const EShopDisabled: u64 = 43;
+const EPriceTooStale: u64 = 44;
 
 const CENTS_PER_DOLLAR: u64 = 100;
 const BASIS_POINT_DENOMINATOR: u64 = 10_000;
@@ -570,7 +571,6 @@ fun add_item_listing_core<T: store>(
     (listing, listing_id, listing_address)
 }
 
-#[allow(lint(share_owned))]
 entry fun add_item_listing<T: store>(
     shop: &mut Shop,
     owner_cap: &ShopOwnerCap,
@@ -833,7 +833,6 @@ fun create_discount_template_core(
 /// - Time windows and limits are stored on-chain and later checked against the shared `Clock`
 ///   (timestamp_ms -> seconds). On Sui, time is an explicit input object; on EVM, `block.timestamp`
 ///   is global state available to view/read-only calls but can drift within protocol bounds.
-#[allow(lint(share_owned))]
 entry fun create_discount_template(
     shop: &mut Shop,
     owner_cap: &ShopOwnerCap,
@@ -1605,6 +1604,15 @@ fun quote_amount_with_guardrails(
         max_confidence_ratio_bps,
         accepted_currency,
     );
+    let price_info = price_info::get_price_info_from_price_info_object(
+        price_info_object,
+    );
+    let publish_time = price::get_timestamp(
+        &price_feed::get_price(price_info::get_price_feed(&price_info)),
+    );
+    let now = now_secs(clock);
+    assert!(now >= publish_time, EPriceTooStale);
+    assert!(now - publish_time <= effective_max_age, EPriceTooStale);
     let price: price::Price = pyth::get_price_no_older_than(
         price_info_object,
         clock,

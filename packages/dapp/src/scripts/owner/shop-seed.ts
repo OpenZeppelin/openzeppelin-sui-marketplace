@@ -496,25 +496,68 @@ const buildItemListingSeeds = (itemPackageId: string): ItemListingSeed[] => {
   }))
 }
 
-const resolveItemExamplesPackageIdForNetwork = async ({
+const resolveItemExamplesPackageIdFromArtifacts = async ({
   networkName,
   itemPackageId
 }: {
   networkName: string
   itemPackageId?: string
-}) => {
-  const resolvedPackageId = await resolveItemExamplesPackageId({
+}) =>
+  resolveItemExamplesPackageId({
     networkName,
     itemPackageId
   })
 
-  if (networkName === "localnet") {
+const resolveItemExamplesPackageIdOrPublish = async ({
+  networkName,
+  itemPackageId,
+  tooling
+}: {
+  networkName: string
+  itemPackageId?: string
+  tooling: Tooling
+}) => {
+  try {
+    return {
+      itemPackageId: await resolveItemExamplesPackageIdFromArtifacts({
+        networkName,
+        itemPackageId
+      }),
+      wasPublished: false
+    }
+  } catch (error) {
+    if (itemPackageId) throw error
+    return {
+      itemPackageId: await publishItemExamplesPackage({ networkName, tooling }),
+      wasPublished: true
+    }
+  }
+}
+
+const resolveItemExamplesPackageIdForNetwork = async ({
+  networkName,
+  itemPackageId,
+  tooling
+}: {
+  networkName: string
+  itemPackageId?: string
+  tooling: Tooling
+}) => {
+  if (networkName === "localnet" && !itemPackageId) {
     const mockArtifact = await readArtifact<MockArtifact>(mockArtifactPath, {})
     const mockItemPackageId = mockArtifact.itemPackageId
-    if (mockItemPackageId) return normalizeSuiObjectId(mockItemPackageId)
+    if (mockItemPackageId)
+      return {
+        itemPackageId: normalizeSuiObjectId(mockItemPackageId),
+        wasPublished: false
+      }
   }
 
-  return resolvedPackageId
+  return resolveItemExamplesPackageIdOrPublish({
+    networkName,
+    itemPackageId,
+    tooling
+  })
 }
 
 const resolveItemExamplesPackagePath = (tooling: Tooling) =>
@@ -639,10 +682,12 @@ const resolveItemListingSeeds = async ({
   tooling: Tooling
   suiClient: SuiClient
 }): Promise<{ itemPackageId: string; listingSeeds: ItemListingSeed[] }> => {
-  const itemPackageId = await resolveItemExamplesPackageIdForNetwork({
-    networkName,
-    itemPackageId: cliArguments.itemPackageId
-  })
+  const { itemPackageId, wasPublished } =
+    await resolveItemExamplesPackageIdForNetwork({
+      networkName,
+      itemPackageId: cliArguments.itemPackageId,
+      tooling
+    })
   const listingSeeds = buildItemListingSeeds(itemPackageId)
 
   const missingItemTypes = await findMissingItemTypes({
@@ -654,6 +699,15 @@ const resolveItemListingSeeds = async ({
 
   if (cliArguments.itemPackageId)
     throw buildMissingItemTypesError({ missingItemTypes, networkName })
+
+  if (wasPublished) {
+    await ensureListingTypesAvailable({
+      listingSeeds,
+      networkName,
+      suiClient
+    })
+    return { itemPackageId, listingSeeds }
+  }
 
   const publishedItemPackageId = await publishItemExamplesPackage({
     networkName,

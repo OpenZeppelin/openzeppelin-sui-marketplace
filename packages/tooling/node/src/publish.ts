@@ -723,14 +723,16 @@ const assertFrameworkRevisionConsistency = async (packagePath: string) => {
   const frameworkRevisions = await readFrameworkRevisionsForPackage(packagePath)
   if (frameworkRevisions.size === 0) return
 
-  if (frameworkRevisions.size > 1)
-    throw new Error(
+  if (frameworkRevisions.size > 1) {
+    logWarning(
       await buildMultipleFrameworkRevisionsMessage({
         packagePath,
         frameworkRevisions,
-        severity: "error"
+        severity: "warning"
       })
     )
+    return
+  }
 
   const [rootFrameworkRevision] = [...frameworkRevisions]
 
