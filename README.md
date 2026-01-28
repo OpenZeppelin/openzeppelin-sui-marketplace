@@ -30,7 +30,7 @@ Full walkthrough: [docs/05-localnet-workflow.md](docs/05-localnet-workflow.md).
 
 ```bash
 # 1) Clone and install
-git clone git@github.com:OpenZeppelin/sui-oracle-market.git && cd sui-oracle-market
+git clone git@github.com:OpenZeppelin/openzeppelin-sui-marketplace.git && cd openzeppelin-sui-marketplace
 # (pnpm workspace install from the repo root)
 pnpm install
 

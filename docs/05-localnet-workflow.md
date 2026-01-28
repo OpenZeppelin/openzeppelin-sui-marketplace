@@ -12,8 +12,8 @@ If you’re brand new, start with [00 Setup + Quickstart](./00-setup.md) and the
 
 ### 1) Clone and install deps
 ```bash
-git clone git@github.com:OpenZeppelin/sui-oracle-market.git sui-oracle-market
-cd sui-oracle-market
+git clone git@github.com:OpenZeppelin/openzeppelin-sui-marketplace.git
+cd openzeppelin-sui-marketplace
 pnpm install
 ```
 
