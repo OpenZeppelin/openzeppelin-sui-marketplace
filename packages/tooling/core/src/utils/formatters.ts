@@ -84,6 +84,12 @@ export const readMoveString = (value: unknown): string | undefined => {
 }
 
 /**
+ * Attempts to read a Move `string` or legacy `vector<u8>` as a UTF-8 string.
+ */
+export const readMoveStringOrVector = (value: unknown): string | undefined =>
+  readMoveString(value) ?? decodeUtf8Vector(value)
+
+/**
  * Decodes a byte array to a UTF-8 string.
  */
 export const fromBytesToString = (bytes: number[]): string =>

@@ -1,11 +1,6 @@
 import type { WrappedSuiSharedObject } from "@sui-oracle-market/tooling-core/shared-object"
 import { newTransaction } from "@sui-oracle-market/tooling-core/transactions"
 
-export const encodeShopName = (name: string): Uint8Array => {
-  if (!name.trim()) throw new Error("Shop name cannot be empty.")
-  return new TextEncoder().encode(name)
-}
-
 export const buildCreateShopTransaction = ({
   packageId,
   shopName
@@ -14,10 +9,12 @@ export const buildCreateShopTransaction = ({
   shopName: string
 }) => {
   const transaction = newTransaction()
+  const normalizedShopName = shopName.trim()
+  if (!normalizedShopName) throw new Error("Shop name cannot be empty.")
 
   transaction.moveCall({
     target: `${packageId}::shop::create_shop`,
-    arguments: [transaction.pure.vector("u8", encodeShopName(shopName))]
+    arguments: [transaction.pure.string(normalizedShopName)]
   })
 
   return transaction
