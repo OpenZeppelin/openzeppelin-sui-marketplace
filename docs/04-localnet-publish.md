@@ -16,7 +16,7 @@ This chapter gets a local chain running, seeds mocks, and publishes the Move pac
 ## 3. Run it
 ```bash
 pnpm script chain:localnet:start --with-faucet
-pnpm script mock:setup --buyer-address <0x...>
+pnpm script mock:setup --buyer-address <0x...> --network localnet
 pnpm script move:publish --package-path oracle-market
 ```
 

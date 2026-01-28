@@ -45,7 +45,7 @@ export SUI_ACCOUNT_PRIVATE_KEY=<base64 or hex>
 pnpm script chain:localnet:start --with-faucet
 
 # 5) Seed mocks (coins + Pyth stub + price feeds)
-pnpm script mock:setup --buyer-address <0x...>
+pnpm script mock:setup --buyer-address <0x...> --network localnet
 
 # 6) Publish oracle-market (uses localnet dep replacements for mocks)
 pnpm script move:publish --package-path oracle-market
