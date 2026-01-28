@@ -8,7 +8,7 @@ import {
   normalizeOptionalIdFromValue,
   unwrapMoveObjectFields
 } from "@sui-oracle-market/tooling-core/object"
-import { decodeUtf8Vector } from "@sui-oracle-market/tooling-core/utils/formatters"
+import { readMoveStringOrVector } from "@sui-oracle-market/tooling-core/utils/formatters"
 import {
   requireValue,
   tryParseBigInt
@@ -99,7 +99,7 @@ const parseShopCreatedEvent = (
     return {
       shopId,
       ownerAddress: normalizeOptionalIdFromValue(fields.owner),
-      name: decodeUtf8Vector(fields.name),
+      name: readMoveStringOrVector(fields.name),
       ownerCapId: normalizeOptionalIdFromValue(fields.shop_owner_cap_id),
       createdAtMs: event.timestampMs ? String(event.timestampMs) : undefined,
       txDigest: event.id?.txDigest
@@ -183,7 +183,7 @@ export const getShopOverview = async (
 
 export const getShopNameFromObject = (object: SuiObjectData): string => {
   const shopFields = unwrapMoveObjectFields<{ name?: unknown }>(object)
-  return (shopFields.name as string) || "Unnamed Shop"
+  return readMoveStringOrVector(shopFields.name) ?? "Unnamed Shop"
 }
 
 export const getShopDisabledFlagFromObject = (
