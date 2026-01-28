@@ -56,15 +56,15 @@ Use this page as the navigation hub for the docs. Each chapter ends with Prev/Ne
 | Dynamic fields | Membership index and discovery without monolithic maps | `packages/dapp/move/oracle-market/sources/shop.move` (ItemListingMarker, DiscountClaim) | `docs/08-listings-receipts.md`, `docs/10-discounts-tickets.md` |
 | Type tags / TypeName | Runtime type names for listings and coins; compile-time safety still comes from generics | `packages/dapp/move/oracle-market/sources/shop.move` (item_type, coin_type) | `docs/08-listings-receipts.md`, `docs/09-currencies-oracles.md` |
 | Phantom types | Typed receipts without storing the value | `packages/dapp/move/oracle-market/sources/shop.move` (`ShopItem<phantom TItem>`) | `docs/08-listings-receipts.md` |
-| `Coin<T>` resources | Payment as objects, not allowances | `packages/dapp/move/oracle-market/sources/shop.move` (process_purchase, pay_shop, refund_or_destroy) | `docs/09-currencies-oracles.md` |
+| `Coin<T>` resources | Payment as objects, not allowances | `packages/dapp/move/oracle-market/sources/shop.move` (process_purchase, split_payment, finalize_purchase_transfers) | `docs/09-currencies-oracles.md` |
 | Coin registry | Trusted metadata for decimals/symbols | `packages/dapp/move/oracle-market/sources/shop.move` (add_accepted_currency) | `docs/09-currencies-oracles.md` |
 | Oracle objects (Pyth) | Price feeds are objects with guardrails | `packages/dapp/move/oracle-market/sources/shop.move` (quote_amount_for_price_info_object) | `docs/09-currencies-oracles.md` |
 | Clock | Trusted time for windows and freshness | `packages/dapp/move/oracle-market/sources/shop.move` (now_secs) | `docs/09-currencies-oracles.md`, `docs/10-discounts-tickets.md` |
 | PTB composition | Oracle update + buy in one transaction | `packages/domain/core/src/flows/buy.ts` (buildBuyTransaction) | `docs/12-buyer-ui.md` |
 | PTB limits + gas | Batching and gas coin handling | `packages/domain/core/src/flows/buy.ts` (maybeSetDedicatedGasForSuiPayments) | `docs/17-ptb-gas.md` |
 | Events | Typed logs for UI and indexers | `packages/dapp/move/oracle-market/sources/shop.move` (PurchaseCompleted) | `docs/14-advanced.md` |
-| TxContext | Object creation and coin splits | `packages/dapp/move/oracle-market/sources/shop.move` (obj::new, coin::split) | `docs/14-advanced.md` |
-| Publisher / init | Publish-time metadata | `packages/dapp/move/oracle-market/sources/shop.move` (init, claim_publisher) | `docs/04-localnet-publish.md` |
+| TxContext | Object creation and coin splits | `packages/dapp/move/oracle-market/sources/shop.move` (object::new, split_payment) | `docs/14-advanced.md` |
+| Publisher / init | Publish-time metadata | `packages/dapp/move/oracle-market/sources/shop.move` (init, package::claim_and_keep) | `docs/04-localnet-publish.md` |
 | UpgradeCap | Package upgrades and access control | `packages/dapp/deployments/deployment.localnet.json` | `docs/04-localnet-publish.md`, `docs/14-advanced.md` |
 | test_only helpers | Test scaffolding without prod entry points | `packages/dapp/move/oracle-market/sources/shop.move` (#[test_only]) | `docs/14-advanced.md` |
 | Data access | Objects + events + dynamic fields in UI | `packages/domain/core/src/models/shop.ts` (event queries) | `docs/18-data-access.md` |

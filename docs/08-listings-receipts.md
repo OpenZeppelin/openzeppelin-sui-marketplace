@@ -50,7 +50,7 @@ pnpm script buyer:item-listing:list --shop-id <shopId>
   Code: `packages/dapp/move/oracle-market/sources/shop.move` (`ShopItem`)
 - **Receipts are transferable, not the asset**: `ShopItem<TItem>` is an owned receipt. It can be
   transferred like any owned object, but it is a proof of purchase, not the actual item itself.
-  Code: `packages/dapp/move/oracle-market/sources/shop.move` (`ShopItem`, `mint_and_transfer_item`)
+  Code: `packages/dapp/move/oracle-market/sources/shop.move` (`ShopItem`, `mint_shop_item`)
 - **Object IDs vs addresses**: on Sui, object IDs are addresses (but not every address is an object ID).
   Convert between `UID` and address forms for events and off-chain tooling using `obj::uid_to_address`
   and `obj::id_from_address`.
@@ -69,7 +69,7 @@ pnpm script buyer:item-listing:list --shop-id <shopId>
 entry fun add_item_listing<T: store>(
   shop: &mut Shop,
   owner_cap: &ShopOwnerCap,
-  name: vector<u8>,
+  name: string::String,
   base_price_usd_cents: u64,
   stock: u64,
   spotlight_discount_template_id: Option<obj::ID>,
@@ -103,7 +103,7 @@ fun mint_shop_item<TItem: store>(
     shop_address: item_listing.shop_address,
     item_listing_address: obj::uid_to_address(&item_listing.id),
     item_type: item_listing.item_type,
-    name: clone_bytes(&item_listing.name),
+    name: clone_string(&item_listing.name),
     acquired_at: now_secs(clock),
   }
 }

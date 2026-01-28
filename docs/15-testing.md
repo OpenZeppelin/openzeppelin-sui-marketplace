@@ -23,8 +23,9 @@ Localnet used by tests is isolated in a temp dir and does not reuse `~/.sui` or 
 ## 2. Unit tests (domain + UI)
 ```bash
 pnpm --filter @sui-oracle-market/domain-core test:unit
-pnpm ui test:unit
+pnpm ui lint
 ```
+Note: the UI package does not currently expose a `test:unit` script.
 
 ### 2.1 Pyth mock helper for Move unit tests
 Use `new_price_info_object_for_test` from the Pyth mock to build a `PriceInfoObject` that behaves
@@ -56,16 +57,8 @@ public fun new_price_info_object_for_test(
 }
 ```
 
-Note: clean up test objects to keep unit tests tidy and avoid accidental leaks:
-
-`packages/dapp/move/pyth-mock/sources/price_info.move`
-```move
-#[test_only]
-public fun destroy(price_info: PriceInfoObject) {
-  let PriceInfoObject { id, price_info: _ } = price_info;
-  obj::delete(id);
-}
-```
+Note: the mock package does not ship a test-only destroy helper. If you need cleanup, delete the
+object in your test (for example, by extracting its `UID` and calling `delete()`).
 
 ## 3. Script testing framework
 This repo ships a reusable testing layer in `@sui-oracle-market/tooling-node/testing` designed for scripts built on `runSuiScript`.
@@ -82,8 +75,7 @@ The goal is to keep script tests fast, deterministic, and production-grade while
 ### 3.2 Directory layout (dapp)
 - `packages/dapp/src/scripts/owner/test-integration/` → owner script integration tests and helpers.
 - `packages/dapp/src/scripts/buyer/test-integration/` → buyer script integration tests and helpers.
-- `packages/dapp/src/utils/test/helpers/helpers.ts` → shared test utilities and fixtures used by both owner/buyer suites.
-- `packages/dapp/src/scripts/utils/test/` → unit tests for script utilities.
+- `packages/dapp/src/utils/test-utils/helpers.ts` → shared test utilities and fixtures used by both owner/buyer suites.
 
 ### 3.2.1 Code spotlight: buyer script integration test
 `packages/dapp/src/scripts/buyer/test-integration/buyer-scripts.test.ts`
@@ -142,7 +134,7 @@ export default defineConfig({
 Each test file can share a lazily created harness, but every `withTestContext` call now starts its own fully isolated localnet + temp directory. No suite hooks or shared artifacts are required:
 ```ts
 import { it } from "vitest"
-import { createDappIntegrationTestEnv } from "packages/dapp/src/utils/test/helpers/helpers"
+import { createDappIntegrationTestEnv } from "packages/dapp/src/utils/test-utils/helpers"
 
 const testEnv = createDappIntegrationTestEnv()
 
@@ -162,7 +154,7 @@ import {
 	createScriptRunner,
 	publishMovePackage,
 	runScriptJson
-} from "packages/dapp/src/utils/test/helpers/helpers"
+} from "packages/dapp/src/utils/test-utils/helpers"
 
 const scriptRunner = createScriptRunner(context)
 const oracleMarketArtifact = await publishMovePackage(
@@ -194,7 +186,7 @@ import {
 	resolveItemType,
 	seedShopWithListingAndDiscount,
 	runBuyerScriptJson
-} from "packages/dapp/src/utils/test/helpers/helpers"
+} from "packages/dapp/src/utils/test-utils/helpers"
 
 const { publisher, scriptRunner, shopId, itemExamplesPackageId } =
 	await createShopWithItemExamplesFixture(context, {

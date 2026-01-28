@@ -40,7 +40,7 @@ pnpm ui dev
 ```
 
 ## 5. EVM -> Sui translation
-1. **approve + transferFrom -> move a `Coin<T>`**: you pass the coin object into the PTB; change is returned as a new coin object. In this repo's flow, SUI payments keep a dedicated SUI coin for gas (custom flows can split from gas instead). See `buildBuyTransaction` in `packages/domain/core/src/flows/buy.ts`.
+1. **approve + transferFrom -> move a `Coin<T>`**: Move conventions prefer passing a coin with the exact amount by value. This repo instead splits a payment coin and returns change (SUI payments also keep a dedicated SUI coin for gas). See `buildBuyTransaction` in `packages/domain/core/src/flows/buy.ts`.
 2. **Oracle update + buy -> single PTB**: the transaction updates Pyth and buys in one block. See `maybeUpdatePythPriceFeed` in `packages/domain/core/src/flows/buy.ts`.
 3. **Localnet signing**: the UI signs in the wallet but executes through the app RPC client to avoid network mismatches. See `packages/ui/src/app/hooks/useBuyFlowModalState.ts`.
 

@@ -95,7 +95,7 @@ entry fun create_discount_template(
   );
   txf::share_object(discount_template);
   let shop_address: address = shop_address(shop);
-  event::emit(DiscountTemplateCreated {
+  event::emit(DiscountTemplateCreatedEvent {
     shop_address,
     discount_template_id: discount_template_address,
     rule: discount_rule,

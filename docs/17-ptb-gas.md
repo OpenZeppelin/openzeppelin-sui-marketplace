@@ -27,7 +27,7 @@ Code: `packages/domain/core/src/flows/buy.ts` (`buildBuyTransaction`, `estimateR
 
 ## 5. Concept deep dive: gas coins and SUI payments
 - **Separate gas coin (repo choice)**: when paying with SUI, the flow keeps a dedicated gas coin to avoid mixing payment and gas; custom PTBs can split from the gas coin instead.
-- **Coin splitting**: payments are made by splitting coins inside the PTB; change is returned as a new coin object.
+- **Coin splitting**: Move conventions prefer passing an exact-amount coin by value. This repo instead splits a payment coin inside the PTB and returns change.
 - **Gas smashing**: Sui can combine gas coins for efficiency, but you still must provide a valid gas coin in the transaction.
 - **Sponsored transactions (optional)**: a sponsor can pay gas for another signer, which is useful for onboarding flows.
 
@@ -36,19 +36,33 @@ Code: `packages/domain/core/src/flows/buy.ts` (`maybeSetDedicatedGasForSuiPaymen
 ## 6. Concept deep dive: storage fees and rebates
 - **Storage fees**: object creation and mutation carry storage cost.
 - **Storage rebates**: deleting objects returns part of the storage cost.
-- **Why it matters here**: `refund_or_destroy` explicitly destroys zero-value coins to reclaim storage.
+- **Why it matters here**: `finalize_purchase_transfers` explicitly destroys zero-value coins to reclaim storage.
 
-Code: `packages/dapp/move/oracle-market/sources/shop.move` (`refund_or_destroy`)
+Code: `packages/dapp/move/oracle-market/sources/shop.move` (`finalize_purchase_transfers`)
 
 **Code spotlight: refund or destroy change**
 `packages/dapp/move/oracle-market/sources/shop.move`
 ```move
-fun refund_or_destroy<TCoin>(payment: coin::Coin<TCoin>, recipient: address) {
-  if (coin::value(&payment) == 0) {
-    coin::destroy_zero(payment);
+fun finalize_purchase_transfers<TItem: store, TCoin>(
+  owed_coin_opt: option::Option<coin::Coin<TCoin>>,
+  change_coin: coin::Coin<TCoin>,
+  minted_item: ShopItem<TItem>,
+  payout_to: address,
+  refund_extra_to: address,
+  mint_to: address,
+) {
+  if (option::is_some(&owed_coin_opt)) {
+    let owed_coin = option::destroy_some(owed_coin_opt);
+    transfer::public_transfer(owed_coin, payout_to);
   } else {
-    txf::public_transfer(payment, recipient);
+    option::destroy_none(owed_coin_opt);
   };
+  if (change_coin.value() == 0) {
+    change_coin.destroy_zero();
+  } else {
+    transfer::public_transfer(change_coin, refund_extra_to);
+  };
+  transfer::public_transfer(minted_item, mint_to);
 }
 ```
 
@@ -61,7 +75,7 @@ fun refund_or_destroy<TCoin>(payment: coin::Coin<TCoin>, recipient: address) {
 PTB
   1) update Pyth price feed (optional)
   2) buy_item or claim_and_buy_item_with_discount
-  3) split payment coin -> pay owner + return change
+  3) pay owner (convention prefers exact-amount coin; this repo may split and return change)
 ```
 
 ## 9. Further reading (Sui docs)
