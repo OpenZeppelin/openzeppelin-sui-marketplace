@@ -69,7 +69,7 @@ pnpm script buyer:item-listing:list --shop-id <shopId>
 entry fun add_item_listing<T: store>(
   shop: &mut Shop,
   owner_cap: &ShopOwnerCap,
-  name: vector<u8>,
+  name: string::String,
   base_price_usd_cents: u64,
   stock: u64,
   spotlight_discount_template_id: Option<obj::ID>,
@@ -103,7 +103,7 @@ fun mint_shop_item<TItem: store>(
     shop_address: item_listing.shop_address,
     item_listing_address: obj::uid_to_address(&item_listing.id),
     item_type: item_listing.item_type,
-    name: clone_bytes(&item_listing.name),
+    name: clone_string(&item_listing.name),
     acquired_at: now_secs(clock),
   }
 }

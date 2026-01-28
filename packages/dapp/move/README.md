@@ -102,7 +102,7 @@ Minimal PTB Examples
 --------------------
 **Create shop**
 ```
-create_shop(b"Shop", &mut ctx);
+create_shop(string::utf8(b"Shop"), &mut ctx);
 ```
 
 **Rotate payout address**
@@ -119,7 +119,7 @@ update_shop_owner(
 ```
 add_item_listing<ItemType>(
     &mut shop,
-    b"Example Item",
+    string::utf8(b"Example Item"),
     /* usd_cents */ 125_00,
     /* stock */ 10,
     /* spotlight template */ none,

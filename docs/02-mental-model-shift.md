@@ -31,10 +31,7 @@ This repo assumes you already think in Solidity. The goal here is not to re-teac
   objects. This repo uses address-owned capabilities/tickets, shared objects for Shop/listings, and
   object-owned dynamic-field children under the Shop or templates.
   Code: `packages/dapp/move/oracle-market/sources/shop.move` (ShopOwnerCap, Shop, marker structs)
-- **Strings (`String`)**: Sui Move conventions prefer `String` for user-facing text. If you follow
-  the conventions, use `String` and only drop down to `vector<u8>` when you have a strong reason.
-  This repo currently stores names as `vector<u8>` for explicit bytes, so convert to/from UTF-8 at
-  the UI/CLI edges if you keep that pattern.
+- **Strings (`String`)**: Sui Move’s String type is designed for user-facing, human-readable text and is always UTF-8 encoded. This is different from Solidity, where string is a dynamic byte array and encoding is not enforced. Using String ensures your data is valid UTF-8, which is important for interoperability and user interfaces. Many Sui and Move standard library functions expect or return String, making it the idiomatic choice for names, descriptions, and other text fields. Use vector<u8> only when you need to store arbitrary bytes (e.g., binary data, hashes, or non-UTF-8 content).
   Code: `packages/dapp/move/oracle-market/sources/shop.move` (Shop.name, ItemListing.name)
 - **Options instead of sentinels**: optional values use `Option` instead of magic constants.
   This is used for optional listing links, template expiry, and max-redemption caps.
@@ -57,7 +54,7 @@ public struct ShopOwnerCap has key, store {
 public struct Shop has key, store {
   id: obj::UID,
   owner: address,
-  name: vector<u8>,
+  name: string::String,
   disabled: bool,
 }
 ```
@@ -96,7 +93,7 @@ await publishPackageToNetwork(
 **Code spotlight: instantiate a Shop after publish**
 `packages/dapp/move/oracle-market/sources/shop.move`
 ```move
-fun create_shop(name: vector<u8>, ctx: &mut tx::TxContext) {
+fun create_shop(name: string::String, ctx: &mut tx::TxContext) {
   let owner: address = ctx.sender();
   let shop: Shop = new_shop(name, owner, ctx);
 
