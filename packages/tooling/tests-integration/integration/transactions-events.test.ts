@@ -18,16 +18,11 @@ const testEnv = createToolingIntegrationTestEnv()
 const eventTypeEndsWith = (eventType: string, suffix: string) =>
   eventType.toLowerCase().endsWith(suffix.toLowerCase())
 
-const encodeShopName = (name: string) => {
-  if (!name.trim()) throw new Error("Shop name cannot be empty.")
-  return new TextEncoder().encode(name)
-}
-
 const buildCreateShopTransaction = (packageId: string, shopName: string) => {
   const transaction = newTransaction()
   transaction.moveCall({
     target: `${packageId}::shop::create_shop`,
-    arguments: [transaction.pure.vector("u8", encodeShopName(shopName))]
+    arguments: [transaction.pure.string(shopName.trim())]
   })
   return transaction
 }
