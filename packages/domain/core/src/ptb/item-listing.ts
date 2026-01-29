@@ -20,11 +20,6 @@ type DiscountTemplateMetadata = {
   appliesToListing?: string
 }
 
-export const encodeItemName = (name: string): Uint8Array => {
-  if (!name.trim()) throw new Error("Item name cannot be empty.")
-  return new TextEncoder().encode(name)
-}
-
 export const getItemListingMetadata = async (
   listingId: string,
   shopId: string,
@@ -159,6 +154,8 @@ export const buildAddItemListingTransaction = ({
 }) => {
   const transaction = newTransaction()
   const shopArgument = transaction.sharedObjectRef(shop.sharedRef)
+  const normalizedItemName = itemName.trim()
+  if (!normalizedItemName) throw new Error("Item name cannot be empty.")
 
   transaction.moveCall({
     target: `${packageId}::shop::add_item_listing`,
@@ -166,7 +163,7 @@ export const buildAddItemListingTransaction = ({
     arguments: [
       shopArgument,
       transaction.object(ownerCapId),
-      transaction.pure.vector("u8", encodeItemName(itemName)),
+      transaction.pure.string(normalizedItemName),
       transaction.pure.u64(basePriceUsdCents),
       transaction.pure.u64(stock),
       transaction.pure.option("address", spotlightDiscountId ?? null)
