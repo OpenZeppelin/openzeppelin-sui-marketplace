@@ -30,7 +30,7 @@ Full walkthrough: [docs/05-localnet-workflow.md](docs/05-localnet-workflow.md).
 
 ```bash
 # 1) Clone and install
-git clone git@github.com:OpenZeppelin/sui-oracle-market.git && cd sui-oracle-market
+git clone git@github.com:OpenZeppelin/openzeppelin-sui-marketplace.git && cd openzeppelin-sui-marketplace
 # (pnpm workspace install from the repo root)
 pnpm install
 
@@ -45,7 +45,7 @@ export SUI_ACCOUNT_PRIVATE_KEY=<base64 or hex>
 pnpm script chain:localnet:start --with-faucet
 
 # 5) Seed mocks (coins + Pyth stub + price feeds)
-pnpm script mock:setup --buyer-address <0x...>
+pnpm script mock:setup --buyer-address <0x...> --network localnet
 
 # 6) Publish oracle-market (uses localnet dep replacements for mocks)
 pnpm script move:publish --package-path oracle-market
