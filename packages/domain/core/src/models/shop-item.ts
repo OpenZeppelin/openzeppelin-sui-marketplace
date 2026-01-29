@@ -7,8 +7,8 @@ import {
   unwrapMoveObjectFields
 } from "@sui-oracle-market/tooling-core/object"
 import {
-  decodeUtf8Vector,
-  formatOptionalNumericValue
+  formatOptionalNumericValue,
+  readMoveStringOrVector
 } from "@sui-oracle-market/tooling-core/utils/formatters"
 import { formatTypeNameFromFieldValue } from "@sui-oracle-market/tooling-core/utils/type-name"
 
@@ -106,7 +106,7 @@ export const parseShopItemReceiptFromObject = (
     shopAddress,
     itemListingAddress,
     itemType,
-    name: decodeUtf8Vector(shopItemFields.name),
+    name: readMoveStringOrVector(shopItemFields.name),
     acquiredAt: formatOptionalNumericValue(shopItemFields.acquired_at)
   }
 }
