@@ -33,7 +33,7 @@ git clone git@github.com:OpenZeppelin/openzeppelin-sui-marketplace.git && cd ope
 # (pnpm workspace install from the repo root)
 pnpm install
 
-# Create an address (this will be your shop owner address) (note the recovery phrase to import it later in your browser wallet)
+# Create an address (it will be your shop owner address). Note the recovery phrase to import it later in your browser wallet.
 sui client new-address ed25519
 
 # Configure this address in dapp/.env , Sui config file or export
