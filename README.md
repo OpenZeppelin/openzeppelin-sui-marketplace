@@ -23,7 +23,7 @@ More detail (workspace layering rules, folder layout): `docs/01-repo-layout.md`.
 
 
 ## Environment Setup
-Set up your environment so you have active address and localnet running so you can publish and interact with the oracle-market package
+Set up your environment with an active address and a running localnet to publish and interact with the `oracle-market` package.
 
 Full walkthrough: [docs/05-localnet-workflow.md](docs/05-localnet-workflow.md).
 
