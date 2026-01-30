@@ -34,7 +34,7 @@ Coin type IDs can vary by network and can change on upgrades. Do not hardcode th
 
 ## 5. Buyer + oracle validation
 1. Run `pnpm script buyer:shop:view --network <testnet|mainnet>` and ensure every listing resolves.
-2. Execute `pnpm script buyer:item-listing:quote` with the same coin/oracle pair the UI will use; the PTB should succeed via dev-inspect even before real buys.
+2. Execute `pnpm script buyer:buy --dev-inspect` with the same coin/oracle pair the UI will use; the PTB should succeed via dev-inspect even before real buys.
 3. Trigger a price update via your oracle feed (or rely on upstream testnet cadence) and confirm `price_info::PriceInfoObject` freshness in logs.
 
 ## 6. Navigation
