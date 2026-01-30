@@ -10,8 +10,8 @@ import {
   unwrapMoveObjectFields
 } from "@sui-oracle-market/tooling-core/object"
 import {
-  decodeUtf8Vector,
-  formatOptionalNumericValue
+  formatOptionalNumericValue,
+  readMoveStringOrVector
 } from "@sui-oracle-market/tooling-core/utils/formatters"
 import { formatTypeNameFromFieldValue } from "@sui-oracle-market/tooling-core/utils/type-name"
 
@@ -142,7 +142,7 @@ const buildItemListingDetails = (
   return {
     itemListingId: listingId,
     markerObjectId,
-    name: decodeUtf8Vector(itemListingFields.name),
+    name: readMoveStringOrVector(itemListingFields.name),
     itemType,
     basePriceUsdCents: formatOptionalNumericValue(
       itemListingFields.base_price_usd_cents
