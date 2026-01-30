@@ -38,7 +38,19 @@ if (checkOnly) {
   ```
 
 ## "Failed to publish the Move module(s), reason: No modules found in the package" on publish
-- You need to re publish the package with --re-publish
+- Cause: the package path resolves to a folder without Move sources (or stale build metadata after regenesis).
+- Fix:
+  1. Ensure you are targeting the Move package directory (for localnet: `--package-path oracle-market`).
+  2. Re-publish with `--re-publish`:
+     - `pnpm dapp move:publish --package-path oracle-market --network localnet --re-publish`.
+
+## "Failed to fetch package Pyth" / "Object ... does not exist" on publish (localnet)
+- Cause: localnet regenesis reset on-chain objects, but local artifacts still point at an old mock Pyth package ID.
+- Fix (localnet):
+  1. (optional) Delete `packages/dapp/deployments/mock.localnet.json`.
+  2. (optional) Delete `packages/dapp/move/pyth-mock/Published.toml`.
+  3. Re-publish mocks: `pnpm dapp mock:setup --re-publish`.
+  4. Re-publish the oracle package: `pnpm dapp move:publish --package-path oracle-market --network localnet --re-publish`.
 
 ## "No ShopOwnerCap found"
 - Ensure the owner cap is in your wallet. See `packages/domain/core/src/models/shop.ts`.

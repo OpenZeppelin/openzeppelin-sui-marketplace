@@ -401,6 +401,8 @@ const BuyFlowModal = ({
     canSubmit,
     oracleWarning,
     oracleQuote,
+    oracleQuoteLastUpdatedMs,
+    requestOracleQuoteRefresh,
     hasSufficientBalance,
     oracleShortfall,
     handlePurchase,
@@ -440,6 +442,9 @@ const BuyFlowModal = ({
       : shortfallMessage
 
   const paymentCardHasError = Boolean(paymentCardErrorMessage)
+  const oracleQuoteTimestampLabel = oracleQuoteLastUpdatedMs
+    ? `Updated ${formatTimestamp(oracleQuoteLastUpdatedMs)}`
+    : "Not updated yet"
 
   if (!open) return <></>
 
@@ -576,6 +581,17 @@ const BuyFlowModal = ({
                                 {getStructLabel(selectedCurrency.coinType)}
                               </div>
                             ) : undefined}
+                            <div className="mt-2 inline-flex items-center gap-2 whitespace-nowrap text-[0.6rem] text-slate-500 dark:text-slate-200/60">
+                              <Button
+                                variant="ghost"
+                                size="compact"
+                                onClick={requestOracleQuoteRefresh}
+                                disabled={oracleQuote.status === "loading"}
+                              >
+                                Refresh quote
+                              </Button>
+                              <span>{oracleQuoteTimestampLabel}</span>
+                            </div>
                           </div>
                           <div className="sm:pl-3">
                             <div className="text-[0.6rem] uppercase tracking-[0.18em] text-slate-500 dark:text-slate-200/60">

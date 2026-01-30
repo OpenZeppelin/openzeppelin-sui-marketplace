@@ -156,7 +156,10 @@ const parseU64ReturnValue = (
   }
 }
 
-export type EstimateRequiredAmountPriceUpdateMode = "none" | "localnet-mock"
+export type EstimateRequiredAmountPriceUpdateMode =
+  | "none"
+  | "localnet-mock"
+  | "pyth-update"
 
 /**
  * Estimates the required payment amount for a USD price using the oracle quote.
@@ -166,6 +169,8 @@ export const estimateRequiredAmount = async ({
   shopShared,
   acceptedCurrencyShared,
   pythPriceInfoShared,
+  pythFeedIdHex,
+  networkName,
   priceUsdCents,
   maxPriceAgeSecs,
   maxConfidenceRatioBps,
@@ -173,12 +178,16 @@ export const estimateRequiredAmount = async ({
   signerAddress,
   suiClient,
   priceUpdateMode = "none",
+  hermesUrlOverride,
+  pythConfigOverride,
   onPriceUpdateWarning
 }: {
   shopPackageId: string
   shopShared: Awaited<ReturnType<typeof getSuiSharedObject>>
   acceptedCurrencyShared: Awaited<ReturnType<typeof getSuiSharedObject>>
   pythPriceInfoShared: Awaited<ReturnType<typeof getSuiSharedObject>>
+  pythFeedIdHex?: string
+  networkName?: string
   priceUsdCents: bigint
   maxPriceAgeSecs?: bigint
   maxConfidenceRatioBps?: bigint
@@ -186,6 +195,8 @@ export const estimateRequiredAmount = async ({
   signerAddress: string
   suiClient: SuiClient
   priceUpdateMode?: EstimateRequiredAmountPriceUpdateMode
+  hermesUrlOverride?: string
+  pythConfigOverride?: PythPullOracleConfig
   onPriceUpdateWarning?: (message: string) => void
 }): Promise<bigint | undefined> => {
   const quoteTransaction = newTransaction()
@@ -196,7 +207,7 @@ export const estimateRequiredAmount = async ({
     acceptedCurrencyShared.sharedRef
   )
   const pythPriceInfoSharedRef =
-    priceUpdateMode === "localnet-mock"
+    priceUpdateMode === "localnet-mock" || priceUpdateMode === "pyth-update"
       ? { ...pythPriceInfoShared.sharedRef, mutable: true }
       : pythPriceInfoShared.sharedRef
   const pythPriceInfoArgument = quoteTransaction.sharedObjectRef(
@@ -204,10 +215,10 @@ export const estimateRequiredAmount = async ({
   )
   const clockArgument = quoteTransaction.sharedObjectRef(clockShared.sharedRef)
 
-  let didInjectMockPriceUpdate = false
+  let injectedPriceUpdate = false
 
   if (priceUpdateMode === "localnet-mock") {
-    didInjectMockPriceUpdate = maybeUpdateMockPriceFeed({
+    injectedPriceUpdate = maybeUpdateMockPriceFeed({
       transaction: quoteTransaction,
       priceInfoArgument: pythPriceInfoArgument,
       priceInfoObject: pythPriceInfoShared.object,
@@ -215,10 +226,32 @@ export const estimateRequiredAmount = async ({
       onWarning: onPriceUpdateWarning
     })
 
-    if (!didInjectMockPriceUpdate)
+    if (!injectedPriceUpdate)
       onPriceUpdateWarning?.(
         "Unable to refresh localnet mock price feed before quoting."
       )
+  }
+
+  if (priceUpdateMode === "pyth-update") {
+    if (!pythFeedIdHex || !networkName) {
+      onPriceUpdateWarning?.(
+        "Missing Pyth feed ID or network name; unable to refresh price feed before quoting."
+      )
+    } else {
+      injectedPriceUpdate = await maybeUpdatePythPriceFeed({
+        transaction: quoteTransaction,
+        suiClient,
+        networkName,
+        feedIdHex: pythFeedIdHex,
+        hermesUrlOverride,
+        pythConfigOverride
+      })
+
+      if (!injectedPriceUpdate)
+        onPriceUpdateWarning?.(
+          "Unable to refresh Pyth price feed before quoting."
+        )
+    }
   }
 
   quoteTransaction.moveCall({
@@ -239,10 +272,16 @@ export const estimateRequiredAmount = async ({
     transactionBlock: quoteTransaction
   })
 
-  const quoteResultIndex = didInjectMockPriceUpdate ? 1 : 0
-  return parseU64ReturnValue(
-    inspection.results?.[quoteResultIndex]?.returnValues
-  )
+  if (inspection.error) {
+    const errorLabel =
+      typeof inspection.error === "string"
+        ? inspection.error
+        : JSON.stringify(inspection.error)
+    throw new Error(`Oracle quote failed: ${errorLabel}`)
+  }
+
+  const quoteResult = inspection.results?.[inspection.results.length - 1]
+  return parseU64ReturnValue(quoteResult?.returnValues)
 }
 
 const maybeSetDedicatedGasForSuiPayments = async ({
