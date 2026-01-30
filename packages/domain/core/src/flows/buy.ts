@@ -215,10 +215,10 @@ export const estimateRequiredAmount = async ({
   )
   const clockArgument = quoteTransaction.sharedObjectRef(clockShared.sharedRef)
 
-  let injectPriceUpdate = false
+  let injectedPriceUpdate = false
 
   if (priceUpdateMode === "localnet-mock") {
-    injectPriceUpdate = maybeUpdateMockPriceFeed({
+    injectedPriceUpdate = maybeUpdateMockPriceFeed({
       transaction: quoteTransaction,
       priceInfoArgument: pythPriceInfoArgument,
       priceInfoObject: pythPriceInfoShared.object,
@@ -226,7 +226,7 @@ export const estimateRequiredAmount = async ({
       onWarning: onPriceUpdateWarning
     })
 
-    if (!injectPriceUpdate)
+    if (!injectedPriceUpdate)
       onPriceUpdateWarning?.(
         "Unable to refresh localnet mock price feed before quoting."
       )
@@ -238,7 +238,7 @@ export const estimateRequiredAmount = async ({
         "Missing Pyth feed ID or network name; unable to refresh price feed before quoting."
       )
     } else {
-      didInjectPriceUpdate = await maybeUpdatePythPriceFeed({
+      injectedPriceUpdate = await maybeUpdatePythPriceFeed({
         transaction: quoteTransaction,
         suiClient,
         networkName,
@@ -247,7 +247,7 @@ export const estimateRequiredAmount = async ({
         pythConfigOverride
       })
 
-      if (!didInjectPriceUpdate)
+      if (!injectedPriceUpdate)
         onPriceUpdateWarning?.(
           "Unable to refresh Pyth price feed before quoting."
         )
