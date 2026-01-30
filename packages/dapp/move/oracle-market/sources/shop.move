@@ -2439,8 +2439,7 @@ fun clone_bytes(data: &vector<u8>): vector<u8> {
 }
 
 fun clone_string(value: &string::String): string::String {
-    let mut maybe_string = string::try_utf8(clone_bytes(string::as_bytes(value)));
-    option::extract(&mut maybe_string)
+    *value
 }
 
 fun clone_string_bytes(value: &string::String): vector<u8> {
