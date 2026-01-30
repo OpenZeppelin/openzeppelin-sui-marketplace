@@ -20,12 +20,12 @@ Optional toggles:
 Note: integration tests run single-threaded to avoid localnet port conflicts.
 Localnet used by tests is isolated in a temp dir and does not reuse `~/.sui` or any running localnet.
 
-## 2. Unit tests (domain + UI)
+## 2. Unit tests
+Note: the UI package does not currently expose a `test:unit` script.
 ```bash
 pnpm --filter @sui-oracle-market/domain-core test:unit
 pnpm ui lint
 ```
-Note: the UI package does not currently expose a `test:unit` script.
 
 ### 2.1 Pyth mock helper for Move unit tests
 Use `new_price_info_object_for_test` from the Pyth mock to build a `PriceInfoObject` that behaves
