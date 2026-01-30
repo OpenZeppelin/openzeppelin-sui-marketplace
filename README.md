@@ -23,7 +23,7 @@ More detail (workspace layering rules, folder layout): `docs/01-repo-layout.md`.
 
 
 ## Environment Setup
-Set up your environment so you have active address and localnet running so you can publish and interact with the oracle-market package
+Set up your environment with an active address and a running localnet to publish and interact with the `oracle-market` package.
 
 Full walkthrough: [docs/05-localnet-workflow.md](docs/05-localnet-workflow.md).
 
@@ -33,7 +33,7 @@ git clone git@github.com:OpenZeppelin/openzeppelin-sui-marketplace.git && cd ope
 # (pnpm workspace install from the repo root)
 pnpm install
 
-# Create an address (this will be your shop owner address) (note the recovery phrase to import it later in your browser wallet)
+# Create an address (it will be your shop owner address). Note the recovery phrase to import it later in your browser wallet.
 sui client new-address ed25519
 
 # Configure this address in dapp/.env , Sui config file or export

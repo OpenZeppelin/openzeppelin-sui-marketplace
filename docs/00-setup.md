@@ -70,14 +70,14 @@ pnpm script chain:localnet:start --with-faucet
 ```
 The `--with-faucet` flag will run the faucet runs alongside the localnet allowing to automatically fund address if needed. Note that on first start it will fund your configured address.
 
-If you later want to reset the state of your localnet use (this will update the localnet address registered in your move packages in Move.toml)
+If you later want to reset the state of your localnet use (this will update the localnet address registered in your `Move` packages in Move.toml)
 ```bash
 pnpm script chain:localnet:start --with-faucet --force-regenesis
 ```
 
 
 ## 8. Seed mocks (localnet only)
-This publishes mock coins and Pyth packages, then seeds price feeds. As there is no coins or published Pyth oracle on your blank localnet
+This publishes mock coins and Pyth packages, then seeds price feeds. As there are no coins or published Pyth oracle on your blank localnet
 ```bash
 pnpm script mock:setup --buyer-address <0x...> --network localnet
 ```
