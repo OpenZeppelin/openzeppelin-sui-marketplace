@@ -2439,7 +2439,8 @@ fun clone_bytes(data: &vector<u8>): vector<u8> {
 }
 
 fun clone_string(value: &string::String): string::String {
-    string::utf8(clone_bytes(string::as_bytes(value)))
+    let mut maybe_string = string::try_utf8(clone_bytes(string::as_bytes(value)));
+    option::extract(&mut maybe_string)
 }
 
 fun clone_string_bytes(value: &string::String): vector<u8> {
@@ -2458,7 +2459,7 @@ public fun test_claim_publisher(ctx: &mut TxContext): package::Publisher {
 
 #[test_only]
 public fun test_setup_shop(owner: address, ctx: &mut TxContext): (Shop, ShopOwnerCap) {
-    let shop = new_shop(string::utf8(b"Shop"), owner, ctx);
+    let shop = new_shop(b"Shop".to_string(), owner, ctx);
     let owner_cap = ShopOwnerCap {
         id: object::new(ctx),
         shop_address: object::uid_to_address(&shop.id),

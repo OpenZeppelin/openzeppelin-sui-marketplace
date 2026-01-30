@@ -94,7 +94,7 @@ The published package ID is written to:
 {
   "network": "localnet",
   "rpcUrl": "http://127.0.0.1:9000",
-  "packagePath": "/Users/CoveMB/Code/CoveMB/OpenZeppelin/sui-oracle-market/packages/dapp/move/oracle-market",
+  "packagePath": "../sui-oracle-market/packages/dapp/move/oracle-market",
   "packageName": "sui_oracle_market",
   "packageId": "0x9c7be8c6354e23ec59e8d50c755a5f9ccdb08424e82a72f6991afedaa7ae49ec",
   "upgradeCap": "0xcd483668f30a9069075d9513222ebd8b76d9f5ee1909c7f758161805ee03ae96",
