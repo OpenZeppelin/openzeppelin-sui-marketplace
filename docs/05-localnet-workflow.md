@@ -12,8 +12,8 @@ If you’re brand new, start with [00 Setup + Quickstart](./00-setup.md) and the
 
 ### 1) Clone and install deps
 ```bash
-git clone git@github.com:OpenZeppelin/sui-oracle-market.git sui-oracle-market
-cd sui-oracle-market
+git clone git@github.com:OpenZeppelin/openzeppelin-sui-marketplace.git
+cd openzeppelin-sui-marketplace
 pnpm install
 ```
 
@@ -81,7 +81,7 @@ Quick decision table:
 | Local dev (default) | `pnpm script chain:localnet:start --with-faucet` | `localnet` |
 | Local publish | `pnpm script move:publish --package-path oracle-market` | `localnet` |
 | Testnet publish | `pnpm script move:publish --network testnet --package-path oracle-market` | `testnet` |
-| Testnet scripts | `pnpm script buyer:shop-view --network testnet` | `testnet` |
+| Testnet scripts | `pnpm script buyer:shop:view --network testnet` | `testnet` |
 
 ### 3) Start localnet
 ```bash
@@ -99,7 +99,7 @@ Note: running `sui start` without a stable config dir can regenesis and wipe loc
 
 ### 4) Seed mocks (coins + Pyth)
 ```bash
-pnpm script mock:setup --buyer-address <0x...>
+pnpm script mock:setup --buyer-address <0x...> --network localnet
 ```
 What it does:
 - Publishes `packages/dapp/move/pyth-mock` and `packages/dapp/move/coin-mock` if needed.
@@ -156,7 +156,7 @@ What it does:
 
 ### 2) Seed local mocks (coins, Pyth feeds, example item types)
 ```bash
-pnpm script mock:setup --buyer-address <0x...>
+pnpm script mock:setup --buyer-address <0x...> --network localnet
 ```
 
 What it does:

@@ -32,7 +32,7 @@
 public struct Shop has key, store {
   id: obj::UID,
   owner: address,
-  name: vector<u8>,
+  name: string::String,
   disabled: bool,
 }
 ```

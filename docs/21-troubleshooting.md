@@ -27,7 +27,7 @@ if (checkOnly) {
 - Fix by regenesis (resets faucet treasury objects):
   - `pnpm script chain:localnet:stop`
   - `pnpm script chain:localnet:start --with-faucet --force-regenesis`
-  - Re-run your script (e.g. `pnpm script mock:setup --buyer-address <0x...>`).
+  - Re-run your script (e.g. `pnpm script mock:setup --buyer-address <0x...> --network localnet`).
 - If you need to preserve state, start localnet with a fresh config dir instead:
   - `SUI_LOCALNET_CONFIG_DIR=~/.sui/localnet-fresh pnpm script chain:localnet:start --with-faucet`
 - Optional sanity check for the local faucet endpoint:

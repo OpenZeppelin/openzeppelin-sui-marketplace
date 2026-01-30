@@ -16,7 +16,7 @@ This chapter wires accepted currencies to Pyth feeds and guardrails.
 ## 3. Run it
 ```bash
 # Localnet mock artifacts
-pnpm script mock:setup --buyer-address <0x...>
+pnpm script mock:setup --buyer-address <0x...> --network localnet
 cat packages/dapp/deployments/mock.localnet.json
 
 # Register a currency
@@ -34,10 +34,10 @@ pnpm script buyer:currency:list --shop-id <shopId>
 3. **Staleness checks -> guardrails**: guardrails are enforced on-chain and can be tightened by buyers. See `quote_amount_for_price_info_object` in `packages/dapp/move/oracle-market/sources/shop.move`.
 
 ## 5. Concept deep dive: coins, registry, and oracles
-- **`Coin<T>` as a resource**: payment is a `Coin<T>` object, not a balance. The buyer moves a coin
-  into the transaction, the module splits what it needs (`pay_shop`), and returns change as a new
-  coin (`refund_or_destroy`). This makes the transfer explicit and eliminates allowance races.
-  Code: `packages/dapp/move/oracle-market/sources/shop.move` (`process_purchase`, `pay_shop`, `refund_or_destroy`)
+- **`Coin<T>` as a resource**: payment is a `Coin<T>` object, not a balance. Move conventions
+  recommend passing a coin with the exact amount by value for readability. This repo instead
+  splits a payment coin and returns change, which is a deliberate deviation from that guidance.
+  Code: `packages/dapp/move/oracle-market/sources/shop.move` (`process_purchase`, `split_payment`, `finalize_purchase_transfers`)
 - **Coin registry metadata**: `coin_registry::Currency<T>` provides trusted decimals/symbols.
   This avoids spoofed ERC-20 metadata. The module copies metadata into `AcceptedCurrency`.
   Code: `packages/dapp/move/oracle-market/sources/shop.move` (`add_accepted_currency`)
