@@ -2443,6 +2443,11 @@ public fun test_claim_publisher(ctx: &mut TxContext): package::Publisher {
 }
 
 #[test_only]
+public fun test_init(ctx: &mut TxContext) {
+    init(SHOP {}, ctx)
+}
+
+#[test_only]
 public fun test_setup_shop(owner: address, ctx: &mut TxContext): (Shop, ShopOwnerCap) {
     let shop = new_shop(b"Shop".to_string(), owner, ctx);
     let owner_cap = ShopOwnerCap {
@@ -2761,6 +2766,11 @@ public fun test_apply_percent_discount(base_price_usd_cents: u64, bps: u16): u64
 }
 
 #[test_only]
+public fun test_bytes_equal(left: vector<u8>, right: vector<u8>): bool {
+    bytes_equal(&left, &right)
+}
+
+#[test_only]
 public fun test_discount_template_created_shop(event: &DiscountTemplateCreatedEvent): address {
     event.shop_address
 }
@@ -3007,6 +3017,11 @@ public fun test_remove_listing(shop: &mut Shop, listing_id: object::ID) {
             ItemListingKey { listing_id },
         );
     };
+}
+
+#[test_only]
+public fun test_remove_currency_field(shop: &mut Shop, coin_type: TypeName) {
+    remove_currency_field(shop, coin_type)
 }
 
 #[test_only]
