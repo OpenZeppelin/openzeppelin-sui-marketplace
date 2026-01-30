@@ -70,7 +70,7 @@ pnpm script chain:localnet:start --with-faucet
 ```
 `--with-faucet` is recommended as some script auto fund address if fund is missing, on first start it will fund your configured address
 
-If you later want to reset the state of your localnet use (this will update the localnet address registered in your move packages in Move.toml)
+If you later want to reset the state of your localnet use (this will update the localnet address registered in your `Move` packages in Move.toml)
 ```bash
 pnpm script chain:localnet:start --with-faucet --force-regenesis
 ```
