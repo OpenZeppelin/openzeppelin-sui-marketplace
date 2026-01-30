@@ -68,7 +68,7 @@ export SUI_NETWORK=localnet
 ```bash
 pnpm script chain:localnet:start --with-faucet
 ```
-`--with-faucet` is recommended as some script auto fund address if fund is missing, on first start it will fund your configured address
+The `--with-faucet` flag will run the faucet runs alongside the localnet allowing to automatically fund address if needed. Note that on first start it will fund your configured address.
 
 If you later want to reset the state of your localnet use (this will update the localnet address registered in your move packages in Move.toml)
 ```bash
