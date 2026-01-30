@@ -77,7 +77,7 @@ pnpm script chain:localnet:start --with-faucet --force-regenesis
 
 
 ## 8. Seed mocks (localnet only)
-This publishes mock coins and Pyth packages, then seeds price feeds. As there is no coins or published Pyth oracle on your blank localnet
+This publishes mock coins and Pyth packages, then seeds price feeds. As there are no coins or published Pyth oracle on your blank localnet
 ```bash
 pnpm script mock:setup --buyer-address <0x...> --network localnet
 ```
