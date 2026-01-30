@@ -68,7 +68,3 @@ fun clone_bytes(data: &vector<u8>): vector<u8> {
   let len: u64 = data.length();
   vector::tabulate!(len, |i| data[i])
 }
-
-fun clone_string(value: &string::String): string::String {
-  string::utf8(clone_bytes(string::as_bytes(value)))
-}

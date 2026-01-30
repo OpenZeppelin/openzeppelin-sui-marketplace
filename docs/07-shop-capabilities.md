@@ -53,7 +53,7 @@ pnpm script owner:shop:update-owner --new-owner <0x...>
 **Code spotlight: Shop creation + owner cap mint**
 `packages/dapp/move/oracle-market/sources/shop.move`
 ```move
-entry fun create_shop(name: vector<u8>, ctx: &mut tx::TxContext) {
+entry fun create_shop(name: string::String, ctx: &mut tx::TxContext) {
   let owner: address = ctx.sender();
   let shop: Shop = new_shop(name, owner, ctx);
 
@@ -83,7 +83,7 @@ fun update_shop_owner(
   shop.owner = new_owner;
   owner_cap.owner = new_owner;
 
-  event::emit(ShopOwnerUpdated {
+  event::emit(ShopOwnerUpdatedEvent {
     shop_address: shop_address(shop),
     previous_owner,
     new_owner,

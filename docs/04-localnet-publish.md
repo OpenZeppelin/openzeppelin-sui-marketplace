@@ -33,10 +33,10 @@ pnpm script move:publish --package-path oracle-market
 - **UpgradeCap + artifacts**: the publish script writes `deployment.<network>.json` with the
   package ID, `UpgradeCap`, and `Publisher` IDs. Treat the `UpgradeCap` like admin authority.
   Code: `packages/dapp/deployments/deployment.localnet.json`
-- **Module initializer and Publisher**: this module claims a Publisher object at publish time using
+- **Module initializer and Publisher**: this module claims the Publisher object at publish time using
   an init witness. This is a publish-time side effect, not a runtime admin check, and it demonstrates
   how publish-time data can be anchored to the package.
-  Code: `packages/dapp/move/oracle-market/sources/shop.move` (`init`, `claim_publisher`)
+  Code: `packages/dapp/move/oracle-market/sources/shop.move` (`init`, `package::claim_and_keep`)
 - **Localnet dep replacements**: the Move.toml `dep-replacements.localnet` swaps Pyth to the mock
   package so localnet runs without real oracles.
   Code: `packages/dapp/move/oracle-market/Move.toml`
@@ -107,9 +107,8 @@ await publishPackageToNetwork(
 ```move
 public struct SHOP has drop {}
 
-fun init(publisher_witness: SHOP, ctx: &mut tx::TxContext) {
-  let publisher: pkg::Publisher = claim_publisher(publisher_witness, ctx);
-  transfer_publisher_to_sender(publisher, ctx);
+fun init(publisher_witness: SHOP, ctx: &mut TxContext) {
+  package::claim_and_keep<SHOP>(publisher_witness, ctx);
 }
 ```
 
