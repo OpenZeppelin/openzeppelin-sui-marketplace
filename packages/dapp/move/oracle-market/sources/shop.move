@@ -6,7 +6,7 @@ use Pyth::price_feed;
 use Pyth::price_identifier;
 use Pyth::price_info;
 use Pyth::pyth;
-use std::string;
+use std::string::{Self, String};
 use std::type_name::{Self, TypeName};
 use std::u128;
 use sui::clock;
@@ -169,7 +169,7 @@ public struct ShopOwnerCap has key, store {
 public struct Shop has key, store {
     id: UID,
     owner: address, // Payout recipient for sales.
-    name: string::String,
+    name: String,
     disabled: bool,
 }
 
@@ -179,7 +179,7 @@ public struct ItemListing has key, store {
     id: UID,
     shop_address: address,
     item_type: TypeName,
-    name: string::String,
+    name: String,
     base_price_usd_cents: u64, // Stored in USD cents to avoid floating point math.
     stock: u64,
     spotlight_discount_template_id: option::Option<ID>,
@@ -202,7 +202,7 @@ public struct ShopItem<phantom TItem> has key, store {
     shop_address: address,
     item_listing_address: address,
     item_type: TypeName,
-    name: string::String,
+    name: String,
     acquired_at: u64,
 }
 
@@ -300,7 +300,7 @@ public struct DiscountClaim has key, store {
 public struct ShopCreatedEvent has copy, drop {
     shop_address: address,
     owner: address,
-    name: string::String,
+    name: String,
     shop_owner_cap_id: address,
 }
 
@@ -325,7 +325,7 @@ public struct ShopDisabledEvent has copy, drop {
 public struct ItemListingAddedEvent has copy, drop {
     shop_address: address,
     item_listing_address: address,
-    name: string::String,
+    name: String,
     base_price_usd_cents: u64,
     spotlight_discount_template_id: option::Option<address>,
     stock: u64,
@@ -439,10 +439,10 @@ public struct MintingCompletedEvent has copy, drop {
 ///   siblings indexed by lightweight markers under the shop (plus a coin-type index for currencies).
 ///   State is sharded into per-object locks so PTBs only touch the listing/template/currency they
 ///   mutate instead of contending on a monolithic storage map as in Solidity.
-entry fun create_shop(name: string::String, ctx: &mut TxContext) {
+entry fun create_shop(name: String, ctx: &mut TxContext) {
     let owner: address = ctx.sender();
     let shop: Shop = new_shop(name, owner, ctx);
-    let shop_name_for_event: string::String = clone_string(&shop.name);
+    let shop_name_for_event: String = clone_string(&shop.name);
 
     let owner_cap: ShopOwnerCap = ShopOwnerCap {
         id: object::new(ctx),
@@ -520,7 +520,7 @@ entry fun update_shop_owner(
 fun add_item_listing_core<T: store>(
     shop: &mut Shop,
     owner_cap: &ShopOwnerCap,
-    name: string::String,
+    name: String,
     base_price_usd_cents: u64,
     stock: u64,
     spotlight_discount_template_id: option::Option<object::ID>,
@@ -552,7 +552,7 @@ fun add_item_listing_core<T: store>(
         &listing.spotlight_discount_template_id,
     );
 
-    let listing_name_for_event: string::String = clone_string(&listing.name);
+    let listing_name_for_event: String = clone_string(&listing.name);
 
     event::emit(ItemListingAddedEvent {
         shop_address,
@@ -574,7 +574,7 @@ fun add_item_listing_core<T: store>(
 entry fun add_item_listing<T: store>(
     shop: &mut Shop,
     owner_cap: &ShopOwnerCap,
-    name: string::String,
+    name: String,
     base_price_usd_cents: u64,
     stock: u64,
     spotlight_discount_template_id: option::Option<object::ID>,
@@ -1269,7 +1269,7 @@ entry fun claim_and_buy_item_with_discount<TItem: store, TCoin>(
 
 // === Data ===
 
-fun new_shop(name: string::String, owner: address, ctx: &mut TxContext): Shop {
+fun new_shop(name: String, owner: address, ctx: &mut TxContext): Shop {
     validate_shop_name(&name);
     Shop {
         id: object::new(ctx),
@@ -1314,7 +1314,7 @@ fun new_accepted_currency(
 
 fun new_item_listing<T: store>(
     shop_address: address,
-    name: string::String,
+    name: String,
     base_price_usd_cents: u64,
     stock: u64,
     spotlight_discount_template_id: option::Option<object::ID>,
@@ -1986,7 +1986,7 @@ fun assert_schedule(starts_at: u64, expires_at: &option::Option<u64>) {
 
 fun validate_listing_inputs(
     shop: &Shop,
-    name: &string::String,
+    name: &String,
     base_price_usd_cents: u64,
     stock: u64,
     spotlight_discount_template_id: &option::Option<object::ID>,
@@ -2002,7 +2002,7 @@ fun validate_listing_inputs(
     );
 }
 
-fun validate_shop_name(name: &string::String) {
+fun validate_shop_name(name: &String) {
     assert!(!string::as_bytes(name).is_empty(), EEmptyShopName);
 }
 
@@ -2341,10 +2341,10 @@ public fun discount_template_id_for_address(
 public fun listing_values(
     shop: &Shop,
     listing: &ItemListing,
-): (vector<u8>, u64, u64, address, option::Option<object::ID>) {
+): (String, u64, u64, address, option::Option<object::ID>) {
     assert_listing_matches_shop(shop, listing);
     (
-        clone_string_bytes(&listing.name),
+        clone_string(&listing.name),
         listing.base_price_usd_cents,
         listing.stock,
         listing.shop_address,
@@ -2432,12 +2432,8 @@ fun clone_bytes(data: &vector<u8>): vector<u8> {
     vector::tabulate!(len, |i| data[i])
 }
 
-fun clone_string(value: &string::String): string::String {
+fun clone_string(value: &String): String {
     *value
-}
-
-fun clone_string_bytes(value: &string::String): vector<u8> {
-    clone_bytes(string::as_bytes(value))
 }
 
 // === #[test_only] API ===
@@ -2575,7 +2571,7 @@ public fun test_max_decimal_power(): u64 {
 public fun test_listing_values(
     shop: &Shop,
     listing: &ItemListing,
-): (vector<u8>, u64, u64, address, option::Option<object::ID>) {
+): (String, u64, u64, address, option::Option<object::ID>) {
     listing_values(shop, listing)
 }
 
@@ -2981,7 +2977,7 @@ public fun test_last_created_id(ctx: &TxContext): object::ID {
 public fun test_add_item_listing_local<T: store>(
     shop: &mut Shop,
     owner_cap: &ShopOwnerCap,
-    name: string::String,
+    name: String,
     base_price_usd_cents: u64,
     stock: u64,
     spotlight_discount_template_id: option::Option<object::ID>,
@@ -3002,9 +2998,9 @@ public fun test_add_item_listing_local<T: store>(
 #[test_only]
 public fun test_listing_values_local(
     listing: &ItemListing,
-): (vector<u8>, u64, u64, address, option::Option<object::ID>) {
+): (String, u64, u64, address, option::Option<object::ID>) {
     (
-        clone_string_bytes(&listing.name),
+        clone_string(&listing.name),
         listing.base_price_usd_cents,
         listing.stock,
         listing.shop_address,
@@ -3058,8 +3054,8 @@ public fun test_shop_owner(shop: &Shop): address {
 }
 
 #[test_only]
-public fun test_shop_name(shop: &Shop): vector<u8> {
-    clone_string_bytes(&shop.name)
+public fun test_shop_name(shop: &Shop): String {
+    clone_string(&shop.name)
 }
 
 #[test_only]
@@ -3088,8 +3084,8 @@ public fun test_shop_created_owner(event: &ShopCreatedEvent): address {
 }
 
 #[test_only]
-public fun test_shop_created_name(event: &ShopCreatedEvent): vector<u8> {
-    clone_string_bytes(&event.name)
+public fun test_shop_created_name(event: &ShopCreatedEvent): String {
+    clone_string(&event.name)
 }
 
 #[test_only]
@@ -3173,8 +3169,8 @@ public fun test_item_listing_added_listing(event: &ItemListingAddedEvent): addre
 }
 
 #[test_only]
-public fun test_item_listing_added_name(event: &ItemListingAddedEvent): vector<u8> {
-    clone_string_bytes(&event.name)
+public fun test_item_listing_added_name(event: &ItemListingAddedEvent): String {
+    clone_string(&event.name)
 }
 
 #[test_only]
