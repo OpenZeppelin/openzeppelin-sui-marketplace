@@ -44,7 +44,7 @@ Code: `packages/dapp/move/oracle-market/sources/shop.move` (`finalize_purchase_t
 `packages/dapp/move/oracle-market/sources/shop.move`
 ```move
 fun finalize_purchase_transfers<TItem: store, TCoin>(
-  owed_coin_opt: option::Option<coin::Coin<TCoin>>,
+  owed_coin_opt: Option<coin::Coin<TCoin>>,
   change_coin: coin::Coin<TCoin>,
   minted_item: ShopItem<TItem>,
   payout_to: address,
