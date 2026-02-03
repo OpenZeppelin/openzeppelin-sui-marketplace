@@ -1,22 +1,22 @@
+import type { PublishArtifact } from "@sui-oracle-market/tooling-core/types"
 import path from "node:path"
 import { describe, expect, it } from "vitest"
-import {
-  buildMoveEnvironmentFlags,
-  buildMoveTestArguments,
-  buildMoveTestPublishArguments,
-  clearPublishedEntryForNetwork,
-  resolveFullPackagePath,
-  canonicalizePackagePath,
-  hasDeploymentForPackage,
-  syncMoveEnvironmentChainId
-} from "../../src/move.ts"
-import type { PublishArtifact } from "@sui-oracle-market/tooling-core/types"
 import {
   readFixture,
   readTextFile,
   withTempDir,
   writeFileTree
 } from "../../../tests-integration/helpers/fs.ts"
+import {
+  buildMoveEnvironmentFlags,
+  buildMoveTestArguments,
+  buildMoveTestPublishArguments,
+  canonicalizePackagePath,
+  clearPublishedEntryForNetwork,
+  hasDeploymentForPackage,
+  resolveFullPackagePath,
+  syncMoveEnvironmentChainId
+} from "../../src/move.ts"
 
 describe("move helpers", () => {
   const buildPublishArtifact = (
@@ -38,7 +38,7 @@ describe("move helpers", () => {
     expect(buildMoveEnvironmentFlags({})).toEqual([])
     expect(buildMoveEnvironmentFlags({ environmentName: "localnet" })).toEqual([
       "--environment",
-      "localnet"
+      "test-publish"
     ])
   })
 
@@ -60,7 +60,7 @@ describe("move helpers", () => {
     expect(args).toEqual([
       "/tmp/pkg",
       "--build-env",
-      "localnet",
+      "test-publish",
       "--pubfile-path",
       "/tmp/publish.json",
       "--with-unpublished-dependencies"

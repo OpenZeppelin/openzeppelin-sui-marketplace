@@ -197,7 +197,7 @@ Where the vendored packages live:
 
 How dependency resolution works:
 - `packages/dapp/move/oracle-market` depends on the vendored Pyth by default.
-- `localnet` swaps Pyth to `pyth-mock` via `dep-replacements`.
+- `test-publish` swaps Pyth to `pyth-mock` via `dep-replacements`.
 
 Update instructions
 -------------------
@@ -215,7 +215,7 @@ When updating Pyth/Wormhole versions, do the following in order.
     - MUST NOT define an `[addresses] wormhole = ...` entry (Wormhole owns the `wormhole` named address in this repo)
     - MUST define `[addresses] pyth = "<pyth package id>"`
     - MUST depend on the same Sui framework revision as the rest of the repo
-    - MUST depend on local Wormhole: `[dependencies.Wormhole] local = "../wormhole-upstream-patched"`
+    - MUST depend on local Wormhole: `[dependencies.wormhole] local = "../wormhole-upstream-patched"`
 
 - `packages/dapp/move/wormhole-upstream-patched/Move.toml`
     - `edition = "legacy"`
@@ -225,7 +225,7 @@ When updating Pyth/Wormhole versions, do the following in order.
 3) Re-pin the lockfile
 - From `packages/dapp/move/oracle-market`, run:
     - `sui move build -e testnet`
-    - `sui move build -e localnet`
+    - `sui move build -e test-publish`
     This should update/validate `Move.lock` resolution per-environment.
 
 4) Sanity check publish flow (testnet)

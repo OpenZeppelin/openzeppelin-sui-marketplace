@@ -1,11 +1,11 @@
 module sui_oracle_market::shop;
 
-use Pyth::i64;
-use Pyth::price;
-use Pyth::price_feed;
-use Pyth::price_identifier;
-use Pyth::price_info;
-use Pyth::pyth;
+use pyth::i64;
+use pyth::price;
+use pyth::price_feed;
+use pyth::price_identifier;
+use pyth::price_info;
+use pyth::pyth;
 use std::string::{Self, String};
 use std::type_name::{Self, TypeName};
 use std::u128;

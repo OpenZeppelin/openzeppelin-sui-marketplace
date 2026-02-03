@@ -1,5 +1,5 @@
 [package]
-name = "Pyth"
+name = "pyth"
 version = "0.0.2"
 edition = "legacy"
 published-at = "0xabf837e98c26087cba0883c0a7a28326b1fa3c5e1e2c5abdb486f9e8f594c837"
@@ -9,7 +9,7 @@ git = "https://github.com/MystenLabs/sui.git"
 subdir = "crates/sui-framework/packages/sui-framework"
 rev = "ad937889f2f99bc666b05aaeadccb0d3d7d1f863"
 
-[dependencies.Wormhole]
+[dependencies.wormhole]
 local = "../wormhole-upstream-patched"
 
 [addresses]

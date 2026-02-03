@@ -1,5 +1,5 @@
 [package]
-name = "Wormhole"
+name = "wormhole"
 version = "0.2.0"
 edition = "legacy"
 published-at = "0xf47329f4344f3bf0f8e436e2f7b485466cff300f12a166563995d3888c296a94"
