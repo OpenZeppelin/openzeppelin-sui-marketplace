@@ -1964,6 +1964,36 @@ fun remove_item_listing_removes_listing_and_emits_event() {
     std::unit_test::destroy(shop);
 }
 
+#[test]
+fun delete_item_listing_deletes_listing_and_emits_event() {
+    let mut ctx = tx_context::dummy();
+    let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
+
+    let (listing, listing_id) = shop::test_add_item_listing_local<TestItem>(
+        &mut shop,
+        &owner_cap,
+        b"Vintage Pump".to_string(),
+        99_00,
+        2,
+        option::none(),
+        &mut ctx,
+    );
+    let listing_address = shop::test_listing_address(&listing);
+    let shop_address = shop::test_shop_id(&shop);
+
+    shop::delete_item_listing(&mut shop, &owner_cap, listing, &ctx);
+
+    let removed_events = event::events_by_type<shop::ItemListingRemovedEvent>();
+    assert_eq!(removed_events.length(), 1);
+    let removed = &removed_events[0];
+    assert_eq!(shop::test_item_listing_removed_shop(removed), shop_address);
+    assert_eq!(shop::test_item_listing_removed_listing(removed), listing_address);
+    assert!(!shop::test_listing_exists(&shop, listing_id));
+
+    std::unit_test::destroy(owner_cap);
+    std::unit_test::destroy(shop);
+}
+
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::EInvalidOwnerCap)]
 fun remove_item_listing_rejects_foreign_owner_cap() {
     let mut ctx = tx_context::dummy();

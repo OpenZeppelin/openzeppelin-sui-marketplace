@@ -627,6 +627,33 @@ entry fun remove_item_listing(
     });
 }
 
+/// Delete an item listing object and remove its marker, reclaiming storage.
+///
+/// Use `remove_item_listing` to delist but keep the listing object for history.
+entry fun delete_item_listing(
+    shop: &mut Shop,
+    owner_cap: &ShopOwnerCap,
+    item_listing: ItemListing,
+    _ctx: &TxContext,
+) {
+    assert_owner_cap(shop, owner_cap);
+    assert_listing_matches_shop(shop, &item_listing);
+    let item_listing_id = listing_id(&item_listing);
+    let item_listing_address = object::uid_to_address(&item_listing.id);
+    let _marker: ItemListingMarker = dynamic_field::remove(
+        &mut shop.id,
+        ItemListingKey { listing_id: item_listing_id },
+    );
+
+    event::emit(ItemListingRemovedEvent {
+        shop_address: shop_address(shop),
+        item_listing_address,
+    });
+
+    let ItemListing { id, .. } = item_listing;
+    id.delete();
+}
+
 // === Accepted Currencies ===
 
 /// Register a coin type that the shop will price through an oracle feed.
