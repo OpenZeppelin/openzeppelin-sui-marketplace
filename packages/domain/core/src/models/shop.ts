@@ -98,8 +98,6 @@ const parseShopCreatedEvent = (
 
     return {
       shopId,
-      ownerAddress: normalizeOptionalIdFromValue(fields.owner),
-      name: readMoveStringOrVector(fields.name),
       ownerCapId: normalizeOptionalIdFromValue(fields.shop_owner_cap_id),
       createdAtMs: event.timestampMs ? String(event.timestampMs) : undefined,
       txDigest: event.id?.txDigest
@@ -141,19 +139,6 @@ export const getShopCreatedSummaries = async ({
       const summary = parseShopCreatedEvent(event)
       if (!summary || seen.has(summary.shopId)) continue
       seen.add(summary.shopId)
-      if (!summary.ownerAddress || !summary.name) {
-        try {
-          const { object } = await getSuiObject(
-            { objectId: summary.shopId, options: { showContent: true } },
-            { suiClient }
-          )
-          summary.ownerAddress =
-            summary.ownerAddress ?? getShopOwnerAddressFromObject(object)
-          summary.name = summary.name ?? getShopNameFromObject(object)
-        } catch {
-          // Best-effort enrichment; keep the summary even if the object fetch fails.
-        }
-      }
       summaries.push(summary)
     }
 
@@ -161,7 +146,28 @@ export const getShopCreatedSummaries = async ({
     cursor = response.nextCursor
   }
 
-  return summaries
+  const enriched = await Promise.all(
+    summaries.map(async (summary) => {
+      if (summary.ownerAddress && summary.name) return summary
+
+      try {
+        const { object } = await getSuiObject(
+          { objectId: summary.shopId, options: { showContent: true } },
+          { suiClient }
+        )
+
+        return {
+          ...summary,
+          ownerAddress: getShopOwnerAddressFromObject(object),
+          name: getShopNameFromObject(object)
+        }
+      } catch {
+        return summary
+      }
+    })
+  )
+
+  return enriched
 }
 
 export const getShopOwnerAddressFromObject = (
