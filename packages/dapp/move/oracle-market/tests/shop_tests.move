@@ -62,7 +62,7 @@ fun sample_price(): price::Price {
 fun create_price_info_object_for_feed(
     feed_id: vector<u8>,
     ctx: &mut tx_context::TxContext,
-): (price_info::PriceInfoObject, object::ID) {
+): (price_info::PriceInfoObject, ID) {
     create_price_info_object_for_feed_with_price(feed_id, sample_price(), ctx)
 }
 
@@ -70,7 +70,7 @@ fun create_price_info_object_for_feed_with_price(
     feed_id: vector<u8>,
     price: price::Price,
     ctx: &mut tx_context::TxContext,
-): (price_info::PriceInfoObject, object::ID) {
+): (price_info::PriceInfoObject, ID) {
     create_price_info_object_for_feed_with_price_and_times(
         feed_id,
         price,
@@ -86,7 +86,7 @@ fun create_price_info_object_for_feed_with_price_and_times(
     attestation_time: u64,
     arrival_time: u64,
     ctx: &mut tx_context::TxContext,
-): (price_info::PriceInfoObject, object::ID) {
+): (price_info::PriceInfoObject, ID) {
     let price_identifier = price_identifier::from_byte_vec(feed_id);
     let price_feed = price_feed::new(price_identifier, price, price);
     let price_info = price_info::new_price_info(
@@ -108,7 +108,7 @@ fun add_currency_with_feed<T>(
     feed_id: vector<u8>,
     owner_cap: &shop::ShopOwnerCap,
     ctx: &mut tx_context::TxContext,
-): object::ID {
+): ID {
     let (price_info_object, price_info_id) = create_price_info_object_for_feed(
         feed_id,
         ctx,
@@ -5067,7 +5067,7 @@ fun setup_shop_with_currency_listing_and_price_info(
     scn: &mut test_scenario::Scenario,
     base_price_usd_cents: u64,
     stock: u64,
-): (object::ID, object::ID, object::ID, object::ID) {
+): (ID, ID, ID, ID) {
     let currency = prepare_test_currency_for_owner(scn, TEST_OWNER);
 
     let (mut shop_obj, owner_cap) = shop::test_setup_shop(
@@ -5118,7 +5118,7 @@ fun setup_shop_with_currency_listing_and_price_info_for_item<TItem: store>(
     item_name: vector<u8>,
     base_price_usd_cents: u64,
     stock: u64,
-): (object::ID, object::ID, object::ID, object::ID) {
+): (ID, ID, ID, ID) {
     let currency = prepare_test_currency_for_owner(scn, TEST_OWNER);
 
     let (mut shop_obj, owner_cap) = shop::test_setup_shop(
@@ -5241,10 +5241,7 @@ fun buy_item_emits_events_decrements_stock_and_refunds_change() {
     assert_eq!(shop::test_purchase_completed_quote_amount(purchase), quote_amount);
     assert_eq!(shop::test_purchase_completed_discounted_price(purchase), 100);
     assert_eq!(shop::test_purchase_completed_base_price_usd_cents(purchase), 100);
-    assert_eq!(
-        shop::test_purchase_completed_accepted_currency_id(purchase),
-        accepted_currency_id,
-    );
+    assert_eq!(shop::test_purchase_completed_accepted_currency_id(purchase), accepted_currency_id);
     assert_eq!(shop::test_purchase_completed_feed_id(purchase), PRIMARY_FEED_ID);
     assert!(option::is_none(&shop::test_purchase_completed_discount_template_id(purchase)));
 
@@ -5840,10 +5837,7 @@ fun buy_item_with_discount_emits_discount_redeemed_and_records_template_id() {
     assert_eq!(redeems.length(), redeem_before + 1);
     let redeem = &redeems[redeems.length() - 1];
     assert_eq!(shop::test_discount_redeemed_shop(redeem), shop::test_shop_id(&shared_shop));
-    assert_eq!(
-        shop::test_discount_redeemed_template_id(redeem),
-        template_id,
-    );
+    assert_eq!(shop::test_discount_redeemed_template_id(redeem), template_id);
     assert_eq!(
         shop::test_discount_redeemed_listing_id(redeem),
         shop::test_listing_address(&listing),
@@ -6822,7 +6816,7 @@ fun create_discount_template(
     shop: &mut shop::Shop,
     _owner_cap: &shop::ShopOwnerCap,
     ctx: &mut tx_context::TxContext,
-): (shop::DiscountTemplate, object::ID) {
+): (shop::DiscountTemplate, ID) {
     shop::test_create_discount_template_local(
         shop,
         option::none(),
