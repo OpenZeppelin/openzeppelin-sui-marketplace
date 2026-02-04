@@ -214,7 +214,7 @@ public struct AcceptedCurrency has key, store {
     feed_id: vector<u8>, // Pyth price feed identifier (32 bytes).
     pyth_object_id: ID, // ID of Pyth PriceInfoObject
     decimals: u8,
-    symbol: vector<u8>,
+    symbol: String,
     max_price_age_secs_cap: u64,
     max_confidence_ratio_bps_cap: u64,
     max_price_status_lag_secs_cap: u64,
@@ -688,7 +688,7 @@ entry fun add_accepted_currency<T>(
 
     let decimals: u8 = coin_registry::decimals(currency);
     assert_supported_decimals(decimals);
-    let symbol: vector<u8> = string::into_bytes(coin_registry::symbol(currency));
+    let symbol: String = coin_registry::symbol(currency);
     let shop_address: address = shop_address(shop);
     let age_cap: u64 = resolve_guardrail_cap(
         &max_price_age_secs_cap,
@@ -2358,7 +2358,7 @@ public fun listing_values(
 public fun accepted_currency_values(
     shop: &Shop,
     accepted_currency: &AcceptedCurrency,
-): (address, TypeName, vector<u8>, object::ID, u8, vector<u8>, u64, u64, u64) {
+): (address, TypeName, vector<u8>, object::ID, u8, String, u64, u64, u64) {
     assert_currency_matches_shop(shop, accepted_currency);
     (
         accepted_currency.shop_address,
@@ -2366,7 +2366,7 @@ public fun accepted_currency_values(
         clone_bytes(&accepted_currency.feed_id),
         accepted_currency.pyth_object_id,
         accepted_currency.decimals,
-        clone_bytes(&accepted_currency.symbol),
+        clone_string(&accepted_currency.symbol),
         accepted_currency.max_price_age_secs_cap,
         accepted_currency.max_confidence_ratio_bps_cap,
         accepted_currency.max_price_status_lag_secs_cap,
@@ -2601,7 +2601,7 @@ public fun test_accepted_currency_exists(shop: &Shop, accepted_currency_id: obje
 public fun test_accepted_currency_values(
     shop: &Shop,
     accepted_currency: &AcceptedCurrency,
-): (address, TypeName, vector<u8>, object::ID, u8, vector<u8>, u64, u64, u64) {
+): (address, TypeName, vector<u8>, object::ID, u8, String, u64, u64, u64) {
     accepted_currency_values(shop, accepted_currency)
 }
 
