@@ -141,6 +141,19 @@ export const getShopCreatedSummaries = async ({
       const summary = parseShopCreatedEvent(event)
       if (!summary || seen.has(summary.shopId)) continue
       seen.add(summary.shopId)
+      if (!summary.ownerAddress || !summary.name) {
+        try {
+          const { object } = await getSuiObject(
+            { objectId: summary.shopId, options: { showContent: true } },
+            { suiClient }
+          )
+          summary.ownerAddress =
+            summary.ownerAddress ?? getShopOwnerAddressFromObject(object)
+          summary.name = summary.name ?? getShopNameFromObject(object)
+        } catch {
+          // Best-effort enrichment; keep the summary even if the object fetch fails.
+        }
+      }
       summaries.push(summary)
     }
 
