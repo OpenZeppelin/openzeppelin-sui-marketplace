@@ -40,21 +40,20 @@ None. This is a conceptual chapter that builds on earlier examples.
 `packages/dapp/move/oracle-market/sources/shop.move`
 ```move
 public struct ShopOwnerCap has key, store {
-  id: obj::UID,
-  shop_address: address,
-  owner: address,
+  id: object::UID,
+  shop_address: object::ID,
 }
 
 public struct DiscountTicket has key, store {
-  id: obj::UID,
-  discount_template_id: address,
-  shop_address: address,
-  listing_id: Option<obj::ID>,
+  id: object::UID,
+  discount_template_id: object::ID,
+  shop_address: object::ID,
+  listing_id: Option<object::ID>,
   claimer: address,
 }
 
 public struct ItemListingMarker has copy, drop, store {
-  listing_id: obj::ID,
+  listing_id: object::ID,
 }
 ```
 

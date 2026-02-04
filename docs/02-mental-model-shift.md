@@ -46,13 +46,12 @@ This repo assumes you already think in Solidity. The goal here is not to re-teac
 `packages/dapp/move/oracle-market/sources/shop.move`
 ```move
 public struct ShopOwnerCap has key, store {
-  id: obj::UID,
-  shop_address: address,
-  owner: address,
+  id: object::UID,
+  shop_address: object::ID,
 }
 
 public struct Shop has key, store {
-  id: obj::UID,
+  id: object::UID,
   owner: address,
   name: string::String,
   disabled: bool,
@@ -98,9 +97,8 @@ fun create_shop(name: string::String, ctx: &mut tx::TxContext) {
   let shop: Shop = new_shop(name, owner, ctx);
 
   let owner_cap: ShopOwnerCap = ShopOwnerCap {
-    id: obj::new(ctx),
+    id: object::new(ctx),
     shop_address: shop_address(&shop),
-    owner,
   };
 
   txf::share_object(shop);

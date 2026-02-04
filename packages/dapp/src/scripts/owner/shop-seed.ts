@@ -76,6 +76,7 @@ import { retryWithDelay } from "@sui-oracle-market/tooling-core/utils/retry"
 import { extractStructNameFromType } from "@sui-oracle-market/tooling-core/utils/type-name"
 import {
   parseNonNegativeU64,
+  parseOptionalPositiveU16,
   parseOptionalPositiveU64,
   parseOptionalU64,
   parsePositiveU64,
@@ -1151,7 +1152,7 @@ const normalizeAcceptedCurrencyInputs = async ({
       cliArguments.maxPriceAgeSecsCap,
       "maxPriceAgeSecsCap"
     ),
-    maxConfidenceRatioBpsCap: parseOptionalPositiveU64(
+    maxConfidenceRatioBpsCap: parseOptionalPositiveU16(
       cliArguments.maxConfidenceRatioBpsCap,
       "maxConfidenceRatioBpsCap"
     ),

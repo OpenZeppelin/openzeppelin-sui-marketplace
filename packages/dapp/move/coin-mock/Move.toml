@@ -3,4 +3,4 @@ name = "mock_coin"
 edition = "2024"
 
 [environments]
-localnet = "43bd0c5c"
+localnet = "06ab6259"

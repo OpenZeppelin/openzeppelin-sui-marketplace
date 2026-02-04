@@ -174,6 +174,49 @@ export const parseOptionalPositiveU64 = (
   rawValue === undefined ? undefined : parsePositiveU64(rawValue, label)
 
 /**
+ * Parses a non-negative u16 from user input.
+ */
+export const parseNonNegativeU16 = (
+  rawValue: string,
+  label: string
+): number => {
+  const value = tryParseBigInt(rawValue)
+  if (value < 0n) throw new Error(`${label} cannot be negative.`)
+  const maxU16 = (1n << 16n) - 1n
+  if (value > maxU16)
+    throw new Error(`${label} exceeds the maximum allowed u16 value.`)
+
+  return Number(value)
+}
+
+/**
+ * Parses a positive (non-zero) u16 from user input.
+ */
+export const parsePositiveU16 = (rawValue: string, label: string): number => {
+  const value = parseNonNegativeU16(rawValue, label)
+  if (value <= 0) throw new Error(`${label} must be greater than zero.`)
+  return value
+}
+
+/**
+ * Parses an optional u16 from user input.
+ */
+export const parseOptionalU16 = (
+  rawValue: string | undefined,
+  label: string
+): number | undefined =>
+  rawValue === undefined ? undefined : parseNonNegativeU16(rawValue, label)
+
+/**
+ * Parses an optional positive u16 from user input.
+ */
+export const parseOptionalPositiveU16 = (
+  rawValue: string | undefined,
+  label: string
+): number | undefined =>
+  rawValue === undefined ? undefined : parsePositiveU16(rawValue, label)
+
+/**
  * Parses a bigint-like value and falls back to 0 on invalid input.
  */
 export const parseBalance = (value?: string | number | bigint) => {
