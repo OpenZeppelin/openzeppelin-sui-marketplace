@@ -37,7 +37,10 @@ import {
   deriveRelevantPackageId,
   normalizeIdOrThrow
 } from "@sui-oracle-market/tooling-core/object"
-import { parseOptionalU64 } from "@sui-oracle-market/tooling-core/utils/utility"
+import {
+  parseOptionalU16,
+  parseOptionalU64
+} from "@sui-oracle-market/tooling-core/utils/utility"
 import { emitJsonOutput } from "@sui-oracle-market/tooling-node/json"
 import {
   logKeyValueBlue,
@@ -491,7 +494,7 @@ const normalizeInputs = async (
       cliArguments.maxPriceAgeSecs,
       "maxPriceAgeSecs"
     ),
-    maxConfidenceRatioBps: parseOptionalU64(
+    maxConfidenceRatioBps: parseOptionalU16(
       cliArguments.maxConfidenceRatioBps,
       "maxConfidenceRatioBps"
     ),

@@ -190,7 +190,7 @@ export const estimateRequiredAmount = async ({
   networkName?: string
   priceUsdCents: bigint
   maxPriceAgeSecs?: bigint
-  maxConfidenceRatioBps?: bigint
+  maxConfidenceRatioBps?: number
   clockShared: Awaited<ReturnType<typeof getSuiSharedObject>>
   signerAddress: string
   suiClient: SuiClient
@@ -262,7 +262,7 @@ export const estimateRequiredAmount = async ({
       pythPriceInfoArgument,
       quoteTransaction.pure.u64(priceUsdCents),
       quoteTransaction.pure.option("u64", maxPriceAgeSecs ?? null),
-      quoteTransaction.pure.option("u64", maxConfidenceRatioBps ?? null),
+      quoteTransaction.pure.option("u16", maxConfidenceRatioBps ?? null),
       clockArgument
     ]
   })
@@ -589,7 +589,7 @@ export const buildBuyTransaction = async (
     mintTo: string
     refundTo: string
     maxPriceAgeSecs?: bigint
-    maxConfidenceRatioBps?: bigint
+    maxConfidenceRatioBps?: number
     gasBudget?: number
     discountContext: DiscountContext
     skipPriceUpdate?: boolean
@@ -717,7 +717,7 @@ export const buildBuyTransaction = async (
         transaction.pure.address(mintTo),
         transaction.pure.address(refundTo),
         transaction.pure.option("u64", maxPriceAgeSecs ?? null),
-        transaction.pure.option("u64", maxConfidenceRatioBps ?? null),
+        transaction.pure.option("u16", maxConfidenceRatioBps ?? null),
         clockArgument
       ]
     })
@@ -745,7 +745,7 @@ export const buildBuyTransaction = async (
         transaction.pure.address(mintTo),
         transaction.pure.address(refundTo),
         transaction.pure.option("u64", maxPriceAgeSecs ?? null),
-        transaction.pure.option("u64", maxConfidenceRatioBps ?? null),
+        transaction.pure.option("u16", maxConfidenceRatioBps ?? null),
         clockArgument
       ]
     })
@@ -765,7 +765,7 @@ export const buildBuyTransaction = async (
       transaction.pure.address(mintTo),
       transaction.pure.address(refundTo),
       transaction.pure.option("u64", maxPriceAgeSecs ?? null),
-      transaction.pure.option("u64", maxConfidenceRatioBps ?? null),
+      transaction.pure.option("u16", maxConfidenceRatioBps ?? null),
       clockArgument
     ]
   })
