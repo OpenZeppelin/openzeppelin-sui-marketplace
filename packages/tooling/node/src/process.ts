@@ -5,11 +5,12 @@ import { createHash } from "node:crypto"
 import { basename } from "node:path"
 import { fileURLToPath } from "node:url"
 
-import { formatErrorMessage } from "@sui-oracle-market/tooling-core/utils/errors"
 import { type Argv } from "yargs"
 import { hideBin } from "yargs/helpers"
+import { formatErrorMessage } from "@sui-oracle-market/tooling-core/utils/errors"
 import type { SuiResolvedConfig } from "./config.ts"
 import { getNetworkConfig, loadSuiConfig } from "./config.ts"
+import { createSuiClient } from "./sui-client.ts"
 import type { Tooling } from "./factory.ts"
 import { createTooling } from "./factory.ts"
 import {
@@ -19,7 +20,6 @@ import {
   logSimpleBlue,
   logWarning
 } from "./log.ts"
-import { createSuiClient } from "./sui-client.ts"
 import {
   createSuiCliEnvironment,
   ensureSuiCli,
@@ -282,7 +282,7 @@ const syncLocalnetMoveEnvironmentChainIdForTooling = async (
 
   if (updatedFiles.length) {
     logKeyValueBlue("Move.toml")(
-      `updated ${updatedFiles.length} test-publish environment entries`
+      `updated ${updatedFiles.length} localnet environment entries`
     )
   }
 }

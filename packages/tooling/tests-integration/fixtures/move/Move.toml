@@ -5,7 +5,7 @@ version = "0.0.1"
 [dependencies]
 Sui = { local = "../sui" }
 
-[dep-replacements.test-publish]
+[dep-replacements.localnet]
 Sui = { local = "../sui" }
 
 [addresses]

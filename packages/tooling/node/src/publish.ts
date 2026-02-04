@@ -114,7 +114,7 @@ const syncLocalnetMoveEnvironmentChainIdForPublish = async (
 
   if (updatedFiles.length) {
     logKeyValueBlue("Move.toml")(
-      `updated ${updatedFiles.length} test-publish environment entries`
+      `updated ${updatedFiles.length} localnet environment entries`
     )
   }
 }
