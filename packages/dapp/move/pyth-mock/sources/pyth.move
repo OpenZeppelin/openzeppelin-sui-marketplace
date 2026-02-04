@@ -1,8 +1,8 @@
-module pyth::pyth;
+module Pyth::pyth;
 
-use pyth::price;
-use pyth::price_feed;
-use pyth::price_info::{Self, PriceInfoObject};
+use Pyth::price;
+use Pyth::price_feed;
+use Pyth::price_info::{Self, PriceInfoObject};
 use sui::clock::{Self, Clock};
 
 const EStalePriceUpdate: u64 = 0;

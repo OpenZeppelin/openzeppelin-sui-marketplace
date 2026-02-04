@@ -1,4 +1,4 @@
-module pyth::i64;
+module Pyth::i64;
 
 // As Move does not support signed integers, this module wraps a magnitude with a sign bit.
 const MAX_POSITIVE_MAGNITUDE: u64 = (1 << 63) - 1;

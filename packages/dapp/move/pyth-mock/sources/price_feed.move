@@ -1,7 +1,7 @@
-module pyth::price_feed;
+module Pyth::price_feed;
 
-use pyth::price::Price;
-use pyth::price_identifier::PriceIdentifier;
+use Pyth::price::Price;
+use Pyth::price_identifier::PriceIdentifier;
 
 /// Simplified price feed container.
 public struct PriceFeed has copy, drop, store {

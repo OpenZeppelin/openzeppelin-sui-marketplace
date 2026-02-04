@@ -1,6 +1,6 @@
-module pyth::price;
+module Pyth::price;
 
-use pyth::i64::I64;
+use Pyth::i64::I64;
 
 /// Oracle price with confidence interval in fixed-point form.
 public struct Price has copy, drop, store {

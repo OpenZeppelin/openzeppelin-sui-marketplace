@@ -3,17 +3,18 @@ name = "sui_oracle_market"
 edition = "2024"
 
 [dependencies]
-[dependencies.pyth]
+[dependencies.Pyth]
 git = "https://github.com/pyth-network/pyth-crosschain.git"
 subdir = "target_chains/sui/contracts"
 rev = "sui-contract-testnet"
 rename-from = "pyth"
 addr_substitutions = { pyth = "0xabf837e98c26087cba0883c0a7a28326b1fa3c5e1e2c5abdb486f9e8f594c837" }
 
-[dependencies.wormhole]
+[dependencies.Wormhole]
 git = "https://github.com/wormhole-foundation/wormhole.git"
 subdir = "sui/wormhole"
 rev = "sui/testnet"
+rename-from = "wormhole"
 addr_substitutions = { wormhole = "0xf47329f4344f3bf0f8e436e2f7b485466cff300f12a166563995d3888c296a94" }
 
 [environments]
@@ -21,4 +22,4 @@ test-publish = "52911988"
 testnet_beta = "4c78adac"
 
 [dep-replacements.test-publish]
-pyth = { local = "../pyth-mock", override = true, addr_substitutions = { pyth = "0x2" } }
+Pyth = { local = "../pyth-mock", override = true, addr_substitutions = { pyth = "0x2" } }
