@@ -191,7 +191,7 @@ public struct ItemListingKey has copy, drop, store {
 }
 
 /// Marker stored under the shop to record listing membership.
-public struct ItemListingMarker has copy, drop, store {
+public struct ItemListingMarker has drop, store {
     listing_id: ID,
 }
 
@@ -231,7 +231,7 @@ public struct AcceptedCurrencyTypeKey has copy, drop, store {
 }
 
 /// Marker stored under the shop to record accepted currency membership.
-public struct AcceptedCurrencyMarker has copy, drop, store {
+public struct AcceptedCurrencyMarker has drop, store {
     accepted_currency_id: ID,
     coin_type: TypeName,
 }
@@ -268,7 +268,7 @@ public struct DiscountTemplateKey has copy, drop, store {
 }
 
 /// Marker stored under the shop to record template membership.
-public struct DiscountTemplateMarker has copy, drop, store {
+public struct DiscountTemplateMarker has drop, store {
     template_id: ID,
     applies_to_listing: option::Option<ID>,
 }
@@ -290,8 +290,7 @@ public struct DiscountClaimKey has copy, drop, store {
 }
 
 /// Tracks which addresses already claimed a discount from a template.
-public struct DiscountClaim has key, store {
-    id: UID,
+public struct DiscountClaim has drop, store {
     claimer: address,
 }
 
@@ -1021,7 +1020,7 @@ public fun claim_discount_ticket_inline(
         claimer,
         ctx,
     );
-    record_discount_claim(discount_template, claimer, ctx);
+    record_discount_claim(discount_template, claimer);
     discount_ticket
 }
 
@@ -1378,17 +1377,14 @@ fun new_discount_ticket(
     }
 }
 
-fun record_discount_claim(template: &mut DiscountTemplate, claimer: address, ctx: &mut TxContext) {
+fun record_discount_claim(template: &mut DiscountTemplate, claimer: address) {
     // Track issued tickets; actual uses are counted at redemption time.
     template.claims_issued = template.claims_issued + 1;
 
     dynamic_field::add(
         &mut template.id,
         DiscountClaimKey { claimer },
-        DiscountClaim {
-            id: object::new(ctx),
-            claimer,
-        },
+        DiscountClaim { claimer },
     );
 }
 
@@ -1399,11 +1395,10 @@ fun remove_discount_claim_if_exists(template: &mut DiscountTemplate, claimer: ad
             DiscountClaimKey { claimer },
         )
     ) {
-        let DiscountClaim { id, .. } = dynamic_field::remove(
+        let _claim: DiscountClaim = dynamic_field::remove(
             &mut template.id,
             DiscountClaimKey { claimer },
         );
-        id.delete();
     };
 }
 
