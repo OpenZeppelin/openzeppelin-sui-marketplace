@@ -765,9 +765,9 @@ entry fun remove_accepted_currency(
         shop,
         accepted_currency.coin_type,
     );
-    if (option::is_some(&mapped_id_opt)) {
-        assert!(*option::borrow(&mapped_id_opt) == accepted_currency_id, EAcceptedCurrencyMissing);
-    };
+    option::do_ref!(&mapped_id_opt, |mapped_id| {
+        assert!(*mapped_id == accepted_currency_id, EAcceptedCurrencyMissing);
+    });
     remove_currency_field(shop, accepted_currency.coin_type);
     if (
         dynamic_field::exists_with_type<AcceptedCurrencyKey, AcceptedCurrencyMarker>(
@@ -1126,12 +1126,9 @@ entry fun buy_item<TItem: store, TCoin>(
         clock,
         ctx,
     );
-    if (option::is_some(&owed_coin_opt)) {
-        let owed_coin = option::destroy_some(owed_coin_opt);
+    option::do!(owed_coin_opt, |owed_coin| {
         transfer::public_transfer(owed_coin, shop.owner);
-    } else {
-        option::destroy_none(owed_coin_opt);
-    };
+    });
     if (change_coin.value() == 0) {
         change_coin.destroy_zero();
     } else {
@@ -1203,12 +1200,9 @@ entry fun buy_item_with_discount<TItem: store, TCoin>(
         clock,
         ctx,
     );
-    if (option::is_some(&owed_coin_opt)) {
-        let owed_coin = option::destroy_some(owed_coin_opt);
+    option::do!(owed_coin_opt, |owed_coin| {
         transfer::public_transfer(owed_coin, shop.owner);
-    } else {
-        option::destroy_none(owed_coin_opt);
-    };
+    });
     if (change_coin.value() == 0) {
         change_coin.destroy_zero();
     } else {
@@ -1560,11 +1554,11 @@ macro fun assert_listing_matches_shop!($shop: &Shop, $listing: &ItemListing) {
 }
 
 fun unwrap_or_default(value: &Option<u64>, default_value: u64): u64 {
-    if (option::is_some(value)) {
-        *option::borrow(value)
-    } else {
-        default_value
-    }
+    let mut resolved: u64 = default_value;
+    option::do_ref!(value, |inner| {
+        resolved = *inner;
+    });
+    resolved
 }
 
 /// Normalize a seller-provided guardrail cap, enforcing module-level ceilings and non-zero.
@@ -1787,11 +1781,11 @@ fun build_discount_rule(rule_kind: DiscountRuleKind, rule_value: u64): DiscountR
 }
 
 fun map_id_option_to_address(source: &Option<object::ID>): Option<address> {
-    if (option::is_some(source)) {
-        option::some(object::id_to_address(option::borrow(source)))
-    } else {
-        option::none()
-    }
+    let mut mapped = option::none();
+    option::do_ref!(source, |value| {
+        mapped = option::some(object::id_to_address(value));
+    });
+    mapped
 }
 
 fun template_address(template: &DiscountTemplate): address {
@@ -2005,9 +1999,9 @@ macro fun assert_stock_available!($item_listing: &ItemListing) {
 macro fun assert_schedule!($starts_at: u64, $expires_at: &Option<u64>) {
     let starts_at = $starts_at;
     let expires_at = $expires_at;
-    if (option::is_some(expires_at)) {
-        assert!(*option::borrow(expires_at) > starts_at, ETemplateWindow);
-    }
+    option::do_ref!(expires_at, |expires_at_value| {
+        assert!(*expires_at_value > starts_at, ETemplateWindow);
+    });
 }
 
 macro fun validate_listing_inputs!(
@@ -2063,24 +2057,24 @@ macro fun assert_template_in_time_window!($template: &DiscountTemplate, $now_sec
     let now_secs = $now_secs;
     assert!(template.starts_at <= now_secs, ETemplateTooEarly);
 
-    if (option::is_some(&template.expires_at)) {
-        assert!(now_secs < *option::borrow(&template.expires_at), ETemplateExpired);
-    };
+    option::do_ref!(&template.expires_at, |expires_at| {
+        assert!(now_secs < *expires_at, ETemplateExpired);
+    });
 }
 
 fun redemption_cap_reached(template: &DiscountTemplate): bool {
-    if (option::is_some(&template.max_redemptions)) {
-        let max_redemptions = *option::borrow(&template.max_redemptions);
-        (max_redemptions > 0) && (template.redemptions >= max_redemptions)
-    } else {
-        false
-    }
+    let mut reached = false;
+    option::do_ref!(&template.max_redemptions, |max_redemptions| {
+        reached = (*max_redemptions > 0) && (template.redemptions >= *max_redemptions);
+    });
+    reached
 }
 
 fun template_finished(template: &DiscountTemplate, now: u64): bool {
-    let expired =
-        option::is_some(&template.expires_at)
-        && now >= *option::borrow(&template.expires_at);
+    let mut expired = false;
+    option::do_ref!(&template.expires_at, |expires_at| {
+        expired = now >= *expires_at;
+    });
     let maxed_out = redemption_cap_reached(template);
     expired || maxed_out
 }
@@ -2112,12 +2106,12 @@ macro fun assert_discount_redemption_allowed!(
     let applies_to = map_id_option_to_address(
         &discount_template.applies_to_listing,
     );
-    if (option::is_some(&applies_to)) {
+    option::do_ref!(&applies_to, |applies_to_listing| {
         assert!(
-            *option::borrow(&applies_to) == object::uid_to_address(&item_listing.id),
+            *applies_to_listing == object::uid_to_address(&item_listing.id),
             EDiscountTicketListingMismatch,
         );
-    };
+    });
     assert_template_in_time_window!(discount_template, now);
     assert!(discount_template.claims_issued > discount_template.redemptions, ETemplateMaxedOut);
     assert!(!redemption_cap_reached(discount_template), ETemplateMaxedOut);
@@ -2142,12 +2136,12 @@ macro fun assert_ticket_matches_context!(
     let applies_to_listing = map_id_option_to_address(
         &discount_ticket.listing_id,
     );
-    if (option::is_some(&applies_to_listing)) {
+    option::do_ref!(&applies_to_listing, |listing_address| {
         assert!(
-            *option::borrow(&applies_to_listing) == object::uid_to_address(&item_listing.id),
+            *listing_address == object::uid_to_address(&item_listing.id),
             EDiscountTicketListingMismatch,
         );
-    };
+    });
 }
 
 macro fun validate_accepted_currency_inputs!(
@@ -2286,13 +2280,13 @@ macro fun assert_belongs_to_shop_if_some!(
     let shop = $shop;
     let kind = $kind;
     let maybe_id = $maybe_id;
-    if (option::is_some(maybe_id)) {
-        let id = *option::borrow(maybe_id);
+    option::do_ref!(maybe_id, |id| {
+        let id = *id;
         match (kind) {
             ReferenceKind::Template => assert_template_belongs_to_shop!(shop, id),
             ReferenceKind::Listing => assert_listing_belongs_to_shop!(shop, id),
         };
-    };
+    });
 }
 
 macro fun assert_spotlight_template_matches_listing!(
@@ -2303,9 +2297,9 @@ macro fun assert_spotlight_template_matches_listing!(
     let shop = $shop;
     let listing_id = $listing_id;
     let discount_template_id = $discount_template_id;
-    if (option::is_some(discount_template_id)) {
+    option::do_ref!(discount_template_id, |template_id| {
         let listing_address = object::id_to_address(&listing_id);
-        let template_id = *option::borrow(discount_template_id);
+        let template_id = *template_id;
         assert_template_belongs_to_shop!(shop, template_id);
         let marker: &DiscountTemplateMarker = dynamic_field::borrow(
             &shop.id,
@@ -2314,13 +2308,13 @@ macro fun assert_spotlight_template_matches_listing!(
         let applies_to_listing = map_id_option_to_address(
             &marker.applies_to_listing,
         );
-        if (option::is_some(&applies_to_listing)) {
+        option::do_ref!(&applies_to_listing, |applies_to_listing| {
             assert!(
-                *option::borrow(&applies_to_listing) == listing_address,
+                *applies_to_listing == listing_address,
                 ESpotlightTemplateListingMismatch,
             );
-        };
-    };
+        });
+    });
 }
 
 /// Guardrails to keep claims inside schedule/limits and unique per address.
@@ -2331,11 +2325,10 @@ macro fun assert_template_claimable!($template: &DiscountTemplate, $claimer: add
     assert!(template.active, ETemplateInactive);
     assert_template_in_time_window!(template, now_secs);
 
-    if (option::is_some(&template.max_redemptions)) {
-        let max_redemptions = *option::borrow(&template.max_redemptions);
-        assert!(template.claims_issued < max_redemptions, ETemplateMaxedOut);
-        assert!(template.redemptions < max_redemptions, ETemplateMaxedOut);
-    };
+    option::do_ref!(&template.max_redemptions, |max_redemptions| {
+        assert!(template.claims_issued < *max_redemptions, ETemplateMaxedOut);
+        assert!(template.redemptions < *max_redemptions, ETemplateMaxedOut);
+    });
 
     assert!(
         !dynamic_field::exists_with_type<DiscountClaimKey, DiscountClaim>(
@@ -2424,7 +2417,6 @@ public fun discount_template_id_for_address(
 public fun listing_values(
     shop: &Shop,
     listing: &ItemListing,
-): (String, u64, u64, address, Option<object::ID>) {
 ): (String, u64, u64, address, Option<object::ID>) {
     assert_listing_matches_shop!(shop, listing);
     (
@@ -2805,12 +2797,9 @@ public fun test_claim_and_buy_with_ids<TItem: store, TCoin>(
         clock,
         ctx,
     );
-    if (option::is_some(&owed_coin_opt)) {
-        let owed_coin = option::destroy_some(owed_coin_opt);
+    option::do!(owed_coin_opt, |owed_coin| {
         transfer::public_transfer(owed_coin, shop_owner);
-    } else {
-        option::destroy_none(owed_coin_opt);
-    };
+    });
     if (change_coin.value() == 0) {
         change_coin.destroy_zero();
     } else {
