@@ -1287,7 +1287,7 @@ fun new_accepted_currency(
     feed_id: vector<u8>,
     pyth_object_id: object::ID,
     decimals: u8,
-    symbol: vector<u8>,
+    symbol: String,
     max_price_age_secs_cap: u64,
     max_confidence_ratio_bps_cap: u64,
     max_price_status_lag_secs_cap: u64,
