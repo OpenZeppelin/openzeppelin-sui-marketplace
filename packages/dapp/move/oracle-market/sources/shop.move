@@ -749,7 +749,7 @@ entry fun remove_accepted_currency(
         shop,
         accepted_currency.coin_type,
     );
-    option::do_ref!(&mapped_id_opt, |mapped_id| {
+    mapped_id_opt.do_ref!(|mapped_id| {
         assert!(*mapped_id == accepted_currency_id, EAcceptedCurrencyMissing);
     });
     remove_currency_field(shop, accepted_currency.coin_type);
@@ -1114,9 +1114,10 @@ entry fun buy_item<TItem: store, TCoin>(
         clock,
         ctx,
     );
-    option::do!(owed_coin_opt, |owed_coin| {
+    owed_coin_opt.do!(|owed_coin| {
         transfer::public_transfer(owed_coin, shop.owner);
     });
+
     if (change_coin.value() == 0) {
         change_coin.destroy_zero();
     } else {
@@ -1188,7 +1189,7 @@ entry fun buy_item_with_discount<TItem: store, TCoin>(
         clock,
         ctx,
     );
-    option::do!(owed_coin_opt, |owed_coin| {
+    owed_coin_opt.do!(|owed_coin| {
         transfer::public_transfer(owed_coin, shop.owner);
     });
     if (change_coin.value() == 0) {
@@ -1539,7 +1540,7 @@ fun assert_listing_matches_shop(shop: &Shop, listing: &ItemListing) {
 
 fun unwrap_or_default(value: &option::Option<u64>, default_value: u64): u64 {
     let mut resolved: u64 = default_value;
-    option::do_ref!(value, |inner| {
+    value.do_ref!(|inner| {
         resolved = *inner;
     });
     resolved
@@ -1765,7 +1766,7 @@ fun build_discount_rule(rule_kind: DiscountRuleKind, rule_value: u64): DiscountR
 
 fun map_id_option_to_address(source: &option::Option<object::ID>): option::Option<address> {
     let mut mapped = option::none();
-    option::do_ref!(source, |value| {
+    source.do_ref!(|value| {
         mapped = option::some(object::id_to_address(value));
     });
     mapped
@@ -1975,7 +1976,7 @@ fun assert_stock_available(item_listing: &ItemListing) {
 }
 
 fun assert_schedule(starts_at: u64, expires_at: &option::Option<u64>) {
-    option::do_ref!(expires_at, |expires_at_value| {
+    expires_at.do_ref!(|expires_at_value| {
         assert!(*expires_at_value > starts_at, ETemplateWindow);
     });
 }
@@ -2019,14 +2020,14 @@ fun validate_discount_template_inputs(
 fun assert_template_in_time_window(template: &DiscountTemplate, now_secs: u64) {
     assert!(template.starts_at <= now_secs, ETemplateTooEarly);
 
-    option::do_ref!(&template.expires_at, |expires_at| {
+    template.expires_at.do_ref!(|expires_at| {
         assert!(now_secs < *expires_at, ETemplateExpired);
     });
 }
 
 fun redemption_cap_reached(template: &DiscountTemplate): bool {
     let mut reached = false;
-    option::do_ref!(&template.max_redemptions, |max_redemptions| {
+    template.max_redemptions.do_ref!(|max_redemptions| {
         reached = (*max_redemptions > 0) && (template.redemptions >= *max_redemptions);
     });
     reached
@@ -2034,7 +2035,7 @@ fun redemption_cap_reached(template: &DiscountTemplate): bool {
 
 fun template_finished(template: &DiscountTemplate, now: u64): bool {
     let mut expired = false;
-    option::do_ref!(&template.expires_at, |expires_at| {
+    template.expires_at.do_ref!(|expires_at| {
         expired = now >= *expires_at;
     });
     let maxed_out = redemption_cap_reached(template);
@@ -2061,7 +2062,7 @@ fun assert_discount_redemption_allowed(
     let applies_to = map_id_option_to_address(
         &discount_template.applies_to_listing,
     );
-    option::do_ref!(&applies_to, |applies_to_listing| {
+    applies_to.do_ref!(|applies_to_listing| {
         assert!(
             *applies_to_listing == object::uid_to_address(&item_listing.id),
             EDiscountTicketListingMismatch,
@@ -2087,7 +2088,7 @@ fun assert_ticket_matches_context(
     let applies_to_listing = map_id_option_to_address(
         &discount_ticket.listing_id,
     );
-    option::do_ref!(&applies_to_listing, |listing_address| {
+    applies_to_listing.do_ref!(|listing_address| {
         assert!(
             *listing_address == object::uid_to_address(&item_listing.id),
             EDiscountTicketListingMismatch,
@@ -2203,7 +2204,7 @@ fun assert_belongs_to_shop_if_some(
     kind: ReferenceKind,
     maybe_id: &option::Option<object::ID>,
 ) {
-    option::do_ref!(maybe_id, |id| {
+    maybe_id.do_ref!(|id| {
         let id = *id;
         match (kind) {
             ReferenceKind::Template => assert_template_belongs_to_shop(shop, id),
@@ -2217,7 +2218,7 @@ fun assert_spotlight_template_matches_listing(
     listing_id: object::ID,
     discount_template_id: &option::Option<object::ID>,
 ) {
-    option::do_ref!(discount_template_id, |template_id| {
+    discount_template_id.do_ref!(|template_id| {
         let listing_address = object::id_to_address(&listing_id);
         let template_id = *template_id;
         assert_template_belongs_to_shop(shop, template_id);
@@ -2228,11 +2229,8 @@ fun assert_spotlight_template_matches_listing(
         let applies_to_listing = map_id_option_to_address(
             &marker.applies_to_listing,
         );
-        option::do_ref!(&applies_to_listing, |applies_to_listing| {
-            assert!(
-                *applies_to_listing == listing_address,
-                ESpotlightTemplateListingMismatch,
-            );
+        applies_to_listing.do_ref!(|applies_to_listing| {
+            assert!(*applies_to_listing == listing_address, ESpotlightTemplateListingMismatch);
         });
     });
 }
@@ -2242,7 +2240,7 @@ fun assert_template_claimable(template: &DiscountTemplate, claimer: address, now
     assert!(template.active, ETemplateInactive);
     assert_template_in_time_window(template, now_secs);
 
-    option::do_ref!(&template.max_redemptions, |max_redemptions| {
+    template.max_redemptions.do_ref!(|max_redemptions| {
         assert!(template.claims_issued < *max_redemptions, ETemplateMaxedOut);
         assert!(template.redemptions < *max_redemptions, ETemplateMaxedOut);
     });
@@ -2716,7 +2714,7 @@ public fun test_claim_and_buy_with_ids<TItem: store, TCoin>(
         clock,
         ctx,
     );
-    option::do!(owed_coin_opt, |owed_coin| {
+    owed_coin_opt.do!( |owed_coin| {
         transfer::public_transfer(owed_coin, shop_owner);
     });
     if (change_coin.value() == 0) {

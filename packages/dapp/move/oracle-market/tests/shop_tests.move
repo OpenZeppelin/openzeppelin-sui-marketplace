@@ -472,7 +472,7 @@ fun add_accepted_currency_records_currency_and_event() {
         test_coin_type(),
     );
     assert!(option::is_some(&mapped_id));
-    option::do_ref!(&mapped_id, |value| {
+    mapped_id.do_ref!(|value| {
         assert_eq!(*value, accepted_currency_id);
     });
 
@@ -1633,7 +1633,7 @@ fun add_item_listing_links_spotlight_template() {
     let listing_address = shop::test_listing_address(&listing);
 
     assert!(option::is_some(&spotlight_template_id));
-    option::do_ref!(&spotlight_template_id, |value| {
+    spotlight_template_id.do_ref!(|value| {
         assert_eq!(*value, template_id);
     });
     assert_eq!(shop::test_item_listing_added_shop(added_event), shop_address);
@@ -1644,7 +1644,7 @@ fun add_item_listing_links_spotlight_template() {
         added_event,
     );
     assert!(option::is_some(&spotlight_template));
-    option::do_ref!(&spotlight_template, |value| {
+    spotlight_template.do_ref!(|value| {
         assert_eq!(*value, object::id_to_address(&template_id));
     });
     assert_eq!(shop::test_item_listing_added_stock(added_event), 8);
@@ -2096,11 +2096,11 @@ fun create_discount_template_persists_fields_and_emits_event() {
     assert_eq!(shop::test_discount_rule_value(rule), 1_250);
     assert_eq!(starts_at, 10);
     assert!(option::is_some(&expires_at));
-    option::do_ref!(&expires_at, |value| {
+    expires_at.do_ref!(|value| {
         assert_eq!(*value, 50);
     });
     assert!(option::is_some(&max_redemptions));
-    option::do_ref!(&max_redemptions, |value| {
+    max_redemptions.do_ref!(|value| {
         assert_eq!(*value, 5);
     });
     assert_eq!(claims_issued, 0);
@@ -2166,7 +2166,7 @@ fun create_discount_template_links_listing_and_percent_rule() {
 
     assert_eq!(shop_address, shop::test_shop_id(&shop));
     assert!(option::is_some(&applies_to_listing));
-    option::do_ref!(&applies_to_listing, |value| {
+    applies_to_listing.do_ref!(|value| {
         assert_eq!(*value, listing_id);
     });
     assert_eq!(shop::test_discount_rule_kind(rule), 1);
@@ -2375,18 +2375,18 @@ fun update_discount_template_updates_fields_and_emits_event() {
     ) = shop::test_discount_template_values(&shop, &template);
     assert_eq!(shop_address, shop::test_shop_id(&shop));
     assert!(option::is_some(&applies_to_listing));
-    option::do_ref!(&applies_to_listing, |value| {
+    applies_to_listing.do_ref!(|value| {
         assert_eq!(*value, listing_id);
     });
     assert_eq!(shop::test_discount_rule_kind(rule), 1);
     assert_eq!(shop::test_discount_rule_value(rule), 750);
     assert_eq!(starts_at, 50);
     assert!(option::is_some(&expires_at));
-    option::do_ref!(&expires_at, |value| {
+    expires_at.do_ref!(|value| {
         assert_eq!(*value, 200);
     });
     assert!(option::is_some(&max_redemptions));
-    option::do_ref!(&max_redemptions, |value| {
+    max_redemptions.do_ref!(|value| {
         assert_eq!(*value, 10);
     });
     assert_eq!(claims_issued, 0);
@@ -2940,7 +2940,7 @@ fun toggle_template_on_listing_sets_and_clears_spotlight() {
         &listing,
     );
     assert!(option::is_some(&spotlight_after_set));
-    option::do_ref!(&spotlight_after_set, |value| {
+    spotlight_after_set.do_ref!(|value| {
         assert_eq!(*value, template_id);
     });
     assert_eq!(tx_context::get_ids_created(&ctx), ids_before_toggle);
@@ -3157,7 +3157,7 @@ fun attach_template_to_listing_sets_spotlight_without_emitting_events() {
     );
     assert_eq!(shop_id, shop::test_shop_id(&shop));
     assert!(option::is_some(&spotlight));
-    option::do_ref!(&spotlight, |value| {
+    spotlight.do_ref!(|value| {
         assert_eq!(*value, template_id);
     });
     assert_eq!(tx_context::get_ids_created(&ctx), ids_before);
@@ -3205,7 +3205,7 @@ fun attach_template_to_listing_overwrites_existing_spotlight() {
         &listing,
     );
     assert!(option::is_some(&spotlight_before));
-    option::do_ref!(&spotlight_before, |value| {
+    spotlight_before.do_ref!(|value| {
         assert_eq!(*value, first_template);
     });
 
@@ -3221,7 +3221,7 @@ fun attach_template_to_listing_overwrites_existing_spotlight() {
         &listing,
     );
     assert!(option::is_some(&spotlight_after));
-    option::do_ref!(&spotlight_after, |value| {
+    spotlight_after.do_ref!(|value| {
         assert_eq!(*value, second_template);
     });
     assert_eq!(tx_context::get_ids_created(&ctx), ids_before);
@@ -3274,7 +3274,7 @@ fun attach_template_to_listing_accepts_matching_listing() {
 
     let (_, _, _, _, spotlight) = shop::test_listing_values_local(&listing);
     assert!(option::is_some(&spotlight));
-    option::do_ref!(&spotlight, |value| {
+    spotlight.do_ref!(|value| {
         assert_eq!(*value, template_id);
     });
 
@@ -3456,7 +3456,7 @@ fun clear_template_from_listing_removes_spotlight_without_side_effects() {
     let created_before = tx_context::get_ids_created(&ctx);
     let toggled_before = event::events_by_type<shop::DiscountTemplateToggledEvent>().length();
     assert!(option::is_some(&spotlight_before));
-    option::do_ref!(&spotlight_before, |value| {
+    spotlight_before.do_ref!(|value| {
         assert_eq!(*value, template_id);
     });
 
@@ -3696,7 +3696,7 @@ fun claim_discount_ticket_mints_transfers_and_records_claim() {
     assert_eq!(ticket_template, template_address);
     assert_eq!(ticket_shop, shop_address);
     assert!(option::is_some(&ticket_listing));
-    option::do_ref!(&ticket_listing, |value| {
+    ticket_listing.do_ref!(|value| {
         assert_eq!(*value, listing_id);
     });
     assert_eq!(ticket_owner, OTHER_OWNER);
@@ -5957,7 +5957,7 @@ fun buy_item_with_discount_emits_discount_redeemed_and_records_template_id() {
         purchase,
     );
     assert!(option::is_some(&template_id_opt));
-    option::do_ref!(&template_id_opt, |value| {
+    template_id_opt.do_ref!(|value| {
         assert_eq!(*value, object::id_to_address(&template_id));
     });
 
