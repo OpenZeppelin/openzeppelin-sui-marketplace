@@ -21,7 +21,6 @@ public struct ShopCreatedEvent has copy, drop {
   shop_id: address,
   shop_owner_cap_id: address,
   owner: address,
-  name: string::String,
 }
 
 public struct ShopOwnerUpdatedEvent has copy, drop {
@@ -31,7 +30,6 @@ public struct ShopOwnerUpdatedEvent has copy, drop {
 
 entry fun create_shop(name: string::String, ctx: &mut TxContext) {
   let owner = ctx.sender();
-  let name_for_event = clone_string(&name);
   let shop = Shop {
     id: object::new(ctx),
     name,
@@ -48,7 +46,6 @@ entry fun create_shop(name: string::String, ctx: &mut TxContext) {
     shop_id,
     shop_owner_cap_id: owner_cap_id,
     owner,
-    name: name_for_event,
   });
 }
 
@@ -62,13 +59,4 @@ entry fun update_shop_owner(
   shop.owner = new_owner;
   transfer::transfer(owner_cap, new_owner);
   event::emit(ShopOwnerUpdatedEvent { shop_id, new_owner });
-}
-
-fun clone_bytes(data: &vector<u8>): vector<u8> {
-  let len: u64 = data.length();
-  vector::tabulate!(len, |i| data[i])
-}
-
-fun clone_string(value: &string::String): string::String {
-  string::utf8(clone_bytes(string::as_bytes(value)))
 }

@@ -6,11 +6,16 @@ coverage
 .DS_Store
 .vscode
 
+**/next-env.d.ts
+**/tsconfig.tsbuildinfo
+
 deployments/
 
 packages/dapp/move/**/build/
 packages/dapp/move/**/.trace
+packages/dapp/move/**/traces
 packages/dapp/move/**/.coverage*
+packages/dapp/move/**/lcov*
 packages/dapp/move/**/Pub.localnet.toml
 packages/dapp/move/**/Move.lock
 packages/dapp/move/**/Published.toml

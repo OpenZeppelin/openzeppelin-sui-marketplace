@@ -52,9 +52,9 @@ pnpm script buyer:buy --help
   Code: `packages/dapp/move/oracle-market/sources/shop.move` (helper functions and events)
 - **Transfers and sharing**: `txf::public_transfer` moves owned resources, and `txf::share_object`
   creates shared objects. This pattern replaces EVM-style factory deployments.
-  Code: `packages/dapp/move/oracle-market/sources/shop.move` (`create_shop`, `refund_or_destroy`)
-- **TxContext usage**: `tx::TxContext` is needed for object creation (`obj::new`) and coin splits.
-  Code: `packages/dapp/move/oracle-market/sources/shop.move` (`pay_shop`, `create_shop`)
+  Code: `packages/dapp/move/oracle-market/sources/shop.move` (`create_shop`, `finalize_purchase_transfers`)
+- **TxContext usage**: `tx::TxContext` is needed for object creation (`object::new`) and coin splits.
+  Code: `packages/dapp/move/oracle-market/sources/shop.move` (`split_payment`, `create_shop`)
 - **Fixed-point math**: prices are stored in USD cents; discounts use basis points; conversion uses
   u128 scaling and a pow10 table to avoid floating point math.
   Code: `packages/dapp/move/oracle-market/sources/shop.move` (`POW10_U128`, `quote_amount_with_guardrails`)
@@ -63,8 +63,8 @@ pnpm script buyer:buy --help
   into separate shared objects.
   Code: `packages/dapp/move/oracle-market/sources/shop.move` (shared object types)
 - **Storage rebates**: destroying objects (e.g., zero-value coins) returns storage rebates, which is
-  why `refund_or_destroy` explicitly calls `coin::destroy_zero`.
-  Code: `packages/dapp/move/oracle-market/sources/shop.move` (`refund_or_destroy`)
+  why `finalize_purchase_transfers` explicitly calls `coin::destroy_zero`.
+  Code: `packages/dapp/move/oracle-market/sources/shop.move` (`finalize_purchase_transfers`)
 - **Test-only helpers**: `#[test_only]` APIs expose helpers for Move unit tests without shipping
   them as production entry points.
   Code: `packages/dapp/move/oracle-market/sources/shop.move` (test_* functions)
@@ -108,7 +108,7 @@ public fun accepted_currency_id_for_type(
 
 ## 7. Exercises
 1. Find `quote_amount_for_price_info_object` and identify which parts are “identity checks” vs “pricing math”. Expected outcome: you can point to the function that binds feed bytes + object IDs.
-2. Find `refund_or_destroy` and explain why it destroys zero-value coins. Expected outcome: you can explain storage rebates at a high level.
+2. Find `finalize_purchase_transfers` and explain why it destroys zero-value coins. Expected outcome: you can explain storage rebates at a high level.
 
 ## 8. Annotated diff: Solidity vs Move buy flow
 ```solidity
@@ -139,7 +139,7 @@ entry fun buy_item<TItem: store, TCoin>(
 ) {
   // listing + currency checks
   // oracle guardrails
-  // payment coin moved in, change returned
+  // payment coin moved in (convention prefers exact-amount coins; this repo may return change)
   // receipt minted as ShopItem<TItem>
   // events emitted
 }

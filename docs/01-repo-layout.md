@@ -2,7 +2,7 @@
 
 **Path:** [Learning Path](./) > 01 Repo Layout + How to Navigate
 
-Read this once near the start to understand where Move code lives, how the CLI/scripts are organized, and how the workspace layering is enforced.
+Understand where Move code lives, how the CLI/scripts are organized, and how the workspace layering is enforced.
 
 ## 1. Repository layout
 
@@ -10,7 +10,7 @@ Read this once near the start to understand where Move code lives, how the CLI/s
 .
 ├── packages/
 │   ├── dapp/
-│   │   ├── move/                     # Move packages (oracle-market + mocks + examples)
+│   │   ├── move/                      # Move packages (oracle-market + mocks + examples)
 │   │   │   ├── oracle-market/         # Main Move package (sui_oracle_market)
 │   │   │   ├── pyth-mock/             # Local-only Pyth stub (dev/localnet)
 │   │   │   ├── coin-mock/             # Local-only mock coins (dev/localnet)
@@ -41,9 +41,9 @@ Read this once near the start to understand where Move code lives, how the CLI/s
 ```
 
 What this means in practice:
-- **`packages/dapp`** owns Move packages, CLI scripts, and generated artifacts under `packages/dapp/deployments`.
+- **`packages/dapp`** owns Move packages, CLI scripts, and generated state artifacts under `packages/dapp/deployments`.
 - **`packages/domain/*`** is the domain SDK split into browser-safe `core` and Node-only `node`.
-- **`packages/tooling/*`** is shared infra helpers split into browser-safe `core` and Node-only `node`.
+- **`packages/tooling/*`** is shared infra, script and integration test helpers split into browser-safe `core` and Node-only `node`.
 - **`packages/ui`** is a Next.js UI that uses the same package IDs and Shop objects created by scripts.
 
 ## 2. Package intent and dependency rules
@@ -59,9 +59,6 @@ This workspace is intentionally layered so browser code stays browser-safe.
 - **Application layers**
   - `packages/dapp`: scripts/CLI orchestration. May depend on `tooling-*` and `domain-*`.
   - `packages/ui`: browser-only app. Must depend only on `@sui-oracle-market/tooling-core` and `@sui-oracle-market/domain-core`.
-
-Enforcement:
-- ESLint blocks forbidden cross-layer imports.
 
 ## 3. Navigation
 1. Previous: [00 Setup + Quickstart](./00-setup.md)

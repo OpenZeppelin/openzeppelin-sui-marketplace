@@ -81,7 +81,7 @@ Quick decision table:
 | Local dev (default) | `pnpm script chain:localnet:start --with-faucet` | `localnet` |
 | Local publish | `pnpm script move:publish --package-path oracle-market` | `localnet` |
 | Testnet publish | `pnpm script move:publish --network testnet --package-path oracle-market` | `testnet` |
-| Testnet scripts | `pnpm script buyer:shop-view --network testnet` | `testnet` |
+| Testnet scripts | `pnpm script buyer:shop:view --network testnet` | `testnet` |
 
 ### 3) Start localnet
 ```bash
