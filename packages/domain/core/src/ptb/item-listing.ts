@@ -31,13 +31,11 @@ export const getItemListingMetadata = async (
   )
 
   const fields = unwrapMoveObjectFields(object)
-  const rawShopAddress = fields.shop_address
-  if (typeof rawShopAddress !== "string")
+  const shopAddress = normalizeOptionalIdFromValue(fields.shop_address)
+  if (!shopAddress)
     throw new Error(
       `Item listing ${listingId} is missing a shop_address field.`
     )
-
-  const shopAddress = normalizeSuiObjectId(rawShopAddress)
   const normalizedListingId =
     normalizeOptionalIdFromValue(fields.id) ?? normalizeSuiObjectId(listingId)
 
@@ -58,8 +56,8 @@ export const getDiscountTemplateMetadata = async (
   )
 
   const fields = unwrapMoveObjectFields(object)
-  const rawShopAddress = fields.shop_address
-  if (typeof rawShopAddress !== "string")
+  const shopAddress = normalizeOptionalIdFromValue(fields.shop_address)
+  if (!shopAddress)
     throw new Error(
       `Discount template ${templateId} is missing a shop_address field.`
     )
@@ -68,7 +66,7 @@ export const getDiscountTemplateMetadata = async (
     id:
       normalizeOptionalIdFromValue(fields.id) ??
       normalizeSuiObjectId(templateId),
-    shopAddress: normalizeSuiObjectId(rawShopAddress),
+    shopAddress,
     appliesToListing: normalizeOptionalIdFromValue(fields.applies_to_listing)
   }
 }
