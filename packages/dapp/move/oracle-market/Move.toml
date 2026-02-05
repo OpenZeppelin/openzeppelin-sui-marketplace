@@ -7,7 +7,6 @@ edition = "2024"
 git = "https://github.com/pyth-network/pyth-crosschain.git"
 subdir = "target_chains/sui/contracts"
 rev = "sui-contract-testnet"
-rename-from = "pyth"
 addr_substitutions = { pyth = "0xabf837e98c26087cba0883c0a7a28326b1fa3c5e1e2c5abdb486f9e8f594c837" }
 
 [dependencies.wormhole]
