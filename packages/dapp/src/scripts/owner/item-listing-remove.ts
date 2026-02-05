@@ -69,7 +69,7 @@ runSuiScript(
       alias: ["item-listing-id", "item-id", "listing-id"],
       type: "string",
       description:
-            "ItemListing object ID to delete (object ID, not a type tag).",
+        "ItemListing object ID to delete (object ID, not a type tag).",
       demandOption: true
     })
     .option("shopPackageId", {
