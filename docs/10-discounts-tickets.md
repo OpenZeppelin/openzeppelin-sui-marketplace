@@ -80,9 +80,8 @@ entry fun create_discount_template(
   assert_owner_cap(shop, owner_cap);
   let (
     discount_template,
-    _discount_template_id,
+    discount_template_id,
     discount_rule,
-    discount_template_address,
   ) = create_discount_template_core(
     shop,
     applies_to_listing,
@@ -94,10 +93,10 @@ entry fun create_discount_template(
     ctx,
   );
   txf::share_object(discount_template);
-  let shop_address: address = shop_address(shop);
+  let shop_address: ID = shop_address(shop);
   event::emit(DiscountTemplateCreatedEvent {
     shop_address,
-    discount_template_id: discount_template_address,
+    discount_template_id,
     rule: discount_rule,
   });
 }

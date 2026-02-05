@@ -1762,10 +1762,6 @@ fun build_discount_rule(rule_kind: DiscountRuleKind, rule_value: u64): DiscountR
     }
 }
 
-fun template_address(template: &DiscountTemplate): address {
-    object::uid_to_address(&template.id)
-}
-
 /// Pull consensus timestamp seconds from the shared clock to enforce time windows predictably.
 fun now_secs(clock: &clock::Clock): u64 {
     clock::timestamp_ms(clock) / 1000
@@ -2289,32 +2285,6 @@ public fun accepted_currency_id_for_type(
     }
 }
 
-/// Returns the listing ID for a listing address if registered.
-public fun listing_id_for_address(
-    shop: &Shop,
-    listing_address: address,
-): option::Option<ID> {
-    let listing_id = object::id_from_address(listing_address);
-    if (listing_exists(shop, listing_id)) {
-        option::some(listing_id)
-    } else {
-        option::none()
-    }
-}
-
-/// Returns the template ID for a template address if registered.
-public fun discount_template_id_for_address(
-    shop: &Shop,
-    template_address: address,
-): option::Option<ID> {
-    let template_id = object::id_from_address(template_address);
-    if (discount_template_exists(shop, template_id)) {
-        option::some(template_id)
-    } else {
-        option::none()
-    }
-}
-
 /// Returns listing fields after validating shop membership.
 public fun listing_values(
     shop: &Shop,
@@ -2561,11 +2531,6 @@ public fun test_listing_exists(shop: &Shop, listing_id: ID): bool {
 #[test_only]
 public fun test_listing_id_from_value(listing: &ItemListing): ID {
     listing_id(listing)
-}
-
-#[test_only]
-public fun test_listing_address(listing: &ItemListing): address {
-    object::uid_to_address(&listing.id)
 }
 
 #[test_only]

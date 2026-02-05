@@ -4062,12 +4062,8 @@ fun claim_and_buy_item_with_discount_emits_events_and_covers_helpers() {
     let redeemed_event = &redeemed_events[redeemed_events.length() - 1];
     let _ = shop::test_discount_redeemed_discount_id(redeemed_event);
 
-    let listing_address = object::id_to_address(&listing_id);
-    let listing_id_opt = shop::listing_id_for_address(&shared_shop, listing_address);
-    assert!(option::is_some(&listing_id_opt));
-    let template_address = object::id_to_address(&template_id);
-    let template_id_opt = shop::discount_template_id_for_address(&shared_shop, template_address);
-    assert!(option::is_some(&template_id_opt));
+    assert!(shop::listing_exists(&shared_shop, listing_id));
+    assert!(shop::discount_template_exists(&shared_shop, template_id));
 
     let (_name, _price, _stock, _shop_address, _spotlight) = shop::test_listing_values(
         &shared_shop,
@@ -4121,15 +4117,13 @@ fun test_abort_accepted_currency_missing_is_reachable() {
 }
 
 #[test]
-fun listing_and_template_id_for_address_return_none_when_missing() {
+fun listing_and_template_exists_return_false_when_missing() {
     let mut ctx = tx_context::new_from_hint(TEST_OWNER, 9993, 0, 0, 0);
     let (shop_obj, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
-    let missing_address = @0x1234;
+    let missing_id = object::id_from_address(@0x1234);
 
-    let listing_id_opt = shop::listing_id_for_address(&shop_obj, missing_address);
-    assert!(option::is_none(&listing_id_opt));
-    let template_id_opt = shop::discount_template_id_for_address(&shop_obj, missing_address);
-    assert!(option::is_none(&template_id_opt));
+    assert!(!shop::listing_exists(&shop_obj, missing_id));
+    assert!(!shop::discount_template_exists(&shop_obj, missing_id));
 
     std::unit_test::destroy(shop_obj);
     std::unit_test::destroy(owner_cap);
