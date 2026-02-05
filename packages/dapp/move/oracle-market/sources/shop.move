@@ -175,7 +175,7 @@ public struct Shop has key, store {
 
 /// Item listing metadata keyed under the shared `Shop`, used to mint specific items on purchase.
 /// Discounts can be attached to highlight promotions in the UI.
-public struct ItemListing has key, store {
+public struct ItemListing has key {
     id: UID,
     shop_address: address,
     item_type: TypeName,
@@ -207,7 +207,7 @@ public struct ShopItem<phantom TItem> has key, store {
 }
 
 /// Defines which external coins the shop is able to price/accept.
-public struct AcceptedCurrency has key, store {
+public struct AcceptedCurrency has key {
     id: UID,
     shop_address: address,
     coin_type: TypeName,
@@ -249,7 +249,7 @@ public enum DiscountRuleKind has copy, drop {
 }
 
 /// Coupon template for creating discounts tracked under the shop.
-public struct DiscountTemplate has key, store {
+public struct DiscountTemplate has key {
     id: UID,
     shop_address: address,
     applies_to_listing: option::Option<ID>,
