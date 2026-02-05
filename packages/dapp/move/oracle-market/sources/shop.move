@@ -2008,18 +2008,16 @@ fun assert_template_in_time_window(template: &DiscountTemplate, now_secs: u64) {
 }
 
 fun redemption_cap_reached(template: &DiscountTemplate): bool {
-    let mut reached = false;
-    template.max_redemptions.do_ref!(|max_redemptions| {
-        reached = (*max_redemptions > 0) && (template.redemptions >= *max_redemptions);
-    });
-    reached
+    template
+        .max_redemptions
+        .map_ref!(
+            |max_redemptions| (*max_redemptions > 0) && (template.redemptions >= *max_redemptions),
+        )
+        .destroy_or!(false)
 }
 
 fun template_finished(template: &DiscountTemplate, now: u64): bool {
-    let mut expired = false;
-    template.expires_at.do_ref!(|expires_at| {
-        expired = now >= *expires_at;
-    });
+    let expired = template.expires_at.map_ref!(|expires_at| now >= *expires_at).destroy_or!(false);
     let maxed_out = redemption_cap_reached(template);
     expired || maxed_out
 }
@@ -2183,10 +2181,9 @@ fun assert_belongs_to_shop_if_some(
     maybe_id: &option::Option<object::ID>,
 ) {
     maybe_id.do_ref!(|id| {
-        let id = *id;
         match (kind) {
-            ReferenceKind::Template => assert_template_belongs_to_shop(shop, id),
-            ReferenceKind::Listing => assert_listing_belongs_to_shop(shop, id),
+            ReferenceKind::Template => assert_template_belongs_to_shop(shop, *id),
+            ReferenceKind::Listing => assert_listing_belongs_to_shop(shop, *id),
         };
     });
 }
@@ -2197,12 +2194,11 @@ fun assert_spotlight_template_matches_listing(
     discount_template_id: &option::Option<object::ID>,
 ) {
     discount_template_id.do_ref!(|template_id| {
-        let listing_address = object::id_to_address(&listing_id);
-        let template_id = *template_id;
-        assert_template_belongs_to_shop(shop, template_id);
+        let listing_address = listing_id.to_address();
+        assert_template_belongs_to_shop(shop, *template_id);
         let marker: &DiscountTemplateMarker = dynamic_field::borrow(
             &shop.id,
-            DiscountTemplateKey { template_id },
+            DiscountTemplateKey { template_id: *template_id },
         );
         let applies_to_listing = marker.applies_to_listing.map_ref!(|x| x.to_address());
         applies_to_listing.do_ref!(|applies_to_listing| {
