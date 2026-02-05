@@ -691,15 +691,15 @@ entry fun add_accepted_currency<T>(
     let symbol: vector<u8> = string::into_bytes(coin_registry::symbol(currency));
     let shop_address: address = shop_address(shop);
     let age_cap: u64 = resolve_guardrail_cap(
-        &max_price_age_secs_cap,
+        max_price_age_secs_cap,
         MAX_PRICE_AGE_SECS_CAP,
     );
     let confidence_cap = resolve_guardrail_cap(
-        &max_confidence_ratio_bps_cap,
+        max_confidence_ratio_bps_cap,
         MAX_CONFIDENCE_RATIO_BPS_CAP,
     );
     let status_lag_cap = resolve_guardrail_cap(
-        &max_price_status_lag_secs_cap,
+        max_price_status_lag_secs_cap,
         MAX_PRICE_STATUS_LAG_SECS_CAP,
     );
 
@@ -1538,17 +1538,9 @@ fun assert_listing_matches_shop(shop: &Shop, listing: &ItemListing) {
     assert!(listing.shop_address == shop_address(shop), EListingShopMismatch);
 }
 
-fun unwrap_or_default(value: &option::Option<u64>, default_value: u64): u64 {
-    let mut resolved: u64 = default_value;
-    value.do_ref!(|inner| {
-        resolved = *inner;
-    });
-    resolved
-}
-
 /// Normalize a seller-provided guardrail cap, enforcing module-level ceilings and non-zero.
-fun resolve_guardrail_cap(proposed_cap: &option::Option<u64>, module_cap: u64): u64 {
-    let value = unwrap_or_default(proposed_cap, module_cap);
+fun resolve_guardrail_cap(proposed_cap: option::Option<u64>, module_cap: u64): u64 {
+    let value = proposed_cap.destroy_or!(module_cap);
     assert!(value > 0, EInvalidGuardrailCap);
     clamp_max(value, module_cap)
 }
@@ -1564,16 +1556,14 @@ fun clamp_max(value: u64, cap: u64): u64 {
 
 /// Resolve caller overrides against seller caps so pricing guardrails stay tight.
 fun resolve_effective_guardrails(
-    max_price_age_secs: &option::Option<u64>,
-    max_confidence_ratio_bps: &option::Option<u64>,
+    max_price_age_secs: option::Option<u64>,
+    max_confidence_ratio_bps: option::Option<u64>,
     accepted_currency: &AcceptedCurrency,
 ): (u64, u64) {
-    let requested_max_age = unwrap_or_default(
-        max_price_age_secs,
+    let requested_max_age = max_price_age_secs.destroy_or!(
         accepted_currency.max_price_age_secs_cap,
     );
-    let requested_confidence_ratio = unwrap_or_default(
-        max_confidence_ratio_bps,
+    let requested_confidence_ratio = max_confidence_ratio_bps.destroy_or!(
         accepted_currency.max_confidence_ratio_bps_cap,
     );
     let effective_max_age = clamp_max(
@@ -1600,8 +1590,8 @@ fun quote_amount_with_guardrails(
     accepted_currency: &AcceptedCurrency,
     price_info_object: &price_info::PriceInfoObject,
     price_usd_cents: u64,
-    max_price_age_secs: &option::Option<u64>,
-    max_confidence_ratio_bps: &option::Option<u64>,
+    max_price_age_secs: option::Option<u64>,
+    max_confidence_ratio_bps: option::Option<u64>,
     clock: &clock::Clock,
 ): u64 {
     let (effective_max_age, effective_confidence_ratio) = resolve_effective_guardrails(
@@ -1696,8 +1686,8 @@ fun process_purchase_core<TItem: store, TCoin>(
         accepted_currency,
         price_info_object,
         discounted_price_usd_cents,
-        &max_price_age_secs,
-        &max_confidence_ratio_bps,
+        max_price_age_secs,
+        max_confidence_ratio_bps,
         clock,
     );
 
@@ -2414,8 +2404,8 @@ entry fun quote_amount_for_price_info_object(
         accepted_currency,
         price_info_object,
         price_usd_cents,
-        &max_price_age_secs,
-        &max_confidence_ratio_bps,
+        max_price_age_secs,
+        max_confidence_ratio_bps,
         clock,
     )
 }
@@ -2714,7 +2704,7 @@ public fun test_claim_and_buy_with_ids<TItem: store, TCoin>(
         clock,
         ctx,
     );
-    owed_coin_opt.do!( |owed_coin| {
+    owed_coin_opt.do!(|owed_coin| {
         transfer::public_transfer(owed_coin, shop_owner);
     });
     if (change_coin.value() == 0) {
