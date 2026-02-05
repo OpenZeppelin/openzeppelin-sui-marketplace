@@ -559,9 +559,9 @@ fun add_item_listing_core<T: store>(
         item_listing_address: listing_address,
         name: listing_name_for_event,
         base_price_usd_cents: listing.base_price_usd_cents,
-        spotlight_discount_template_id: map_id_option_to_address(
-            &listing.spotlight_discount_template_id,
-        ),
+        spotlight_discount_template_id: listing
+            .spotlight_discount_template_id
+            .map_ref!(|x| x.to_address()),
         stock,
     });
 
@@ -1754,14 +1754,6 @@ fun build_discount_rule(rule_kind: DiscountRuleKind, rule_value: u64): DiscountR
     }
 }
 
-fun map_id_option_to_address(source: &option::Option<object::ID>): option::Option<address> {
-    let mut mapped = option::none();
-    source.do_ref!(|value| {
-        mapped = option::some(object::id_to_address(value));
-    });
-    mapped
-}
-
 fun template_address(template: &DiscountTemplate): address {
     object::uid_to_address(&template.id)
 }
@@ -2049,9 +2041,7 @@ fun assert_discount_redemption_allowed(
 ) {
     assert!(discount_template.active, ETemplateInactive);
     assert!(discount_template.shop_address == item_listing.shop_address, EDiscountShopMismatch);
-    let applies_to = map_id_option_to_address(
-        &discount_template.applies_to_listing,
-    );
+    let applies_to = discount_template.applies_to_listing.map_ref!(|x| x.to_address());
     applies_to.do_ref!(|applies_to_listing| {
         assert!(
             *applies_to_listing == object::uid_to_address(&item_listing.id),
@@ -2075,9 +2065,7 @@ fun assert_ticket_matches_context(
         EDiscountTicketMismatch,
     );
     assert!(discount_ticket.claimer == buyer, EDiscountTicketOwnerMismatch);
-    let applies_to_listing = map_id_option_to_address(
-        &discount_ticket.listing_id,
-    );
+    let applies_to_listing = discount_ticket.listing_id.map!(|x| x.to_address());
     applies_to_listing.do_ref!(|listing_address| {
         assert!(
             *listing_address == object::uid_to_address(&item_listing.id),
@@ -2216,9 +2204,7 @@ fun assert_spotlight_template_matches_listing(
             &shop.id,
             DiscountTemplateKey { template_id },
         );
-        let applies_to_listing = map_id_option_to_address(
-            &marker.applies_to_listing,
-        );
+        let applies_to_listing = marker.applies_to_listing.map_ref!(|x| x.to_address());
         applies_to_listing.do_ref!(|applies_to_listing| {
             assert!(*applies_to_listing == listing_address, ESpotlightTemplateListingMismatch);
         });
