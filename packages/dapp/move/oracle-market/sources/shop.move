@@ -1496,7 +1496,7 @@ fun add_currency_marker(shop: &mut Shop, accepted_currency_id: object::ID, coin_
     );
 }
 
-macro fun assert_template_registered!($shop: &Shop, $template_id: object::ID) {
+macro fun assert_template_registered($shop: &Shop, $template_id: object::ID) {
     let shop = $shop;
     let template_id = $template_id;
     assert!(
@@ -1508,7 +1508,7 @@ macro fun assert_template_registered!($shop: &Shop, $template_id: object::ID) {
     );
 }
 
-macro fun assert_currency_registered!($shop: &Shop, $accepted_currency_id: object::ID) {
+macro fun assert_currency_registered($shop: &Shop, $accepted_currency_id: object::ID) {
     let shop = $shop;
     let accepted_currency_id = $accepted_currency_id;
     assert!(
@@ -1522,7 +1522,7 @@ macro fun assert_currency_registered!($shop: &Shop, $accepted_currency_id: objec
     );
 }
 
-macro fun assert_listing_registered!($shop: &Shop, $listing_id: object::ID) {
+macro fun assert_listing_registered($shop: &Shop, $listing_id: object::ID) {
     let shop = $shop;
     let listing_id = $listing_id;
     assert!(
@@ -1534,21 +1534,21 @@ macro fun assert_listing_registered!($shop: &Shop, $listing_id: object::ID) {
     );
 }
 
-macro fun assert_template_matches_shop!($shop: &Shop, $template: &DiscountTemplate) {
+macro fun assert_template_matches_shop($shop: &Shop, $template: &DiscountTemplate) {
     let shop = $shop;
     let template = $template;
     assert_template_registered!(shop, template_id(template));
     assert!(template.shop_address == shop_address(shop), ETemplateShopMismatch);
 }
 
-macro fun assert_currency_matches_shop!($shop: &Shop, $accepted_currency: &AcceptedCurrency) {
+macro fun assert_currency_matches_shop($shop: &Shop, $accepted_currency: &AcceptedCurrency) {
     let shop = $shop;
     let accepted_currency = $accepted_currency;
     assert_currency_registered!(shop, accepted_currency_id(accepted_currency));
     assert!(accepted_currency.shop_address == shop_address(shop), EAcceptedCurrencyMissing);
 }
 
-macro fun assert_listing_matches_shop!($shop: &Shop, $listing: &ItemListing) {
+macro fun assert_listing_matches_shop($shop: &Shop, $listing: &ItemListing) {
     let shop = $shop;
     let listing = $listing;
     assert_listing_registered!(shop, listing_id(listing));
@@ -1707,7 +1707,7 @@ fun process_purchase_core<TItem: store, TCoin>(
         price_info_object,
         accepted_currency.max_price_status_lag_secs_cap,
     );
-    assert_payment_coin_type<TCoin>(accepted_currency);
+    assert_payment_coin_type!<TCoin>(accepted_currency);
     assert_stock_available!(item_listing);
     let quote_amount: u64 = quote_amount_with_guardrails(
         accepted_currency,
@@ -1976,28 +1976,28 @@ fun as_u128_from_u64(value: u64): u128 {
 
 // === Asserts and validations ===
 
-macro fun assert_owner_cap!($shop: &Shop, $owner_cap: &ShopOwnerCap) {
+macro fun assert_owner_cap($shop: &Shop, $owner_cap: &ShopOwnerCap) {
     let shop = $shop;
     let owner_cap = $owner_cap;
     assert!(owner_cap.shop_address == object::uid_to_address(&shop.id), EInvalidOwnerCap);
 }
 
-macro fun assert_shop_active!($shop: &Shop) {
+macro fun assert_shop_active($shop: &Shop) {
     let shop = $shop;
     assert!(!shop.disabled, EShopDisabled);
 }
 
-macro fun assert_non_zero_stock!($stock: u64) {
+macro fun assert_non_zero_stock($stock: u64) {
     let stock = $stock;
     assert!(stock > 0, EZeroStock)
 }
 
-macro fun assert_stock_available!($item_listing: &ItemListing) {
+macro fun assert_stock_available($item_listing: &ItemListing) {
     let item_listing = $item_listing;
     assert!(item_listing.stock > 0, EOutOfStock);
 }
 
-macro fun assert_schedule!($starts_at: u64, $expires_at: &option::Option<u64>) {
+macro fun assert_schedule($starts_at: u64, $expires_at: &option::Option<u64>) {
     let starts_at = $starts_at;
     let expires_at = $expires_at;
     if (option::is_some(expires_at)) {
@@ -2005,7 +2005,7 @@ macro fun assert_schedule!($starts_at: u64, $expires_at: &option::Option<u64>) {
     }
 }
 
-macro fun validate_listing_inputs!(
+macro fun validate_listing_inputs(
     $shop: &Shop,
     $name: &String,
     $base_price_usd_cents: u64,
@@ -2029,12 +2029,12 @@ macro fun validate_listing_inputs!(
     );
 }
 
-macro fun validate_shop_name!($name: &String) {
+macro fun validate_shop_name($name: &String) {
     let name = $name;
     assert!(!string::as_bytes(name).is_empty(), EEmptyShopName);
 }
 
-macro fun validate_discount_template_inputs!(
+macro fun validate_discount_template_inputs(
     $shop: &Shop,
     $applies_to_listing: &option::Option<object::ID>,
     $starts_at: u64,
@@ -2053,7 +2053,7 @@ macro fun validate_discount_template_inputs!(
     );
 }
 
-macro fun assert_template_in_time_window!($template: &DiscountTemplate, $now_secs: u64) {
+macro fun assert_template_in_time_window($template: &DiscountTemplate, $now_secs: u64) {
     let template = $template;
     let now_secs = $now_secs;
     assert!(template.starts_at <= now_secs, ETemplateTooEarly);
@@ -2080,13 +2080,13 @@ fun template_finished(template: &DiscountTemplate, now: u64): bool {
     expired || maxed_out
 }
 
-macro fun assert_template_prunable!($template: &DiscountTemplate, $now: u64) {
+macro fun assert_template_prunable($template: &DiscountTemplate, $now: u64) {
     let template = $template;
     let now = $now;
     assert!(template_finished(template, now), EDiscountClaimsNotPrunable);
 }
 
-macro fun assert_template_updatable!($template: &DiscountTemplate, $now: u64) {
+macro fun assert_template_updatable($template: &DiscountTemplate, $now: u64) {
     let template = $template;
     let now = $now;
     assert!(template.claims_issued == 0, ETemplateFinalized);
@@ -2094,7 +2094,7 @@ macro fun assert_template_updatable!($template: &DiscountTemplate, $now: u64) {
     assert!(!template_finished(template, now), ETemplateFinalized);
 }
 
-macro fun assert_discount_redemption_allowed!(
+macro fun assert_discount_redemption_allowed(
     $discount_template: &DiscountTemplate,
     $item_listing: &ItemListing,
     $now: u64,
@@ -2118,7 +2118,7 @@ macro fun assert_discount_redemption_allowed!(
     assert!(!redemption_cap_reached(discount_template), ETemplateMaxedOut);
 }
 
-macro fun assert_ticket_matches_context!(
+macro fun assert_ticket_matches_context(
     $discount_ticket: &DiscountTicket,
     $discount_template: &DiscountTemplate,
     $item_listing: &ItemListing,
@@ -2145,7 +2145,7 @@ macro fun assert_ticket_matches_context!(
     };
 }
 
-macro fun validate_accepted_currency_inputs!(
+macro fun validate_accepted_currency_inputs(
     $shop: &Shop,
     $coin_type: &TypeName,
     $feed_id: &vector<u8>,
@@ -2163,13 +2163,13 @@ macro fun validate_accepted_currency_inputs!(
     assert_price_info_identity!(feed_id, pyth_object_id, price_info_object);
 }
 
-macro fun assert_valid_feed_id!($feed_id: &vector<u8>) {
+macro fun assert_valid_feed_id($feed_id: &vector<u8>) {
     let feed_id = $feed_id;
     assert!(!feed_id.is_empty(), EEmptyFeedId);
     assert!(feed_id.length() == PYTH_PRICE_IDENTIFIER_LENGTH, EInvalidFeedIdLength);
 }
 
-macro fun assert_price_info_identity!(
+macro fun assert_price_info_identity(
     $expected_feed_id: &vector<u8>,
     $expected_pyth_object_id: &object::ID,
     $price_info_object: &price_info::PriceInfoObject,
@@ -2188,7 +2188,7 @@ macro fun assert_price_info_identity!(
     assert!(bytes_equal(expected_feed_id, &identifier_bytes), EFeedIdentifierMismatch);
 }
 
-macro fun assert_currency_not_registered!($shop: &Shop, $coin_type: &TypeName) {
+macro fun assert_currency_not_registered($shop: &Shop, $coin_type: &TypeName) {
     let shop = $shop;
     let coin_type = $coin_type;
     assert!(
@@ -2200,12 +2200,12 @@ macro fun assert_currency_not_registered!($shop: &Shop, $coin_type: &TypeName) {
     );
 }
 
-macro fun assert_supported_decimals!($decimals: u8) {
+macro fun assert_supported_decimals($decimals: u8) {
     let decimals = $decimals;
     assert!(as_u64_from_u8(decimals) <= MAX_DECIMAL_POWER, EUnsupportedCurrencyDecimals);
 }
 
-macro fun assert_listing_currency_match!(
+macro fun assert_listing_currency_match(
     $shop: &Shop,
     $item_listing: &ItemListing,
     $accepted_currency: &AcceptedCurrency,
@@ -2217,7 +2217,7 @@ macro fun assert_listing_currency_match!(
     assert!(item_listing.shop_address == accepted_currency.shop_address, ECurrencyListingMismatch);
 }
 
-macro fun ensure_price_info_matches_currency!(
+macro fun ensure_price_info_matches_currency(
     $accepted_currency: &AcceptedCurrency,
     $price_info_object: &price_info::PriceInfoObject,
 ) {
@@ -2230,7 +2230,7 @@ macro fun ensure_price_info_matches_currency!(
     );
 }
 
-macro fun assert_price_status_trading!(
+macro fun assert_price_status_trading(
     $price_info_object: &price_info::PriceInfoObject,
     $max_price_status_lag_secs: u64,
 ) {
@@ -2249,19 +2249,19 @@ macro fun assert_price_status_trading!(
     assert!(attestation_lag_secs <= max_price_status_lag_secs, EPriceStatusNotTrading);
 }
 
-macro fun assert_payment_coin_type<TCoin>($accepted_currency: &AcceptedCurrency) {
+macro fun assert_payment_coin_type<$TCoin>($accepted_currency: &AcceptedCurrency) {
     let accepted_currency = $accepted_currency;
-    let payment_type = type_name::with_defining_ids<TCoin>();
+    let payment_type = type_name::with_defining_ids<$TCoin>();
     assert!(accepted_currency.coin_type == payment_type, EInvalidPaymentCoinType);
 }
 
-macro fun assert_template_belongs_to_shop!($shop: &Shop, $discount_template_id: object::ID) {
+macro fun assert_template_belongs_to_shop($shop: &Shop, $discount_template_id: object::ID) {
     let shop = $shop;
     let discount_template_id = $discount_template_id;
     assert_template_registered!(shop, discount_template_id);
 }
 
-macro fun assert_listing_belongs_to_shop!($shop: &Shop, $listing_id: object::ID) {
+macro fun assert_listing_belongs_to_shop($shop: &Shop, $listing_id: object::ID) {
     let shop = $shop;
     let listing_id = $listing_id;
     assert_listing_registered!(shop, listing_id);
@@ -2273,7 +2273,7 @@ public enum ReferenceKind has copy, drop {
     Listing,
 }
 
-macro fun assert_belongs_to_shop_if_some!(
+macro fun assert_belongs_to_shop_if_some(
     $shop: &Shop,
     $kind: ReferenceKind,
     $maybe_id: &option::Option<object::ID>,
@@ -2290,7 +2290,7 @@ macro fun assert_belongs_to_shop_if_some!(
     };
 }
 
-macro fun assert_spotlight_template_matches_listing!(
+macro fun assert_spotlight_template_matches_listing(
     $shop: &Shop,
     $listing_id: object::ID,
     $discount_template_id: &option::Option<object::ID>,
@@ -2319,7 +2319,7 @@ macro fun assert_spotlight_template_matches_listing!(
 }
 
 /// Guardrails to keep claims inside schedule/limits and unique per address.
-macro fun assert_template_claimable!($template: &DiscountTemplate, $claimer: address, $now_secs: u64) {
+macro fun assert_template_claimable($template: &DiscountTemplate, $claimer: address, $now_secs: u64) {
     let template = $template;
     let claimer = $claimer;
     let now_secs = $now_secs;
@@ -2625,7 +2625,7 @@ public fun test_default_max_price_status_lag_secs(): u64 {
 }
 
 #[test_only]
-public fun test_assert_price_status_trading!(price_info_object: &price_info::PriceInfoObject) {
+public fun test_assert_price_status_trading(price_info_object: &price_info::PriceInfoObject) {
     assert_price_status_trading!(
         price_info_object,
         DEFAULT_MAX_PRICE_STATUS_LAG_SECS,
