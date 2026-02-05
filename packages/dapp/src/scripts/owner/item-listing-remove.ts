@@ -1,18 +1,17 @@
 /**
- * Delists an ItemListing by removing its marker under the Shop.
- * The listing object remains addressable for history and indexers.
+ * Deletes an ItemListing by removing its marker and destroying the listing object.
  * Requires the ShopOwnerCap capability.
  */
 import { normalizeSuiObjectId } from "@mysten/sui/utils"
 import yargs from "yargs"
 
-import { buildRemoveItemListingTransaction } from "@sui-oracle-market/domain-core/ptb/item-listing"
+import { buildDeleteItemListingTransaction } from "@sui-oracle-market/domain-core/ptb/item-listing"
 import { emitJsonOutput } from "@sui-oracle-market/tooling-node/json"
 import { logKeyValueGreen } from "@sui-oracle-market/tooling-node/log"
 import { runSuiScript } from "@sui-oracle-market/tooling-node/process"
 import { resolveOwnerShopIdentifiers } from "../../utils/shop-context.ts"
 
-type RemoveItemArguments = {
+type DeleteItemArguments = {
   shopPackageId?: string
   shopId?: string
   ownerCapId?: string
@@ -29,10 +28,10 @@ runSuiScript(
     const shopSharedObject = await tooling.getMutableSharedObject({
       objectId: inputs.shopId
     })
-    const itemListingSharedObject = await tooling.getImmutableSharedObject({
+    const itemListingSharedObject = await tooling.getMutableSharedObject({
       objectId: inputs.itemListingId
     })
-    const removeItemTransaction = buildRemoveItemListingTransaction({
+    const deleteItemTransaction = buildDeleteItemListingTransaction({
       packageId: inputs.packageId,
       shop: shopSharedObject,
       ownerCapId: inputs.ownerCapId,
@@ -40,9 +39,9 @@ runSuiScript(
     })
 
     const { execution, summary } = await tooling.executeTransactionWithSummary({
-      transaction: removeItemTransaction,
+      transaction: deleteItemTransaction,
       signer: tooling.loadedEd25519KeyPair,
-      summaryLabel: "remove-item-listing",
+      summaryLabel: "delete-item-listing",
       devInspect: cliArguments.devInspect,
       dryRun: cliArguments.dryRun
     })
@@ -70,7 +69,7 @@ runSuiScript(
       alias: ["item-listing-id", "item-id", "listing-id"],
       type: "string",
       description:
-        "ItemListing object ID to remove (object ID, not a type tag).",
+            "ItemListing object ID to delete (object ID, not a type tag).",
       demandOption: true
     })
     .option("shopPackageId", {
@@ -119,7 +118,7 @@ type NormalizedInputs = {
 }
 
 const normalizeInputs = async (
-  cliArguments: RemoveItemArguments,
+  cliArguments: DeleteItemArguments,
   networkName: string
 ): Promise<NormalizedInputs> => {
   const { packageId, shopId, ownerCapId } = await resolveOwnerShopIdentifiers({

@@ -11,7 +11,7 @@ import {
 import type { SuiTransactionBlockResponse } from "@mysten/sui/client"
 import type { IdentifierString } from "@mysten/wallet-standard"
 import type { ItemListingSummary } from "@sui-oracle-market/domain-core/models/item-listing"
-import { buildRemoveItemListingTransaction } from "@sui-oracle-market/domain-core/ptb/item-listing"
+import { buildDeleteItemListingTransaction } from "@sui-oracle-market/domain-core/ptb/item-listing"
 import { deriveRelevantPackageId } from "@sui-oracle-market/tooling-core/object"
 import { getSuiSharedObject } from "@sui-oracle-market/tooling-core/shared-object"
 import { ENetwork } from "@sui-oracle-market/tooling-core/types"
@@ -118,7 +118,7 @@ export const useRemoveItemModalState = ({
     if (!walletAddress || !shopId || !listing) {
       setTransactionState({
         status: "error",
-        error: "Wallet, shop, and listing details are required to remove."
+        error: "Wallet, shop, and listing details are required to delete."
       })
       return
     }
@@ -188,24 +188,24 @@ export const useRemoveItemModalState = ({
         suiClient
       })
       const listingShared = await getSuiSharedObject(
-        { objectId: listing.itemListingId, mutable: false },
+        { objectId: listing.itemListingId, mutable: true },
         { suiClient }
       )
 
-      const removeListingTransaction = buildRemoveItemListingTransaction({
+      const deleteListingTransaction = buildDeleteItemListingTransaction({
         packageId: shopPackageId,
         shop: shopShared,
         ownerCapId: ownerCapabilityId,
         itemListing: listingShared
       })
-      removeListingTransaction.setSender(walletAddress)
+      deleteListingTransaction.setSender(walletAddress)
 
       let digest = ""
       let transactionBlock: SuiTransactionBlockResponse
 
       if (isLocalnet) {
         failureStage = "execute"
-        const result = await localnetExecutor(removeListingTransaction, {
+        const result = await localnetExecutor(deleteListingTransaction, {
           chain: expectedChain
         })
         digest = result.digest
@@ -213,7 +213,7 @@ export const useRemoveItemModalState = ({
       } else {
         failureStage = "execute"
         const result = await signAndExecuteTransaction.mutateAsync({
-          transaction: removeListingTransaction,
+          transaction: deleteListingTransaction,
           chain: expectedChain
         })
 
