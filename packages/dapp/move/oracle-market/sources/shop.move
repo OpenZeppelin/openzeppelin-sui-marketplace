@@ -186,9 +186,7 @@ public struct ItemListing has key, store {
 }
 
 /// Dynamic field key for item listing markers stored under a shop.
-public struct ItemListingKey has copy, drop, store {
-    listing_id: ID,
-}
+public struct ItemListingKey(ID) has copy, drop, store;
 
 /// Marker stored under the shop to record listing membership.
 public struct ItemListingMarker has copy, drop, store {
@@ -221,14 +219,10 @@ public struct AcceptedCurrency has key, store {
 }
 
 /// Dynamic field key for accepted currency markers stored under a shop.
-public struct AcceptedCurrencyKey has copy, drop, store {
-    accepted_currency_id: ID,
-}
+public struct AcceptedCurrencyKey(ID) has copy, drop, store;
 
 /// Dynamic field key for mapping a coin type to its accepted currency object.
-public struct AcceptedCurrencyTypeKey has copy, drop, store {
-    coin_type: TypeName,
-}
+public struct AcceptedCurrencyTypeKey(TypeName) has copy, drop, store;
 
 /// Marker stored under the shop to record accepted currency membership.
 public struct AcceptedCurrencyMarker has copy, drop, store {
@@ -263,9 +257,7 @@ public struct DiscountTemplate has key, store {
 }
 
 /// Dynamic field key for discount template markers stored under a shop.
-public struct DiscountTemplateKey has copy, drop, store {
-    template_id: ID,
-}
+public struct DiscountTemplateKey(ID) has copy, drop, store;
 
 /// Marker stored under the shop to record template membership.
 public struct DiscountTemplateMarker has copy, drop, store {
@@ -285,9 +277,7 @@ public struct DiscountTicket has key, store {
 }
 
 /// Dynamic field key for recorded discount claims stored under a template.
-public struct DiscountClaimKey has copy, drop, store {
-    claimer: address,
-}
+public struct DiscountClaimKey(address) has copy, drop, store;
 
 /// Tracks which addresses already claimed a discount from a template.
 public struct DiscountClaim has key, store {
@@ -626,7 +616,7 @@ entry fun remove_item_listing(
     let item_listing_id = listing_id(item_listing);
     let _marker: ItemListingMarker = dynamic_field::remove(
         &mut shop.id,
-        ItemListingKey { listing_id: item_listing_id },
+        ItemListingKey(item_listing_id),
     );
 
     event::emit(ItemListingRemovedEvent {
@@ -716,7 +706,7 @@ entry fun add_accepted_currency<T>(
     add_currency_marker(shop, accepted_currency_id, coin_type);
     dynamic_field::add(
         &mut shop.id,
-        AcceptedCurrencyTypeKey { coin_type },
+        AcceptedCurrencyTypeKey(coin_type),
         accepted_currency_id,
     );
     transfer::share_object(accepted_currency);
@@ -751,16 +741,12 @@ entry fun remove_accepted_currency(
     if (
         dynamic_field::exists_with_type<AcceptedCurrencyKey, AcceptedCurrencyMarker>(
             &shop.id,
-            AcceptedCurrencyKey {
-                accepted_currency_id,
-            },
+            AcceptedCurrencyKey(accepted_currency_id),
         )
     ) {
         let _marker: AcceptedCurrencyMarker = dynamic_field::remove(
             &mut shop.id,
-            AcceptedCurrencyKey {
-                accepted_currency_id,
-            },
+            AcceptedCurrencyKey(accepted_currency_id),
         );
     };
 
@@ -1373,7 +1359,7 @@ fun record_discount_claim(template: &mut DiscountTemplate, claimer: address, ctx
 
     dynamic_field::add(
         &mut template.id,
-        DiscountClaimKey { claimer },
+        DiscountClaimKey(claimer),
         DiscountClaim {
             id: object::new(ctx),
             claimer,
@@ -1385,12 +1371,12 @@ fun remove_discount_claim_if_exists(template: &mut DiscountTemplate, claimer: ad
     if (
         dynamic_field::exists_with_type<DiscountClaimKey, DiscountClaim>(
             &template.id,
-            DiscountClaimKey { claimer },
+            DiscountClaimKey(claimer),
         )
     ) {
         let DiscountClaim { id, .. } = dynamic_field::remove(
             &mut template.id,
-            DiscountClaimKey { claimer },
+            DiscountClaimKey(claimer),
         );
         id.delete();
     };
@@ -1416,7 +1402,7 @@ fun apply_discount_template_updates(
 fun remove_currency_field(shop: &mut Shop, coin_type: TypeName) {
     dynamic_field::remove_if_exists<AcceptedCurrencyTypeKey, ID>(
         &mut shop.id,
-        AcceptedCurrencyTypeKey { coin_type },
+        AcceptedCurrencyTypeKey(coin_type),
     );
 }
 
@@ -1454,7 +1440,7 @@ fun template_id(template: &DiscountTemplate): ID {
 fun add_listing_marker(shop: &mut Shop, listing_id: ID) {
     dynamic_field::add(
         &mut shop.id,
-        ItemListingKey { listing_id },
+        ItemListingKey(listing_id),
         ItemListingMarker {
             listing_id,
         },
@@ -1468,7 +1454,7 @@ fun add_template_marker(
 ) {
     dynamic_field::add(
         &mut shop.id,
-        DiscountTemplateKey { template_id },
+        DiscountTemplateKey(template_id),
         DiscountTemplateMarker {
             template_id,
             applies_to_listing,
@@ -1479,9 +1465,7 @@ fun add_template_marker(
 fun add_currency_marker(shop: &mut Shop, accepted_currency_id: ID, coin_type: TypeName) {
     dynamic_field::add(
         &mut shop.id,
-        AcceptedCurrencyKey {
-            accepted_currency_id,
-        },
+        AcceptedCurrencyKey(accepted_currency_id),
         AcceptedCurrencyMarker {
             accepted_currency_id,
             coin_type,
@@ -1493,7 +1477,7 @@ fun assert_template_registered(shop: &Shop, template_id: ID) {
     assert!(
         dynamic_field::exists_with_type<DiscountTemplateKey, DiscountTemplateMarker>(
             &shop.id,
-            DiscountTemplateKey { template_id },
+            DiscountTemplateKey(template_id),
         ),
         ETemplateShopMismatch,
     );
@@ -1503,9 +1487,7 @@ fun assert_currency_registered(shop: &Shop, accepted_currency_id: ID) {
     assert!(
         dynamic_field::exists_with_type<AcceptedCurrencyKey, AcceptedCurrencyMarker>(
             &shop.id,
-            AcceptedCurrencyKey {
-                accepted_currency_id,
-            },
+            AcceptedCurrencyKey(accepted_currency_id),
         ),
         EAcceptedCurrencyMissing,
     );
@@ -1515,7 +1497,7 @@ fun assert_listing_registered(shop: &Shop, listing_id: ID) {
     assert!(
         dynamic_field::exists_with_type<ItemListingKey, ItemListingMarker>(
             &shop.id,
-            ItemListingKey { listing_id },
+            ItemListingKey(listing_id),
         ),
         EListingShopMismatch,
     );
@@ -2114,7 +2096,7 @@ fun assert_currency_not_registered(shop: &Shop, coin_type: &TypeName) {
     assert!(
         !dynamic_field::exists_<AcceptedCurrencyTypeKey>(
             &shop.id,
-            AcceptedCurrencyTypeKey { coin_type: *coin_type },
+            AcceptedCurrencyTypeKey(*coin_type),
         ),
         EAcceptedCurrencyExists,
     );
@@ -2204,7 +2186,7 @@ fun assert_spotlight_template_matches_listing(
         assert_template_belongs_to_shop(shop, template_id);
         let marker: &DiscountTemplateMarker = dynamic_field::borrow(
             &shop.id,
-            DiscountTemplateKey { template_id },
+            DiscountTemplateKey(template_id),
         );
         if (option::is_some(&marker.applies_to_listing)) {
             assert!(
@@ -2229,7 +2211,7 @@ fun assert_template_claimable(template: &DiscountTemplate, claimer: address, now
     assert!(
         !dynamic_field::exists_with_type<DiscountClaimKey, DiscountClaim>(
             &template.id,
-            DiscountClaimKey { claimer },
+            DiscountClaimKey(claimer),
         ),
         EDiscountAlreadyClaimed,
     );
@@ -2241,7 +2223,7 @@ fun assert_template_claimable(template: &DiscountTemplate, claimer: address, now
 public fun listing_exists(shop: &Shop, listing_id: ID): bool {
     dynamic_field::exists_with_type<ItemListingKey, ItemListingMarker>(
         &shop.id,
-        ItemListingKey { listing_id },
+        ItemListingKey(listing_id),
     )
 }
 
@@ -2249,7 +2231,7 @@ public fun listing_exists(shop: &Shop, listing_id: ID): bool {
 public fun discount_template_exists(shop: &Shop, template_id: ID): bool {
     dynamic_field::exists_with_type<DiscountTemplateKey, DiscountTemplateMarker>(
         &shop.id,
-        DiscountTemplateKey { template_id },
+        DiscountTemplateKey(template_id),
     )
 }
 
@@ -2257,9 +2239,7 @@ public fun discount_template_exists(shop: &Shop, template_id: ID): bool {
 public fun accepted_currency_exists(shop: &Shop, accepted_currency_id: ID): bool {
     dynamic_field::exists_with_type<AcceptedCurrencyKey, AcceptedCurrencyMarker>(
         &shop.id,
-        AcceptedCurrencyKey {
-            accepted_currency_id,
-        },
+        AcceptedCurrencyKey(accepted_currency_id),
     )
 }
 
@@ -2271,13 +2251,13 @@ public fun accepted_currency_id_for_type(
     if (
         dynamic_field::exists_with_type<AcceptedCurrencyTypeKey, ID>(
             &shop.id,
-            AcceptedCurrencyTypeKey { coin_type },
+            AcceptedCurrencyTypeKey(coin_type),
         )
     ) {
         option::some(
             *dynamic_field::borrow<AcceptedCurrencyTypeKey, ID>(
                 &shop.id,
-                AcceptedCurrencyTypeKey { coin_type },
+                AcceptedCurrencyTypeKey(coin_type),
             ),
         )
     } else {
@@ -2578,7 +2558,7 @@ public fun test_discount_template_values(
 public fun test_discount_claim_exists(template: &DiscountTemplate, claimer: address): bool {
     dynamic_field::exists_with_type<DiscountClaimKey, DiscountClaim>(
         &template.id,
-        DiscountClaimKey { claimer },
+        DiscountClaimKey(claimer),
     )
 }
 
@@ -2956,12 +2936,12 @@ public fun test_remove_listing(shop: &mut Shop, listing_id: ID) {
     if (
         dynamic_field::exists_with_type<ItemListingKey, ItemListingMarker>(
             &shop.id,
-            ItemListingKey { listing_id },
+            ItemListingKey(listing_id),
         )
     ) {
         let _marker: ItemListingMarker = dynamic_field::remove(
             &mut shop.id,
-            ItemListingKey { listing_id },
+            ItemListingKey(listing_id),
         );
     };
 }
@@ -2976,12 +2956,12 @@ public fun test_remove_template(shop: &mut Shop, template_id: ID) {
     if (
         dynamic_field::exists_with_type<DiscountTemplateKey, DiscountTemplateMarker>(
             &shop.id,
-            DiscountTemplateKey { template_id },
+            DiscountTemplateKey(template_id),
         )
     ) {
         let _marker: DiscountTemplateMarker = dynamic_field::remove(
             &mut shop.id,
-            DiscountTemplateKey { template_id },
+            DiscountTemplateKey(template_id),
         );
     };
 }
