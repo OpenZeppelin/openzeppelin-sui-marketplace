@@ -162,7 +162,6 @@ fun init(publisher_witness: SHOP, ctx: &mut TxContext) {
 public struct ShopOwnerCap has key, store {
     id: UID,
     shop_address: address,
-    owner: address, // Cached payout address updated by update_shop_owner; may drift if the cap is transferred.
 }
 
 /// Shared shop that stores item listings to sell, accepted currencies, and discount templates via dynamic fields.
@@ -447,7 +446,6 @@ entry fun create_shop(name: String, ctx: &mut TxContext) {
     let owner_cap: ShopOwnerCap = ShopOwnerCap {
         id: object::new(ctx),
         shop_address: shop_address(&shop),
-        owner,
     };
 
     event::emit(ShopCreatedEvent {
@@ -483,7 +481,7 @@ entry fun disable_shop(shop: &mut Shop, owner_cap: &ShopOwnerCap, ctx: &TxContex
 /// - Buyers never handle capabilities--checkout remains permissionless against the shared `Shop`.
 entry fun update_shop_owner(
     shop: &mut Shop,
-    owner_cap: &mut ShopOwnerCap,
+    owner_cap: &ShopOwnerCap,
     new_owner: address,
     ctx: &TxContext,
 ) {
@@ -491,7 +489,6 @@ entry fun update_shop_owner(
 
     let previous_owner: address = shop.owner;
     shop.owner = new_owner;
-    owner_cap.owner = new_owner;
 
     event::emit(ShopOwnerUpdatedEvent {
         shop_address: shop_address(shop),
@@ -2459,7 +2456,6 @@ public fun test_setup_shop(owner: address, ctx: &mut TxContext): (Shop, ShopOwne
     let owner_cap = ShopOwnerCap {
         id: object::new(ctx),
         shop_address: object::uid_to_address(&shop.id),
-        owner,
     };
     (shop, owner_cap)
 }
@@ -3063,11 +3059,6 @@ public fun test_shop_name(shop: &Shop): String {
 #[test_only]
 public fun test_shop_disabled(shop: &Shop): bool {
     shop.disabled
-}
-
-#[test_only]
-public fun test_shop_owner_cap_owner(owner_cap: &ShopOwnerCap): address {
-    owner_cap.owner
 }
 
 #[test_only]
