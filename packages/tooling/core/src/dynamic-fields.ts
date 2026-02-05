@@ -165,7 +165,7 @@ export const getSuiDynamicFieldObject = async (
     await suiClient.getDynamicFieldObject({
       parentId: normalizeSuiObjectId(parentObjectId),
       name: {
-        type: "0x2::ID",
+        type: "0x2::object::ID",
         value: normalizedChildObjectId
       }
     })

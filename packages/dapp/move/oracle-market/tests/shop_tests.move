@@ -3571,6 +3571,7 @@ fun claim_discount_ticket_mints_transfers_and_records_claim() {
         &scn,
         ticket_id,
     );
+    let shop_address = shop::test_shop_id(&shared_shop);
     let (
         ticket_template,
         ticket_shop,
