@@ -4320,7 +4320,7 @@ fun remove_listing_and_template_noop_when_missing() {
     let mut ctx = tx_context::new_from_hint(TEST_OWNER, 10004, 0, 0, 0);
     let (mut shop_obj, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
     let dummy_uid = object::new(&mut ctx);
-    let dummy_id = object::id_from_address(object::uid_to_address(&dummy_uid));
+    let dummy_id = dummy_uid.uid_to_inner();
     dummy_uid.delete();
 
     shop::test_remove_listing(&mut shop_obj, dummy_id);
