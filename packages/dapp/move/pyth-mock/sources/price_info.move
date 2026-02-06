@@ -1,9 +1,9 @@
-module Pyth::price_info;
+module pyth::price_info;
 
-use Pyth::i64;
-use Pyth::price;
-use Pyth::price_feed::{Self, PriceFeed};
-use Pyth::price_identifier::{Self, PriceIdentifier};
+use pyth::i64;
+use pyth::price;
+use pyth::price_feed::{Self, PriceFeed};
+use pyth::price_identifier::{Self, PriceIdentifier};
 use sui::clock::{Self, Clock};
 
 /// Simplified price info object for localnet tests.
