@@ -2182,9 +2182,6 @@ fun assert_spotlight_template_matches_listing(
             &shop.id,
             DiscountTemplateKey(*template_id),
         );
-        let applies_to_listing = map_id_option_to_address(
-            &marker.applies_to_listing,
-        );
         let applies_to_listing = marker.applies_to_listing.map_ref!(|x| x.to_address());
         applies_to_listing.do_ref!(|applies_to_listing| {
             assert!(*applies_to_listing == listing_address, ESpotlightTemplateListingMismatch);
