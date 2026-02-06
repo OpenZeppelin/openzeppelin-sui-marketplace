@@ -103,7 +103,7 @@ fun mint_shop_item<TItem: store>(
     shop_address: item_listing.shop_address,
     item_listing_address: obj::uid_to_address(&item_listing.id),
     item_type: item_listing.item_type,
-    name: clone_string(&item_listing.name),
+    name: item_listing.name,
     acquired_at: now_secs(clock),
   }
 }
