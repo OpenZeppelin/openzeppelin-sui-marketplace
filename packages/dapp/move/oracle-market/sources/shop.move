@@ -2021,13 +2021,14 @@ fun assert_discount_redemption_allowed(
 ) {
     assert!(discount_template.active, ETemplateInactive);
     assert!(discount_template.shop_address == item_listing.shop_address, EDiscountShopMismatch);
-    let applies_to = discount_template.applies_to_listing.map_ref!(|x| x.to_address());
-    applies_to.do_ref!(|applies_to_listing| {
+
+    discount_template.applies_to_listing.map_ref!(|x| x.to_address()).do_ref!(|applies_to_listing| {
         assert!(
             *applies_to_listing == object::uid_to_address(&item_listing.id),
             EDiscountTicketListingMismatch,
         );
     });
+
     assert_template_in_time_window(discount_template, now);
     assert!(discount_template.claims_issued > discount_template.redemptions, ETemplateMaxedOut);
     assert!(!redemption_cap_reached(discount_template), ETemplateMaxedOut);
@@ -2045,8 +2046,8 @@ fun assert_ticket_matches_context(
         EDiscountTicketMismatch,
     );
     assert!(discount_ticket.claimer == buyer, EDiscountTicketOwnerMismatch);
-    let applies_to_listing = discount_ticket.listing_id.map!(|x| x.to_address());
-    applies_to_listing.do_ref!(|listing_address| {
+
+    discount_ticket.listing_id.map!(|x| x.to_address()).do_ref!(|listing_address| {
         assert!(
             *listing_address == object::uid_to_address(&item_listing.id),
             EDiscountTicketListingMismatch,
