@@ -2271,7 +2271,7 @@ macro fun assert_spotlight_template_matches_listing(
     let discount_template_id = $discount_template_id;
     discount_template_id.do_ref!(|template_id| {
         let listing_address = listing_id.to_address();
-        assert_template_belongs_to_shop(shop, *template_id);
+        assert_template_belongs_to_shop!(shop, *template_id);
         let marker: &DiscountTemplateMarker = dynamic_field::borrow(
             &shop.id,
             DiscountTemplateKey(*template_id),
