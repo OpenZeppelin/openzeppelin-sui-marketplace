@@ -76,49 +76,92 @@ use sui::package;
 //   production calls. Docs: docs/15-testing.md
 
 // === Errors ===
-const EInvalidOwnerCap: u64 = 2;
-const EEmptyItemName: u64 = 3;
-const EInvalidPrice: u64 = 4;
-const EZeroStock: u64 = 5;
-const ETemplateWindow: u64 = 6;
-const ETemplateShopMismatch: u64 = 7;
-const EListingShopMismatch: u64 = 8;
-const EInvalidRuleKind: u64 = 9;
-const EInvalidRuleValue: u64 = 10;
-const EAcceptedCurrencyExists: u64 = 11;
-const EAcceptedCurrencyMissing: u64 = 12;
-const EEmptyFeedId: u64 = 13;
-const EInvalidFeedIdLength: u64 = 34;
-const ETemplateInactive: u64 = 14;
-const ETemplateTooEarly: u64 = 15;
-const ETemplateExpired: u64 = 16;
-const ETemplateMaxedOut: u64 = 17;
-const EDiscountAlreadyClaimed: u64 = 18;
-const EOutOfStock: u64 = 19;
-const EInvalidPaymentCoinType: u64 = 20;
-const EPythObjectMismatch: u64 = 21;
-const EFeedIdentifierMismatch: u64 = 22;
-const EPriceNonPositive: u64 = 23;
-const EPriceOverflow: u64 = 24;
-const EInsufficientPayment: u64 = 25;
-const EDiscountTicketMismatch: u64 = 26;
-const EDiscountTicketOwnerMismatch: u64 = 27;
-const EDiscountTicketListingMismatch: u64 = 28;
-const EDiscountTicketShopMismatch: u64 = 29;
-const ECurrencyListingMismatch: u64 = 30;
-const EDiscountShopMismatch: u64 = 31;
-const EConfidenceIntervalTooWide: u64 = 32;
-const EConfidenceExceedsPrice: u64 = 33;
-const ESpotlightTemplateListingMismatch: u64 = 35;
-const EDiscountClaimsNotPrunable: u64 = 36;
-const EInvalidGuardrailCap: u64 = 37;
-const ETemplateFinalized: u64 = 38;
-const EPriceStatusNotTrading: u64 = 39;
-const EItemTypeMismatch: u64 = 40;
-const EUnsupportedCurrencyDecimals: u64 = 41;
-const EEmptyShopName: u64 = 42;
-const EShopDisabled: u64 = 43;
-const EPriceTooStale: u64 = 44;
+#[error]
+const EInvalidOwnerCap: vector<u8> = b"invalid owner capability";
+#[error]
+const EEmptyItemName: vector<u8> = b"empty item name";
+#[error]
+const EInvalidPrice: vector<u8> = b"invalid price";
+#[error]
+const EZeroStock: vector<u8> = b"zero stock";
+#[error]
+const ETemplateWindow: vector<u8> = b"invalid template window";
+#[error]
+const ETemplateShopMismatch: vector<u8> = b"template shop mismatch";
+#[error]
+const EListingShopMismatch: vector<u8> = b"listing shop mismatch";
+#[error]
+const EInvalidRuleKind: vector<u8> = b"invalid rule kind";
+#[error]
+const EInvalidRuleValue: vector<u8> = b"invalid rule value";
+#[error]
+const EAcceptedCurrencyExists: vector<u8> = b"accepted currency exists";
+#[error]
+const EAcceptedCurrencyMissing: vector<u8> = b"accepted currency missing";
+#[error]
+const EEmptyFeedId: vector<u8> = b"empty feed id";
+#[error]
+const EInvalidFeedIdLength: vector<u8> = b"invalid feed id length";
+#[error]
+const ETemplateInactive: vector<u8> = b"template inactive";
+#[error]
+const ETemplateTooEarly: vector<u8> = b"template too early";
+#[error]
+const ETemplateExpired: vector<u8> = b"template expired";
+#[error]
+const ETemplateMaxedOut: vector<u8> = b"template maxed out";
+#[error]
+const EDiscountAlreadyClaimed: vector<u8> = b"discount already claimed";
+#[error]
+const EOutOfStock: vector<u8> = b"out of stock";
+#[error]
+const EInvalidPaymentCoinType: vector<u8> = b"invalid payment coin type";
+#[error]
+const EPythObjectMismatch: vector<u8> = b"pyth object mismatch";
+#[error]
+const EFeedIdentifierMismatch: vector<u8> = b"feed identifier mismatch";
+#[error]
+const EPriceNonPositive: vector<u8> = b"price non-positive";
+#[error]
+const EPriceOverflow: vector<u8> = b"price overflow";
+#[error]
+const EInsufficientPayment: vector<u8> = b"insufficient payment";
+#[error]
+const EDiscountTicketMismatch: vector<u8> = b"discount ticket mismatch";
+#[error]
+const EDiscountTicketOwnerMismatch: vector<u8> = b"discount ticket owner mismatch";
+#[error]
+const EDiscountTicketListingMismatch: vector<u8> = b"discount ticket listing mismatch";
+#[error]
+const EDiscountTicketShopMismatch: vector<u8> = b"discount ticket shop mismatch";
+#[error]
+const ECurrencyListingMismatch: vector<u8> = b"currency listing mismatch";
+#[error]
+const EDiscountShopMismatch: vector<u8> = b"discount shop mismatch";
+#[error]
+const EConfidenceIntervalTooWide: vector<u8> = b"confidence interval too wide";
+#[error]
+const EConfidenceExceedsPrice: vector<u8> = b"confidence exceeds price";
+#[error]
+const ESpotlightTemplateListingMismatch: vector<u8> = b"spotlight template listing mismatch";
+#[error]
+const EDiscountClaimsNotPrunable: vector<u8> = b"discount claims not prunable";
+#[error]
+const EInvalidGuardrailCap: vector<u8> = b"invalid guardrail cap";
+#[error]
+const ETemplateFinalized: vector<u8> = b"template finalized";
+#[error]
+const EPriceStatusNotTrading: vector<u8> = b"price status not trading";
+#[error]
+const EItemTypeMismatch: vector<u8> = b"item type mismatch";
+#[error]
+const EUnsupportedCurrencyDecimals: vector<u8> = b"unsupported currency decimals";
+#[error]
+const EEmptyShopName: vector<u8> = b"empty shop name";
+#[error]
+const EShopDisabled: vector<u8> = b"shop disabled";
+#[error]
+const EPriceTooStale: vector<u8> = b"price too stale";
 
 const CENTS_PER_DOLLAR: u64 = 100;
 const BASIS_POINT_DENOMINATOR: u64 = 10_000;
