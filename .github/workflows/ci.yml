@@ -20,6 +20,22 @@ env:
   CI: true
 
 jobs:
+  move-formatting:
+    name: Move Formatter Check
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Check Move formatting
+        uses: MystenLabs/move-formatter-action@v1
+        with:
+          prettier-plugin-move-version: "latest"
+          working-directory: "packages/dapp/move"
+          pattern: "**/*.move"
+          write-changes: false
+
   lint:
     runs-on: ubuntu-latest
     timeout-minutes: 10
