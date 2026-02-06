@@ -1,11 +1,11 @@
 module sui_oracle_market::shop;
 
-use Pyth::i64;
-use Pyth::price;
-use Pyth::price_feed;
-use Pyth::price_identifier;
-use Pyth::price_info;
-use Pyth::pyth;
+use pyth::i64;
+use pyth::price;
+use pyth::price_feed;
+use pyth::price_identifier;
+use pyth::price_info;
+use pyth::pyth;
 use std::string::{Self, String};
 use std::type_name::{Self, TypeName};
 use std::u128;
@@ -46,7 +46,7 @@ use sui::package;
 //   must be `id: UID` (the object ID). `store` allows values to be stored in objects, while `copy`
 //   and `drop` control value semantics. These drive ownership rules. Docs: docs/02-mental-model-shift.md,
 //   docs/16-object-ownership.md
-// - Option types: option::Option makes optional IDs and optional limits/expiry explicit instead of
+// - Option types: Option makes optional IDs and optional limits/expiry explicit instead of
 //   sentinel values. Docs: docs/08-listings-receipts.md, docs/10-discounts-tickets.md
 // - Entry vs public functions: PTBs can call `entry` and `public`, while other Move modules can only call
 //   `public`. Prefer `public` for composable helpers and `entry` for PTB-only calls.
@@ -182,7 +182,7 @@ public struct ItemListing has key, store {
     name: String,
     base_price_usd_cents: u64, // Stored in USD cents to avoid floating point math.
     stock: u64,
-    spotlight_discount_template_id: option::Option<ID>,
+    spotlight_discount_template_id: Option<ID>,
 }
 
 /// Dynamic field key for item listing markers stored under a shop.
@@ -246,11 +246,11 @@ public enum DiscountRuleKind has copy, drop {
 public struct DiscountTemplate has key, store {
     id: UID,
     shop_address: address,
-    applies_to_listing: option::Option<ID>,
+    applies_to_listing: Option<ID>,
     rule: DiscountRule,
     starts_at: u64,
-    expires_at: option::Option<u64>,
-    max_redemptions: option::Option<u64>,
+    expires_at: Option<u64>,
+    max_redemptions: Option<u64>,
     claims_issued: u64,
     redemptions: u64,
     active: bool,
@@ -262,7 +262,7 @@ public struct DiscountTemplateKey(ID) has copy, drop, store;
 /// Marker stored under the shop to record template membership.
 public struct DiscountTemplateMarker has copy, drop, store {
     template_id: ID,
-    applies_to_listing: option::Option<ID>,
+    applies_to_listing: Option<ID>,
 }
 
 /// Discount ticket that future buyers will redeem during purchase flow.
@@ -272,7 +272,7 @@ public struct DiscountTicket has key, store {
     id: UID,
     discount_template_id: address,
     shop_address: address,
-    listing_id: option::Option<ID>,
+    listing_id: Option<ID>,
     claimer: address,
 }
 
@@ -317,7 +317,7 @@ public struct ItemListingAddedEvent has copy, drop {
     item_listing_address: address,
     name: String,
     base_price_usd_cents: u64,
-    spotlight_discount_template_id: option::Option<address>,
+    spotlight_discount_template_id: Option<address>,
     stock: u64,
 }
 
@@ -394,7 +394,7 @@ public struct PurchaseCompletedEvent has copy, drop {
     mint_to: address,
     coin_type: TypeName,
     amount_paid: u64,
-    discount_template_id: option::Option<address>,
+    discount_template_id: Option<address>,
     accepted_currency_id: address,
     feed_id: vector<u8>,
     base_price_usd_cents: u64,
@@ -513,7 +513,7 @@ fun add_item_listing_core<T: store>(
     name: String,
     base_price_usd_cents: u64,
     stock: u64,
-    spotlight_discount_template_id: option::Option<object::ID>,
+    spotlight_discount_template_id: Option<object::ID>,
     ctx: &mut TxContext,
 ): (ItemListing, object::ID, address) {
     assert_owner_cap!(shop, owner_cap);
@@ -568,7 +568,7 @@ entry fun add_item_listing<T: store>(
     name: String,
     base_price_usd_cents: u64,
     stock: u64,
-    spotlight_discount_template_id: option::Option<object::ID>,
+    spotlight_discount_template_id: Option<object::ID>,
     ctx: &mut TxContext,
 ) {
     let (listing, _listing_id, _listing_address) = add_item_listing_core<T>(
@@ -658,9 +658,9 @@ entry fun add_accepted_currency<T>(
     price_info_object: &price_info::PriceInfoObject,
     feed_id: vector<u8>,
     pyth_object_id: object::ID,
-    max_price_age_secs_cap: option::Option<u64>,
-    max_confidence_ratio_bps_cap: option::Option<u64>,
-    max_price_status_lag_secs_cap: option::Option<u64>,
+    max_price_age_secs_cap: Option<u64>,
+    max_confidence_ratio_bps_cap: Option<u64>,
+    max_price_status_lag_secs_cap: Option<u64>,
     ctx: &mut TxContext,
 ) {
     assert_owner_cap!(shop, owner_cap);
@@ -765,12 +765,12 @@ entry fun remove_accepted_currency(
 
 fun create_discount_template_core(
     shop: &mut Shop,
-    applies_to_listing: option::Option<object::ID>,
+    applies_to_listing: Option<object::ID>,
     rule_kind: u8,
     rule_value: u64,
     starts_at: u64,
-    expires_at: option::Option<u64>,
-    max_redemptions: option::Option<u64>,
+    expires_at: Option<u64>,
+    max_redemptions: Option<u64>,
     ctx: &mut TxContext,
 ): (DiscountTemplate, object::ID, DiscountRule, address) {
     validate_discount_template_inputs!(
@@ -824,12 +824,12 @@ fun create_discount_template_core(
 entry fun create_discount_template(
     shop: &mut Shop,
     owner_cap: &ShopOwnerCap,
-    applies_to_listing: option::Option<object::ID>,
+    applies_to_listing: Option<object::ID>,
     rule_kind: u8,
     rule_value: u64,
     starts_at: u64,
-    expires_at: option::Option<u64>,
-    max_redemptions: option::Option<u64>,
+    expires_at: Option<u64>,
+    max_redemptions: Option<u64>,
     ctx: &mut TxContext,
 ) {
     assert_owner_cap!(shop, owner_cap);
@@ -869,8 +869,8 @@ entry fun update_discount_template(
     rule_kind: u8,
     rule_value: u64,
     starts_at: u64,
-    expires_at: option::Option<u64>,
-    max_redemptions: option::Option<u64>,
+    expires_at: Option<u64>,
+    max_redemptions: Option<u64>,
     clock: &clock::Clock,
 ) {
     assert_owner_cap!(shop, owner_cap);
@@ -1076,8 +1076,8 @@ entry fun buy_item<TItem: store, TCoin>(
     payment: coin::Coin<TCoin>,
     mint_to: address,
     refund_extra_to: address,
-    max_price_age_secs: option::Option<u64>,
-    max_confidence_ratio_bps: option::Option<u64>,
+    max_price_age_secs: Option<u64>,
+    max_confidence_ratio_bps: Option<u64>,
     clock: &clock::Clock,
     ctx: &mut TxContext,
 ) {
@@ -1136,8 +1136,8 @@ entry fun buy_item_with_discount<TItem: store, TCoin>(
     payment: coin::Coin<TCoin>,
     mint_to: address,
     refund_extra_to: address,
-    max_price_age_secs: option::Option<u64>,
-    max_confidence_ratio_bps: option::Option<u64>,
+    max_price_age_secs: Option<u64>,
+    max_confidence_ratio_bps: Option<u64>,
     clock: &clock::Clock,
     ctx: &mut TxContext,
 ) {
@@ -1223,8 +1223,8 @@ entry fun claim_and_buy_item_with_discount<TItem: store, TCoin>(
     payment: coin::Coin<TCoin>,
     mint_to: address,
     refund_extra_to: address,
-    max_price_age_secs: option::Option<u64>,
-    max_confidence_ratio_bps: option::Option<u64>,
+    max_price_age_secs: Option<u64>,
+    max_confidence_ratio_bps: Option<u64>,
     clock: &clock::Clock,
     ctx: &mut TxContext,
 ) {
@@ -1305,7 +1305,7 @@ fun new_item_listing<T: store>(
     name: String,
     base_price_usd_cents: u64,
     stock: u64,
-    spotlight_discount_template_id: option::Option<object::ID>,
+    spotlight_discount_template_id: Option<object::ID>,
     ctx: &mut TxContext,
 ): (ItemListing, address) {
     let listing: ItemListing = ItemListing {
@@ -1324,11 +1324,11 @@ fun new_item_listing<T: store>(
 
 fun new_discount_template(
     shop_address: address,
-    applies_to_listing: option::Option<object::ID>,
+    applies_to_listing: Option<object::ID>,
     rule: DiscountRule,
     starts_at: u64,
-    expires_at: option::Option<u64>,
-    max_redemptions: option::Option<u64>,
+    expires_at: Option<u64>,
+    max_redemptions: Option<u64>,
     ctx: &mut TxContext,
 ): (DiscountTemplate, address) {
     let discount_template: DiscountTemplate = DiscountTemplate {
@@ -1401,8 +1401,8 @@ fun apply_discount_template_updates(
     discount_template: &mut DiscountTemplate,
     discount_rule: DiscountRule,
     starts_at: u64,
-    expires_at: option::Option<u64>,
-    max_redemptions: option::Option<u64>,
+    expires_at: Option<u64>,
+    max_redemptions: Option<u64>,
 ) {
     discount_template.rule = discount_rule;
     discount_template.starts_at = starts_at;
@@ -1457,7 +1457,7 @@ fun add_listing_marker(shop: &mut Shop, listing_id: object::ID) {
 fun add_template_marker(
     shop: &mut Shop,
     template_id: object::ID,
-    applies_to_listing: option::Option<object::ID>,
+    applies_to_listing: Option<object::ID>,
 ) {
     dynamic_field::add(
         &mut shop.id,
@@ -1537,7 +1537,7 @@ macro fun assert_listing_matches_shop($shop: &Shop, $listing: &ItemListing) {
     assert!(listing.shop_address == shop_address(shop), EListingShopMismatch);
 }
 
-fun unwrap_or_default(value: &option::Option<u64>, default_value: u64): u64 {
+fun unwrap_or_default(value: &Option<u64>, default_value: u64): u64 {
     if (option::is_some(value)) {
         *option::borrow(value)
     } else {
@@ -1546,7 +1546,7 @@ fun unwrap_or_default(value: &option::Option<u64>, default_value: u64): u64 {
 }
 
 /// Normalize a seller-provided guardrail cap, enforcing module-level ceilings and non-zero.
-fun resolve_guardrail_cap(proposed_cap: &option::Option<u64>, module_cap: u64): u64 {
+fun resolve_guardrail_cap(proposed_cap: &Option<u64>, module_cap: u64): u64 {
     let value = unwrap_or_default(proposed_cap, module_cap);
     assert!(value > 0, EInvalidGuardrailCap);
     clamp_max(value, module_cap)
@@ -1563,8 +1563,8 @@ fun clamp_max(value: u64, cap: u64): u64 {
 
 /// Resolve caller overrides against seller caps so pricing guardrails stay tight.
 fun resolve_effective_guardrails(
-    max_price_age_secs: &option::Option<u64>,
-    max_confidence_ratio_bps: &option::Option<u64>,
+    max_price_age_secs: &Option<u64>,
+    max_confidence_ratio_bps: &Option<u64>,
     accepted_currency: &AcceptedCurrency,
 ): (u64, u64) {
     let requested_max_age = unwrap_or_default(
@@ -1599,8 +1599,8 @@ fun quote_amount_with_guardrails(
     accepted_currency: &AcceptedCurrency,
     price_info_object: &price_info::PriceInfoObject,
     price_usd_cents: u64,
-    max_price_age_secs: &option::Option<u64>,
-    max_confidence_ratio_bps: &option::Option<u64>,
+    max_price_age_secs: &Option<u64>,
+    max_confidence_ratio_bps: &Option<u64>,
     clock: &clock::Clock,
 ): u64 {
     let (effective_max_age, effective_confidence_ratio) = resolve_effective_guardrails(
@@ -1639,12 +1639,12 @@ fun process_purchase<TItem: store, TCoin>(
     mint_to: address,
     refund_extra_to: address,
     discounted_price_usd_cents: u64,
-    discount_template_id: option::Option<address>,
-    max_price_age_secs: option::Option<u64>,
-    max_confidence_ratio_bps: option::Option<u64>,
+    discount_template_id: Option<address>,
+    max_price_age_secs: Option<u64>,
+    max_confidence_ratio_bps: Option<u64>,
     clock: &clock::Clock,
     ctx: &mut TxContext,
-): (option::Option<coin::Coin<TCoin>>, coin::Coin<TCoin>, ShopItem<TItem>) {
+): (Option<coin::Coin<TCoin>>, coin::Coin<TCoin>, ShopItem<TItem>) {
     assert_listing_type_matches<TItem>(item_listing);
     let accepted_currency = borrow_registered_accepted_currency(
         shop,
@@ -1678,12 +1678,12 @@ fun process_purchase_core<TItem: store, TCoin>(
     mint_to: address,
     refund_extra_to: address,
     discounted_price_usd_cents: u64,
-    discount_template_id: option::Option<address>,
-    max_price_age_secs: option::Option<u64>,
-    max_confidence_ratio_bps: option::Option<u64>,
+    discount_template_id: Option<address>,
+    max_price_age_secs: Option<u64>,
+    max_confidence_ratio_bps: Option<u64>,
     clock: &clock::Clock,
     ctx: &mut TxContext,
-): (option::Option<coin::Coin<TCoin>>, coin::Coin<TCoin>, ShopItem<TItem>) {
+): (Option<coin::Coin<TCoin>>, coin::Coin<TCoin>, ShopItem<TItem>) {
     ensure_price_info_matches_currency!(accepted_currency, price_info_object);
     assert_price_status_trading!(
         price_info_object,
@@ -1763,7 +1763,7 @@ fun build_discount_rule(rule_kind: DiscountRuleKind, rule_value: u64): DiscountR
     }
 }
 
-fun map_id_option_to_address(source: &option::Option<object::ID>): option::Option<address> {
+fun map_id_option_to_address(source: &Option<object::ID>): Option<address> {
     if (option::is_some(source)) {
         option::some(object::id_to_address(option::borrow(source)))
     } else {
@@ -1868,7 +1868,7 @@ fun split_payment<TCoin>(
     payment: &mut coin::Coin<TCoin>,
     amount_due: u64,
     ctx: &mut TxContext,
-): option::Option<coin::Coin<TCoin>> {
+): Option<coin::Coin<TCoin>> {
     if (amount_due == 0) {
         return option::none()
     };
@@ -1979,7 +1979,7 @@ macro fun assert_stock_available($item_listing: &ItemListing) {
     assert!(item_listing.stock > 0, EOutOfStock);
 }
 
-macro fun assert_schedule($starts_at: u64, $expires_at: &option::Option<u64>) {
+macro fun assert_schedule($starts_at: u64, $expires_at: &Option<u64>) {
     let starts_at = $starts_at;
     let expires_at = $expires_at;
     if (option::is_some(expires_at)) {
@@ -1992,7 +1992,7 @@ macro fun validate_listing_inputs(
     $name: &String,
     $base_price_usd_cents: u64,
     $stock: u64,
-    $spotlight_discount_template_id: &option::Option<object::ID>,
+    $spotlight_discount_template_id: &Option<object::ID>,
 ) {
     let shop = $shop;
     let name = $name;
@@ -2018,9 +2018,9 @@ macro fun validate_shop_name($name: &String) {
 
 macro fun validate_discount_template_inputs(
     $shop: &Shop,
-    $applies_to_listing: &option::Option<object::ID>,
+    $applies_to_listing: &Option<object::ID>,
     $starts_at: u64,
-    $expires_at: &option::Option<u64>,
+    $expires_at: &Option<u64>,
 ) {
     let shop = $shop;
     let applies_to_listing = $applies_to_listing;
@@ -2258,7 +2258,7 @@ public enum ReferenceKind has copy, drop {
 macro fun assert_belongs_to_shop_if_some(
     $shop: &Shop,
     $kind: ReferenceKind,
-    $maybe_id: &option::Option<object::ID>,
+    $maybe_id: &Option<object::ID>,
 ) {
     let shop = $shop;
     let kind = $kind;
@@ -2275,7 +2275,7 @@ macro fun assert_belongs_to_shop_if_some(
 macro fun assert_spotlight_template_matches_listing(
     $shop: &Shop,
     $listing_id: object::ID,
-    $discount_template_id: &option::Option<object::ID>,
+    $discount_template_id: &Option<object::ID>,
 ) {
     let shop = $shop;
     let listing_id = $listing_id;
@@ -2353,7 +2353,7 @@ public fun accepted_currency_exists(shop: &Shop, accepted_currency_id: object::I
 public fun accepted_currency_id_for_type(
     shop: &Shop,
     coin_type: TypeName,
-): option::Option<object::ID> {
+): Option<object::ID> {
     if (
         dynamic_field::exists_with_type<AcceptedCurrencyTypeKey, object::ID>(
             &shop.id,
@@ -2375,7 +2375,7 @@ public fun accepted_currency_id_for_type(
 public fun listing_id_for_address(
     shop: &Shop,
     listing_address: address,
-): option::Option<object::ID> {
+): Option<object::ID> {
     let listing_id = object::id_from_address(listing_address);
     if (listing_exists(shop, listing_id)) {
         option::some(listing_id)
@@ -2388,7 +2388,7 @@ public fun listing_id_for_address(
 public fun discount_template_id_for_address(
     shop: &Shop,
     template_address: address,
-): option::Option<object::ID> {
+): Option<object::ID> {
     let template_id = object::id_from_address(template_address);
     if (discount_template_exists(shop, template_id)) {
         option::some(template_id)
@@ -2401,7 +2401,7 @@ public fun discount_template_id_for_address(
 public fun listing_values(
     shop: &Shop,
     listing: &ItemListing,
-): (String, u64, u64, address, option::Option<object::ID>) {
+): (String, u64, u64, address, Option<object::ID>) {
     assert_listing_matches_shop!(shop, listing);
     (
         clone_string(&listing.name),
@@ -2437,11 +2437,11 @@ public fun discount_template_values(
     template: &DiscountTemplate,
 ): (
     address,
-    option::Option<object::ID>,
+    Option<object::ID>,
     DiscountRule,
     u64,
-    option::Option<u64>,
-    option::Option<u64>,
+    Option<u64>,
+    Option<u64>,
     u64,
     u64,
     bool,
@@ -2466,8 +2466,8 @@ entry fun quote_amount_for_price_info_object(
     accepted_currency: &AcceptedCurrency,
     price_info_object: &price_info::PriceInfoObject,
     price_usd_cents: u64,
-    max_price_age_secs: option::Option<u64>,
-    max_confidence_ratio_bps: option::Option<u64>,
+    max_price_age_secs: Option<u64>,
+    max_confidence_ratio_bps: Option<u64>,
     clock: &clock::Clock,
 ): u64 {
     assert_currency_matches_shop!(shop, accepted_currency);
@@ -2530,12 +2530,12 @@ public fun test_template_id(template: &DiscountTemplate): object::ID {
 #[test_only]
 public fun test_create_discount_template_local(
     shop: &mut Shop,
-    applies_to_listing: option::Option<object::ID>,
+    applies_to_listing: Option<object::ID>,
     rule_kind: u8,
     rule_value: u64,
     starts_at: u64,
-    expires_at: option::Option<u64>,
-    max_redemptions: option::Option<u64>,
+    expires_at: Option<u64>,
+    max_redemptions: Option<u64>,
     ctx: &mut TxContext,
 ): (DiscountTemplate, object::ID) {
     let (template, template_id, discount_rule, template_address) = create_discount_template_core(
@@ -2579,8 +2579,8 @@ public fun test_quote_amount_for_price_info_object(
     accepted_currency: &AcceptedCurrency,
     price_info_object: &price_info::PriceInfoObject,
     price_usd_cents: u64,
-    max_price_age_secs: option::Option<u64>,
-    max_confidence_ratio_bps: option::Option<u64>,
+    max_price_age_secs: Option<u64>,
+    max_confidence_ratio_bps: Option<u64>,
     clock: &clock::Clock,
 ): u64 {
     quote_amount_for_price_info_object(
@@ -2631,7 +2631,7 @@ public fun test_max_decimal_power(): u64 {
 public fun test_listing_values(
     shop: &Shop,
     listing: &ItemListing,
-): (String, u64, u64, address, option::Option<object::ID>) {
+): (String, u64, u64, address, Option<object::ID>) {
     listing_values(shop, listing)
 }
 
@@ -2679,11 +2679,11 @@ public fun test_discount_template_values(
     template: &DiscountTemplate,
 ): (
     address,
-    option::Option<object::ID>,
+    Option<object::ID>,
     DiscountRule,
     u64,
-    option::Option<u64>,
-    option::Option<u64>,
+    Option<u64>,
+    Option<u64>,
     u64,
     u64,
     bool,
@@ -2740,8 +2740,8 @@ public fun test_claim_and_buy_with_ids<TItem: store, TCoin>(
     payment: coin::Coin<TCoin>,
     mint_to: address,
     refund_extra_to: address,
-    max_price_age_secs: option::Option<u64>,
-    max_confidence_ratio_bps: option::Option<u64>,
+    max_price_age_secs: Option<u64>,
+    max_confidence_ratio_bps: Option<u64>,
     clock: &clock::Clock,
     ctx: &mut TxContext,
 ) {
@@ -2912,7 +2912,7 @@ public fun test_purchase_completed_amount_paid(event: &PurchaseCompletedEvent): 
 #[test_only]
 public fun test_purchase_completed_discount_template_id(
     event: &PurchaseCompletedEvent,
-): option::Option<address> {
+): Option<address> {
     event.discount_template_id
 }
 
@@ -3024,7 +3024,7 @@ public fun test_discount_claimed_discount_id(event: &DiscountClaimedEvent): addr
 #[test_only]
 public fun test_discount_ticket_values(
     ticket: &DiscountTicket,
-): (address, address, option::Option<object::ID>, address) {
+): (address, address, Option<object::ID>, address) {
     (ticket.discount_template_id, ticket.shop_address, ticket.listing_id, ticket.claimer)
 }
 
@@ -3040,7 +3040,7 @@ public fun test_add_item_listing_local<T: store>(
     name: String,
     base_price_usd_cents: u64,
     stock: u64,
-    spotlight_discount_template_id: option::Option<object::ID>,
+    spotlight_discount_template_id: Option<object::ID>,
     ctx: &mut TxContext,
 ): (ItemListing, object::ID) {
     let (listing, listing_id, _listing_address) = add_item_listing_core<T>(
@@ -3058,7 +3058,7 @@ public fun test_add_item_listing_local<T: store>(
 #[test_only]
 public fun test_listing_values_local(
     listing: &ItemListing,
-): (String, u64, u64, address, option::Option<object::ID>) {
+): (String, u64, u64, address, Option<object::ID>) {
     (
         clone_string(&listing.name),
         listing.base_price_usd_cents,
@@ -3241,7 +3241,7 @@ public fun test_item_listing_added_base_price_usd_cents(event: &ItemListingAdded
 #[test_only]
 public fun test_item_listing_added_spotlight_template(
     event: &ItemListingAddedEvent,
-): option::Option<address> {
+): Option<address> {
     event.spotlight_discount_template_id
 }
 

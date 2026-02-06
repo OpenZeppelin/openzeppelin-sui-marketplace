@@ -1,5 +1,5 @@
 [package]
-name = "Pyth"
+name = "pyth"
 edition = "2024"
 
 [environments]
