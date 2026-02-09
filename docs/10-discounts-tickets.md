@@ -83,8 +83,7 @@ entry fun create_discount_template(
     _discount_template_id,
     discount_rule,
     discount_template_address,
-  ) = create_discount_template_core(
-    shop,
+  ) = shop.create_discount_template_core(
     applies_to_listing,
     rule_kind,
     rule_value,
@@ -115,8 +114,7 @@ entry fun claim_discount_ticket(
   assert_shop_active(shop);
   assert_template_matches_shop(shop, discount_template);
   let now_secs: u64 = now_secs(clock);
-  let (discount_ticket, claimer) = claim_discount_ticket_with_event(
-    discount_template,
+  let (discount_ticket, claimer) = discount_template.claim_discount_ticket_with_event(
     now_secs,
     ctx,
   );
