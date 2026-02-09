@@ -75,8 +75,7 @@ entry fun add_item_listing<T: store>(
   spotlight_discount_template_id: Option<obj::ID>,
   ctx: &mut tx::TxContext,
 ) {
-  let (listing, _listing_id, _listing_address) = add_item_listing_core<T>(
-    shop,
+  let (listing, _listing_id, _listing_address) = shop.add_item_listing_core<T>(
     owner_cap,
     name,
     base_price_usd_cents,
