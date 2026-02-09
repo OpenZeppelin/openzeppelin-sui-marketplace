@@ -140,7 +140,7 @@ fun create_shop_emits_event_and_records_ids() {
     let created = event::events_by_type<shop::ShopCreatedEvent>();
     assert_eq!(created.length(), 1);
     let shop_created = &created[0];
-    let owner_cap_addr = object::id_to_address(&shop::test_last_created_id(&ctx));
+    let owner_cap_addr = shop::test_last_created_id(&ctx).to_address();
 
     assert_eq!(shop::test_shop_created_owner(shop_created), TEST_OWNER);
     assert_eq!(shop::test_shop_created_name(shop_created), DEFAULT_SHOP_NAME.to_string());
@@ -1645,7 +1645,7 @@ fun add_item_listing_links_spotlight_template() {
     );
     assert!(option::is_some(&spotlight_template));
     spotlight_template.do_ref!(|value| {
-        assert_eq!(*value, object::id_to_address(&template_id));
+        assert_eq!(*value, template_id.to_address());
     });
     assert_eq!(shop::test_item_listing_added_stock(added_event), 8);
 
@@ -2072,7 +2072,7 @@ fun create_discount_template_persists_fields_and_emits_event() {
         option::some(5),
         &mut ctx,
     );
-    let template_address = object::id_to_address(&template_id);
+    let template_address = template_id.to_address();
     assert!(shop::test_discount_template_exists(&shop, template_id));
 
     let (
@@ -2397,10 +2397,7 @@ fun update_discount_template_updates_fields_and_emits_event() {
     assert_eq!(updated_events.length(), 1);
     let updated = &updated_events[0];
     assert_eq!(shop::test_discount_template_updated_shop(updated), shop::test_shop_id(&shop));
-    assert_eq!(
-        shop::test_discount_template_updated_id(updated),
-        object::id_to_address(&template_id),
-    );
+    assert_eq!(shop::test_discount_template_updated_id(updated), template_id.to_address());
 
     shop::test_remove_template(&mut shop, template_id);
     std::unit_test::destroy(template);
@@ -2705,7 +2702,7 @@ fun toggle_discount_template_updates_active_and_emits_events() {
         option::some(3),
         &mut ctx,
     );
-    let template_address = object::id_to_address(&template_id);
+    let template_address = template_id.to_address();
 
     let (
         shop_address,
@@ -3668,8 +3665,8 @@ fun claim_discount_ticket_mints_transfers_and_records_claim() {
     let claim_events_len = claim_events.length();
     assert!(claim_events_len > 0);
     let claimed = &claim_events[claim_events_len - 1];
-    let shop_address = object::id_to_address(&shop_id);
-    let template_address = object::id_to_address(&template_id);
+    let shop_address = shop_id.to_address();
+    let template_address = template_id.to_address();
     assert_eq!(shop::test_discount_claimed_shop(claimed), shop_address);
     assert_eq!(shop::test_discount_claimed_template_id(claimed), template_address);
     assert_eq!(shop::test_discount_claimed_claimer(claimed), OTHER_OWNER);
@@ -4189,10 +4186,10 @@ fun claim_and_buy_item_with_discount_emits_events_and_covers_helpers() {
     let redeemed_event = &redeemed_events[redeemed_events.length() - 1];
     let _ = shop::test_discount_redeemed_discount_id(redeemed_event);
 
-    let listing_address = object::id_to_address(&listing_id);
+    let listing_address = listing_id.to_address();
     let listing_id_opt = shop::listing_id_for_address(&shared_shop, listing_address);
     assert!(option::is_some(&listing_id_opt));
-    let template_address = object::id_to_address(&template_id);
+    let template_address = template_id.to_address();
     let template_id_opt = shop::discount_template_id_for_address(&shared_shop, template_address);
     assert!(option::is_some(&template_id_opt));
 
@@ -5362,7 +5359,7 @@ fun buy_item_emits_events_decrements_stock_and_refunds_change() {
     assert_eq!(shop::test_purchase_completed_base_price_usd_cents(purchase), 100);
     assert_eq!(
         shop::test_purchase_completed_accepted_currency_id(purchase),
-        object::id_to_address(&accepted_currency_id),
+        accepted_currency_id.to_address(),
     );
     assert_eq!(shop::test_purchase_completed_feed_id(purchase), PRIMARY_FEED_ID);
     assert!(option::is_none(&shop::test_purchase_completed_discount_template_id(purchase)));
@@ -5958,17 +5955,14 @@ fun buy_item_with_discount_emits_discount_redeemed_and_records_template_id() {
     );
     assert!(option::is_some(&template_id_opt));
     template_id_opt.do_ref!(|value| {
-        assert_eq!(*value, object::id_to_address(&template_id));
+        assert_eq!(*value, template_id.to_address());
     });
 
     let redeems = event::events_by_type<shop::DiscountRedeemedEvent>();
     assert_eq!(redeems.length(), redeem_before + 1);
     let redeem = &redeems[redeems.length() - 1];
     assert_eq!(shop::test_discount_redeemed_shop(redeem), shop::test_shop_id(&shared_shop));
-    assert_eq!(
-        shop::test_discount_redeemed_template_id(redeem),
-        object::id_to_address(&template_id),
-    );
+    assert_eq!(shop::test_discount_redeemed_template_id(redeem), template_id.to_address());
     assert_eq!(
         shop::test_discount_redeemed_listing_id(redeem),
         shop::test_listing_address(&listing),
