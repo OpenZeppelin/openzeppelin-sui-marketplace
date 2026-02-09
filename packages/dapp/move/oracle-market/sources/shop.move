@@ -472,7 +472,6 @@ public struct MintingCompletedEvent has copy, drop {
 entry fun create_shop(name: String, ctx: &mut TxContext) {
     let owner: address = ctx.sender();
     let shop: Shop = new_shop(name, owner, ctx);
-    let shop_name_for_event: String = clone_string(&shop.name);
 
     let owner_cap: ShopOwnerCap = ShopOwnerCap {
         id: object::new(ctx),
@@ -483,7 +482,7 @@ entry fun create_shop(name: String, ctx: &mut TxContext) {
     event::emit(ShopCreatedEvent {
         shop_address: shop_address(&shop),
         owner,
-        name: shop_name_for_event,
+        name: shop.name,
         shop_owner_cap_id: object::uid_to_address(&owner_cap.id),
     });
 
@@ -582,12 +581,10 @@ fun add_item_listing_core<T: store>(
         &listing.spotlight_discount_template_id,
     );
 
-    let listing_name_for_event: String = clone_string(&listing.name);
-
     event::emit(ItemListingAddedEvent {
         shop_address,
         item_listing_address: listing_address,
-        name: listing_name_for_event,
+        name: listing.name,
         base_price_usd_cents: listing.base_price_usd_cents,
         spotlight_discount_template_id: map_id_option_to_address(
             &listing.spotlight_discount_template_id,
@@ -745,7 +742,6 @@ entry fun add_accepted_currency<T>(
         status_lag_cap,
         ctx,
     );
-    let feed_for_event: vector<u8> = clone_bytes(&accepted_currency.feed_id);
 
     let accepted_currency_id = object::id_from_address(accepted_currency_address);
     add_currency_marker(shop, accepted_currency_id, coin_type);
@@ -754,12 +750,13 @@ entry fun add_accepted_currency<T>(
         AcceptedCurrencyTypeKey(coin_type),
         accepted_currency_id,
     );
+
     transfer::share_object(accepted_currency);
 
     event::emit(AcceptedCoinAddedEvent {
         shop_address,
         coin_type,
-        feed_id: feed_for_event,
+        feed_id,
         pyth_object_id,
         decimals,
     })
@@ -1742,7 +1739,7 @@ fun process_purchase_core<TItem: store, TCoin>(
         amount_paid: quote_amount,
         discount_template_id,
         accepted_currency_id: object::uid_to_address(&accepted_currency.id),
-        feed_id: clone_bytes(&accepted_currency.feed_id),
+        feed_id: accepted_currency.feed_id,
         base_price_usd_cents: item_listing.base_price_usd_cents,
         discounted_price_usd_cents,
         quote_amount,
@@ -1921,7 +1918,7 @@ fun mint_shop_item<TItem: store>(
         shop_address: item_listing.shop_address,
         item_listing_address: object::uid_to_address(&item_listing.id),
         item_type: item_listing.item_type,
-        name: clone_string(&item_listing.name),
+        name: item_listing.name,
         acquired_at: now_secs(clock),
     }
 }
@@ -2420,7 +2417,7 @@ public fun listing_values(
 ): (String, u64, u64, address, Option<object::ID>) {
     assert_listing_matches_shop!(shop, listing);
     (
-        clone_string(&listing.name),
+        listing.name,
         listing.base_price_usd_cents,
         listing.stock,
         listing.shop_address,
@@ -2437,10 +2434,10 @@ public fun accepted_currency_values(
     (
         accepted_currency.shop_address,
         accepted_currency.coin_type,
-        clone_bytes(&accepted_currency.feed_id),
+        accepted_currency.feed_id,
         accepted_currency.pyth_object_id,
         accepted_currency.decimals,
-        clone_bytes(&accepted_currency.symbol),
+        accepted_currency.symbol,
         accepted_currency.max_price_age_secs_cap,
         accepted_currency.max_confidence_ratio_bps_cap,
         accepted_currency.max_price_status_lag_secs_cap,
@@ -2491,15 +2488,6 @@ entry fun quote_amount_for_price_info_object(
         &max_confidence_ratio_bps,
         clock,
     )
-}
-
-fun clone_bytes(data: &vector<u8>): vector<u8> {
-    let len: u64 = data.length();
-    vector::tabulate!(len, |i| data[i])
-}
-
-fun clone_string(value: &String): String {
-    *value
 }
 
 // === #[test_only] API ===
@@ -2916,7 +2904,7 @@ public fun test_purchase_completed_accepted_currency_id(event: &PurchaseComplete
 
 #[test_only]
 public fun test_purchase_completed_feed_id(event: &PurchaseCompletedEvent): vector<u8> {
-    clone_bytes(&event.feed_id)
+    event.feed_id
 }
 
 #[test_only]
@@ -3053,7 +3041,7 @@ public fun test_listing_values_local(
     listing: &ItemListing,
 ): (String, u64, u64, address, Option<object::ID>) {
     (
-        clone_string(&listing.name),
+        listing.name,
         listing.base_price_usd_cents,
         listing.stock,
         listing.shop_address,
@@ -3108,7 +3096,7 @@ public fun test_shop_owner(shop: &Shop): address {
 
 #[test_only]
 public fun test_shop_name(shop: &Shop): String {
-    clone_string(&shop.name)
+    shop.name
 }
 
 #[test_only]
@@ -3138,7 +3126,7 @@ public fun test_shop_created_owner(event: &ShopCreatedEvent): address {
 
 #[test_only]
 public fun test_shop_created_name(event: &ShopCreatedEvent): String {
-    clone_string(&event.name)
+    event.name
 }
 
 #[test_only]
@@ -3223,7 +3211,7 @@ public fun test_item_listing_added_listing(event: &ItemListingAddedEvent): addre
 
 #[test_only]
 public fun test_item_listing_added_name(event: &ItemListingAddedEvent): String {
-    clone_string(&event.name)
+    event.name
 }
 
 #[test_only]
@@ -3265,7 +3253,7 @@ public fun test_accepted_coin_added_coin_type(event: &AcceptedCoinAddedEvent): T
 
 #[test_only]
 public fun test_accepted_coin_added_feed_id(event: &AcceptedCoinAddedEvent): vector<u8> {
-    clone_bytes(&event.feed_id)
+    event.feed_id
 }
 
 #[test_only]
