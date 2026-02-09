@@ -1770,7 +1770,7 @@ fun quote_amount_from_usd_cents(
 ): u64 {
     let price_value = price::get_price(price);
     let mantissa = positive_price_to_u128(&price_value);
-    let confidence = as_u128_from_u64(price::get_conf(price));
+    let confidence = price::get_conf(price) as u128;
     let exponent = price::get_expo(price);
     let exponent_is_negative = i64::get_is_negative(&exponent);
     let exponent_magnitude = if (exponent_is_negative) {
@@ -1784,10 +1784,10 @@ fun quote_amount_from_usd_cents(
         max_confidence_ratio_bps,
     );
 
-    let coin_decimals_pow10 = pow10_u128(as_u64_from_u8(coin_decimals));
+    let coin_decimals_pow10 = pow10_u128(coin_decimals as u64);
     let exponent_pow10 = pow10_u128(exponent_magnitude);
 
-    let mut numerator = as_u128_from_u64(usd_cents);
+    let mut numerator = usd_cents as u128;
     numerator = checked_mul_u128(numerator, coin_decimals_pow10);
 
     if (exponent_is_negative) {
@@ -1796,7 +1796,7 @@ fun quote_amount_from_usd_cents(
 
     let mut denominator = checked_mul_u128(
         conservative_mantissa,
-        as_u128_from_u64(CENTS_PER_DOLLAR),
+        CENTS_PER_DOLLAR as u128,
     );
     if (!exponent_is_negative) {
         denominator = checked_mul_u128(denominator, exponent_pow10);
@@ -1830,7 +1830,7 @@ fun ceil_div_u128(numerator: u128, denominator: u128): u128 {
 
 fun positive_price_to_u128(value: &i64::I64): u128 {
     assert!(!i64::get_is_negative(value), EPriceNonPositive);
-    as_u128_from_u64(i64::get_magnitude_if_positive(value))
+    i64::get_magnitude_if_positive(value) as u128
 }
 
 /// Apply mu-sigma per Pyth best practices to avoid undercharging when prices are uncertain.
@@ -1840,8 +1840,8 @@ fun conservative_price_mantissa(
     max_confidence_ratio_bps: u64,
 ): u128 {
     assert!(mantissa > confidence, EConfidenceExceedsPrice);
-    let scaled_confidence = confidence * as_u128_from_u64(BASIS_POINT_DENOMINATOR);
-    let max_allowed = mantissa * as_u128_from_u64(max_confidence_ratio_bps);
+    let scaled_confidence = confidence * (BASIS_POINT_DENOMINATOR as u128);
+    let max_allowed = mantissa * (max_confidence_ratio_bps as u128);
     assert!(scaled_confidence <= max_allowed, EConfidenceIntervalTooWide);
     mantissa - confidence
 }
@@ -1892,11 +1892,11 @@ fun apply_discount(base_price_usd_cents: u64, rule: &DiscountRule): u64 {
             }
         },
         DiscountRule::Percent { bps } => {
-            let remaining_bps = BASIS_POINT_DENOMINATOR - as_u64_from_u16(*bps);
-            let product = as_u128_from_u64(base_price_usd_cents) * as_u128_from_u64(remaining_bps);
+            let remaining_bps = BASIS_POINT_DENOMINATOR - (*bps as u64);
+            let product = (base_price_usd_cents as u128) * (remaining_bps as u128);
             let discounted = ceil_div_u128(
                 product,
-                as_u128_from_u64(BASIS_POINT_DENOMINATOR),
+                BASIS_POINT_DENOMINATOR as u128,
             );
             let maybe_discounted = u128::try_as_u64(discounted);
             maybe_discounted.destroy_or!(abort EPriceOverflow)
@@ -1907,18 +1907,6 @@ fun apply_discount(base_price_usd_cents: u64, rule: &DiscountRule): u64 {
 fun burn_discount_ticket(discount_ticket: DiscountTicket) {
     let DiscountTicket { id, .. } = discount_ticket;
     id.delete();
-}
-
-fun as_u64_from_u8(value: u8): u64 {
-    value as u64
-}
-
-fun as_u64_from_u16(value: u16): u64 {
-    value as u64
-}
-
-fun as_u128_from_u64(value: u64): u128 {
-    value as u128
 }
 
 // === Asserts and validations ===
@@ -2133,7 +2121,7 @@ macro fun assert_currency_not_registered($shop: &Shop, $coin_type: &TypeName) {
 
 macro fun assert_supported_decimals($decimals: u8) {
     let decimals = $decimals;
-    assert!(as_u64_from_u8(decimals) <= MAX_DECIMAL_POWER, EUnsupportedCurrencyDecimals);
+    assert!(decimals as u64 <= MAX_DECIMAL_POWER, EUnsupportedCurrencyDecimals);
 }
 
 macro fun assert_listing_currency_match(
