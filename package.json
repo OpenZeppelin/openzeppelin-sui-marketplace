@@ -33,5 +33,11 @@
   "workspaces": [
     "packages/*",
     "packages/*/*"
-  ]
+  ],
+  "pnpm": {
+    "overrides": {
+      "axios": "1.13.5",
+      "@isaacs/brace-expansion": "5.0.1"
+    }
+  }
 }
