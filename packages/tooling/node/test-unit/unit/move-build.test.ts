@@ -1,11 +1,11 @@
 import path from "node:path"
 import { beforeEach, describe, expect, it, vi } from "vitest"
-import { createSuiClientMock } from "../../../tests-integration/helpers/sui.ts"
 import {
   readTextFile,
   withTempDir,
   writeFileTree
 } from "../../../tests-integration/helpers/fs.ts"
+import { createSuiClientMock } from "../../../tests-integration/helpers/sui.ts"
 
 const runSuiCliMock = vi.hoisted(() => vi.fn())
 const getSuiCliEnvironmentChainIdMock = vi.hoisted(() => vi.fn())
@@ -20,12 +20,12 @@ vi.mock("../../src/log.ts", () => ({
   logWarning: logWarningMock
 }))
 
+import type { SuiResolvedConfig } from "../../src/config.ts"
 import {
   buildMovePackage,
   resolveChainIdentifier,
   syncLocalnetMoveEnvironmentChainId
 } from "../../src/move.ts"
-import type { SuiResolvedConfig } from "../../src/config.ts"
 
 const buildSuiConfig = (networkName: string): SuiResolvedConfig => ({
   currentNetwork: networkName,
@@ -116,7 +116,7 @@ describe("syncLocalnetMoveEnvironmentChainId", () => {
     })
 
     await withTempDir(async (dir) => {
-      const moveToml = `[package]\nname = "fixture"\nversion = "0.0.1"\n\n[dep-replacements.localnet]\nSui = { local = "../sui" }\n`
+      const moveToml = `[package]\nname = "fixture"\nversion = "0.0.1"\n\n[dep-replacements.test-publish]\nSui = { local = "../sui" }\n`
       await writeFileTree(dir, { "Move.toml": moveToml })
 
       const result = await syncLocalnetMoveEnvironmentChainId(
@@ -132,7 +132,7 @@ describe("syncLocalnetMoveEnvironmentChainId", () => {
 
       const updated = await readTextFile(path.join(dir, "Move.toml"))
       expect(updated).toContain("[environments]")
-      expect(updated).toContain('localnet = "0xabc"')
+      expect(updated).toContain('test-publish = "0xabc"')
     })
   })
 })
