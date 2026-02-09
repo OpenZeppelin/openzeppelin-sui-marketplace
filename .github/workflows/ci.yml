@@ -128,8 +128,8 @@ jobs:
       - uses: ./.github/actions/setup-sui
       - name: Run Move tests (${{ matrix.package }})
         run: |
-          sui move test --path ./packages/dapp/move/oracle-market --environment localnet --coverage --trace --test
-          sui move coverage summary --path ./packages/dapp/move/oracle-market --environment localnet --test
+          sui move test --path ./packages/dapp/move/oracle-market --environment test-publish --coverage --trace --test
+          sui move coverage summary --path ./packages/dapp/move/oracle-market --environment test-publish --test
 
   security-audit:
     runs-on: ubuntu-latest
