@@ -576,7 +576,7 @@ fun add_item_listing_core<T: store>(
         spotlight_discount_template_id,
         ctx,
     );
-    let listing_id: object::ID = object::id_from_address(listing_address);
+    let listing_id: object::ID = listing_address.to_id();
 
     assert_spotlight_template_matches_listing!(
         shop,
@@ -745,7 +745,7 @@ entry fun add_accepted_currency<T>(
         ctx,
     );
 
-    let accepted_currency_id = object::id_from_address(accepted_currency_address);
+    let accepted_currency_id = accepted_currency_address.to_id();
     add_currency_marker(shop, accepted_currency_id, coin_type);
     dynamic_field::add(
         &mut shop.id,
@@ -830,7 +830,7 @@ fun create_discount_template_core(
         ctx,
     );
 
-    let discount_template_id = object::id_from_address(discount_template_address);
+    let discount_template_id = discount_template_address.to_id();
     add_template_marker(shop, discount_template_id, applies_to_listing);
     (discount_template, discount_template_id, discount_rule, discount_template_address)
 }
@@ -2332,7 +2332,7 @@ public fun accepted_currency_id_for_type(shop: &Shop, coin_type: TypeName): Opti
 
 /// Returns the listing ID for a listing address if registered.
 public fun listing_id_for_address(shop: &Shop, listing_address: address): Option<object::ID> {
-    let listing_id = object::id_from_address(listing_address);
+    let listing_id = listing_address.to_id();
     if (listing_exists(shop, listing_id)) {
         option::some(listing_id)
     } else {
@@ -2345,7 +2345,7 @@ public fun discount_template_id_for_address(
     shop: &Shop,
     template_address: address,
 ): Option<object::ID> {
-    let template_id = object::id_from_address(template_address);
+    let template_id = template_address.to_id();
     if (discount_template_exists(shop, template_id)) {
         option::some(template_id)
     } else {
@@ -2951,7 +2951,7 @@ public fun test_discount_ticket_values(
 
 #[test_only]
 public fun test_last_created_id(ctx: &TxContext): object::ID {
-    object::id_from_address(tx_context::last_created_object_id(ctx))
+    tx_context::last_created_object_id(ctx).to_id()
 }
 
 #[test_only]
