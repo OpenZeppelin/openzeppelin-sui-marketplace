@@ -1545,16 +1545,7 @@ macro fun assert_listing_matches_shop($shop: &Shop, $listing: &ItemListing) {
 fun resolve_guardrail_cap(proposed_cap: Option<u64>, module_cap: u64): u64 {
     let value = proposed_cap.destroy_or!(module_cap);
     assert!(value > 0, EInvalidGuardrailCap);
-    clamp_max(value, module_cap)
-}
-
-/// Clamp a caller-provided override so oracle guardrails cannot be loosened.
-fun clamp_max(value: u64, cap: u64): u64 {
-    if (value <= cap) {
-        value
-    } else {
-        cap
-    }
+    value.min(module_cap)
 }
 
 /// Resolve caller overrides against seller caps so pricing guardrails stay tight.
@@ -1569,14 +1560,8 @@ fun resolve_effective_guardrails(
     let requested_confidence_ratio = max_confidence_ratio_bps.destroy_or!(
         accepted_currency.max_confidence_ratio_bps_cap,
     );
-    let effective_max_age = clamp_max(
-        requested_max_age,
-        accepted_currency.max_price_age_secs_cap,
-    );
-    let effective_confidence_ratio = clamp_max(
-        requested_confidence_ratio,
-        accepted_currency.max_confidence_ratio_bps_cap,
-    );
+    let effective_max_age = requested_max_age.min(accepted_currency.max_price_age_secs_cap);
+    let effective_confidence_ratio = requested_confidence_ratio.min(accepted_currency.max_confidence_ratio_bps_cap);
     (effective_max_age, effective_confidence_ratio)
 }
 
