@@ -1803,7 +1803,7 @@ fun quote_amount_from_usd_cents(
     };
 
     let amount = ceil_div_u128(numerator, denominator);
-    let maybe_amount = u128::try_as_u64(amount);
+    let maybe_amount = amount.try_as_u64();
     maybe_amount.destroy_or!(abort EPriceOverflow)
 }
 
@@ -1825,7 +1825,7 @@ fun checked_mul_u128(lhs: u128, rhs: u128): u128 {
 
 fun ceil_div_u128(numerator: u128, denominator: u128): u128 {
     assert!(denominator != 0, EPriceOverflow);
-    u128::divide_and_round_up(numerator, denominator)
+    numerator.divide_and_round_up(denominator)
 }
 
 fun positive_price_to_u128(value: &i64::I64): u128 {
@@ -1898,7 +1898,7 @@ fun apply_discount(base_price_usd_cents: u64, rule: &DiscountRule): u64 {
                 product,
                 BASIS_POINT_DENOMINATOR as u128,
             );
-            let maybe_discounted = u128::try_as_u64(discounted);
+            let maybe_discounted = discounted.try_as_u64();
             maybe_discounted.destroy_or!(abort EPriceOverflow)
         },
     }
