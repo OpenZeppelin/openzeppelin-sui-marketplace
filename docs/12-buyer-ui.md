@@ -95,8 +95,7 @@ entry fun buy_item<TItem: store, TCoin>(
   assert_shop_active(shop);
   assert_listing_matches_shop(shop, item_listing);
   let base_price_usd_cents: u64 = item_listing.base_price_usd_cents;
-  process_purchase<TItem, TCoin>(
-    shop,
+  shop.process_purchase<TItem, TCoin>(
     item_listing,
     accepted_currency,
     price_info_object,
