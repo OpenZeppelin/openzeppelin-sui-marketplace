@@ -47,6 +47,7 @@ import {
   withArtifactsRoot
 } from "../artifacts.ts"
 import type { SuiResolvedConfig } from "../config.ts"
+import { loadSuiConfig } from "../config.ts"
 import { DEFAULT_TX_GAS_BUDGET } from "../constants.ts"
 import {
   buildKeystoreEntry,
@@ -58,9 +59,9 @@ import { resolveChainIdentifier } from "../move-toml.ts"
 import {
   buildMoveEnvironmentFlags,
   buildMovePackage,
-  clearPublishedEntryForNetwork
+  clearPublishedEntryForNetwork,
+  resolveMoveCliEnvironmentName
 } from "../move.ts"
-import { loadSuiConfig } from "../config.ts"
 import { publishPackageWithLog } from "../publish.ts"
 import { createSuiClient } from "../sui-client.ts"
 import { signAndExecute } from "../transactions.ts"
@@ -1243,49 +1244,34 @@ const listMoveTomlFiles = async (rootDir: string): Promise<string[]> => {
   return files
 }
 
-const ensureLocalnetEnvironmentEntry = async (
-  moveRootPath: string,
+const resolveLocalnetMoveEnvironmentName = () =>
+  resolveMoveCliEnvironmentName("localnet") ?? "test-publish"
+
+const buildEnvironmentEntryLine = (environmentName: string, chainId: string) =>
+  `${environmentName} = "${chainId}"`
+
+const buildEnvironmentEntryRegex = (environmentName: string) =>
+  new RegExp(`^\\s*${environmentName}\\s*=\\s*"[^"]*"`, "m")
+
+const ensureMoveTomlEnvironmentEntry = async ({
+  moveTomlPath,
+  environmentName,
+  chainId
+}: {
+  moveTomlPath: string
+  environmentName: string
   chainId: string
-) => {
-  const moveTomlFiles = await listMoveTomlFiles(moveRootPath)
-
-  await Promise.all(
-    moveTomlFiles.map(async (moveTomlPath) => {
-      const contents = await readFile(moveTomlPath, "utf8")
-      if (/^\s*\[environments\]\s*$/m.test(contents)) {
-        if (/^\s*localnet\s*=\s*"[^"]*"/m.test(contents)) {
-          return
-        }
-        const updated = contents.replace(
-          /^\s*\[environments\]\s*$/m,
-          `[environments]\nlocalnet = "${chainId}"`
-        )
-        if (updated !== contents) {
-          await writeFile(moveTomlPath, updated, "utf8")
-        }
-        return
-      }
-
-      const suffix = contents.endsWith("\n") ? "" : "\n"
-      const updated = `${contents}${suffix}\n[environments]\nlocalnet = "${chainId}"\n`
-      await writeFile(moveTomlPath, updated, "utf8")
-    })
-  )
-}
-
-const ensureLocalnetEnvironmentEntryForPackage = async (
-  packagePath: string,
-  chainId: string
-) => {
-  const moveTomlPath = path.join(packagePath, "Move.toml")
+}) => {
   const contents = await readFile(moveTomlPath, "utf8")
+  const entryRegex = buildEnvironmentEntryRegex(environmentName)
+  if (entryRegex.test(contents)) return
 
-  if (/^\s*localnet\s*=\s*"[^"]*"/m.test(contents)) return
+  const entryLine = buildEnvironmentEntryLine(environmentName, chainId)
 
   if (/^\s*\[environments\]\s*$/m.test(contents)) {
     const updated = contents.replace(
       /^\s*\[environments\]\s*$/m,
-      `[environments]\nlocalnet = "${chainId}"`
+      `[environments]\n${entryLine}`
     )
     if (updated !== contents) {
       await writeFile(moveTomlPath, updated, "utf8")
@@ -1294,8 +1280,39 @@ const ensureLocalnetEnvironmentEntryForPackage = async (
   }
 
   const suffix = contents.endsWith("\n") ? "" : "\n"
-  const updated = `${contents}${suffix}\n[environments]\nlocalnet = "${chainId}"\n`
+  const updated = `${contents}${suffix}\n[environments]\n${entryLine}\n`
   await writeFile(moveTomlPath, updated, "utf8")
+}
+
+const ensureLocalnetEnvironmentEntry = async (
+  moveRootPath: string,
+  chainId: string
+) => {
+  const moveEnvironmentName = resolveLocalnetMoveEnvironmentName()
+  const moveTomlFiles = await listMoveTomlFiles(moveRootPath)
+
+  await Promise.all(
+    moveTomlFiles.map(async (moveTomlPath) => {
+      await ensureMoveTomlEnvironmentEntry({
+        moveTomlPath,
+        environmentName: moveEnvironmentName,
+        chainId
+      })
+    })
+  )
+}
+
+const ensureLocalnetEnvironmentEntryForPackage = async (
+  packagePath: string,
+  chainId: string
+) => {
+  const moveEnvironmentName = resolveLocalnetMoveEnvironmentName()
+  const moveTomlPath = path.join(packagePath, "Move.toml")
+  await ensureMoveTomlEnvironmentEntry({
+    moveTomlPath,
+    environmentName: moveEnvironmentName,
+    chainId
+  })
 }
 
 const removeMoveBuildArtifacts = async (rootDir: string) => {
