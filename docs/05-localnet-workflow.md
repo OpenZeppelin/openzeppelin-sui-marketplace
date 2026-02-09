@@ -57,7 +57,7 @@ pnpm install
 
 Move environments (localnet/devnet/testnet/mainnet):
 - All Move packages include `[environments]` so `--environment <name>` resolves chain IDs consistently.
-- For localnet, we use `dep-replacements.localnet` to swap Pyth to the mock package without dev-mode flags.
+- For localnet, we use `dep-replacements.test-publish` to swap Pyth to the mock package without dev-mode flags.
 - Chain IDs should match `sui client chain-identifier` for each CLI env. If you regenesis localnet, update its entry:
   ```bash
   sui client switch --env localnet
