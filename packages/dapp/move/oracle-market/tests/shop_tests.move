@@ -4194,12 +4194,6 @@ fun create_shop_rejects_empty_name() {
     abort EAssertFailure
 }
 
-#[test]
-fun bytes_equal_handles_length_mismatch() {
-    assert!(!shop::test_bytes_equal(b"abcd", b"abc"));
-    assert!(shop::test_bytes_equal(b"same", b"same"));
-}
-
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::EListingShopMismatch)]
 fun listing_values_rejects_foreign_shop() {
     let mut ctx = tx_context::new_from_hint(TEST_OWNER, 10002, 0, 0, 0);

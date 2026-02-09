@@ -1909,23 +1909,6 @@ fun burn_discount_ticket(discount_ticket: DiscountTicket) {
     id.delete();
 }
 
-fun bytes_equal(left: &vector<u8>, right: &vector<u8>): bool {
-    if (left.length() != right.length()) {
-        return false
-    };
-    let mut matches = true;
-    let mut i: u64 = 0;
-    left.do_ref!(|value| {
-        if (matches) {
-            if (*value != right[i]) {
-                matches = false;
-            };
-        };
-        i = i + 1;
-    });
-    matches
-}
-
 fun as_u64_from_u8(value: u8): u64 {
     value as u64
 }
@@ -2133,7 +2116,7 @@ macro fun assert_price_info_identity(
     );
     let identifier = price_info::get_price_identifier(&price_info);
     let identifier_bytes = price_identifier::get_bytes(&identifier);
-    assert!(bytes_equal(expected_feed_id, &identifier_bytes), EFeedIdentifierMismatch);
+    assert!(expected_feed_id == identifier_bytes, EFeedIdentifierMismatch);
 }
 
 macro fun assert_currency_not_registered($shop: &Shop, $coin_type: &TypeName) {
@@ -2748,11 +2731,6 @@ public fun test_apply_percent_discount(base_price_usd_cents: u64, bps: u16): u64
         base_price_usd_cents,
         &DiscountRule::Percent { bps },
     )
-}
-
-#[test_only]
-public fun test_bytes_equal(left: vector<u8>, right: vector<u8>): bool {
-    bytes_equal(&left, &right)
 }
 
 #[test_only]
