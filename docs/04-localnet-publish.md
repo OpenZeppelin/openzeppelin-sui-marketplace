@@ -37,7 +37,7 @@ pnpm script move:publish --package-path oracle-market
   an init witness. This is a publish-time side effect, not a runtime admin check, and it demonstrates
   how publish-time data can be anchored to the package.
   Code: `packages/dapp/move/oracle-market/sources/shop.move` (`init`, `package::claim_and_keep`)
-- **Localnet dep replacements**: the Move.toml `dep-replacements.localnet` swaps Pyth to the mock
+- **Localnet dep replacements**: the Move.toml `dep-replacements.test-publish` swaps Pyth to the mock
   package so localnet runs without real oracles.
   Code: `packages/dapp/move/oracle-market/Move.toml`
 - **Localnet regenesis**: localnet state (and object IDs) are tied to its config dir and CLI
@@ -48,7 +48,7 @@ pnpm script move:publish --package-path oracle-market
 1. `packages/dapp/src/scripts/chain/localnet-start.ts` (localnet lifecycle)
 2. `packages/dapp/src/scripts/mock/setup.ts` (mock Pyth + coins)
 3. `packages/dapp/src/scripts/move/publish.ts` (publish and artifacts)
-4. `packages/dapp/move/oracle-market/Move.toml` (dep-replacements.localnet)
+4. `packages/dapp/move/oracle-market/Move.toml` (dep-replacements.test-publish)
 
 **Code spotlight: localnet lifecycle guardrails**
 `packages/dapp/src/scripts/chain/localnet-start.ts`

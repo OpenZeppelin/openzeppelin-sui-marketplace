@@ -33,7 +33,7 @@ To keep localnet-only Move.lock data out of commits, enable the repo hooks (this
 git config --local core.hooksPath .githooks
 ```
 
-This enables a pre-commit hook that strips the `[env.localnet]` block from any staged `Move.lock`.
+This enables a pre-commit hook that strips the `[env.test-publish]` block from any staged `Move.lock`.
 Your working tree may still contain the localnet block; only the commit content is cleaned.
 
 To verify hooks are enabled:
