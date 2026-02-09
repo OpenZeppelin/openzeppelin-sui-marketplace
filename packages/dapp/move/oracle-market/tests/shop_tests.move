@@ -1,12 +1,12 @@
 #[test_only]
 module sui_oracle_market::shop_tests;
 
-use Pyth::i64;
-use Pyth::price;
-use Pyth::price_feed;
-use Pyth::price_identifier;
-use Pyth::price_info;
-use Pyth::pyth;
+use pyth::i64;
+use pyth::price;
+use pyth::price_feed;
+use pyth::price_identifier;
+use pyth::price_info;
+use pyth::pyth;
 use std::type_name;
 use std::unit_test::assert_eq;
 use sui::clock;
@@ -425,10 +425,10 @@ fun add_accepted_currency_records_currency_and_event() {
     assert!(added_len > events_before);
     let added_event = &added_events[added_len - 1];
     assert_eq!(shop::test_accepted_coin_added_shop(added_event), shop::test_shop_id(&shop_obj));
-    assert_eq!(
-        shop::test_accepted_coin_added_id(added_event),
-        object::id_to_address(&accepted_currency_id),
-    );
+    assert_eq!(shop::test_accepted_coin_added_coin_type(added_event), test_coin_type());
+    assert_eq!(shop::test_accepted_coin_added_feed_id(added_event), expected_feed_id);
+    assert_eq!(shop::test_accepted_coin_added_pyth_object_id(added_event), pyth_object_id);
+    assert_eq!(shop::test_accepted_coin_added_decimals(added_event), 9);
 
     test_scenario::return_to_sender(&scn, owner_cap_obj);
     test_scenario::return_shared(shop_obj);
@@ -2135,7 +2135,7 @@ fun create_discount_template_links_listing_and_percent_rule() {
 
     let created_events = event::events_by_type<shop::DiscountTemplateCreatedEvent>();
     assert_eq!(created_events.length(), 1);
-    let created = &created_events[0];
+    let _created = &created_events[0];
 
     shop::test_remove_template(&mut shop, template_id);
     std::unit_test::destroy(template);
@@ -5094,10 +5094,7 @@ fun remove_accepted_currency_emits_removed_event_fields() {
         shop::test_accepted_coin_removed_shop(removed_event),
         shop::test_shop_id(&shared_shop),
     );
-    assert_eq!(
-        shop::test_accepted_coin_removed_id(removed_event),
-        object::id_to_address(&accepted_currency_id),
-    );
+    assert_eq!(shop::test_accepted_coin_removed_coin_type(removed_event), test_coin_type());
 
     test_scenario::return_shared(shared_shop);
     test_scenario::return_shared(accepted_currency);
@@ -5531,7 +5528,7 @@ fun buy_item_emits_events_with_exact_payment_and_zero_change() {
 
     let mints = event::events_by_type<shop::MintingCompletedEvent>();
     assert_eq!(mints.length(), mint_before + 1);
-    let mint = &mints[mints.length() - 1];
+    let _mint = &mints[mints.length() - 1];
 
     test_scenario::return_shared(shared_shop);
     test_scenario::return_shared(accepted_currency);
