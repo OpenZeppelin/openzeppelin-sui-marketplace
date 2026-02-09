@@ -8,7 +8,7 @@ const isStaged = args.has("--staged")
 const isAll = args.has("--all")
 const restoreAfterStage = isStaged && !args.has("--no-restore")
 
-const LOCALNET_SECTION = /\n?\[env\.localnet\][\s\S]*?(?=\n\[|$)/
+const LOCALNET_SECTION = /\n?\[env\.test-publish\][\s\S]*?(?=\n\[|$)/
 
 const getRepoRoot = () => {
   try {
@@ -157,6 +157,6 @@ const main = async () => {
 }
 
 main().catch((error) => {
-  console.error("Failed to strip [env.localnet] from Move.lock:", error)
+  console.error("Failed to strip [env.test-publish] from Move.lock:", error)
   process.exit(1)
 })
