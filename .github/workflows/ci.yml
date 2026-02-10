@@ -115,7 +115,6 @@ jobs:
           if-no-files-found: ignore
 
   move-tests:
-    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 40
     strategy:
@@ -133,7 +132,6 @@ jobs:
           sui move coverage summary --path ./packages/dapp/move/oracle-market --environment test-publish --test
 
   security-audit:
-    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
