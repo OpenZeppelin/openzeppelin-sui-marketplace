@@ -2463,7 +2463,8 @@ public fun test_quote_amount_for_price_info_object(
     max_confidence_ratio_bps: Option<u16>,
     clock: &clock::Clock,
 ): u64 {
-    shop.quote_amount_for_price_info_object(        accepted_currency,
+    shop.quote_amount_for_price_info_object(
+        accepted_currency,
         price_info_object,
         price_usd_cents,
         max_price_age_secs,
