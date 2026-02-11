@@ -47,7 +47,7 @@ This repo assumes you already think in Solidity. The goal here is not to re-teac
 ```move
 public struct ShopOwnerCap has key, store {
   id: obj::UID,
-  shop_address: address,
+  shop_address: ID,
   owner: address,
 }
 

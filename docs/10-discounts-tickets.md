@@ -69,7 +69,7 @@ pnpm script buyer:discount-ticket:list
 entry fun create_discount_template(
   shop: &mut Shop,
   owner_cap: &ShopOwnerCap,
-  applies_to_listing: Option<obj::ID>,
+  applies_to_listing: Option<ID>,
   rule_kind: u8,
   rule_value: u64,
   starts_at: u64,
@@ -80,9 +80,8 @@ entry fun create_discount_template(
   assert_owner_cap(shop, owner_cap);
   let (
     discount_template,
-    _discount_template_id,
+    discount_template_id,
     discount_rule,
-    discount_template_address,
   ) = shop.create_discount_template_core(
     applies_to_listing,
     rule_kind,
@@ -93,10 +92,10 @@ entry fun create_discount_template(
     ctx,
   );
   txf::share_object(discount_template);
-  let shop_address: address = shop_address(shop);
+  let shop_address: ID = shop.id.uid_to_inner();
   event::emit(DiscountTemplateCreatedEvent {
     shop_address,
-    discount_template_id: discount_template_address,
+    discount_template_id,
     rule: discount_rule,
   });
 }

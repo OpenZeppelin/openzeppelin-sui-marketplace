@@ -41,20 +41,20 @@ None. This is a conceptual chapter that builds on earlier examples.
 ```move
 public struct ShopOwnerCap has key, store {
   id: obj::UID,
-  shop_address: address,
+  shop_address: ID,
   owner: address,
 }
 
 public struct DiscountTicket has key, store {
   id: obj::UID,
-  discount_template_id: address,
-  shop_address: address,
-  listing_id: Option<obj::ID>,
+  discount_template_id: ID,
+  shop_address: ID,
+  listing_id: Option<ID>,
   claimer: address,
 }
 
 public struct ItemListingMarker has copy, drop, store {
-  listing_id: obj::ID,
+  listing_id: ID,
 }
 ```
 

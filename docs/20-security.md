@@ -35,7 +35,7 @@ From `assert_owner_cap` in `packages/dapp/move/oracle-market/sources/shop.move`:
 ```move
 fun assert_owner_cap(shop: &Shop, owner_cap: &ShopOwnerCap) {
    assert!(
-      owner_cap.shop_address == obj::uid_to_address(&shop.id),
+      owner_cap.shop_address == shop.id.uid_to_inner(),
       EInvalidOwnerCap,
    );
 }
@@ -67,7 +67,7 @@ From `assert_price_info_identity` in `packages/dapp/move/oracle-market/sources/s
 ```move
 fun assert_price_info_identity(
    expected_feed_id: &vector<u8>,
-   expected_pyth_object_id: &obj::ID,
+   expected_pyth_object_id: &ID,
    price_info_object: &price_info::PriceInfoObject,
 ) {
    let confirmed_price_object = price_info::uid_to_inner(price_info_object);
