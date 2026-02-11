@@ -254,7 +254,7 @@ public struct AcceptedCurrency has key, store {
     feed_id: vector<u8>, // Pyth price feed identifier (32 bytes).
     pyth_object_id: ID, // ID of Pyth PriceInfoObject
     decimals: u8,
-    symbol: vector<u8>,
+    symbol: String,
     max_price_age_secs_cap: u64,
     max_confidence_ratio_bps_cap: u64,
     max_price_status_lag_secs_cap: u64,
@@ -713,7 +713,7 @@ entry fun add_accepted_currency<T>(
 
     let decimals: u8 = coin_registry::decimals(currency);
     assert_supported_decimals!(decimals);
-    let symbol: vector<u8> = string::into_bytes(coin_registry::symbol(currency));
+    let symbol: String = coin_registry::symbol(currency);
     let shop_address: address = shop.id.to_address();
     let age_cap: u64 = resolve_guardrail_cap(
         max_price_age_secs_cap,
@@ -1275,7 +1275,7 @@ fun new_accepted_currency(
     feed_id: vector<u8>,
     pyth_object_id: object::ID,
     decimals: u8,
-    symbol: vector<u8>,
+    symbol: String,
     max_price_age_secs_cap: u64,
     max_confidence_ratio_bps_cap: u64,
     max_price_status_lag_secs_cap: u64,
@@ -2302,7 +2302,7 @@ public fun listing_values(
 public fun accepted_currency_values(
     shop: &Shop,
     accepted_currency: &AcceptedCurrency,
-): (address, TypeName, vector<u8>, object::ID, u8, vector<u8>, u64, u64, u64) {
+): (address, TypeName, vector<u8>, object::ID, u8, String, u64, u64, u64) {
     assert_currency_matches_shop!(shop, accepted_currency);
     (
         accepted_currency.shop_address,
@@ -2524,7 +2524,7 @@ public fun test_accepted_currency_exists(shop: &Shop, accepted_currency_id: obje
 public fun test_accepted_currency_values(
     shop: &Shop,
     accepted_currency: &AcceptedCurrency,
-): (address, TypeName, vector<u8>, object::ID, u8, vector<u8>, u64, u64, u64) {
+): (address, TypeName, vector<u8>, object::ID, u8, String, u64, u64, u64) {
     shop.accepted_currency_values(accepted_currency)
 }
 
