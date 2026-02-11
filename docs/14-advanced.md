@@ -48,7 +48,7 @@ pnpm script buyer:buy --help
   Code: `packages/dapp/move/oracle-market/sources/shop.move` (ShopCreated, PurchaseCompleted)
 - **Object IDs and addresses**: object IDs are addresses (but not every address is an object ID). We
   still convert between `UID` and address forms for events and off-chain tooling via
-  `obj::uid_to_address` and `ID_from_address`.
+  `object::uid_to_address` and `object::id_from_address`.
   Code: `packages/dapp/move/oracle-market/sources/shop.move` (helper functions and events)
 - **Transfers and sharing**: `txf::public_transfer` moves owned resources, and `txf::share_object`
   creates shared objects. This pattern replaces EVM-style factory deployments.
