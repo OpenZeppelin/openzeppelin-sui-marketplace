@@ -92,9 +92,9 @@ entry fun create_discount_template(
     ctx,
   );
   txf::share_object(discount_template);
-  let shop_address = shop.id.uid_to_inner();
+  let shop_id = shop.id.uid_to_inner();
   event::emit(DiscountTemplateCreatedEvent {
-    shop_address,
+    shop_id,
     discount_template_id,
     rule: discount_rule,
   });

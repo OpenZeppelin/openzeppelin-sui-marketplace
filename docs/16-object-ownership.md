@@ -41,13 +41,13 @@ None. This is a conceptual chapter that builds on earlier examples.
 ```move
 public struct ShopOwnerCap has key, store {
   id: obj::UID,
-  shop_address: ID,
+  shop_id: ID,
 }
 
 public struct DiscountTicket has key, store {
   id: obj::UID,
   discount_template_id: ID,
-  shop_address: ID,
+  shop_id: ID,
   listing_id: Option<ID>,
   claimer: address,
 }

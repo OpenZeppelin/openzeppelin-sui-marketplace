@@ -47,7 +47,7 @@ This repo assumes you already think in Solidity. The goal here is not to re-teac
 ```move
 public struct ShopOwnerCap has key, store {
   id: obj::UID,
-  shop_address: ID,
+  shop_id: ID,
 }
 
 public struct Shop has key, store {
@@ -98,7 +98,7 @@ fun create_shop(name: string::String, ctx: &mut tx::TxContext) {
 
   let owner_cap = ShopOwnerCap {
     id: obj::new(ctx),
-    shop_address: shop_address(&shop),
+    shop_id: shop.id.uid_to_inner(),
   };
 
   txf::share_object(shop);
