@@ -26,11 +26,11 @@ const DEFAULT_SHOP_NAME: vector<u8> = b"Shop";
 
 // === Test Types ===
 /// Test coin used in unit tests.
-public struct TestCoin has key, store { id: object::UID }
+public struct TestCoin has key, store { id: UID }
 /// Alternate test coin used in unit tests.
-public struct AltTestCoin has key, store { id: object::UID }
+public struct AltTestCoin has key, store { id: UID }
 /// Test coin with high decimals to validate precision handling.
-public struct HighDecimalCoin has key, store { id: object::UID }
+public struct HighDecimalCoin has key, store { id: UID }
 /// Test item type used in unit tests.
 public struct TestItem has store {}
 /// Alternate item type used in unit tests.
@@ -38,12 +38,12 @@ public struct OtherItem has store {}
 
 /// Test vehicle object used in unit tests.
 public struct Car has key, store {
-    id: object::UID,
+    id: UID,
 }
 
 /// Test vehicle object used in unit tests.
 public struct Bike has key, store {
-    id: object::UID,
+    id: UID,
 }
 
 // === Test Fixtures ===
@@ -62,7 +62,7 @@ fun sample_price(): price::Price {
 fun create_price_info_object_for_feed(
     feed_id: vector<u8>,
     ctx: &mut tx_context::TxContext,
-): (price_info::PriceInfoObject, object::ID) {
+): (price_info::PriceInfoObject, ID) {
     create_price_info_object_for_feed_with_price(feed_id, sample_price(), ctx)
 }
 
@@ -70,7 +70,7 @@ fun create_price_info_object_for_feed_with_price(
     feed_id: vector<u8>,
     price: price::Price,
     ctx: &mut tx_context::TxContext,
-): (price_info::PriceInfoObject, object::ID) {
+): (price_info::PriceInfoObject, ID) {
     create_price_info_object_for_feed_with_price_and_times(
         feed_id,
         price,
@@ -86,7 +86,7 @@ fun create_price_info_object_for_feed_with_price_and_times(
     attestation_time: u64,
     arrival_time: u64,
     ctx: &mut tx_context::TxContext,
-): (price_info::PriceInfoObject, object::ID) {
+): (price_info::PriceInfoObject, ID) {
     let price_identifier = price_identifier::from_byte_vec(feed_id);
     let price_feed = price_feed::new(price_identifier, price, price);
     let price_info = price_info::new_price_info(
@@ -108,7 +108,7 @@ fun add_currency_with_feed<T>(
     feed_id: vector<u8>,
     owner_cap: &shop::ShopOwnerCap,
     ctx: &mut tx_context::TxContext,
-): object::ID {
+): ID {
     let (price_info_object, price_info_id) = create_price_info_object_for_feed(
         feed_id,
         ctx,
@@ -5075,7 +5075,7 @@ fun setup_shop_with_currency_listing_and_price_info(
     scn: &mut test_scenario::Scenario,
     base_price_usd_cents: u64,
     stock: u64,
-): (object::ID, object::ID, object::ID, object::ID) {
+): (ID, ID, ID, ID) {
     let currency = prepare_test_currency_for_owner(scn, TEST_OWNER);
 
     let (mut shop_obj, owner_cap) = shop::test_setup_shop(
@@ -5126,7 +5126,7 @@ fun setup_shop_with_currency_listing_and_price_info_for_item<TItem: store>(
     item_name: vector<u8>,
     base_price_usd_cents: u64,
     stock: u64,
-): (object::ID, object::ID, object::ID, object::ID) {
+): (ID, ID, ID, ID) {
     let currency = prepare_test_currency_for_owner(scn, TEST_OWNER);
 
     let (mut shop_obj, owner_cap) = shop::test_setup_shop(
@@ -6826,7 +6826,7 @@ fun create_discount_template(
     shop: &mut shop::Shop,
     _owner_cap: &shop::ShopOwnerCap,
     ctx: &mut tx_context::TxContext,
-): (shop::DiscountTemplate, object::ID) {
+): (shop::DiscountTemplate, ID) {
     shop::test_create_discount_template_local(
         shop,
         option::none(),
