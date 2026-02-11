@@ -1025,7 +1025,7 @@ public fun claim_discount_ticket_inline(
         ctx,
     );
 
-    discount_template.record_discount_claim(claimer, ctx);
+    discount_template.record_discount_claim(claimer);
     discount_ticket
 }
 
@@ -2450,7 +2450,8 @@ public fun test_quote_amount_for_price_info_object(
     max_confidence_ratio_bps: Option<u64>,
     clock: &clock::Clock,
 ): u64 {
-    shop.quote_amount_for_price_info_object(        accepted_currency,
+    shop.quote_amount_for_price_info_object(
+        accepted_currency,
         price_info_object,
         price_usd_cents,
         max_price_age_secs,
