@@ -16,7 +16,7 @@ rev = "sui/testnet"
 addr_substitutions = { wormhole = "0xf47329f4344f3bf0f8e436e2f7b485466cff300f12a166563995d3888c296a94" }
 
 [environments]
-test-publish = "52911988"
+test-publish = "53417c5d"
 testnet_beta = "4c78adac"
 
 [dep-replacements.test-publish]
