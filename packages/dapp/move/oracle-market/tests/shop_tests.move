@@ -5249,10 +5249,7 @@ fun buy_item_emits_events_decrements_stock_and_refunds_change() {
     assert_eq!(shop::test_purchase_completed_quote_amount(purchase), quote_amount);
     assert_eq!(shop::test_purchase_completed_discounted_price(purchase), 100);
     assert_eq!(shop::test_purchase_completed_base_price_usd_cents(purchase), 100);
-    assert_eq!(
-        shop::test_purchase_completed_accepted_currency_id(purchase),
-        accepted_currency_id,
-    );
+    assert_eq!(shop::test_purchase_completed_accepted_currency_id(purchase), accepted_currency_id);
     assert_eq!(shop::test_purchase_completed_feed_id(purchase), PRIMARY_FEED_ID);
     assert!(option::is_none(&shop::test_purchase_completed_discount_template_id(purchase)));
 

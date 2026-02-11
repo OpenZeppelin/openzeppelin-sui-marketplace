@@ -818,41 +818,6 @@ fun create_discount_template_core(
     (discount_template, discount_template_id, discount_rule)
 }
 
-fun create_discount_template_shared_core(
-    shop: &mut Shop,
-    applies_to_listing: Option<object::ID>,
-    rule_kind: u8,
-    rule_value: u64,
-    starts_at: u64,
-    expires_at: Option<u64>,
-    max_redemptions: Option<u64>,
-    ctx: &mut TxContext,
-): (object::ID, DiscountRule) {
-    validate_discount_template_inputs!(shop, &applies_to_listing, starts_at, &expires_at);
-
-    let discount_rule_kind = parse_rule_kind(rule_kind);
-    let discount_rule = discount_rule_kind.build_discount_rule(rule_value);
-    let shop_address = shop.id.uid_to_inner();
-    let discount_template = DiscountTemplate {
-        id: object::new(ctx),
-        shop_address,
-        applies_to_listing,
-        rule: discount_rule,
-        starts_at,
-        expires_at,
-        max_redemptions,
-        claims_issued: 0,
-        redemptions: 0,
-        active: true,
-    };
-    let discount_template_id = discount_template.id.uid_to_inner();
-
-    shop.add_template_marker(discount_template_id, applies_to_listing);
-    transfer::share_object(discount_template);
-
-    (discount_template_id, discount_rule)
-}
-
 /// Create a discount template anchored under the shop.
 ///
 /// Templates are shared configuration objects indexed by a marker under the shop; admin entry
@@ -884,7 +849,7 @@ entry fun create_discount_template(
     ctx: &mut TxContext,
 ) {
     assert_owner_cap!(shop, owner_cap);
-    let (discount_template_id, discount_rule) = shop.create_discount_template_shared_core(
+    let (discount_template, discount_template_id, discount_rule) = shop.create_discount_template_core(
         applies_to_listing,
         rule_kind,
         rule_value,
@@ -893,6 +858,8 @@ entry fun create_discount_template(
         max_redemptions,
         ctx,
     );
+
+    transfer::share_object(discount_template);
 
     let shop_address = shop.id.uid_to_inner();
     event::emit(DiscountTemplateCreatedEvent {
