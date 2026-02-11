@@ -36,17 +36,13 @@ entry fun create_shop(name: string::String, ctx: &mut TxContext) {
     owner,
     disabled: false,
   };
-  let shop_id = object::uid_to_address(&shop.id);
+  let shop_id = shop.id.uid_to_address();
   let owner_cap = ShopOwnerCap { id: object::new(ctx), shop_id };
-  let owner_cap_id = object::uid_to_address(&owner_cap.id);
+  let owner_cap_id = owner_cap.id.uid_to_address();
 
   transfer::share_object(shop);
   transfer::transfer(owner_cap, owner);
-  event::emit(ShopCreatedEvent {
-    shop_id,
-    shop_owner_cap_id: owner_cap_id,
-    owner,
-  });
+  event::emit(ShopCreatedEvent { shop_id, shop_owner_cap_id: owner_cap_id, owner });
 }
 
 entry fun update_shop_owner(
@@ -54,9 +50,10 @@ entry fun update_shop_owner(
   owner_cap: ShopOwnerCap,
   new_owner: address,
 ) {
-  let shop_id = object::uid_to_address(&shop.id);
+  let shop_id = shop.id.uid_to_address();
   assert!(owner_cap.shop_id == shop_id, EInvalidOwnerCap);
   shop.owner = new_owner;
   transfer::transfer(owner_cap, new_owner);
   event::emit(ShopOwnerUpdatedEvent { shop_id, new_owner });
 }
+
