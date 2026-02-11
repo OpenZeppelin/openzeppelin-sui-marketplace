@@ -849,7 +849,11 @@ entry fun create_discount_template(
     ctx: &mut TxContext,
 ) {
     assert_owner_cap!(shop, owner_cap);
-    let (discount_template, discount_template_id, discount_rule) = shop.create_discount_template_core(
+    let (
+        discount_template,
+        discount_template_id,
+        discount_rule,
+    ) = shop.create_discount_template_core(
         applies_to_listing,
         rule_kind,
         rule_value,
