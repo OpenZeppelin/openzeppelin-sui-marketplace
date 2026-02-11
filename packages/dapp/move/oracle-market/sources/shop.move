@@ -217,7 +217,7 @@ public struct Shop has key, store {
 
 /// Item listing metadata keyed under the shared `Shop`, used to mint specific items on purchase.
 /// Discounts can be attached to highlight promotions in the UI.
-public struct ItemListing has key, store {
+public struct ItemListing has key {
     id: UID,
     shop_address: address,
     item_type: TypeName,
@@ -231,7 +231,7 @@ public struct ItemListing has key, store {
 public struct ItemListingKey(ID) has copy, drop, store;
 
 /// Marker stored under the shop to record listing membership.
-public struct ItemListingMarker has copy, drop, store {
+public struct ItemListingMarker has drop, store {
     listing_id: ID,
 }
 
@@ -247,7 +247,7 @@ public struct ShopItem<phantom TItem> has key, store {
 }
 
 /// Defines which external coins the shop is able to price/accept.
-public struct AcceptedCurrency has key, store {
+public struct AcceptedCurrency has key {
     id: UID,
     shop_address: address,
     coin_type: TypeName,
@@ -267,7 +267,7 @@ public struct AcceptedCurrencyKey(ID) has copy, drop, store;
 public struct AcceptedCurrencyTypeKey(TypeName) has copy, drop, store;
 
 /// Marker stored under the shop to record accepted currency membership.
-public struct AcceptedCurrencyMarker has copy, drop, store {
+public struct AcceptedCurrencyMarker has drop, store {
     accepted_currency_id: ID,
     coin_type: TypeName,
 }
@@ -285,7 +285,7 @@ public enum DiscountRuleKind has copy, drop {
 }
 
 /// Coupon template for creating discounts tracked under the shop.
-public struct DiscountTemplate has key, store {
+public struct DiscountTemplate has key {
     id: UID,
     shop_address: address,
     applies_to_listing: Option<ID>,
@@ -302,7 +302,7 @@ public struct DiscountTemplate has key, store {
 public struct DiscountTemplateKey(ID) has copy, drop, store;
 
 /// Marker stored under the shop to record template membership.
-public struct DiscountTemplateMarker has copy, drop, store {
+public struct DiscountTemplateMarker has drop, store {
     template_id: ID,
     applies_to_listing: Option<ID>,
 }
@@ -322,10 +322,7 @@ public struct DiscountTicket has key, store {
 public struct DiscountClaimKey(address) has copy, drop, store;
 
 /// Tracks which addresses already claimed a discount from a template.
-public struct DiscountClaim has key, store {
-    id: UID,
-    claimer: address,
-}
+public struct DiscountClaim(address) has drop, store;
 
 // === Event Definitions ===
 /// Event emitted when a shop is created.
@@ -1024,7 +1021,8 @@ public fun claim_discount_ticket_inline(
         claimer,
         ctx,
     );
-    discount_template.record_discount_claim(claimer, ctx);
+
+    discount_template.record_discount_claim(claimer);
     discount_ticket
 }
 
@@ -1363,17 +1361,14 @@ fun new_discount_ticket(
     }
 }
 
-fun record_discount_claim(template: &mut DiscountTemplate, claimer: address, ctx: &mut TxContext) {
+fun record_discount_claim(template: &mut DiscountTemplate, claimer: address) {
     // Track issued tickets; actual uses are counted at redemption time.
     template.claims_issued = template.claims_issued + 1;
 
     dynamic_field::add(
         &mut template.id,
         DiscountClaimKey(claimer),
-        DiscountClaim {
-            id: object::new(ctx),
-            claimer,
-        },
+        DiscountClaim(claimer),
     );
 }
 
@@ -1384,11 +1379,10 @@ fun remove_discount_claim_if_exists(template: &mut DiscountTemplate, claimer: ad
             DiscountClaimKey(claimer),
         )
     ) {
-        let DiscountClaim { id, .. } = dynamic_field::remove(
+        let _claim: DiscountClaim = dynamic_field::remove(
             &mut template.id,
             DiscountClaimKey(claimer),
         );
-        id.delete();
     };
 }
 
