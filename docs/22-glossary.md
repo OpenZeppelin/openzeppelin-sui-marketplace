@@ -30,7 +30,7 @@
 `packages/dapp/move/oracle-market/sources/shop.move`
 ```move
 public struct Shop has key, store {
-  id: obj::UID,
+  id: UID,
   owner: address,
   name: string::String,
   disabled: bool,

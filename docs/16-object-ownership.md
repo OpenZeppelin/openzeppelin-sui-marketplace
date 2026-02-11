@@ -40,12 +40,12 @@ None. This is a conceptual chapter that builds on earlier examples.
 `packages/dapp/move/oracle-market/sources/shop.move`
 ```move
 public struct ShopOwnerCap has key, store {
-  id: obj::UID,
+  id: UID,
   shop_id: ID,
 }
 
 public struct DiscountTicket has key, store {
-  id: obj::UID,
+  id: UID,
   discount_template_id: ID,
   shop_id: ID,
   listing_id: Option<ID>,

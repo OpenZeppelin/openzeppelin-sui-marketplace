@@ -46,12 +46,12 @@ This repo assumes you already think in Solidity. The goal here is not to re-teac
 `packages/dapp/move/oracle-market/sources/shop.move`
 ```move
 public struct ShopOwnerCap has key, store {
-  id: obj::UID,
+  id: UID,
   shop_id: ID,
 }
 
 public struct Shop has key, store {
-  id: obj::UID,
+  id: UID,
   owner: address,
   name: string::String,
   disabled: bool,
