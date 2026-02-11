@@ -94,10 +94,10 @@ await publishPackageToNetwork(
 `packages/dapp/move/oracle-market/sources/shop.move`
 ```move
 fun create_shop(name: string::String, ctx: &mut tx::TxContext) {
-  let owner: address = ctx.sender();
-  let shop: Shop = new_shop(name, owner, ctx);
+  let owner = ctx.sender();
+  let shop = new_shop(name, owner, ctx);
 
-  let owner_cap: ShopOwnerCap = ShopOwnerCap {
+  let owner_cap = ShopOwnerCap {
     id: obj::new(ctx),
     shop_address: shop_address(&shop),
     owner,

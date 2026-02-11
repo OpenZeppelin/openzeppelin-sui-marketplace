@@ -92,7 +92,7 @@ entry fun create_discount_template(
     ctx,
   );
   txf::share_object(discount_template);
-  let shop_address: ID = shop.id.uid_to_inner();
+  let shop_address = shop.id.uid_to_inner();
   event::emit(DiscountTemplateCreatedEvent {
     shop_address,
     discount_template_id,
@@ -112,7 +112,7 @@ entry fun claim_discount_ticket(
 ): () {
   assert_shop_active(shop);
   assert_template_matches_shop(shop, discount_template);
-  let now_secs: u64 = now_secs(clock);
+  let now_secs = now_secs(clock);
   let (discount_ticket, claimer) = discount_template.claim_discount_ticket_with_event(
     now_secs,
     ctx,

@@ -473,10 +473,10 @@ public struct MintingCompletedEvent has copy, drop {
 ///   State is sharded into per-object locks so PTBs only touch the listing/template/currency they
 ///   mutate instead of contending on a monolithic storage map as in Solidity.
 entry fun create_shop(name: String, ctx: &mut TxContext) {
-    let owner: address = ctx.sender();
-    let shop: Shop = new_shop(name, owner, ctx);
+    let owner = ctx.sender();
+    let shop = new_shop(name, owner, ctx);
 
-    let owner_cap: ShopOwnerCap = ShopOwnerCap {
+    let owner_cap = ShopOwnerCap {
         id: object::new(ctx),
         shop_address: shop.id.uid_to_inner(),
         owner,
@@ -521,7 +521,7 @@ entry fun update_shop_owner(
 ) {
     assert_owner_cap!(shop, owner_cap);
 
-    let previous_owner: address = shop.owner;
+    let previous_owner = shop.owner;
     shop.owner = new_owner;
     owner_cap.owner = new_owner;
 
@@ -567,7 +567,7 @@ fun add_item_listing_core<T: store>(
         &spotlight_discount_template_id,
     );
 
-    let shop_address: object::ID = shop.id.uid_to_inner();
+    let shop_address = shop.id.uid_to_inner();
     let (listing, listing_id) = new_item_listing<T>(
         shop_address,
         name,
@@ -711,11 +711,11 @@ entry fun add_accepted_currency<T>(
         price_info_object,
     );
 
-    let decimals: u8 = coin_registry::decimals(currency);
+    let decimals = coin_registry::decimals(currency);
     assert_supported_decimals!(decimals);
-    let symbol: vector<u8> = string::into_bytes(coin_registry::symbol(currency));
-    let shop_address: object::ID = shop.id.uid_to_inner();
-    let age_cap: u64 = resolve_guardrail_cap(
+    let symbol = string::into_bytes(coin_registry::symbol(currency));
+    let shop_address = shop.id.uid_to_inner();
+    let age_cap = resolve_guardrail_cap(
         max_price_age_secs_cap,
         MAX_PRICE_AGE_SECS_CAP,
     );
@@ -805,9 +805,9 @@ fun create_discount_template_core(
 ): (DiscountTemplate, object::ID, DiscountRule) {
     validate_discount_template_inputs!(shop, &applies_to_listing, starts_at, &expires_at);
 
-    let discount_rule_kind: DiscountRuleKind = parse_rule_kind(rule_kind);
-    let discount_rule: DiscountRule = discount_rule_kind.build_discount_rule(rule_value);
-    let shop_address: object::ID = shop.id.uid_to_inner();
+    let discount_rule_kind = parse_rule_kind(rule_kind);
+    let discount_rule = discount_rule_kind.build_discount_rule(rule_value);
+    let shop_address = shop.id.uid_to_inner();
     let (discount_template, discount_template_id) = new_discount_template(
         shop_address,
         applies_to_listing,
@@ -833,10 +833,10 @@ fun create_discount_template_shared_core(
 ): (object::ID, DiscountRule) {
     validate_discount_template_inputs!(shop, &applies_to_listing, starts_at, &expires_at);
 
-    let discount_rule_kind: DiscountRuleKind = parse_rule_kind(rule_kind);
-    let discount_rule: DiscountRule = discount_rule_kind.build_discount_rule(rule_value);
-    let shop_address: object::ID = shop.id.uid_to_inner();
-    let discount_template: DiscountTemplate = DiscountTemplate {
+    let discount_rule_kind = parse_rule_kind(rule_kind);
+    let discount_rule = discount_rule_kind.build_discount_rule(rule_value);
+    let shop_address = shop.id.uid_to_inner();
+    let discount_template = DiscountTemplate {
         id: object::new(ctx),
         shop_address,
         applies_to_listing,
@@ -848,7 +848,7 @@ fun create_discount_template_shared_core(
         redemptions: 0,
         active: true,
     };
-    let discount_template_id: object::ID = discount_template.id.uid_to_inner();
+    let discount_template_id = discount_template.id.uid_to_inner();
 
     shop.add_template_marker(discount_template_id, applies_to_listing);
     transfer::share_object(discount_template);
@@ -897,7 +897,7 @@ entry fun create_discount_template(
         ctx,
     );
 
-    let shop_address: object::ID = shop.id.uid_to_inner();
+    let shop_address = shop.id.uid_to_inner();
     event::emit(DiscountTemplateCreatedEvent {
         shop_address,
         discount_template_id: discount_template_id,
@@ -924,9 +924,9 @@ entry fun update_discount_template(
     assert_template_matches_shop!(shop, discount_template);
     assert_schedule!(starts_at, &expires_at);
 
-    let discount_rule_kind: DiscountRuleKind = parse_rule_kind(rule_kind);
-    let discount_rule: DiscountRule = discount_rule_kind.build_discount_rule(rule_value);
-    let now: u64 = now_secs(clock);
+    let discount_rule_kind = parse_rule_kind(rule_kind);
+    let discount_rule = discount_rule_kind.build_discount_rule(rule_value);
+    let now = now_secs(clock);
     assert_template_updatable!(discount_template, now);
 
     discount_template.apply_discount_template_updates(
@@ -1023,7 +1023,7 @@ entry fun claim_discount_ticket(
     assert_shop_active!(shop);
     assert_template_matches_shop!(shop, discount_template);
 
-    let now_secs: u64 = now_secs(clock);
+    let now_secs = now_secs(clock);
     let (discount_ticket, claimer) = discount_template.claim_discount_ticket_with_event(
         now_secs,
         ctx,
@@ -1044,7 +1044,7 @@ public fun claim_discount_ticket_inline(
     let claimer = ctx.sender();
     assert_template_claimable!(discount_template, claimer, now_secs);
 
-    let discount_ticket: DiscountTicket = new_discount_ticket(
+    let discount_ticket = new_discount_ticket(
         discount_template,
         claimer,
         ctx,
@@ -1124,7 +1124,7 @@ entry fun buy_item<TItem: store, TCoin>(
 ) {
     assert_shop_active!(shop);
     assert_listing_matches_shop!(shop, item_listing);
-    let base_price_usd_cents: u64 = item_listing.base_price_usd_cents;
+    let base_price_usd_cents = item_listing.base_price_usd_cents;
     // Payment is a Coin<T> object; process_purchase splits the payment and returns change.
     let (owed_coin_opt, change_coin, minted_item) = shop.process_purchase<TItem, TCoin>(
         item_listing,
@@ -1308,7 +1308,7 @@ fun new_accepted_currency(
 ): (AcceptedCurrency, object::ID) {
     assert_supported_decimals!(decimals);
 
-    let accepted_currency: AcceptedCurrency = AcceptedCurrency {
+    let accepted_currency = AcceptedCurrency {
         id: object::new(ctx),
         shop_address,
         coin_type,
@@ -1320,7 +1320,7 @@ fun new_accepted_currency(
         max_confidence_ratio_bps_cap,
         max_price_status_lag_secs_cap,
     };
-    let accepted_currency_id: object::ID = accepted_currency.id.uid_to_inner();
+    let accepted_currency_id = accepted_currency.id.uid_to_inner();
 
     (accepted_currency, accepted_currency_id)
 }
@@ -1333,7 +1333,7 @@ fun new_item_listing<T: store>(
     spotlight_discount_template_id: Option<object::ID>,
     ctx: &mut TxContext,
 ): (ItemListing, object::ID) {
-    let listing: ItemListing = ItemListing {
+    let listing = ItemListing {
         id: object::new(ctx),
         shop_address,
         item_type: type_name::with_defining_ids<T>(),
@@ -1342,7 +1342,7 @@ fun new_item_listing<T: store>(
         stock,
         spotlight_discount_template_id,
     };
-    let listing_id: object::ID = listing.id.uid_to_inner();
+    let listing_id = listing.id.uid_to_inner();
 
     (listing, listing_id)
 }
@@ -1356,7 +1356,7 @@ fun new_discount_template(
     max_redemptions: Option<u64>,
     ctx: &mut TxContext,
 ): (DiscountTemplate, object::ID) {
-    let discount_template: DiscountTemplate = DiscountTemplate {
+    let discount_template = DiscountTemplate {
         id: object::new(ctx),
         shop_address,
         applies_to_listing,
@@ -1369,7 +1369,7 @@ fun new_discount_template(
         active: true,
     };
 
-    let discount_template_id: object::ID = discount_template.id.uid_to_inner();
+    let discount_template_id = discount_template.id.uid_to_inner();
 
     (discount_template, discount_template_id)
 }
@@ -1600,7 +1600,7 @@ fun quote_amount_with_guardrails(
     let now = now_secs(clock);
     assert!(now >= publish_time, EPriceTooStale);
     assert!(now - publish_time <= effective_max_age, EPriceTooStale);
-    let price: price::Price = pyth::get_price_no_older_than(
+    let price = pyth::get_price_no_older_than(
         price_info_object,
         clock,
         effective_max_age,
@@ -1670,7 +1670,7 @@ fun process_purchase_core<TItem: store, TCoin>(
     );
     assert_payment_coin_type!<TCoin>(accepted_currency);
     assert_stock_available!(item_listing);
-    let quote_amount: u64 = accepted_currency.quote_amount_with_guardrails(
+    let quote_amount = accepted_currency.quote_amount_with_guardrails(
         price_info_object,
         discounted_price_usd_cents,
         max_price_age_secs,
@@ -1680,7 +1680,7 @@ fun process_purchase_core<TItem: store, TCoin>(
 
     let owed_coin_opt = split_payment(&mut payment, quote_amount, ctx);
 
-    let buyer: address = ctx.sender();
+    let buyer = ctx.sender();
     let change_amount = payment.value();
 
     item_listing.decrement_stock();

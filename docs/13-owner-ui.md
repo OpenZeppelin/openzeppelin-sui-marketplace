@@ -69,7 +69,7 @@ entry fun update_shop_owner(
 ) {
   assert_owner_cap(shop, owner_cap);
 
-  let previous_owner: address = shop.owner;
+  let previous_owner = shop.owner;
   shop.owner = new_owner;
   owner_cap.owner = new_owner;
 

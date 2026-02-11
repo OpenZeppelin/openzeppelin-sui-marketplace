@@ -241,8 +241,8 @@ fun create_shop_shares_shop_and_transfers_owner_cap() {
     assert_eq!(transferred[&owner_cap_id], TEST_OWNER);
     assert_eq!(test_scenario::num_user_events(&effects), 1);
 
-    let shared_shop: shop::Shop = test_scenario::take_shared_by_id(&scn, shop_id);
-    let owner_cap: shop::ShopOwnerCap = test_scenario::take_from_sender_by_id(
+    let shared_shop = test_scenario::take_shared_by_id(&scn, shop_id);
+    let owner_cap = test_scenario::take_from_sender_by_id(
         &scn,
         owner_cap_id,
     );
@@ -401,7 +401,7 @@ fun add_accepted_currency_records_currency_and_event() {
     let events_before = event::events_by_type<shop::AcceptedCoinAddedEvent>().length();
 
     let mut shop_obj = test_scenario::take_shared_by_id(&scn, shop_id);
-    let owner_cap_obj: shop::ShopOwnerCap = test_scenario::take_from_sender_by_id(
+    let owner_cap_obj = test_scenario::take_from_sender_by_id(
         &scn,
         owner_cap_id,
     );
@@ -493,7 +493,7 @@ fun add_accepted_currency_stores_custom_guardrail_caps() {
     let custom_status_cap = 3;
 
     let mut shop_obj = test_scenario::take_shared_by_id(&scn, shop_id);
-    let owner_cap_obj: shop::ShopOwnerCap = test_scenario::take_from_sender_by_id(
+    let owner_cap_obj = test_scenario::take_from_sender_by_id(
         &scn,
         owner_cap_id,
     );
@@ -556,7 +556,7 @@ fun add_accepted_currency_clamps_guardrail_caps_to_defaults() {
     let over_status_cap = shop::test_default_max_price_status_lag_secs() + 10;
 
     let mut shop_obj = test_scenario::take_shared_by_id(&scn, shop_id);
-    let owner_cap_obj: shop::ShopOwnerCap = test_scenario::take_from_sender_by_id(
+    let owner_cap_obj = test_scenario::take_from_sender_by_id(
         &scn,
         owner_cap_id,
     );
@@ -855,7 +855,7 @@ fun quote_rejects_attestation_lag_above_currency_cap() {
     );
 
     let mut shop_obj = test_scenario::take_shared_by_id(&scn, shop_id);
-    let owner_cap_obj: shop::ShopOwnerCap = test_scenario::take_from_sender_by_id(
+    let owner_cap_obj = test_scenario::take_from_sender_by_id(
         &scn,
         owner_cap_id,
     );
@@ -927,7 +927,7 @@ fun quote_rejects_price_timestamp_older_than_max_age() {
     );
 
     let mut shop_obj = test_scenario::take_shared_by_id(&scn, shop_id);
-    let owner_cap_obj: shop::ShopOwnerCap = test_scenario::take_from_sender_by_id(
+    let owner_cap_obj = test_scenario::take_from_sender_by_id(
         &scn,
         owner_cap_id,
     );
@@ -989,7 +989,7 @@ fun remove_accepted_currency_removes_state_and_emits_event() {
     let _removed_before = event::events_by_type<shop::AcceptedCoinRemovedEvent>().length();
 
     let mut shop_obj = test_scenario::take_shared_by_id(&scn, shop_id);
-    let owner_cap_obj: shop::ShopOwnerCap = test_scenario::take_from_sender_by_id(
+    let owner_cap_obj = test_scenario::take_from_sender_by_id(
         &scn,
         owner_cap_id,
     );
@@ -1053,7 +1053,7 @@ fun remove_accepted_currency_rejects_foreign_owner_cap() {
     let wrong_cap_id = shop::test_shop_created_owner_cap_id(other_created);
 
     let _ = test_scenario::next_tx(&mut scn, TEST_OWNER);
-    let owner_cap_obj: shop::ShopOwnerCap = test_scenario::take_from_sender_by_id(
+    let owner_cap_obj = test_scenario::take_from_sender_by_id(
         &scn,
         owner_cap_id,
     );
@@ -1085,7 +1085,7 @@ fun remove_accepted_currency_rejects_foreign_owner_cap() {
 
     let _ = test_scenario::next_tx(&mut scn, OTHER_OWNER);
 
-    let wrong_cap: shop::ShopOwnerCap = test_scenario::take_from_sender_by_id(
+    let wrong_cap = test_scenario::take_from_sender_by_id(
         &scn,
         wrong_cap_id,
     );
@@ -1129,7 +1129,7 @@ fun remove_accepted_currency_rejects_missing_id() {
         &scn,
         other_shop_id,
     );
-    let other_owner_cap_obj: shop::ShopOwnerCap = test_scenario::take_from_sender_by_id(
+    let other_owner_cap_obj = test_scenario::take_from_sender_by_id(
         &scn,
         other_owner_cap_id,
     );
@@ -1153,7 +1153,7 @@ fun remove_accepted_currency_rejects_missing_id() {
     transfer::public_share_object(price_info_object);
 
     let _ = test_scenario::next_tx(&mut scn, TEST_OWNER);
-    let owner_cap_obj: shop::ShopOwnerCap = test_scenario::take_from_sender_by_id(
+    let owner_cap_obj = test_scenario::take_from_sender_by_id(
         &scn,
         owner_cap_id,
     );
@@ -1187,7 +1187,7 @@ fun remove_accepted_currency_handles_missing_type_mapping() {
     );
 
     let mut shop_obj = test_scenario::take_shared_by_id(&scn, shop_id);
-    let owner_cap: shop::ShopOwnerCap = test_scenario::take_from_sender_by_id(
+    let owner_cap = test_scenario::take_from_sender_by_id(
         &scn,
         owner_cap_id,
     );
@@ -1254,7 +1254,7 @@ fun remove_accepted_currency_rejects_mismatched_type_mapping() {
     );
 
     let mut shop_obj = test_scenario::take_shared_by_id(&scn, shop_id);
-    let owner_cap: shop::ShopOwnerCap = test_scenario::take_from_sender_by_id(
+    let owner_cap = test_scenario::take_from_sender_by_id(
         &scn,
         owner_cap_id,
     );
@@ -1333,7 +1333,7 @@ fun quote_view_matches_internal_math() {
     );
 
     let mut shop_obj = test_scenario::take_shared_by_id(&scn, shop_id);
-    let owner_cap_obj: shop::ShopOwnerCap = test_scenario::take_from_sender_by_id(
+    let owner_cap_obj = test_scenario::take_from_sender_by_id(
         &scn,
         owner_cap_id,
     );
@@ -1363,13 +1363,13 @@ fun quote_view_matches_internal_math() {
         &scn,
         accepted_currency_id,
     );
-    let price_info_obj: price_info::PriceInfoObject = test_scenario::take_shared_by_id(
+    let price_info_obj = test_scenario::take_shared_by_id(
         &scn,
         price_info_id,
     );
     let mut clock_obj = clock::create_for_testing(test_scenario::ctx(&mut scn));
     clock::set_for_testing(&mut clock_obj, 1);
-    let price_usd_cents: u64 = 10_000;
+    let price_usd_cents = 10_000;
     let (_, _, _, _, decimals, _, _, _, _) = shop::test_accepted_currency_values(
         &shared_shop,
         &accepted_currency,
@@ -1416,7 +1416,7 @@ fun quote_amount_rejects_overflow_before_runtime_abort() {
         i64::new(0, false),
         0,
     );
-    let max_usd_cents: u64 = 18_446_744_073_709_551_615;
+    let max_usd_cents = 18_446_744_073_709_551_615;
 
     shop::test_quote_amount_from_usd_cents(
         max_usd_cents,
@@ -1445,7 +1445,7 @@ fun quote_view_rejects_mismatched_price_info_object() {
     );
 
     let mut shop_obj = test_scenario::take_shared_by_id(&scn, shop_id);
-    let owner_cap_obj: shop::ShopOwnerCap = test_scenario::take_from_sender_by_id(
+    let owner_cap_obj = test_scenario::take_from_sender_by_id(
         &scn,
         owner_cap_id,
     );
@@ -1498,7 +1498,7 @@ fun quote_view_rejects_mismatched_price_info_object() {
 
 #[test]
 fun add_item_listing_stores_metadata() {
-    let mut ctx: tx_context::TxContext = tx_context::dummy();
+    let mut ctx = tx_context::dummy();
     let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
 
     let (listing, listing_id) = shop::test_add_item_listing_local<TestItem>(
@@ -3532,7 +3532,7 @@ fun claim_discount_ticket_mints_transfers_and_records_claim() {
     let _ = test_scenario::next_tx(&mut scn, TEST_OWNER);
 
     let mut shop_obj = test_scenario::take_shared_by_id(&scn, shop_id);
-    let owner_cap: shop::ShopOwnerCap = test_scenario::take_from_sender_by_id(
+    let owner_cap = test_scenario::take_from_sender_by_id(
         &scn,
         owner_cap_id,
     );
@@ -3869,7 +3869,7 @@ fun claim_and_buy_rejects_second_claim_after_redeem() {
     let _ = test_scenario::next_tx(&mut scn, @0x0);
 
     let mut shop_obj = test_scenario::take_shared_by_id(&scn, shop_id);
-    let owner_cap: shop::ShopOwnerCap = test_scenario::take_from_sender_by_id(
+    let owner_cap = test_scenario::take_from_sender_by_id(
         &scn,
         owner_cap_id,
     );
@@ -3927,7 +3927,7 @@ fun claim_and_buy_rejects_second_claim_after_redeem() {
     let _ = test_scenario::next_tx(&mut scn, OTHER_OWNER);
 
     let mut shared_shop = test_scenario::take_shared_by_id(&scn, shop_id);
-    let price_info_obj: price_info::PriceInfoObject = test_scenario::take_shared_by_id(
+    let price_info_obj = test_scenario::take_shared_by_id(
         &scn,
         price_info_id,
     );
@@ -3999,7 +3999,7 @@ fun claim_and_buy_item_with_discount_emits_events_and_covers_helpers() {
     );
 
     let mut shop_obj = test_scenario::take_shared_by_id(&scn, shop_id);
-    let owner_cap: shop::ShopOwnerCap = test_scenario::take_from_sender_by_id(
+    let owner_cap = test_scenario::take_from_sender_by_id(
         &scn,
         owner_cap_id,
     );
@@ -4063,7 +4063,7 @@ fun claim_and_buy_item_with_discount_emits_events_and_covers_helpers() {
         &scn,
         template_id,
     );
-    let price_info_obj: price_info::PriceInfoObject = test_scenario::take_shared_by_id(
+    let price_info_obj = test_scenario::take_shared_by_id(
         &scn,
         price_info_id,
     );
@@ -4310,7 +4310,7 @@ fun discount_redemption_without_listing_restriction_allows_zero_price() {
     );
 
     let mut shop_obj = test_scenario::take_shared_by_id(&scn, shop_id);
-    let owner_cap: shop::ShopOwnerCap = test_scenario::take_from_sender_by_id(
+    let owner_cap = test_scenario::take_from_sender_by_id(
         &scn,
         owner_cap_id,
     );
@@ -4373,7 +4373,7 @@ fun discount_redemption_without_listing_restriction_allows_zero_price() {
         &scn,
         template_id,
     );
-    let price_info_obj: price_info::PriceInfoObject = test_scenario::take_shared_by_id(
+    let price_info_obj = test_scenario::take_shared_by_id(
         &scn,
         price_info_id,
     );
@@ -4425,7 +4425,7 @@ fun discount_redemption_rejects_listing_mismatch() {
     );
 
     let mut shop_obj = test_scenario::take_shared_by_id(&scn, shop_id);
-    let owner_cap: shop::ShopOwnerCap = test_scenario::take_from_sender_by_id(
+    let owner_cap = test_scenario::take_from_sender_by_id(
         &scn,
         owner_cap_id,
     );
@@ -4498,7 +4498,7 @@ fun discount_redemption_rejects_listing_mismatch() {
         &scn,
         template_id,
     );
-    let price_info_obj: price_info::PriceInfoObject = test_scenario::take_shared_by_id(
+    let price_info_obj = test_scenario::take_shared_by_id(
         &scn,
         price_info_id,
     );
@@ -4552,7 +4552,7 @@ fun discount_template_maxed_out_by_redemption() {
     );
 
     let mut shop_obj = test_scenario::take_shared_by_id(&scn, shop_id);
-    let owner_cap: shop::ShopOwnerCap = test_scenario::take_from_sender_by_id(
+    let owner_cap = test_scenario::take_from_sender_by_id(
         &scn,
         owner_cap_id,
     );
@@ -4615,7 +4615,7 @@ fun discount_template_maxed_out_by_redemption() {
         &scn,
         template_id,
     );
-    let price_info_obj: price_info::PriceInfoObject = test_scenario::take_shared_by_id(
+    let price_info_obj = test_scenario::take_shared_by_id(
         &scn,
         price_info_id,
     );
@@ -4687,7 +4687,7 @@ fun checkout_rejects_listing_from_other_shop() {
         &scn,
         listing_a_id,
     );
-    let price_info_a: price_info::PriceInfoObject = test_scenario::take_shared_by_id(
+    let price_info_a = test_scenario::take_shared_by_id(
         &scn,
         price_info_a_id,
     );
@@ -4739,7 +4739,7 @@ fun checkout_rejects_currency_from_other_shop() {
         &scn,
         listing_a_id,
     );
-    let price_info_b: price_info::PriceInfoObject = test_scenario::take_shared_by_id(
+    let price_info_b = test_scenario::take_shared_by_id(
         &scn,
         price_info_b_id,
     );
@@ -4775,7 +4775,7 @@ fun price_status_rejects_attestation_before_publish() {
 
     let currency = prepare_test_currency_for_owner(&mut scn, TEST_OWNER);
     let mut shop_obj = test_scenario::take_shared_by_id(&scn, shop_id);
-    let owner_cap_obj: shop::ShopOwnerCap = test_scenario::take_from_sender_by_id(
+    let owner_cap_obj = test_scenario::take_from_sender_by_id(
         &scn,
         owner_cap_id,
     );
@@ -4816,7 +4816,7 @@ fun price_status_rejects_attestation_before_publish() {
         &scn,
         accepted_currency_id,
     );
-    let price_info_obj: price_info::PriceInfoObject = test_scenario::take_shared_by_id(
+    let price_info_obj = test_scenario::take_shared_by_id(
         &scn,
         price_info_id,
     );
@@ -4925,7 +4925,7 @@ fun accepted_currency_values_rejects_foreign_shop() {
         test_scenario::ctx(&mut scn),
     );
     let mut shop_obj = test_scenario::take_shared_by_id(&scn, shop_a_id);
-    let owner_cap_obj: shop::ShopOwnerCap = test_scenario::take_from_sender_by_id(
+    let owner_cap_obj = test_scenario::take_from_sender_by_id(
         &scn,
         owner_cap_a_id,
     );
@@ -4976,7 +4976,7 @@ fun remove_currency_field_clears_mapping() {
     );
 
     let mut shop_obj = test_scenario::take_shared_by_id(&scn, shop_id);
-    let owner_cap_obj: shop::ShopOwnerCap = test_scenario::take_from_sender_by_id(
+    let owner_cap_obj = test_scenario::take_from_sender_by_id(
         &scn,
         owner_cap_id,
     );
@@ -5020,7 +5020,7 @@ fun remove_accepted_currency_emits_removed_event_fields() {
     );
 
     let mut shop_obj = test_scenario::take_shared_by_id(&scn, shop_id);
-    let owner_cap_obj: shop::ShopOwnerCap = test_scenario::take_from_sender_by_id(
+    let owner_cap_obj = test_scenario::take_from_sender_by_id(
         &scn,
         owner_cap_id,
     );
@@ -5049,7 +5049,7 @@ fun remove_accepted_currency_emits_removed_event_fields() {
         &scn,
         accepted_currency_id,
     );
-    let owner_cap: shop::ShopOwnerCap = test_scenario::take_from_sender_by_id(
+    let owner_cap = test_scenario::take_from_sender_by_id(
         &scn,
         owner_cap_id,
     );
@@ -5197,7 +5197,7 @@ fun buy_item_emits_events_decrements_stock_and_refunds_change() {
         &scn,
         listing_id,
     );
-    let price_info_obj: price_info::PriceInfoObject = test_scenario::take_shared_by_id(
+    let price_info_obj = test_scenario::take_shared_by_id(
         &scn,
         price_info_id,
     );
@@ -5313,7 +5313,7 @@ fun buy_item_supports_example_car_receipts() {
         &scn,
         listing_id,
     );
-    let price_info_obj: price_info::PriceInfoObject = test_scenario::take_shared_by_id(
+    let price_info_obj = test_scenario::take_shared_by_id(
         &scn,
         price_info_id,
     );
@@ -5388,7 +5388,7 @@ fun buy_item_supports_example_bike_receipts() {
         &scn,
         listing_id,
     );
-    let price_info_obj: price_info::PriceInfoObject = test_scenario::take_shared_by_id(
+    let price_info_obj = test_scenario::take_shared_by_id(
         &scn,
         price_info_id,
     );
@@ -5458,7 +5458,7 @@ fun buy_item_emits_events_with_exact_payment_and_zero_change() {
         &scn,
         listing_id,
     );
-    let price_info_obj: price_info::PriceInfoObject = test_scenario::take_shared_by_id(
+    let price_info_obj = test_scenario::take_shared_by_id(
         &scn,
         price_info_id,
     );
@@ -5532,7 +5532,7 @@ fun buy_item_rejects_out_of_stock_after_depletion() {
         &scn,
         listing_id,
     );
-    let price_info_obj: price_info::PriceInfoObject = test_scenario::take_shared_by_id(
+    let price_info_obj = test_scenario::take_shared_by_id(
         &scn,
         price_info_id,
     );
@@ -5585,7 +5585,7 @@ fun buy_item_rejects_out_of_stock_after_depletion() {
         &scn,
         listing_id,
     );
-    let price_info_obj: price_info::PriceInfoObject = test_scenario::take_shared_by_id(
+    let price_info_obj = test_scenario::take_shared_by_id(
         &scn,
         price_info_id,
     );
@@ -5677,7 +5677,7 @@ fun buy_item_rejects_price_info_object_id_mismatch() {
         &scn,
         listing_id,
     );
-    let other_price_info_obj: price_info::PriceInfoObject = test_scenario::take_shared_by_id(
+    let other_price_info_obj = test_scenario::take_shared_by_id(
         &scn,
         other_price_info_id,
     );
@@ -5719,7 +5719,7 @@ fun buy_item_with_discount_emits_discount_redeemed_and_records_template_id() {
     );
 
     let mut shop_obj = test_scenario::take_shared_by_id(&scn, shop_id);
-    let owner_cap_obj: shop::ShopOwnerCap = test_scenario::take_from_sender_by_id(
+    let owner_cap_obj = test_scenario::take_from_sender_by_id(
         &scn,
         owner_cap_id,
     );
@@ -5784,7 +5784,7 @@ fun buy_item_with_discount_emits_discount_redeemed_and_records_template_id() {
         &scn,
         template_id,
     );
-    let price_info_obj: price_info::PriceInfoObject = test_scenario::take_shared_by_id(
+    let price_info_obj = test_scenario::take_shared_by_id(
         &scn,
         price_info_id,
     );
@@ -5900,7 +5900,7 @@ fun buy_item_with_discount_rejects_ticket_owner_mismatch() {
     );
 
     let mut shop_obj = test_scenario::take_shared_by_id(&scn, shop_id);
-    let owner_cap_obj: shop::ShopOwnerCap = test_scenario::take_from_sender_by_id(
+    let owner_cap_obj = test_scenario::take_from_sender_by_id(
         &scn,
         owner_cap_id,
     );
@@ -6005,11 +6005,11 @@ fun buy_item_with_discount_rejects_ticket_owner_mismatch() {
         &scn,
         template_id,
     );
-    let price_info_obj: price_info::PriceInfoObject = test_scenario::take_shared_by_id(
+    let price_info_obj = test_scenario::take_shared_by_id(
         &scn,
         price_info_id,
     );
-    let ticket: shop::DiscountTicket = test_scenario::take_from_sender_by_id(
+    let ticket = test_scenario::take_from_sender_by_id(
         &scn,
         ticket_id,
     );
@@ -6061,7 +6061,7 @@ fun buy_item_rejects_insufficient_payment() {
         &scn,
         listing_id,
     );
-    let price_info_obj: price_info::PriceInfoObject = test_scenario::take_shared_by_id(
+    let price_info_obj = test_scenario::take_shared_by_id(
         &scn,
         price_info_id,
     );
@@ -6121,7 +6121,7 @@ fun buy_item_rejects_wrong_coin_type() {
         &scn,
         listing_id,
     );
-    let price_info_obj: price_info::PriceInfoObject = test_scenario::take_shared_by_id(
+    let price_info_obj = test_scenario::take_shared_by_id(
         &scn,
         price_info_id,
     );
@@ -6170,7 +6170,7 @@ fun buy_item_rejects_item_type_mismatch() {
         &scn,
         listing_id,
     );
-    let price_info_obj: price_info::PriceInfoObject = test_scenario::take_shared_by_id(
+    let price_info_obj = test_scenario::take_shared_by_id(
         &scn,
         price_info_id,
     );
@@ -6211,7 +6211,7 @@ fun buy_item_rejects_guardrail_override_above_cap() {
     );
 
     let mut shop_obj = test_scenario::take_shared_by_id(&scn, shop_id);
-    let owner_cap_obj: shop::ShopOwnerCap = test_scenario::take_from_sender_by_id(
+    let owner_cap_obj = test_scenario::take_from_sender_by_id(
         &scn,
         owner_cap_id,
     );
@@ -6263,7 +6263,7 @@ fun buy_item_with_discount_rejects_inactive_template() {
     );
 
     let mut shop_obj = test_scenario::take_shared_by_id(&scn, shop_id);
-    let owner_cap_obj: shop::ShopOwnerCap = test_scenario::take_from_sender_by_id(
+    let owner_cap_obj = test_scenario::take_from_sender_by_id(
         &scn,
         owner_cap_id,
     );
@@ -6373,7 +6373,7 @@ fun buy_item_with_discount_rejects_inactive_template() {
         &scn,
         template_id,
     );
-    let price_info_obj: price_info::PriceInfoObject = test_scenario::take_shared_by_id(
+    let price_info_obj = test_scenario::take_shared_by_id(
         &scn,
         price_info_id,
     );
@@ -6432,7 +6432,7 @@ fun buy_item_with_discount_rejects_ticket_template_mismatch() {
     );
 
     let mut shop_obj = test_scenario::take_shared_by_id(&scn, shop_id);
-    let owner_cap_obj: shop::ShopOwnerCap = test_scenario::take_from_sender_by_id(
+    let owner_cap_obj = test_scenario::take_from_sender_by_id(
         &scn,
         owner_cap_id,
     );
@@ -6514,7 +6514,7 @@ fun buy_item_with_discount_rejects_ticket_template_mismatch() {
         &scn,
         template_b_id,
     );
-    let price_info_obj: price_info::PriceInfoObject = test_scenario::take_shared_by_id(
+    let price_info_obj = test_scenario::take_shared_by_id(
         &scn,
         price_info_id,
     );
@@ -6588,7 +6588,7 @@ fun buy_item_with_discount_rejects_ticket_shop_mismatch() {
     );
 
     let mut shop_a = test_scenario::take_shared_by_id(&scn, shop_a_id);
-    let owner_cap_a: shop::ShopOwnerCap = test_scenario::take_from_sender_by_id(
+    let owner_cap_a = test_scenario::take_from_sender_by_id(
         &scn,
         owner_cap_a_id,
     );
@@ -6634,7 +6634,7 @@ fun buy_item_with_discount_rejects_ticket_shop_mismatch() {
     let template_a_id = shop::test_last_created_id(test_scenario::ctx(&mut scn));
 
     let mut shop_b = test_scenario::take_shared_by_id(&scn, shop_b_id);
-    let owner_cap_b: shop::ShopOwnerCap = test_scenario::take_from_sender_by_id(
+    let owner_cap_b = test_scenario::take_from_sender_by_id(
         &scn,
         owner_cap_b_id,
     );
@@ -6677,7 +6677,7 @@ fun buy_item_with_discount_rejects_ticket_shop_mismatch() {
         &scn,
         template_b_id,
     );
-    let price_info_obj: price_info::PriceInfoObject = test_scenario::take_shared_by_id(
+    let price_info_obj = test_scenario::take_shared_by_id(
         &scn,
         price_info_id,
     );
