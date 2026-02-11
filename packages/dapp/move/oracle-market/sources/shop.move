@@ -677,7 +677,7 @@ entry fun delete_item_listing(
 ) {
     assert_owner_cap!(shop, owner_cap);
     assert_listing_matches_shop!(shop, &item_listing);
-    let item_listing_id = listing_id(&item_listing);
+    let item_listing_id = item_listing.id.uid_to_inner();
     let item_listing_address = object::uid_to_address(&item_listing.id);
     let _marker: ItemListingMarker = dynamic_field::remove(
         &mut shop.id,
@@ -685,7 +685,7 @@ entry fun delete_item_listing(
     );
 
     event::emit(ItemListingRemovedEvent {
-        shop_address: shop_address(shop),
+        shop_address: shop.id.to_address(),
         item_listing_address,
     });
 
@@ -2574,7 +2574,7 @@ public fun test_discount_template_values(
     shop: &Shop,
     template: &DiscountTemplate,
 ): (address, Option<object::ID>, DiscountRule, u64, Option<u64>, Option<u64>, u64, u64, bool) {
-    shop.discount_template_values(shop, template)
+    shop.discount_template_values(template)
 }
 
 #[test_only]
