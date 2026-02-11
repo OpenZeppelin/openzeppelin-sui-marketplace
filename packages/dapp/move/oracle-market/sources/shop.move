@@ -205,7 +205,6 @@ fun init(publisher_witness: SHOP, ctx: &mut TxContext) {
 public struct ShopOwnerCap has key, store {
     id: UID,
     shop_address: address,
-    owner: address, // Cached payout address updated by update_shop_owner; may drift if the cap is transferred.
 }
 
 /// Shared shop that stores item listings to sell, accepted currencies, and discount templates via dynamic fields.
@@ -255,7 +254,7 @@ public struct AcceptedCurrency has key, store {
     feed_id: vector<u8>, // Pyth price feed identifier (32 bytes).
     pyth_object_id: ID, // ID of Pyth PriceInfoObject
     decimals: u8,
-    symbol: vector<u8>,
+    symbol: String,
     max_price_age_secs_cap: u64,
     max_confidence_ratio_bps_cap: u64,
     max_price_status_lag_secs_cap: u64,
@@ -479,7 +478,6 @@ entry fun create_shop(name: String, ctx: &mut TxContext) {
     let owner_cap: ShopOwnerCap = ShopOwnerCap {
         id: object::new(ctx),
         shop_address: shop.id.to_address(),
-        owner,
     };
 
     event::emit(ShopCreatedEvent {
@@ -515,7 +513,7 @@ entry fun disable_shop(shop: &mut Shop, owner_cap: &ShopOwnerCap, ctx: &TxContex
 /// - Buyers never handle capabilities--checkout remains permissionless against the shared `Shop`.
 entry fun update_shop_owner(
     shop: &mut Shop,
-    owner_cap: &mut ShopOwnerCap,
+    owner_cap: &ShopOwnerCap,
     new_owner: address,
     ctx: &TxContext,
 ) {
@@ -523,7 +521,6 @@ entry fun update_shop_owner(
 
     let previous_owner: address = shop.owner;
     shop.owner = new_owner;
-    owner_cap.owner = new_owner;
 
     event::emit(ShopOwnerUpdatedEvent {
         shop_address: shop.id.to_address(),
@@ -743,7 +740,7 @@ entry fun add_accepted_currency<T>(
 
     let decimals: u8 = coin_registry::decimals(currency);
     assert_supported_decimals!(decimals);
-    let symbol: vector<u8> = string::into_bytes(coin_registry::symbol(currency));
+    let symbol: String = coin_registry::symbol(currency);
     let shop_address: address = shop.id.to_address();
     let age_cap: u64 = resolve_guardrail_cap(
         max_price_age_secs_cap,
@@ -1305,7 +1302,7 @@ fun new_accepted_currency(
     feed_id: vector<u8>,
     pyth_object_id: object::ID,
     decimals: u8,
-    symbol: vector<u8>,
+    symbol: String,
     max_price_age_secs_cap: u64,
     max_confidence_ratio_bps_cap: u64,
     max_price_status_lag_secs_cap: u64,
@@ -2332,7 +2329,7 @@ public fun listing_values(
 public fun accepted_currency_values(
     shop: &Shop,
     accepted_currency: &AcceptedCurrency,
-): (address, TypeName, vector<u8>, object::ID, u8, vector<u8>, u64, u64, u64) {
+): (address, TypeName, vector<u8>, object::ID, u8, String, u64, u64, u64) {
     assert_currency_matches_shop!(shop, accepted_currency);
     (
         accepted_currency.shop_address,
@@ -2413,7 +2410,6 @@ public fun test_setup_shop(owner: address, ctx: &mut TxContext): (Shop, ShopOwne
     let owner_cap = ShopOwnerCap {
         id: object::new(ctx),
         shop_address: shop.id.to_address(),
-        owner,
     };
     (shop, owner_cap)
 }
@@ -2555,7 +2551,7 @@ public fun test_accepted_currency_exists(shop: &Shop, accepted_currency_id: obje
 public fun test_accepted_currency_values(
     shop: &Shop,
     accepted_currency: &AcceptedCurrency,
-): (address, TypeName, vector<u8>, object::ID, u8, vector<u8>, u64, u64, u64) {
+): (address, TypeName, vector<u8>, object::ID, u8, String, u64, u64, u64) {
     shop.accepted_currency_values(accepted_currency)
 }
 
@@ -2999,11 +2995,6 @@ public fun test_shop_name(shop: &Shop): String {
 #[test_only]
 public fun test_shop_disabled(shop: &Shop): bool {
     shop.disabled
-}
-
-#[test_only]
-public fun test_shop_owner_cap_owner(owner_cap: &ShopOwnerCap): address {
-    owner_cap.owner
 }
 
 #[test_only]
