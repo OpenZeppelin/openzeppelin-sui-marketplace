@@ -148,7 +148,38 @@ export const getShopCreatedSummaries = async ({
     cursor = response.nextCursor
   }
 
-  return summaries
+  if (!summaries.length) return summaries
+
+  const enrichedSummaries = summaries.map((summary) => ({ ...summary }))
+  const batchSize = 50
+
+  for (let start = 0; start < enrichedSummaries.length; start += batchSize) {
+    const batch = enrichedSummaries.slice(start, start + batchSize)
+    try {
+      const objects = await suiClient.multiGetObjects({
+        ids: batch.map((summary) => summary.shopId),
+        options: { showContent: true, showType: true }
+      })
+
+      objects.forEach((response, index) => {
+        const object = response.data
+        if (!object) return
+        const summary = batch[index]
+        if (!summary) return
+
+        try {
+          summary.ownerAddress = getShopOwnerAddressFromObject(object)
+          summary.name = getShopNameFromObject(object)
+        } catch {
+          return
+        }
+      })
+    } catch {
+      continue
+    }
+  }
+
+  return enrichedSummaries
 }
 
 export const getShopOwnerAddressFromObject = (
