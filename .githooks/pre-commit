@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+pnpm dapp format:move 
 pnpm lint:fix
 node scripts/strip-move-localnet.js --staged
