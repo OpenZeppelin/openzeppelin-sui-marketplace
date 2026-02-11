@@ -390,10 +390,20 @@ export const clearPublishedEntryForNetwork = async ({
     throw error
   }
 
-  const { updatedContents, didUpdate } = removePublishedSectionForNetwork(
-    contents,
-    networkName
-  )
+  const targetNetworks =
+    networkName === "localnet" ? ["localnet", "test-publish"] : [networkName]
+  let updatedContents = contents
+  let didUpdate = false
+
+  for (const targetNetwork of targetNetworks) {
+    const result = removePublishedSectionForNetwork(
+      updatedContents,
+      targetNetwork
+    )
+    updatedContents = result.updatedContents
+    if (result.didUpdate) didUpdate = true
+  }
+
   if (!didUpdate) return { publishedTomlPath, didUpdate: false }
 
   await fs.writeFile(publishedTomlPath, updatedContents)
