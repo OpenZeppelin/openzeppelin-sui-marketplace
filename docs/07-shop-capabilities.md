@@ -60,7 +60,6 @@ entry fun create_shop(name: string::String, ctx: &mut tx::TxContext) {
   let owner_cap = ShopOwnerCap {
     id: obj::new(ctx),
     shop_address: shop_address(&shop),
-    owner,
   };
 
   txf::share_object(shop);
@@ -73,15 +72,14 @@ entry fun create_shop(name: string::String, ctx: &mut tx::TxContext) {
 ```move
 fun update_shop_owner(
   shop: &mut Shop,
-  owner_cap: &mut ShopOwnerCap,
+  owner_cap: &ShopOwnerCap,
   new_owner: address,
-  ctx: &mut tx::TxContext,
+  ctx: &tx::TxContext,
 ) {
   assert_owner_cap(shop, owner_cap);
 
   let previous_owner = shop.owner;
   shop.owner = new_owner;
-  owner_cap.owner = new_owner;
 
   event::emit(ShopOwnerUpdatedEvent {
     shop_address: shop.id.uid_to_inner(),

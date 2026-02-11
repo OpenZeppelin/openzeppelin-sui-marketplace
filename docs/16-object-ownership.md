@@ -42,7 +42,6 @@ None. This is a conceptual chapter that builds on earlier examples.
 public struct ShopOwnerCap has key, store {
   id: obj::UID,
   shop_address: ID,
-  owner: address,
 }
 
 public struct DiscountTicket has key, store {

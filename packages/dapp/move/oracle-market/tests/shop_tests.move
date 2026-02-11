@@ -249,7 +249,6 @@ fun create_shop_shares_shop_and_transfers_owner_cap() {
     assert_eq!(shop::test_shop_owner(&shared_shop), TEST_OWNER);
     assert_eq!(shop::test_shop_name(&shared_shop), DEFAULT_SHOP_NAME.to_string());
     assert!(!shop::test_shop_disabled(&shared_shop));
-    assert_eq!(shop::test_shop_owner_cap_owner(&owner_cap), TEST_OWNER);
     assert_eq!(
         shop::test_shop_owner_cap_shop_address(&owner_cap),
         shop::test_shop_id(&shared_shop),
@@ -263,12 +262,11 @@ fun create_shop_shares_shop_and_transfers_owner_cap() {
 #[test]
 fun update_shop_owner_rotates_payout_and_emits_event() {
     let mut ctx = tx_context::new_from_hint(TEST_OWNER, 40, 0, 0, 0);
-    let (mut shop, mut owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
+    let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
 
-    shop::update_shop_owner(&mut shop, &mut owner_cap, OTHER_OWNER, &ctx);
+    shop::update_shop_owner(&mut shop, &owner_cap, OTHER_OWNER, &ctx);
 
     assert_eq!(shop::test_shop_owner(&shop), OTHER_OWNER);
-    assert_eq!(shop::test_shop_owner_cap_owner(&owner_cap), OTHER_OWNER);
 
     let events = event::events_by_type<shop::ShopOwnerUpdatedEvent>();
     assert_eq!(events.length(), 1);
@@ -288,12 +286,11 @@ fun update_shop_owner_rotates_payout_and_emits_event() {
 #[test]
 fun update_shop_owner_emits_event_even_when_unchanged() {
     let mut ctx = tx_context::new_from_hint(TEST_OWNER, 42, 0, 0, 0);
-    let (mut shop, mut owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
+    let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
 
-    shop::update_shop_owner(&mut shop, &mut owner_cap, TEST_OWNER, &ctx);
+    shop::update_shop_owner(&mut shop, &owner_cap, TEST_OWNER, &ctx);
 
     assert_eq!(shop::test_shop_owner(&shop), TEST_OWNER);
-    assert_eq!(shop::test_shop_owner_cap_owner(&owner_cap), TEST_OWNER);
 
     let events = event::events_by_type<shop::ShopOwnerUpdatedEvent>();
     assert_eq!(events.length(), 1);
@@ -314,16 +311,15 @@ fun update_shop_owner_emits_event_even_when_unchanged() {
 #[test]
 fun update_shop_owner_records_rotated_by_sender() {
     let mut ctx = tx_context::new_from_hint(THIRD_OWNER, 43, 0, 0, 0);
-    let (mut shop, mut owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
+    let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
 
-    shop::update_shop_owner(&mut shop, &mut owner_cap, OTHER_OWNER, &ctx);
+    shop::update_shop_owner(&mut shop, &owner_cap, OTHER_OWNER, &ctx);
 
     let events = event::events_by_type<shop::ShopOwnerUpdatedEvent>();
     assert_eq!(events.length(), 1);
     let rotated = &events[0];
 
     assert_eq!(shop::test_shop_owner(&shop), OTHER_OWNER);
-    assert_eq!(shop::test_shop_owner_cap_owner(&owner_cap), OTHER_OWNER);
     assert_eq!(shop::test_shop_owner_updated_previous(rotated), TEST_OWNER);
     assert_eq!(shop::test_shop_owner_updated_new(rotated), OTHER_OWNER);
     assert_eq!(shop::test_shop_owner_updated_rotated_by(rotated), THIRD_OWNER);
@@ -372,12 +368,12 @@ fun disable_shop_rejects_foreign_cap() {
 fun update_shop_owner_rejects_foreign_cap() {
     let mut ctx = tx_context::new_from_hint(TEST_OWNER, 41, 0, 0, 0);
     let (mut shop, _owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
-    let (_other_shop, mut other_cap) = shop::test_setup_shop(
+    let (_other_shop, other_cap) = shop::test_setup_shop(
         OTHER_OWNER,
         &mut ctx,
     );
 
-    shop::update_shop_owner(&mut shop, &mut other_cap, OTHER_OWNER, &ctx);
+    shop::update_shop_owner(&mut shop, &other_cap, OTHER_OWNER, &ctx);
 
     shop::test_abort_accepted_currency_missing();
     abort EAssertFailure
