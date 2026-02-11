@@ -454,7 +454,7 @@ fun add_accepted_currency_records_currency_and_event() {
     assert_eq!(feed_id, expected_feed_id);
     assert_eq!(pyth_id, pyth_object_id);
     assert_eq!(decimals, 9);
-    assert_eq!(symbol, b"TCO");
+    assert_eq!(symbol, b"TCO".to_string());
     let mapped_id = shop::accepted_currency_id_for_type(
         &shared_shop,
         test_coin_type(),
