@@ -56,8 +56,8 @@ runSuiScript(
       tooling.suiClient,
       (receipt, reason) => {
         const warning = {
-          itemListingId: receipt.itemListingAddress,
-          shopId: receipt.shopAddress,
+          itemListingId: receipt.itemListingId,
+          shopId: receipt.shopId,
           error: reason instanceof Error ? reason.message : String(reason)
         }
 
@@ -118,7 +118,7 @@ runSuiScript(
     .option("shopId", {
       alias: "shop-id",
       type: "string",
-      description: "Optional Shop object ID to filter by shop address."
+      description: "Optional Shop object ID to filter by shop id."
     })
     .option("json", {
       type: "boolean",
@@ -157,7 +157,7 @@ const getListingDetailsForReceipts = async (
   shopItemReceipts: Awaited<ReturnType<typeof getShopItemReceiptSummaries>>,
   suiClient: SuiClient,
   onError: (
-    receipt: { itemListingAddress: string; shopAddress: string },
+    receipt: { itemListingId: string; shopId: string },
     reason: unknown
   ) => void
 ) =>
@@ -165,8 +165,8 @@ const getListingDetailsForReceipts = async (
     items: shopItemReceipts,
     task: (receipt) =>
       getItemListingDetails(
-        receipt.shopAddress,
-        receipt.itemListingAddress,
+        receipt.shopId,
+        receipt.itemListingId,
         suiClient
       ),
     onError
