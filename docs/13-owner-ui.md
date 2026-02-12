@@ -69,14 +69,14 @@ entry fun update_shop_owner(
 ) {
   assert_owner_cap(shop, owner_cap);
 
-  let previous_owner: address = shop.owner;
+  let previous_owner = shop.owner;
   shop.owner = new_owner;
 
   event::emit(ShopOwnerUpdatedEvent {
-    shop_address: shop_address(shop),
+    shop_id: shop.id.to_inner(),
     previous_owner,
     new_owner,
-    shop_owner_cap_id: obj::uid_to_address(&owner_cap.id),
+    shop_owner_cap_id: owner_cap.id.to_inner(),
     rotated_by: ctx.sender(),
   });
 }

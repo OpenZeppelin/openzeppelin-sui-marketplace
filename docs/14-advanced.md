@@ -48,7 +48,7 @@ pnpm script buyer:buy --help
   Code: `packages/dapp/move/oracle-market/sources/shop.move` (ShopCreated, PurchaseCompleted)
 - **Object IDs and addresses**: object IDs are addresses (but not every address is an object ID). We
   still convert between `UID` and address forms for events and off-chain tooling via
-  `obj::uid_to_address` and `obj::id_from_address`.
+  `object::uid_to_address` and `object::id_from_address`.
   Code: `packages/dapp/move/oracle-market/sources/shop.move` (helper functions and events)
 - **Transfers and sharing**: `txf::public_transfer` moves owned resources, and `txf::share_object`
   creates shared objects. This pattern replaces EVM-style factory deployments.
@@ -77,7 +77,7 @@ pnpm script buyer:buy --help
 **Code spotlight: view helpers used by dev-inspect**
 `packages/dapp/move/oracle-market/sources/shop.move`
 ```move
-public fun listing_exists(shop: &Shop, listing_id: obj::ID): bool {
+public fun listing_exists(shop: &Shop, listing_id: ID): bool {
   dynamic_field::exists_with_type<ItemListingKey, ItemListingMarker>(
     &shop.id,
     ItemListingKey(listing_id),
@@ -87,15 +87,15 @@ public fun listing_exists(shop: &Shop, listing_id: obj::ID): bool {
 public fun accepted_currency_id_for_type(
   shop: &Shop,
   coin_type: TypeName,
-): Option<obj::ID> {
+): Option<ID> {
   if (
-    dynamic_field::exists_with_type<AcceptedCurrencyTypeKey, obj::ID>(
+    dynamic_field::exists_with_type<AcceptedCurrencyTypeKey, ID>(
       &shop.id,
       AcceptedCurrencyTypeKey(coin_type),
     )
   ) {
     opt::some(
-      *dynamic_field::borrow<AcceptedCurrencyTypeKey, obj::ID>(
+      *dynamic_field::borrow<AcceptedCurrencyTypeKey, ID>(
         &shop.id,
         AcceptedCurrencyTypeKey(coin_type),
       )
