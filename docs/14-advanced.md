@@ -32,7 +32,7 @@ pnpm script buyer:buy --help
 
 ## 4. EVM -> Sui translation
 1. **Single-threaded storage -> object-level parallelism**: shared objects lock independently. Listings/currencies/templates are separate shared objects to keep concurrency high. See `ItemListing`, `AcceptedCurrency`, and `DiscountTemplate` in `packages/dapp/contracts/oracle-market/sources/shop.move`.
-2. **Proxy upgrades -> new package IDs**: upgrades publish a new package; callers opt into new IDs. See `packages/dapp/contracts/oracle-market/Move.toml` and `packages/dapp/src/scripts/move/publish.ts` for artifacts.
+2. **Proxy upgrades -> new package IDs**: upgrades publish a new package; callers opt into new IDs. See `packages/dapp/contracts/oracle-market/Move.toml` and `packages/dapp/src/scripts/contracts/publish.ts` for artifacts.
 3. **Blocks -> object DAG**: each object records the last transaction digest that mutated it, giving you causal history per object instead of global block history.
 
 ## 5. Concept deep dive: Move execution surface
@@ -72,7 +72,7 @@ pnpm script buyer:buy --help
 ## 6. Code references
 1. `packages/dapp/contracts/oracle-market/sources/shop.move` (entry/view functions, events, math)
 2. `packages/domain/core/src/flows/buy.ts` (dev-inspect quote + PTB composition)
-3. `packages/dapp/src/scripts/move/publish.ts` (publish artifacts and upgrade-cap capture)
+3. `packages/dapp/src/scripts/contracts/publish.ts` (publish artifacts and upgrade-cap capture)
 
 **Code spotlight: view helpers used by dev-inspect**
 `packages/dapp/contracts/oracle-market/sources/shop.move`

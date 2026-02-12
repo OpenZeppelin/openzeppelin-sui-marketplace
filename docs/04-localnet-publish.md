@@ -23,13 +23,13 @@ pnpm script move:publish --package-path oracle-market
 ## 4. EVM -> Sui translation
 1. **Hardhat local node -> Sui localnet**: localnet is a full chain with shared objects and versions, not a global in-memory state. See `packages/dapp/src/scripts/chain/localnet-start.ts`.
 2. **Mock contracts -> mock packages**: on Sui, mocks are real packages with real objects. See `packages/dapp/contracts/pyth-mock` and `packages/dapp/contracts/coin-mock`.
-3. **Deploy -> publish**: publish creates a package object; your stateful instance comes later via `create_shop`. See `packages/dapp/src/scripts/move/publish.ts`.
+3. **Deploy -> publish**: publish creates a package object; your stateful instance comes later via `create_shop`. See `packages/dapp/src/scripts/contracts/publish.ts`.
 
 ## 5. Concept deep dive: packages and publish flow
 - **Packages are objects**: publishing creates an immutable package object plus an `UpgradeCap`.
   Unlike Solidity, there is no mutable code slot. New versions are new package IDs, and callers
   must opt into the new ID explicitly.
-  Code: `packages/dapp/src/scripts/move/publish.ts`
+  Code: `packages/dapp/src/scripts/contracts/publish.ts`
 - **UpgradeCap + artifacts**: the publish script writes `deployment.<network>.json` with the
   package ID, `UpgradeCap`, and `Publisher` IDs. Treat the `UpgradeCap` like admin authority.
   Code: `packages/dapp/deployments/deployment.localnet.json`
@@ -47,7 +47,7 @@ pnpm script move:publish --package-path oracle-market
 ## 6. Code references
 1. `packages/dapp/src/scripts/chain/localnet-start.ts` (localnet lifecycle)
 2. `packages/dapp/src/scripts/mock/setup.ts` (mock Pyth + coins)
-3. `packages/dapp/src/scripts/move/publish.ts` (publish and artifacts)
+3. `packages/dapp/src/scripts/contracts/publish.ts` (publish and artifacts)
 4. `packages/dapp/contracts/oracle-market/Move.toml` (dep-replacements.test-publish)
 
 **Code spotlight: localnet lifecycle guardrails**
@@ -72,7 +72,7 @@ if (probeResult.status === "running") {
 ```
 
 **Code spotlight: publish flow entry**
-`packages/dapp/src/scripts/move/publish.ts`
+`packages/dapp/src/scripts/contracts/publish.ts`
 ```ts
 const fullPackagePath = resolveFullPackagePath(
   path.resolve(tooling.suiConfig.paths.move),

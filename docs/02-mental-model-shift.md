@@ -12,7 +12,7 @@ This repo assumes you already think in Solidity. The goal here is not to re-teac
 ## 2. EVM -> Sui translation
 1. **Contract storage -> objects**: your state lives in owned/shared objects, not in a single contract storage map. See `packages/dapp/contracts/oracle-market/sources/shop.move` (`Shop`, `ItemListing`, `AcceptedCurrency`).
 2. **onlyOwner -> capability**: authority is proved by holding a capability object. See `ShopOwnerCap` in `packages/dapp/contracts/oracle-market/sources/shop.move`.
-3. **Deployment -> publish + instantiate**: publishing creates a package object; stateful instances are created later as shared objects. See publish flow in `packages/dapp/src/scripts/move/publish.ts` and shop creation in `packages/dapp/src/scripts/owner/shop-create.ts`.
+3. **Deployment -> publish + instantiate**: publishing creates a package object; stateful instances are created later as shared objects. See publish flow in `packages/dapp/src/scripts/contracts/publish.ts` and shop creation in `packages/dapp/src/scripts/owner/shop-create.ts`.
 4. **Inheritance -> modules + generics**: Move has no inheritance or dynamic dispatch; reuse is done through modules, functions, and type parameters. This repo uses `ShopItem<phantom TItem>` and `Coin<T>` to keep types safe without polymorphism.
 5. **Composability -> PTBs**: you compose calls at runtime in a programmable transaction block (PTB), rather than writing a single on-chain "router" contract for every workflow.
 6. **Upgrades -> new package + UpgradeCap**: upgrades publish a new package ID gated by an `UpgradeCap`. Callers opt into new package IDs explicitly.
@@ -39,7 +39,7 @@ This repo assumes you already think in Solidity. The goal here is not to re-teac
 
 ## 4. Code references
 1. `packages/dapp/contracts/oracle-market/sources/shop.move` (Shop, ShopOwnerCap, entry functions)
-2. `packages/dapp/src/scripts/move/publish.ts` (publish flow + artifacts)
+2. `packages/dapp/src/scripts/contracts/publish.ts` (publish flow + artifacts)
 3. `packages/dapp/src/scripts/owner/shop-create.ts` (shop instantiation)
 
 **Code spotlight: object-first state + capability auth**
@@ -59,7 +59,7 @@ public struct Shop has key, store {
 ```
 
 **Code spotlight: publish flow resolves package + artifacts**
-`packages/dapp/src/scripts/move/publish.ts`
+`packages/dapp/src/scripts/contracts/publish.ts`
 ```ts
 const fullPackagePath = resolveFullPackagePath(
   path.resolve(tooling.suiConfig.paths.move),
@@ -108,7 +108,7 @@ fun create_shop(name: string::String, ctx: &mut tx::TxContext) {
 
 ## 7. Exercises
 1. Open `packages/dapp/contracts/oracle-market/sources/shop.move` and find `ShopOwnerCap`. Expected outcome: you can explain why it replaces `onlyOwner`.
-2. Skim `packages/dapp/src/scripts/move/publish.ts` and list the artifacts it writes. Expected outcome: you can point to `packages/dapp/deployments/deployment.<network>.json`.
+2. Skim `packages/dapp/src/scripts/contracts/publish.ts` and list the artifacts it writes. Expected outcome: you can point to `packages/dapp/deployments/deployment.<network>.json`.
 
 ## 8. Diagram: object-centric state
 ```
