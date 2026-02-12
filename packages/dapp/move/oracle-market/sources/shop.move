@@ -2481,7 +2481,7 @@ public fun test_listing_id_from_value(listing: &ItemListing): ID {
 }
 
 #[test_only]
-public fun test_listing_address(listing: &ItemListing): ID {
+public fun test_listing_id(listing: &ItemListing): ID {
     listing.id.uid_to_inner()
 }
 
