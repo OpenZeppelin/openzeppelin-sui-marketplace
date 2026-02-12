@@ -73,7 +73,7 @@ describe("move helpers", () => {
   })
 
   it("resolves package paths relative to move root", () => {
-    const moveRoot = "/tmp/move"
+    const moveRoot = "/tmp/contracts"
     const resolved = resolveFullPackagePath(moveRoot, "packages/oracle")
     expect(resolved).toBe(path.join(moveRoot, "packages", "oracle"))
   })
