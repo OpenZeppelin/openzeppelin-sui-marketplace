@@ -84,7 +84,7 @@ export const parseShopItemReceiptFromObject = (
   )
   const shopItemFields = unwrapMoveObjectFields<{
     shop_address: unknown
-    item_listing_address: unknown
+    item_listing_id: unknown
     item_type: unknown
     name: unknown
     acquired_at: unknown
@@ -95,8 +95,8 @@ export const parseShopItemReceiptFromObject = (
     `Missing shop_address for ShopItem ${shopItemId}.`
   )
   const itemListingAddress = normalizeIdOrThrow(
-    normalizeOptionalIdFromValue(shopItemFields.item_listing_address),
-    `Missing item_listing_address for ShopItem ${shopItemId}.`
+    normalizeOptionalIdFromValue(shopItemFields.item_listing_id),
+    `Missing item_listing_id for ShopItem ${shopItemId}.`
   )
   const itemType =
     formatTypeNameFromFieldValue(shopItemFields.item_type) || "Unknown"

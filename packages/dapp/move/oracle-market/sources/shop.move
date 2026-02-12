@@ -240,7 +240,7 @@ public struct ItemListingMarker has drop, store {
 public struct ShopItem<phantom TItem> has key, store {
     id: UID,
     shop_id: ID,
-    item_listing_address: ID,
+    item_listing_id: ID,
     item_type: TypeName,
     name: String,
     acquired_at: u64,
@@ -353,7 +353,7 @@ public struct ShopDisabledEvent has copy, drop {
 /// Event emitted when an item listing is added.
 public struct ItemListingAddedEvent has copy, drop {
     shop_id: ID,
-    item_listing_address: ID,
+    item_listing_id: ID,
     name: String,
     base_price_usd_cents: u64,
     spotlight_discount_template_id: Option<ID>,
@@ -363,14 +363,14 @@ public struct ItemListingAddedEvent has copy, drop {
 /// Event emitted when listing stock is updated.
 public struct ItemListingStockUpdatedEvent has copy, drop {
     shop_id: ID,
-    item_listing_address: ID,
+    item_listing_id: ID,
     new_stock: u64,
 }
 
 /// Event emitted when an item listing is removed.
 public struct ItemListingRemovedEvent has copy, drop {
     shop_id: ID,
-    item_listing_address: ID,
+    item_listing_id: ID,
 }
 
 /// Event emitted when a discount template is created.
@@ -428,7 +428,7 @@ public struct DiscountRedeemedEvent has copy, drop {
 /// Event emitted when a purchase completes.
 public struct PurchaseCompletedEvent has copy, drop {
     shop_id: ID,
-    item_listing_address: ID,
+    item_listing_id: ID,
     buyer: address,
     mint_to: address,
     coin_type: TypeName,
@@ -444,7 +444,7 @@ public struct PurchaseCompletedEvent has copy, drop {
 /// Event emitted when minting completes.
 public struct MintingCompletedEvent has copy, drop {
     shop_id: ID,
-    item_listing_address: ID,
+    item_listing_id: ID,
     buyer: address,
     minted_item_id: ID,
     mint_to: address,
@@ -579,7 +579,7 @@ fun add_item_listing_core<T: store>(
 
     event::emit(ItemListingAddedEvent {
         shop_id,
-        item_listing_address: listing_id,
+        item_listing_id: listing_id,
         name: listing.name,
         base_price_usd_cents: listing.base_price_usd_cents,
         spotlight_discount_template_id: listing.spotlight_discount_template_id,
@@ -627,7 +627,7 @@ entry fun update_item_listing_stock(
 
     event::emit(ItemListingStockUpdatedEvent {
         shop_id: item_listing.shop_id,
-        item_listing_address: item_listing.id.uid_to_inner(),
+        item_listing_id: item_listing.id.uid_to_inner(),
         new_stock,
     });
 }
@@ -653,7 +653,7 @@ entry fun remove_item_listing(
 
     event::emit(ItemListingRemovedEvent {
         shop_id: shop.id.uid_to_inner(),
-        item_listing_address: item_listing.id.uid_to_inner(),
+        item_listing_id: item_listing.id.uid_to_inner(),
     });
 }
 
@@ -1645,7 +1645,7 @@ fun process_purchase_core<TItem: store, TCoin>(
 
     event::emit(PurchaseCompletedEvent {
         shop_id,
-        item_listing_address: item_listing.id.uid_to_inner(),
+        item_listing_id: item_listing.id.uid_to_inner(),
         buyer,
         mint_to,
         coin_type: accepted_currency.coin_type,
@@ -1660,7 +1660,7 @@ fun process_purchase_core<TItem: store, TCoin>(
 
     event::emit(ItemListingStockUpdatedEvent {
         shop_id,
-        item_listing_address: item_listing.id.uid_to_inner(),
+        item_listing_id: item_listing.id.uid_to_inner(),
         new_stock: item_listing.stock,
     });
 
@@ -1669,7 +1669,7 @@ fun process_purchase_core<TItem: store, TCoin>(
 
     event::emit(MintingCompletedEvent {
         shop_id,
-        item_listing_address: item_listing.id.uid_to_inner(),
+        item_listing_id: item_listing.id.uid_to_inner(),
         buyer,
         minted_item_id,
         mint_to,
@@ -1817,7 +1817,7 @@ fun mint_shop_item<TItem: store>(
     ShopItem {
         id: object::new(ctx),
         shop_id: item_listing.shop_id,
-        item_listing_address: item_listing.id.uid_to_inner(),
+        item_listing_id: item_listing.id.uid_to_inner(),
         item_type: item_listing.item_type,
         name: item_listing.name,
         acquired_at: now_secs(clock),
@@ -2704,7 +2704,7 @@ public fun test_purchase_completed_shop(event: &PurchaseCompletedEvent): ID {
 
 #[test_only]
 public fun test_purchase_completed_listing(event: &PurchaseCompletedEvent): ID {
-    event.item_listing_address
+    event.item_listing_id
 }
 
 #[test_only]
@@ -2761,7 +2761,7 @@ public fun test_minting_completed_shop(event: &MintingCompletedEvent): ID {
 
 #[test_only]
 public fun test_minting_completed_listing(event: &MintingCompletedEvent): ID {
-    event.item_listing_address
+    event.item_listing_id
 }
 
 #[test_only]
@@ -3018,7 +3018,7 @@ public fun test_item_listing_stock_updated_shop(event: &ItemListingStockUpdatedE
 
 #[test_only]
 public fun test_item_listing_stock_updated_listing(event: &ItemListingStockUpdatedEvent): ID {
-    event.item_listing_address
+    event.item_listing_id
 }
 
 #[test_only]
@@ -3033,7 +3033,7 @@ public fun test_item_listing_added_shop(event: &ItemListingAddedEvent): ID {
 
 #[test_only]
 public fun test_item_listing_added_listing(event: &ItemListingAddedEvent): ID {
-    event.item_listing_address
+    event.item_listing_id
 }
 
 #[test_only]
@@ -3063,7 +3063,7 @@ public fun test_item_listing_removed_shop(event: &ItemListingRemovedEvent): ID {
 
 #[test_only]
 public fun test_item_listing_removed_listing(event: &ItemListingRemovedEvent): ID {
-    event.item_listing_address
+    event.item_listing_id
 }
 
 #[test_only]
