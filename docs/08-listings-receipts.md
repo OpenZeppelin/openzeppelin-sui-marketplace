@@ -139,7 +139,7 @@ return {
 Shop (shared)
   df: listing_id -> ItemListingMarker
 ItemListing (shared)
-  fields: shop_id (ID), item_type, price, stock
+  fields: shop_id, item_type, price, stock
 ```
 
 ## 9. Further reading (Sui docs)
