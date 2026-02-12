@@ -47,7 +47,7 @@
     "test:integration": "vitest --config ./vitest.integration.config.ts",
     "test:unit": "vitest --config ./vitest.config.ts",
     "lint:fix": "../../node_modules/.bin/eslint . --fix",
-    "format:move": "prettier --write 'move/**/*.move' '!move/**/**-patched/**/*.move'"
+    "format:move": "prettier --write 'contracts/**/*.move' '!move/**/**-patched/**/*.move'"
   },
   "dependencies": {
     "@mysten/sui": "^1.45.2",

@@ -7,7 +7,7 @@
 End-to-end example of a small on-chain market on **Sui**: items are priced in **USD cents** (stablecoin-style), while buyers can pay in **multiple currencies** using **oracle prices**.
 
 This repo is a pnpm workspace containing:
-- a Move package `packages/dapp/move/oracle-market`,
+- a Move package `packages/dapp/contracts/oracle-market`,
 - a CLI/script layer for localnet + seeding + owner/buyer flows `dapp/scripts`
 - state artefact captured in (`packages/dapp/deployments`) 
 - a Next.js UI `packages/ui`,

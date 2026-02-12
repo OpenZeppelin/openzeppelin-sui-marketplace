@@ -10,8 +10,8 @@ This repo assumes you already think in Solidity. The goal here is not to re-teac
 3. Run a quick environment sanity check before touching code.
 
 ## 2. EVM -> Sui translation
-1. **Contract storage -> objects**: your state lives in owned/shared objects, not in a single contract storage map. See `packages/dapp/move/oracle-market/sources/shop.move` (`Shop`, `ItemListing`, `AcceptedCurrency`).
-2. **onlyOwner -> capability**: authority is proved by holding a capability object. See `ShopOwnerCap` in `packages/dapp/move/oracle-market/sources/shop.move`.
+1. **Contract storage -> objects**: your state lives in owned/shared objects, not in a single contract storage map. See `packages/dapp/contracts/oracle-market/sources/shop.move` (`Shop`, `ItemListing`, `AcceptedCurrency`).
+2. **onlyOwner -> capability**: authority is proved by holding a capability object. See `ShopOwnerCap` in `packages/dapp/contracts/oracle-market/sources/shop.move`.
 3. **Deployment -> publish + instantiate**: publishing creates a package object; stateful instances are created later as shared objects. See publish flow in `packages/dapp/src/scripts/move/publish.ts` and shop creation in `packages/dapp/src/scripts/owner/shop-create.ts`.
 4. **Inheritance -> modules + generics**: Move has no inheritance or dynamic dispatch; reuse is done through modules, functions, and type parameters. This repo uses `ShopItem<phantom TItem>` and `Coin<T>` to keep types safe without polymorphism.
 5. **Composability -> PTBs**: you compose calls at runtime in a programmable transaction block (PTB), rather than writing a single on-chain "router" contract for every workflow.
@@ -22,28 +22,28 @@ This repo assumes you already think in Solidity. The goal here is not to re-teac
   moved. `key` turns a struct into an object with identity. `store` lets it live on-chain. `copy`
   and `drop` opt into value semantics. In this repo, objects like `Shop` and `ShopOwnerCap` are
   `has key, store`, while events are `has copy, drop`.
-  Code: `packages/dapp/move/oracle-market/sources/shop.move` (struct definitions)
+  Code: `packages/dapp/contracts/oracle-market/sources/shop.move` (struct definitions)
 - **Resources and ownership**: Move resources must be moved, not copied. Owned objects (like
   `ShopOwnerCap`) are authority tokens. Passing a resource by value is a one-time action, which is
   why a `DiscountTicket` can only be redeemed once.
-  Code: `packages/dapp/move/oracle-market/sources/shop.move` (ShopOwnerCap, DiscountTicket)
+  Code: `packages/dapp/contracts/oracle-market/sources/shop.move` (ShopOwnerCap, DiscountTicket)
 - **Object ownership types**: Sui supports address-owned, shared, immutable, and object-owned
   objects. This repo uses address-owned capabilities/tickets, shared objects for Shop/listings, and
   object-owned dynamic-field children under the Shop or templates.
-  Code: `packages/dapp/move/oracle-market/sources/shop.move` (ShopOwnerCap, Shop, marker structs)
+  Code: `packages/dapp/contracts/oracle-market/sources/shop.move` (ShopOwnerCap, Shop, marker structs)
 - **Strings (`String`)**: Sui Move’s String type is designed for user-facing, human-readable text and is always UTF-8 encoded. This is different from Solidity, where string is a dynamic byte array and encoding is not enforced. Using String ensures your data is valid UTF-8, which is important for interoperability and user interfaces. Many Sui and Move standard library functions expect or return String, making it the idiomatic choice for names, descriptions, and other text fields. Use vector<u8> only when you need to store arbitrary bytes (e.g., binary data, hashes, or non-UTF-8 content).
-  Code: `packages/dapp/move/oracle-market/sources/shop.move` (Shop.name, ItemListing.name)
+  Code: `packages/dapp/contracts/oracle-market/sources/shop.move` (Shop.name, ItemListing.name)
 - **Options instead of sentinels**: optional values use `Option` instead of magic constants.
   This is used for optional listing links, template expiry, and max-redemption caps.
-  Code: `packages/dapp/move/oracle-market/sources/shop.move` (Option fields)
+  Code: `packages/dapp/contracts/oracle-market/sources/shop.move` (Option fields)
 
 ## 4. Code references
-1. `packages/dapp/move/oracle-market/sources/shop.move` (Shop, ShopOwnerCap, entry functions)
+1. `packages/dapp/contracts/oracle-market/sources/shop.move` (Shop, ShopOwnerCap, entry functions)
 2. `packages/dapp/src/scripts/move/publish.ts` (publish flow + artifacts)
 3. `packages/dapp/src/scripts/owner/shop-create.ts` (shop instantiation)
 
 **Code spotlight: object-first state + capability auth**
-`packages/dapp/move/oracle-market/sources/shop.move`
+`packages/dapp/contracts/oracle-market/sources/shop.move`
 ```move
 public struct ShopOwnerCap has key, store {
   id: UID,
@@ -90,7 +90,7 @@ await publishPackageToNetwork(
 ```
 
 **Code spotlight: instantiate a Shop after publish**
-`packages/dapp/move/oracle-market/sources/shop.move`
+`packages/dapp/contracts/oracle-market/sources/shop.move`
 ```move
 fun create_shop(name: string::String, ctx: &mut tx::TxContext) {
   let owner = ctx.sender();
@@ -107,7 +107,7 @@ fun create_shop(name: string::String, ctx: &mut tx::TxContext) {
 ```
 
 ## 7. Exercises
-1. Open `packages/dapp/move/oracle-market/sources/shop.move` and find `ShopOwnerCap`. Expected outcome: you can explain why it replaces `onlyOwner`.
+1. Open `packages/dapp/contracts/oracle-market/sources/shop.move` and find `ShopOwnerCap`. Expected outcome: you can explain why it replaces `onlyOwner`.
 2. Skim `packages/dapp/src/scripts/move/publish.ts` and list the artifacts it writes. Expected outcome: you can point to `packages/dapp/deployments/deployment.<network>.json`.
 
 ## 8. Diagram: object-centric state

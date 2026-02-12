@@ -188,7 +188,7 @@ Reference
 
 Oracle Dependencies
 -------------------
-- `packages/dapp/move/oracle-market` depends on upstream Pyth + Wormhole via git in `Move.toml`.
+- `packages/dapp/contracts/oracle-market` depends on upstream Pyth + Wormhole via git in `Move.toml`.
 - `test-publish` swaps Pyth to `pyth-mock` via `dep-replacements`.
 
 Update instructions
@@ -196,10 +196,10 @@ Update instructions
 When updating Pyth/Wormhole revisions, do the following in order.
 
 1) Update revisions
-- Edit the `rev` (or branch/tag) in `packages/dapp/move/oracle-market/Move.toml`.
+- Edit the `rev` (or branch/tag) in `packages/dapp/contracts/oracle-market/Move.toml`.
 
 2) Re-pin the lockfile
-- From `packages/dapp/move/oracle-market`, run:
+- From `packages/dapp/contracts/oracle-market`, run:
     - `sui move build -e testnet`
     - `sui move build -e test-publish`
     This should update/validate `Move.lock` resolution per-environment.

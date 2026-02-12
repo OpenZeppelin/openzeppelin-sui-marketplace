@@ -56,10 +56,10 @@ Buyer flows live in `docs/12-buyer-ui.md`.
 Code:
 - `packages/ui/src/app/hooks/useStoreDashboardViewModel.ts` (isShopOwner logic)
 - `packages/ui/src/app/hooks/useShopDashboardData.tsx` (shop overview load)
-- `packages/dapp/move/oracle-market/sources/shop.move` (Shop.owner field)
+- `packages/dapp/contracts/oracle-market/sources/shop.move` (Shop.owner field)
 
 **Code spotlight: Shop owner is stored on-chain**
-`packages/dapp/move/oracle-market/sources/shop.move`
+`packages/dapp/contracts/oracle-market/sources/shop.move`
 ```move
 entry fun update_shop_owner(
   shop: &mut Shop,

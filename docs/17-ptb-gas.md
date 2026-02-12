@@ -44,10 +44,10 @@ Code: `packages/domain/core/src/flows/buy.ts` (`maybeSetDedicatedGasForSuiPaymen
 - **Storage rebates**: deleting objects returns part of the storage cost.
 - **Why it matters here**: `finalize_purchase_transfers` explicitly destroys zero-value coins to reclaim storage.
 
-Code: `packages/dapp/move/oracle-market/sources/shop.move` (`finalize_purchase_transfers`)
+Code: `packages/dapp/contracts/oracle-market/sources/shop.move` (`finalize_purchase_transfers`)
 
 **Code spotlight: refund or destroy change**
-`packages/dapp/move/oracle-market/sources/shop.move`
+`packages/dapp/contracts/oracle-market/sources/shop.move`
 
 ```move
 fun finalize_purchase_transfers<TItem: store, TCoin>(

@@ -48,23 +48,23 @@ Use this page as the navigation hub for the docs. Each chapter ends with Prev/Ne
 
 | Concept | Why it matters | Code anchor | Docs |
 | --- | --- | --- | --- |
-| Shared objects | Concurrency boundary; avoid global storage contention | `packages/dapp/move/oracle-market/sources/shop.move` (Shop, ItemListing) | `docs/07-shop-capabilities.md`, `docs/08-listings-receipts.md` |
-| Address-owned objects | Capabilities and receipts live in wallets | `packages/dapp/move/oracle-market/sources/shop.move` (ShopOwnerCap, ShopItem) | `docs/07-shop-capabilities.md`, `docs/08-listings-receipts.md` |
-| Object-owned children | Dynamic-field markers are owned by parent objects | `packages/dapp/move/oracle-market/sources/shop.move` (ItemListingMarker, DiscountClaim) | `docs/08-listings-receipts.md`, `docs/10-discounts-tickets.md` |
+| Shared objects | Concurrency boundary; avoid global storage contention | `packages/dapp/contracts/oracle-market/sources/shop.move` (Shop, ItemListing) | `docs/07-shop-capabilities.md`, `docs/08-listings-receipts.md` |
+| Address-owned objects | Capabilities and receipts live in wallets | `packages/dapp/contracts/oracle-market/sources/shop.move` (ShopOwnerCap, ShopItem) | `docs/07-shop-capabilities.md`, `docs/08-listings-receipts.md` |
+| Object-owned children | Dynamic-field markers are owned by parent objects | `packages/dapp/contracts/oracle-market/sources/shop.move` (ItemListingMarker, DiscountClaim) | `docs/08-listings-receipts.md`, `docs/10-discounts-tickets.md` |
 | Ownership types | Fastpath vs consensus trade-offs | `packages/tooling/core/src/object-info.ts` (owner labels) | `docs/16-object-ownership.md` |
-| Capabilities | Explicit admin auth via owned objects | `packages/dapp/move/oracle-market/sources/shop.move` (ShopOwnerCap) | `docs/07-shop-capabilities.md` |
-| Dynamic fields | Membership index and discovery without monolithic maps | `packages/dapp/move/oracle-market/sources/shop.move` (ItemListingMarker, DiscountClaim) | `docs/08-listings-receipts.md`, `docs/10-discounts-tickets.md` |
-| Type tags / TypeName | Runtime type names for listings and coins; compile-time safety still comes from generics | `packages/dapp/move/oracle-market/sources/shop.move` (item_type, coin_type) | `docs/08-listings-receipts.md`, `docs/09-currencies-oracles.md` |
-| Phantom types | Typed receipts without storing the value | `packages/dapp/move/oracle-market/sources/shop.move` (`ShopItem<phantom TItem>`) | `docs/08-listings-receipts.md` |
-| `Coin<T>` resources | Payment as objects, not allowances | `packages/dapp/move/oracle-market/sources/shop.move` (process_purchase, split_payment, finalize_purchase_transfers) | `docs/09-currencies-oracles.md` |
-| Coin registry | Trusted metadata for decimals/symbols | `packages/dapp/move/oracle-market/sources/shop.move` (add_accepted_currency) | `docs/09-currencies-oracles.md` |
-| Oracle objects (Pyth) | Price feeds are objects with guardrails | `packages/dapp/move/oracle-market/sources/shop.move` (quote_amount_for_price_info_object) | `docs/09-currencies-oracles.md` |
-| Clock | Trusted time for windows and freshness | `packages/dapp/move/oracle-market/sources/shop.move` (now_secs) | `docs/09-currencies-oracles.md`, `docs/10-discounts-tickets.md` |
+| Capabilities | Explicit admin auth via owned objects | `packages/dapp/contracts/oracle-market/sources/shop.move` (ShopOwnerCap) | `docs/07-shop-capabilities.md` |
+| Dynamic fields | Membership index and discovery without monolithic maps | `packages/dapp/contracts/oracle-market/sources/shop.move` (ItemListingMarker, DiscountClaim) | `docs/08-listings-receipts.md`, `docs/10-discounts-tickets.md` |
+| Type tags / TypeName | Runtime type names for listings and coins; compile-time safety still comes from generics | `packages/dapp/contracts/oracle-market/sources/shop.move` (item_type, coin_type) | `docs/08-listings-receipts.md`, `docs/09-currencies-oracles.md` |
+| Phantom types | Typed receipts without storing the value | `packages/dapp/contracts/oracle-market/sources/shop.move` (`ShopItem<phantom TItem>`) | `docs/08-listings-receipts.md` |
+| `Coin<T>` resources | Payment as objects, not allowances | `packages/dapp/contracts/oracle-market/sources/shop.move` (process_purchase, split_payment, finalize_purchase_transfers) | `docs/09-currencies-oracles.md` |
+| Coin registry | Trusted metadata for decimals/symbols | `packages/dapp/contracts/oracle-market/sources/shop.move` (add_accepted_currency) | `docs/09-currencies-oracles.md` |
+| Oracle objects (Pyth) | Price feeds are objects with guardrails | `packages/dapp/contracts/oracle-market/sources/shop.move` (quote_amount_for_price_info_object) | `docs/09-currencies-oracles.md` |
+| Clock | Trusted time for windows and freshness | `packages/dapp/contracts/oracle-market/sources/shop.move` (now_secs) | `docs/09-currencies-oracles.md`, `docs/10-discounts-tickets.md` |
 | PTB composition | Oracle update + buy in one transaction | `packages/domain/core/src/flows/buy.ts` (buildBuyTransaction) | `docs/12-buyer-ui.md` |
 | PTB limits + gas | Batching and gas coin handling | `packages/domain/core/src/flows/buy.ts` (maybeSetDedicatedGasForSuiPayments) | `docs/17-ptb-gas.md` |
-| Events | Typed logs for UI and indexers | `packages/dapp/move/oracle-market/sources/shop.move` (PurchaseCompleted) | `docs/14-advanced.md` |
-| TxContext | Object creation and coin splits | `packages/dapp/move/oracle-market/sources/shop.move` (object::new, split_payment) | `docs/14-advanced.md` |
-| Publisher / init | Publish-time metadata | `packages/dapp/move/oracle-market/sources/shop.move` (init, package::claim_and_keep) | `docs/04-localnet-publish.md` |
+| Events | Typed logs for UI and indexers | `packages/dapp/contracts/oracle-market/sources/shop.move` (PurchaseCompleted) | `docs/14-advanced.md` |
+| TxContext | Object creation and coin splits | `packages/dapp/contracts/oracle-market/sources/shop.move` (object::new, split_payment) | `docs/14-advanced.md` |
+| Publisher / init | Publish-time metadata | `packages/dapp/contracts/oracle-market/sources/shop.move` (init, package::claim_and_keep) | `docs/04-localnet-publish.md` |
 | UpgradeCap | Package upgrades and access control | `packages/dapp/deployments/deployment.localnet.json` | `docs/04-localnet-publish.md`, `docs/14-advanced.md` |
-| test_only helpers | Test scaffolding without prod entry points | `packages/dapp/move/oracle-market/sources/shop.move` (#[test_only]) | `docs/14-advanced.md` |
+| test_only helpers | Test scaffolding without prod entry points | `packages/dapp/contracts/oracle-market/sources/shop.move` (#[test_only]) | `docs/14-advanced.md` |
 | Data access | Objects + events + dynamic fields in UI | `packages/domain/core/src/models/shop.ts` (event queries) | `docs/18-data-access.md` |
