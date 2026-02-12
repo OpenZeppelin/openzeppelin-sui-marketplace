@@ -164,10 +164,6 @@ const getListingDetailsForReceipts = async (
   mapSettledWithWarnings({
     items: shopItemReceipts,
     task: (receipt) =>
-      getItemListingDetails(
-        receipt.shopId,
-        receipt.itemListingId,
-        suiClient
-      ),
+      getItemListingDetails(receipt.shopId, receipt.itemListingId, suiClient),
     onError
   })
