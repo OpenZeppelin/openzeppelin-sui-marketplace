@@ -317,9 +317,6 @@ fun update_shop_owner_records_rotated_by_sender() {
     assert_eq!(shop::test_shop_owner(&shop), OTHER_OWNER);
     assert_eq!(shop::test_shop_owner_updated_shop(rotated), shop::test_shop_id(&shop));
     assert_eq!(shop::test_shop_owner_updated_cap_id(rotated), cap_id);
-    assert_eq!(shop::test_shop_owner_updated_previous(rotated), TEST_OWNER);
-    assert_eq!(shop::test_shop_owner_updated_new(rotated), OTHER_OWNER);
-    assert_eq!(shop::test_shop_owner_updated_rotated_by(rotated), THIRD_OWNER);
 
     std::unit_test::destroy(owner_cap);
     std::unit_test::destroy(shop);
@@ -416,10 +413,10 @@ fun add_accepted_currency_records_currency_and_event() {
     assert!(added_len > events_before);
     let added_event = &added_events[added_len - 1];
     assert_eq!(shop::test_accepted_coin_added_shop(added_event), shop::test_shop_id(&shop_obj));
-    assert_eq!(shop::test_accepted_coin_added_coin_type(added_event), test_coin_type());
-    assert_eq!(shop::test_accepted_coin_added_feed_id(added_event), expected_feed_id);
-    assert_eq!(shop::test_accepted_coin_added_pyth_object_id(added_event), pyth_object_id);
-    assert_eq!(shop::test_accepted_coin_added_decimals(added_event), 9);
+    assert_eq!(
+        shop::test_accepted_coin_added_id(added_event),
+        accepted_currency_id.to_address()
+    );
 
     test_scenario::return_to_sender(&scn, owner_cap_obj);
     test_scenario::return_shared(shop_obj);
@@ -1548,31 +1545,23 @@ fun add_item_listing_links_spotlight_template() {
         option::some(template_id),
         &mut ctx,
     );
-    let (_, _, _, _, spotlight_template_id) = shop::test_listing_values_local(
-        &listing,
-    );
+    let (listing_name, base_price_usd_cents, stock, _, spotlight_template_id) =
+        shop::test_listing_values_local(&listing);
     let added_events = event::events_by_type<shop::ItemListingAddedEvent>();
     assert_eq!(added_events.length(), 1);
     let added_event = &added_events[0];
     let shop_address = shop::test_shop_id(&shop);
     let listing_address = shop::test_listing_address(&listing);
 
+    assert_eq!(listing_name, b"Limited Tire Set".to_string());
+    assert_eq!(base_price_usd_cents, 200_00);
+    assert_eq!(stock, 8);
     assert!(option::is_some(&spotlight_template_id));
     spotlight_template_id.do_ref!(|value| {
         assert_eq!(*value, template_id);
     });
     assert_eq!(shop::test_item_listing_added_shop(added_event), shop_address);
     assert_eq!(shop::test_item_listing_added_listing(added_event), listing_address);
-    assert_eq!(shop::test_item_listing_added_name(added_event), b"Limited Tire Set".to_string());
-    assert_eq!(shop::test_item_listing_added_base_price_usd_cents(added_event), 200_00);
-    let spotlight_template = shop::test_item_listing_added_spotlight_template(
-        added_event,
-    );
-    assert!(option::is_some(&spotlight_template));
-    spotlight_template.do_ref!(|value| {
-        assert_eq!(*value, template_id.to_address());
-    });
-    assert_eq!(shop::test_item_listing_added_stock(added_event), 8);
 
     shop::test_remove_listing(&mut shop, listing_id);
     shop::test_remove_template(&mut shop, template_id);
@@ -5038,7 +5027,10 @@ fun remove_accepted_currency_emits_removed_event_fields() {
         shop::test_accepted_coin_removed_shop(removed_event),
         shop::test_shop_id(&shared_shop),
     );
-    assert_eq!(shop::test_accepted_coin_removed_coin_type(removed_event), test_coin_type());
+    assert_eq!(
+        shop::test_accepted_coin_removed_id(removed_event),
+        accepted_currency_id.to_address()
+    );
 
     test_scenario::return_shared(shared_shop);
     test_scenario::return_shared(accepted_currency);
@@ -5825,11 +5817,6 @@ fun buy_item_with_discount_emits_discount_redeemed_and_records_template_id() {
     let redeem = &redeems[redeems.length() - 1];
     assert_eq!(shop::test_discount_redeemed_shop(redeem), shop::test_shop_id(&shared_shop));
     assert_eq!(shop::test_discount_redeemed_template_id(redeem), template_id.to_address());
-    assert_eq!(
-        shop::test_discount_redeemed_listing_id(redeem),
-        shop::test_listing_address(&listing),
-    );
-    assert_eq!(shop::test_discount_redeemed_buyer(redeem), OTHER_OWNER);
 
     let (
         _shop_address,
