@@ -71,6 +71,13 @@ export type ShopOverview = {
   disabled: boolean
 }
 
+export type ShopCreatedEnrichmentError = {
+  stage: "fetchObject" | "parseObject"
+  message: string
+  name?: string
+  shopId: string
+}
+
 export type ShopCreatedSummary = {
   shopId: string
   ownerAddress?: string
@@ -78,6 +85,26 @@ export type ShopCreatedSummary = {
   ownerCapId?: string
   createdAtMs?: string
   txDigest?: string
+  errors?: ShopCreatedEnrichmentError[]
+}
+
+const buildShopCreatedEnrichmentError = (
+  stage: ShopCreatedEnrichmentError["stage"],
+  error: unknown,
+  shopId: string
+): ShopCreatedEnrichmentError => {
+  if (error instanceof Error) {
+    return { stage, message: error.message, name: error.name, shopId }
+  }
+
+  return { stage, message: String(error), shopId }
+}
+
+const appendShopCreatedError = (
+  summary: ShopCreatedSummary,
+  error: ShopCreatedEnrichmentError
+) => {
+  summary.errors = summary.errors ? [...summary.errors, error] : [error]
 }
 
 const parseShopCreatedEvent = (
@@ -147,11 +174,21 @@ export const getShopCreatedSummaries = async ({
             { objectId: summary.shopId, options: { showContent: true } },
             { suiClient }
           )
-          summary.ownerAddress =
-            summary.ownerAddress ?? getShopOwnerAddressFromObject(object)
-          summary.name = summary.name ?? getShopNameFromObject(object)
-        } catch {
-          // Best-effort enrichment; keep the summary even if the object fetch fails.
+          try {
+            summary.ownerAddress =
+              summary.ownerAddress ?? getShopOwnerAddressFromObject(object)
+            summary.name = summary.name ?? getShopNameFromObject(object)
+          } catch (error) {
+            appendShopCreatedError(
+              summary,
+              buildShopCreatedEnrichmentError("parseObject", error, summary.shopId)
+            )
+          }
+        } catch (error) {
+          appendShopCreatedError(
+            summary,
+            buildShopCreatedEnrichmentError("fetchObject", error, summary.shopId)
+          )
         }
       }
       summaries.push(summary)
