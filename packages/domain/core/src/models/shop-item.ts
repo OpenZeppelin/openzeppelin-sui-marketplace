@@ -27,8 +27,8 @@ export const findCreatedShopItemIds = (createdObjects: CreatedObjectLike[]) =>
 
 export type ShopItemReceiptSummary = {
   shopItemId: string
-  shopAddress: string
-  itemListingAddress: string
+  shopId: string
+  itemListingId: string
   itemType: string
   name?: string
   acquiredAt?: string
@@ -71,7 +71,7 @@ export const getShopItemReceiptSummaries = async ({
   )
 
   return shopItemReceipts.filter(
-    (receipt) => receipt.shopAddress === normalizedShopFilterId
+    (receipt) => receipt.shopId === normalizedShopFilterId
   )
 }
 
@@ -83,21 +83,18 @@ export const parseShopItemReceiptFromObject = (
     "ShopItem object is missing an id."
   )
   const shopItemFields = unwrapMoveObjectFields<{
-    shop_address?: unknown
-    shop_id?: unknown
+    shop_id: unknown
     item_listing_id: unknown
     item_type: unknown
     name: unknown
     acquired_at: unknown
   }>(shopItemObject)
 
-  const shopAddress = normalizeIdOrThrow(
-    normalizeOptionalIdFromValue(
-      shopItemFields.shop_address ?? shopItemFields.shop_id
-    ),
+  const shopId = normalizeIdOrThrow(
+    normalizeOptionalIdFromValue(shopItemFields.shop_id),
     `Missing shop_id for ShopItem ${shopItemId}.`
   )
-  const itemListingAddress = normalizeIdOrThrow(
+  const itemListingId = normalizeIdOrThrow(
     normalizeOptionalIdFromValue(shopItemFields.item_listing_id),
     `Missing item_listing_id for ShopItem ${shopItemId}.`
   )
@@ -106,8 +103,8 @@ export const parseShopItemReceiptFromObject = (
 
   return {
     shopItemId,
-    shopAddress,
-    itemListingAddress,
+    shopId,
+    itemListingId,
     itemType,
     name: readMoveStringOrVector(shopItemFields.name),
     acquiredAt: formatOptionalNumericValue(shopItemFields.acquired_at)
