@@ -98,7 +98,7 @@ fun create_shop(name: string::String, ctx: &mut tx::TxContext) {
 
   let owner_cap = ShopOwnerCap {
     id: obj::new(ctx),
-    shop_id: shop.id.uid_to_inner(),
+    shop_id: shop.id.to_inner(),
   };
 
   txf::share_object(shop);

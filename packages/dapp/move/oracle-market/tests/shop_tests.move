@@ -4223,7 +4223,7 @@ fun remove_listing_and_template_noop_when_missing() {
     let mut ctx = tx_context::new_from_hint(TEST_OWNER, 10004, 0, 0, 0);
     let (mut shop_obj, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
     let dummy_uid = object::new(&mut ctx);
-    let dummy_id = dummy_uid.uid_to_inner();
+    let dummy_id = dummy_uid.to_inner();
     dummy_uid.delete();
 
     shop::test_remove_listing(&mut shop_obj, dummy_id);
@@ -5229,10 +5229,7 @@ fun buy_item_emits_events_decrements_stock_and_refunds_change() {
     assert_eq!(purchases.length(), purchase_before + 1);
     let purchase = &purchases[purchases.length() - 1];
     assert_eq!(shop::test_purchase_completed_shop(purchase), shop::test_shop_id(&shared_shop));
-    assert_eq!(
-        shop::test_purchase_completed_listing(purchase),
-        shop::test_listing_id(&listing),
-    );
+    assert_eq!(shop::test_purchase_completed_listing(purchase), shop::test_listing_id(&listing));
     assert_eq!(shop::test_purchase_completed_buyer(purchase), OTHER_OWNER);
     assert_eq!(shop::test_purchase_completed_mint_to(purchase), OTHER_OWNER);
     assert_eq!(shop::test_purchase_completed_amount_paid(purchase), quote_amount);
@@ -5838,10 +5835,7 @@ fun buy_item_with_discount_emits_discount_redeemed_and_records_template_id() {
     let redeem = &redeems[redeems.length() - 1];
     assert_eq!(shop::test_discount_redeemed_shop(redeem), shop::test_shop_id(&shared_shop));
     assert_eq!(shop::test_discount_redeemed_template_id(redeem), template_id);
-    assert_eq!(
-        shop::test_discount_redeemed_listing_id(redeem),
-        shop::test_listing_id(&listing),
-    );
+    assert_eq!(shop::test_discount_redeemed_listing_id(redeem), shop::test_listing_id(&listing));
     assert_eq!(shop::test_discount_redeemed_buyer(redeem), OTHER_OWNER);
 
     let (

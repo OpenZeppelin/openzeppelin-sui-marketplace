@@ -73,10 +73,10 @@ entry fun update_shop_owner(
   shop.owner = new_owner;
 
   event::emit(ShopOwnerUpdatedEvent {
-    shop_id: shop.id.uid_to_inner(),
+    shop_id: shop.id.to_inner(),
     previous_owner,
     new_owner,
-    shop_owner_cap_id: owner_cap.id.uid_to_inner(),
+    shop_owner_cap_id: owner_cap.id.to_inner(),
     rotated_by: ctx.sender(),
   });
 }

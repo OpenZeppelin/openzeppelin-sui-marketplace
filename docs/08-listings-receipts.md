@@ -100,7 +100,7 @@ fun mint_shop_item<TItem: store>(
   ShopItem {
     id: obj::new(ctx),
     shop_id: item_listing.shop_id,
-    item_listing_id: item_listing.id.uid_to_inner(),
+    item_listing_id: item_listing.id.to_inner(),
     item_type: item_listing.item_type,
     name: item_listing.name,
     acquired_at: now_secs(clock),

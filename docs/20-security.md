@@ -35,7 +35,7 @@ From `assert_owner_cap` in `packages/dapp/move/oracle-market/sources/shop.move`:
 ```move
 fun assert_owner_cap(shop: &Shop, owner_cap: &ShopOwnerCap) {
    assert!(
-      owner_cap.shop_id == shop.id.uid_to_inner(),
+      owner_cap.shop_id == shop.id.to_inner(),
       EInvalidOwnerCap,
    );
 }
