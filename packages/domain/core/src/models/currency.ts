@@ -12,10 +12,10 @@ import {
   unwrapMoveObjectFields
 } from "@sui-oracle-market/tooling-core/object"
 import {
-  decodeUtf8Vector,
   formatOptionalNumericValue,
   formatVectorBytesAsHex,
-  parseOptionalNumber
+  parseOptionalNumber,
+  readMoveStringOrVector
 } from "@sui-oracle-market/tooling-core/utils/formatters"
 import {
   formatTypeNameFromFieldValue,
@@ -271,7 +271,7 @@ const buildAcceptedCurrencySummary = (
     acceptedCurrencyId,
     markerObjectId,
     coinType,
-    symbol: decodeUtf8Vector(acceptedCurrencyFields.symbol),
+    symbol: readMoveStringOrVector(acceptedCurrencyFields.symbol),
     decimals: parseOptionalNumber(acceptedCurrencyFields.decimals),
     feedIdHex: formatVectorBytesAsHex(acceptedCurrencyFields.feed_id),
     pythObjectId: normalizeOptionalIdFromValue(

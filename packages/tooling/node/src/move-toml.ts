@@ -4,6 +4,7 @@ import path from "node:path"
 import { formatErrorMessage } from "@sui-oracle-market/tooling-core/utils/errors"
 import type { ToolingContext } from "./factory.ts"
 import { logWarning } from "./log.ts"
+import { resolveMoveCliEnvironmentName } from "./move.ts"
 import { getSuiCliEnvironmentChainId } from "./suiCli.ts"
 import { isErrnoWithCode } from "./utils/fs.ts"
 import { escapeRegExp } from "./utils/regex.ts"
@@ -309,9 +310,13 @@ export const syncLocalnetMoveEnvironmentChainId = async (
 
   if (!chainId) return { updatedFiles: [], chainId, didAttempt: true }
 
+  const resolvedEnvironmentName = resolveMoveCliEnvironmentName(environmentName)
+  if (!resolvedEnvironmentName)
+    return { updatedFiles: [], chainId, didAttempt: true }
+
   const { updatedFiles } = await syncMoveEnvironmentChainId({
     moveRootPath,
-    environmentName,
+    environmentName: resolvedEnvironmentName,
     chainId,
     dryRun
   })
@@ -385,10 +390,20 @@ export const clearPublishedEntryForNetwork = async ({
     throw error
   }
 
-  const { updatedContents, didUpdate } = removePublishedSectionForNetwork(
-    contents,
-    networkName
-  )
+  const targetNetworks =
+    networkName === "localnet" ? ["localnet", "test-publish"] : [networkName]
+  let updatedContents = contents
+  let didUpdate = false
+
+  for (const targetNetwork of targetNetworks) {
+    const result = removePublishedSectionForNetwork(
+      updatedContents,
+      targetNetwork
+    )
+    updatedContents = result.updatedContents
+    if (result.didUpdate) didUpdate = true
+  }
+
   if (!didUpdate) return { publishedTomlPath, didUpdate: false }
 
   await fs.writeFile(publishedTomlPath, updatedContents)

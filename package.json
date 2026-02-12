@@ -1,6 +1,6 @@
 {
   "name": "dapp",
-  "version": "0.0.0",
+  "version": "1.0.0",
   "type": "module",
   "private": true,
   "description": "Oracle Market",
@@ -33,5 +33,11 @@
   "workspaces": [
     "packages/*",
     "packages/*/*"
-  ]
+  ],
+  "pnpm": {
+    "overrides": {
+      "axios": ">=1.13.5",
+      "@isaacs/brace-expansion": ">=5.0.1"
+    }
+  }
 }
