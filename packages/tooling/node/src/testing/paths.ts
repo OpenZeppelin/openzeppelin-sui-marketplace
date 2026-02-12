@@ -17,7 +17,8 @@ export const resolveDappRoot = () =>
 export const resolveDappConfigPath = () =>
   path.join(resolveDappRoot(), "sui.config.ts")
 
-export const resolveDappMoveRoot = () => path.join(resolveDappRoot(), "contracts")
+export const resolveDappMoveRoot = () =>
+  path.join(resolveDappRoot(), "contracts")
 
 export const resolveTsNodeEsmPath = () => {
   const binaryName =

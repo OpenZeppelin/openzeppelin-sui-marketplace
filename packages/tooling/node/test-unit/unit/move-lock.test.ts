@@ -8,7 +8,7 @@ import { readFixture } from "../../../tests-integration/helpers/fs.ts"
 
 describe("extractSuiFrameworkRevisionsFromMoveLock", () => {
   it("extracts revisions from pinned Move.lock", async () => {
-    const lockContents = await readFixture("contracts", "Move.lock.pinned")
+    const lockContents = await readFixture("move", "Move.lock.pinned")
     const revisions = extractSuiFrameworkRevisionsFromMoveLock({
       lockContents
     })
@@ -17,7 +17,7 @@ describe("extractSuiFrameworkRevisionsFromMoveLock", () => {
   })
 
   it("filters pinned revisions by environment", async () => {
-    const lockContents = await readFixture("contracts", "Move.lock.pinned")
+    const lockContents = await readFixture("move", "Move.lock.pinned")
     const revisions = extractSuiFrameworkRevisionsFromMoveLock({
       lockContents,
       environmentName: "testnet"
@@ -27,7 +27,7 @@ describe("extractSuiFrameworkRevisionsFromMoveLock", () => {
   })
 
   it("extracts revisions from legacy Move.lock", async () => {
-    const lockContents = await readFixture("contracts", "Move.lock.legacy")
+    const lockContents = await readFixture("move", "Move.lock.legacy")
     const revisions = extractSuiFrameworkRevisionsFromMoveLock({
       lockContents
     })
@@ -46,7 +46,7 @@ describe("extractSuiFrameworkRevisionsFromMoveLock", () => {
 
 describe("extractSuiFrameworkPinnedEntriesFromMoveLock", () => {
   it("returns pinned entry metadata for environment", async () => {
-    const lockContents = await readFixture("contracts", "Move.lock.pinned")
+    const lockContents = await readFixture("move", "Move.lock.pinned")
     const entries = extractSuiFrameworkPinnedEntriesFromMoveLock({
       lockContents,
       environmentName: "testnet"
@@ -71,7 +71,7 @@ describe("extractSuiFrameworkPinnedEntriesFromMoveLock", () => {
 
 describe("extractSingleSuiFrameworkRevisionFromMoveLock", () => {
   it("returns one revision from legacy locks", async () => {
-    const lockContents = await readFixture("contracts", "Move.lock.legacy")
+    const lockContents = await readFixture("move", "Move.lock.legacy")
     const revision = extractSingleSuiFrameworkRevisionFromMoveLock({
       lockContents
     })

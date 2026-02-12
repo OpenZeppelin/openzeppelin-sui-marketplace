@@ -420,7 +420,7 @@ describe("publishPackageWithLog", () => {
     await withTempDir(async (dir) => {
       const packagePath = await createPackageFixture({
         rootDir: dir,
-        moveTomlContents: await readFixture("contracts", "Move.toml")
+        moveTomlContents: await readFixture("move", "Move.toml")
       })
 
       const { client } = createSuiClientMock()
@@ -500,8 +500,8 @@ describe("publishPackageWithLog", () => {
     await withTempDir(async (dir) => {
       const packagePath = await createPackageFixture({
         rootDir: dir,
-        moveTomlContents: await readFixture("contracts", "Move.toml"),
-        moveLockContents: await readFixture("contracts", "Move.lock.pinned")
+        moveTomlContents: await readFixture("move", "Move.toml"),
+        moveLockContents: await readFixture("move", "Move.lock.pinned")
       })
 
       const config = buildResolvedConfig({
@@ -548,8 +548,8 @@ describe("publishPackageWithLog", () => {
     await withTempDir(async (dir) => {
       const packagePath = await createPackageFixture({
         rootDir: dir,
-        moveTomlContents: await readFixture("contracts", "Move.toml"),
-        moveLockContents: await readFixture("contracts", "Move.lock.pinned")
+        moveTomlContents: await readFixture("move", "Move.toml"),
+        moveLockContents: await readFixture("move", "Move.lock.pinned")
       })
 
       const config = buildResolvedConfig({
