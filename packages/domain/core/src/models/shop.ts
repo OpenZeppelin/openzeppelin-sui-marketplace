@@ -181,13 +181,21 @@ export const getShopCreatedSummaries = async ({
           } catch (error) {
             appendShopCreatedError(
               summary,
-              buildShopCreatedEnrichmentError("parseObject", error, summary.shopId)
+              buildShopCreatedEnrichmentError(
+                "parseObject",
+                error,
+                summary.shopId
+              )
             )
           }
         } catch (error) {
           appendShopCreatedError(
             summary,
-            buildShopCreatedEnrichmentError("fetchObject", error, summary.shopId)
+            buildShopCreatedEnrichmentError(
+              "fetchObject",
+              error,
+              summary.shopId
+            )
           )
         }
       }
