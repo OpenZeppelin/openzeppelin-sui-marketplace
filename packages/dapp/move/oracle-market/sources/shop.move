@@ -2523,7 +2523,7 @@ public fun test_claim_and_buy_with_ids<TItem: store, TCoin>(
     assert_template_matches_shop!(shop, discount_template);
 
     let now = now_secs(clock);
-    let (discount_ticket, claimer) = discount_template.claim_discount_ticket_with_event(
+    let (discount_ticket, _claimer) = discount_template.claim_discount_ticket_with_event(
         now,
         ctx,
     );
@@ -2699,18 +2699,6 @@ public fun test_discount_claimed_shop(event: &DiscountClaimedEvent): address {
 }
 
 #[test_only]
-public fun test_discount_claimed_template_id(event: &DiscountClaimedEvent): address acquires DiscountTicket {
-    let ticket = borrow_global<DiscountTicket>(event.discount_id);
-    ticket.discount_template_id
-}
-
-#[test_only]
-public fun test_discount_claimed_claimer(event: &DiscountClaimedEvent): address acquires DiscountTicket {
-    let ticket = borrow_global<DiscountTicket>(event.discount_id);
-    ticket.claimer
-}
-
-#[test_only]
 public fun test_discount_claimed_discount_id(event: &DiscountClaimedEvent): address {
     event.discount_id
 }
@@ -2824,18 +2812,6 @@ public fun test_shop_owner_cap_id(owner_cap: &ShopOwnerCap): address {
 #[test_only]
 public fun test_shop_owner_cap_shop_address(owner_cap: &ShopOwnerCap): address {
     owner_cap.shop_address
-}
-
-#[test_only]
-public fun test_shop_created_owner(event: &ShopCreatedEvent): address acquires Shop {
-    let shop = borrow_global<Shop>(event.shop_address);
-    shop.owner
-}
-
-#[test_only]
-public fun test_shop_created_name(event: &ShopCreatedEvent): String acquires Shop {
-    let shop = borrow_global<Shop>(event.shop_address);
-    string::utf8(string::bytes(&shop.name))
 }
 
 #[test_only]

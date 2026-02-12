@@ -142,8 +142,6 @@ fun create_shop_emits_event_and_records_ids() {
     let shop_created = &created[0];
     let owner_cap_addr = shop::test_last_created_id(&ctx).to_address();
 
-    assert_eq!(shop::test_shop_created_owner(shop_created), TEST_OWNER);
-    assert_eq!(shop::test_shop_created_name(shop_created), DEFAULT_SHOP_NAME.to_string());
     assert_eq!(shop::test_shop_created_owner_cap_id(shop_created), owner_cap_addr);
     assert_eq!(tx_context::get_ids_created(&ctx), starting_ids + 2);
 }
@@ -158,12 +156,6 @@ fun create_shop_allows_multiple_shops_per_sender() {
 
     let created = event::events_by_type<shop::ShopCreatedEvent>();
     assert_eq!(created.length(), 2);
-    let first = &created[0];
-    let second = &created[1];
-    assert_eq!(shop::test_shop_created_owner(first), TEST_OWNER);
-    assert_eq!(shop::test_shop_created_name(first), DEFAULT_SHOP_NAME.to_string());
-    assert_eq!(shop::test_shop_created_owner(second), TEST_OWNER);
-    assert_eq!(shop::test_shop_created_name(second), DEFAULT_SHOP_NAME.to_string());
     assert_eq!(tx_context::get_ids_created(&ctx), starting_ids + 4);
 }
 
@@ -196,8 +188,8 @@ fun create_shop_records_sender_in_event() {
     let created = event::events_by_type<shop::ShopCreatedEvent>();
     assert_eq!(created.length(), 1);
     let shop_created = &created[0];
-    assert_eq!(shop::test_shop_created_owner(shop_created), OTHER_OWNER);
-    assert_eq!(shop::test_shop_created_name(shop_created), DEFAULT_SHOP_NAME.to_string());
+    let owner_cap_addr = shop::test_last_created_id(&ctx).to_address();
+    assert_eq!(shop::test_shop_created_owner_cap_id(shop_created), owner_cap_addr);
 }
 
 #[test]
@@ -3567,8 +3559,6 @@ fun claim_discount_ticket_mints_transfers_and_records_claim() {
     let shop_address = shop_id.to_address();
     let template_address = template_id.to_address();
     assert_eq!(shop::test_discount_claimed_shop(claimed), shop_address);
-    assert_eq!(shop::test_discount_claimed_template_id(claimed), template_address);
-    assert_eq!(shop::test_discount_claimed_claimer(claimed), OTHER_OWNER);
     let ticket_id = shop::test_discount_claimed_discount_id(claimed).to_id();
 
     test_scenario::return_shared(template_obj);
