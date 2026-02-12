@@ -125,7 +125,7 @@ type SanitizedNetwork = {
   url?: string
   faucetUrl?: string
   gasBudget?: number
-  move?: SuiNetworkConfig["move"]
+  move?: SuiNetworkConfig["contracts"]
   account?: SanitizedAccount
   accounts?: Record<string, SanitizedAccount>
 }

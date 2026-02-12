@@ -67,11 +67,11 @@ type ExistingState = {
 }
 
 // Where the local Pyth stub lives.
-const DEFAULT_PYTH_CONTRACT_PATH = path.join(process.cwd(), "move", "pyth-mock")
-const DEFAULT_COIN_CONTRACT_PATH = path.join(process.cwd(), "move", "coin-mock")
+const DEFAULT_PYTH_CONTRACT_PATH = path.join(process.cwd(), "contracts", "pyth-mock")
+const DEFAULT_COIN_CONTRACT_PATH = path.join(process.cwd(), "contracts", "coin-mock")
 const DEFAULT_ITEM_EXAMPLES_CONTRACT_PATH = path.join(
   process.cwd(),
-  "move",
+  "contracts",
   "item-examples"
 )
 const PACKAGE_AVAILABILITY_TIMEOUT_MS = 20_000

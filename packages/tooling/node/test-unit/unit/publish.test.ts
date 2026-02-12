@@ -125,7 +125,7 @@ const buildResolvedConfig = ({
     defaultNetwork: networkName,
     networks: { [networkName]: network },
     paths: {
-      move: path.join(packageRoot, "move"),
+      move: path.join(packageRoot, "contracts"),
       deployments: path.join(packageRoot, "deployments"),
       objects: path.join(packageRoot, "deployments"),
       artifacts: path.join(packageRoot, "deployments")
@@ -420,7 +420,7 @@ describe("publishPackageWithLog", () => {
     await withTempDir(async (dir) => {
       const packagePath = await createPackageFixture({
         rootDir: dir,
-        moveTomlContents: await readFixture("move", "Move.toml")
+        moveTomlContents: await readFixture("contracts", "Move.toml")
       })
 
       const { client } = createSuiClientMock()
@@ -500,8 +500,8 @@ describe("publishPackageWithLog", () => {
     await withTempDir(async (dir) => {
       const packagePath = await createPackageFixture({
         rootDir: dir,
-        moveTomlContents: await readFixture("move", "Move.toml"),
-        moveLockContents: await readFixture("move", "Move.lock.pinned")
+        moveTomlContents: await readFixture("contracts", "Move.toml"),
+        moveLockContents: await readFixture("contracts", "Move.lock.pinned")
       })
 
       const config = buildResolvedConfig({
@@ -548,8 +548,8 @@ describe("publishPackageWithLog", () => {
     await withTempDir(async (dir) => {
       const packagePath = await createPackageFixture({
         rootDir: dir,
-        moveTomlContents: await readFixture("move", "Move.toml"),
-        moveLockContents: await readFixture("move", "Move.lock.pinned")
+        moveTomlContents: await readFixture("contracts", "Move.toml"),
+        moveLockContents: await readFixture("contracts", "Move.lock.pinned")
       })
 
       const config = buildResolvedConfig({

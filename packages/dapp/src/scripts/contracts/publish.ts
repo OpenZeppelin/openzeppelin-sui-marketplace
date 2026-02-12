@@ -280,7 +280,7 @@ runSuiScript(
     .option("packagePath", {
       alias: "package-path",
       type: "string",
-      description: `The path of the package to publish in "move" directory`,
+      description: `The path of the package to publish in "contracts" directory`,
       demandOption: true
     })
     .option("withUnpublishedDependencies", {

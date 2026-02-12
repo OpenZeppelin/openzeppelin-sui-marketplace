@@ -92,7 +92,7 @@ describe("move helpers", () => {
 
 describe("syncMoveEnvironmentChainId", () => {
   it("inserts environments block when needed", async () => {
-    const moveToml = await readFixture("move", "Move.toml")
+    const moveToml = await readFixture("contracts", "Move.toml")
 
     await withTempDir(async (dir) => {
       await writeFileTree(dir, { "Move.toml": moveToml })
@@ -133,7 +133,7 @@ describe("syncMoveEnvironmentChainId", () => {
 
 describe("clearPublishedEntryForNetwork", () => {
   it("removes the published section for a network", async () => {
-    const published = await readFixture("move", "Published.toml")
+    const published = await readFixture("contracts", "Published.toml")
 
     await withTempDir(async (dir) => {
       const publishedPath = path.join(dir, "Published.toml")
@@ -154,7 +154,7 @@ describe("clearPublishedEntryForNetwork", () => {
   })
 
   it("no-ops when network name is undefined", async () => {
-    const published = await readFixture("move", "Published.toml")
+    const published = await readFixture("contracts", "Published.toml")
 
     await withTempDir(async (dir) => {
       const publishedPath = path.join(dir, "Published.toml")
