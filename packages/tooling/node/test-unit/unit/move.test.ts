@@ -84,9 +84,9 @@ describe("move helpers", () => {
         packagePath: "/tmp/contracts/../contracts/oracle-market"
       })
     ]
-    expect(hasDeploymentForPackage(artifacts, "/tmp/contracts/oracle-market")).toBe(
-      true
-    )
+    expect(
+      hasDeploymentForPackage(artifacts, "/tmp/contracts/oracle-market")
+    ).toBe(true)
   })
 })
 
