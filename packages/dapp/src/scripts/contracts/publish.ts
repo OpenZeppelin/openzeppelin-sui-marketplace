@@ -234,7 +234,7 @@ runSuiScript(
       clearStaleLocks: cliArguments.clearStaleMoveLocks
     })
 
-    // Resolve the absolute Move package path (relative to repo root or move/).
+    // Resolve the absolute Move package path (relative to repo root or contracts/).
     const fullPackagePath = resolveFullPackagePath(
       path.resolve(tooling.suiConfig.paths.move),
       cliArguments.packagePath

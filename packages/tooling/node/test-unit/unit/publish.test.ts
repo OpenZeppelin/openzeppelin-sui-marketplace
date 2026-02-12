@@ -75,7 +75,7 @@ const buildPublishPlan = (
       url: "http://localhost:9000",
       account: { accountIndex: 0 }
     },
-    packagePath: "/tmp/move/oracle-market",
+    packagePath: "/tmp/contracts/oracle-market",
     fullNodeUrl: "http://localhost:9000",
     keypair: Ed25519Keypair.generate(),
     gasBudget: 1000,

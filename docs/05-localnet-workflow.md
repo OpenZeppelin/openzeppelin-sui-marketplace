@@ -50,7 +50,7 @@ pnpm install
       - `accountMnemonic`: mnemonic for the signer.
     - `accounts`: optional named account map (same shape as `account`) for scripts that switch signer roles.
   - `paths`:
-    - `move`: Move root (defaults to `packages/dapp/move` at runtime).
+    - `move`: Move root (defaults to `packages/dapp/contracts` at runtime).
     - `deployments`: publish artifacts output directory.
     - `objects`: object artifacts output directory.
     - `artifacts`: alias for deployments (kept for compatibility).

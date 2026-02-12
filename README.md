@@ -112,7 +112,7 @@ The detailed docs live under `docs/`:
 .
 ├── packages/
 │   ├── dapp/
-│   │   ├── move/                      # Move packages (oracle-market + mocks + examples)
+│   │   ├── contracts/                 # Move packages (oracle-market + mocks + examples)
 │   │   │   ├── oracle-market/         # Main Move package (sui_oracle_market)
 │   │   │   ├── pyth-mock/             # Local-only Pyth stub (dev/localnet)
 │   │   │   ├── coin-mock/             # Local-only mock coins (dev/localnet)
