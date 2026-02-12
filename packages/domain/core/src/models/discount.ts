@@ -447,7 +447,7 @@ const buildDiscountTemplateSummary = (
 ): DiscountTemplateSummary => {
   const discountTemplateFields = unwrapMoveObjectFields(discountTemplateObject)
   const shopAddress = normalizeOptionalIdFromValue(
-    discountTemplateFields.shop_address
+    discountTemplateFields.shop_address ?? discountTemplateFields.shop_id
   )
   const appliesToListingId = normalizeOptionalIdFromValue(
     discountTemplateFields.applies_to_listing
@@ -476,7 +476,7 @@ const buildDiscountTemplateSummary = (
     markerObjectId,
     shopAddress: normalizeIdOrThrow(
       shopAddress,
-      `Missing shop_address for DiscountTemplate ${discountTemplateId}.`
+      `Missing shop_id for DiscountTemplate ${discountTemplateId}.`
     ),
     appliesToListingId,
     ruleDescription: formatOnChainDiscountRule(rule),
@@ -531,7 +531,8 @@ export const parseDiscountTicketFromObject = (
 
   const discountTicketFields = unwrapMoveObjectFields<{
     discount_template_id: unknown
-    shop_address: unknown
+    shop_address?: unknown
+    shop_id?: unknown
     listing_id: unknown
     claimer: unknown
   }>(discountTicketObject)
@@ -547,8 +548,10 @@ export const parseDiscountTicketFromObject = (
       `Missing discount_template_id for DiscountTicket ${discountTicketId}.`
     ),
     shopAddress: normalizeIdOrThrow(
-      normalizeOptionalIdFromValue(discountTicketFields.shop_address),
-      `Missing shop_address for DiscountTicket ${discountTicketId}.`
+      normalizeOptionalIdFromValue(
+        discountTicketFields.shop_address ?? discountTicketFields.shop_id
+      ),
+      `Missing shop_id for DiscountTicket ${discountTicketId}.`
     ),
     listingId: listingId ? normalizeSuiObjectId(listingId) : undefined,
     claimer: requireValue(
