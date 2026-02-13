@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest"
 
+import type { ItemListingSummary } from "@sui-oracle-market/domain-core/models/item-listing"
+import type { TransactionSummary } from "@sui-oracle-market/tooling-node/transactions-summary"
 import {
   attachDiscountTemplateToListing,
   createDappIntegrationTestEnv,
@@ -10,20 +12,6 @@ import {
   runBuyerScriptJson,
   runOwnerScriptJson
 } from "./helpers.ts"
-
-type TransactionSummary = {
-  status?: string
-}
-
-type ItemListingSummary = {
-  itemListingId?: string
-  markerObjectId?: string
-  name?: string
-  itemType?: string
-  basePriceUsdCents?: string
-  stock?: string
-  spotlightTemplateId?: string
-}
 
 type ItemListingOutput = {
   itemListing?: ItemListingSummary
