@@ -368,7 +368,7 @@ const ItemListingsPanel = ({
                               size="compact"
                               onClick={() => onRemoveItem?.(listing)}
                             >
-                              Remove
+                              Delete
                             </Button>
                           ) : undefined}
                           {showBuy ? (

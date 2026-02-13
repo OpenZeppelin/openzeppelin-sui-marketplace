@@ -31,7 +31,7 @@ const ListingSummarySection = ({
 }) => (
   <ModalSection
     title="Listing details"
-    subtitle="Inventory record scheduled for removal"
+    subtitle="Inventory record scheduled for deletion"
   >
     <div className="grid gap-3 text-xs sm:grid-cols-2">
       <div className="rounded-xl border border-slate-200/70 bg-white/80 p-3 dark:border-slate-50/15 dark:bg-slate-950/60">
@@ -77,12 +77,13 @@ const ListingSummarySection = ({
 
 const RemovalImpactSection = () => (
   <ModalSection
-    title="Removal impact"
-    subtitle="What changes after the listing is removed"
+    title="Deletion impact"
+    subtitle="What changes after the listing is deleted"
   >
     <div className="text-xs text-slate-500 dark:text-slate-200/70">
-      Removing a listing delists it from the shop registry. Buyers will no
-      longer see it in the storefront or be able to purchase it.
+      Deleting a listing removes it from the shop registry and destroys the
+      on-chain listing object. Buyers will no longer see it in the storefront,
+      and historical metadata may no longer be available.
     </div>
   </ModalSection>
 )
@@ -101,11 +102,11 @@ const ListingSuccessView = ({
   <>
     <ModalStatusHeader
       status="success"
-      title="Listing removed"
+      title="Listing deleted"
       subtitle={
         summary.listing.name || getStructLabel(summary.listing.itemType)
       }
-      description="The listing has been delisted on chain."
+      description="The listing has been deleted and storage reclaimed."
       onClose={onClose}
     />
     <ModalBody>
@@ -120,7 +121,7 @@ const ListingSuccessView = ({
         explorerUrl={explorerUrl}
       />
     </ModalBody>
-    <ModalCloseFooter message="Listing removal confirmed." onClose={onClose} />
+    <ModalCloseFooter message="Listing deletion confirmed." onClose={onClose} />
   </>
 )
 
@@ -140,7 +141,7 @@ const ListingErrorView = ({
   <>
     <ModalStatusHeader
       status="error"
-      title="Removal failed"
+      title="Deletion failed"
       subtitle={listingLabel}
       description="Review the error details and try again."
       onClose={onClose}
@@ -206,8 +207,8 @@ const RemoveItemModal = ({
         <>
           <ModalHeader
             eyebrow="Inventory"
-            title="Remove Item"
-            description="Delist this item from the storefront."
+            title="Delete Item"
+            description="Delete this item and reclaim on-chain storage."
             onClose={onClose}
             footer={
               <CopyableId
@@ -230,7 +231,7 @@ const RemoveItemModal = ({
               <div className="text-xs uppercase tracking-[0.18em] text-slate-500 dark:text-slate-200/60">
                 {transactionState.status === "processing"
                   ? "Waiting for wallet confirmation..."
-                  : "Ready to remove the listing."}
+                  : "Ready to delete the listing."}
               </div>
               <div className="flex flex-wrap items-center gap-3">
                 <Button variant="secondary" onClick={onClose}>
@@ -243,7 +244,7 @@ const RemoveItemModal = ({
                 >
                   {transactionState.status === "processing"
                     ? "Processing..."
-                    : "Remove listing"}
+                    : "Delete listing"}
                 </Button>
               </div>
             </div>

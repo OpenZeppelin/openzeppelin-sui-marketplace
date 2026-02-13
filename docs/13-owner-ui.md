@@ -28,7 +28,7 @@ pnpm ui dev
 2. **Add listing** -> `shop::add_item_listing`
    - UI: `packages/ui/src/app/components/AddItemModal.tsx`
    - Hook: `packages/ui/src/app/hooks/useAddItemModalState.ts`
-3. **Remove listing** -> `shop::remove_item_listing`
+3. **Delete listing** -> `shop::delete_item_listing`
    - UI: `packages/ui/src/app/components/RemoveItemModal.tsx`
    - Hook: `packages/ui/src/app/hooks/useRemoveItemModalState.ts`
 4. **Add currency** -> `shop::add_accepted_currency`
