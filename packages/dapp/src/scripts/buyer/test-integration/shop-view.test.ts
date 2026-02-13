@@ -96,7 +96,7 @@ describe("buyer shop-view integration", () => {
       discountTemplates.forEach((template) => {
         expect(template.discountTemplateId).toBeTruthy()
         expect(template.markerObjectId).toBeTruthy()
-        expect(template.shopAddress).toBeTruthy()
+        expect(template.shopId).toBeTruthy()
         expect(template.status).toBeTruthy()
       })
     })

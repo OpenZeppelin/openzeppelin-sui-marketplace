@@ -32,29 +32,28 @@ None. This is a conceptual chapter that builds on earlier examples.
 - **What this repo chooses**: the Shop and its child shared objects use consensus so listings and currencies can be accessed by anyone. Owned capabilities and tickets use fastpath for low-latency user interactions.
 
 ## 6. Code references
-1. `packages/dapp/move/oracle-market/sources/shop.move` (Shop, ShopOwnerCap, DiscountTicket, ItemListingMarker)
+1. `packages/dapp/contracts/oracle-market/sources/shop.move` (Shop, ShopOwnerCap, DiscountTicket, ItemListingMarker)
 2. `packages/domain/core/src/models/shop.ts` (event queries and shop inspection)
 3. `packages/tooling/core/src/object-info.ts` (ownership labels and version metadata)
 
 **Code spotlight: ownership encoded at the type level**
-`packages/dapp/move/oracle-market/sources/shop.move`
+`packages/dapp/contracts/oracle-market/sources/shop.move`
 ```move
 public struct ShopOwnerCap has key, store {
-  id: obj::UID,
-  shop_address: address,
-  owner: address,
+  id: UID,
+  shop_id: ID,
 }
 
 public struct DiscountTicket has key, store {
-  id: obj::UID,
-  discount_template_id: address,
-  shop_address: address,
-  listing_id: Option<obj::ID>,
+  id: UID,
+  discount_template_id: ID,
+  shop_id: ID,
+  listing_id: Option<ID>,
   claimer: address,
 }
 
 public struct ItemListingMarker has copy, drop, store {
-  listing_id: obj::ID,
+  listing_id: ID,
 }
 ```
 

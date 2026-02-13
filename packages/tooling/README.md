@@ -61,7 +61,7 @@ export default defineSuiConfig({
     }
   },
   paths: {
-    move: "move",
+    move: "contracts",
     deployments: "deployments",
     objects: "deployments",
     artifacts: "deployments"

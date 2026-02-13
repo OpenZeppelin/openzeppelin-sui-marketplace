@@ -3,7 +3,7 @@
 **Path:** [Learning Path](./) > 06 Scripts reference (CLI)
 
 All backend scripts live under `packages/dapp/src/scripts`; mock chain scripts live under
-`packages/dapp/src/scripts/mock`, and Move scripts live under `packages/dapp/src/scripts/move`.
+`packages/dapp/src/scripts/mock`, and Move scripts live under `packages/dapp/src/scripts/contracts`.
 
 Run from the repo root:
 ```bash
@@ -66,9 +66,9 @@ await tooling.executeTransactionWithSummary({
 	- `--re-publish`: ignore existing artifacts; republish mocks and recreate feeds.
 
 ### `pnpm script move:publish`
-- Builds and publishes a Move package under `packages/dapp/move`, skipping if a deployment artifact already exists unless `--re-publish` is set.
+- Builds and publishes a Move package under `packages/dapp/contracts`, skipping if a deployment artifact already exists unless `--re-publish` is set.
 - Flags:
-	- `--package-path <path>`: package folder relative to `packages/dapp/move` (required).
+	- `--package-path <path>`: package folder relative to `packages/dapp/contracts` (required).
 	- `--with-unpublished-dependencies`: allow unpublished deps (defaults to `true` on localnet; rejected on shared networks).
 	- `--re-publish`: publish even if a deployment artifact already exists.
 	- Use `--network <name>` to switch between `localnet`, `testnet`, etc; the script passes the matching Move `--environment` to the CLI.

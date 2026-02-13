@@ -29,45 +29,45 @@ pnpm script buyer:currency:list --shop-id <shopId>
 ```
 
 ## 4. EVM -> Sui translation
-1. **ERC-20 metadata -> coin registry**: coin decimals/symbol are fetched from the Sui coin registry. See `add_accepted_currency` in `packages/dapp/move/oracle-market/sources/shop.move`.
-2. **Oracle address -> PriceInfoObject ID**: Pyth feeds are objects, not just addresses. The currency stores `pyth_object_id` and validates it on-chain. See `AcceptedCurrency` in `packages/dapp/move/oracle-market/sources/shop.move`.
-3. **Staleness checks -> guardrails**: guardrails are enforced on-chain and can be tightened by buyers. See `quote_amount_for_price_info_object` in `packages/dapp/move/oracle-market/sources/shop.move`.
+1. **ERC-20 metadata -> coin registry**: coin decimals/symbol are fetched from the Sui coin registry. See `add_accepted_currency` in `packages/dapp/contracts/oracle-market/sources/shop.move`.
+2. **Oracle address -> PriceInfoObject ID**: Pyth feeds are objects, not just addresses. The currency stores `pyth_object_id` and validates it on-chain. See `AcceptedCurrency` in `packages/dapp/contracts/oracle-market/sources/shop.move`.
+3. **Staleness checks -> guardrails**: guardrails are enforced on-chain and can be tightened by buyers. See `quote_amount_for_price_info_object` in `packages/dapp/contracts/oracle-market/sources/shop.move`.
 
 ## 5. Concept deep dive: coins, registry, and oracles
 - **`Coin<T>` as a resource**: payment is a `Coin<T>` object, not a balance. Move conventions
   recommend passing a coin with the exact amount by value for readability. This repo instead
   splits a payment coin and returns change, which is a deliberate deviation from that guidance.
-  Code: `packages/dapp/move/oracle-market/sources/shop.move` (`process_purchase`, `split_payment`, `finalize_purchase_transfers`)
+  Code: `packages/dapp/contracts/oracle-market/sources/shop.move` (`process_purchase`, `split_payment`, `finalize_purchase_transfers`)
 - **Coin registry metadata**: `coin_registry::Currency<T>` provides trusted decimals/symbols.
   This avoids spoofed ERC-20 metadata. The module copies metadata into `AcceptedCurrency`.
-  Code: `packages/dapp/move/oracle-market/sources/shop.move` (`add_accepted_currency`)
+  Code: `packages/dapp/contracts/oracle-market/sources/shop.move` (`add_accepted_currency`)
 - **Pyth PriceInfoObject**: oracles are objects. The shop stores a specific `pyth_object_id` and
   checks the feed_id bytes to prevent spoofing. Clients pass the refreshed object into the PTB, and
   the module validates identity and freshness on-chain.
-  Code: `packages/dapp/move/oracle-market/sources/shop.move` (`ensure_price_info_matches_currency`)
+  Code: `packages/dapp/contracts/oracle-market/sources/shop.move` (`ensure_price_info_matches_currency`)
 - **Feed identity is strict**: feed IDs must be 32 bytes, and the `pyth_object_id` must match the
   actual PriceInfoObject you pass in. Both are checked on-chain to block forged inputs.
-  Code: `packages/dapp/move/oracle-market/sources/shop.move` (`assert_price_info_identity`)
+  Code: `packages/dapp/contracts/oracle-market/sources/shop.move` (`assert_price_info_identity`)
 - **Clock-based freshness**: `clock::Clock` is a shared object that supplies trusted time for
   guardrails. Price age and status lag are verified on-chain so the UI cannot bypass them.
-  Code: `packages/dapp/move/oracle-market/sources/shop.move` (`quote_amount_for_price_info_object`)
+  Code: `packages/dapp/contracts/oracle-market/sources/shop.move` (`quote_amount_for_price_info_object`)
 - **Guardrail caps**: sellers set per-currency caps; buyers can only tighten
   `max_price_age_secs`/`max_confidence_ratio_bps`. Status-lag is enforced on-chain using the seller cap.
   This is a protocol-level safety check, not just a UI preference.
-  Code: `packages/dapp/move/oracle-market/sources/shop.move` (`resolve_guardrail_cap`, `resolve_effective_guardrails`)
+  Code: `packages/dapp/contracts/oracle-market/sources/shop.move` (`resolve_guardrail_cap`, `resolve_effective_guardrails`)
 - **Conservative pricing**: price conversion uses mu-sigma (price minus confidence interval) and
   enforces a max confidence ratio in basis points to avoid undercharging on noisy feeds.
-  Code: `packages/dapp/move/oracle-market/sources/shop.move` (`conservative_price_mantissa`)
+  Code: `packages/dapp/contracts/oracle-market/sources/shop.move` (`conservative_price_mantissa`)
 
 ## 6. Code references
-1. `packages/dapp/move/oracle-market/sources/shop.move` (AcceptedCurrency, add_accepted_currency, quote_amount_for_price_info_object)
+1. `packages/dapp/contracts/oracle-market/sources/shop.move` (AcceptedCurrency, add_accepted_currency, quote_amount_for_price_info_object)
 2. `packages/domain/core/src/models/currency.ts` (coin type index + summaries)
 3. `packages/domain/core/src/models/pyth.ts` (Pyth config + mock feeds)
 4. `packages/dapp/src/scripts/owner/currency-add.ts` (script)
 5. PTB builder definition: `packages/domain/core/src/ptb/currency.ts` (buildAddAcceptedCurrencyTransaction)
 
 **Code spotlight: register an AcceptedCurrency**
-`packages/dapp/move/oracle-market/sources/shop.move`
+`packages/dapp/contracts/oracle-market/sources/shop.move`
 ```move
 entry fun add_accepted_currency<T>(
   shop: &mut Shop,
@@ -75,9 +75,9 @@ entry fun add_accepted_currency<T>(
   currency: &coin_registry::Currency<T>,
   price_info_object: &price_info::PriceInfoObject,
   feed_id: vector<u8>,
-  pyth_object_id: obj::ID,
+  pyth_object_id: ID,
   max_price_age_secs_cap: Option<u64>,
-  max_confidence_ratio_bps_cap: Option<u64>,
+  max_confidence_ratio_bps_cap: Option<u16>,
   max_price_status_lag_secs_cap: Option<u64>,
   ctx: &mut tx::TxContext,
 ) {
@@ -94,11 +94,11 @@ entry fun add_accepted_currency<T>(
 ```
 
 **Code spotlight: strict oracle identity checks**
-`packages/dapp/move/oracle-market/sources/shop.move`
+`packages/dapp/contracts/oracle-market/sources/shop.move`
 ```move
 fun assert_price_info_identity(
   expected_feed_id: &vector<u8>,
-  expected_pyth_object_id: &obj::ID,
+  expected_pyth_object_id: &ID,
   price_info_object: &price_info::PriceInfoObject,
 ) {
   let confirmed_price_object = price_info::uid_to_inner(price_info_object);

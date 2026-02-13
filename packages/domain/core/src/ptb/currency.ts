@@ -24,7 +24,7 @@ export const buildAddAcceptedCurrencyTransaction = ({
   priceInfoObject: WrappedSuiSharedObject
   ownerCapId: string
   maxPriceAgeSecsCap?: bigint
-  maxConfidenceRatioBpsCap?: bigint
+  maxConfidenceRatioBpsCap?: number
   maxPriceStatusLagSecsCap?: bigint
   gasBudget?: number
 }) => {
@@ -47,7 +47,7 @@ export const buildAddAcceptedCurrencyTransaction = ({
       transaction.pure.vector("u8", feedIdBytes),
       transaction.pure.id(pythObjectId),
       transaction.pure.option("u64", maxPriceAgeSecsCap ?? null),
-      transaction.pure.option("u64", maxConfidenceRatioBpsCap ?? null),
+      transaction.pure.option("u16", maxConfidenceRatioBpsCap ?? null),
       transaction.pure.option("u64", maxPriceStatusLagSecsCap ?? null)
     ]
   })

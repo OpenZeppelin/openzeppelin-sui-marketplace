@@ -12,24 +12,27 @@ import {
   unwrapMoveObjectFields
 } from "@sui-oracle-market/tooling-core/object"
 import {
-  decodeUtf8Vector,
   formatOptionalNumericValue,
   formatVectorBytesAsHex,
-  parseOptionalNumber
+  parseOptionalNumber,
+  readMoveStringOrVector
 } from "@sui-oracle-market/tooling-core/utils/formatters"
 import {
   formatTypeNameFromFieldValue,
   isMatchingTypeName,
   parseTypeNameFromString
 } from "@sui-oracle-market/tooling-core/utils/type-name"
-import { parseOptionalPositiveU64 } from "@sui-oracle-market/tooling-core/utils/utility"
+import {
+  parsePositiveU16,
+  parsePositiveU64
+} from "@sui-oracle-market/tooling-core/utils/utility"
 import { resolveValidationMessage } from "@sui-oracle-market/tooling-core/utils/validation"
 
 export const ACCEPTED_CURRENCY_TYPE_FRAGMENT = "::shop::AcceptedCurrencyMarker"
 export const TYPE_NAME_STRUCT = "0x1::type_name::TypeName"
 
 export const MAX_PRICE_AGE_SECS_CAP = 60n
-export const MAX_CONFIDENCE_RATIO_BPS_CAP = 1_000n
+export const MAX_CONFIDENCE_RATIO_BPS_CAP = 1_000
 export const MAX_PRICE_STATUS_LAG_SECS_CAP = 5n
 
 export { normalizeCoinType }
@@ -39,21 +42,57 @@ export type GuardrailParseResult = {
   error?: string
 }
 
-export const parseAcceptedCurrencyGuardrailValue = (
-  rawValue: string,
+export type GuardrailU16ParseResult = {
+  value?: number
+  error?: string
+}
+
+const parseOptionalGuardrailValue = <TValue>({
+  rawValue,
+  label,
+  parser,
+  errorMessage
+}: {
+  rawValue: string
   label: string
-): GuardrailParseResult => {
+  parser: (value: string, label: string) => TValue
+  errorMessage: string
+}): { value?: TValue; error?: string } => {
   const trimmed = rawValue.trim()
   if (!trimmed) return { value: undefined }
 
   try {
-    return { value: parseOptionalPositiveU64(trimmed, label) }
+    return { value: parser(trimmed, label) }
   } catch (error) {
     return {
       value: undefined,
-      error: resolveValidationMessage(error, `${label} must be a positive u64.`)
+      error: resolveValidationMessage(error, errorMessage)
     }
   }
+}
+
+export const parseAcceptedCurrencyGuardrailValue = (
+  rawValue: string,
+  label: string
+): GuardrailParseResult => {
+  return parseOptionalGuardrailValue({
+    rawValue,
+    label,
+    parser: parsePositiveU64,
+    errorMessage: `${label} must be a positive u64.`
+  })
+}
+
+export const parseAcceptedCurrencyBpsValue = (
+  rawValue: string,
+  label: string
+): GuardrailU16ParseResult => {
+  return parseOptionalGuardrailValue({
+    rawValue,
+    label,
+    parser: parsePositiveU16,
+    errorMessage: `${label} must be a positive u16.`
+  })
 }
 
 export type AcceptedCurrencyMatch = {
@@ -271,7 +310,7 @@ const buildAcceptedCurrencySummary = (
     acceptedCurrencyId,
     markerObjectId,
     coinType,
-    symbol: decodeUtf8Vector(acceptedCurrencyFields.symbol),
+    symbol: readMoveStringOrVector(acceptedCurrencyFields.symbol),
     decimals: parseOptionalNumber(acceptedCurrencyFields.decimals),
     feedIdHex: formatVectorBytesAsHex(acceptedCurrencyFields.feed_id),
     pythObjectId: normalizeOptionalIdFromValue(

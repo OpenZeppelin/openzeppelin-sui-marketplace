@@ -14,10 +14,11 @@ import type { IdentifierString } from "@mysten/wallet-standard"
 import type { AcceptedCurrencySummary } from "@sui-oracle-market/domain-core/models/currency"
 import {
   getAcceptedCurrencySummary,
-  normalizeCoinType,
   MAX_CONFIDENCE_RATIO_BPS_CAP,
   MAX_PRICE_AGE_SECS_CAP,
   MAX_PRICE_STATUS_LAG_SECS_CAP,
+  normalizeCoinType,
+  parseAcceptedCurrencyBpsValue,
   parseAcceptedCurrencyGuardrailValue
 } from "@sui-oracle-market/domain-core/models/currency"
 import { buildAddAcceptedCurrencyTransaction } from "@sui-oracle-market/domain-core/ptb/currency"
@@ -30,16 +31,13 @@ import {
 import { deriveRelevantPackageId } from "@sui-oracle-market/tooling-core/object"
 import { getSuiSharedObject } from "@sui-oracle-market/tooling-core/shared-object"
 import { ENetwork } from "@sui-oracle-market/tooling-core/types"
-import { parseOptionalPositiveU64 } from "@sui-oracle-market/tooling-core/utils/utility"
+import {
+  parseOptionalPositiveU16,
+  parseOptionalPositiveU64
+} from "@sui-oracle-market/tooling-core/utils/utility"
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { EXPLORER_URL_VARIABLE_NAME } from "../config/network"
 import { getStructLabel, shortenId } from "../helpers/format"
-import {
-  getLocalnetClient,
-  makeLocalnetExecutor,
-  walletSupportsChain
-} from "../helpers/localnet"
-import { resolveOwnerCapabilityId } from "../helpers/ownerCapabilities"
 import {
   resolveCoinTypeInput,
   validateCoinType,
@@ -48,6 +46,12 @@ import {
   validateRequiredSuiObjectId
 } from "../helpers/inputValidation"
 import {
+  getLocalnetClient,
+  makeLocalnetExecutor,
+  walletSupportsChain
+} from "../helpers/localnet"
+import { resolveOwnerCapabilityId } from "../helpers/ownerCapabilities"
+import {
   extractErrorDetails,
   formatErrorMessage,
   safeJsonStringify,
@@ -55,8 +59,8 @@ import {
 } from "../helpers/transactionErrors"
 import { extractCreatedObjects } from "../helpers/transactionFormat"
 import { waitForTransactionBlock } from "../helpers/transactionWait"
-import useNetworkConfig from "./useNetworkConfig"
 import { useIdleFieldValidation } from "./useIdleFieldValidation"
+import useNetworkConfig from "./useNetworkConfig"
 
 type CurrencyFormState = {
   coinType: string
@@ -75,7 +79,7 @@ type CurrencyInputs = {
   priceInfoObjectId: string
   currencyObjectId?: string
   maxPriceAgeSecsCap?: bigint
-  maxConfidenceRatioBpsCap?: bigint
+  maxConfidenceRatioBpsCap?: number
   maxPriceStatusLagSecsCap?: bigint
 }
 
@@ -141,7 +145,7 @@ const buildCurrencyFieldErrors = (
   )
   if (priceAgeResult.error) errors.maxPriceAgeSecsCap = priceAgeResult.error
 
-  const confidenceResult = parseAcceptedCurrencyGuardrailValue(
+  const confidenceResult = parseAcceptedCurrencyBpsValue(
     formState.maxConfidenceRatioBpsCap,
     "Max confidence"
   )
@@ -174,7 +178,7 @@ const buildCurrencyFieldWarnings = (
     warnings.maxPriceAgeSecsCap = `Will be clamped to ${MAX_PRICE_AGE_SECS_CAP.toString()} seconds.`
   }
 
-  const confidenceResult = parseAcceptedCurrencyGuardrailValue(
+  const confidenceResult = parseAcceptedCurrencyBpsValue(
     formState.maxConfidenceRatioBpsCap,
     "Max confidence"
   )
@@ -225,7 +229,7 @@ const parseCurrencyInputs = (formState: CurrencyFormState): CurrencyInputs => {
       trimToOptional(formState.maxPriceAgeSecsCap),
       "maxPriceAgeSecsCap"
     ),
-    maxConfidenceRatioBpsCap: parseOptionalPositiveU64(
+    maxConfidenceRatioBpsCap: parseOptionalPositiveU16(
       trimToOptional(formState.maxConfidenceRatioBpsCap),
       "maxConfidenceRatioBpsCap"
     ),
