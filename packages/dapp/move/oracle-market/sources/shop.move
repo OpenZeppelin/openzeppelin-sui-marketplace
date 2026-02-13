@@ -660,7 +660,7 @@ entry fun remove_item_listing(
 /// Delete an item listing object and remove its marker, reclaiming storage.
 ///
 /// Use `remove_item_listing` to delist but keep the listing object for history.
-entry fun delete_item_listing(
+public fun delete_item_listing(
     shop: &mut Shop,
     owner_cap: &ShopOwnerCap,
     item_listing: ItemListing,
