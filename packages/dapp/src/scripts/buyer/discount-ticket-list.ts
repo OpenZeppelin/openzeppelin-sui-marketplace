@@ -147,7 +147,7 @@ const logDiscountTicket = (
   logKeyValueGreen("Ticket")(index)
   logKeyValueGreen("Object")(discountTicket.discountTicketId)
   logKeyValueGreen("Template")(discountTicket.discountTemplateId)
-  logKeyValueGreen("Shop")(discountTicket.shopAddress)
+  logKeyValueGreen("Shop")(discountTicket.shopId)
   logKeyValueGreen("Claimer")(discountTicket.claimer)
   if (discountTicket.listingId)
     logKeyValueGreen("Listing")(discountTicket.listingId)

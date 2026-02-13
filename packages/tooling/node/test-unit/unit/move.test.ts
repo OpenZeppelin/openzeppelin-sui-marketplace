@@ -24,7 +24,7 @@ describe("move helpers", () => {
   ): PublishArtifact => ({
     network: "localnet",
     rpcUrl: "http://localhost:9000",
-    packagePath: "/tmp/contracts/../move/oracle-market",
+    packagePath: "/tmp/contracts/../contracts/oracle-market",
     packageId: "0x1",
     sender: "0x2",
     digest: "digest",
@@ -73,7 +73,7 @@ describe("move helpers", () => {
   })
 
   it("resolves package paths relative to move root", () => {
-    const moveRoot = "/tmp/move"
+    const moveRoot = "/tmp/contracts"
     const resolved = resolveFullPackagePath(moveRoot, "packages/oracle")
     expect(resolved).toBe(path.join(moveRoot, "packages", "oracle"))
   })
@@ -81,12 +81,12 @@ describe("move helpers", () => {
   it("matches deployments by canonicalized path", () => {
     const artifacts = [
       buildPublishArtifact({
-        packagePath: "/tmp/contracts/../move/oracle-market"
+        packagePath: "/tmp/contracts/../contracts/oracle-market"
       })
     ]
-    expect(hasDeploymentForPackage(artifacts, "/tmp/move/oracle-market")).toBe(
-      true
-    )
+    expect(
+      hasDeploymentForPackage(artifacts, "/tmp/contracts/oracle-market")
+    ).toBe(true)
   })
 })
 

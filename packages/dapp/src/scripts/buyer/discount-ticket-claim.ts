@@ -49,7 +49,7 @@ runSuiScript(
       logClaimContext({
         discountTemplateId,
         packageId: shopPackageId,
-        shopAddress: shopId,
+        shopId,
         rpcUrl: tooling.network.url,
         networkName: tooling.network.networkName
       })
@@ -152,13 +152,13 @@ const resolveInputs = async (
 const logClaimContext = ({
   discountTemplateId,
   packageId,
-  shopAddress,
+  shopId,
   rpcUrl,
   networkName
 }: {
   discountTemplateId: string
   packageId: string
-  shopAddress?: string
+  shopId?: string
   rpcUrl: string
   networkName: string
 }) => {
@@ -166,7 +166,7 @@ const logClaimContext = ({
   logKeyValueBlue("RPC")(rpcUrl)
   logKeyValueBlue("Package")(packageId)
   logKeyValueBlue("Template")(discountTemplateId)
-  if (shopAddress) logKeyValueBlue("Shop")(shopAddress)
+  if (shopId) logKeyValueBlue("Shop")(shopId)
   console.log("")
 }
 

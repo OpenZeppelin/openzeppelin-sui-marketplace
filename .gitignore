@@ -11,14 +11,14 @@ coverage
 
 deployments/
 
-packages/dapp/move/**/build/
-packages/dapp/move/**/.trace
-packages/dapp/move/**/traces
-packages/dapp/move/**/.coverage*
-packages/dapp/move/**/lcov*
-packages/dapp/move/**/Pub.localnet.toml
-packages/dapp/move/**/Move.lock
-packages/dapp/move/**/Published.toml
+packages/dapp/contracts/**/build/
+packages/dapp/contracts/**/.trace
+packages/dapp/contracts/**/traces
+packages/dapp/contracts/**/.coverage*
+packages/dapp/contracts/**/lcov*
+packages/dapp/contracts/**/Pub.localnet.toml
+packages/dapp/contracts/**/Move.lock
+packages/dapp/contracts/**/Published.toml
 
 patches/pyth-crosschain/
 
