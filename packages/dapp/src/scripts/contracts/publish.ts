@@ -234,7 +234,7 @@ runSuiScript(
       clearStaleLocks: cliArguments.clearStaleMoveLocks
     })
 
-    // Resolve the absolute Move package path (relative to repo root or move/).
+    // Resolve the absolute Move package path (relative to repo root or contracts/).
     const fullPackagePath = resolveFullPackagePath(
       path.resolve(tooling.suiConfig.paths.move),
       cliArguments.packagePath
@@ -280,7 +280,7 @@ runSuiScript(
     .option("packagePath", {
       alias: "package-path",
       type: "string",
-      description: `The path of the package to publish in "move" directory`,
+      description: `The path of the package to publish in "contracts" directory`,
       demandOption: true
     })
     .option("withUnpublishedDependencies", {

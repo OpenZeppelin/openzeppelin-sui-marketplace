@@ -30,41 +30,41 @@ pnpm script buyer:discount-ticket:list
 ```
 
 ## 4. EVM -> Sui translation
-1. **Coupon codes -> template objects**: templates are shared objects attached to the shop via markers. See `DiscountTemplate` and `create_discount_template` in `packages/dapp/move/oracle-market/sources/shop.move`.
-2. **Allowlist of claimed addresses -> dynamic fields**: per-claimer `DiscountClaim` objects live under each template. See `DiscountClaim` and `claim_discount_ticket` in `packages/dapp/move/oracle-market/sources/shop.move`.
-3. **Redeem with a receipt -> redeem with an owned ticket**: a `DiscountTicket` is an owned object that is burned on redemption. See `buy_item_with_discount` in `packages/dapp/move/oracle-market/sources/shop.move`.
+1. **Coupon codes -> template objects**: templates are shared objects attached to the shop via markers. See `DiscountTemplate` and `create_discount_template` in `packages/dapp/contracts/oracle-market/sources/shop.move`.
+2. **Allowlist of claimed addresses -> dynamic fields**: per-claimer `DiscountClaim` objects live under each template. See `DiscountClaim` and `claim_discount_ticket` in `packages/dapp/contracts/oracle-market/sources/shop.move`.
+3. **Redeem with a receipt -> redeem with an owned ticket**: a `DiscountTicket` is an owned object that is burned on redemption. See `buy_item_with_discount` in `packages/dapp/contracts/oracle-market/sources/shop.move`.
 
 ## 5. Concept deep dive: discount lifecycle mechanics
 - **Owned tickets as one-time rights**: a `DiscountTicket` is an owned object. Passing it by value
   to `buy_item_with_discount` consumes it, which enforces single-use redemption without extra
   storage or signatures. This is the Move-native way to model a coupon that cannot be reused.
-  Code: `packages/dapp/move/oracle-market/sources/shop.move` (`DiscountTicket`, `buy_item_with_discount`)
+  Code: `packages/dapp/contracts/oracle-market/sources/shop.move` (`DiscountTicket`, `buy_item_with_discount`)
 - **Dynamic field claims**: each claimer gets a `DiscountClaim` child under the template. This
   prevents multiple claims per wallet without locking the whole shop, and it keeps the one-claim
   rule entirely on-chain.
-  Code: `packages/dapp/move/oracle-market/sources/shop.move` (`claim_discount_ticket`, `DiscountClaim`)
+  Code: `packages/dapp/contracts/oracle-market/sources/shop.move` (`claim_discount_ticket`, `DiscountClaim`)
 - **Schedules and scoping**: `starts_at` is required, while `expires_at` and `max_redemptions` are
   optional. Templates can also be scoped to a specific listing via `applies_to_listing`.
-  Code: `packages/dapp/move/oracle-market/sources/shop.move` (`DiscountTemplate` fields)
+  Code: `packages/dapp/contracts/oracle-market/sources/shop.move` (`DiscountTemplate` fields)
 - **Claim + redemption caps**: max redemptions are enforced at both claim time and redemption time,
   so a template cannot be over-claimed and then over-redeemed.
-  Code: `packages/dapp/move/oracle-market/sources/shop.move` (`assert_template_claimable`, `assert_discount_redemption_allowed`)
+  Code: `packages/dapp/contracts/oracle-market/sources/shop.move` (`assert_template_claimable`, `assert_discount_redemption_allowed`)
 - **Enums for rules and references**: `DiscountRule` and `DiscountRuleKind` encode fixed vs percent
   discounts at the type level to avoid ambiguous numeric inputs. `ReferenceKind` is a small enum
   used for internal lookup paths when validating IDs.
-  Code: `packages/dapp/move/oracle-market/sources/shop.move` (`DiscountRule`, `ReferenceKind`)
+  Code: `packages/dapp/contracts/oracle-market/sources/shop.move` (`DiscountRule`, `ReferenceKind`)
 - **Clock for windows**: discount windows are checked against the shared `Clock`, not client time.
-  Code: `packages/dapp/move/oracle-market/sources/shop.move` (`assert_discount_redemption_allowed`)
+  Code: `packages/dapp/contracts/oracle-market/sources/shop.move` (`assert_discount_redemption_allowed`)
 
 ## 6. Code references
-1. `packages/dapp/move/oracle-market/sources/shop.move` (DiscountTemplate, DiscountTicket, claim_discount_ticket)
+1. `packages/dapp/contracts/oracle-market/sources/shop.move` (DiscountTemplate, DiscountTicket, claim_discount_ticket)
 2. `packages/domain/core/src/models/discount.ts` (rule parsing + status)
 3. `packages/dapp/src/scripts/owner/discount-template-create.ts` (script)
 4. `packages/dapp/src/scripts/buyer/discount-ticket-claim.ts` (script)
 5. PTB builder definition: `packages/domain/core/src/ptb/discount-template.ts` (buildCreateDiscountTemplateTransaction)
 
 **Code spotlight: create a shared DiscountTemplate**
-`packages/dapp/move/oracle-market/sources/shop.move`
+`packages/dapp/contracts/oracle-market/sources/shop.move`
 ```move
 entry fun create_discount_template(
   shop: &mut Shop,
@@ -102,7 +102,7 @@ entry fun create_discount_template(
 ```
 
 **Code spotlight: claim a single-use ticket**
-`packages/dapp/move/oracle-market/sources/shop.move`
+`packages/dapp/contracts/oracle-market/sources/shop.move`
 ```move
 entry fun claim_discount_ticket(
   shop: &Shop,

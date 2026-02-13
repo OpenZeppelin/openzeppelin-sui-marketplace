@@ -70,14 +70,14 @@ pnpm ui dev
 
 ## 8. Code references
 1. `packages/domain/core/src/flows/buy.ts` (buy transaction builder + Pyth update)
-2. `packages/dapp/move/oracle-market/sources/shop.move` (buy_item, buy_item_with_discount)
+2. `packages/dapp/contracts/oracle-market/sources/shop.move` (buy_item, buy_item_with_discount)
 3. `packages/dapp/src/scripts/buyer/buy.ts` (CLI buy flow)
 4. `packages/ui/src/app/hooks/useBuyFlowModalState.ts` (UI PTB execution)
 5. `packages/ui/src/app/hooks/useShopDashboardData.tsx` (shared vs owned reads)
 6. PTB builder definition: `packages/domain/core/src/flows/buy.ts` (buildBuyTransaction)
 
 **Code spotlight: buy entry points accept `Coin<T>` and PriceInfoObject**
-`packages/dapp/move/oracle-market/sources/shop.move`
+`packages/dapp/contracts/oracle-market/sources/shop.move`
 ```move
 entry fun buy_item<TItem: store, TCoin>(
   shop: &Shop,
