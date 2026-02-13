@@ -128,7 +128,7 @@ describe("artifact path helpers", () => {
           {
             packageId: "0x5",
             packageName: "oracle-market",
-            packagePath: "/tmp/move/oracle-market",
+            packagePath: "/tmp/contracts/oracle-market",
             publishedAt: "2024-01-01T00:00:00Z"
           }
         ]
@@ -165,7 +165,7 @@ describe("isPublishArtifactNamed", () => {
     expect(
       matcher({
         packageName: "Oracle-Market",
-        packagePath: "/tmp/move/oracle-market"
+        packagePath: "/tmp/contracts/oracle-market"
       } as PublishArtifact)
     ).toBe(true)
   })

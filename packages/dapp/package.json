@@ -11,8 +11,8 @@
     "chain:describe-coin-balances": "TS_NODE_SKIP_IGNORE=1 NODE_OPTIONS=\"--no-warnings\" ../../node_modules/.bin/ts-node-esm --transpile-only src/scripts/chain/describe-coin-balances.ts",
     "chain:describe-object": "TS_NODE_SKIP_IGNORE=1 NODE_OPTIONS=\"--no-warnings\" ../../node_modules/.bin/ts-node-esm --transpile-only src/scripts/chain/describe-object.ts",
     "chain:describe-dynamic-field-object": "TS_NODE_SKIP_IGNORE=1 NODE_OPTIONS=\"--no-warnings\" ../../node_modules/.bin/ts-node-esm --transpile-only src/scripts/chain/describe-dynamic-field-object.ts",
-    "move:publish": "TS_NODE_SKIP_IGNORE=1 NODE_OPTIONS=\"--no-warnings\" ../../node_modules/.bin/ts-node-esm --transpile-only src/scripts/move/publish.ts",
-    "move:test": "TS_NODE_SKIP_IGNORE=1 NODE_OPTIONS=\"--no-warnings\" ../../node_modules/.bin/ts-node-esm --transpile-only src/scripts/move/test.ts",
+    "move:publish": "TS_NODE_SKIP_IGNORE=1 NODE_OPTIONS=\"--no-warnings\" ../../node_modules/.bin/ts-node-esm --transpile-only src/scripts/contracts/publish.ts",
+    "move:test": "TS_NODE_SKIP_IGNORE=1 NODE_OPTIONS=\"--no-warnings\" ../../node_modules/.bin/ts-node-esm --transpile-only src/scripts/contracts/test.ts",
     "mock:setup": "TS_NODE_SKIP_IGNORE=1 NODE_OPTIONS=\"--no-warnings\" ../../node_modules/.bin/ts-node-esm --transpile-only src/scripts/mock/setup.ts",
     "mock:bootstrap": "pnpm mock:setup",
     "mock:get-currency": "TS_NODE_SKIP_IGNORE=1 NODE_OPTIONS=\"--no-warnings\" ../../node_modules/.bin/ts-node-esm --transpile-only src/scripts/mock/get-currency.ts",
@@ -47,7 +47,7 @@
     "test:integration": "vitest --config ./vitest.integration.config.ts",
     "test:unit": "vitest --config ./vitest.config.ts",
     "lint:fix": "../../node_modules/.bin/eslint . --fix",
-    "format:move": "prettier --write 'move/**/*.move' '!move/**/**-patched/**/*.move'"
+    "format:move": "prettier --write 'contracts/**/*.move' '!move/**/**-patched/**/*.move'"
   },
   "dependencies": {
     "@mysten/sui": "^1.45.2",

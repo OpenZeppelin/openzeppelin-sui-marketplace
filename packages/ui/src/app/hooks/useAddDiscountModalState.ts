@@ -456,7 +456,7 @@ export const useAddDiscountModalState = ({
         ? {
             discountTemplateId,
             markerObjectId: discountTemplateId,
-            shopAddress: resolvedShopId,
+            shopId: resolvedShopId,
             appliesToListingId: discountInputs.appliesToListingId,
             ruleDescription: formatDiscountRulePreview({
               ruleKind: discountInputs.ruleKind,

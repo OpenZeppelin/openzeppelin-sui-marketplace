@@ -2,7 +2,7 @@
 
 **Path:** [Learning Path](./) > 22 Glossary
 
-1. **Object**: On-chain data with an ID. Objects can be owned or shared. See `packages/dapp/move/oracle-market/sources/shop.move`.
+1. **Object**: On-chain data with an ID. Objects can be owned or shared. See `packages/dapp/contracts/oracle-market/sources/shop.move`.
 2. **Owned object**: An object tied to an address; transfers are explicit. Example: `ShopOwnerCap`.
 3. **Shared object**: Mutable through consensus by anyone who includes it in a transaction, but
    module checks still decide what can change. Example: `Shop` and `ItemListing`.
@@ -27,10 +27,10 @@
 22. **Consensus object**: A shared object that must be sequenced by consensus.
 
 **Code spotlight: objects are structs with `key`**
-`packages/dapp/move/oracle-market/sources/shop.move`
+`packages/dapp/contracts/oracle-market/sources/shop.move`
 ```move
 public struct Shop has key, store {
-  id: obj::UID,
+  id: UID,
   owner: address,
   name: string::String,
   disabled: bool,
