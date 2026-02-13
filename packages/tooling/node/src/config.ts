@@ -80,7 +80,7 @@ const resolveRpcUrlOverride = () =>
 const resolvePaths = (
   pathsConfig?: SuiPathsUserConfig
 ): Required<SuiPathsUserConfig> => ({
-  move: path.resolve(process.cwd(), pathsConfig?.move ?? "move"),
+  move: path.resolve(process.cwd(), pathsConfig?.move ?? "contracts"),
   deployments: path.resolve(
     process.cwd(),
     pathsConfig?.deployments ?? "deployments"

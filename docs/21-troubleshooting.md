@@ -48,7 +48,7 @@ if (checkOnly) {
 - Cause: localnet regenesis reset on-chain objects, but local artifacts still point at an old mock Pyth package ID.
 - Fix (localnet):
   1. (optional) Delete `packages/dapp/deployments/mock.localnet.json`.
-  2. (optional) Delete `packages/dapp/move/pyth-mock/Published.toml`.
+  2. (optional) Delete `packages/dapp/contracts/pyth-mock/Published.toml`.
   3. Re-publish mocks: `pnpm dapp mock:setup --re-publish`.
   4. Re-publish the oracle package: `pnpm dapp move:publish --package-path oracle-market --network localnet --re-publish`.
 
@@ -63,32 +63,24 @@ if (checkOnly) {
 
 ## Price feed mismatch or stale price
 - Re-run `pnpm script mock:update-prices` on localnet.
-- Guardrails are implemented in `packages/dapp/move/oracle-market/sources/shop.move`.
+- Guardrails are implemented in `packages/dapp/contracts/oracle-market/sources/shop.move`.
 
 **Code spotlight: guardrails clamp buyer overrides**
-`packages/dapp/move/oracle-market/sources/shop.move`
+`packages/dapp/contracts/oracle-market/sources/shop.move`
 ```move
 fun resolve_effective_guardrails(
-  max_price_age_secs: &Option<u64>,
-  max_confidence_ratio_bps: &Option<u64>,
+  max_price_age_secs: Option<u64>,
+  max_confidence_ratio_bps: Option<u16>,
   accepted_currency: &AcceptedCurrency,
-): (u64, u64) {
-  let requested_max_age = unwrap_or_default(
-    max_price_age_secs,
-    accepted_currency.max_price_age_secs_cap,
-  );
-  let requested_confidence_ratio = unwrap_or_default(
-    max_confidence_ratio_bps,
-    accepted_currency.max_confidence_ratio_bps_cap,
-  );
-  let effective_max_age = clamp_max(
-    requested_max_age,
-    accepted_currency.max_price_age_secs_cap,
-  );
-  let effective_confidence_ratio = clamp_max(
-    requested_confidence_ratio,
-    accepted_currency.max_confidence_ratio_bps_cap,
-  );
+): (u64, u16) {
+  let requested_max_age =
+    max_price_age_secs.destroy_or!(accepted_currency.max_price_age_secs_cap);
+  let requested_confidence_ratio =
+    max_confidence_ratio_bps.destroy_or!(accepted_currency.max_confidence_ratio_bps_cap);
+  let effective_max_age =
+    requested_max_age.min(accepted_currency.max_price_age_secs_cap);
+  let effective_confidence_ratio =
+    requested_confidence_ratio.min(accepted_currency.max_confidence_ratio_bps_cap);
   (effective_max_age, effective_confidence_ratio)
 }
 ```
