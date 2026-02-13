@@ -35,7 +35,7 @@ From `assert_owner_cap` in `packages/dapp/move/oracle-market/sources/shop.move`:
 ```move
 fun assert_owner_cap(shop: &Shop, owner_cap: &ShopOwnerCap) {
    assert!(
-      owner_cap.shop_address == obj::uid_to_address(&shop.id),
+      owner_cap.shop_id == shop.id.to_inner(),
       EInvalidOwnerCap,
    );
 }
@@ -47,8 +47,8 @@ The important part is not “who signed” but “does this capability bind to t
 Two recurring “Sui-native” checks show up throughout the module:
 
 ### 3.1 Cross-object linkage checks
-Shared objects in this design carry a `shop_address` field (e.g., `ItemListing.shop_address`,
-`AcceptedCurrency.shop_address`). Before any mutation, the module asserts that:
+Shared objects in this design carry a `shop_id` field (e.g., `ItemListing.shop_id`,
+`AcceptedCurrency.shop_id`). Before any mutation, the module asserts that:
 - the shop matches the object, and
 - the object is registered (via dynamic-field marker membership).
 
@@ -67,7 +67,7 @@ From `assert_price_info_identity` in `packages/dapp/move/oracle-market/sources/s
 ```move
 fun assert_price_info_identity(
    expected_feed_id: &vector<u8>,
-   expected_pyth_object_id: &obj::ID,
+   expected_pyth_object_id: &ID,
    price_info_object: &price_info::PriceInfoObject,
 ) {
    let confirmed_price_object = price_info::uid_to_inner(price_info_object);

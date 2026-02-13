@@ -606,13 +606,13 @@ const PurchasedItemsPanel = ({
                   </div>
                   <div className="mt-4 flex flex-col gap-2 text-[0.65rem]">
                     <CopyableId
-                      value={item.itemListingAddress}
+                      value={item.itemListingId}
                       label="Listing"
                       className="w-full justify-start"
                       explorerUrl={explorerUrl}
                     />
                     <CopyableId
-                      value={item.shopAddress}
+                      value={item.shopId}
                       label="Shop"
                       className="w-full justify-start"
                       explorerUrl={explorerUrl}

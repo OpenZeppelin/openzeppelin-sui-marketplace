@@ -75,7 +75,7 @@ entry fun add_accepted_currency<T>(
   currency: &coin_registry::Currency<T>,
   price_info_object: &price_info::PriceInfoObject,
   feed_id: vector<u8>,
-  pyth_object_id: obj::ID,
+  pyth_object_id: ID,
   max_price_age_secs_cap: Option<u64>,
   max_confidence_ratio_bps_cap: Option<u64>,
   max_price_status_lag_secs_cap: Option<u64>,
@@ -98,7 +98,7 @@ entry fun add_accepted_currency<T>(
 ```move
 fun assert_price_info_identity(
   expected_feed_id: &vector<u8>,
-  expected_pyth_object_id: &obj::ID,
+  expected_pyth_object_id: &ID,
   price_info_object: &price_info::PriceInfoObject,
 ) {
   let confirmed_price_object = price_info::uid_to_inner(price_info_object);

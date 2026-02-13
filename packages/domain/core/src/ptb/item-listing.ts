@@ -11,12 +11,12 @@ import { newTransaction } from "@sui-oracle-market/tooling-core/transactions"
 
 type ListingMetadata = {
   id: string
-  shopAddress: string
+  shopId: string
 }
 
 type DiscountTemplateMetadata = {
   id: string
-  shopAddress: string
+  shopId: string
   appliesToListing?: string
 }
 
@@ -31,19 +31,15 @@ export const getItemListingMetadata = async (
   )
 
   const fields = unwrapMoveObjectFields(object)
-  const rawShopAddress = fields.shop_address
-  if (typeof rawShopAddress !== "string")
-    throw new Error(
-      `Item listing ${listingId} is missing a shop_address field.`
-    )
-
-  const shopAddress = normalizeSuiObjectId(rawShopAddress)
+  const listingShopId = normalizeOptionalIdFromValue(fields.shop_id)
+  if (!listingShopId)
+    throw new Error(`Item listing ${listingId} is missing a shop_id field.`)
   const normalizedListingId =
     normalizeOptionalIdFromValue(fields.id) ?? normalizeSuiObjectId(listingId)
 
   return {
     id: normalizedListingId,
-    shopAddress
+    shopId: listingShopId
   }
 }
 
@@ -58,17 +54,17 @@ export const getDiscountTemplateMetadata = async (
   )
 
   const fields = unwrapMoveObjectFields(object)
-  const rawShopAddress = fields.shop_address
-  if (typeof rawShopAddress !== "string")
+  const templateShopId = normalizeOptionalIdFromValue(fields.shop_id)
+  if (!templateShopId)
     throw new Error(
-      `Discount template ${templateId} is missing a shop_address field.`
+      `Discount template ${templateId} is missing a shop_id field.`
     )
 
   return {
     id:
       normalizeOptionalIdFromValue(fields.id) ??
       normalizeSuiObjectId(templateId),
-    shopAddress: normalizeSuiObjectId(rawShopAddress),
+    shopId: templateShopId,
     appliesToListing: normalizeOptionalIdFromValue(fields.applies_to_listing)
   }
 }
@@ -92,14 +88,14 @@ export const validateTemplateAndListing = async ({
   const normalizedShopId = normalizeSuiObjectId(shopId)
 
   // Defensive cross-shop check: prevents attaching a foreign listing/template to this Shop.
-  if (listing.shopAddress !== normalizedShopId)
+  if (listing.shopId !== normalizedShopId)
     throw new Error(
-      `Item listing ${listing.id} belongs to shop ${listing.shopAddress}, not ${normalizedShopId}.`
+      `Item listing ${listing.id} belongs to shop ${listing.shopId}, not ${normalizedShopId}.`
     )
 
-  if (template.shopAddress !== normalizedShopId)
+  if (template.shopId !== normalizedShopId)
     throw new Error(
-      `Discount template ${template.id} belongs to shop ${template.shopAddress}, not ${normalizedShopId}.`
+      `Discount template ${template.id} belongs to shop ${template.shopId}, not ${normalizedShopId}.`
     )
 
   if (template.appliesToListing && template.appliesToListing !== listing.id)
@@ -125,9 +121,9 @@ export const resolveListingIdForShop = async ({
   const listing = await getItemListingMetadata(itemListingId, shopId, suiClient)
   const normalizedShopId = normalizeSuiObjectId(shopId)
 
-  if (listing.shopAddress !== normalizedShopId)
+  if (listing.shopId !== normalizedShopId)
     throw new Error(
-      `Item listing ${itemListingId} belongs to shop ${listing.shopAddress}, not ${normalizedShopId}.`
+      `Item listing ${itemListingId} belongs to shop ${listing.shopId}, not ${normalizedShopId}.`
     )
 
   return listing.id
