@@ -20,7 +20,10 @@ import {
   hexToBytes
 } from "@sui-oracle-market/tooling-core/hex"
 import type { ObjectArtifact } from "@sui-oracle-market/tooling-core/object"
-import { parseOptionalPositiveU64 } from "@sui-oracle-market/tooling-core/utils/utility"
+import {
+  parseOptionalPositiveU16,
+  parseOptionalPositiveU64
+} from "@sui-oracle-market/tooling-core/utils/utility"
 import {
   DEFAULT_TX_GAS_BUDGET,
   SUI_COIN_REGISTRY_ID
@@ -277,7 +280,7 @@ const normalizeInputs = async (
       cliArguments.maxPriceAgeSecsCap,
       "maxPriceAgeSecsCap"
     ),
-    maxConfidenceRatioBpsCap: parseOptionalPositiveU64(
+    maxConfidenceRatioBpsCap: parseOptionalPositiveU16(
       cliArguments.maxConfidenceRatioBpsCap,
       "maxConfidenceRatioBpsCap"
     ),

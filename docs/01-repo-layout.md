@@ -10,7 +10,7 @@ Understand where Move code lives, how the CLI/scripts are organized, and how the
 .
 ├── packages/
 │   ├── dapp/
-│   │   ├── move/                      # Move packages (oracle-market + mocks + examples)
+│   │   ├── contracts/                 # Move packages (oracle-market + mocks + examples)
 │   │   │   ├── oracle-market/         # Main Move package (sui_oracle_market)
 │   │   │   ├── pyth-mock/             # Local-only Pyth stub (dev/localnet)
 │   │   │   ├── coin-mock/             # Local-only mock coins (dev/localnet)

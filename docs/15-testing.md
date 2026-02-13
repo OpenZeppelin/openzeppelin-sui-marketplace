@@ -32,7 +32,7 @@ Use `new_price_info_object_for_test` from the Pyth mock to build a `PriceInfoObj
 like the real oracle object but is safe for tests. This keeps oracle guardrail tests deterministic
 without requiring on-chain Pyth state.
 
-`packages/dapp/move/oracle-market/tests/shop_tests.move`
+`packages/dapp/contracts/oracle-market/tests/shop_tests.move`
 ```move
 let price_info = pyth_price_info::new_price_info(
   attestation_time,
@@ -46,7 +46,7 @@ let price_info_object = pyth_price_info::new_price_info_object_for_test(
 let price_info_id = pyth_price_info::uid_to_inner(&price_info_object);
 ```
 
-`packages/dapp/move/pyth-mock/sources/price_info.move`
+`packages/dapp/contracts/pyth-mock/sources/price_info.move`
 ```move
 #[test_only]
 public fun new_price_info_object_for_test(

@@ -81,14 +81,14 @@ Sui Move Principles, Applied
 
 Sui Fundamentals (EVM contrasts)
 --------------------------------
-- **Explicit capabilities over modifiers:** Admin flows require the owned `ShopOwnerCap` instead of `msg.sender` checks (`add_item_listing`, `update_shop_owner` in `move/sources/shop.move`). Docs: Move concepts (https://docs.sui.io/concepts/sui-move-concepts) and object ownership (https://docs.sui.io/guides/developer/objects/object-ownership). Compared to Solidity, callers must physically present the capability object, so auth is enforced by the type system.
-- **Typed events for off-chain sync:** Events are structs with `has copy, drop` and are emitted explicitly (`event::emit` blocks across `move/sources/shop.move`), which indexers/GraphQL pick up without scanning storage. Solidity logs are untyped bytes; here the struct layout is part of the ABI. Docs: https://docs.sui.io/guides/developer/sui-101/using-events.
+- **Explicit capabilities over modifiers:** Admin flows require the owned `ShopOwnerCap` instead of `msg.sender` checks (`add_item_listing`, `update_shop_owner` in `contracts/oracle-market/sources/shop.move`). Docs: Move concepts (https://docs.sui.io/concepts/sui-move-concepts) and object ownership (https://docs.sui.io/guides/developer/objects/object-ownership). Compared to Solidity, callers must physically present the capability object, so auth is enforced by the type system.
+- **Typed events for off-chain sync:** Events are structs with `has copy, drop` and are emitted explicitly (`event::emit` blocks across `contracts/oracle-market/sources/shop.move`), which indexers/GraphQL pick up without scanning storage. Solidity logs are untyped bytes; here the struct layout is part of the ABI. Docs: https://docs.sui.io/guides/developer/sui-101/using-events.
 - **Object-oriented state and concurrency:** The `Shop` is shared; listings/templates/currencies are shared objects indexed by markers under the shop plus a coin-type index. PTBs lock only the specific listing/template/currency object involved, enabling parallelism versus EVM’s single storage map. Docs: https://docs.sui.io/guides/developer/objects/object-model and https://docs.sui.io/concepts/dynamic-fields.
 - **Shared vs owned paths:** Checkout uses shared listings/currencies for discovery, but burns an owned `DiscountTicket` to keep redemption parallel. Sui’s fast path for owned objects has no consensus hop, unlike EVM where all state writes are sequenced in the same block. Docs: ownership and shared objects (https://docs.sui.io/guides/developer/objects/object-ownership).
 - **Packages are objects (immutable code):** Publishing creates an immutable package object. There is no mutable “contract code” slot like `delegatecall` proxies in Solidity. Docs: packages (https://docs.sui.io/concepts/sui-move-concepts/packages).
 - **Upgrading with UpgradeCap:** New versions are published alongside the old one; data migrations are explicit, gated by `UpgradeCap`, and callers opt into the new package ID. Solidity-style in-place proxy upgrades aren’t available. Docs: https://docs.sui.io/concepts/sui-move-concepts/packages/upgrade.
 - **No inheritance, compose with modules/generics:** Move has no inheritance or dynamic dispatch; reuse is via modules, functions, and type parameters (e.g., `ShopItem<phantom TItem>`). Docs: https://docs.sui.io/concepts/sui-move-concepts
-- **Coin registry integration instead of ERC-20 metadata:** `add_accepted_currency` pulls decimals/symbol from the shared `coin_registry` and stores them on the `AcceptedCurrency` object, avoiding the spoofed-decimals risk of unverified ERC-20s. See registry calls inside `move/sources/shop.move`. Docs: https://docs.sui.io/references/framework/sui_sui/coin_registry.
+- **Coin registry integration instead of ERC-20 metadata:** `add_accepted_currency` pulls decimals/symbol from the shared `coin_registry` and stores them on the `AcceptedCurrency` object, avoiding the spoofed-decimals risk of unverified ERC-20s. See registry calls inside `contracts/oracle-market/sources/shop.move`. Docs: https://docs.sui.io/references/framework/sui_sui/coin_registry.
 - **Oracle feeds as objects:** Prices come from a `price_info::PriceInfoObject` passed into the PTB;
   `quote_amount_with_guardrails` wraps `pyth::get_price_no_older_than` and enforces status/σ guards
   before converting. Unlike Chainlink address lookups, callers must present the feed object and
@@ -188,7 +188,7 @@ Reference
 
 Oracle Dependencies
 -------------------
-- `packages/dapp/move/oracle-market` depends on upstream Pyth + Wormhole via git in `Move.toml`.
+- `packages/dapp/contracts/oracle-market` depends on upstream Pyth + Wormhole via git in `Move.toml`.
 - `test-publish` swaps Pyth to `pyth-mock` via `dep-replacements`.
 
 Update instructions
@@ -196,10 +196,10 @@ Update instructions
 When updating Pyth/Wormhole revisions, do the following in order.
 
 1) Update revisions
-- Edit the `rev` (or branch/tag) in `packages/dapp/move/oracle-market/Move.toml`.
+- Edit the `rev` (or branch/tag) in `packages/dapp/contracts/oracle-market/Move.toml`.
 
 2) Re-pin the lockfile
-- From `packages/dapp/move/oracle-market`, run:
+- From `packages/dapp/contracts/oracle-market`, run:
     - `sui move build -e testnet`
     - `sui move build -e test-publish`
     This should update/validate `Move.lock` resolution per-environment.

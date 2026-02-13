@@ -30,7 +30,7 @@ If you build owner tooling or UI flows:
 
 Code anchor (capability check):
 
-From `assert_owner_cap` in `packages/dapp/move/oracle-market/sources/shop.move`:
+From `assert_owner_cap` in `packages/dapp/contracts/oracle-market/sources/shop.move`:
 
 ```move
 fun assert_owner_cap(shop: &Shop, owner_cap: &ShopOwnerCap) {
@@ -62,7 +62,7 @@ The module defends against this by binding two things:
 - the expected Pyth object ID, and
 - the expected feed identifier bytes.
 
-From `assert_price_info_identity` in `packages/dapp/move/oracle-market/sources/shop.move`:
+From `assert_price_info_identity` in `packages/dapp/contracts/oracle-market/sources/shop.move`:
 
 ```move
 fun assert_price_info_identity(
@@ -108,30 +108,24 @@ They are correctness checks.
 
 Code anchor (guardrail caps):
 
-From `resolve_effective_guardrails` in `packages/dapp/move/oracle-market/sources/shop.move`:
+From `resolve_effective_guardrails` in `packages/dapp/contracts/oracle-market/sources/shop.move`:
 
 ```move
 fun resolve_effective_guardrails(
-   max_price_age_secs: &Option<u64>,
-   max_confidence_ratio_bps: &Option<u64>,
+   max_price_age_secs: Option<u64>,
+   max_confidence_ratio_bps: Option<u16>,
    accepted_currency: &AcceptedCurrency,
-): (u64, u64) {
-   let requested_max_age = unwrap_or_default(
-      max_price_age_secs,
-      accepted_currency.max_price_age_secs_cap,
+): (u64, u16) {
+   let requested_max_age = max_price_age_secs.destroy_or!(
+      accepted_currency.max_price_age_secs_cap
    );
-   let requested_confidence_ratio = unwrap_or_default(
-      max_confidence_ratio_bps,
-      accepted_currency.max_confidence_ratio_bps_cap,
+   let requested_confidence_ratio = max_confidence_ratio_bps.destroy_or!(
+      accepted_currency.max_confidence_ratio_bps_cap
    );
-   let effective_max_age = clamp_max(
-      requested_max_age,
-      accepted_currency.max_price_age_secs_cap,
-   );
-   let effective_confidence_ratio = clamp_max(
-      requested_confidence_ratio,
-      accepted_currency.max_confidence_ratio_bps_cap,
-   );
+   let effective_max_age =
+      requested_max_age.min(accepted_currency.max_price_age_secs_cap);
+   let effective_confidence_ratio =
+      requested_confidence_ratio.min(accepted_currency.max_confidence_ratio_bps_cap);
    (effective_max_age, effective_confidence_ratio)
 }
 ```
@@ -190,7 +184,7 @@ Before you ship a modification to the Move module:
 - Decide transfer semantics for any new owned object (is it a receipt? a right? a credential?).
 
 ## 9. Code references
-1. `packages/dapp/move/oracle-market/sources/shop.move` (cap checks, oracle identity, guardrails)
+1. `packages/dapp/contracts/oracle-market/sources/shop.move` (cap checks, oracle identity, guardrails)
 2. `packages/domain/core/src/flows/buy.ts` (dev-inspect quote, PTB composition, SUI gas rules)
 3. `docs/16-object-ownership.md` (ownership types and how they affect execution)
 
