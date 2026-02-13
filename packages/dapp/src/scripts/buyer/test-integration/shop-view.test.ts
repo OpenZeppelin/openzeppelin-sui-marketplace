@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest"
 
+import type { AcceptedCurrencySummary } from "@sui-oracle-market/domain-core/models/currency"
+import type { DiscountTemplateSummary } from "@sui-oracle-market/domain-core/models/discount"
+import type { ItemListingDetails } from "@sui-oracle-market/domain-core/models/item-listing"
+import type { ShopOverview } from "@sui-oracle-market/domain-core/models/shop"
 import {
   createDappIntegrationTestEnv,
   createShopWithItemExamplesFixture,
@@ -9,29 +13,10 @@ import {
 } from "./helpers.ts"
 
 type ShopViewOutput = {
-  shopOverview?: {
-    shopId?: string
-    ownerAddress?: string
-    name?: string
-  }
-  itemListings?: Array<{
-    itemListingId?: string
-    markerObjectId?: string
-    itemType?: string
-    name?: string
-  }>
-  acceptedCurrencies?: Array<{
-    acceptedCurrencyId?: string
-    markerObjectId?: string
-    coinType?: string
-    feedIdHex?: string
-  }>
-  discountTemplates?: Array<{
-    discountTemplateId?: string
-    markerObjectId?: string
-    shopAddress?: string
-    status?: string
-  }>
+  shopOverview?: ShopOverview
+  itemListings?: Array<ItemListingDetails>
+  acceptedCurrencies?: Array<AcceptedCurrencySummary>
+  discountTemplates?: Array<DiscountTemplateSummary>
 }
 
 const testEnv = createDappIntegrationTestEnv()
