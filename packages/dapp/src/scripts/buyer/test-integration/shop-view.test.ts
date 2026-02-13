@@ -11,6 +11,17 @@ import {
 } from "./helpers.ts"
 
 const testEnv = createDappIntegrationTestEnv()
+const DEFAULT_LISTING_INPUT = {
+  name: "Roadster",
+  priceUsd: "12.50",
+  priceUsdCents: "1250",
+  stock: "4"
+}
+
+const findListingById = (
+  listings: ShopSnapshot["itemListings"],
+  listingId: string
+) => listings.find((listing) => listing.itemListingId === listingId)
 
 describe("buyer shop-view integration", () => {
   it("returns seeded shop snapshot details", async () => {
@@ -21,17 +32,18 @@ describe("buyer shop-view integration", () => {
         })
 
       const itemType = resolveItemType(itemExamplesPackageId, "Car")
-      await seedShopWithListingAndDiscount({
-        scriptRunner,
-        publisher,
-        shopId,
-        itemType,
-        listingName: "Roadster",
-        price: "1250",
-        stock: "4",
-        ruleKind: "percent",
-        value: "10"
-      })
+      const { itemListing, discountTemplate } =
+        await seedShopWithListingAndDiscount({
+          scriptRunner,
+          publisher,
+          shopId,
+          itemType,
+          listingName: DEFAULT_LISTING_INPUT.name,
+          price: DEFAULT_LISTING_INPUT.priceUsd,
+          stock: DEFAULT_LISTING_INPUT.stock,
+          ruleKind: "percent",
+          value: "10"
+        })
 
       const viewPayload = await runBuyerScriptJson<ShopSnapshot>(
         scriptRunner,
@@ -46,19 +58,28 @@ describe("buyer shop-view integration", () => {
       expect(viewPayload.shopOverview.name).toBeTruthy()
       expect(viewPayload.shopOverview.ownerAddress).toBeTruthy()
 
-      const itemListings = viewPayload.itemListings ?? []
+      const itemListings = viewPayload.itemListings
       expect(itemListings.length).toBeGreaterThan(0)
-      itemListings.forEach((itemListing) => {
-        expect(itemListing.itemListingId).toBeTruthy()
-        expect(itemListing.markerObjectId).toBeTruthy()
-        expect(itemListing.itemType).toBeTruthy()
-        expect(itemListing.name).toBeTruthy()
+      const seededListing = findListingById(itemListings, itemListing.itemListingId)
+      expect(seededListing).toBeTruthy()
+      itemListings.forEach((listing) => {
+        expect(listing.itemListingId).toBeTruthy()
+        expect(listing.markerObjectId).toBeTruthy()
+        expect(listing.itemType).toBeTruthy()
+        expect(listing.name).toBeTruthy()
       })
+      expect(seededListing?.basePriceUsdCents).toBe(
+        DEFAULT_LISTING_INPUT.priceUsdCents
+      )
+      expect(seededListing?.stock).toBe(DEFAULT_LISTING_INPUT.stock)
+      expect(seededListing?.spotlightTemplateId).toBe(
+        discountTemplate.discountTemplateId
+      )
 
-      const acceptedCurrencies = viewPayload.acceptedCurrencies ?? []
+      const acceptedCurrencies = viewPayload.acceptedCurrencies
       expect(acceptedCurrencies.length).toBe(0)
 
-      const discountTemplates = viewPayload.discountTemplates ?? []
+      const discountTemplates = viewPayload.discountTemplates
       expect(discountTemplates.length).toBeGreaterThan(0)
       discountTemplates.forEach((discountTemplate) => {
         expect(discountTemplate.discountTemplateId).toBeTruthy()
@@ -88,7 +109,7 @@ describe("buyer shop-view integration", () => {
           }
         )
 
-        const acceptedCurrencies = viewPayload.acceptedCurrencies ?? []
+        const acceptedCurrencies = viewPayload.acceptedCurrencies
         expect(acceptedCurrencies.length).toBeGreaterThan(0)
         expect(
           acceptedCurrencies.some(
