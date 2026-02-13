@@ -151,7 +151,8 @@ const buildBoundedBigIntParser = <T>({
   }
 }
 
-const withPositive = <T extends bigint | number>(parser: Parser<T>): Parser<T> =>
+const withPositive =
+  <T extends bigint | number>(parser: Parser<T>): Parser<T> =>
   (rawValue, label) => {
     const value = parser(rawValue, label)
     const isPositive = typeof value === "bigint" ? value > 0n : value > 0
@@ -193,8 +194,7 @@ export const parsePositiveU64 = (rawValue: string, label: string): bigint => {
 export const parseOptionalU64 = (
   rawValue: string | undefined,
   label: string
-): bigint | undefined =>
-  withOptional(parseNonNegativeU64)(rawValue, label)
+): bigint | undefined => withOptional(parseNonNegativeU64)(rawValue, label)
 
 /**
  * Parses an optional positive u64 from user input.
@@ -202,8 +202,7 @@ export const parseOptionalU64 = (
 export const parseOptionalPositiveU64 = (
   rawValue: string | undefined,
   label: string
-): bigint | undefined =>
-  withOptional(parsePositiveU64)(rawValue, label)
+): bigint | undefined => withOptional(parsePositiveU64)(rawValue, label)
 
 /**
  * Parses a non-negative u16 from user input.
@@ -233,8 +232,7 @@ export const parsePositiveU16 = (rawValue: string, label: string): number => {
 export const parseOptionalU16 = (
   rawValue: string | undefined,
   label: string
-): number | undefined =>
-  withOptional(parseNonNegativeU16)(rawValue, label)
+): number | undefined => withOptional(parseNonNegativeU16)(rawValue, label)
 
 /**
  * Parses an optional positive u16 from user input.
@@ -242,8 +240,7 @@ export const parseOptionalU16 = (
 export const parseOptionalPositiveU16 = (
   rawValue: string | undefined,
   label: string
-): number | undefined =>
-  withOptional(parsePositiveU16)(rawValue, label)
+): number | undefined => withOptional(parsePositiveU16)(rawValue, label)
 
 /**
  * Parses a bigint-like value and falls back to 0 on invalid input.
