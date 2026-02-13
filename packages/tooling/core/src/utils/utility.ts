@@ -128,6 +128,42 @@ export const tryParseBigInt = (value: string): bigint => {
   }
 }
 
+type Parser<T> = (rawValue: string, label: string) => T
+
+const buildBoundedBigIntParser = <T>({
+  min,
+  max,
+  map,
+  maxLabel
+}: {
+  min: bigint
+  max: bigint
+  map: (value: bigint) => T
+  maxLabel: string
+}): Parser<T> => {
+  return (rawValue, label) => {
+    const value = tryParseBigInt(rawValue)
+    if (value < min) throw new Error(`${label} cannot be negative.`)
+    if (value > max)
+      throw new Error(`${label} exceeds the maximum allowed ${maxLabel} value.`)
+
+    return map(value)
+  }
+}
+
+const withPositive = <T extends bigint | number>(parser: Parser<T>): Parser<T> =>
+  (rawValue, label) => {
+    const value = parser(rawValue, label)
+    const isPositive = typeof value === "bigint" ? value > 0n : value > 0
+    if (!isPositive) throw new Error(`${label} must be greater than zero.`)
+    return value
+  }
+
+const withOptional = <T>(parser: Parser<T>) => {
+  return (rawValue: string | undefined, label: string): T | undefined =>
+    rawValue === undefined ? undefined : parser(rawValue, label)
+}
+
 /**
  * Parses a non-negative u64 from user input.
  * Sui uses u64 for many on-chain quantities; keep them as bigint in JS.
@@ -136,23 +172,19 @@ export const parseNonNegativeU64 = (
   rawValue: string,
   label: string
 ): bigint => {
-  const value = tryParseBigInt(rawValue)
-  if (value < 0n) throw new Error(`${label} cannot be negative.`)
-
-  const maxU64 = (1n << 64n) - 1n
-  if (value > maxU64)
-    throw new Error(`${label} exceeds the maximum allowed u64 value.`)
-
-  return value
+  return buildBoundedBigIntParser({
+    min: 0n,
+    max: (1n << 64n) - 1n,
+    map: (value) => value,
+    maxLabel: "u64"
+  })(rawValue, label)
 }
 
 /**
  * Parses a positive (non-zero) u64 from user input.
  */
 export const parsePositiveU64 = (rawValue: string, label: string): bigint => {
-  const value = parseNonNegativeU64(rawValue, label)
-  if (value <= 0n) throw new Error(`${label} must be greater than zero.`)
-  return value
+  return withPositive(parseNonNegativeU64)(rawValue, label)
 }
 
 /**
@@ -162,7 +194,7 @@ export const parseOptionalU64 = (
   rawValue: string | undefined,
   label: string
 ): bigint | undefined =>
-  rawValue === undefined ? undefined : parseNonNegativeU64(rawValue, label)
+  withOptional(parseNonNegativeU64)(rawValue, label)
 
 /**
  * Parses an optional positive u64 from user input.
@@ -171,7 +203,7 @@ export const parseOptionalPositiveU64 = (
   rawValue: string | undefined,
   label: string
 ): bigint | undefined =>
-  rawValue === undefined ? undefined : parsePositiveU64(rawValue, label)
+  withOptional(parsePositiveU64)(rawValue, label)
 
 /**
  * Parses a non-negative u16 from user input.
@@ -180,22 +212,19 @@ export const parseNonNegativeU16 = (
   rawValue: string,
   label: string
 ): number => {
-  const value = tryParseBigInt(rawValue)
-  if (value < 0n) throw new Error(`${label} cannot be negative.`)
-  const maxU16 = (1n << 16n) - 1n
-  if (value > maxU16)
-    throw new Error(`${label} exceeds the maximum allowed u16 value.`)
-
-  return Number(value)
+  return buildBoundedBigIntParser({
+    min: 0n,
+    max: (1n << 16n) - 1n,
+    map: (value) => Number(value),
+    maxLabel: "u16"
+  })(rawValue, label)
 }
 
 /**
  * Parses a positive (non-zero) u16 from user input.
  */
 export const parsePositiveU16 = (rawValue: string, label: string): number => {
-  const value = parseNonNegativeU16(rawValue, label)
-  if (value <= 0) throw new Error(`${label} must be greater than zero.`)
-  return value
+  return withPositive(parseNonNegativeU16)(rawValue, label)
 }
 
 /**
@@ -205,7 +234,7 @@ export const parseOptionalU16 = (
   rawValue: string | undefined,
   label: string
 ): number | undefined =>
-  rawValue === undefined ? undefined : parseNonNegativeU16(rawValue, label)
+  withOptional(parseNonNegativeU16)(rawValue, label)
 
 /**
  * Parses an optional positive u16 from user input.
@@ -214,7 +243,7 @@ export const parseOptionalPositiveU16 = (
   rawValue: string | undefined,
   label: string
 ): number | undefined =>
-  rawValue === undefined ? undefined : parsePositiveU16(rawValue, label)
+  withOptional(parsePositiveU16)(rawValue, label)
 
 /**
  * Parses a bigint-like value and falls back to 0 on invalid input.
