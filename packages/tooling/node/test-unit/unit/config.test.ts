@@ -32,7 +32,7 @@ describe("loadSuiConfig", () => {
           expect(config.currentNetwork).toBe("localnet")
           expect(config.network.networkName).toBe("localnet")
           const resolvedDir = await resolveRealPath(dir)
-          expect(config.paths.move).toBe(path.join(resolvedDir, "move"))
+          expect(config.paths.move).toBe(path.join(resolvedDir, "contracts"))
           expect(config.paths.deployments).toBe(
             path.join(resolvedDir, "deployments")
           )

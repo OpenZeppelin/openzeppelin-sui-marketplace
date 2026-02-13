@@ -50,7 +50,7 @@ pnpm install
       - `accountMnemonic`: mnemonic for the signer.
     - `accounts`: optional named account map (same shape as `account`) for scripts that switch signer roles.
   - `paths`:
-    - `move`: Move root (defaults to `packages/dapp/move` at runtime).
+    - `move`: Move root (defaults to `packages/dapp/contracts` at runtime).
     - `deployments`: publish artifacts output directory.
     - `objects`: object artifacts output directory.
     - `artifacts`: alias for deployments (kept for compatibility).
@@ -63,7 +63,7 @@ Move environments (localnet/devnet/testnet/mainnet):
   sui client switch --env localnet
   sui client chain-identifier
   ```
-  Then update `localnet = "<chain-id>"` in `packages/dapp/move/oracle-market/Move.toml` if it changed.
+  Then update `localnet = "<chain-id>"` in `packages/dapp/contracts/oracle-market/Move.toml` if it changed.
 
 Environment overrides (optional):
 - Network selection precedence: `--network` > `SUI_NETWORK` > `defaultNetwork` > `localnet`.
@@ -102,7 +102,7 @@ Note: running `sui start` without a stable config dir can regenesis and wipe loc
 pnpm script mock:setup --buyer-address <0x...> --network localnet
 ```
 What it does:
-- Publishes `packages/dapp/move/pyth-mock` and `packages/dapp/move/coin-mock` if needed.
+- Publishes `packages/dapp/contracts/pyth-mock` and `packages/dapp/contracts/coin-mock` if needed.
 - Mints mock coins via the coin registry, funds your signer, and transfers half of each minted coin to the buyer address.
 - Publishes mock Pyth price feeds with fresh timestamps.
 - Writes artifacts to `packages/dapp/deployments/mock.localnet.json` for reuse.

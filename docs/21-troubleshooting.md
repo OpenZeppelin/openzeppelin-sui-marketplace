@@ -48,7 +48,7 @@ if (checkOnly) {
 - Cause: localnet regenesis reset on-chain objects, but local artifacts still point at an old mock Pyth package ID.
 - Fix (localnet):
   1. (optional) Delete `packages/dapp/deployments/mock.localnet.json`.
-  2. (optional) Delete `packages/dapp/move/pyth-mock/Published.toml`.
+  2. (optional) Delete `packages/dapp/contracts/pyth-mock/Published.toml`.
   3. Re-publish mocks: `pnpm dapp mock:setup --re-publish`.
   4. Re-publish the oracle package: `pnpm dapp move:publish --package-path oracle-market --network localnet --re-publish`.
 
@@ -63,10 +63,10 @@ if (checkOnly) {
 
 ## Price feed mismatch or stale price
 - Re-run `pnpm script mock:update-prices` on localnet.
-- Guardrails are implemented in `packages/dapp/move/oracle-market/sources/shop.move`.
+- Guardrails are implemented in `packages/dapp/contracts/oracle-market/sources/shop.move`.
 
 **Code spotlight: guardrails clamp buyer overrides**
-`packages/dapp/move/oracle-market/sources/shop.move`
+`packages/dapp/contracts/oracle-market/sources/shop.move`
 ```move
 fun resolve_effective_guardrails(
   max_price_age_secs: &Option<u64>,

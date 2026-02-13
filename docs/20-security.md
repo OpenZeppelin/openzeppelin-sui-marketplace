@@ -30,7 +30,7 @@ If you build owner tooling or UI flows:
 
 Code anchor (capability check):
 
-From `assert_owner_cap` in `packages/dapp/move/oracle-market/sources/shop.move`:
+From `assert_owner_cap` in `packages/dapp/contracts/oracle-market/sources/shop.move`:
 
 ```move
 fun assert_owner_cap(shop: &Shop, owner_cap: &ShopOwnerCap) {
@@ -62,7 +62,7 @@ The module defends against this by binding two things:
 - the expected Pyth object ID, and
 - the expected feed identifier bytes.
 
-From `assert_price_info_identity` in `packages/dapp/move/oracle-market/sources/shop.move`:
+From `assert_price_info_identity` in `packages/dapp/contracts/oracle-market/sources/shop.move`:
 
 ```move
 fun assert_price_info_identity(
@@ -108,7 +108,7 @@ They are correctness checks.
 
 Code anchor (guardrail caps):
 
-From `resolve_effective_guardrails` in `packages/dapp/move/oracle-market/sources/shop.move`:
+From `resolve_effective_guardrails` in `packages/dapp/contracts/oracle-market/sources/shop.move`:
 
 ```move
 fun resolve_effective_guardrails(
@@ -190,7 +190,7 @@ Before you ship a modification to the Move module:
 - Decide transfer semantics for any new owned object (is it a receipt? a right? a credential?).
 
 ## 9. Code references
-1. `packages/dapp/move/oracle-market/sources/shop.move` (cap checks, oracle identity, guardrails)
+1. `packages/dapp/contracts/oracle-market/sources/shop.move` (cap checks, oracle identity, guardrails)
 2. `packages/domain/core/src/flows/buy.ts` (dev-inspect quote, PTB composition, SUI gas rules)
 3. `docs/16-object-ownership.md` (ownership types and how they affect execution)
 

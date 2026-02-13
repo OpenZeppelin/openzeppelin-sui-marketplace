@@ -21,37 +21,37 @@ pnpm script owner:shop:update-owner --new-owner <0x...>
 ```
 
 ## 4. EVM -> Sui translation
-1. **onlyOwner -> capability**: authority is proved by owning `ShopOwnerCap`, not by `msg.sender`. See `ShopOwnerCap` and `update_shop_owner` in `packages/dapp/move/oracle-market/sources/shop.move`.
-2. **Constructor -> entry function**: `create_shop` mints both the shared Shop and the owner capability. See `create_shop` in `packages/dapp/move/oracle-market/sources/shop.move` and the script in `packages/dapp/src/scripts/owner/shop-create.ts`.
+1. **onlyOwner -> capability**: authority is proved by owning `ShopOwnerCap`, not by `msg.sender`. See `ShopOwnerCap` and `update_shop_owner` in `packages/dapp/contracts/oracle-market/sources/shop.move`.
+2. **Constructor -> entry function**: `create_shop` mints both the shared Shop and the owner capability. See `create_shop` in `packages/dapp/contracts/oracle-market/sources/shop.move` and the script in `packages/dapp/src/scripts/owner/shop-create.ts`.
 
 ## 5. Concept deep dive: shared objects and capabilities
 - **Shared objects**: `Shop` is shared so anyone can read it and anyone can submit a transaction that
   touches it, but only the right capability can mutate it. Sharing is explicit via `txf::share_object`,
   and shared objects become the concurrency boundary for transactions.
-  Code: `packages/dapp/move/oracle-market/sources/shop.move` (`create_shop`, `Shop`)
+  Code: `packages/dapp/contracts/oracle-market/sources/shop.move` (`create_shop`, `Shop`)
 - **Ownership types in practice**: `ShopOwnerCap` is address-owned, the Shop is shared, and dynamic
   field markers are object-owned under the Shop. Sui enforces access based on ownership and the
   object references you pass into a PTB.
-  Code: `packages/dapp/move/oracle-market/sources/shop.move` (ShopOwnerCap, markers)
+  Code: `packages/dapp/contracts/oracle-market/sources/shop.move` (ShopOwnerCap, markers)
 - **Capability-based auth**: `ShopOwnerCap` is an owned object that proves admin rights. Entry
   functions take it as a parameter and call `assert_owner_cap`. This keeps access control explicit,
   and it allows ownership rotation without changing code or global state.
-  Code: `packages/dapp/move/oracle-market/sources/shop.move` (`ShopOwnerCap`, `assert_owner_cap`)
+  Code: `packages/dapp/contracts/oracle-market/sources/shop.move` (`ShopOwnerCap`, `assert_owner_cap`)
 - **TxContext and object creation**: `obj::new(ctx)` creates new objects and assigns IDs. The
   capability and the shop are minted in a single transaction.
-  Code: `packages/dapp/move/oracle-market/sources/shop.move` (`create_shop`, `new_shop`)
+  Code: `packages/dapp/contracts/oracle-market/sources/shop.move` (`create_shop`, `new_shop`)
 - **Public transfer vs sharing**: `txf::public_transfer` moves owned objects to an address; sharing
   creates a global shared object. This mirrors deploy + ownership transfer in a single PTB.
-  Code: `packages/dapp/move/oracle-market/sources/shop.move` (`create_shop`)
+  Code: `packages/dapp/contracts/oracle-market/sources/shop.move` (`create_shop`)
 
 ## 6. Code references
-1. `packages/dapp/move/oracle-market/sources/shop.move` (Shop, ShopOwnerCap, create_shop, update_shop_owner)
+1. `packages/dapp/contracts/oracle-market/sources/shop.move` (Shop, ShopOwnerCap, create_shop, update_shop_owner)
 2. `packages/domain/core/src/ptb/shop.ts` (buildCreateShopTransaction, buildUpdateShopOwnerTransaction)
 3. `packages/dapp/src/scripts/owner/shop-update-owner.ts` (owner rotation)
 4. PTB builder definitions: `packages/domain/core/src/ptb/shop.ts`
 
 **Code spotlight: Shop creation + owner cap mint**
-`packages/dapp/move/oracle-market/sources/shop.move`
+`packages/dapp/contracts/oracle-market/sources/shop.move`
 ```move
 entry fun create_shop(name: string::String, ctx: &mut tx::TxContext) {
   let owner = ctx.sender();
@@ -68,7 +68,7 @@ entry fun create_shop(name: string::String, ctx: &mut tx::TxContext) {
 ```
 
 **Code spotlight: rotate shop ownership on-chain**
-`packages/dapp/move/oracle-market/sources/shop.move`
+`packages/dapp/contracts/oracle-market/sources/shop.move`
 ```move
 fun update_shop_owner(
   shop: &mut Shop,
