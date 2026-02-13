@@ -82,7 +82,7 @@ export type ShopCreatedSummary = {
   shopId: string
   ownerAddress?: string
   name?: string
-  ownerCapId?: string
+  ownerCapAddress?: string
   createdAtMs?: string
   txDigest?: string
   errors?: ShopCreatedEnrichmentError[]
@@ -127,7 +127,9 @@ const parseShopCreatedEvent = (
       shopId,
       ownerAddress: normalizeOptionalIdFromValue(fields.owner),
       name: readMoveStringOrVector(fields.name),
-      ownerCapId: normalizeOptionalIdFromValue(fields.shop_owner_cap_address),
+      ownerCapAddress: normalizeOptionalIdFromValue(
+        fields.shop_owner_cap_address
+      ),
       createdAtMs: event.timestampMs ? String(event.timestampMs) : undefined,
       txDigest: event.id?.txDigest
     }
