@@ -29,8 +29,8 @@ import {
 } from "./ModalPrimitives"
 import TransactionRecap from "./TransactionRecap"
 
-const formatGuardrailCap = (value?: bigint) =>
-  value ? value.toString() : "Default"
+const formatGuardrailCap = (value?: bigint | number | string) =>
+  value !== undefined ? value.toString() : "Default"
 
 const CurrencySummarySection = ({
   summary,

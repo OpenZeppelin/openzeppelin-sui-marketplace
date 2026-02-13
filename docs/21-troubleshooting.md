@@ -69,26 +69,18 @@ if (checkOnly) {
 `packages/dapp/contracts/oracle-market/sources/shop.move`
 ```move
 fun resolve_effective_guardrails(
-  max_price_age_secs: &Option<u64>,
-  max_confidence_ratio_bps: &Option<u64>,
+  max_price_age_secs: Option<u64>,
+  max_confidence_ratio_bps: Option<u16>,
   accepted_currency: &AcceptedCurrency,
-): (u64, u64) {
-  let requested_max_age = unwrap_or_default(
-    max_price_age_secs,
-    accepted_currency.max_price_age_secs_cap,
-  );
-  let requested_confidence_ratio = unwrap_or_default(
-    max_confidence_ratio_bps,
-    accepted_currency.max_confidence_ratio_bps_cap,
-  );
-  let effective_max_age = clamp_max(
-    requested_max_age,
-    accepted_currency.max_price_age_secs_cap,
-  );
-  let effective_confidence_ratio = clamp_max(
-    requested_confidence_ratio,
-    accepted_currency.max_confidence_ratio_bps_cap,
-  );
+): (u64, u16) {
+  let requested_max_age =
+    max_price_age_secs.destroy_or!(accepted_currency.max_price_age_secs_cap);
+  let requested_confidence_ratio =
+    max_confidence_ratio_bps.destroy_or!(accepted_currency.max_confidence_ratio_bps_cap);
+  let effective_max_age =
+    requested_max_age.min(accepted_currency.max_price_age_secs_cap);
+  let effective_confidence_ratio =
+    requested_confidence_ratio.min(accepted_currency.max_confidence_ratio_bps_cap);
   (effective_max_age, effective_confidence_ratio)
 }
 ```

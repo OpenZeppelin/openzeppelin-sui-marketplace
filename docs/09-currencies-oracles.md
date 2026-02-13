@@ -77,7 +77,7 @@ entry fun add_accepted_currency<T>(
   feed_id: vector<u8>,
   pyth_object_id: ID,
   max_price_age_secs_cap: Option<u64>,
-  max_confidence_ratio_bps_cap: Option<u64>,
+  max_confidence_ratio_bps_cap: Option<u16>,
   max_price_status_lag_secs_cap: Option<u64>,
   ctx: &mut tx::TxContext,
 ) {
