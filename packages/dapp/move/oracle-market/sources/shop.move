@@ -669,15 +669,14 @@ public fun delete_item_listing(
     assert_owner_cap!(shop, owner_cap);
     assert_listing_matches_shop!(shop, &item_listing);
     let item_listing_id = item_listing.id.uid_to_inner();
-    let item_listing_address = object::uid_to_address(&item_listing.id);
     let _marker: ItemListingMarker = dynamic_field::remove(
         &mut shop.id,
         ItemListingKey(item_listing_id),
     );
 
     event::emit(ItemListingRemovedEvent {
-        shop_address: shop.id.to_address(),
-        item_listing_address,
+        shop_id: shop.id.to_inner(),
+        item_listing_id,
     });
 
     let ItemListing { id, .. } = item_listing;

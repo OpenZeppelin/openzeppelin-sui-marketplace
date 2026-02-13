@@ -1913,16 +1913,15 @@ fun delete_item_listing_deletes_listing_and_emits_event() {
         option::none(),
         &mut ctx,
     );
-    let listing_address = shop::test_listing_address(&listing);
-    let shop_address = shop::test_shop_id(&shop);
+    let shop_id = shop::test_shop_id(&shop);
 
     shop::delete_item_listing(&mut shop, &owner_cap, listing, &ctx);
 
     let removed_events = event::events_by_type<shop::ItemListingRemovedEvent>();
     assert_eq!(removed_events.length(), 1);
     let removed = &removed_events[0];
-    assert_eq!(shop::test_item_listing_removed_shop(removed), shop_address);
-    assert_eq!(shop::test_item_listing_removed_listing(removed), listing_address);
+    assert_eq!(shop::test_item_listing_removed_shop(removed), shop_id);
+    assert_eq!(shop::test_item_listing_removed_listing(removed), listing_id);
     assert!(!shop::test_listing_exists(&shop, listing_id));
 
     std::unit_test::destroy(owner_cap);
