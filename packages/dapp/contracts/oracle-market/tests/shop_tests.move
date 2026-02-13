@@ -186,7 +186,10 @@ fun create_shop_records_sender_in_event() {
     let created = event::events_by_type<shop::ShopCreatedEvent>();
     assert_eq!(created.length(), 1);
     let shop_created = &created[0];
-    assert_eq!(shop::test_shop_created_owner_cap_id(shop_created), shop::test_last_created_id(&ctx));
+    assert_eq!(
+        shop::test_shop_created_owner_cap_id(shop_created),
+        shop::test_last_created_id(&ctx),
+    );
 }
 
 #[test]
@@ -4041,7 +4044,10 @@ fun claim_and_buy_item_with_discount_emits_events_and_covers_helpers() {
     let purchase_event = &purchase_events[purchase_events.length() - 1];
     assert_eq!(shop::test_purchase_completed_shop(purchase_event), shop_id);
     assert_eq!(shop::test_purchase_completed_listing(purchase_event), listing_id);
-    assert_eq!(shop::test_purchase_completed_accepted_currency_id(purchase_event), accepted_currency_id);
+    assert_eq!(
+        shop::test_purchase_completed_accepted_currency_id(purchase_event),
+        accepted_currency_id,
+    );
 
     let mint_events = event::events_by_type<shop::MintingCompletedEvent>();
     let mint_event = &mint_events[mint_events.length() - 1];
