@@ -20,11 +20,14 @@ This chapter explains how to read Sui data for apps: object queries, dynamic fie
 ## 4. Concept deep dive: read paths
 - **Direct RPC (fullnode)**: best for current state and object ownership.
 - **Events**: query by type and sender to track lifecycle changes (listings, purchases, discounts).
-- **Dynamic fields**: enumerate markers under a shared object to discover listings and currencies without scanning storage maps.
+- **Dynamic fields**: enumerate markers under a shared object to discover currencies and discount templates without scanning storage maps.
+- **Table-backed listings**: listings live inside the Shop’s `Table`. Off-chain reads enumerate the
+  table entries (dynamic fields under the table ID) or rely on snapshot helpers plus events for
+  history.
 
 Code:
 1. `packages/domain/core/src/models/shop.ts` (events + shop overview)
-2. `packages/domain/core/src/models/item-listing.ts` (dynamic field lookups)
+2. `packages/domain/core/src/models/item-listing.ts` (listing table lookups)
 3. `packages/domain/core/src/models/currency.ts` (currency markers)
 
 ## 5. Concept deep dive: indexers and GraphQL
@@ -42,7 +45,7 @@ Code:
 2. `packages/ui/src/app/components/TransactionRecap.tsx`
 
 ## 7. Exercises
-1. Run `pnpm script buyer:shop:view` and compare output with `pnpm script buyer:item-listing:list`. Expected outcome: you can trace which calls use dynamic-field enumeration.
+1. Run `pnpm script buyer:shop:view` and compare output with `pnpm script buyer:item-listing:list`. Expected outcome: you can trace which calls use the listings table vs marker enumeration.
 2. Query for `PurchaseCompleted` events and verify the most recent buy. Expected outcome: you can see typed event fields (listing, buyer, amount).
 
 ## 8. Further reading (Sui docs)

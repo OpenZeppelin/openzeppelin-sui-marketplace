@@ -233,13 +233,13 @@ pnpm script owner:item-listing:add \
   --item-type <ITEM_TYPE>
 ```
 What it does:
-- Creates a new `ItemListing` object with price (USD cents), stock, and item type metadata.
-- Records the listing in `packages/dapp/deployments/objects.localnet.json`.
+- Creates a new listing entry inside the Shop’s listings table with price (USD cents), stock, and
+  item type metadata.
+- Emits an `ItemListingAddedEvent` with the numeric `listing_id`.
 
 Where to find values:
 - `ITEM_TYPE`: `packages/dapp/deployments/mock.localnet.json` -> `itemTypes[].itemType`
-- `itemListingId`: `objects.localnet.json` entry with `objectType` ending in `::shop::ItemListing`
-- The script logs the listing ID and its marker (dynamic field) ID.
+- `listingId`: in the script JSON output or via `pnpm script buyer:shop:view` (listings include their IDs).
 
 ### 7) Create a discount template
 ```bash
@@ -249,23 +249,23 @@ pnpm script owner:discount-template:create \
 ```
 What it does:
 - Creates a reusable `DiscountTemplate` object with schedule and rule settings.
-- Optionally scope it to a listing with `--listing-id <ITEM_LISTING_ID>`.
+- Optionally scope it to a listing with `--listing-id <LISTING_ID>` (u64).
 
 Where to find values:
 - `discountTemplateId`: `objects.localnet.json` entry with `objectType` ending in `::shop::DiscountTemplate`
-- If you scoped the template, `--listing-id` should be the `itemListingId` from step 6.
+- If you scoped the template, `--listing-id` should be the `listingId` from step 6.
 
 ### 8) Attach the discount template to a listing (spotlight)
 ```bash
 pnpm script owner:item-listing:attach-discount-template \
-  --item-listing-id <ITEM_LISTING_ID> \
+  --item-listing-id <LISTING_ID> \
   --discount-template-id <DISCOUNT_TEMPLATE_ID>
 ```
 What it does:
 - Updates the listing to reference the discount template so it is spotlighted.
 
 Where to find values:
-- `ITEM_LISTING_ID`: from step 6 (`objects.localnet.json` or script output)
+- `LISTING_ID`: from step 6 (script output or `buyer:shop:view`)
 - `DISCOUNT_TEMPLATE_ID`: from step 7 (`objects.localnet.json` or script output)
 
 ### 9) Transfer mock coins from owner to buyer

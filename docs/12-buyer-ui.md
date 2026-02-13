@@ -29,6 +29,7 @@ pnpm script buyer:buy \
   --discount-template-id <templateId> \
   --claim-discount
 ```
+Note: `listingId` is the numeric listing ID (`u64`) from the shop snapshot or script output, not a Sui object ID.
 
 ## 4. Run it (UI)
 ```bash
@@ -58,8 +59,8 @@ pnpm ui dev
 - **Price update policy**: for localnet/testnet/mainnet, the UI requires a Pyth update to be added
   to the PTB; for other networks it can be auto/skip. This keeps pricing deterministic and fresh.
   Code: `packages/ui/src/app/hooks/useBuyFlowModalState.ts`
-- **Shared vs owned reads in UI**: storefront data comes from shared objects (listings, currencies,
-  templates). Wallet data comes from owned objects (tickets, receipts).
+- **Shared vs owned reads in UI**: storefront data comes from shared objects (the Shop, listings
+  table, currencies, templates). Wallet data comes from owned objects (tickets, receipts).
   Code: `packages/ui/src/app/hooks/useShopDashboardData.tsx`
 
 ## 7. UI map (buyer path)
@@ -70,33 +71,33 @@ pnpm ui dev
 
 ## 8. Code references
 1. `packages/domain/core/src/flows/buy.ts` (buy transaction builder + Pyth update)
-2. `packages/dapp/contracts/oracle-market/sources/shop.move` (buy_item, buy_item_with_discount)
+2. `packages/dapp/move/oracle-market/sources/shop.move` (buy_item, buy_item_with_discount)
 3. `packages/dapp/src/scripts/buyer/buy.ts` (CLI buy flow)
 4. `packages/ui/src/app/hooks/useBuyFlowModalState.ts` (UI PTB execution)
 5. `packages/ui/src/app/hooks/useShopDashboardData.tsx` (shared vs owned reads)
 6. PTB builder definition: `packages/domain/core/src/flows/buy.ts` (buildBuyTransaction)
 
 **Code spotlight: buy entry points accept `Coin<T>` and PriceInfoObject**
-`packages/dapp/contracts/oracle-market/sources/shop.move`
+`packages/dapp/move/oracle-market/sources/shop.move`
 ```move
 entry fun buy_item<TItem: store, TCoin>(
-  shop: &Shop,
-  item_listing: &mut ItemListing,
+  shop: &mut Shop,
+  listing_id: u64,
   accepted_currency: &AcceptedCurrency,
   price_info_object: &price_info::PriceInfoObject,
   payment: coin::Coin<TCoin>,
   mint_to: address,
   refund_extra_to: address,
   max_price_age_secs: Option<u64>,
-  max_confidence_ratio_bps: Option<u16>,
+  max_confidence_ratio_bps: Option<u64>,
   clock: &clock::Clock,
   ctx: &mut tx::TxContext,
 ) {
   assert_shop_active(shop);
-  assert_listing_matches_shop(shop, item_listing);
-  let base_price_usd_cents = item_listing.base_price_usd_cents;
-  shop.process_purchase<TItem, TCoin>(
-    item_listing,
+  assert_listing_registered!(shop, listing_id);
+  let item_listing = shop.borrow_listing_mut(listing_id, shop.id.to_address());
+  let base_price_usd_cents: u64 = item_listing.base_price_usd_cents;
+  item_listing.process_purchase_core<TItem, TCoin>(
     accepted_currency,
     price_info_object,
     payment,

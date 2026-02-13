@@ -212,7 +212,7 @@ Owner scripts default `--shop-package-id`, `--shop-id`, and `--owner-cap-id` fro
 	- One of `--accepted-currency-id` or `--coin-type` is required.
 
 ### `pnpm script owner:item-listing:add`
-- Creates an item listing with a USD price, stock count, Move item type, and optional spotlighted discount template.
+- Creates a listing entry in the Shop table with a USD price, stock count, Move item type, and optional spotlighted discount template. Listing IDs are numeric (`u64`) and are surfaced via events/JSON output.
 - Flags:
 	- `--name <string>`: item name (required; UTF-8 encoded).
 	- `--price <usd-or-cents>`: USD string (`12.50`) or integer cents (`1250`) (required).
@@ -223,16 +223,15 @@ Owner scripts default `--shop-package-id`, `--shop-id`, and `--owner-cap-id` fro
 	- `--shop-package-id <id>` / `--shop-id <id>` / `--owner-cap-id <id>`: override artifact defaults.
 
 ### `pnpm script owner:item-listing:remove`
-- Delists the item by removing its marker under the Shop. The shared `ItemListing` object remains
-  addressable for history and analytics.
+- Removes a listing entry from the Shop table. Historical discovery should rely on events and indexers.
 - Flags:
-	- `--item-listing-id <id>`: listing object ID to remove (required).
+	- `--item-listing-id <id>`: listing ID (`u64`) to remove (required).
 	- `--shop-package-id <id>` / `--shop-id <id>` / `--owner-cap-id <id>`: override artifact defaults.
 
 ### `pnpm script owner:item-listing:update-stock`
 - Updates inventory for an existing listing; setting `0` pauses sales without removing the listing.
 - Flags:
-	- `--item-listing-id <id>`: listing object ID (required).
+	- `--item-listing-id <id>`: listing ID (`u64`) (required).
 	- `--stock <u64>`: new quantity (required; can be zero).
 	- `--shop-package-id <id>` / `--shop-id <id>` / `--owner-cap-id <id>`: override artifact defaults.
 
@@ -244,7 +243,7 @@ Owner scripts default `--shop-package-id`, `--shop-id`, and `--owner-cap-id` fro
 	- `--starts-at <epoch-seconds>`: activation time (defaults to now).
 	- `--expires-at <epoch-seconds>`: optional expiry (must be > `starts-at` when set).
 	- `--max-redemptions <u64>`: optional redemption cap.
-	- `--listing-id <id>`: optional ItemListing to pin this template to.
+	- `--listing-id <id>`: optional listing ID (`u64`) to pin this template to.
 	- `--publisher-id <id>`: optional metadata-only field; not passed on-chain.
 	- `--shop-package-id <id>` / `--shop-id <id>` / `--owner-cap-id <id>`: override artifact defaults.
 
@@ -275,14 +274,14 @@ Owner scripts default `--shop-package-id`, `--shop-id`, and `--owner-cap-id` fro
 ### `pnpm script owner:item-listing:attach-discount-template`
 - Attaches a discount template to a listing for spotlighting.
 - Flags:
-	- `--item-listing-id <id>`: listing object ID to attach to (required).
+	- `--item-listing-id <id>`: listing ID (`u64`) to attach to (required).
 	- `--discount-template-id <id>`: template object ID to attach (required).
 	- `--shop-package-id <id>` / `--shop-id <id>` / `--owner-cap-id <id>`: override artifact defaults.
 
 ### `pnpm script owner:item-listing:clear-discount-template`
 - Clears the spotlighted template from a listing (does not delete the template).
 - Flags:
-	- `--item-listing-id <id>`: listing object ID to clear (required).
+	- `--item-listing-id <id>`: listing ID (`u64`) to clear (required).
 	- `--shop-package-id <id>` / `--shop-id <id>` / `--owner-cap-id <id>`: override artifact defaults.
 
 ---
@@ -300,7 +299,7 @@ Owner scripts default `--shop-package-id`, `--shop-id`, and `--owner-cap-id` fro
 	- `--shop-id <id>`: shop to inspect; defaults to the latest Shop artifact.
 
 ### `pnpm script buyer:item-listing:list`
-- Lists all item listings under a shop.
+- Lists all item listings under a shop (listing IDs are numeric `u64` values).
 - Flags:
 	- `--shop-id <id>`: shop to inspect; defaults to the latest Shop artifact.
 
@@ -326,7 +325,7 @@ Owner scripts default `--shop-package-id`, `--shop-id`, and `--owner-cap-id` fro
 - Executes checkout with oracle guardrails and optional discounts.
 	- Flags:
 		- `--shop-id <id>`: shared Shop object ID; defaults to the latest Shop artifact.
-		- `--item-listing-id <id>`: listing object ID to purchase (required).
+		- `--item-listing-id <id>`: listing ID (`u64`) to purchase (required).
 		- `--coin-type <0x...::Coin>`: payment coin type (must be registered as an AcceptedCurrency) (required).
 		- `--payment-coin-object-id <id>`: specific Coin object ID to use; otherwise the script picks the richest owned coin of that type.
 		- `--mint-to <0x...>`: address that receives the ShopItem receipt (defaults to signer); redeeming the receipt for the actual item happens in a separate flow.

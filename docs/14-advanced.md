@@ -31,71 +31,69 @@ pnpm script buyer:buy --help
 ```
 
 ## 4. EVM -> Sui translation
-1. **Single-threaded storage -> object-level parallelism**: shared objects lock independently. Listings/currencies/templates are separate shared objects to keep concurrency high. See `ItemListing`, `AcceptedCurrency`, and `DiscountTemplate` in `packages/dapp/contracts/oracle-market/sources/shop.move`.
-2. **Proxy upgrades -> new package IDs**: upgrades publish a new package; callers opt into new IDs. See `packages/dapp/contracts/oracle-market/Move.toml` and `packages/dapp/src/scripts/contracts/publish.ts` for artifacts.
+1. **Single-threaded storage -> object-level parallelism**: shared objects lock independently. This design keeps currencies/templates as separate shared objects, while listings live inside the Shop’s table (so listing mutations touch the Shop). See `Shop`, `AcceptedCurrency`, and `DiscountTemplate` in `packages/dapp/move/oracle-market/sources/shop.move`.
+2. **Proxy upgrades -> new package IDs**: upgrades publish a new package; callers opt into new IDs. See `packages/dapp/move/oracle-market/Move.toml` and `packages/dapp/src/scripts/move/publish.ts` for artifacts.
 3. **Blocks -> object DAG**: each object records the last transaction digest that mutated it, giving you causal history per object instead of global block history.
 
 ## 5. Concept deep dive: Move execution surface
 - **Entry vs public functions**: PTBs can call `entry` functions; other Move modules can call
   `public` functions. Keep `entry` as the transaction surface and route into `public` or private
   helpers for reuse.
-  Code: `packages/dapp/contracts/oracle-market/sources/shop.move` (`create_shop`, `quote_amount_for_price_info_object`)
+  Code: `packages/dapp/move/oracle-market/sources/shop.move` (`create_shop`, `quote_amount_for_price_info_object`)
 - **PTB limits**: a PTB can include up to 1,024 commands, which shapes how much work you can bundle
   into a single transaction. This matters most when you try to batch “admin seeding” or enumerate
   many dynamic-field children in one go.
 - **Events**: events are typed structs emitted via `event::emit`. Indexers and UIs rely on them
   instead of scanning contract storage arrays.
-  Code: `packages/dapp/contracts/oracle-market/sources/shop.move` (ShopCreated, PurchaseCompleted)
+  Code: `packages/dapp/move/oracle-market/sources/shop.move` (ShopCreated, PurchaseCompleted)
 - **Object IDs and addresses**: object IDs are addresses (but not every address is an object ID). We
   still convert between `UID` and address forms for events and off-chain tooling via
-  `object::uid_to_address` and `object::id_from_address`.
-  Code: `packages/dapp/contracts/oracle-market/sources/shop.move` (helper functions and events)
+  `obj::uid_to_address` and `obj::id_from_address`.
+  Code: `packages/dapp/move/oracle-market/sources/shop.move` (helper functions and events)
 - **Transfers and sharing**: `txf::public_transfer` moves owned resources, and `txf::share_object`
   creates shared objects. This pattern replaces EVM-style factory deployments.
-  Code: `packages/dapp/contracts/oracle-market/sources/shop.move` (`create_shop`, `finalize_purchase_transfers`)
+  Code: `packages/dapp/move/oracle-market/sources/shop.move` (`create_shop`, `finalize_purchase_transfers`)
 - **TxContext usage**: `tx::TxContext` is needed for object creation (`object::new`) and coin splits.
-  Code: `packages/dapp/contracts/oracle-market/sources/shop.move` (`split_payment`, `create_shop`)
+  Code: `packages/dapp/move/oracle-market/sources/shop.move` (`split_payment`, `create_shop`)
 - **Fixed-point math**: prices are stored in USD cents; discounts use basis points; conversion uses
   u128 scaling and a pow10 table to avoid floating point math.
-  Code: `packages/dapp/contracts/oracle-market/sources/shop.move` (`POW10_U128`, `quote_amount_with_guardrails`)
+  Code: `packages/dapp/move/oracle-market/sources/shop.move` (`POW10_U128`, `quote_amount_with_guardrails`)
 - **Fast path vs consensus**: owned-object transactions can execute without consensus ordering,
-  while shared-object mutations require consensus. This is why the design splits listings/currencies
-  into separate shared objects.
-  Code: `packages/dapp/contracts/oracle-market/sources/shop.move` (shared object types)
+  while shared-object mutations require consensus. Listings now live inside the Shop table, so
+  checkout and listing updates touch the Shop; currencies and templates remain separate shared
+  objects to keep unrelated writes decoupled.
+  Code: `packages/dapp/move/oracle-market/sources/shop.move` (shared object types)
 - **Storage rebates**: destroying objects (e.g., zero-value coins) returns storage rebates, which is
   why `finalize_purchase_transfers` explicitly calls `coin::destroy_zero`.
-  Code: `packages/dapp/contracts/oracle-market/sources/shop.move` (`finalize_purchase_transfers`)
+  Code: `packages/dapp/move/oracle-market/sources/shop.move` (`finalize_purchase_transfers`)
 - **Test-only helpers**: `#[test_only]` APIs expose helpers for Move unit tests without shipping
   them as production entry points.
-  Code: `packages/dapp/contracts/oracle-market/sources/shop.move` (test_* functions)
+  Code: `packages/dapp/move/oracle-market/sources/shop.move` (test_* functions)
 
 ## 6. Code references
-1. `packages/dapp/contracts/oracle-market/sources/shop.move` (entry/view functions, events, math)
+1. `packages/dapp/move/oracle-market/sources/shop.move` (entry/view functions, events, math)
 2. `packages/domain/core/src/flows/buy.ts` (dev-inspect quote + PTB composition)
-3. `packages/dapp/src/scripts/contracts/publish.ts` (publish artifacts and upgrade-cap capture)
+3. `packages/dapp/src/scripts/move/publish.ts` (publish artifacts and upgrade-cap capture)
 
 **Code spotlight: view helpers used by dev-inspect**
-`packages/dapp/contracts/oracle-market/sources/shop.move`
+`packages/dapp/move/oracle-market/sources/shop.move`
 ```move
-public fun listing_exists(shop: &Shop, listing_id: ID): bool {
-  dynamic_field::exists_with_type<ItemListingKey, ItemListingMarker>(
-    &shop.id,
-    ItemListingKey(listing_id),
-  )
+public fun listing_exists(shop: &Shop, listing_id: u64): bool {
+  table::contains(&shop.listings, listing_id)
 }
 
 public fun accepted_currency_id_for_type(
   shop: &Shop,
   coin_type: TypeName,
-): Option<ID> {
+): Option<obj::ID> {
   if (
-    dynamic_field::exists_with_type<AcceptedCurrencyTypeKey, ID>(
+    dynamic_field::exists_with_type<AcceptedCurrencyTypeKey, obj::ID>(
       &shop.id,
       AcceptedCurrencyTypeKey(coin_type),
     )
   ) {
     opt::some(
-      *dynamic_field::borrow<AcceptedCurrencyTypeKey, ID>(
+      *dynamic_field::borrow<AcceptedCurrencyTypeKey, obj::ID>(
         &shop.id,
         AcceptedCurrencyTypeKey(coin_type),
       )
@@ -125,15 +123,15 @@ function buy(uint256 listingId, address payToken) external {
 ```move
 // Move (actual shape)
 entry fun buy_item<TItem: store, TCoin>(
-  shop: &Shop,
-  listing: &mut ItemListing,
+  shop: &mut Shop,
+  listing_id: u64,
   accepted_currency: &AcceptedCurrency,
   price_info: &price_info::PriceInfoObject,
   payment_coin: coin::Coin<TCoin>,
   mint_to: address,
   refund_to: address,
   max_price_age_secs: Option<u64>,
-  max_confidence_ratio_bps: Option<u16>,
+  max_confidence_ratio_bps: Option<u64>,
   clock: &clock::Clock,
   ctx: &mut tx::TxContext
 ) {
@@ -151,7 +149,7 @@ entry fun buy_item<TItem: store, TCoin>(
 
 ## 9. Diagram: shared vs owned objects in tests
 ```
-Shared: Shop, ItemListing, AcceptedCurrency, DiscountTemplate
+Shared: Shop (listings table), AcceptedCurrency, DiscountTemplate
 Owned: ShopOwnerCap, DiscountTicket, ShopItem
 ```
 

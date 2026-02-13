@@ -106,9 +106,9 @@ it("lists item listings created by owner scripts", async () => {
     )
 
     const listedIds = (listPayload.itemListings ?? []).map(
-      (listing) => listing.itemListingId
+      (listing) => listing.listingId
     )
-    expect(listedIds).toContain(listing.itemListingId)
+    expect(listedIds).toContain(listing.listingId)
   })
 })
 ```

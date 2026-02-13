@@ -20,8 +20,9 @@ None. This is a conceptual chapter that builds on earlier examples.
 ## 4. Concept deep dive: ownership types
 - **Address-owned objects (fastpath)**: owned by a wallet address. These can execute on the fastpath with low latency. Examples here: `ShopOwnerCap`, `DiscountTicket`, and `ShopItem`.
 - **Shared objects (consensus)**: anyone can include them in a transaction, and mutations are
-  sequenced by consensus, but module checks still gate what can change. Examples here: `Shop`,
-  `ItemListing`, `AcceptedCurrency`, `DiscountTemplate`, and the Pyth `PriceInfoObject`.
+  sequenced by consensus, but module checks still gate what can change. Examples here: `Shop`
+  (including its listings table), `AcceptedCurrency`, `DiscountTemplate`, and the Pyth
+  `PriceInfoObject`.
 - **Object-owned objects**: children owned by another object. This is how dynamic-field markers and per-claimer claims work.
 - **Immutable objects**: globally readable, never mutable. Common for package-published constants or registry-like data.
 
@@ -29,31 +30,35 @@ None. This is a conceptual chapter that builds on earlier examples.
 - **Fastpath objects**: address-owned objects execute without consensus and require the latest version in each transaction input. Conflicting transactions from the same owner fail, so avoid signing two transactions against the same version.
 - **Immutable objects**: read-only inputs that never change, so they do not participate in version contention.
 - **Consensus objects**: shared objects are sequenced by consensus, which simplifies coordination at the cost of higher latency.
-- **What this repo chooses**: the Shop and its child shared objects use consensus so listings and currencies can be accessed by anyone. Owned capabilities and tickets use fastpath for low-latency user interactions.
+- **What this repo chooses**: the Shop (and its listings table) plus currency/template objects use
+  consensus so anyone can access shared state. Owned capabilities and tickets use fastpath for
+  low-latency user interactions.
 
 ## 6. Code references
-1. `packages/dapp/contracts/oracle-market/sources/shop.move` (Shop, ShopOwnerCap, DiscountTicket, ItemListingMarker)
+1. `packages/dapp/move/oracle-market/sources/shop.move` (Shop, ShopOwnerCap, DiscountTicket, DiscountClaim)
 2. `packages/domain/core/src/models/shop.ts` (event queries and shop inspection)
 3. `packages/tooling/core/src/object-info.ts` (ownership labels and version metadata)
 
 **Code spotlight: ownership encoded at the type level**
-`packages/dapp/contracts/oracle-market/sources/shop.move`
+`packages/dapp/move/oracle-market/sources/shop.move`
 ```move
 public struct ShopOwnerCap has key, store {
-  id: UID,
-  shop_id: ID,
+  id: obj::UID,
+  shop_address: address,
+  owner: address,
 }
 
 public struct DiscountTicket has key, store {
-  id: UID,
-  discount_template_id: ID,
-  shop_id: ID,
-  listing_id: Option<ID>,
+  id: obj::UID,
+  discount_template_id: address,
+  shop_address: address,
+  listing_id: Option<u64>,
   claimer: address,
 }
 
-public struct ItemListingMarker has copy, drop, store {
-  listing_id: ID,
+public struct DiscountClaim has key, store {
+  id: obj::UID,
+  claimer: address,
 }
 ```
 
@@ -64,8 +69,8 @@ public struct ItemListingMarker has copy, drop, store {
 ## 8. Diagram: ownership layout
 ```
 Address-owned (fastpath): ShopOwnerCap, DiscountTicket, ShopItem
-Shared (consensus): Shop, ItemListing, AcceptedCurrency, DiscountTemplate, PriceInfoObject
-Object-owned: ItemListingMarker, AcceptedCurrencyMarker, DiscountClaim
+Shared (consensus): Shop (listings table), AcceptedCurrency, DiscountTemplate, PriceInfoObject
+Object-owned: AcceptedCurrencyMarker, DiscountTemplateMarker, DiscountClaim
 ```
 
 ## 9. Further reading (Sui docs)

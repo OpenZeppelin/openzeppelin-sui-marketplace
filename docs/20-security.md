@@ -30,12 +30,12 @@ If you build owner tooling or UI flows:
 
 Code anchor (capability check):
 
-From `assert_owner_cap` in `packages/dapp/contracts/oracle-market/sources/shop.move`:
+From `assert_owner_cap` in `packages/dapp/move/oracle-market/sources/shop.move`:
 
 ```move
 fun assert_owner_cap(shop: &Shop, owner_cap: &ShopOwnerCap) {
    assert!(
-      owner_cap.shop_id == shop.id.to_inner(),
+      owner_cap.shop_address == obj::uid_to_address(&shop.id),
       EInvalidOwnerCap,
    );
 }
@@ -47,10 +47,11 @@ The important part is not “who signed” but “does this capability bind to t
 Two recurring “Sui-native” checks show up throughout the module:
 
 ### 3.1 Cross-object linkage checks
-Shared objects in this design carry a `shop_id` field (e.g., `ItemListing.shop_id`,
-`AcceptedCurrency.shop_id`). Before any mutation, the module asserts that:
-- the shop matches the object, and
-- the object is registered (via dynamic-field marker membership).
+Shared objects in this design carry a `shop_address` field (e.g., `AcceptedCurrency.shop_address`,
+`DiscountTemplate.shop_address`). Listings are stored inside the Shop table and also carry
+`shop_address`. Before any mutation, the module asserts that:
+- the shop matches the object or listing entry, and
+- the listing ID is registered in the Shop table.
 
 This prevents a caller from mixing objects from different shops.
 
@@ -62,12 +63,12 @@ The module defends against this by binding two things:
 - the expected Pyth object ID, and
 - the expected feed identifier bytes.
 
-From `assert_price_info_identity` in `packages/dapp/contracts/oracle-market/sources/shop.move`:
+From `assert_price_info_identity` in `packages/dapp/move/oracle-market/sources/shop.move`:
 
 ```move
 fun assert_price_info_identity(
    expected_feed_id: &vector<u8>,
-   expected_pyth_object_id: &ID,
+   expected_pyth_object_id: &obj::ID,
    price_info_object: &price_info::PriceInfoObject,
 ) {
    let confirmed_price_object = price_info::uid_to_inner(price_info_object);
@@ -108,24 +109,30 @@ They are correctness checks.
 
 Code anchor (guardrail caps):
 
-From `resolve_effective_guardrails` in `packages/dapp/contracts/oracle-market/sources/shop.move`:
+From `resolve_effective_guardrails` in `packages/dapp/move/oracle-market/sources/shop.move`:
 
 ```move
 fun resolve_effective_guardrails(
-   max_price_age_secs: Option<u64>,
-   max_confidence_ratio_bps: Option<u16>,
+   max_price_age_secs: &Option<u64>,
+   max_confidence_ratio_bps: &Option<u64>,
    accepted_currency: &AcceptedCurrency,
-): (u64, u16) {
-   let requested_max_age = max_price_age_secs.destroy_or!(
-      accepted_currency.max_price_age_secs_cap
+): (u64, u64) {
+   let requested_max_age = unwrap_or_default(
+      max_price_age_secs,
+      accepted_currency.max_price_age_secs_cap,
    );
-   let requested_confidence_ratio = max_confidence_ratio_bps.destroy_or!(
-      accepted_currency.max_confidence_ratio_bps_cap
+   let requested_confidence_ratio = unwrap_or_default(
+      max_confidence_ratio_bps,
+      accepted_currency.max_confidence_ratio_bps_cap,
    );
-   let effective_max_age =
-      requested_max_age.min(accepted_currency.max_price_age_secs_cap);
-   let effective_confidence_ratio =
-      requested_confidence_ratio.min(accepted_currency.max_confidence_ratio_bps_cap);
+   let effective_max_age = clamp_max(
+      requested_max_age,
+      accepted_currency.max_price_age_secs_cap,
+   );
+   let effective_confidence_ratio = clamp_max(
+      requested_confidence_ratio,
+      accepted_currency.max_confidence_ratio_bps_cap,
+   );
    (effective_max_age, effective_confidence_ratio)
 }
 ```
@@ -134,10 +141,10 @@ fun resolve_effective_guardrails(
 On Sui, shared objects are the concurrency boundary. If you put too much state behind a single
 shared object, you create a performance bottleneck and a DoS surface.
 
-This repo intentionally shards state:
-- `Shop` is shared, but most mutations happen on sibling shared objects (`ItemListing`,
-   `AcceptedCurrency`, `DiscountTemplate`).
-- `Shop` mainly carries markers and small metadata.
+This repo intentionally scopes state:
+- `Shop` is shared and owns the listings table, so listing updates and checkout mutate the Shop.
+- `AcceptedCurrency` and `DiscountTemplate` remain separate shared objects so unrelated updates
+  avoid touching the Shop.
 
 When you add new features, sanity-check:
 - “Does this force every transaction to touch the `Shop` object?”
@@ -184,7 +191,7 @@ Before you ship a modification to the Move module:
 - Decide transfer semantics for any new owned object (is it a receipt? a right? a credential?).
 
 ## 9. Code references
-1. `packages/dapp/contracts/oracle-market/sources/shop.move` (cap checks, oracle identity, guardrails)
+1. `packages/dapp/move/oracle-market/sources/shop.move` (cap checks, oracle identity, guardrails)
 2. `packages/domain/core/src/flows/buy.ts` (dev-inspect quote, PTB composition, SUI gas rules)
 3. `docs/16-object-ownership.md` (ownership types and how they affect execution)
 
