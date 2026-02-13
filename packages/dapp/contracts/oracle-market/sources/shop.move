@@ -166,12 +166,12 @@ const EPriceTooStale: vector<u8> = b"price too stale";
 const CENTS_PER_DOLLAR: u64 = 100;
 const BASIS_POINT_DENOMINATOR: u64 = 10_000;
 const DEFAULT_MAX_PRICE_AGE_SECS: u64 = 60;
-const MAX_PRICE_AGE_SECS_CAP: u64 = DEFAULT_MAX_PRICE_AGE_SECS;
 const MAX_DECIMAL_POWER: u64 = 38;
-const DEFAULT_MAX_CONFIDENCE_RATIO_BPS: u16 = 1_000; // Reject price feeds with sigma/mu above 10%.
+// Reject price feeds with sigma/mu above 10%.
+const DEFAULT_MAX_CONFIDENCE_RATIO_BPS: u16 = 1_000;
 const PYTH_PRICE_IDENTIFIER_LENGTH: u64 = 32;
-const DEFAULT_MAX_PRICE_STATUS_LAG_SECS: u64 = 5; // Allow small attestation/publish skew without halting checkout.
-const MAX_PRICE_STATUS_LAG_SECS_CAP: u64 = DEFAULT_MAX_PRICE_STATUS_LAG_SECS;
+// Allow small attestation/publish skew without halting checkout.
+const DEFAULT_MAX_PRICE_STATUS_LAG_SECS: u64 = 5;
 // Powers of 10 from 10^0 through 10^38 for scaling Pyth prices and coin decimals.
 const POW10_U128: vector<u128> = vector[
     1, 10, 100, 1_000, 10_000, 100_000, 1_000_000, 10_000_000, 100_000_000, 1_000_000_000,
@@ -708,14 +708,14 @@ entry fun add_accepted_currency<T>(
     assert_supported_decimals!(decimals);
     let symbol = coin_registry::symbol(currency);
     let shop_id = shop.id.to_inner();
-    let age_cap = resolve_guardrail_cap!(max_price_age_secs_cap, MAX_PRICE_AGE_SECS_CAP);
+    let age_cap = resolve_guardrail_cap!(max_price_age_secs_cap, DEFAULT_MAX_PRICE_AGE_SECS);
     let confidence_cap = resolve_guardrail_cap!(
         max_confidence_ratio_bps_cap,
         DEFAULT_MAX_CONFIDENCE_RATIO_BPS,
     );
     let status_lag_cap = resolve_guardrail_cap!(
         max_price_status_lag_secs_cap,
-        MAX_PRICE_STATUS_LAG_SECS_CAP,
+        DEFAULT_MAX_PRICE_STATUS_LAG_SECS,
     );
 
     let (accepted_currency, accepted_currency_id) = new_accepted_currency(
