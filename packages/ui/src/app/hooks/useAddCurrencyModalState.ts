@@ -14,10 +14,10 @@ import type { IdentifierString } from "@mysten/wallet-standard"
 import type { AcceptedCurrencySummary } from "@sui-oracle-market/domain-core/models/currency"
 import {
   getAcceptedCurrencySummary,
-  normalizeCoinType,
   MAX_CONFIDENCE_RATIO_BPS_CAP,
   MAX_PRICE_AGE_SECS_CAP,
   MAX_PRICE_STATUS_LAG_SECS_CAP,
+  normalizeCoinType,
   parseAcceptedCurrencyBpsValue,
   parseAcceptedCurrencyGuardrailValue
 } from "@sui-oracle-market/domain-core/models/currency"
@@ -39,18 +39,18 @@ import { useCallback, useEffect, useMemo, useState } from "react"
 import { EXPLORER_URL_VARIABLE_NAME } from "../config/network"
 import { getStructLabel, shortenId } from "../helpers/format"
 import {
-  getLocalnetClient,
-  makeLocalnetExecutor,
-  walletSupportsChain
-} from "../helpers/localnet"
-import { resolveOwnerCapabilityId } from "../helpers/ownerCapabilities"
-import {
   resolveCoinTypeInput,
   validateCoinType,
   validateOptionalSuiObjectId,
   validateRequiredHexBytes,
   validateRequiredSuiObjectId
 } from "../helpers/inputValidation"
+import {
+  getLocalnetClient,
+  makeLocalnetExecutor,
+  walletSupportsChain
+} from "../helpers/localnet"
+import { resolveOwnerCapabilityId } from "../helpers/ownerCapabilities"
 import {
   extractErrorDetails,
   formatErrorMessage,
@@ -59,8 +59,8 @@ import {
 } from "../helpers/transactionErrors"
 import { extractCreatedObjects } from "../helpers/transactionFormat"
 import { waitForTransactionBlock } from "../helpers/transactionWait"
-import useNetworkConfig from "./useNetworkConfig"
 import { useIdleFieldValidation } from "./useIdleFieldValidation"
+import useNetworkConfig from "./useNetworkConfig"
 
 type CurrencyFormState = {
   coinType: string
