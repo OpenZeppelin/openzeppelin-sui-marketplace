@@ -709,15 +709,12 @@ entry fun add_accepted_currency<T>(
     assert_supported_decimals!(decimals);
     let symbol = coin_registry::symbol(currency);
     let shop_id = shop.id.to_inner();
-    let age_cap = resolve_guardrail_cap(
-        max_price_age_secs_cap,
-        MAX_PRICE_AGE_SECS_CAP,
-    );
-    let confidence_cap = resolve_guardrail_cap_u16(
+    let age_cap = resolve_guardrail_cap!<u64>(max_price_age_secs_cap, MAX_PRICE_AGE_SECS_CAP);
+    let confidence_cap = resolve_guardrail_cap!<u16>(
         max_confidence_ratio_bps_cap,
-        MAX_CONFIDENCE_RATIO_BPS_CAP,
+        DEFAULT_MAX_CONFIDENCE_RATIO_BPS,
     );
-    let status_lag_cap = resolve_guardrail_cap(
+    let status_lag_cap = resolve_guardrail_cap!<u64>(
         max_price_status_lag_secs_cap,
         MAX_PRICE_STATUS_LAG_SECS_CAP,
     );
@@ -1504,14 +1501,9 @@ macro fun assert_listing_matches_shop($shop: &Shop, $listing: &ItemListing) {
 }
 
 /// Normalize a seller-provided guardrail cap, enforcing module-level ceilings and non-zero.
-fun resolve_guardrail_cap(proposed_cap: Option<u64>, module_cap: u64): u64 {
-    let value = proposed_cap.destroy_or!(module_cap);
-    assert!(value > 0, EInvalidGuardrailCap);
-    value.min(module_cap)
-}
-
-/// Normalize a seller-provided guardrail cap (bps), enforcing module-level ceilings and non-zero.
-fun resolve_guardrail_cap_u16(proposed_cap: Option<u16>, module_cap: u16): u16 {
+macro fun resolve_guardrail_cap<$T>($proposed_cap: Option<$T>, $module_cap: $T): $T {
+    let proposed_cap = $proposed_cap;
+    let module_cap = $module_cap;
     let value = proposed_cap.destroy_or!(module_cap);
     assert!(value > 0, EInvalidGuardrailCap);
     value.min(module_cap)
