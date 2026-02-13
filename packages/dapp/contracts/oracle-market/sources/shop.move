@@ -326,32 +326,32 @@ public struct DiscountClaim(address) has drop, store;
 // === Event Definitions ===
 /// Event emitted when a shop is created.
 public struct ShopCreatedEvent has copy, drop {
-    shop_address: address,
-    shop_owner_cap_address: address,
+    shop_id: ID,
+    shop_owner_cap_id: ID,
 }
 
 /// Event emitted when a shop owner is updated.
 public struct ShopOwnerUpdatedEvent has copy, drop {
-    shop_address: address,
-    shop_owner_cap_address: address,
+    shop_id: ID,
+    shop_owner_cap_id: ID,
 }
 
 /// Event emitted when a shop is disabled.
 public struct ShopDisabledEvent has copy, drop {
-    shop_address: address,
-    shop_owner_cap_address: address,
+    shop_id: ID,
+    shop_owner_cap_id: ID,
 }
 
 /// Event emitted when an item listing is added.
 public struct ItemListingAddedEvent has copy, drop {
-    shop_address: address,
-    item_listing_address: address,
+    shop_id: ID,
+    item_listing_id: ID,
 }
 
 /// Event emitted when listing stock is updated.
 public struct ItemListingStockUpdatedEvent has copy, drop {
-    shop_address: address,
-    item_listing_address: address,
+    shop_id: ID,
+    item_listing_id: ID,
 }
 
 /// Event emitted when an item listing is removed.
@@ -362,54 +362,54 @@ public struct ItemListingRemovedEvent has copy, drop {
 
 /// Event emitted when a discount template is created.
 public struct DiscountTemplateCreatedEvent has copy, drop {
-    shop_address: address,
-    discount_template_address: address,
+    shop_id: ID,
+    discount_template_id: ID,
 }
 
 /// Event emitted when a discount template is updated.
 public struct DiscountTemplateUpdatedEvent has copy, drop {
-    shop_address: address,
-    discount_template_address: address,
+    shop_id: ID,
+    discount_template_id: ID,
 }
 
 /// Event emitted when a discount template is toggled.
 public struct DiscountTemplateToggledEvent has copy, drop {
-    shop_address: address,
-    discount_template_address: address,
+    shop_id: ID,
+    discount_template_id: ID,
 }
 
 /// Event emitted when an accepted coin is added.
 public struct AcceptedCoinAddedEvent has copy, drop {
-    shop_address: address,
-    accepted_currency_address: address,
+    shop_id: ID,
+    accepted_currency_id: ID,
 }
 
 /// Event emitted when an accepted coin is removed.
 public struct AcceptedCoinRemovedEvent has copy, drop {
-    shop_address: address,
-    accepted_currency_address: address,
+    shop_id: ID,
+    accepted_currency_id: ID,
 }
 
 /// Event emitted when a discount ticket is claimed.
 public struct DiscountClaimedEvent has copy, drop {
-    shop_address: address,
-    discount_address: address,
+    shop_id: ID,
+    discount_id: ID,
 }
 
 /// Event emitted when a discount ticket is redeemed.
 public struct DiscountRedeemedEvent has copy, drop {
-    shop_address: address,
-    discount_template_address: address,
-    discount_address: address,
+    shop_id: ID,
+    discount_template_id: ID,
+    discount_id: ID,
 }
 
 /// Event emitted when a purchase completes.
 public struct PurchaseCompletedEvent has copy, drop {
-    shop_address: address,
-    item_listing_address: address,
-    accepted_currency_address: address,
-    discount_template_address: Option<address>,
-    /// Amount paid, discounted price, and quote amount are not stored elsewhere.
+    shop_id: ID,
+    item_listing_id: ID,
+    accepted_currency_id: ID,
+    discount_template_id: Option<ID>,
+    /// These checkout values are not persisted on any object and must remain in the event.
     amount_paid: u64,
     discounted_price_usd_cents: u64,
     quote_amount: u64,
@@ -417,9 +417,9 @@ public struct PurchaseCompletedEvent has copy, drop {
 
 /// Event emitted when minting completes.
 public struct MintingCompletedEvent has copy, drop {
-    shop_address: address,
-    item_listing_address: address,
-    minted_item_address: address,
+    shop_id: ID,
+    item_listing_id: ID,
+    minted_item_id: ID,
 }
 
 // === Entry Point Methods ===
@@ -447,8 +447,8 @@ entry fun create_shop(name: String, ctx: &mut TxContext) {
     };
 
     event::emit(ShopCreatedEvent {
-        shop_address: shop.id.to_address(),
-        shop_owner_cap_address: owner_cap.id.to_address(),
+        shop_id: shop.id.to_inner(),
+        shop_owner_cap_id: owner_cap.id.to_inner(),
     });
 
     transfer::share_object(shop);
@@ -461,8 +461,8 @@ entry fun disable_shop(shop: &mut Shop, owner_cap: &ShopOwnerCap, _ctx: &TxConte
     shop.disabled = true;
 
     event::emit(ShopDisabledEvent {
-        shop_address: shop.id.to_address(),
-        shop_owner_cap_address: owner_cap.id.to_address(),
+        shop_id: shop.id.to_inner(),
+        shop_owner_cap_id: owner_cap.id.to_inner(),
     });
 }
 
@@ -484,8 +484,8 @@ entry fun update_shop_owner(
     shop.owner = new_owner;
 
     event::emit(ShopOwnerUpdatedEvent {
-        shop_address: shop.id.to_address(),
-        shop_owner_cap_address: owner_cap.id.to_address(),
+        shop_id: shop.id.to_inner(),
+        shop_owner_cap_id: owner_cap.id.to_inner(),
     });
 }
 
@@ -539,8 +539,8 @@ fun add_item_listing_core<T: store>(
     );
 
     event::emit(ItemListingAddedEvent {
-        shop_address,
-        item_listing_address: listing_address,
+        shop_id,
+        item_listing_id: listing_id,
     });
 
     // Marker entries act like a membership index: the Shop stays slim while each listing mutates
@@ -583,8 +583,8 @@ entry fun update_item_listing_stock(
     item_listing.stock = new_stock;
 
     event::emit(ItemListingStockUpdatedEvent {
-        shop_address: item_listing.shop_address,
-        item_listing_address: item_listing.id.to_address(),
+        shop_id: item_listing.shop_id,
+        item_listing_id: item_listing.id.to_inner(),
     });
 }
 
@@ -697,8 +697,8 @@ entry fun add_accepted_currency<T>(
     transfer::share_object(accepted_currency);
 
     event::emit(AcceptedCoinAddedEvent {
-        shop_address,
-        accepted_currency_address: accepted_currency_address,
+        shop_id,
+        accepted_currency_id,
     })
 }
 
@@ -730,8 +730,8 @@ entry fun remove_accepted_currency(
     };
 
     event::emit(AcceptedCoinRemovedEvent {
-        shop_address: accepted_currency.shop_address,
-        accepted_currency_address: accepted_currency.id.to_address(),
+        shop_id: accepted_currency.shop_id,
+        accepted_currency_id,
     });
 }
 
@@ -746,7 +746,7 @@ fun create_discount_template_core(
     expires_at: Option<u64>,
     max_redemptions: Option<u64>,
     ctx: &mut TxContext,
-): (DiscountTemplate, object::ID) {
+): (DiscountTemplate, ID) {
     validate_discount_template_inputs!(shop, &applies_to_listing, starts_at, &expires_at);
 
     let discount_rule_kind = parse_rule_kind(rule_kind);
@@ -810,8 +810,8 @@ entry fun create_discount_template(
 
     let shop_id = shop.id.to_inner();
     event::emit(DiscountTemplateCreatedEvent {
-        shop_address,
-        discount_template_address: discount_template_id.to_address(),
+        shop_id,
+        discount_template_id: discount_template_id,
     });
 }
 
@@ -847,8 +847,8 @@ entry fun update_discount_template(
     );
 
     event::emit(DiscountTemplateUpdatedEvent {
-        shop_address: discount_template.shop_address,
-        discount_template_address: discount_template.id.to_address(),
+        shop_id: discount_template.shop_id,
+        discount_template_id: discount_template.id.to_inner(),
     });
 }
 
@@ -866,8 +866,8 @@ entry fun toggle_discount_template(
     discount_template.active = active;
 
     event::emit(DiscountTemplateToggledEvent {
-        shop_address: discount_template.shop_address,
-        discount_template_address: discount_template.id.to_address(),
+        shop_id: discount_template.shop_id,
+        discount_template_id: discount_template.id.to_inner(),
     });
 }
 
@@ -975,8 +975,8 @@ fun claim_discount_ticket_with_event(
     let claimer = ctx.sender();
 
     event::emit(DiscountClaimedEvent {
-        shop_address: discount_template.shop_address,
-        discount_address: discount_ticket.id.to_address(),
+        shop_id: discount_template.shop_id,
+        discount_id: discount_ticket.id.to_inner(),
     });
 
     (discount_ticket, claimer)
@@ -1128,9 +1128,9 @@ entry fun buy_item_with_discount<TItem: store, TCoin>(
     transfer::public_transfer(minted_item, mint_to);
 
     event::emit(DiscountRedeemedEvent {
-        shop_address: item_listing.shop_address,
-        discount_template_address: discount_template.id.to_address(),
-        discount_address: ticket_id,
+        shop_id: item_listing.shop_id,
+        discount_template_id: discount_template.id.to_inner(),
+        discount_id: ticket_id,
     });
 
     discount_ticket.burn_discount_ticket();
@@ -1553,7 +1553,7 @@ fun process_purchase_core<TItem: store, TCoin>(
     accepted_currency: &AcceptedCurrency,
     price_info_object: &price_info::PriceInfoObject,
     mut payment: coin::Coin<TCoin>,
-    shop_address: address,
+    shop_id: ID,
     _mint_to: address,
     _refund_extra_to: address,
     discounted_price_usd_cents: u64,
@@ -1583,27 +1583,27 @@ fun process_purchase_core<TItem: store, TCoin>(
     item_listing.decrement_stock();
 
     event::emit(PurchaseCompletedEvent {
-        shop_address,
-        item_listing_address: item_listing.id.to_address(),
-        accepted_currency_address: accepted_currency.id.to_address(),
-        discount_template_address: discount_template_id,
+        shop_id,
+        item_listing_id: item_listing.id.to_inner(),
+        accepted_currency_id: accepted_currency.id.to_inner(),
+        discount_template_id,
         amount_paid: quote_amount,
         discounted_price_usd_cents,
         quote_amount,
     });
 
     event::emit(ItemListingStockUpdatedEvent {
-        shop_address,
-        item_listing_address: item_listing.id.to_address(),
+        shop_id,
+        item_listing_id: item_listing.id.to_inner(),
     });
 
     let minted_item = item_listing.mint_shop_item<TItem>(clock, ctx);
-    let minted_item_address = minted_item.id.to_address();
+    let minted_item_id = minted_item.id.to_inner();
 
     event::emit(MintingCompletedEvent {
-        shop_address,
-        item_listing_address: item_listing.id.to_address(),
-        minted_item_address,
+        shop_id,
+        item_listing_id: item_listing.id.to_inner(),
+        minted_item_id,
     });
     (owed_coin_opt, payment, minted_item)
 }
@@ -2302,7 +2302,7 @@ public fun test_create_discount_template_local(
     expires_at: Option<u64>,
     max_redemptions: Option<u64>,
     ctx: &mut TxContext,
-): (DiscountTemplate, object::ID) {
+): (DiscountTemplate, ID) {
     let (template, template_id) = shop.create_discount_template_core(
         applies_to_listing,
         rule_kind,
@@ -2312,11 +2312,10 @@ public fun test_create_discount_template_local(
         max_redemptions,
         ctx,
     );
-    let template_address = template_id.to_address();
 
     event::emit(DiscountTemplateCreatedEvent {
-        shop_address: shop.id.to_address(),
-        discount_template_address: template_address,
+        shop_id: shop.id.to_inner(),
+        discount_template_id: template_id,
     });
 
     (template, template_id)
@@ -2543,9 +2542,9 @@ public fun test_claim_and_buy_with_ids<TItem: store, TCoin>(
     transfer::public_transfer(minted_item, mint_to);
 
     event::emit(DiscountRedeemedEvent {
-        shop_address,
-        discount_template_address: discount_template.id.to_address(),
-        discount_address: ticket_id,
+        shop_id,
+        discount_template_id: discount_template.id.to_inner(),
+        discount_id: ticket_id,
     });
 
     discount_ticket.burn_discount_ticket();
@@ -2581,8 +2580,8 @@ public fun test_discount_template_created_shop(event: &DiscountTemplateCreatedEv
 }
 
 #[test_only]
-public fun test_discount_template_created_address(event: &DiscountTemplateCreatedEvent): address {
-    event.discount_template_address
+public fun test_discount_template_created_id(event: &DiscountTemplateCreatedEvent): ID {
+    event.discount_template_id
 }
 
 #[test_only]
@@ -2591,8 +2590,8 @@ public fun test_discount_template_updated_shop(event: &DiscountTemplateUpdatedEv
 }
 
 #[test_only]
-public fun test_discount_template_updated_address(event: &DiscountTemplateUpdatedEvent): address {
-    event.discount_template_address
+public fun test_discount_template_updated_id(event: &DiscountTemplateUpdatedEvent): ID {
+    event.discount_template_id
 }
 
 #[test_only]
@@ -2601,8 +2600,8 @@ public fun test_discount_template_toggled_shop(event: &DiscountTemplateToggledEv
 }
 
 #[test_only]
-public fun test_discount_template_toggled_address(event: &DiscountTemplateToggledEvent): address {
-    event.discount_template_address
+public fun test_discount_template_toggled_id(event: &DiscountTemplateToggledEvent): ID {
+    event.discount_template_id
 }
 
 #[test_only]
@@ -2626,15 +2625,15 @@ public fun test_purchase_completed_amount_paid(event: &PurchaseCompletedEvent): 
 }
 
 #[test_only]
-public fun test_purchase_completed_discount_template_address(
+public fun test_purchase_completed_discount_template_id(
     event: &PurchaseCompletedEvent,
-): Option<address> {
-    event.discount_template_address
+): Option<ID> {
+    event.discount_template_id
 }
 
 #[test_only]
-public fun test_purchase_completed_accepted_currency_address(event: &PurchaseCompletedEvent): address {
-    event.accepted_currency_address
+public fun test_purchase_completed_accepted_currency_id(event: &PurchaseCompletedEvent): ID {
+    event.accepted_currency_id
 }
 
 #[test_only]
@@ -2653,8 +2652,8 @@ public fun test_minting_completed_listing(event: &MintingCompletedEvent): ID {
 }
 
 #[test_only]
-public fun test_minting_completed_minted_item_address(event: &MintingCompletedEvent): address {
-    event.minted_item_address
+public fun test_minting_completed_minted_item_id(event: &MintingCompletedEvent): ID {
+    event.minted_item_id
 }
 
 #[test_only]
@@ -2663,13 +2662,13 @@ public fun test_discount_redeemed_shop(event: &DiscountRedeemedEvent): ID {
 }
 
 #[test_only]
-public fun test_discount_redeemed_template_address(event: &DiscountRedeemedEvent): address {
-    event.discount_template_address
+public fun test_discount_redeemed_template_id(event: &DiscountRedeemedEvent): ID {
+    event.discount_template_id
 }
 
 #[test_only]
-public fun test_discount_redeemed_discount_address(event: &DiscountRedeemedEvent): address {
-    event.discount_address
+public fun test_discount_redeemed_discount_id(event: &DiscountRedeemedEvent): ID {
+    event.discount_id
 }
 
 #[test_only]
@@ -2678,8 +2677,8 @@ public fun test_discount_claimed_shop(event: &DiscountClaimedEvent): ID {
 }
 
 #[test_only]
-public fun test_discount_claimed_discount_address(event: &DiscountClaimedEvent): address {
-    event.discount_address
+public fun test_discount_claimed_discount_id(event: &DiscountClaimedEvent): ID {
+    event.discount_id
 }
 
 #[test_only]
@@ -2780,8 +2779,8 @@ public fun test_shop_disabled(shop: &Shop): bool {
 }
 
 #[test_only]
-public fun test_shop_owner_cap_address(owner_cap: &ShopOwnerCap): address {
-    owner_cap.id.to_address()
+public fun test_shop_owner_cap_id(owner_cap: &ShopOwnerCap): ID {
+    owner_cap.id.to_inner()
 }
 
 #[test_only]
@@ -2790,8 +2789,8 @@ public fun test_shop_owner_cap_shop_id(owner_cap: &ShopOwnerCap): ID {
 }
 
 #[test_only]
-public fun test_shop_created_owner_cap_address(event: &ShopCreatedEvent): address {
-    event.shop_owner_cap_address
+public fun test_shop_created_owner_cap_id(event: &ShopCreatedEvent): ID {
+    event.shop_owner_cap_id
 }
 
 #[test_only]
@@ -2805,8 +2804,8 @@ public fun test_shop_owner_updated_shop(event: &ShopOwnerUpdatedEvent): ID {
 }
 
 #[test_only]
-public fun test_shop_owner_updated_cap_address(event: &ShopOwnerUpdatedEvent): address {
-    event.shop_owner_cap_address
+public fun test_shop_owner_updated_cap_id(event: &ShopOwnerUpdatedEvent): ID {
+    event.shop_owner_cap_id
 }
 
 #[test_only]
@@ -2815,8 +2814,8 @@ public fun test_shop_disabled_shop(event: &ShopDisabledEvent): ID {
 }
 
 #[test_only]
-public fun test_shop_disabled_cap_address(event: &ShopDisabledEvent): address {
-    event.shop_owner_cap_address
+public fun test_shop_disabled_cap_id(event: &ShopDisabledEvent): ID {
+    event.shop_owner_cap_id
 }
 
 #[test_only]
@@ -2830,8 +2829,8 @@ public fun test_item_listing_stock_updated_listing(event: &ItemListingStockUpdat
 }
 
 #[test_only]
-public fun test_item_listing_added_shop(event: &ItemListingAddedEvent): address {
-    event.shop_address
+public fun test_item_listing_added_shop(event: &ItemListingAddedEvent): ID {
+    event.shop_id
 }
 
 #[test_only]
@@ -2839,9 +2838,8 @@ public fun test_item_listing_added_listing(event: &ItemListingAddedEvent): ID {
     event.item_listing_id
 }
 
-#[test_only]
-public fun test_item_listing_removed_shop(event: &ItemListingRemovedEvent): address {
-    event.shop_address
+public fun test_item_listing_removed_shop(event: &ItemListingRemovedEvent): ID {
+    event.shop_id
 }
 
 #[test_only]
@@ -2855,8 +2853,8 @@ public fun test_accepted_coin_added_shop(event: &AcceptedCoinAddedEvent): ID {
 }
 
 #[test_only]
-public fun test_accepted_coin_added_address(event: &AcceptedCoinAddedEvent): address {
-    event.accepted_currency_address
+public fun test_accepted_coin_added_id(event: &AcceptedCoinAddedEvent): ID {
+    event.accepted_currency_id
 }
 
 #[test_only]
@@ -2865,6 +2863,6 @@ public fun test_accepted_coin_removed_shop(event: &AcceptedCoinRemovedEvent): ID
 }
 
 #[test_only]
-public fun test_accepted_coin_removed_address(event: &AcceptedCoinRemovedEvent): address {
-    event.accepted_currency_address
+public fun test_accepted_coin_removed_id(event: &AcceptedCoinRemovedEvent): ID {
+    event.accepted_currency_id
 }

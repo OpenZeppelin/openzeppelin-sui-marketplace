@@ -71,21 +71,21 @@ export type ShopOverview = {
   disabled: boolean
 }
 
+export type ShopCreatedSummary = {
+  shopId: string
+  ownerAddress?: string
+  name?: string
+  ownerCapId?: string
+  createdAtMs?: string
+  txDigest?: string
+  errors?: ShopCreatedEnrichmentError[]
+}
+
 export type ShopCreatedEnrichmentError = {
   stage: "fetchObject" | "parseObject"
   message: string
   name?: string
   shopId: string
-}
-
-export type ShopCreatedSummary = {
-  shopId: string
-  ownerAddress?: string
-  name?: string
-  ownerCapAddress?: string
-  createdAtMs?: string
-  txDigest?: string
-  errors?: ShopCreatedEnrichmentError[]
 }
 
 const buildShopCreatedEnrichmentError = (
@@ -118,15 +118,17 @@ const parseShopCreatedEvent = (
     )
       return undefined
     const fields = event.parsedJson as Record<string, unknown>
-    const shopId = normalizeOptionalIdFromValue(fields.shop_id)
+    const shopId = normalizeOptionalIdFromValue(
+      fields.shop_id ?? fields.shop_address
+    )
     if (!shopId) return undefined
 
     return {
       shopId,
       ownerAddress: normalizeOptionalIdFromValue(fields.owner),
       name: readMoveStringOrVector(fields.name),
-      ownerCapAddress: normalizeOptionalIdFromValue(
-        fields.shop_owner_cap_address
+      ownerCapId: normalizeOptionalIdFromValue(
+        fields.shop_owner_cap_id ?? fields.shop_owner_cap_address
       ),
       createdAtMs: event.timestampMs ? String(event.timestampMs) : undefined,
       txDigest: event.id?.txDigest
@@ -174,6 +176,7 @@ export const getShopCreatedSummaries = async ({
             { objectId: summary.shopId, options: { showContent: true } },
             { suiClient }
           )
+
           try {
             summary.ownerAddress =
               summary.ownerAddress ?? getShopOwnerAddressFromObject(object)
@@ -191,11 +194,7 @@ export const getShopCreatedSummaries = async ({
         } catch (error) {
           appendShopCreatedError(
             summary,
-            buildShopCreatedEnrichmentError(
-              "fetchObject",
-              error,
-              summary.shopId
-            )
+            buildShopCreatedEnrichmentError("fetchObject", error, summary.shopId)
           )
         }
       }
