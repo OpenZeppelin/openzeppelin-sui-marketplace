@@ -16,7 +16,6 @@ import type {
 import { withTestnetFaucetRetry } from "./address.ts"
 import {
   getDeploymentArtifactPath,
-  pickRootNonDependencyArtifact,
   writeDeploymentArtifact
 } from "./artifacts.ts"
 import type { SuiNetworkConfig } from "./config.ts"
@@ -42,6 +41,7 @@ import {
   clearPublishedEntryForNetwork,
   syncLocalnetMoveEnvironmentChainId
 } from "./move.ts"
+import { pickRootNonDependencyArtifact } from "./package.ts"
 import { getSuiCliVersion, runSuiCli } from "./suiCli.ts"
 
 type PackageNames = { root?: string; dependencies: string[] }

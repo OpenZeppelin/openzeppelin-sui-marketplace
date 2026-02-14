@@ -43,6 +43,7 @@ import {
 import { planSuiPaymentSplitTransaction } from "@sui-oracle-market/tooling-core/coin"
 import {
   DEFAULT_TX_GAS_BUDGET,
+  NORMALIZED_SUI_COIN_TYPE,
   SUI_CLOCK_ID
 } from "@sui-oracle-market/tooling-core/constants"
 import {
@@ -85,7 +86,6 @@ type BuyFieldErrors = {
   refundTo?: string
 }
 
-const SUI_COIN_TYPE = normalizeCoinType("0x2::sui::SUI")
 const ORACLE_QUOTE_REFRESH_INTERVAL_MS = 15_000
 
 const buildBuyFieldErrors = ({
@@ -836,7 +836,8 @@ export const useBuyFlowModalState = ({
       }
 
       const isSuiPayment =
-        normalizeCoinType(currencySnapshot.coinType) === SUI_COIN_TYPE
+        normalizeCoinType(currencySnapshot.coinType) ===
+        NORMALIZED_SUI_COIN_TYPE
       const gasBudget = BigInt(DEFAULT_TX_GAS_BUDGET)
       if (isSuiPayment && paymentCoinMinimumBalance === undefined) {
         setTransactionState({
