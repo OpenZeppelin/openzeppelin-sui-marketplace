@@ -30,6 +30,7 @@ import { findCreatedShopItemIds } from "@sui-oracle-market/domain-core/models/sh
 import { planSuiPaymentSplitTransaction } from "@sui-oracle-market/tooling-core/coin"
 import {
   DEFAULT_TX_GAS_BUDGET,
+  NORMALIZED_SUI_COIN_TYPE,
   SUI_CLOCK_ID
 } from "@sui-oracle-market/tooling-core/constants"
 import type { ObjectArtifact } from "@sui-oracle-market/tooling-core/object"
@@ -69,8 +70,6 @@ type BuyArguments = {
   dryRun?: boolean
   json?: boolean
 }
-
-const SUI_COIN_TYPE = normalizeCoinType("0x2::sui::SUI")
 
 runSuiScript(
   async (tooling, cliArguments: BuyArguments) => {
@@ -129,7 +128,7 @@ runSuiScript(
       suiClient: tooling.suiClient
     })
 
-    const isSuiPayment = inputs.coinType === SUI_COIN_TYPE
+    const isSuiPayment = inputs.coinType === NORMALIZED_SUI_COIN_TYPE
     const quotePriceUpdateMode =
       tooling.network.networkName === "localnet"
         ? "localnet-mock"

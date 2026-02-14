@@ -10,6 +10,7 @@ import {
   assertTransactionSuccess,
   findCreatedObjectIds
 } from "@sui-oracle-market/tooling-core/transactions"
+import { SUI_COIN_TYPE } from "@sui-oracle-market/tooling-core/constants"
 import { formatObjectResponseError } from "./object-response.ts"
 
 export const assertTransactionSucceeded = (
@@ -234,7 +235,7 @@ export const assertBalanceChange = (
   result: SuiTransactionBlockResponse,
   {
     owner,
-    coinType = "0x2::sui::SUI",
+    coinType = SUI_COIN_TYPE,
     delta
   }: {
     owner: string

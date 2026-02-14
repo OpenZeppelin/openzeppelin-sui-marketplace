@@ -86,6 +86,7 @@ import { readArtifact } from "@sui-oracle-market/tooling-node/artifacts"
 import { withMutedConsole } from "@sui-oracle-market/tooling-node/console"
 import {
   DEFAULT_TX_GAS_BUDGET,
+  SUI_COIN_TYPE,
   SUI_COIN_REGISTRY_ID
 } from "@sui-oracle-market/tooling-node/constants"
 import type { Tooling } from "@sui-oracle-market/tooling-node/factory"
@@ -118,8 +119,6 @@ import { mockArtifactPath, writeMockArtifact } from "../../utils/mocks.ts"
 // and pick a `Coin-type`/`Currency-id` pair that matches the coin you can acquire.
 const DEFAULT_USDC_COIN_TYPE =
   "0xa1ec7fc00a6f40db9693ad1415d0c193ad3906494428cf252621037bd7117e29::usdc::USDC"
-// Native SUI coin type; used on testnet to support SUI payments.
-const DEFAULT_SUI_COIN_TYPE = "0x2::sui::SUI"
 // NOTE: Testnet coin package IDs can change over time.
 // If this ever fails to resolve via the coin registry, run:
 //   pnpm -s script owner:pyth:list --network testnet --query wal --quote USD --limit 5
@@ -207,7 +206,7 @@ type AcceptedCurrencySeed = {
 }
 
 const ACCEPTED_CURRENCY_SEEDS: AcceptedCurrencySeedInput[] = [
-  { coinType: DEFAULT_SUI_COIN_TYPE },
+  { coinType: SUI_COIN_TYPE },
   { coinType: DEFAULT_USDC_COIN_TYPE },
   { coinType: DEFAULT_WAL_COIN_TYPE }
 ]
@@ -926,13 +925,10 @@ const buildLocalnetAcceptedCurrencySeeds = async (): Promise<
   return [
     ...coinSeeds.seeds,
     {
-      coinType: DEFAULT_SUI_COIN_TYPE,
+      coinType: SUI_COIN_TYPE,
       feedId: suiFeed.feedIdHex,
       priceInfoObjectId: suiFeed.priceInfoObjectId,
-      currencyId: deriveCurrencyObjectId(
-        DEFAULT_SUI_COIN_TYPE,
-        SUI_COIN_REGISTRY_ID
-      )
+      currencyId: deriveCurrencyObjectId(SUI_COIN_TYPE, SUI_COIN_REGISTRY_ID)
     }
   ]
 }

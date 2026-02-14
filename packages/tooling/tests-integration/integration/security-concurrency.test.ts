@@ -6,10 +6,8 @@ import {
   newTransaction,
   resolveSplitCoinResult
 } from "@sui-oracle-market/tooling-core/transactions"
-import {
-  pickRootNonDependencyArtifact,
-  withArtifactsRoot
-} from "@sui-oracle-market/tooling-node/artifacts"
+import { withArtifactsRoot } from "@sui-oracle-market/tooling-node/artifacts"
+import { pickRootNonDependencyArtifact } from "@sui-oracle-market/tooling-node/package"
 import { signAndExecute } from "@sui-oracle-market/tooling-node/transactions"
 
 import { requireCreatedObjectId } from "@sui-oracle-market/tooling-node/testing/assert"

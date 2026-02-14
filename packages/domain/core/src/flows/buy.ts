@@ -9,6 +9,8 @@ import {
 
 import {
   DEFAULT_TX_GAS_BUDGET,
+  NORMALIZED_SUI_COIN_TYPE,
+  SUI_COIN_TYPE,
   SUI_CLOCK_ID
 } from "@sui-oracle-market/tooling-core/constants"
 import {
@@ -39,7 +41,7 @@ import type { PriceUpdatePolicy, PythPullOracleConfig } from "../models/pyth.ts"
 import { resolvePythPullOracleConfig } from "../models/pyth.ts"
 
 const isSuiCoinType = (coinType: string) =>
-  normalizeCoinType(coinType) === "0x2::sui::SUI"
+  normalizeCoinType(coinType) === NORMALIZED_SUI_COIN_TYPE
 
 const getObjectRef = async (objectId: string, suiClient: SuiClient) => {
   const response = await suiClient.getObject({
@@ -300,7 +302,7 @@ const maybeSetDedicatedGasForSuiPayments = async ({
   // When paying with SUI, one coin must cover gas and a different coin must be the payment input.
   const coins = await suiClient.getCoins({
     owner: signerAddress,
-    coinType: "0x2::sui::SUI",
+    coinType: SUI_COIN_TYPE,
     limit: 50
   })
 
