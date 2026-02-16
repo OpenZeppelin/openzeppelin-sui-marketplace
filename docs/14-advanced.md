@@ -31,7 +31,7 @@ pnpm script buyer:buy --help
 ```
 
 ## 4. EVM -> Sui translation
-1. **Single-threaded storage -> object-level parallelism**: shared objects lock independently. Listings/currencies/templates are separate shared objects to keep concurrency high. See `ItemListing`, `AcceptedCurrency`, and `DiscountTemplate` in `packages/dapp/contracts/oracle-market/sources/shop.move`.
+1. **Single-threaded storage -> object-level parallelism**: shared objects lock independently. Listings/templates are separate shared objects, while currencies are stored in `Shop.accepted_currencies: Table<TypeName, AcceptedCurrency>` for typed coin lookup. See `ItemListing`, `DiscountTemplate`, and `Shop` in `packages/dapp/contracts/oracle-market/sources/shop.move`.
 2. **Proxy upgrades -> new package IDs**: upgrades publish a new package; callers opt into new IDs. See `packages/dapp/contracts/oracle-market/Move.toml` and `packages/dapp/src/scripts/contracts/publish.ts` for artifacts.
 3. **Blocks -> object DAG**: each object records the last transaction digest that mutated it, giving you causal history per object instead of global block history.
 
@@ -59,8 +59,8 @@ pnpm script buyer:buy --help
   u128 scaling and a pow10 table to avoid floating point math.
   Code: `packages/dapp/contracts/oracle-market/sources/shop.move` (`POW10_U128`, `quote_amount_with_guardrails`)
 - **Fast path vs consensus**: owned-object transactions can execute without consensus ordering,
-  while shared-object mutations require consensus. This is why the design splits listings/currencies
-  into separate shared objects.
+  while shared-object mutations require consensus. This is why the design keeps listing/template writes
+  on dedicated shared objects and currency settings in a keyed table.
   Code: `packages/dapp/contracts/oracle-market/sources/shop.move` (shared object types)
 - **Storage rebates**: destroying objects (e.g., zero-value coins) returns storage rebates, which is
   why `finalize_purchase_transfers` explicitly calls `coin::destroy_zero`.
@@ -84,25 +84,11 @@ public fun listing_exists(shop: &Shop, listing_id: ID): bool {
   )
 }
 
-public fun accepted_currency_id_for_type(
+public fun accepted_currency_exists(
   shop: &Shop,
   coin_type: TypeName,
-): Option<ID> {
-  if (
-    dynamic_field::exists_with_type<AcceptedCurrencyTypeKey, ID>(
-      &shop.id,
-      AcceptedCurrencyTypeKey(coin_type),
-    )
-  ) {
-    opt::some(
-      *dynamic_field::borrow<AcceptedCurrencyTypeKey, ID>(
-        &shop.id,
-        AcceptedCurrencyTypeKey(coin_type),
-      )
-    )
-  } else {
-    opt::none()
-  }
+): bool {
+  table::contains(&shop.accepted_currencies, coin_type)
 }
 ```
 
@@ -127,7 +113,6 @@ function buy(uint256 listingId, address payToken) external {
 entry fun buy_item<TItem: store, TCoin>(
   shop: &Shop,
   listing: &mut ItemListing,
-  accepted_currency: &AcceptedCurrency,
   price_info: &price_info::PriceInfoObject,
   payment_coin: coin::Coin<TCoin>,
   mint_to: address,
@@ -151,7 +136,8 @@ entry fun buy_item<TItem: store, TCoin>(
 
 ## 9. Diagram: shared vs owned objects in tests
 ```
-Shared: Shop, ItemListing, AcceptedCurrency, DiscountTemplate
+Shared: Shop, ItemListing, DiscountTemplate
+Shop table entries: accepted_currencies[TypeName] -> AcceptedCurrency
 Owned: ShopOwnerCap, DiscountTicket, ShopItem
 ```
 

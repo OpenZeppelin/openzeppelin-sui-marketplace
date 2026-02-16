@@ -204,12 +204,10 @@ Owner scripts default `--shop-package-id`, `--shop-id`, and `--owner-cap-id` fro
 	  ```
 
 ### `pnpm script owner:currency:remove`
-- Deregisters an accepted currency. Provide either the `AcceptedCurrency` object ID or a coin type to resolve it.
+- Deregisters an accepted currency by coin type.
 - Flags:
-	- `--accepted-currency-id <id>`: specific AcceptedCurrency object ID to remove.
-	- `--coin-type <0x...::Coin>`: coin type to resolve/remove when `--accepted-currency-id` is omitted.
+	- `--coin-type <0x...::Coin>`: coin type to remove (required).
 	- `--shop-package-id <id>` / `--shop-id <id>` / `--owner-cap-id <id>`: override artifact defaults.
-	- One of `--accepted-currency-id` or `--coin-type` is required.
 
 ### `pnpm script owner:item-listing:add`
 - Creates an item listing with a USD price, stock count, Move item type, and optional spotlighted discount template.

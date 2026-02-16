@@ -541,9 +541,7 @@ const logBuyContext = ({
   if (listingName) logKeyValueBlue("Listing-name")(listingName)
   logKeyValueBlue("Item-type")(itemType)
   logKeyValueBlue("Coin-type")(coinType)
-  logKeyValueBlue("Accepted-currency-entry")(
-    acceptedCurrencyTableEntryFieldId
-  )
+  logKeyValueBlue("Accepted-currency-entry")(acceptedCurrencyTableEntryFieldId)
   logKeyValueBlue("Pyth-price-info")(pythObjectId)
   logKeyValueBlue("Payment-coin")(paymentCoinObjectId)
 

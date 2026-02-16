@@ -183,7 +183,9 @@ describe("owner scripts integration", () => {
         expectSuccessfulTransaction(
           currencyAddPayload.transactionSummary?.status
         )
-        expect(currencyAddPayload.acceptedCurrency?.tableEntryFieldId).toBeTruthy()
+        expect(
+          currencyAddPayload.acceptedCurrency?.tableEntryFieldId
+        ).toBeTruthy()
         expect(currencyAddPayload.acceptedCurrency?.coinType).toBe(
           selection.coinType
         )

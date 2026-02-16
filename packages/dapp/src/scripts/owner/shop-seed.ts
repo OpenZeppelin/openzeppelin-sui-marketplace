@@ -85,8 +85,8 @@ import { readArtifact } from "@sui-oracle-market/tooling-node/artifacts"
 import { withMutedConsole } from "@sui-oracle-market/tooling-node/console"
 import {
   DEFAULT_TX_GAS_BUDGET,
-  SUI_COIN_TYPE,
-  SUI_COIN_REGISTRY_ID
+  SUI_COIN_REGISTRY_ID,
+  SUI_COIN_TYPE
 } from "@sui-oracle-market/tooling-node/constants"
 import type { Tooling } from "@sui-oracle-market/tooling-node/factory"
 import { emitJsonOutput } from "@sui-oracle-market/tooling-node/json"
@@ -99,7 +99,6 @@ import {
 import { runSuiScript } from "@sui-oracle-market/tooling-node/process"
 import {
   ensureCreatedObject,
-  findCreatedArtifactIdBySuffix,
   requireCreatedArtifactIdBySuffix
 } from "@sui-oracle-market/tooling-node/transactions"
 import { ensureNativeSuiCurrencyRegistration } from "../../utils/coin-registry.ts"
@@ -1150,9 +1149,7 @@ const normalizeAcceptedCurrencyInputs = async ({
 
 const logExistingAcceptedCurrency = async ({
   coinType,
-  existingAcceptedCurrency,
-  shopId,
-  suiClient
+  existingAcceptedCurrency
 }: {
   coinType: string
   existingAcceptedCurrency: AcceptedCurrencySummary
@@ -1161,13 +1158,7 @@ const logExistingAcceptedCurrency = async ({
 }) => {
   logKeyValueYellow("Currency")(`${coinType} already registered; skipping.`)
 
-  const acceptedCurrencySummary = await requireAcceptedCurrencyByCoinType({
-    coinType,
-    shopId,
-    suiClient
-  })
-
-  logAcceptedCurrencySummary(acceptedCurrencySummary)
+  logAcceptedCurrencySummary(existingAcceptedCurrency)
 }
 
 const ensureItemListings = async ({

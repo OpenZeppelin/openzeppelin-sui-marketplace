@@ -504,7 +504,9 @@ describe("buyer scripts integration", () => {
         )
 
       expectSuccessfulTransaction(currencyAddPayload.transactionSummary?.status)
-      expect(currencyAddPayload.acceptedCurrency?.tableEntryFieldId).toBeTruthy()
+      expect(
+        currencyAddPayload.acceptedCurrency?.tableEntryFieldId
+      ).toBeTruthy()
 
       const itemType = requireDefined(
         mockArtifact.itemTypes?.[0]?.itemType,

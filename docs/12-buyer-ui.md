@@ -76,13 +76,12 @@ pnpm ui dev
 5. `packages/ui/src/app/hooks/useShopDashboardData.tsx` (shared vs owned reads)
 6. PTB builder definition: `packages/domain/core/src/flows/buy.ts` (buildBuyTransaction)
 
-**Code spotlight: buy entry points accept `Coin<T>` and PriceInfoObject**
+**Code spotlight: buy entry points infer currency from `TCoin`**
 `packages/dapp/contracts/oracle-market/sources/shop.move`
 ```move
 entry fun buy_item<TItem: store, TCoin>(
   shop: &Shop,
   item_listing: &mut ItemListing,
-  accepted_currency: &AcceptedCurrency,
   price_info_object: &price_info::PriceInfoObject,
   payment: coin::Coin<TCoin>,
   mint_to: address,
@@ -95,9 +94,8 @@ entry fun buy_item<TItem: store, TCoin>(
   assert_shop_active(shop);
   assert_listing_matches_shop(shop, item_listing);
   let base_price_usd_cents = item_listing.base_price_usd_cents;
-  shop.process_purchase<TItem, TCoin>(
+  let (owed_coin_opt, change_coin, minted_item) = shop.process_purchase<TItem, TCoin>(
     item_listing,
-    accepted_currency,
     price_info_object,
     payment,
     mint_to,
@@ -109,27 +107,22 @@ entry fun buy_item<TItem: store, TCoin>(
     clock,
     ctx,
   );
+  // transfer owed coin, refund change, transfer minted item
 }
 ```
 
 **Code spotlight: CLI buy flow resolves pricing + payment inputs**
 `packages/dapp/src/scripts/buyer/buy.ts`
 ```ts
-const acceptedCurrencyMatch = await requireAcceptedCurrencyByCoinType({
+const acceptedCurrencySummary = await requireAcceptedCurrencyByCoinType({
   coinType: inputs.coinType,
   shopId: inputs.shopId,
   suiClient: tooling.suiClient
 })
 
-const acceptedCurrencySummary = await getAcceptedCurrencySummary(
-  inputs.shopId,
-  acceptedCurrencyMatch.acceptedCurrencyId,
-  tooling.suiClient
-)
-
 const pythPriceInfoObjectId = normalizeIdOrThrow(
   acceptedCurrencySummary.pythObjectId,
-  `AcceptedCurrency ${acceptedCurrencySummary.acceptedCurrencyId} is missing a pyth_object_id.`
+  `Accepted currency ${acceptedCurrencySummary.coinType} is missing a pyth_object_id.`
 )
 
 const listingSummary = await getItemListingSummary(
