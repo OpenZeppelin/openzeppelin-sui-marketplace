@@ -29,7 +29,8 @@ type ShopOverviewPayload = {
 }
 
 type CurrencyRemovePayload = {
-  deleted?: string
+  removedCoinType?: string
+  tableEntryFieldId?: string
   transactionSummary?: TransactionSummaryOutput
 }
 
@@ -133,8 +134,8 @@ describe("owner scripts integration", () => {
       const currencyAddPayload = acceptedCurrency.currencyAddOutput
       expectSuccessfulTransaction(currencyAddPayload.transactionSummary?.status)
       expect(currencyAddPayload.status).toBeUndefined()
-      expect(currencyAddPayload.acceptedCurrency?.acceptedCurrencyId).toBe(
-        acceptedCurrency.acceptedCurrencyId
+      expect(currencyAddPayload.acceptedCurrency?.tableEntryFieldId).toBe(
+        acceptedCurrency.tableEntryFieldId
       )
       expect(currencyAddPayload.acceptedCurrency?.coinType).toBe(
         acceptedCurrency.coinType
@@ -182,9 +183,7 @@ describe("owner scripts integration", () => {
         expectSuccessfulTransaction(
           currencyAddPayload.transactionSummary?.status
         )
-        expect(
-          currencyAddPayload.acceptedCurrency?.acceptedCurrencyId
-        ).toBeTruthy()
+        expect(currencyAddPayload.acceptedCurrency?.tableEntryFieldId).toBeTruthy()
         expect(currencyAddPayload.acceptedCurrency?.coinType).toBe(
           selection.coinType
         )
@@ -230,15 +229,8 @@ describe("owner scripts integration", () => {
         expect(existingCurrencyPayload.coinType).toBe(acceptedCurrency.coinType)
         expect(existingCurrencyPayload.transactionSummary).toBeUndefined()
         expect(
-          existingCurrencyPayload.acceptedCurrency?.acceptedCurrencyId
-        ).toBe(acceptedCurrency.acceptedCurrencyId)
-        const hasAcceptedCurrencyMarker = Boolean(
-          existingCurrencyPayload.acceptedCurrency?.acceptedCurrencyFieldId
-        )
-        const hasTypeIndexMarker = Boolean(
-          existingCurrencyPayload.acceptedCurrency?.typeIndexFieldId
-        )
-        expect(hasAcceptedCurrencyMarker || hasTypeIndexMarker).toBe(true)
+          existingCurrencyPayload.acceptedCurrency?.tableEntryFieldId
+        ).toBe(acceptedCurrency.tableEntryFieldId)
       }
     )
   })
@@ -323,7 +315,10 @@ describe("owner scripts integration", () => {
       )
 
       expectSuccessfulTransaction(removePayload.transactionSummary?.status)
-      expect(removePayload.deleted).toBe(acceptedCurrency.acceptedCurrencyId)
+      expect(removePayload.removedCoinType).toBe(acceptedCurrency.coinType)
+      expect(removePayload.tableEntryFieldId).toBe(
+        acceptedCurrency.tableEntryFieldId
+      )
 
       const reAddPayload = await runOwnerScriptJson<CurrencyAddScriptOutput>(
         scriptRunner,
@@ -341,13 +336,13 @@ describe("owner scripts integration", () => {
       )
 
       expectSuccessfulTransaction(reAddPayload.transactionSummary?.status)
-      expect(reAddPayload.acceptedCurrency?.acceptedCurrencyId).toBeTruthy()
+      expect(reAddPayload.acceptedCurrency?.tableEntryFieldId).toBeTruthy()
     })
   })
 
-  it("removes accepted currency with owner currency-remove by acceptedCurrencyId", async () => {
+  it("removes accepted currency with owner currency-remove using --type alias", async () => {
     await testEnv.withTestContext(
-      "owner-currency-remove-by-id",
+      "owner-currency-remove-by-type-alias",
       async (context) => {
         const {
           publisher,
@@ -367,13 +362,16 @@ describe("owner scripts integration", () => {
             account: publisher,
             args: {
               shopId,
-              acceptedCurrencyId: acceptedCurrency.acceptedCurrencyId
+              type: acceptedCurrency.coinType
             }
           }
         )
 
         expectSuccessfulTransaction(removePayload.transactionSummary?.status)
-        expect(removePayload.deleted).toBe(acceptedCurrency.acceptedCurrencyId)
+        expect(removePayload.removedCoinType).toBe(acceptedCurrency.coinType)
+        expect(removePayload.tableEntryFieldId).toBe(
+          acceptedCurrency.tableEntryFieldId
+        )
 
         const reAddPayload = await runOwnerScriptJson<CurrencyAddScriptOutput>(
           scriptRunner,
@@ -391,7 +389,7 @@ describe("owner scripts integration", () => {
         )
 
         expectSuccessfulTransaction(reAddPayload.transactionSummary?.status)
-        expect(reAddPayload.acceptedCurrency?.acceptedCurrencyId).toBeTruthy()
+        expect(reAddPayload.acceptedCurrency?.tableEntryFieldId).toBeTruthy()
       }
     )
   })

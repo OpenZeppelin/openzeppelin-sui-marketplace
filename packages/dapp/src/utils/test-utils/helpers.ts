@@ -158,10 +158,7 @@ export type ShopSeedFixture = {
 export type CurrencyAddScriptOutput = {
   status?: string
   coinType?: string
-  acceptedCurrency?: Partial<AcceptedCurrencySummary> & {
-    acceptedCurrencyFieldId?: string
-    typeIndexFieldId?: string
-  }
+  acceptedCurrency?: Partial<AcceptedCurrencySummary>
   transactionSummary?: {
     status?: string
   }
@@ -178,7 +175,7 @@ export type MockCurrencyFeedSelection = {
 }
 
 export type AcceptedCurrencyFixture = MockCurrencyFeedSelection & {
-  acceptedCurrencyId: string
+  tableEntryFieldId: string
   currencyAddOutput: CurrencyAddScriptOutput
 }
 
@@ -798,14 +795,14 @@ export const createAcceptedCurrencyFixture = async ({
     }
   )
 
-  const acceptedCurrencyId = requireDefined(
-    currencyAddOutput.acceptedCurrency?.acceptedCurrencyId,
-    "currency-add did not return an acceptedCurrencyId."
+  const tableEntryFieldId = requireDefined(
+    currencyAddOutput.acceptedCurrency?.tableEntryFieldId,
+    "currency-add did not return a tableEntryFieldId."
   )
 
   return {
     ...selection,
-    acceptedCurrencyId,
+    tableEntryFieldId,
     currencyAddOutput
   }
 }

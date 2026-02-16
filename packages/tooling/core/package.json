@@ -18,6 +18,7 @@
     "./object-info": "./src/object-info.ts",
     "./package": "./src/package.ts",
     "./shared-object": "./src/shared-object.ts",
+    "./table": "./src/table.ts",
     "./transactions": "./src/transactions.ts",
     "./type-utils": "./src/type-utils.ts",
     "./types": "./src/types.ts",

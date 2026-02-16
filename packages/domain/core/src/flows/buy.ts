@@ -169,7 +169,7 @@ export type EstimateRequiredAmountPriceUpdateMode =
 export const estimateRequiredAmount = async ({
   shopPackageId,
   shopShared,
-  acceptedCurrencyShared,
+  coinType,
   pythPriceInfoShared,
   pythFeedIdHex,
   networkName,
@@ -186,7 +186,7 @@ export const estimateRequiredAmount = async ({
 }: {
   shopPackageId: string
   shopShared: Awaited<ReturnType<typeof getSuiSharedObject>>
-  acceptedCurrencyShared: Awaited<ReturnType<typeof getSuiSharedObject>>
+  coinType: string
   pythPriceInfoShared: Awaited<ReturnType<typeof getSuiSharedObject>>
   pythFeedIdHex?: string
   networkName?: string
@@ -205,9 +205,6 @@ export const estimateRequiredAmount = async ({
   quoteTransaction.setSender(signerAddress)
 
   const shopArgument = quoteTransaction.sharedObjectRef(shopShared.sharedRef)
-  const acceptedCurrencyArgument = quoteTransaction.sharedObjectRef(
-    acceptedCurrencyShared.sharedRef
-  )
   const pythPriceInfoSharedRef =
     priceUpdateMode === "localnet-mock" || priceUpdateMode === "pyth-update"
       ? { ...pythPriceInfoShared.sharedRef, mutable: true }
@@ -258,9 +255,9 @@ export const estimateRequiredAmount = async ({
 
   quoteTransaction.moveCall({
     target: `${shopPackageId}::shop::quote_amount_for_price_info_object`,
+    typeArguments: [coinType],
     arguments: [
       shopArgument,
-      acceptedCurrencyArgument,
       pythPriceInfoArgument,
       quoteTransaction.pure.u64(priceUsdCents),
       quoteTransaction.pure.option("u64", maxPriceAgeSecs ?? null),
@@ -559,7 +556,6 @@ export const buildBuyTransaction = async (
     shopPackageId,
     shopShared,
     itemListingShared,
-    acceptedCurrencyShared,
     pythPriceInfoShared,
     pythFeedIdHex,
     paymentCoinObjectId,
@@ -582,7 +578,6 @@ export const buildBuyTransaction = async (
     shopPackageId: string
     shopShared: Awaited<ReturnType<typeof getSuiSharedObject>>
     itemListingShared: Awaited<ReturnType<typeof getSuiSharedObject>>
-    acceptedCurrencyShared: Awaited<ReturnType<typeof getSuiSharedObject>>
     pythPriceInfoShared: Awaited<ReturnType<typeof getSuiSharedObject>>
     pythFeedIdHex: string
     paymentCoinObjectId: string
@@ -621,9 +616,6 @@ export const buildBuyTransaction = async (
   const shopArgument = transaction.sharedObjectRef(shopShared.sharedRef)
   const listingArgument = transaction.sharedObjectRef(
     itemListingShared.sharedRef
-  )
-  const acceptedCurrencyArgument = transaction.sharedObjectRef(
-    acceptedCurrencyShared.sharedRef
   )
 
   const clockShared = await getSuiSharedObject(
@@ -712,7 +704,6 @@ export const buildBuyTransaction = async (
       arguments: [
         shopArgument,
         listingArgument,
-        acceptedCurrencyArgument,
         transaction.sharedObjectRef(discountTemplateShared.sharedRef),
         pythPriceInfoArgument,
         paymentArgument,
@@ -739,7 +730,6 @@ export const buildBuyTransaction = async (
       arguments: [
         shopArgument,
         listingArgument,
-        acceptedCurrencyArgument,
         transaction.sharedObjectRef(discountTemplateShared.sharedRef),
         transaction.object(discountContext.discountTicketId),
         pythPriceInfoArgument,
@@ -761,7 +751,6 @@ export const buildBuyTransaction = async (
     arguments: [
       shopArgument,
       listingArgument,
-      acceptedCurrencyArgument,
       pythPriceInfoArgument,
       paymentArgument,
       transaction.pure.address(mintTo),
