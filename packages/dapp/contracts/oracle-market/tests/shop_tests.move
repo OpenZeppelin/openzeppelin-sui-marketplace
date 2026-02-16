@@ -1411,7 +1411,7 @@ fun quote_amount_rejects_overflow_before_runtime_abort() {
 
     shop::test_quote_amount_from_usd_cents(
         max_usd_cents,
-        24, // Valid max decimals
+        24, // MAX_DECIMAL_POWER
         &price,
         shop::test_default_max_confidence_ratio_bps(),
     );

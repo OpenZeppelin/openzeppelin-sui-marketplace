@@ -1710,13 +1710,13 @@ fun quote_amount_from_usd_cents(
         max_confidence_ratio_bps,
     );
 
-    let coin_decimals_pow10 = coin_decimals_pow10_u128_or_overflow(coin_decimals);
+    let coin_decimals_pow10 = decimals_pow10_u128(coin_decimals);
     let exponent_pow10 = pow10_u128(exponent_magnitude);
 
     let mut numerator_multiplier = coin_decimals_pow10;
     if (exponent_is_negative) {
         numerator_multiplier =
-            mul_div_u128_or_overflow(
+            mul_div_u128(
                 numerator_multiplier,
                 exponent_pow10,
                 1,
@@ -1724,7 +1724,7 @@ fun quote_amount_from_usd_cents(
             );
     };
 
-    let mut denominator_multiplier = mul_div_u128_or_overflow(
+    let mut denominator_multiplier = mul_div_u128(
         conservative_mantissa,
         CENTS_PER_DOLLAR as u128,
         1,
@@ -1732,7 +1732,7 @@ fun quote_amount_from_usd_cents(
     );
     if (!exponent_is_negative) {
         denominator_multiplier =
-            mul_div_u128_or_overflow(
+            mul_div_u128(
                 denominator_multiplier,
                 exponent_pow10,
                 1,
@@ -1740,7 +1740,7 @@ fun quote_amount_from_usd_cents(
             );
     };
 
-    let amount = mul_div_u128_or_overflow(
+    let amount = mul_div_u128(
         usd_cents as u128,
         numerator_multiplier,
         denominator_multiplier,
@@ -1750,7 +1750,7 @@ fun quote_amount_from_usd_cents(
     maybe_amount_u64.destroy_or!(abort EPriceOverflow)
 }
 
-fun coin_decimals_pow10_u128_or_overflow(coin_decimals: u8): u128 {
+fun decimals_pow10_u128(coin_decimals: u8): u128 {
     assert_supported_decimals!(coin_decimals);
     let maybe_coin_decimals_pow10 = decimal_scaling::safe_upcast_balance(
         1,
@@ -1760,7 +1760,7 @@ fun coin_decimals_pow10_u128_or_overflow(coin_decimals: u8): u128 {
     maybe_coin_decimals_pow10.destroy_or!(abort EPriceOverflow)
 }
 
-fun mul_div_u128_or_overflow(
+fun mul_div_u128(
     lhs: u128,
     rhs: u128,
     denominator: u128,
