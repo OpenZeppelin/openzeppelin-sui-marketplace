@@ -44,7 +44,7 @@ pnpm script buyer:currency:list --shop-id <shopId>
 - **Pyth PriceInfoObject**: oracles are objects. The shop stores a specific `pyth_object_id` and
   checks the feed_id bytes to prevent spoofing. Clients pass the refreshed object into the PTB, and
   the module validates identity and freshness on-chain.
-  Code: `packages/dapp/contracts/oracle-market/sources/shop.move` (`ensure_price_info_matches_currency`)
+  Code: `packages/dapp/contracts/oracle-market/sources/shop.move` (`assert_price_info_matches_currency`)
 - **Feed identity is strict**: feed IDs must be 32 bytes, and the `pyth_object_id` must match the
   actual PriceInfoObject you pass in. Both are checked on-chain to block forged inputs.
   Code: `packages/dapp/contracts/oracle-market/sources/shop.move` (`assert_price_info_identity`)

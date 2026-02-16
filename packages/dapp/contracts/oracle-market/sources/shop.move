@@ -508,7 +508,7 @@ fun add_item_listing_core<T: store>(
     ctx: &mut TxContext,
 ): (ItemListing, ID) {
     assert_owner_cap!(shop, owner_cap);
-    validate_listing_inputs!(
+    assert_listing_inputs!(
         shop,
         &name,
         base_price_usd_cents,
@@ -647,7 +647,7 @@ entry fun add_accepted_currency<T>(
     let coin_type = currency_type<T>();
 
     // Bind this currency to a specific PriceInfoObject to prevent oracle feed spoofing.
-    validate_accepted_currency_inputs!(
+    assert_accepted_currency_inputs!(
         shop,
         &coin_type,
         &feed_id,
@@ -741,7 +741,7 @@ fun create_discount_template_core(
     max_redemptions: Option<u64>,
     ctx: &mut TxContext,
 ): (DiscountTemplate, ID) {
-    validate_discount_template_inputs!(shop, &applies_to_listing, starts_at, &expires_at);
+    assert_discount_template_inputs!(shop, &applies_to_listing, starts_at, &expires_at);
 
     let discount_rule_kind = parse_rule_kind(rule_kind);
     let discount_rule = discount_rule_kind.build_discount_rule(rule_value);
@@ -1185,7 +1185,7 @@ entry fun claim_and_buy_item_with_discount<TItem: store, TCoin>(
 // === Data ===
 
 fun new_shop(name: String, owner: address, ctx: &mut TxContext): Shop {
-    validate_shop_name!(&name);
+    assert_shop_name!(&name);
     Shop {
         id: object::new(ctx),
         owner,
@@ -1799,7 +1799,7 @@ macro fun assert_schedule($starts_at: u64, $expires_at: &Option<u64>) {
     });
 }
 
-macro fun validate_listing_inputs(
+macro fun assert_listing_inputs(
     $shop: &Shop,
     $name: &String,
     $base_price_usd_cents: u64,
@@ -1819,12 +1819,12 @@ macro fun validate_listing_inputs(
     assert_belongs_to_shop_if_some!(shop, ReferenceKind::Template, spotlight_discount_template_id);
 }
 
-macro fun validate_shop_name($name: &String) {
+macro fun assert_shop_name($name: &String) {
     let name = $name;
     assert!(!string::as_bytes(name).is_empty(), EEmptyShopName);
 }
 
-macro fun validate_discount_template_inputs(
+macro fun assert_discount_template_inputs(
     $shop: &Shop,
     $applies_to_listing: &Option<ID>,
     $starts_at: u64,
@@ -1920,7 +1920,7 @@ macro fun assert_ticket_matches_context(
     });
 }
 
-macro fun validate_accepted_currency_inputs(
+macro fun assert_accepted_currency_inputs(
     $shop: &Shop,
     $coin_type: &TypeName,
     $feed_id: &vector<u8>,
