@@ -409,16 +409,10 @@ public struct PurchaseCompletedEvent has copy, drop {
     item_listing_id: ID,
     accepted_currency_id: ID,
     discount_template_id: Option<ID>,
+    minted_item_id: ID,
     /// These checkout values are not persisted on any object and must remain in the event.
     amount_paid: u64,
     discounted_price_usd_cents: u64,
-}
-
-/// Event emitted when minting completes.
-public struct MintingCompletedEvent has copy, drop {
-    shop_id: ID,
-    item_listing_id: ID,
-    minted_item_id: ID,
 }
 
 // === Entry Point Methods ===
@@ -1582,15 +1576,6 @@ fun process_purchase_core<TItem: store, TCoin>(
 
     item_listing.decrement_stock();
 
-    event::emit(PurchaseCompletedEvent {
-        shop_id,
-        item_listing_id: item_listing.id.to_inner(),
-        accepted_currency_id: accepted_currency.id.to_inner(),
-        discount_template_id,
-        amount_paid,
-        discounted_price_usd_cents,
-    });
-
     event::emit(ItemListingStockUpdatedEvent {
         shop_id,
         item_listing_id: item_listing.id.to_inner(),
@@ -1599,10 +1584,14 @@ fun process_purchase_core<TItem: store, TCoin>(
     let minted_item = item_listing.mint_shop_item<TItem>(clock, ctx);
     let minted_item_id = minted_item.id.to_inner();
 
-    event::emit(MintingCompletedEvent {
+    event::emit(PurchaseCompletedEvent {
         shop_id,
         item_listing_id: item_listing.id.to_inner(),
+        accepted_currency_id: accepted_currency.id.to_inner(),
+        discount_template_id,
         minted_item_id,
+        amount_paid,
+        discounted_price_usd_cents,
     });
     (owed_coin_opt, payment, minted_item)
 }
@@ -2636,17 +2625,7 @@ public fun test_purchase_completed_accepted_currency_id(event: &PurchaseComplete
 }
 
 #[test_only]
-public fun test_minting_completed_shop(event: &MintingCompletedEvent): ID {
-    event.shop_id
-}
-
-#[test_only]
-public fun test_minting_completed_listing(event: &MintingCompletedEvent): ID {
-    event.item_listing_id
-}
-
-#[test_only]
-public fun test_minting_completed_minted_item_id(event: &MintingCompletedEvent): ID {
+public fun test_purchase_completed_minted_item_id(event: &PurchaseCompletedEvent): ID {
     event.minted_item_id
 }
 

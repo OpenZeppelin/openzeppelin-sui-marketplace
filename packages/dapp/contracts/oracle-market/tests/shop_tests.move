@@ -4048,12 +4048,7 @@ fun claim_and_buy_item_with_discount_emits_events_and_covers_helpers() {
         shop::test_purchase_completed_accepted_currency_id(purchase_event),
         accepted_currency_id,
     );
-
-    let mint_events = event::events_by_type<shop::MintingCompletedEvent>();
-    let mint_event = &mint_events[mint_events.length() - 1];
-    assert_eq!(shop::test_minting_completed_shop(mint_event), shop_id);
-    assert_eq!(shop::test_minting_completed_listing(mint_event), listing_id);
-    let _ = shop::test_minting_completed_minted_item_id(mint_event);
+    let _ = shop::test_purchase_completed_minted_item_id(purchase_event);
 
     let redeemed_events = event::events_by_type<shop::DiscountRedeemedEvent>();
     let redeemed_event = &redeemed_events[redeemed_events.length() - 1];
@@ -5165,7 +5160,6 @@ fun buy_item_emits_events_decrements_stock_and_refunds_change() {
     );
 
     let purchase_before = event::events_by_type<shop::PurchaseCompletedEvent>().length();
-    let mint_before = event::events_by_type<shop::MintingCompletedEvent>().length();
     let stock_before = event::events_by_type<shop::ItemListingStockUpdatedEvent>().length();
 
     let extra = 7;
@@ -5197,6 +5191,7 @@ fun buy_item_emits_events_decrements_stock_and_refunds_change() {
     assert_eq!(shop::test_purchase_completed_discounted_price(purchase), 100);
     assert_eq!(shop::test_purchase_completed_accepted_currency_id(purchase), accepted_currency_id);
     assert!(option::is_none(&shop::test_purchase_completed_discount_template_id(purchase)));
+    let _ = shop::test_purchase_completed_minted_item_id(purchase);
 
     let stock_events = event::events_by_type<shop::ItemListingStockUpdatedEvent>();
     assert_eq!(stock_events.length(), stock_before + 1);
@@ -5205,13 +5200,6 @@ fun buy_item_emits_events_decrements_stock_and_refunds_change() {
         shop::test_item_listing_stock_updated_listing(stock_event),
         shop::test_listing_id(&listing),
     );
-
-    let mints = event::events_by_type<shop::MintingCompletedEvent>();
-    assert_eq!(mints.length(), mint_before + 1);
-    let mint = &mints[mints.length() - 1];
-    assert_eq!(shop::test_minting_completed_shop(mint), shop::test_shop_id(&shared_shop));
-    assert_eq!(shop::test_minting_completed_listing(mint), shop::test_listing_id(&listing));
-    let _ = shop::test_minting_completed_minted_item_id(mint);
 
     test_scenario::return_shared(shared_shop);
     test_scenario::return_shared(accepted_currency);
@@ -5265,7 +5253,7 @@ fun buy_item_supports_example_car_receipts() {
         &clock_obj,
     );
 
-    let mint_before = event::events_by_type<shop::MintingCompletedEvent>().length();
+    let purchase_before = event::events_by_type<shop::PurchaseCompletedEvent>().length();
     let payment = coin::mint_for_testing<TestCoin>(
         quote_amount,
         test_scenario::ctx(&mut scn),
@@ -5285,8 +5273,10 @@ fun buy_item_supports_example_car_receipts() {
         test_scenario::ctx(&mut scn),
     );
 
-    let mints = event::events_by_type<shop::MintingCompletedEvent>();
-    assert_eq!(mints.length(), mint_before + 1);
+    let purchases = event::events_by_type<shop::PurchaseCompletedEvent>();
+    assert_eq!(purchases.length(), purchase_before + 1);
+    let purchase = &purchases[purchases.length() - 1];
+    let _ = shop::test_purchase_completed_minted_item_id(purchase);
 
     test_scenario::return_shared(shared_shop);
     test_scenario::return_shared(accepted_currency);
@@ -5340,7 +5330,7 @@ fun buy_item_supports_example_bike_receipts() {
         &clock_obj,
     );
 
-    let mint_before = event::events_by_type<shop::MintingCompletedEvent>().length();
+    let purchase_before = event::events_by_type<shop::PurchaseCompletedEvent>().length();
     let payment = coin::mint_for_testing<TestCoin>(
         quote_amount,
         test_scenario::ctx(&mut scn),
@@ -5360,8 +5350,10 @@ fun buy_item_supports_example_bike_receipts() {
         test_scenario::ctx(&mut scn),
     );
 
-    let mints = event::events_by_type<shop::MintingCompletedEvent>();
-    assert_eq!(mints.length(), mint_before + 1);
+    let purchases = event::events_by_type<shop::PurchaseCompletedEvent>();
+    assert_eq!(purchases.length(), purchase_before + 1);
+    let purchase = &purchases[purchases.length() - 1];
+    let _ = shop::test_purchase_completed_minted_item_id(purchase);
 
     test_scenario::return_shared(shared_shop);
     test_scenario::return_shared(accepted_currency);
@@ -5410,7 +5402,7 @@ fun buy_item_emits_events_with_exact_payment_and_zero_change() {
         &clock_obj,
     );
 
-    let mint_before = event::events_by_type<shop::MintingCompletedEvent>().length();
+    let purchase_before = event::events_by_type<shop::PurchaseCompletedEvent>().length();
 
     let payment = coin::mint_for_testing<TestCoin>(
         quote_amount,
@@ -5431,10 +5423,10 @@ fun buy_item_emits_events_with_exact_payment_and_zero_change() {
         test_scenario::ctx(&mut scn),
     );
 
-    let mints = event::events_by_type<shop::MintingCompletedEvent>();
-    assert_eq!(mints.length(), mint_before + 1);
-    let mint = &mints[mints.length() - 1];
-    let _ = shop::test_minting_completed_minted_item_id(mint);
+    let purchases = event::events_by_type<shop::PurchaseCompletedEvent>();
+    assert_eq!(purchases.length(), purchase_before + 1);
+    let purchase = &purchases[purchases.length() - 1];
+    let _ = shop::test_purchase_completed_minted_item_id(purchase);
 
     test_scenario::return_shared(shared_shop);
     test_scenario::return_shared(accepted_currency);
