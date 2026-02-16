@@ -1,5 +1,9 @@
 module sui_oracle_market::shop;
 
+use openzeppelin_math::decimal_scaling;
+use openzeppelin_math::rounding;
+use openzeppelin_math::u128;
+use openzeppelin_math::u64;
 use pyth::i64;
 use pyth::price;
 use pyth::price_feed;
@@ -8,7 +12,6 @@ use pyth::price_info;
 use pyth::pyth;
 use std::string::{Self, String};
 use std::type_name::{Self, TypeName};
-use std::u128;
 use sui::clock;
 use sui::coin;
 use sui::coin_registry;
@@ -69,8 +72,8 @@ use sui::package;
 //   docs/09-currencies-oracles.md, docs/10-discounts-tickets.md
 // - Oracle objects (Pyth): price feeds are objects (PriceInfoObject) validated by feed_id and object
 //   ID; guardrails enforce freshness and confidence. Docs: docs/09-currencies-oracles.md
-// - Fixed-point math: prices are stored in USD cents, discounts in basis points, and pow10 tables
-//   are used for scaling. Docs: docs/14-advanced.md
+// - Fixed-point math: prices are stored in USD cents, discounts in basis points, and decimal scaling
+//   uses `std::u128::pow` plus OZ decimal helpers. Docs: docs/14-advanced.md
 // - Enums: DiscountRule, DiscountRuleKind, ReferenceKind model variant logic explicitly. Docs: docs/10-discounts-tickets.md
 // - Test-only APIs: #[test_only] functions expose helpers for Move tests without shipping them to
 //   production calls. Docs: docs/15-testing.md
@@ -166,29 +169,12 @@ const EPriceTooStale: vector<u8> = b"price too stale";
 const CENTS_PER_DOLLAR: u64 = 100;
 const BASIS_POINT_DENOMINATOR: u64 = 10_000;
 const DEFAULT_MAX_PRICE_AGE_SECS: u64 = 60;
-const MAX_DECIMAL_POWER: u64 = 38;
+const MAX_DECIMAL_POWER: u64 = 24;
 // Reject price feeds with sigma/mu above 10%.
 const DEFAULT_MAX_CONFIDENCE_RATIO_BPS: u16 = 1_000;
 const PYTH_PRICE_IDENTIFIER_LENGTH: u64 = 32;
 // Allow small attestation/publish skew without halting checkout.
 const DEFAULT_MAX_PRICE_STATUS_LAG_SECS: u64 = 5;
-// Powers of 10 from 10^0 through 10^38 for scaling Pyth prices and coin decimals.
-const POW10_U128: vector<u128> = vector[
-    1, 10, 100, 1_000, 10_000, 100_000, 1_000_000, 10_000_000, 100_000_000, 1_000_000_000,
-    10_000_000_000, 100_000_000_000, 1_000_000_000_000, 10_000_000_000_000, 100_000_000_000_000,
-    1_000_000_000_000_000, 10_000_000_000_000_000, 100_000_000_000_000_000,
-    1_000_000_000_000_000_000, 10_000_000_000_000_000_000, 100_000_000_000_000_000_000,
-    1_000_000_000_000_000_000_000, 10_000_000_000_000_000_000_000, 100_000_000_000_000_000_000_000,
-    1_000_000_000_000_000_000_000_000, 10_000_000_000_000_000_000_000_000,
-    100_000_000_000_000_000_000_000_000, 1_000_000_000_000_000_000_000_000_000,
-    10_000_000_000_000_000_000_000_000_000, 100_000_000_000_000_000_000_000_000_000,
-    1_000_000_000_000_000_000_000_000_000_000, 10_000_000_000_000_000_000_000_000_000_000,
-    100_000_000_000_000_000_000_000_000_000_000, 1_000_000_000_000_000_000_000_000_000_000_000,
-    10_000_000_000_000_000_000_000_000_000_000_000, 100_000_000_000_000_000_000_000_000_000_000_000,
-    1_000_000_000_000_000_000_000_000_000_000_000_000,
-    10_000_000_000_000_000_000_000_000_000_000_000_000,
-    100_000_000_000_000_000_000_000_000_000_000_000_000,
-];
 
 /// Claims and returns the module's Publisher object during publish.
 public struct SHOP has drop {}
@@ -1691,7 +1677,7 @@ fun build_discount_rule(rule_kind: DiscountRuleKind, rule_value: u64): DiscountR
     match (rule_kind) {
         DiscountRuleKind::Fixed => DiscountRule::Fixed { amount_cents: rule_value },
         DiscountRuleKind::Percent => {
-            assert!(rule_value <= 10_000, EInvalidRuleValue);
+            assert!(rule_value <= BASIS_POINT_DENOMINATOR, EInvalidRuleValue);
             DiscountRule::Percent { bps: rule_value as u16 }
         },
     }
@@ -1724,48 +1710,74 @@ fun quote_amount_from_usd_cents(
         max_confidence_ratio_bps,
     );
 
-    let coin_decimals_pow10 = pow10_u128(coin_decimals as u64);
+    let coin_decimals_pow10 = coin_decimals_pow10_u128_or_overflow(coin_decimals);
     let exponent_pow10 = pow10_u128(exponent_magnitude);
 
-    let mut numerator = usd_cents as u128;
-    numerator = checked_mul_u128(numerator, coin_decimals_pow10);
-
+    let mut numerator_multiplier = coin_decimals_pow10;
     if (exponent_is_negative) {
-        numerator = checked_mul_u128(numerator, exponent_pow10);
+        numerator_multiplier =
+            mul_div_u128_or_overflow(
+                numerator_multiplier,
+                exponent_pow10,
+                1,
+                rounding::down(),
+            );
     };
 
-    let mut denominator = checked_mul_u128(
+    let mut denominator_multiplier = mul_div_u128_or_overflow(
         conservative_mantissa,
         CENTS_PER_DOLLAR as u128,
+        1,
+        rounding::down(),
     );
     if (!exponent_is_negative) {
-        denominator = checked_mul_u128(denominator, exponent_pow10);
+        denominator_multiplier =
+            mul_div_u128_or_overflow(
+                denominator_multiplier,
+                exponent_pow10,
+                1,
+                rounding::down(),
+            );
     };
 
-    let amount = ceil_div_u128(numerator, denominator);
-    let maybe_amount = amount.try_as_u64();
-    maybe_amount.destroy_or!(abort EPriceOverflow)
+    let amount = mul_div_u128_or_overflow(
+        usd_cents as u128,
+        numerator_multiplier,
+        denominator_multiplier,
+        rounding::up(),
+    );
+    let maybe_amount_u64 = amount.try_as_u64();
+    maybe_amount_u64.destroy_or!(abort EPriceOverflow)
+}
+
+fun coin_decimals_pow10_u128_or_overflow(coin_decimals: u8): u128 {
+    assert_supported_decimals!(coin_decimals);
+    let maybe_coin_decimals_pow10 = decimal_scaling::safe_upcast_balance(
+        1,
+        0,
+        coin_decimals,
+    ).try_as_u128();
+    maybe_coin_decimals_pow10.destroy_or!(abort EPriceOverflow)
+}
+
+fun mul_div_u128_or_overflow(
+    lhs: u128,
+    rhs: u128,
+    denominator: u128,
+    rounding_mode: rounding::RoundingMode,
+): u128 {
+    let maybe_result = u128::mul_div(
+        lhs,
+        rhs,
+        denominator,
+        rounding_mode,
+    );
+    maybe_result.destroy_or!(abort EPriceOverflow)
 }
 
 fun pow10_u128(exponent: u64): u128 {
     assert!(exponent <= MAX_DECIMAL_POWER, EPriceOverflow);
-    let pow10_table = POW10_U128;
-    pow10_table[exponent]
-}
-
-/// Multiplication with an explicit overflow guard so we can surface `EPriceOverflow` instead of a generic abort.
-fun checked_mul_u128(lhs: u128, rhs: u128): u128 {
-    if (lhs == 0 || rhs == 0) {
-        0
-    } else {
-        assert!(lhs <= u128::max_value!() / rhs, EPriceOverflow);
-        lhs * rhs
-    }
-}
-
-fun ceil_div_u128(numerator: u128, denominator: u128): u128 {
-    assert!(denominator != 0, EPriceOverflow);
-    numerator.divide_and_round_up(denominator)
+    std::u128::pow(10, exponent as u8)
 }
 
 fun positive_price_to_u128(value: &i64::I64): u128 {
@@ -1833,12 +1845,12 @@ fun apply_discount(base_price_usd_cents: u64, rule: &DiscountRule): u64 {
         },
         DiscountRule::Percent { bps } => {
             let remaining_bps = BASIS_POINT_DENOMINATOR - (*bps as u64);
-            let product = (base_price_usd_cents as u128) * (remaining_bps as u128);
-            let discounted = ceil_div_u128(
-                product,
-                BASIS_POINT_DENOMINATOR as u128,
+            let maybe_discounted = u64::mul_div(
+                base_price_usd_cents,
+                remaining_bps,
+                BASIS_POINT_DENOMINATOR,
+                rounding::up(),
             );
-            let maybe_discounted = discounted.try_as_u64();
             maybe_discounted.destroy_or!(abort EPriceOverflow)
         },
     }
@@ -2455,6 +2467,11 @@ public fun test_default_max_confidence_ratio_bps(): u16 {
 #[test_only]
 public fun test_max_decimal_power(): u64 {
     MAX_DECIMAL_POWER
+}
+
+#[test_only]
+public fun test_pow10_u128(exponent: u64): u128 {
+    pow10_u128(exponent)
 }
 
 #[test_only]

@@ -1411,7 +1411,7 @@ fun quote_amount_rejects_overflow_before_runtime_abort() {
 
     shop::test_quote_amount_from_usd_cents(
         max_usd_cents,
-        38, // MAX_DECIMAL_POWER; forces usd_cents * 10^38 to overflow u128.
+        24, // Valid max decimals
         &price,
         shop::test_default_max_confidence_ratio_bps(),
     );
@@ -4244,16 +4244,107 @@ fun quote_amount_with_positive_exponent() {
         &price,
         shop::test_default_max_confidence_ratio_bps(),
     );
-    assert!(amount > 0);
+    assert_eq!(amount, 10_102);
+}
+
+#[test]
+fun quote_amount_with_zero_usd_cents_is_zero() {
+    let price = sample_price();
+    let amount = shop::test_quote_amount_from_usd_cents(
+        0,
+        9,
+        &price,
+        shop::test_default_max_confidence_ratio_bps(),
+    );
+    assert_eq!(amount, 0);
+}
+
+#[test]
+fun quote_amount_supports_max_coin_decimals() {
+    let max_decimal_power = shop::test_max_decimal_power();
+    let price = price::new(
+        i64::new(1_000, false),
+        0,
+        i64::new(0, false),
+        0,
+    );
+    let amount = shop::test_quote_amount_from_usd_cents(
+        1,
+        max_decimal_power as u8,
+        &price,
+        shop::test_default_max_confidence_ratio_bps(),
+    );
+    assert_eq!(amount, 10_000_000_000_000_000_000);
+}
+
+#[test]
+fun quote_amount_supports_max_positive_exponent() {
+    let max_decimal_power = shop::test_max_decimal_power();
+    let price = price::new(
+        i64::new(1, false),
+        0,
+        i64::new(max_decimal_power, false),
+        0,
+    );
+    let amount = shop::test_quote_amount_from_usd_cents(
+        1,
+        0,
+        &price,
+        shop::test_default_max_confidence_ratio_bps(),
+    );
+    assert_eq!(amount, 1);
+}
+
+#[test]
+fun pow10_u128_supports_zero_and_max_decimal_power() {
+    let max_decimal_power = shop::test_max_decimal_power();
+
+    let one = shop::test_pow10_u128(0);
+    let ten = shop::test_pow10_u128(1);
+    assert_eq!(one, 1);
+    assert_eq!(ten, 10);
+
+    let previous_power = shop::test_pow10_u128(max_decimal_power - 1);
+    let max_power = shop::test_pow10_u128(max_decimal_power);
+    assert_eq!(max_power / previous_power, 10);
+}
+
+#[test]
+fun max_decimal_power_matches_decimal_scaling_cap() {
+    assert_eq!(shop::test_max_decimal_power(), 24);
+}
+
+#[test, expected_failure(abort_code = ::sui_oracle_market::shop::EPriceOverflow)]
+fun pow10_u128_rejects_exponent_above_max_decimal_power() {
+    let max_decimal_power = shop::test_max_decimal_power();
+    let _ = shop::test_pow10_u128(max_decimal_power + 1);
+    abort EAssertFailure
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::EPriceOverflow)]
 fun quote_amount_rejects_large_exponent() {
-    let price = sample_price();
+    let price = price::new(
+        i64::new(1, false),
+        0,
+        i64::new(25, false), // Exceeds MAX_DECIMAL_POWER via exponent magnitude.
+        0,
+    );
     let _ = shop::test_quote_amount_from_usd_cents(
         100,
-        39,
+        9,
         &price,
+        shop::test_default_max_confidence_ratio_bps(),
+    );
+    abort EAssertFailure
+}
+
+#[test, expected_failure(abort_code = ::sui_oracle_market::shop::EUnsupportedCurrencyDecimals)]
+fun quote_amount_rejects_unsupported_coin_decimals() {
+    let unsupported_decimals = (shop::test_max_decimal_power() + 1) as u8;
+    let _ = shop::test_quote_amount_from_usd_cents(
+        100,
+        unsupported_decimals,
+        &sample_price(),
         shop::test_default_max_confidence_ratio_bps(),
     );
     abort EAssertFailure

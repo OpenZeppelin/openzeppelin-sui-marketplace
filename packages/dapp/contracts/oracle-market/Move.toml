@@ -15,6 +15,13 @@ subdir = "sui/wormhole"
 rev = "sui/testnet"
 addr_substitutions = { wormhole = "0xf47329f4344f3bf0f8e436e2f7b485466cff300f12a166563995d3888c296a94" }
 
+[dependencies.openzeppelin_math]
+git = "https://github.com/OpenZeppelin/contracts-sui.git"
+subdir = "math/core"
+# Keep this tuple aligned with dep-replacements.*.openzeppelin_math below.
+rev = "d46324849b1ba5a45b20f77630fc958466830324"
+# Not yet published.
+
 [environments]
 test-publish = "53417c5d"
 testnet_beta = "4c78adac"
