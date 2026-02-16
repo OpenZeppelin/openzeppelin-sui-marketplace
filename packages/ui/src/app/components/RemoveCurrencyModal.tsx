@@ -81,8 +81,8 @@ const CurrencySummarySection = ({
       </div>
       <div className="mt-4 flex flex-wrap items-center gap-3 text-xs">
         <CopyableId
-          value={currency.acceptedCurrencyId}
-          label="Accepted ID"
+          value={currency.tableEntryFieldId}
+          label="Table Entry"
           explorerUrl={explorerUrl}
         />
         {registryId ? (
@@ -190,7 +190,7 @@ const RemoveCurrencyModal = ({
   onClose: () => void
   shopId?: string
   currency?: AcceptedCurrencySummary
-  onCurrencyRemoved?: (currencyId?: string) => void
+  onCurrencyRemoved?: (tableEntryFieldId?: string) => void
 }) => {
   const {
     transactionState,
@@ -238,8 +238,8 @@ const RemoveCurrencyModal = ({
             onClose={onClose}
             footer={
               <CopyableId
-                value={currency.acceptedCurrencyId}
-                label="Accepted"
+                value={currency.tableEntryFieldId}
+                label="Table Entry"
                 explorerUrl={explorerUrl}
               />
             }

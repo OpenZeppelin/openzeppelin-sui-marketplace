@@ -65,7 +65,7 @@ export const useRemoveCurrencyModalState = ({
   open: boolean
   shopId?: string
   currency?: AcceptedCurrencySummary
-  onCurrencyRemoved?: (currencyId?: string) => void
+  onCurrencyRemoved?: (tableEntryFieldId?: string) => void
 }): RemoveCurrencyModalState => {
   const currentAccount = useCurrentAccount()
   const { currentWallet } = useCurrentWallet()
@@ -96,7 +96,7 @@ export const useRemoveCurrencyModalState = ({
     : signAndExecuteTransaction.isPending
 
   const canSubmit =
-    Boolean(walletAddress && shopId && currency?.acceptedCurrencyId) &&
+    Boolean(walletAddress && shopId && currency?.coinType) &&
     transactionState.status !== "processing" &&
     isSubmissionPending !== true
   const walletConnected = Boolean(walletAddress)
@@ -108,7 +108,7 @@ export const useRemoveCurrencyModalState = ({
   useEffect(() => {
     if (!open) return
     resetState()
-  }, [open, currency?.acceptedCurrencyId, resetState])
+  }, [open, currency?.coinType, resetState])
 
   const handleRemoveCurrency = useCallback(async () => {
     if (!walletAddress || !shopId || !currency) {
@@ -183,16 +183,11 @@ export const useRemoveCurrencyModalState = ({
         ownerAddress: walletAddress,
         suiClient
       })
-      const currencyShared = await getSuiSharedObject(
-        { objectId: currency.acceptedCurrencyId, mutable: false },
-        { suiClient }
-      )
-
       const removeCurrencyTransaction = buildRemoveAcceptedCurrencyTransaction({
         packageId: shopPackageId,
         shop: shopShared,
         ownerCapId: ownerCapabilityId,
-        acceptedCurrency: currencyShared
+        coinType: currency.coinType
       })
       removeCurrencyTransaction.setSender(walletAddress)
 
@@ -227,7 +222,7 @@ export const useRemoveCurrencyModalState = ({
         }
       })
 
-      onCurrencyRemoved?.(currency.acceptedCurrencyId)
+      onCurrencyRemoved?.(currency.tableEntryFieldId)
     } catch (error) {
       const errorDetails = extractErrorDetails(error)
       const localnetSupportNote =
