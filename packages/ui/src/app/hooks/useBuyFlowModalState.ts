@@ -335,7 +335,7 @@ export const useBuyFlowModalState = ({
   const selectedCurrency = useMemo(
     () =>
       availableCurrencies.find(
-        (currency) => currency.acceptedCurrencyId === selectedCurrencyId
+        (currency) => currency.tableEntryFieldId === selectedCurrencyId
       ),
     [availableCurrencies, selectedCurrencyId]
   )
@@ -471,10 +471,10 @@ export const useBuyFlowModalState = ({
     }
 
     const isSelectedAvailable = availableCurrencies.some(
-      (currency) => currency.acceptedCurrencyId === selectedCurrencyId
+      (currency) => currency.tableEntryFieldId === selectedCurrencyId
     )
     if (!isSelectedAvailable)
-      setSelectedCurrencyId(availableCurrencies[0].acceptedCurrencyId)
+      setSelectedCurrencyId(availableCurrencies[0].tableEntryFieldId)
   }, [availableCurrencies, open, selectedCurrencyId])
 
   useEffect(() => {
@@ -533,16 +533,9 @@ export const useBuyFlowModalState = ({
           { objectId: shopId, mutable: false },
           { suiClient }
         )
-        const acceptedCurrencyShared = await getSuiSharedObject(
-          {
-            objectId: selectedCurrency.acceptedCurrencyId,
-            mutable: false
-          },
-          { suiClient }
-        )
         const pythObjectId = normalizeIdOrThrow(
           selectedCurrency.pythObjectId,
-          `AcceptedCurrency ${selectedCurrency.acceptedCurrencyId} is missing a pyth_object_id.`
+          `Accepted currency ${selectedCurrency.coinType} is missing a pyth_object_id.`
         )
         const pythPriceInfoShared = await getSuiSharedObject(
           { objectId: pythObjectId, mutable: false },
@@ -556,7 +549,7 @@ export const useBuyFlowModalState = ({
         const requiredAmount = await estimateRequiredAmount({
           shopPackageId,
           shopShared,
-          acceptedCurrencyShared,
+          coinType: selectedCurrency.coinType,
           pythPriceInfoShared,
           pythFeedIdHex: selectedCurrency.feedIdHex,
           networkName: network,
@@ -759,13 +752,9 @@ export const useBuyFlowModalState = ({
         { objectId: listingSnapshot.itemListingId, mutable: true },
         { suiClient }
       )
-      const acceptedCurrencyShared = await getSuiSharedObject(
-        { objectId: currencySnapshot.acceptedCurrencyId, mutable: false },
-        { suiClient }
-      )
       const pythObjectId = normalizeIdOrThrow(
         currencySnapshot.pythObjectId,
-        `AcceptedCurrency ${currencySnapshot.acceptedCurrencyId} is missing a pyth_object_id.`
+        `Accepted currency ${currencySnapshot.coinType} is missing a pyth_object_id.`
       )
       const pythPriceInfoShared = await getSuiSharedObject(
         { objectId: pythObjectId, mutable: false },
@@ -790,7 +779,7 @@ export const useBuyFlowModalState = ({
           const requiredAmount = await estimateRequiredAmount({
             shopPackageId,
             shopShared,
-            acceptedCurrencyShared,
+            coinType: currencySnapshot.coinType,
             pythPriceInfoShared,
             pythFeedIdHex: selectedCurrency.feedIdHex,
             networkName: network,
@@ -923,7 +912,6 @@ export const useBuyFlowModalState = ({
           shopPackageId,
           shopShared,
           itemListingShared: listingShared,
-          acceptedCurrencyShared,
           pythPriceInfoShared,
           pythFeedIdHex: currencySnapshot.feedIdHex,
           paymentCoinObjectId,
