@@ -412,7 +412,6 @@ public struct PurchaseCompletedEvent has copy, drop {
     /// These checkout values are not persisted on any object and must remain in the event.
     amount_paid: u64,
     discounted_price_usd_cents: u64,
-    quote_amount: u64,
 }
 
 /// Event emitted when minting completes.
@@ -1579,6 +1578,7 @@ fun process_purchase_core<TItem: store, TCoin>(
     );
 
     let owed_coin_opt = split_payment(&mut payment, quote_amount, ctx);
+    let amount_paid = owed_coin_opt.map_ref!(|owed_coin| owed_coin.value()).destroy_or!(0);
 
     item_listing.decrement_stock();
 
@@ -1587,9 +1587,8 @@ fun process_purchase_core<TItem: store, TCoin>(
         item_listing_id: item_listing.id.to_inner(),
         accepted_currency_id: accepted_currency.id.to_inner(),
         discount_template_id,
-        amount_paid: quote_amount,
+        amount_paid,
         discounted_price_usd_cents,
-        quote_amount,
     });
 
     event::emit(ItemListingStockUpdatedEvent {
@@ -2634,11 +2633,6 @@ public fun test_purchase_completed_discount_template_id(
 #[test_only]
 public fun test_purchase_completed_accepted_currency_id(event: &PurchaseCompletedEvent): ID {
     event.accepted_currency_id
-}
-
-#[test_only]
-public fun test_purchase_completed_quote_amount(event: &PurchaseCompletedEvent): u64 {
-    event.quote_amount
 }
 
 #[test_only]

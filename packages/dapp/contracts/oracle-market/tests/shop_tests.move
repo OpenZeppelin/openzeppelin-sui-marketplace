@@ -5194,7 +5194,6 @@ fun buy_item_emits_events_decrements_stock_and_refunds_change() {
     assert_eq!(shop::test_purchase_completed_shop(purchase), shop::test_shop_id(&shared_shop));
     assert_eq!(shop::test_purchase_completed_listing(purchase), shop::test_listing_id(&listing));
     assert_eq!(shop::test_purchase_completed_amount_paid(purchase), quote_amount);
-    assert_eq!(shop::test_purchase_completed_quote_amount(purchase), quote_amount);
     assert_eq!(shop::test_purchase_completed_discounted_price(purchase), 100);
     assert_eq!(shop::test_purchase_completed_accepted_currency_id(purchase), accepted_currency_id);
     assert!(option::is_none(&shop::test_purchase_completed_discount_template_id(purchase)));
