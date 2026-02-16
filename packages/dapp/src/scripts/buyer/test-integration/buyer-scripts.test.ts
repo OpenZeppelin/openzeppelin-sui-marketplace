@@ -49,9 +49,9 @@ type DiscountTicketClaimOutput = {
   }
 }
 
-const listAcceptedCurrencyIds = (
+const listAcceptedCurrencyCoinTypes = (
   acceptedCurrencies: AcceptedCurrencySummary[] = []
-) => acceptedCurrencies.map((currency) => currency.acceptedCurrencyId)
+) => acceptedCurrencies.map((currency) => currency.coinType)
 
 const expectSuccessfulTransaction = (status?: string) =>
   expect(status).toBe("success")
@@ -158,12 +158,11 @@ describe("buyer scripts integration", () => {
 
       expect(currencyListPayload.shopId).toBe(shopId)
       expect(
-        listAcceptedCurrencyIds(currencyListPayload.acceptedCurrencies)
-      ).toContain(acceptedCurrency.acceptedCurrencyId)
+        listAcceptedCurrencyCoinTypes(currencyListPayload.acceptedCurrencies)
+      ).toContain(acceptedCurrency.coinType)
       const listedAcceptedCurrency =
         currencyListPayload.acceptedCurrencies?.find(
-          (currency) =>
-            currency.acceptedCurrencyId === acceptedCurrency.acceptedCurrencyId
+          (currency) => currency.coinType === acceptedCurrency.coinType
         )
       expect(listedAcceptedCurrency?.coinType).toBe(acceptedCurrency.coinType)
       expect(listedAcceptedCurrency?.feedIdHex).toBe(acceptedCurrency.feedIdHex)
@@ -505,9 +504,7 @@ describe("buyer scripts integration", () => {
         )
 
       expectSuccessfulTransaction(currencyAddPayload.transactionSummary?.status)
-      expect(
-        currencyAddPayload.acceptedCurrency?.acceptedCurrencyId
-      ).toBeTruthy()
+      expect(currencyAddPayload.acceptedCurrency?.tableEntryFieldId).toBeTruthy()
 
       const itemType = requireDefined(
         mockArtifact.itemTypes?.[0]?.itemType,

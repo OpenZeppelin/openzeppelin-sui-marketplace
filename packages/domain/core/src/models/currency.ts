@@ -1,16 +1,15 @@
 import type { SuiClient, SuiObjectData } from "@mysten/sui/client"
 import { normalizeCoinType } from "@sui-oracle-market/tooling-core/coin"
-
-import {
-  getAllDynamicFields,
-  getSuiDynamicFieldObject
-} from "@sui-oracle-market/tooling-core/dynamic-fields"
 import {
   getSuiObject,
-  normalizeIdOrThrow,
+  normalizeOptionalId,
   normalizeOptionalIdFromValue,
   unwrapMoveObjectFields
 } from "@sui-oracle-market/tooling-core/object"
+import {
+  getTableEntryDynamicFields,
+  resolveTableObjectIdFromField
+} from "@sui-oracle-market/tooling-core/table"
 import {
   formatOptionalNumericValue,
   formatVectorBytesAsHex,
@@ -28,8 +27,9 @@ import {
 } from "@sui-oracle-market/tooling-core/utils/utility"
 import { resolveValidationMessage } from "@sui-oracle-market/tooling-core/utils/validation"
 
-export const ACCEPTED_CURRENCY_TYPE_FRAGMENT = "::shop::AcceptedCurrencyMarker"
+export const ACCEPTED_CURRENCY_TYPE_FRAGMENT = "::shop::AcceptedCurrency"
 export const TYPE_NAME_STRUCT = "0x1::type_name::TypeName"
+const SHOP_ACCEPTED_CURRENCIES_FIELD = "accepted_currencies"
 
 export const MAX_PRICE_AGE_SECS_CAP = 60n
 export const MAX_CONFIDENCE_RATIO_BPS_CAP = 1_000
@@ -46,6 +46,10 @@ export type GuardrailU16ParseResult = {
   value?: number
   error?: string
 }
+
+type AcceptedCurrencyTableEntryField = Awaited<
+  ReturnType<typeof getTableEntryDynamicFields>
+>[number]
 
 const parseOptionalGuardrailValue = <TValue>({
   rawValue,
@@ -95,11 +99,16 @@ export const parseAcceptedCurrencyBpsValue = (
   })
 }
 
-export type AcceptedCurrencyMatch = {
-  coinType?: string
-  acceptedCurrencyId: string
-  typeIndexFieldId?: string
-  acceptedCurrencyFieldId?: string
+export type AcceptedCurrencySummary = {
+  coinType: string
+  tableEntryFieldId: string
+  symbol?: string
+  decimals?: number
+  feedIdHex: string
+  pythObjectId?: string
+  maxPriceAgeSecsCap?: string
+  maxConfidenceRatioBpsCap?: string
+  maxPriceStatusLagSecsCap?: string
 }
 
 export const ensureSignerOwnsCoin = ({
@@ -117,199 +126,78 @@ export const ensureSignerOwnsCoin = ({
     )
 }
 
-export const findAcceptedCurrencyByCoinType = async ({
-  coinType,
+const getAcceptedCurrenciesTableObjectId = async ({
   shopId,
   suiClient
 }: {
-  coinType: string
   shopId: string
   suiClient: SuiClient
-}): Promise<AcceptedCurrencyMatch | undefined> => {
-  const normalizedCoinType = normalizeCoinType(coinType)
-  const expectedTypeName = parseTypeNameFromString(normalizedCoinType)
-  const dynamicFields = await getAllDynamicFields(
-    { parentObjectId: shopId },
-    { suiClient }
-  )
-
-  const resolveFromSummaries = async () => {
-    const acceptedCurrencySummaries = await getAcceptedCurrencySummaries(
-      shopId,
-      suiClient
-    )
-    const matchedSummary = acceptedCurrencySummaries.find((summary) => {
-      try {
-        return normalizeCoinType(summary.coinType) === normalizedCoinType
-      } catch {
-        return false
-      }
-    })
-
-    if (!matchedSummary) return undefined
-
-    return {
-      coinType: normalizedCoinType,
-      acceptedCurrencyId: matchedSummary.acceptedCurrencyId,
-      acceptedCurrencyFieldId: matchedSummary.markerObjectId
-    }
-  }
-
-  const typeIndexField = dynamicFields.find(
-    (dynamicField) =>
-      dynamicField.name.type === TYPE_NAME_STRUCT &&
-      isMatchingTypeName(expectedTypeName, dynamicField.name.value)
-  )
-
-  if (!typeIndexField) return resolveFromSummaries()
-
-  const acceptedCurrencyId = await extractAcceptedCurrencyIdFromTypeIndexField(
-    typeIndexField.objectId,
-    suiClient
-  )
-
-  if (!acceptedCurrencyId) return resolveFromSummaries()
-
-  const acceptedCurrencyMarker = dynamicFields.find(
-    (dynamicField) =>
-      dynamicField.objectType?.includes(ACCEPTED_CURRENCY_TYPE_FRAGMENT) &&
-      normalizeOptionalIdFromValue(dynamicField.name.value) ===
-        acceptedCurrencyId
-  )
-
-  return {
-    coinType: normalizedCoinType,
-    acceptedCurrencyId,
-    typeIndexFieldId: typeIndexField.objectId,
-    acceptedCurrencyFieldId: acceptedCurrencyMarker?.objectId
-  }
-}
-
-export const requireAcceptedCurrencyByCoinType = async (args: {
-  coinType: string
-  shopId: string
-  suiClient: SuiClient
-}): Promise<AcceptedCurrencyMatch> => {
-  const match = await findAcceptedCurrencyByCoinType(args)
-  if (match) return match
-
-  throw new Error(
-    `No accepted currency registered for coin type ${normalizeCoinType(
-      args.coinType
-    )}.`
-  )
-}
-
-const extractAcceptedCurrencyIdFromTypeIndexField = async (
-  dynamicFieldObjectId: string,
-  suiClient: SuiClient
-): Promise<string | undefined> => {
-  const { object } = await getSuiObject(
+}) => {
+  const { object: shopObject } = await getSuiObject(
     {
-      objectId: dynamicFieldObjectId,
+      objectId: shopId,
       options: { showContent: true, showType: true }
     },
     { suiClient }
   )
 
-  // Dynamic field values can be nested; normalizeOptionalIdFromValue handles common shapes.
-  // @ts-expect-error Move object content exposes fields for dynamic field values.
-  return normalizeOptionalIdFromValue(object.content?.fields?.value)
+  return resolveTableObjectIdFromField({
+    object: shopObject,
+    fieldName: SHOP_ACCEPTED_CURRENCIES_FIELD
+  })
 }
 
-export type AcceptedCurrencySummary = {
-  acceptedCurrencyId: string
-  markerObjectId: string
-  coinType: string
-  symbol?: string
-  decimals?: number
-  feedIdHex: string
-  pythObjectId?: string
-  maxPriceAgeSecsCap?: string
-  maxConfidenceRatioBpsCap?: string
-  maxPriceStatusLagSecsCap?: string
-}
-
-export const getAcceptedCurrencySummaries = async (
-  shopId: string,
+const getAcceptedCurrencyTableEntryFields = async ({
+  tableObjectId,
+  suiClient
+}: {
+  tableObjectId: string
   suiClient: SuiClient
-): Promise<AcceptedCurrencySummary[]> => {
-  const acceptedCurrencyMarkers = await getAllDynamicFields(
+}) =>
+  getTableEntryDynamicFields(
     {
-      parentObjectId: shopId,
+      tableObjectId,
       objectTypeFilter: ACCEPTED_CURRENCY_TYPE_FRAGMENT
     },
     { suiClient }
   )
 
-  if (acceptedCurrencyMarkers.length === 0) return []
+const findAcceptedCurrencyTableEntryFieldByCoinType = ({
+  coinType,
+  tableEntryFields
+}: {
+  coinType: string
+  tableEntryFields: AcceptedCurrencyTableEntryField[]
+}) => {
+  const expectedTypeName = parseTypeNameFromString(coinType)
 
-  const acceptedCurrencyIds = acceptedCurrencyMarkers.map((marker) =>
-    normalizeIdOrThrow(
-      normalizeOptionalIdFromValue((marker.name as { value: string })?.value),
-      `Missing AcceptedCurrency id for dynamic field ${marker.objectId}.`
-    )
-  )
-
-  const acceptedCurrencyObjects = await Promise.all(
-    acceptedCurrencyIds.map((currencyId) =>
-      getSuiObject(
-        {
-          objectId: currencyId,
-          options: { showContent: true, showType: true }
-        },
-        { suiClient }
-      )
-    )
-  )
-
-  return acceptedCurrencyObjects.map((response, index) =>
-    buildAcceptedCurrencySummary(
-      response.object,
-      acceptedCurrencyIds[index],
-      acceptedCurrencyMarkers[index].objectId
-    )
+  return tableEntryFields.find(
+    (tableEntryField) =>
+      tableEntryField.name.type === TYPE_NAME_STRUCT &&
+      isMatchingTypeName(expectedTypeName, tableEntryField.name.value)
   )
 }
 
-export const getAcceptedCurrencySummary = async (
-  shopId: string,
-  acceptedCurrencyId: string,
-  suiClient: SuiClient
-): Promise<AcceptedCurrencySummary> => {
-  const { object } = await getSuiObject(
-    {
-      objectId: acceptedCurrencyId,
-      options: { showContent: true, showType: true }
-    },
-    { suiClient }
-  )
+const resolveCoinTypeFromTableEntryField = (
+  tableEntryField: AcceptedCurrencyTableEntryField
+) => formatTypeNameFromFieldValue(tableEntryField.name.value) || "Unknown"
 
-  const marker = await getSuiDynamicFieldObject(
-    { parentObjectId: shopId, childObjectId: acceptedCurrencyId },
-    { suiClient }
+const buildAcceptedCurrencySummary = ({
+  acceptedCurrencyTableEntryObject,
+  tableEntryFieldId,
+  coinType
+}: {
+  acceptedCurrencyTableEntryObject: SuiObjectData
+  tableEntryFieldId: string
+  coinType: string
+}): AcceptedCurrencySummary => {
+  const acceptedCurrencyFields = unwrapMoveObjectFields<Record<string, unknown>>(
+    acceptedCurrencyTableEntryObject
   )
-
-  return buildAcceptedCurrencySummary(
-    object,
-    acceptedCurrencyId,
-    marker.dynamicFieldId
-  )
-}
-
-const buildAcceptedCurrencySummary = (
-  acceptedCurrencyObject: SuiObjectData,
-  acceptedCurrencyId: string,
-  markerObjectId: string
-): AcceptedCurrencySummary => {
-  const acceptedCurrencyFields = unwrapMoveObjectFields(acceptedCurrencyObject)
-  const coinType =
-    formatTypeNameFromFieldValue(acceptedCurrencyFields.coin_type) || "Unknown"
 
   return {
-    acceptedCurrencyId,
-    markerObjectId,
     coinType,
+    tableEntryFieldId,
     symbol: readMoveStringOrVector(acceptedCurrencyFields.symbol),
     decimals: parseOptionalNumber(acceptedCurrencyFields.decimals),
     feedIdHex: formatVectorBytesAsHex(acceptedCurrencyFields.feed_id),
@@ -326,4 +214,162 @@ const buildAcceptedCurrencySummary = (
       acceptedCurrencyFields.max_price_status_lag_secs_cap
     )
   }
+}
+
+const getAcceptedCurrencySummaryByTableEntryField = async ({
+  tableEntryField,
+  coinType,
+  suiClient
+}: {
+  tableEntryField: AcceptedCurrencyTableEntryField
+  coinType: string
+  suiClient: SuiClient
+}): Promise<AcceptedCurrencySummary> => {
+  const { object: acceptedCurrencyTableEntryObject } = await getSuiObject(
+    {
+      objectId: tableEntryField.objectId,
+      options: { showContent: true, showType: true }
+    },
+    { suiClient }
+  )
+
+  return buildAcceptedCurrencySummary({
+    acceptedCurrencyTableEntryObject,
+    tableEntryFieldId: tableEntryField.objectId,
+    coinType
+  })
+}
+
+const getAcceptedCurrencySummaryByLegacyTableEntryFieldId = async ({
+  shopId,
+  legacyTableEntryFieldId,
+  suiClient
+}: {
+  shopId: string
+  legacyTableEntryFieldId: string
+  suiClient: SuiClient
+}): Promise<AcceptedCurrencySummary | undefined> => {
+  const normalizedTableEntryFieldId = normalizeOptionalId(
+    legacyTableEntryFieldId
+  )
+  if (!normalizedTableEntryFieldId) return undefined
+
+  const acceptedCurrencySummaries = await getAcceptedCurrencySummaries(
+    shopId,
+    suiClient
+  )
+
+  return acceptedCurrencySummaries.find(
+    (summary) => summary.tableEntryFieldId === normalizedTableEntryFieldId
+  )
+}
+
+const isCoinTypeCandidate = (value: string) => value.includes("::")
+
+export const findAcceptedCurrencyByCoinType = async ({
+  coinType,
+  shopId,
+  suiClient
+}: {
+  coinType: string
+  shopId: string
+  suiClient: SuiClient
+}): Promise<AcceptedCurrencySummary | undefined> => {
+  const normalizedCoinType = normalizeCoinType(coinType)
+  const tableObjectId = await getAcceptedCurrenciesTableObjectId({
+    shopId,
+    suiClient
+  })
+  const tableEntryFields = await getAcceptedCurrencyTableEntryFields({
+    tableObjectId,
+    suiClient
+  })
+
+  const matchedTableEntryField = findAcceptedCurrencyTableEntryFieldByCoinType({
+    coinType: normalizedCoinType,
+    tableEntryFields
+  })
+
+  if (!matchedTableEntryField) return undefined
+
+  return getAcceptedCurrencySummaryByTableEntryField({
+    tableEntryField: matchedTableEntryField,
+    coinType: normalizedCoinType,
+    suiClient
+  })
+}
+
+export const requireAcceptedCurrencyByCoinType = async (args: {
+  coinType: string
+  shopId: string
+  suiClient: SuiClient
+}): Promise<AcceptedCurrencySummary> => {
+  const summary = await findAcceptedCurrencyByCoinType(args)
+  if (summary) return summary
+
+  throw new Error(
+    `No accepted currency registered for coin type ${normalizeCoinType(
+      args.coinType
+    )}.`
+  )
+}
+
+export const getAcceptedCurrencySummaries = async (
+  shopId: string,
+  suiClient: SuiClient
+): Promise<AcceptedCurrencySummary[]> => {
+  const tableObjectId = await getAcceptedCurrenciesTableObjectId({
+    shopId,
+    suiClient
+  })
+  const tableEntryFields = await getAcceptedCurrencyTableEntryFields({
+    tableObjectId,
+    suiClient
+  })
+
+  if (tableEntryFields.length === 0) return []
+
+  const summaries = await Promise.all(
+    tableEntryFields.map((tableEntryField) =>
+      getAcceptedCurrencySummaryByTableEntryField({
+        tableEntryField,
+        coinType: resolveCoinTypeFromTableEntryField(tableEntryField),
+        suiClient
+      })
+    )
+  )
+
+  return summaries.sort((left, right) => left.coinType.localeCompare(right.coinType))
+}
+
+/**
+ * Transitional helper: resolves accepted currency summary by coin type.
+ * If a legacy table-entry dynamic-field ID is provided, it resolves by ID.
+ */
+export const getAcceptedCurrencySummary = async (
+  shopId: string,
+  coinTypeOrLegacyTableEntryFieldId: string,
+  suiClient: SuiClient
+): Promise<AcceptedCurrencySummary> => {
+  if (!coinTypeOrLegacyTableEntryFieldId.trim())
+    throw new Error("coinType is required.")
+
+  if (isCoinTypeCandidate(coinTypeOrLegacyTableEntryFieldId))
+    return requireAcceptedCurrencyByCoinType({
+      coinType: coinTypeOrLegacyTableEntryFieldId,
+      shopId,
+      suiClient
+    })
+
+  const summary = await getAcceptedCurrencySummaryByLegacyTableEntryFieldId({
+    shopId,
+    legacyTableEntryFieldId: coinTypeOrLegacyTableEntryFieldId,
+    suiClient
+  })
+
+  if (summary) return summary
+
+  throw new Error(
+    `No accepted currency registered for legacy table entry field id ${coinTypeOrLegacyTableEntryFieldId}.`
+  )
 }

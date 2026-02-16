@@ -93,8 +93,8 @@ describe("buyer shop-view integration", () => {
         expect(
           acceptedCurrencies.some(
             (currency) =>
-              currency.acceptedCurrencyId ===
-                acceptedCurrency.acceptedCurrencyId &&
+              currency.tableEntryFieldId ===
+                acceptedCurrency.tableEntryFieldId &&
               currency.coinType === acceptedCurrency.coinType &&
               currency.feedIdHex === acceptedCurrency.feedIdHex
           )

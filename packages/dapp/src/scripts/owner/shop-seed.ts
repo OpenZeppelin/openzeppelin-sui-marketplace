@@ -12,10 +12,9 @@ import yargs from "yargs"
 import {
   findAcceptedCurrencyByCoinType,
   getAcceptedCurrencySummaries,
-  getAcceptedCurrencySummary,
   normalizeCoinType,
   requireAcceptedCurrencyByCoinType,
-  type AcceptedCurrencyMatch
+  type AcceptedCurrencySummary
 } from "@sui-oracle-market/domain-core/models/currency"
 import {
   defaultStartTimestampSeconds,
@@ -1067,9 +1066,7 @@ const ensureAcceptedCurrency = async ({
 
   const gasBudget = tooling.network.gasBudget ?? DEFAULT_TX_GAS_BUDGET
 
-  const {
-    objectArtifacts: { created }
-  } = await signAndExecuteWithRetry({
+  await signAndExecuteWithRetry({
     tooling,
     buildTransaction: () =>
       buildAddAcceptedCurrencyTransaction({
@@ -1088,19 +1085,11 @@ const ensureAcceptedCurrency = async ({
       })
   })
 
-  const acceptedCurrencyId =
-    findCreatedArtifactIdBySuffix(created, "::shop::AcceptedCurrency") ??
-    (await requireAcceptedCurrencyId({
-      shopId: inputs.shopId,
-      coinType: inputs.coinType,
-      suiClient
-    }))
-
-  const acceptedCurrencySummary = await getAcceptedCurrencySummary(
-    inputs.shopId,
-    acceptedCurrencyId,
+  const acceptedCurrencySummary = await requireAcceptedCurrencyByCoinType({
+    coinType: inputs.coinType,
+    shopId: inputs.shopId,
     suiClient
-  )
+  })
 
   logAcceptedCurrencySummary(acceptedCurrencySummary)
   logKeyValueGreen("Feed-id")(currencySeed.feedId)
@@ -1166,25 +1155,17 @@ const logExistingAcceptedCurrency = async ({
   suiClient
 }: {
   coinType: string
-  existingAcceptedCurrency: AcceptedCurrencyMatch
+  existingAcceptedCurrency: AcceptedCurrencySummary
   shopId: string
   suiClient: SuiClient
 }) => {
-  const acceptedCurrencyId =
-    existingAcceptedCurrency.acceptedCurrencyId ||
-    (await requireAcceptedCurrencyId({
-      shopId,
-      coinType,
-      suiClient
-    }))
-
   logKeyValueYellow("Currency")(`${coinType} already registered; skipping.`)
 
-  const acceptedCurrencySummary = await getAcceptedCurrencySummary(
+  const acceptedCurrencySummary = await requireAcceptedCurrencyByCoinType({
+    coinType,
     shopId,
-    acceptedCurrencyId,
     suiClient
-  )
+  })
 
   logAcceptedCurrencySummary(acceptedCurrencySummary)
 }
@@ -1537,20 +1518,3 @@ const indexDiscountTemplateSummaries = (
     },
     new Map()
   )
-
-const requireAcceptedCurrencyId = async ({
-  shopId,
-  coinType,
-  suiClient
-}: {
-  shopId: string
-  coinType: string
-  suiClient: SuiClient
-}): Promise<string> => {
-  const match = await requireAcceptedCurrencyByCoinType({
-    coinType,
-    shopId,
-    suiClient
-  })
-  return match.acceptedCurrencyId
-}
