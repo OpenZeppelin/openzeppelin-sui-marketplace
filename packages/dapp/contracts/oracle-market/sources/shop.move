@@ -6,7 +6,7 @@ use pyth::price_feed;
 use pyth::price_identifier;
 use pyth::price_info;
 use pyth::pyth;
-use std::string::String;
+use std::string::{Self, String};
 use std::type_name::{Self, TypeName};
 use std::u128;
 use sui::clock;
@@ -15,13 +15,14 @@ use sui::coin_registry;
 use sui::dynamic_field;
 use sui::event;
 use sui::package;
+use sui::table::{Self, Table};
 
 // === Concepts used in this module (what/why/how) ===
-// - Shared objects (Shop, ItemListing, AcceptedCurrency, DiscountTemplate): shared objects are
+// - Shared objects (Shop, ItemListing, DiscountTemplate): shared objects are
 //   globally addressable. Anyone can include them as inputs and read them, and any transaction
 //   that mutates them goes through consensus. What "can mutate" really means is "can submit a
 //   tx that tries" -- the module still enforces its own authorization checks. Sharding state across
-//   many shared objects means each PTB only locks the listing/currency/template it needs, instead
+//   many shared objects means each PTB only locks the listing/template it needs, instead
 //   of contending on one monolithic map. They are created with object::new and shared via
 //   transfer::share_object.
 //   Docs: docs/07-shop-capabilities.md, docs/08-listings-receipts.md, docs/09-currencies-oracles.md,
@@ -36,6 +37,8 @@ use sui::package;
 //   so discovery still relies on indexing/off-chain queries. This keeps parent objects small and
 //   limits contention to the touched child. See dynamic_field::add/exists/remove/borrow. Docs:
 //   docs/08-listings-receipts.md, docs/10-discounts-tickets.md
+// - Table collections (accepted currencies): typed `Table<TypeName, AcceptedCurrency>` keeps
+//   currency configs under `Shop` without exposing currencies as standalone objects.
 // - Type tags and TypeName: item and coin types are recorded as TypeName for runtime checks,
 //   events, and UI metadata; compile-time correctness still comes from generics (ShopItem<TItem>,
 //   Coin<T>) and explicit comparisons when needed. Docs: docs/08-listings-receipts.md,
@@ -115,8 +118,6 @@ const EDiscountAlreadyClaimed: vector<u8> = b"discount already claimed";
 #[error]
 const EOutOfStock: vector<u8> = b"out of stock";
 #[error]
-const EInvalidPaymentCoinType: vector<u8> = b"invalid payment coin type";
-#[error]
 const EPythObjectMismatch: vector<u8> = b"pyth object mismatch";
 #[error]
 const EFeedIdentifierMismatch: vector<u8> = b"feed identifier mismatch";
@@ -134,8 +135,6 @@ const EDiscountTicketOwnerMismatch: vector<u8> = b"discount ticket owner mismatc
 const EDiscountTicketListingMismatch: vector<u8> = b"discount ticket listing mismatch";
 #[error]
 const EDiscountTicketShopMismatch: vector<u8> = b"discount ticket shop mismatch";
-#[error]
-const ECurrencyListingMismatch: vector<u8> = b"currency listing mismatch";
 #[error]
 const EDiscountShopMismatch: vector<u8> = b"discount shop mismatch";
 #[error]
@@ -206,12 +205,14 @@ public struct ShopOwnerCap has key, store {
     shop_id: ID,
 }
 
-/// Shared shop that stores item listings to sell, accepted currencies, and discount templates via dynamic fields.
+/// Shared shop that stores item listings and discount templates via dynamic fields, plus accepted
+/// currencies in a typed table keyed by coin type.
 public struct Shop has key, store {
     id: UID,
     owner: address, // Payout recipient for sales.
     name: String,
     disabled: bool,
+    accepted_currencies: Table<TypeName, AcceptedCurrency>,
 }
 
 /// Item listing metadata keyed under the shared `Shop`, used to mint specific items on purchase.
@@ -246,10 +247,7 @@ public struct ShopItem<phantom TItem> has key, store {
 }
 
 /// Defines which external coins the shop is able to price/accept.
-public struct AcceptedCurrency has key {
-    id: UID,
-    shop_id: ID,
-    coin_type: TypeName,
+public struct AcceptedCurrency has drop, store {
     feed_id: vector<u8>, // Pyth price feed identifier (32 bytes).
     pyth_object_id: ID, // ID of Pyth PriceInfoObject
     decimals: u8,
@@ -257,18 +255,6 @@ public struct AcceptedCurrency has key {
     max_price_age_secs_cap: u64,
     max_confidence_ratio_bps_cap: u16,
     max_price_status_lag_secs_cap: u64,
-}
-
-/// Dynamic field key for accepted currency markers stored under a shop.
-public struct AcceptedCurrencyKey(ID) has copy, drop, store;
-
-/// Dynamic field key for mapping a coin type to its accepted currency object.
-public struct AcceptedCurrencyTypeKey(TypeName) has copy, drop, store;
-
-/// Marker stored under the shop to record accepted currency membership.
-public struct AcceptedCurrencyMarker has drop, store {
-    accepted_currency_id: ID,
-    coin_type: TypeName,
 }
 
 /// Discount rules mirror the spec: fixed (USD cents) or percentage basis points off.
@@ -327,31 +313,43 @@ public struct DiscountClaim(address) has drop, store;
 /// Event emitted when a shop is created.
 public struct ShopCreatedEvent has copy, drop {
     shop_id: ID,
+    owner: address,
+    name: String,
     shop_owner_cap_id: ID,
 }
 
 /// Event emitted when a shop owner is updated.
 public struct ShopOwnerUpdatedEvent has copy, drop {
     shop_id: ID,
+    previous_owner: address,
+    new_owner: address,
     shop_owner_cap_id: ID,
+    rotated_by: address,
 }
 
 /// Event emitted when a shop is disabled.
 public struct ShopDisabledEvent has copy, drop {
     shop_id: ID,
+    owner: address,
     shop_owner_cap_id: ID,
+    disabled_by: address,
 }
 
 /// Event emitted when an item listing is added.
 public struct ItemListingAddedEvent has copy, drop {
     shop_id: ID,
     item_listing_id: ID,
+    name: String,
+    base_price_usd_cents: u64,
+    spotlight_discount_template_id: Option<ID>,
+    stock: u64,
 }
 
 /// Event emitted when listing stock is updated.
 public struct ItemListingStockUpdatedEvent has copy, drop {
     shop_id: ID,
     item_listing_id: ID,
+    new_stock: u64,
 }
 
 /// Event emitted when an item listing is removed.
@@ -364,6 +362,7 @@ public struct ItemListingRemovedEvent has copy, drop {
 public struct DiscountTemplateCreatedEvent has copy, drop {
     shop_id: ID,
     discount_template_id: ID,
+    rule: DiscountRule,
 }
 
 /// Event emitted when a discount template is updated.
@@ -376,23 +375,26 @@ public struct DiscountTemplateUpdatedEvent has copy, drop {
 public struct DiscountTemplateToggledEvent has copy, drop {
     shop_id: ID,
     discount_template_id: ID,
+    active: bool,
 }
 
 /// Event emitted when an accepted coin is added.
 public struct AcceptedCoinAddedEvent has copy, drop {
     shop_id: ID,
-    accepted_currency_id: ID,
+    pyth_object_id: ID,
 }
 
 /// Event emitted when an accepted coin is removed.
 public struct AcceptedCoinRemovedEvent has copy, drop {
     shop_id: ID,
-    accepted_currency_id: ID,
+    pyth_object_id: ID,
 }
 
 /// Event emitted when a discount ticket is claimed.
 public struct DiscountClaimedEvent has copy, drop {
     shop_id: ID,
+    discount_template_id: ID,
+    claimer: address,
     discount_id: ID,
 }
 
@@ -401,18 +403,35 @@ public struct DiscountRedeemedEvent has copy, drop {
     shop_id: ID,
     discount_template_id: ID,
     discount_id: ID,
+    listing_id: ID,
+    buyer: address,
 }
 
 /// Event emitted when a purchase completes.
 public struct PurchaseCompletedEvent has copy, drop {
     shop_id: ID,
     item_listing_id: ID,
-    accepted_currency_id: ID,
-    discount_template_id: Option<ID>,
-    minted_item_id: ID,
-    /// These checkout values are not persisted on any object and must remain in the event.
+    buyer: address,
+    mint_to: address,
+    coin_type: TypeName,
     amount_paid: u64,
+    discount_template_id: Option<ID>,
+    feed_id: vector<u8>,
+    base_price_usd_cents: u64,
     discounted_price_usd_cents: u64,
+    quote_amount: u64,
+}
+
+/// Event emitted when minting completes.
+public struct MintingCompletedEvent has copy, drop {
+    shop_id: ID,
+    item_listing_id: ID,
+    buyer: address,
+    minted_item_id: ID,
+    mint_to: address,
+    refund_to: address,
+    change_amount: u64,
+    coin_type: TypeName,
 }
 
 // === Entry Point Methods ===
@@ -426,10 +445,9 @@ public struct PurchaseCompletedEvent has copy, drop {
 /// - Capability > `msg.sender`: ownership lives in a first-class `ShopOwnerCap`. Entry functions
 ///   require the cap, so authority follows the object holder rather than whichever address signs
 ///   the PTB. Solidity relies on `msg.sender` and modifiers; here, capabilities are explicit inputs.
-/// - Shared object composition: the shop is shared, and listings/templates/currencies are shared
-///   siblings indexed by lightweight markers under the shop (plus a coin-type index for currencies).
-///   State is sharded into per-object locks so PTBs only touch the listing/template/currency they
-///   mutate instead of contending on a monolithic storage map as in Solidity.
+/// - Shared object composition: the shop is shared, while listings/templates are shared sibling
+///   objects indexed by lightweight markers under the shop and currencies live in a typed table.
+///   State stays sharded so PTBs only touch the listing/template object they mutate.
 entry fun create_shop(name: String, ctx: &mut TxContext) {
     let owner = ctx.sender();
     let shop = new_shop(name, owner, ctx);
@@ -441,6 +459,8 @@ entry fun create_shop(name: String, ctx: &mut TxContext) {
 
     event::emit(ShopCreatedEvent {
         shop_id: shop.id.to_inner(),
+        owner,
+        name: shop.name,
         shop_owner_cap_id: owner_cap.id.to_inner(),
     });
 
@@ -449,13 +469,15 @@ entry fun create_shop(name: String, ctx: &mut TxContext) {
 }
 
 /// Disable a shop permanently (buyer flows will reject new checkouts).
-entry fun disable_shop(shop: &mut Shop, owner_cap: &ShopOwnerCap, _ctx: &TxContext) {
+entry fun disable_shop(shop: &mut Shop, owner_cap: &ShopOwnerCap, ctx: &TxContext) {
     assert_owner_cap!(shop, owner_cap);
     shop.disabled = true;
 
     event::emit(ShopDisabledEvent {
         shop_id: shop.id.to_inner(),
+        owner: shop.owner,
         shop_owner_cap_id: owner_cap.id.to_inner(),
+        disabled_by: ctx.sender(),
     });
 }
 
@@ -470,15 +492,19 @@ entry fun update_shop_owner(
     shop: &mut Shop,
     owner_cap: &ShopOwnerCap,
     new_owner: address,
-    _ctx: &TxContext,
+    ctx: &TxContext,
 ) {
     assert_owner_cap!(shop, owner_cap);
 
+    let previous_owner = shop.owner;
     shop.owner = new_owner;
 
     event::emit(ShopOwnerUpdatedEvent {
         shop_id: shop.id.to_inner(),
+        previous_owner,
+        new_owner,
         shop_owner_cap_id: owner_cap.id.to_inner(),
+        rotated_by: ctx.sender(),
     });
 }
 
@@ -512,7 +538,7 @@ fun add_item_listing_core<T: store>(
         &name,
         base_price_usd_cents,
         stock,
-        spotlight_discount_template_id,
+        &spotlight_discount_template_id,
     );
 
     let shop_id = shop.id.to_inner();
@@ -528,12 +554,16 @@ fun add_item_listing_core<T: store>(
     assert_spotlight_template_matches_listing!(
         shop,
         listing_id,
-        listing.spotlight_discount_template_id,
+        &listing.spotlight_discount_template_id,
     );
 
     event::emit(ItemListingAddedEvent {
         shop_id,
         item_listing_id: listing_id,
+        name: listing.name,
+        base_price_usd_cents: listing.base_price_usd_cents,
+        spotlight_discount_template_id: listing.spotlight_discount_template_id,
+        stock,
     });
 
     // Marker entries act like a membership index: the Shop stays slim while each listing mutates
@@ -578,6 +608,7 @@ entry fun update_item_listing_stock(
     event::emit(ItemListingStockUpdatedEvent {
         shop_id: item_listing.shop_id,
         item_listing_id: item_listing.id.to_inner(),
+        new_stock,
     });
 }
 
@@ -618,17 +649,14 @@ entry fun remove_item_listing(
 ///   ERC-20 land.
 /// - Operators prove authority with `ShopOwnerCap`; buyers never touch this path. The cap pattern is
 ///   the Sui-native replacement for `onlyOwner`.
-/// - Each accepted currency is its own shared object; the Shop keeps a marker plus a
-///   `coin_type -> ID` dynamic-field index for discovery. Creating or removing currencies mutates
-///   the Shop (marker/index), while checkout only needs the specific `AcceptedCurrency` object and
-///   listing.
+/// - Accepted currencies are stored in a typed `Table<TypeName, AcceptedCurrency>` under the
+///   shared `Shop`, keyed by coin type.
 /// - Callers supply the on-chain `PriceInfoObject` (fetched via RPC); the module re-validates feed
 ///   bytes and the Pyth object ID to defend against spoofed inputs. This reduces reliance on
 ///   off-chain metadata, but the caller still must provide the correct on-chain object.
 /// - Sellers can optionally tighten oracle guardrails per currency (`max_price_age_secs_cap`,
 ///   `max_confidence_ratio_bps_cap`, `max_price_status_lag_secs_cap`). Buyers may only tighten
-///   `max_price_age_secs`/`max_confidence_ratio_bps` further--never loosen--mirroring "slippage limits"
-///   but enforced with object caps instead of unbounded calldata.
+///   `max_price_age_secs`/`max_confidence_ratio_bps` further--never loosen.
 entry fun add_accepted_currency<T>(
     shop: &mut Shop,
     owner_cap: &ShopOwnerCap,
@@ -639,14 +667,19 @@ entry fun add_accepted_currency<T>(
     max_price_age_secs_cap: Option<u64>,
     max_confidence_ratio_bps_cap: Option<u16>,
     max_price_status_lag_secs_cap: Option<u64>,
-    ctx: &mut TxContext,
 ) {
     assert_owner_cap!(shop, owner_cap);
 
     let coin_type = currency_type<T>();
 
     // Bind this currency to a specific PriceInfoObject to prevent oracle feed spoofing.
-    validate_accepted_currency_inputs!(shop, coin_type, feed_id, pyth_object_id, price_info_object);
+    validate_accepted_currency_inputs!(
+        shop,
+        &coin_type,
+        &feed_id,
+        &pyth_object_id,
+        price_info_object,
+    );
 
     let decimals = coin_registry::decimals(currency);
     assert_supported_decimals!(decimals);
@@ -662,9 +695,7 @@ entry fun add_accepted_currency<T>(
         DEFAULT_MAX_PRICE_STATUS_LAG_SECS,
     );
 
-    let (accepted_currency, accepted_currency_id) = new_accepted_currency(
-        shop_id,
-        coin_type,
+    let accepted_currency = new_accepted_currency(
         feed_id,
         pyth_object_id,
         decimals,
@@ -672,53 +703,24 @@ entry fun add_accepted_currency<T>(
         age_cap,
         confidence_cap,
         status_lag_cap,
-        ctx,
     );
-    shop.add_currency_marker(accepted_currency_id, coin_type);
-    dynamic_field::add(
-        &mut shop.id,
-        AcceptedCurrencyTypeKey(coin_type),
-        accepted_currency_id,
-    );
-
-    transfer::share_object(accepted_currency);
+    table::add(&mut shop.accepted_currencies, coin_type, accepted_currency);
 
     event::emit(AcceptedCoinAddedEvent {
         shop_id,
-        accepted_currency_id,
+        pyth_object_id,
     })
 }
 
-/// Deregister an accepted coin type and clean up its lookup index.
-entry fun remove_accepted_currency(
-    shop: &mut Shop,
-    owner_cap: &ShopOwnerCap,
-    accepted_currency: &AcceptedCurrency,
-    _ctx: &TxContext,
-) {
+/// Deregister an accepted coin type.
+entry fun remove_accepted_currency<TCoin>(shop: &mut Shop, owner_cap: &ShopOwnerCap) {
     assert_owner_cap!(shop, owner_cap);
-    assert_currency_matches_shop!(shop, accepted_currency);
-    let accepted_currency_id = accepted_currency.id.to_inner();
-    let mapped_id_opt = shop.accepted_currency_id_for_type(accepted_currency.coin_type);
-    mapped_id_opt.do_ref!(|mapped_id| {
-        assert!(*mapped_id == accepted_currency_id, EAcceptedCurrencyMissing);
-    });
-    shop.remove_currency_field(accepted_currency.coin_type);
-    if (
-        dynamic_field::exists_with_type<AcceptedCurrencyKey, AcceptedCurrencyMarker>(
-            &shop.id,
-            AcceptedCurrencyKey(accepted_currency_id),
-        )
-    ) {
-        let _marker: AcceptedCurrencyMarker = dynamic_field::remove(
-            &mut shop.id,
-            AcceptedCurrencyKey(accepted_currency_id),
-        );
-    };
+    let coin_type = currency_type<TCoin>();
+    let accepted_currency = shop.remove_registered_accepted_currency(coin_type);
 
     event::emit(AcceptedCoinRemovedEvent {
-        shop_id: accepted_currency.shop_id,
-        accepted_currency_id,
+        shop_id: shop.id.to_inner(),
+        pyth_object_id: accepted_currency.pyth_object_id,
     });
 }
 
@@ -733,8 +735,8 @@ fun create_discount_template_core(
     expires_at: Option<u64>,
     max_redemptions: Option<u64>,
     ctx: &mut TxContext,
-): (DiscountTemplate, ID) {
-    validate_discount_template_inputs!(shop, applies_to_listing, starts_at, expires_at);
+): (DiscountTemplate, ID, DiscountRule) {
+    validate_discount_template_inputs!(shop, &applies_to_listing, starts_at, &expires_at);
 
     let discount_rule_kind = parse_rule_kind(rule_kind);
     let discount_rule = discount_rule_kind.build_discount_rule(rule_value);
@@ -749,7 +751,7 @@ fun create_discount_template_core(
         ctx,
     );
     shop.add_template_marker(discount_template_id, applies_to_listing);
-    (discount_template, discount_template_id)
+    (discount_template, discount_template_id, discount_rule)
 }
 
 /// Create a discount template anchored under the shop.
@@ -783,7 +785,11 @@ entry fun create_discount_template(
     ctx: &mut TxContext,
 ) {
     assert_owner_cap!(shop, owner_cap);
-    let (discount_template, discount_template_id) = shop.create_discount_template_core(
+    let (
+        discount_template,
+        discount_template_id,
+        discount_rule,
+    ) = shop.create_discount_template_core(
         applies_to_listing,
         rule_kind,
         rule_value,
@@ -798,7 +804,8 @@ entry fun create_discount_template(
     let shop_id = shop.id.to_inner();
     event::emit(DiscountTemplateCreatedEvent {
         shop_id,
-        discount_template_id,
+        discount_template_id: discount_template_id,
+        rule: discount_rule,
     });
 }
 
@@ -819,7 +826,7 @@ entry fun update_discount_template(
 ) {
     assert_owner_cap!(shop, owner_cap);
     assert_template_matches_shop!(shop, discount_template);
-    assert_schedule!(starts_at, expires_at);
+    assert_schedule!(starts_at, &expires_at);
 
     let discount_rule_kind = parse_rule_kind(rule_kind);
     let discount_rule = discount_rule_kind.build_discount_rule(rule_value);
@@ -855,6 +862,7 @@ entry fun toggle_discount_template(
     event::emit(DiscountTemplateToggledEvent {
         shop_id: discount_template.shop_id,
         discount_template_id: discount_template.id.to_inner(),
+        active,
     });
 }
 
@@ -872,7 +880,7 @@ entry fun attach_template_to_listing(
     assert_spotlight_template_matches_listing!(
         shop,
         item_listing.id.to_inner(),
-        option::some(discount_template.id.to_inner()),
+        &option::some(discount_template.id.to_inner()),
     );
 
     item_listing.spotlight_discount_template_id = option::some(discount_template.id.to_inner());
@@ -963,6 +971,8 @@ fun claim_discount_ticket_with_event(
 
     event::emit(DiscountClaimedEvent {
         shop_id: discount_template.shop_id,
+        discount_template_id: discount_template.id.to_inner(),
+        claimer,
         discount_id: discount_ticket.id.to_inner(),
     });
 
@@ -994,7 +1004,7 @@ entry fun prune_discount_claims(
 /// - There is no global ERC-20 allowance; the buyer passes an owned `Coin<T>`, the function splits
 ///   exactly what is needed, and refunds change in the same PTB.
 /// - The `Shop` is a read-only input; only the listing mutates (stock decrements), so contention is
-///   scoped to that listing and other listing/currency objects are unaffected by the write.
+///   scoped to that listing and other listings/templates are unaffected by the write.
 /// - Buyers pass explicit `mint_to` and `refund_extra_to` targets so PTBs can gift receipts or route
 ///   change without extra hops--common for custody or marketplace flows.
 /// - Oracles are first-class objects. Callers supply a refreshed `PriceInfoObject`, and on-chain
@@ -1007,7 +1017,6 @@ entry fun prune_discount_claims(
 entry fun buy_item<TItem: store, TCoin>(
     shop: &Shop,
     item_listing: &mut ItemListing,
-    accepted_currency: &AcceptedCurrency,
     price_info_object: &price_info::PriceInfoObject,
     payment: coin::Coin<TCoin>,
     mint_to: address,
@@ -1023,9 +1032,10 @@ entry fun buy_item<TItem: store, TCoin>(
     // Payment is a Coin<T> object; process_purchase splits the payment and returns change.
     let (owed_coin_opt, change_coin, minted_item) = shop.process_purchase<TItem, TCoin>(
         item_listing,
-        accepted_currency,
         price_info_object,
         payment,
+        mint_to,
+        refund_extra_to,
         base_price_usd_cents,
         option::none(),
         max_price_age_secs,
@@ -1060,7 +1070,6 @@ entry fun buy_item<TItem: store, TCoin>(
 entry fun buy_item_with_discount<TItem: store, TCoin>(
     shop: &Shop,
     item_listing: &mut ItemListing,
-    accepted_currency: &AcceptedCurrency,
     discount_template: &mut DiscountTemplate,
     discount_ticket: DiscountTicket,
     price_info_object: &price_info::PriceInfoObject,
@@ -1082,7 +1091,7 @@ entry fun buy_item_with_discount<TItem: store, TCoin>(
 
     let discounted_price_usd_cents = apply_discount(
         item_listing.base_price_usd_cents,
-        discount_template.rule,
+        &discount_template.rule,
     );
     let discount_template_id = option::some(discount_template.id.to_inner());
     let ticket_id = discount_ticket.id.to_inner();
@@ -1090,9 +1099,10 @@ entry fun buy_item_with_discount<TItem: store, TCoin>(
 
     let (owed_coin_opt, change_coin, minted_item) = shop.process_purchase<TItem, TCoin>(
         item_listing,
-        accepted_currency,
         price_info_object,
         payment,
+        mint_to,
+        refund_extra_to,
         discounted_price_usd_cents,
         discount_template_id,
         max_price_age_secs,
@@ -1114,6 +1124,8 @@ entry fun buy_item_with_discount<TItem: store, TCoin>(
         shop_id: item_listing.shop_id,
         discount_template_id: discount_template.id.to_inner(),
         discount_id: ticket_id,
+        listing_id: item_listing.id.to_inner(),
+        buyer,
     });
 
     discount_ticket.burn_discount_ticket();
@@ -1135,7 +1147,6 @@ entry fun buy_item_with_discount<TItem: store, TCoin>(
 entry fun claim_and_buy_item_with_discount<TItem: store, TCoin>(
     shop: &Shop,
     item_listing: &mut ItemListing,
-    accepted_currency: &AcceptedCurrency,
     discount_template: &mut DiscountTemplate,
     price_info_object: &price_info::PriceInfoObject,
     payment: coin::Coin<TCoin>,
@@ -1157,7 +1168,6 @@ entry fun claim_and_buy_item_with_discount<TItem: store, TCoin>(
 
     shop.buy_item_with_discount<TItem, TCoin>(
         item_listing,
-        accepted_currency,
         discount_template,
         discount_ticket,
         price_info_object,
@@ -1180,12 +1190,11 @@ fun new_shop(name: String, owner: address, ctx: &mut TxContext): Shop {
         owner,
         name,
         disabled: false,
+        accepted_currencies: table::new<TypeName, AcceptedCurrency>(ctx),
     }
 }
 
 fun new_accepted_currency(
-    shop_id: ID,
-    coin_type: TypeName,
     feed_id: vector<u8>,
     pyth_object_id: ID,
     decimals: u8,
@@ -1193,14 +1202,10 @@ fun new_accepted_currency(
     max_price_age_secs_cap: u64,
     max_confidence_ratio_bps_cap: u16,
     max_price_status_lag_secs_cap: u64,
-    ctx: &mut TxContext,
-): (AcceptedCurrency, ID) {
+): AcceptedCurrency {
     assert_supported_decimals!(decimals);
 
-    let accepted_currency = AcceptedCurrency {
-        id: object::new(ctx),
-        shop_id,
-        coin_type,
+    AcceptedCurrency {
         feed_id,
         pyth_object_id,
         decimals,
@@ -1208,10 +1213,7 @@ fun new_accepted_currency(
         max_price_age_secs_cap,
         max_confidence_ratio_bps_cap,
         max_price_status_lag_secs_cap,
-    };
-    let accepted_currency_id = accepted_currency.id.to_inner();
-
-    (accepted_currency, accepted_currency_id)
+    }
 }
 
 fun new_item_listing<T: store>(
@@ -1319,13 +1321,6 @@ fun apply_discount_template_updates(
     discount_template.max_redemptions = max_redemptions;
 }
 
-fun remove_currency_field(shop: &mut Shop, coin_type: TypeName) {
-    dynamic_field::remove_if_exists<AcceptedCurrencyTypeKey, ID>(
-        &mut shop.id,
-        AcceptedCurrencyTypeKey(coin_type),
-    );
-}
-
 fun currency_type<T>(): TypeName {
     type_name::with_defining_ids<T>()
 }
@@ -1358,17 +1353,6 @@ fun add_template_marker(shop: &mut Shop, template_id: ID, applies_to_listing: Op
     );
 }
 
-fun add_currency_marker(shop: &mut Shop, accepted_currency_id: ID, coin_type: TypeName) {
-    dynamic_field::add(
-        &mut shop.id,
-        AcceptedCurrencyKey(accepted_currency_id),
-        AcceptedCurrencyMarker {
-            accepted_currency_id,
-            coin_type,
-        },
-    );
-}
-
 macro fun assert_template_registered($shop: &Shop, $template_id: ID) {
     let shop = $shop;
     let template_id = $template_id;
@@ -1378,18 +1362,6 @@ macro fun assert_template_registered($shop: &Shop, $template_id: ID) {
             DiscountTemplateKey(template_id),
         ),
         ETemplateShopMismatch,
-    );
-}
-
-macro fun assert_currency_registered($shop: &Shop, $accepted_currency_id: ID) {
-    let shop = $shop;
-    let accepted_currency_id = $accepted_currency_id;
-    assert!(
-        dynamic_field::exists_with_type<AcceptedCurrencyKey, AcceptedCurrencyMarker>(
-            &shop.id,
-            AcceptedCurrencyKey(accepted_currency_id),
-        ),
-        EAcceptedCurrencyMissing,
     );
 }
 
@@ -1410,13 +1382,6 @@ macro fun assert_template_matches_shop($shop: &Shop, $template: &DiscountTemplat
     let template = $template;
     assert_template_registered!(shop, template.id.to_inner());
     assert!(template.shop_id == shop.id.to_inner(), ETemplateShopMismatch);
-}
-
-macro fun assert_currency_matches_shop($shop: &Shop, $accepted_currency: &AcceptedCurrency) {
-    let shop = $shop;
-    let accepted_currency = $accepted_currency;
-    assert_currency_registered!(shop, accepted_currency.id.to_inner());
-    assert!(accepted_currency.shop_id == shop.id.to_inner(), EAcceptedCurrencyMissing);
 }
 
 macro fun assert_listing_matches_shop($shop: &Shop, $listing: &ItemListing) {
@@ -1452,13 +1417,14 @@ fun resolve_effective_guardrails(
     (effective_max_age, effective_confidence_ratio)
 }
 
-/// Ensure checkout uses the currency object stored under the shop, not a forged caller value.
-fun borrow_registered_accepted_currency(
-    shop: &Shop,
-    accepted_currency: &AcceptedCurrency,
-): &AcceptedCurrency {
-    assert_currency_matches_shop!(shop, accepted_currency);
-    accepted_currency
+fun borrow_registered_accepted_currency(shop: &Shop, coin_type: TypeName): &AcceptedCurrency {
+    assert!(table::contains(&shop.accepted_currencies, coin_type), EAcceptedCurrencyMissing);
+    table::borrow(&shop.accepted_currencies, coin_type)
+}
+
+fun remove_registered_accepted_currency(shop: &mut Shop, coin_type: TypeName): AcceptedCurrency {
+    assert!(table::contains(&shop.accepted_currencies, coin_type), EAcceptedCurrencyMissing);
+    table::remove(&mut shop.accepted_currencies, coin_type)
 }
 
 fun quote_amount_with_guardrails(
@@ -1478,7 +1444,7 @@ fun quote_amount_with_guardrails(
         price_info_object,
     );
     let publish_time = price::get_timestamp(
-        price_feed::get_price(*price_info::get_price_feed(&price_info)),
+        &price_feed::get_price(price_info::get_price_feed(&price_info)),
     );
     let now = now_secs(clock);
     assert!(now >= publish_time, EPriceTooStale);
@@ -1491,7 +1457,7 @@ fun quote_amount_with_guardrails(
     quote_amount_from_usd_cents(
         price_usd_cents,
         accepted_currency.decimals,
-        price,
+        &price,
         effective_confidence_ratio,
     )
 }
@@ -1499,9 +1465,10 @@ fun quote_amount_with_guardrails(
 fun process_purchase<TItem: store, TCoin>(
     shop: &Shop,
     item_listing: &mut ItemListing,
-    accepted_currency: &AcceptedCurrency,
     price_info_object: &price_info::PriceInfoObject,
     payment: coin::Coin<TCoin>,
+    mint_to: address,
+    refund_extra_to: address,
     discounted_price_usd_cents: u64,
     discount_template_id: Option<ID>,
     max_price_age_secs: Option<u64>,
@@ -1510,14 +1477,18 @@ fun process_purchase<TItem: store, TCoin>(
     ctx: &mut TxContext,
 ): (Option<coin::Coin<TCoin>>, coin::Coin<TCoin>, ShopItem<TItem>) {
     assert_listing_type_matches<TItem>(item_listing);
-    let accepted_currency = shop.borrow_registered_accepted_currency(accepted_currency);
+    let coin_type = currency_type<TCoin>();
+    let accepted_currency = shop.borrow_registered_accepted_currency(coin_type);
 
-    assert_listing_currency_match!(shop, item_listing, accepted_currency);
+    assert_listing_currency_match!(shop, item_listing);
     item_listing.process_purchase_core<TItem, TCoin>(
         accepted_currency,
+        coin_type,
         price_info_object,
         payment,
         shop.id.to_inner(),
+        mint_to,
+        refund_extra_to,
         discounted_price_usd_cents,
         discount_template_id,
         max_price_age_secs,
@@ -1530,9 +1501,12 @@ fun process_purchase<TItem: store, TCoin>(
 fun process_purchase_core<TItem: store, TCoin>(
     item_listing: &mut ItemListing,
     accepted_currency: &AcceptedCurrency,
+    coin_type: TypeName,
     price_info_object: &price_info::PriceInfoObject,
     mut payment: coin::Coin<TCoin>,
     shop_id: ID,
+    mint_to: address,
+    refund_extra_to: address,
     discounted_price_usd_cents: u64,
     discount_template_id: Option<ID>,
     max_price_age_secs: Option<u64>,
@@ -1545,7 +1519,6 @@ fun process_purchase_core<TItem: store, TCoin>(
         price_info_object,
         accepted_currency.max_price_status_lag_secs_cap,
     );
-    assert_payment_coin_type!<TCoin>(accepted_currency);
     assert_stock_available!(item_listing);
     let quote_amount = accepted_currency.quote_amount_with_guardrails(
         price_info_object,
@@ -1556,26 +1529,44 @@ fun process_purchase_core<TItem: store, TCoin>(
     );
 
     let owed_coin_opt = split_payment(&mut payment, quote_amount, ctx);
-    let amount_paid = owed_coin_opt.map_ref!(|owed_coin| owed_coin.value()).destroy_or!(0);
+
+    let buyer = ctx.sender();
+    let change_amount = payment.value();
 
     item_listing.decrement_stock();
+
+    event::emit(PurchaseCompletedEvent {
+        shop_id,
+        item_listing_id: item_listing.id.to_inner(),
+        buyer,
+        mint_to,
+        coin_type,
+        amount_paid: quote_amount,
+        discount_template_id,
+        feed_id: accepted_currency.feed_id,
+        base_price_usd_cents: item_listing.base_price_usd_cents,
+        discounted_price_usd_cents,
+        quote_amount,
+    });
 
     event::emit(ItemListingStockUpdatedEvent {
         shop_id,
         item_listing_id: item_listing.id.to_inner(),
+        new_stock: item_listing.stock,
     });
 
     let minted_item = item_listing.mint_shop_item<TItem>(clock, ctx);
     let minted_item_id = minted_item.id.to_inner();
 
-    event::emit(PurchaseCompletedEvent {
+    event::emit(MintingCompletedEvent {
         shop_id,
         item_listing_id: item_listing.id.to_inner(),
-        accepted_currency_id: accepted_currency.id.to_inner(),
-        discount_template_id,
+        buyer,
         minted_item_id,
-        amount_paid,
-        discounted_price_usd_cents,
+        mint_to,
+        refund_to: refund_extra_to,
+        change_amount,
+        coin_type,
     });
     (owed_coin_opt, payment, minted_item)
 }
@@ -1607,18 +1598,18 @@ fun now_secs(clock: &clock::Clock): u64 {
 fun quote_amount_from_usd_cents(
     usd_cents: u64,
     coin_decimals: u8,
-    price: price::Price,
+    price: &price::Price,
     max_confidence_ratio_bps: u16,
 ): u64 {
     let price_value = price::get_price(price);
-    let mantissa = positive_price_to_u128(price_value);
+    let mantissa = positive_price_to_u128(&price_value);
     let confidence = price::get_conf(price) as u128;
     let exponent = price::get_expo(price);
-    let exponent_is_negative = i64::get_is_negative(exponent);
+    let exponent_is_negative = i64::get_is_negative(&exponent);
     let exponent_magnitude = if (exponent_is_negative) {
-        i64::get_magnitude_if_negative(exponent)
+        i64::get_magnitude_if_negative(&exponent)
     } else {
-        i64::get_magnitude_if_positive(exponent)
+        i64::get_magnitude_if_positive(&exponent)
     };
     let conservative_mantissa = conservative_price_mantissa(
         mantissa,
@@ -1670,7 +1661,7 @@ fun ceil_div_u128(numerator: u128, denominator: u128): u128 {
     numerator.divide_and_round_up(denominator)
 }
 
-fun positive_price_to_u128(value: i64::I64): u128 {
+fun positive_price_to_u128(value: &i64::I64): u128 {
     assert!(!i64::get_is_negative(value), EPriceNonPositive);
     i64::get_magnitude_if_positive(value) as u128
 }
@@ -1724,17 +1715,17 @@ fun mint_shop_item<TItem: store>(
     }
 }
 
-fun apply_discount(base_price_usd_cents: u64, rule: DiscountRule): u64 {
+fun apply_discount(base_price_usd_cents: u64, rule: &DiscountRule): u64 {
     match (rule) {
         DiscountRule::Fixed { amount_cents } => {
-            if (amount_cents >= base_price_usd_cents) {
+            if (*amount_cents >= base_price_usd_cents) {
                 0
             } else {
-                base_price_usd_cents - amount_cents
+                base_price_usd_cents - *amount_cents
             }
         },
         DiscountRule::Percent { bps } => {
-            let remaining_bps = BASIS_POINT_DENOMINATOR - (bps as u64);
+            let remaining_bps = BASIS_POINT_DENOMINATOR - (*bps as u64);
             let product = (base_price_usd_cents as u128) * (remaining_bps as u128);
             let discounted = ceil_div_u128(
                 product,
@@ -1774,7 +1765,7 @@ macro fun assert_stock_available($item_listing: &ItemListing) {
     assert!(item_listing.stock > 0, EOutOfStock);
 }
 
-macro fun assert_schedule($starts_at: u64, $expires_at: Option<u64>) {
+macro fun assert_schedule($starts_at: u64, $expires_at: &Option<u64>) {
     let starts_at = $starts_at;
     let expires_at = $expires_at;
     expires_at.do_ref!(|expires_at_value| {
@@ -1787,7 +1778,7 @@ macro fun validate_listing_inputs(
     $name: &String,
     $base_price_usd_cents: u64,
     $stock: u64,
-    $spotlight_discount_template_id: Option<ID>,
+    $spotlight_discount_template_id: &Option<ID>,
 ) {
     let shop = $shop;
     let name = $name;
@@ -1796,7 +1787,7 @@ macro fun validate_listing_inputs(
     let spotlight_discount_template_id = $spotlight_discount_template_id;
 
     assert_non_zero_stock!(stock);
-    assert!(!name.is_empty(), EEmptyItemName);
+    assert!(!string::as_bytes(name).is_empty(), EEmptyItemName);
     assert!(base_price_usd_cents > 0, EInvalidPrice);
 
     assert_belongs_to_shop_if_some!(shop, ReferenceKind::Template, spotlight_discount_template_id);
@@ -1804,14 +1795,14 @@ macro fun validate_listing_inputs(
 
 macro fun validate_shop_name($name: &String) {
     let name = $name;
-    assert!(!name.is_empty(), EEmptyShopName);
+    assert!(!string::as_bytes(name).is_empty(), EEmptyShopName);
 }
 
 macro fun validate_discount_template_inputs(
     $shop: &Shop,
-    $applies_to_listing: Option<ID>,
+    $applies_to_listing: &Option<ID>,
     $starts_at: u64,
-    $expires_at: Option<u64>,
+    $expires_at: &Option<u64>,
 ) {
     let shop = $shop;
     let applies_to_listing = $applies_to_listing;
@@ -1905,9 +1896,9 @@ macro fun assert_ticket_matches_context(
 
 macro fun validate_accepted_currency_inputs(
     $shop: &Shop,
-    $coin_type: TypeName,
-    $feed_id: vector<u8>,
-    $pyth_object_id: ID,
+    $coin_type: &TypeName,
+    $feed_id: &vector<u8>,
+    $pyth_object_id: &ID,
     $price_info_object: &price_info::PriceInfoObject,
 ) {
     let shop = $shop;
@@ -1921,41 +1912,35 @@ macro fun validate_accepted_currency_inputs(
     assert_price_info_identity!(feed_id, pyth_object_id, price_info_object);
 }
 
-macro fun assert_valid_feed_id($feed_id: vector<u8>) {
+macro fun assert_valid_feed_id($feed_id: &vector<u8>) {
     let feed_id = $feed_id;
     assert!(!feed_id.is_empty(), EEmptyFeedId);
     assert!(feed_id.length() == PYTH_PRICE_IDENTIFIER_LENGTH, EInvalidFeedIdLength);
 }
 
 macro fun assert_price_info_identity(
-    $expected_feed_id: vector<u8>,
-    $expected_pyth_object_id: ID,
+    $expected_feed_id: &vector<u8>,
+    $expected_pyth_object_id: &ID,
     $price_info_object: &price_info::PriceInfoObject,
 ) {
     let expected_feed_id = $expected_feed_id;
     let expected_pyth_object_id = $expected_pyth_object_id;
     let price_info_object = $price_info_object;
     let confirmed_price_object = price_info::uid_to_inner(price_info_object);
-    assert!(confirmed_price_object == expected_pyth_object_id, EPythObjectMismatch);
+    assert!(confirmed_price_object == *expected_pyth_object_id, EPythObjectMismatch);
 
     let price_info = price_info::get_price_info_from_price_info_object(
         price_info_object,
     );
-    let identifier = price_info::get_price_identifier(price_info);
-    let identifier_bytes = price_identifier::get_bytes(identifier);
+    let identifier = price_info::get_price_identifier(&price_info);
+    let identifier_bytes = price_identifier::get_bytes(&identifier);
     assert!(expected_feed_id == identifier_bytes, EFeedIdentifierMismatch);
 }
 
-macro fun assert_currency_not_registered($shop: &Shop, $coin_type: TypeName) {
+macro fun assert_currency_not_registered($shop: &Shop, $coin_type: &TypeName) {
     let shop = $shop;
     let coin_type = $coin_type;
-    assert!(
-        !dynamic_field::exists_<AcceptedCurrencyTypeKey>(
-            &shop.id,
-            AcceptedCurrencyTypeKey(coin_type),
-        ),
-        EAcceptedCurrencyExists,
-    );
+    assert!(!table::contains(&shop.accepted_currencies, *coin_type), EAcceptedCurrencyExists);
 }
 
 macro fun assert_supported_decimals($decimals: u8) {
@@ -1963,16 +1948,10 @@ macro fun assert_supported_decimals($decimals: u8) {
     assert!(decimals as u64 <= MAX_DECIMAL_POWER, EUnsupportedCurrencyDecimals);
 }
 
-macro fun assert_listing_currency_match(
-    $shop: &Shop,
-    $item_listing: &ItemListing,
-    $accepted_currency: &AcceptedCurrency,
-) {
+macro fun assert_listing_currency_match($shop: &Shop, $item_listing: &ItemListing) {
     let shop = $shop;
     let item_listing = $item_listing;
-    let accepted_currency = $accepted_currency;
     assert!(item_listing.shop_id == shop.id.to_inner(), EListingShopMismatch);
-    assert!(item_listing.shop_id == accepted_currency.shop_id, ECurrencyListingMismatch);
 }
 
 macro fun ensure_price_info_matches_currency(
@@ -1982,8 +1961,8 @@ macro fun ensure_price_info_matches_currency(
     let accepted_currency = $accepted_currency;
     let price_info_object = $price_info_object;
     assert_price_info_identity!(
-        accepted_currency.feed_id,
-        accepted_currency.pyth_object_id,
+        &accepted_currency.feed_id,
+        &accepted_currency.pyth_object_id,
         price_info_object,
     );
 }
@@ -1997,20 +1976,14 @@ macro fun assert_price_status_trading(
     let price_info = price_info::get_price_info_from_price_info_object(
         price_info_object,
     );
-    let attestation_time = price_info::get_attestation_time(price_info);
+    let attestation_time = price_info::get_attestation_time(&price_info);
     let publish_time = price::get_timestamp(
-        price_feed::get_price(*price_info::get_price_feed(&price_info)),
+        &price_feed::get_price(price_info::get_price_feed(&price_info)),
     );
     // Treat feeds with stale attestations as unavailable even if Pyth doesn't expose an explicit status.
     assert!(attestation_time >= publish_time, EPriceStatusNotTrading);
     let attestation_lag_secs = attestation_time - publish_time;
     assert!(attestation_lag_secs <= max_price_status_lag_secs, EPriceStatusNotTrading);
-}
-
-macro fun assert_payment_coin_type<$TCoin>($accepted_currency: &AcceptedCurrency) {
-    let accepted_currency = $accepted_currency;
-    let payment_type = type_name::with_defining_ids<$TCoin>();
-    assert!(accepted_currency.coin_type == payment_type, EInvalidPaymentCoinType);
 }
 
 macro fun assert_template_belongs_to_shop($shop: &Shop, $discount_template_id: ID) {
@@ -2034,7 +2007,7 @@ public enum ReferenceKind has copy, drop {
 macro fun assert_belongs_to_shop_if_some(
     $shop: &Shop,
     $kind: ReferenceKind,
-    $maybe_id: Option<ID>,
+    $maybe_id: &Option<ID>,
 ) {
     let shop = $shop;
     let kind = $kind;
@@ -2050,7 +2023,7 @@ macro fun assert_belongs_to_shop_if_some(
 macro fun assert_spotlight_template_matches_listing(
     $shop: &Shop,
     $listing_id: ID,
-    $discount_template_id: Option<ID>,
+    $discount_template_id: &Option<ID>,
 ) {
     let shop = $shop;
     let listing_id = $listing_id;
@@ -2112,30 +2085,8 @@ public fun discount_template_exists(shop: &Shop, template_id: ID): bool {
 }
 
 /// Returns true if the accepted currency is registered under the shop.
-public fun accepted_currency_exists(shop: &Shop, accepted_currency_id: ID): bool {
-    dynamic_field::exists_with_type<AcceptedCurrencyKey, AcceptedCurrencyMarker>(
-        &shop.id,
-        AcceptedCurrencyKey(accepted_currency_id),
-    )
-}
-
-/// Returns the accepted currency ID for a coin type if registered.
-public fun accepted_currency_id_for_type(shop: &Shop, coin_type: TypeName): Option<ID> {
-    if (
-        dynamic_field::exists_with_type<AcceptedCurrencyTypeKey, ID>(
-            &shop.id,
-            AcceptedCurrencyTypeKey(coin_type),
-        )
-    ) {
-        option::some(
-            *dynamic_field::borrow<AcceptedCurrencyTypeKey, ID>(
-                &shop.id,
-                AcceptedCurrencyTypeKey(coin_type),
-            ),
-        )
-    } else {
-        option::none()
-    }
+public fun accepted_currency_exists(shop: &Shop, coin_type: TypeName): bool {
+    table::contains(&shop.accepted_currencies, coin_type)
 }
 
 /// Returns the listing ID for a listing address if registered.
@@ -2171,14 +2122,14 @@ public fun listing_values(shop: &Shop, listing: &ItemListing): (String, u64, u64
 }
 
 /// Returns accepted currency fields after validating shop membership.
-public fun accepted_currency_values(
+public fun accepted_currency_values<TCoin>(
     shop: &Shop,
-    accepted_currency: &AcceptedCurrency,
 ): (ID, TypeName, vector<u8>, ID, u8, String, u64, u16, u64) {
-    assert_currency_matches_shop!(shop, accepted_currency);
+    let coin_type = currency_type<TCoin>();
+    let accepted_currency = shop.borrow_registered_accepted_currency(coin_type);
     (
-        accepted_currency.shop_id,
-        accepted_currency.coin_type,
+        shop.id.to_inner(),
+        coin_type,
         accepted_currency.feed_id,
         accepted_currency.pyth_object_id,
         accepted_currency.decimals,
@@ -2209,16 +2160,16 @@ public fun discount_template_values(
 }
 
 /// Quotes the coin amount for a price info object with guardrails.
-entry fun quote_amount_for_price_info_object(
+entry fun quote_amount_for_price_info_object<TCoin>(
     shop: &Shop,
-    accepted_currency: &AcceptedCurrency,
     price_info_object: &price_info::PriceInfoObject,
     price_usd_cents: u64,
     max_price_age_secs: Option<u64>,
     max_confidence_ratio_bps: Option<u16>,
     clock: &clock::Clock,
 ): u64 {
-    assert_currency_matches_shop!(shop, accepted_currency);
+    let coin_type = currency_type<TCoin>();
+    let accepted_currency = shop.borrow_registered_accepted_currency(coin_type);
     ensure_price_info_matches_currency!(accepted_currency, price_info_object);
     assert_price_status_trading!(
         price_info_object,
@@ -2275,7 +2226,7 @@ public fun test_create_discount_template_local(
     max_redemptions: Option<u64>,
     ctx: &mut TxContext,
 ): (DiscountTemplate, ID) {
-    let (template, template_id) = shop.create_discount_template_core(
+    let (template, template_id, discount_rule) = shop.create_discount_template_core(
         applies_to_listing,
         rule_kind,
         rule_value,
@@ -2288,6 +2239,7 @@ public fun test_create_discount_template_local(
     event::emit(DiscountTemplateCreatedEvent {
         shop_id: shop.id.to_inner(),
         discount_template_id: template_id,
+        rule: discount_rule,
     });
 
     (template, template_id)
@@ -2297,7 +2249,7 @@ public fun test_create_discount_template_local(
 public fun test_quote_amount_from_usd_cents(
     usd_cents: u64,
     coin_decimals: u8,
-    price: price::Price,
+    price: &price::Price,
     max_confidence_ratio_bps: u16,
 ): u64 {
     quote_amount_from_usd_cents(
@@ -2309,17 +2261,15 @@ public fun test_quote_amount_from_usd_cents(
 }
 
 #[test_only]
-public fun test_quote_amount_for_price_info_object(
+public fun test_quote_amount_for_price_info_object<TCoin>(
     shop: &Shop,
-    accepted_currency: &AcceptedCurrency,
     price_info_object: &price_info::PriceInfoObject,
     price_usd_cents: u64,
     max_price_age_secs: Option<u64>,
     max_confidence_ratio_bps: Option<u16>,
     clock: &clock::Clock,
 ): u64 {
-    shop.quote_amount_for_price_info_object(
-        accepted_currency,
+    shop.quote_amount_for_price_info_object<TCoin>(
         price_info_object,
         price_usd_cents,
         max_price_age_secs,
@@ -2382,21 +2332,15 @@ public fun test_listing_id(listing: &ItemListing): ID {
 }
 
 #[test_only]
-public fun test_accepted_currency_exists(shop: &Shop, accepted_currency_id: ID): bool {
-    shop.accepted_currency_exists(accepted_currency_id)
+public fun test_accepted_currency_exists(shop: &Shop, coin_type: TypeName): bool {
+    shop.accepted_currency_exists(coin_type)
 }
 
 #[test_only]
-public fun test_accepted_currency_values(
+public fun test_accepted_currency_values<TCoin>(
     shop: &Shop,
-    accepted_currency: &AcceptedCurrency,
 ): (ID, TypeName, vector<u8>, ID, u8, String, u64, u16, u64) {
-    shop.accepted_currency_values(accepted_currency)
-}
-
-#[test_only]
-public fun test_accepted_currency_id_for_type(shop: &Shop, coin_type: TypeName): ID {
-    shop.accepted_currency_id_for_type(coin_type).destroy_or!(abort EAcceptedCurrencyMissing)
+    shop.accepted_currency_values<TCoin>()
 }
 
 #[test_only]
@@ -2455,7 +2399,6 @@ public fun test_claim_discount_ticket_inline(
 public fun test_claim_and_buy_with_ids<TItem: store, TCoin>(
     shop: &mut Shop,
     item_listing: &mut ItemListing,
-    accepted_currency: &AcceptedCurrency,
     discount_template: &mut DiscountTemplate,
     price_info_object: &price_info::PriceInfoObject,
     payment: coin::Coin<TCoin>,
@@ -2468,19 +2411,20 @@ public fun test_claim_and_buy_with_ids<TItem: store, TCoin>(
 ) {
     let shop_owner = shop.owner;
     let shop_id = shop.id.to_inner();
+    let coin_type = currency_type<TCoin>();
+    let accepted_currency = shop.borrow_registered_accepted_currency(coin_type);
     assert_listing_matches_shop!(shop, item_listing);
-    assert_currency_matches_shop!(shop, accepted_currency);
     assert_template_matches_shop!(shop, discount_template);
 
     let now = now_secs(clock);
-    let (discount_ticket, _claimer) = discount_template.claim_discount_ticket_with_event(
+    let (discount_ticket, claimer) = discount_template.claim_discount_ticket_with_event(
         now,
         ctx,
     );
 
     let discounted_price_usd_cents = apply_discount(
         item_listing.base_price_usd_cents,
-        discount_template.rule,
+        &discount_template.rule,
     );
     let discount_template_id = option::some(discount_template.id.to_inner());
     let ticket_id = discount_ticket.id.to_inner();
@@ -2491,9 +2435,12 @@ public fun test_claim_and_buy_with_ids<TItem: store, TCoin>(
         TCoin,
     >(
         accepted_currency,
+        coin_type,
         price_info_object,
         payment,
         shop_id,
+        mint_to,
+        refund_extra_to,
         discounted_price_usd_cents,
         discount_template_id,
         max_price_age_secs,
@@ -2515,6 +2462,8 @@ public fun test_claim_and_buy_with_ids<TItem: store, TCoin>(
         shop_id,
         discount_template_id: discount_template.id.to_inner(),
         discount_id: ticket_id,
+        listing_id: item_listing.id.to_inner(),
+        buyer: claimer,
     });
 
     discount_ticket.burn_discount_ticket();
@@ -2540,7 +2489,7 @@ public fun test_discount_rule_value(rule: DiscountRule): u64 {
 public fun test_apply_percent_discount(base_price_usd_cents: u64, bps: u16): u64 {
     apply_discount(
         base_price_usd_cents,
-        DiscountRule::Percent { bps },
+        &DiscountRule::Percent { bps },
     )
 }
 
@@ -2552,6 +2501,11 @@ public fun test_discount_template_created_shop(event: &DiscountTemplateCreatedEv
 #[test_only]
 public fun test_discount_template_created_id(event: &DiscountTemplateCreatedEvent): ID {
     event.discount_template_id
+}
+
+#[test_only]
+public fun test_discount_template_created_rule(event: &DiscountTemplateCreatedEvent): DiscountRule {
+    event.rule
 }
 
 #[test_only]
@@ -2575,6 +2529,11 @@ public fun test_discount_template_toggled_id(event: &DiscountTemplateToggledEven
 }
 
 #[test_only]
+public fun test_discount_template_toggled_active(event: &DiscountTemplateToggledEvent): bool {
+    event.active
+}
+
+#[test_only]
 public fun test_purchase_completed_discounted_price(event: &PurchaseCompletedEvent): u64 {
     event.discounted_price_usd_cents
 }
@@ -2590,6 +2549,21 @@ public fun test_purchase_completed_listing(event: &PurchaseCompletedEvent): ID {
 }
 
 #[test_only]
+public fun test_purchase_completed_buyer(event: &PurchaseCompletedEvent): address {
+    event.buyer
+}
+
+#[test_only]
+public fun test_purchase_completed_mint_to(event: &PurchaseCompletedEvent): address {
+    event.mint_to
+}
+
+#[test_only]
+public fun test_purchase_completed_coin_type(event: &PurchaseCompletedEvent): TypeName {
+    event.coin_type
+}
+
+#[test_only]
 public fun test_purchase_completed_amount_paid(event: &PurchaseCompletedEvent): u64 {
     event.amount_paid
 }
@@ -2602,13 +2576,58 @@ public fun test_purchase_completed_discount_template_id(
 }
 
 #[test_only]
-public fun test_purchase_completed_accepted_currency_id(event: &PurchaseCompletedEvent): ID {
-    event.accepted_currency_id
+public fun test_purchase_completed_feed_id(event: &PurchaseCompletedEvent): vector<u8> {
+    event.feed_id
 }
 
 #[test_only]
-public fun test_purchase_completed_minted_item_id(event: &PurchaseCompletedEvent): ID {
+public fun test_purchase_completed_base_price_usd_cents(event: &PurchaseCompletedEvent): u64 {
+    event.base_price_usd_cents
+}
+
+#[test_only]
+public fun test_purchase_completed_quote_amount(event: &PurchaseCompletedEvent): u64 {
+    event.quote_amount
+}
+
+#[test_only]
+public fun test_minting_completed_shop(event: &MintingCompletedEvent): ID {
+    event.shop_id
+}
+
+#[test_only]
+public fun test_minting_completed_listing(event: &MintingCompletedEvent): ID {
+    event.item_listing_id
+}
+
+#[test_only]
+public fun test_minting_completed_buyer(event: &MintingCompletedEvent): address {
+    event.buyer
+}
+
+#[test_only]
+public fun test_minting_completed_minted_item_id(event: &MintingCompletedEvent): ID {
     event.minted_item_id
+}
+
+#[test_only]
+public fun test_minting_completed_mint_to(event: &MintingCompletedEvent): address {
+    event.mint_to
+}
+
+#[test_only]
+public fun test_minting_completed_refund_to(event: &MintingCompletedEvent): address {
+    event.refund_to
+}
+
+#[test_only]
+public fun test_minting_completed_change_amount(event: &MintingCompletedEvent): u64 {
+    event.change_amount
+}
+
+#[test_only]
+public fun test_minting_completed_coin_type(event: &MintingCompletedEvent): TypeName {
+    event.coin_type
 }
 
 #[test_only]
@@ -2627,8 +2646,28 @@ public fun test_discount_redeemed_discount_id(event: &DiscountRedeemedEvent): ID
 }
 
 #[test_only]
+public fun test_discount_redeemed_listing_id(event: &DiscountRedeemedEvent): ID {
+    event.listing_id
+}
+
+#[test_only]
+public fun test_discount_redeemed_buyer(event: &DiscountRedeemedEvent): address {
+    event.buyer
+}
+
+#[test_only]
 public fun test_discount_claimed_shop(event: &DiscountClaimedEvent): ID {
     event.shop_id
+}
+
+#[test_only]
+public fun test_discount_claimed_template_id(event: &DiscountClaimedEvent): ID {
+    event.discount_template_id
+}
+
+#[test_only]
+public fun test_discount_claimed_claimer(event: &DiscountClaimedEvent): address {
+    event.claimer
 }
 
 #[test_only]
@@ -2694,8 +2733,11 @@ public fun test_remove_listing(shop: &mut Shop, listing_id: ID) {
 }
 
 #[test_only]
-public fun test_remove_currency_field(shop: &mut Shop, coin_type: TypeName) {
-    shop.remove_currency_field(coin_type)
+public fun test_remove_currency_field<TCoin>(shop: &mut Shop) {
+    let coin_type = currency_type<TCoin>();
+    if (shop.accepted_currency_exists(coin_type)) {
+        let _accepted_currency = shop.remove_registered_accepted_currency(coin_type);
+    };
 }
 
 #[test_only]
@@ -2744,6 +2786,16 @@ public fun test_shop_owner_cap_shop_id(owner_cap: &ShopOwnerCap): ID {
 }
 
 #[test_only]
+public fun test_shop_created_owner(event: &ShopCreatedEvent): address {
+    event.owner
+}
+
+#[test_only]
+public fun test_shop_created_name(event: &ShopCreatedEvent): String {
+    event.name
+}
+
+#[test_only]
 public fun test_shop_created_owner_cap_id(event: &ShopCreatedEvent): ID {
     event.shop_owner_cap_id
 }
@@ -2759,8 +2811,23 @@ public fun test_shop_owner_updated_shop(event: &ShopOwnerUpdatedEvent): ID {
 }
 
 #[test_only]
+public fun test_shop_owner_updated_previous(event: &ShopOwnerUpdatedEvent): address {
+    event.previous_owner
+}
+
+#[test_only]
+public fun test_shop_owner_updated_new(event: &ShopOwnerUpdatedEvent): address {
+    event.new_owner
+}
+
+#[test_only]
 public fun test_shop_owner_updated_cap_id(event: &ShopOwnerUpdatedEvent): ID {
     event.shop_owner_cap_id
+}
+
+#[test_only]
+public fun test_shop_owner_updated_rotated_by(event: &ShopOwnerUpdatedEvent): address {
+    event.rotated_by
 }
 
 #[test_only]
@@ -2769,8 +2836,18 @@ public fun test_shop_disabled_shop(event: &ShopDisabledEvent): ID {
 }
 
 #[test_only]
+public fun test_shop_disabled_owner(event: &ShopDisabledEvent): address {
+    event.owner
+}
+
+#[test_only]
 public fun test_shop_disabled_cap_id(event: &ShopDisabledEvent): ID {
     event.shop_owner_cap_id
+}
+
+#[test_only]
+public fun test_shop_disabled_by(event: &ShopDisabledEvent): address {
+    event.disabled_by
 }
 
 #[test_only]
@@ -2784,6 +2861,11 @@ public fun test_item_listing_stock_updated_listing(event: &ItemListingStockUpdat
 }
 
 #[test_only]
+public fun test_item_listing_stock_updated_new_stock(event: &ItemListingStockUpdatedEvent): u64 {
+    event.new_stock
+}
+
+#[test_only]
 public fun test_item_listing_added_shop(event: &ItemListingAddedEvent): ID {
     event.shop_id
 }
@@ -2793,6 +2875,27 @@ public fun test_item_listing_added_listing(event: &ItemListingAddedEvent): ID {
     event.item_listing_id
 }
 
+#[test_only]
+public fun test_item_listing_added_name(event: &ItemListingAddedEvent): String {
+    event.name
+}
+
+#[test_only]
+public fun test_item_listing_added_base_price_usd_cents(event: &ItemListingAddedEvent): u64 {
+    event.base_price_usd_cents
+}
+
+#[test_only]
+public fun test_item_listing_added_spotlight_template(event: &ItemListingAddedEvent): Option<ID> {
+    event.spotlight_discount_template_id
+}
+
+#[test_only]
+public fun test_item_listing_added_stock(event: &ItemListingAddedEvent): u64 {
+    event.stock
+}
+
+#[test_only]
 public fun test_item_listing_removed_shop(event: &ItemListingRemovedEvent): ID {
     event.shop_id
 }
@@ -2808,8 +2911,8 @@ public fun test_accepted_coin_added_shop(event: &AcceptedCoinAddedEvent): ID {
 }
 
 #[test_only]
-public fun test_accepted_coin_added_id(event: &AcceptedCoinAddedEvent): ID {
-    event.accepted_currency_id
+public fun test_accepted_coin_added_pyth_object_id(event: &AcceptedCoinAddedEvent): ID {
+    event.pyth_object_id
 }
 
 #[test_only]
@@ -2818,6 +2921,6 @@ public fun test_accepted_coin_removed_shop(event: &AcceptedCoinRemovedEvent): ID
 }
 
 #[test_only]
-public fun test_accepted_coin_removed_id(event: &AcceptedCoinRemovedEvent): ID {
-    event.accepted_currency_id
+public fun test_accepted_coin_removed_pyth_object_id(event: &AcceptedCoinRemovedEvent): ID {
+    event.pyth_object_id
 }
