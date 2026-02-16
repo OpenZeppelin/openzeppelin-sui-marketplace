@@ -191,9 +191,9 @@ const buildAcceptedCurrencySummary = ({
   tableEntryFieldId: string
   coinType: string
 }): AcceptedCurrencySummary => {
-  const acceptedCurrencyFields = unwrapMoveObjectFields<Record<string, unknown>>(
-    acceptedCurrencyTableEntryObject
-  )
+  const acceptedCurrencyFields = unwrapMoveObjectFields<
+    Record<string, unknown>
+  >(acceptedCurrencyTableEntryObject)
 
   return {
     coinType,
@@ -339,7 +339,9 @@ export const getAcceptedCurrencySummaries = async (
     )
   )
 
-  return summaries.sort((left, right) => left.coinType.localeCompare(right.coinType))
+  return summaries.sort((left, right) =>
+    left.coinType.localeCompare(right.coinType)
+  )
 }
 
 /**
