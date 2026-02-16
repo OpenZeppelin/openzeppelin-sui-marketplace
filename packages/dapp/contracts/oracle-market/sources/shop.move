@@ -163,6 +163,7 @@ const EShopDisabled: vector<u8> = b"shop disabled";
 #[error]
 const EPriceTooStale: vector<u8> = b"price too stale";
 
+// === Constants ===
 const CENTS_PER_DOLLAR: u64 = 100;
 const BASIS_POINT_DENOMINATOR: u64 = 10_000;
 const DEFAULT_MAX_PRICE_AGE_SECS: u64 = 60;
@@ -1340,11 +1341,6 @@ fun currency_type<T>(): TypeName {
     type_name::with_defining_ids<T>()
 }
 
-fun assert_listing_type_matches<TItem: store>(item_listing: &ItemListing) {
-    let expected = type_name::with_defining_ids<TItem>();
-    assert!(item_listing.item_type == expected, EItemTypeMismatch);
-}
-
 // === Helpers ===
 
 fun add_listing_marker(shop: &mut Shop, listing_id: ID) {
@@ -1377,63 +1373,6 @@ fun add_currency_marker(shop: &mut Shop, accepted_currency_id: ID, coin_type: Ty
             coin_type,
         },
     );
-}
-
-macro fun assert_template_registered($shop: &Shop, $template_id: ID) {
-    let shop = $shop;
-    let template_id = $template_id;
-    assert!(
-        dynamic_field::exists_with_type<DiscountTemplateKey, DiscountTemplateMarker>(
-            &shop.id,
-            DiscountTemplateKey(template_id),
-        ),
-        ETemplateShopMismatch,
-    );
-}
-
-macro fun assert_currency_registered($shop: &Shop, $accepted_currency_id: ID) {
-    let shop = $shop;
-    let accepted_currency_id = $accepted_currency_id;
-    assert!(
-        dynamic_field::exists_with_type<AcceptedCurrencyKey, AcceptedCurrencyMarker>(
-            &shop.id,
-            AcceptedCurrencyKey(accepted_currency_id),
-        ),
-        EAcceptedCurrencyMissing,
-    );
-}
-
-macro fun assert_listing_registered($shop: &Shop, $listing_id: ID) {
-    let shop = $shop;
-    let listing_id = $listing_id;
-    assert!(
-        dynamic_field::exists_with_type<ItemListingKey, ItemListingMarker>(
-            &shop.id,
-            ItemListingKey(listing_id),
-        ),
-        EListingShopMismatch,
-    );
-}
-
-macro fun assert_template_matches_shop($shop: &Shop, $template: &DiscountTemplate) {
-    let shop = $shop;
-    let template = $template;
-    assert_template_registered!(shop, template.id.to_inner());
-    assert!(template.shop_id == shop.id.to_inner(), ETemplateShopMismatch);
-}
-
-macro fun assert_currency_matches_shop($shop: &Shop, $accepted_currency: &AcceptedCurrency) {
-    let shop = $shop;
-    let accepted_currency = $accepted_currency;
-    assert_currency_registered!(shop, accepted_currency.id.to_inner());
-    assert!(accepted_currency.shop_id == shop.id.to_inner(), EAcceptedCurrencyMissing);
-}
-
-macro fun assert_listing_matches_shop($shop: &Shop, $listing: &ItemListing) {
-    let shop = $shop;
-    let listing = $listing;
-    assert_listing_registered!(shop, listing.id.to_inner());
-    assert!(listing.shop_id == shop.id.to_inner(), EListingShopMismatch);
 }
 
 /// Normalize a seller-provided guardrail cap, enforcing module-level ceilings and non-zero.
@@ -1556,7 +1495,7 @@ fun process_purchase_core<TItem: store, TCoin>(
     clock: &clock::Clock,
     ctx: &mut TxContext,
 ): (Option<coin::Coin<TCoin>>, coin::Coin<TCoin>, ShopItem<TItem>) {
-    ensure_price_info_matches_currency!(accepted_currency, price_info_object);
+    assert_price_info_matches_currency!(accepted_currency, price_info_object);
     assert_price_status_trading!(
         price_info_object,
         accepted_currency.max_price_status_lag_secs_cap,
@@ -1780,6 +1719,68 @@ macro fun assert_shop_active($shop: &Shop) {
     assert!(!shop.disabled, EShopDisabled);
 }
 
+fun assert_listing_type_matches<TItem: store>(item_listing: &ItemListing) {
+    let expected = type_name::with_defining_ids<TItem>();
+    assert!(item_listing.item_type == expected, EItemTypeMismatch);
+}
+
+macro fun assert_template_registered($shop: &Shop, $template_id: ID) {
+    let shop = $shop;
+    let template_id = $template_id;
+    assert!(
+        dynamic_field::exists_with_type<DiscountTemplateKey, DiscountTemplateMarker>(
+            &shop.id,
+            DiscountTemplateKey(template_id),
+        ),
+        ETemplateShopMismatch,
+    );
+}
+
+macro fun assert_currency_registered($shop: &Shop, $accepted_currency_id: ID) {
+    let shop = $shop;
+    let accepted_currency_id = $accepted_currency_id;
+    assert!(
+        dynamic_field::exists_with_type<AcceptedCurrencyKey, AcceptedCurrencyMarker>(
+            &shop.id,
+            AcceptedCurrencyKey(accepted_currency_id),
+        ),
+        EAcceptedCurrencyMissing,
+    );
+}
+
+macro fun assert_listing_registered($shop: &Shop, $listing_id: ID) {
+    let shop = $shop;
+    let listing_id = $listing_id;
+    assert!(
+        dynamic_field::exists_with_type<ItemListingKey, ItemListingMarker>(
+            &shop.id,
+            ItemListingKey(listing_id),
+        ),
+        EListingShopMismatch,
+    );
+}
+
+macro fun assert_template_matches_shop($shop: &Shop, $template: &DiscountTemplate) {
+    let shop = $shop;
+    let template = $template;
+    assert_template_registered!(shop, template.id.to_inner());
+    assert!(template.shop_id == shop.id.to_inner(), ETemplateShopMismatch);
+}
+
+macro fun assert_currency_matches_shop($shop: &Shop, $accepted_currency: &AcceptedCurrency) {
+    let shop = $shop;
+    let accepted_currency = $accepted_currency;
+    assert_currency_registered!(shop, accepted_currency.id.to_inner());
+    assert!(accepted_currency.shop_id == shop.id.to_inner(), EAcceptedCurrencyMissing);
+}
+
+macro fun assert_listing_matches_shop($shop: &Shop, $listing: &ItemListing) {
+    let shop = $shop;
+    let listing = $listing;
+    assert_listing_registered!(shop, listing.id.to_inner());
+    assert!(listing.shop_id == shop.id.to_inner(), EListingShopMismatch);
+}
+
 macro fun assert_non_zero_stock($stock: u64) {
     let stock = $stock;
     assert!(stock > 0, EZeroStock)
@@ -1991,7 +1992,7 @@ macro fun assert_listing_currency_match(
     assert!(item_listing.shop_id == accepted_currency.shop_id, ECurrencyListingMismatch);
 }
 
-macro fun ensure_price_info_matches_currency(
+macro fun assert_price_info_matches_currency(
     $accepted_currency: &AcceptedCurrency,
     $price_info_object: &price_info::PriceInfoObject,
 ) {
@@ -2235,7 +2236,7 @@ entry fun quote_amount_for_price_info_object(
     clock: &clock::Clock,
 ): u64 {
     assert_currency_matches_shop!(shop, accepted_currency);
-    ensure_price_info_matches_currency!(accepted_currency, price_info_object);
+    assert_price_info_matches_currency!(accepted_currency, price_info_object);
     assert_price_status_trading!(
         price_info_object,
         accepted_currency.max_price_status_lag_secs_cap,
