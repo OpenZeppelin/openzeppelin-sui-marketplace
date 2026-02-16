@@ -811,7 +811,7 @@ entry fun create_discount_template(
     let shop_id = shop.id.to_inner();
     event::emit(DiscountTemplateCreatedEvent {
         shop_id,
-        discount_template_id: discount_template_id,
+        discount_template_id,
     });
 }
 
