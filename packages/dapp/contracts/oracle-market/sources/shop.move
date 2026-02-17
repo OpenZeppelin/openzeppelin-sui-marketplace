@@ -682,10 +682,7 @@ entry fun add_accepted_currency<T>(
     assert_supported_decimals!(decimals);
     let symbol: vector<u8> = string::into_bytes(coin_registry::symbol(currency));
     let shop_address: address = shop.id.to_address();
-    let age_cap: u64 = resolve_guardrail_cap!(
-        max_price_age_secs_cap,
-        MAX_PRICE_AGE_SECS_CAP,
-    );
+    let age_cap: u64 = resolve_guardrail_cap!(max_price_age_secs_cap, MAX_PRICE_AGE_SECS_CAP);
     let confidence_cap = resolve_guardrail_cap!(
         max_confidence_ratio_bps_cap,
         MAX_CONFIDENCE_RATIO_BPS_CAP,
