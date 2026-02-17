@@ -5094,10 +5094,7 @@ fun buy_item_emits_events_decrements_stock_and_refunds_change() {
     assert_eq!(purchases.length(), purchase_before + 1);
     let purchase = &purchases[purchases.length() - 1];
     assert_eq!(shop::test_purchase_completed_shop(purchase), shop::test_shop_id(&shared_shop));
-    assert_eq!(
-        shop::test_purchase_completed_listing(purchase),
-        listing_id,
-    );
+    assert_eq!(shop::test_purchase_completed_listing(purchase), listing_id);
     assert_eq!(shop::test_purchase_completed_buyer(purchase), OTHER_OWNER);
     assert_eq!(shop::test_purchase_completed_mint_to(purchase), OTHER_OWNER);
     assert_eq!(shop::test_purchase_completed_amount_paid(purchase), quote_amount);
@@ -5114,10 +5111,7 @@ fun buy_item_emits_events_decrements_stock_and_refunds_change() {
     let stock_events = event::events_by_type<shop::ItemListingStockUpdatedEvent>();
     assert_eq!(stock_events.length(), stock_before + 1);
     let stock_event = &stock_events[stock_events.length() - 1];
-    assert_eq!(
-        shop::test_item_listing_stock_updated_listing(stock_event),
-        listing_id,
-    );
+    assert_eq!(shop::test_item_listing_stock_updated_listing(stock_event), listing_id);
     let (_, _, stock, _, _) = shop::test_listing_values(&shared_shop, listing_id);
     assert_eq!(stock, 1);
 

@@ -225,7 +225,7 @@ public struct Shop has key, store {
 
 /// Item listing metadata keyed under the shared `Shop`, used to mint specific items on purchase.
 /// Discounts can be attached to highlight promotions in the UI.
-public struct ItemListing has store, drop {
+public struct ItemListing has drop, store {
     listing_id: u64,
     shop_address: address,
     item_type: TypeName,
@@ -561,11 +561,7 @@ fun add_item_listing_core<T: store>(
 
     let shop_address: address = shop.id.to_address();
     let listing_id = shop.allocate_listing_id();
-    assert_spotlight_template_matches_listing!(
-        shop,
-        listing_id,
-        &spotlight_discount_template_id,
-    );
+    assert_spotlight_template_matches_listing!(shop, listing_id, &spotlight_discount_template_id);
     let listing = new_item_listing<T>(
         shop_address,
         listing_id,
@@ -680,13 +676,7 @@ entry fun add_accepted_currency<T>(
     let coin_type = currency_type<T>();
 
     // Bind this currency to a specific PriceInfoObject to prevent oracle feed spoofing.
-    validate_accepted_currency_inputs!(
-        shop,
-        coin_type,
-        feed_id,
-        pyth_object_id,
-        price_info_object,
-    );
+    validate_accepted_currency_inputs!(shop, coin_type, feed_id, pyth_object_id, price_info_object);
 
     let decimals: u8 = coin_registry::decimals(currency);
     assert_supported_decimals!(decimals);
@@ -1438,11 +1428,7 @@ fun borrow_listing(shop: &Shop, listing_id: u64): &ItemListing {
     listing
 }
 
-fun borrow_listing_mut(
-    shop: &mut Shop,
-    listing_id: u64,
-    shop_address: address,
-): &mut ItemListing {
+fun borrow_listing_mut(shop: &mut Shop, listing_id: u64, shop_address: address): &mut ItemListing {
     assert_listing_registered!(shop, listing_id);
     let listing = table::borrow_mut(&mut shop.listings, listing_id);
     assert!(listing.listing_id == listing_id, EListingShopMismatch);
@@ -1450,11 +1436,7 @@ fun borrow_listing_mut(
     listing
 }
 
-fun add_template_marker(
-    shop: &mut Shop,
-    template_id: object::ID,
-    applies_to_listing: Option<u64>,
-) {
+fun add_template_marker(shop: &mut Shop, template_id: object::ID, applies_to_listing: Option<u64>) {
     dynamic_field::add(
         &mut shop.id,
         DiscountTemplateKey(template_id),
@@ -1503,10 +1485,7 @@ macro fun assert_currency_registered($shop: &Shop, $accepted_currency_id: object
 macro fun assert_listing_registered($shop: &Shop, $listing_id: u64) {
     let shop = $shop;
     let listing_id = $listing_id;
-    assert!(
-        table::contains(&shop.listings, listing_id),
-        EListingShopMismatch,
-    );
+    assert!(table::contains(&shop.listings, listing_id), EListingShopMismatch);
 }
 
 macro fun assert_template_matches_shop($shop: &Shop, $template: &DiscountTemplate) {
@@ -1956,10 +1935,7 @@ macro fun assert_discount_redemption_allowed(
     assert!(discount_template.shop_address == item_listing.shop_address, EDiscountShopMismatch);
 
     discount_template.applies_to_listing.do_ref!(|applies_to_listing| {
-        assert!(
-            *applies_to_listing == item_listing.listing_id,
-            EDiscountTicketListingMismatch,
-        );
+        assert!(*applies_to_listing == item_listing.listing_id, EDiscountTicketListingMismatch);
     });
 
     assert_template_in_time_window!(discount_template, now);
@@ -2111,10 +2087,7 @@ macro fun assert_listing_belongs_to_shop($shop: &Shop, $listing_id: u64) {
     assert_listing_registered!(shop, listing_id);
 }
 
-macro fun assert_template_belongs_to_shop_if_some(
-    $shop: &Shop,
-    $maybe_id: &Option<object::ID>,
-) {
+macro fun assert_template_belongs_to_shop_if_some($shop: &Shop, $maybe_id: &Option<object::ID>) {
     let shop = $shop;
     let maybe_id = $maybe_id;
     maybe_id.do_ref!(|id| {
@@ -2122,10 +2095,7 @@ macro fun assert_template_belongs_to_shop_if_some(
     });
 }
 
-macro fun assert_listing_belongs_to_shop_if_some(
-    $shop: &Shop,
-    $maybe_id: &Option<u64>,
-) {
+macro fun assert_listing_belongs_to_shop_if_some($shop: &Shop, $maybe_id: &Option<u64>) {
     let shop = $shop;
     let maybe_id = $maybe_id;
     maybe_id.do_ref!(|id| {
@@ -2404,7 +2374,8 @@ public fun test_quote_amount_for_price_info_object(
     max_confidence_ratio_bps: Option<u64>,
     clock: &clock::Clock,
 ): u64 {
-    shop.quote_amount_for_price_info_object(        accepted_currency,
+    shop.quote_amount_for_price_info_object(
+        accepted_currency,
         price_info_object,
         price_usd_cents,
         max_price_age_secs,
