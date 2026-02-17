@@ -1702,7 +1702,7 @@ fun now_secs(clock: &clock::Clock): u64 {
     clock::timestamp_ms(clock) / 1000
 }
 
-fun quote_amount_from_usd_cents(
+public fun quote_amount_from_usd_cents(
     usd_cents: u64,
     coin_decimals: u8,
     price: &price::Price,
@@ -2257,8 +2257,7 @@ public fun discount_template_id_for_address(shop: &Shop, template_address: addre
 }
 
 /// Returns listing fields after validating shop membership.
-public fun listing_values(shop: &Shop, listing: &ItemListing): (String, u64, u64, ID, Option<ID>) {
-    assert_listing_matches_shop!(shop, listing);
+public fun listing_values_for_listing(listing: &ItemListing): (String, u64, u64, ID, Option<ID>) {
     (
         listing.name,
         listing.base_price_usd_cents,
@@ -2268,12 +2267,15 @@ public fun listing_values(shop: &Shop, listing: &ItemListing): (String, u64, u64
     )
 }
 
-/// Returns accepted currency fields after validating shop membership.
-public fun accepted_currency_values(
-    shop: &Shop,
+/// Returns listing fields after validating shop membership.
+public fun listing_values(shop: &Shop, listing: &ItemListing): (String, u64, u64, ID, Option<ID>) {
+    assert_listing_matches_shop!(shop, listing);
+    listing_values_for_listing(listing)
+}
+
+public fun accepted_currency_values_for_currency(
     accepted_currency: &AcceptedCurrency,
 ): (ID, TypeName, vector<u8>, ID, u8, String, u64, u16, u64) {
-    assert_currency_matches_shop!(shop, accepted_currency);
     (
         accepted_currency.shop_id,
         accepted_currency.coin_type,
@@ -2287,12 +2289,18 @@ public fun accepted_currency_values(
     )
 }
 
-/// Returns discount template fields after validating shop membership.
-public fun discount_template_values(
+/// Returns accepted currency fields after validating shop membership.
+public fun accepted_currency_values(
     shop: &Shop,
+    accepted_currency: &AcceptedCurrency,
+): (ID, TypeName, vector<u8>, ID, u8, String, u64, u16, u64) {
+    assert_currency_matches_shop!(shop, accepted_currency);
+    accepted_currency_values_for_currency(accepted_currency)
+}
+
+public fun discount_template_values_for_template(
     template: &DiscountTemplate,
 ): (ID, Option<ID>, DiscountRule, u64, Option<u64>, Option<u64>, u64, u64, bool) {
-    assert_template_matches_shop!(shop, template);
     (
         template.shop_id,
         template.applies_to_listing,
@@ -2304,6 +2312,15 @@ public fun discount_template_values(
         template.redemptions,
         template.active,
     )
+}
+
+/// Returns discount template fields after validating shop membership.
+public fun discount_template_values(
+    shop: &Shop,
+    template: &DiscountTemplate,
+): (ID, Option<ID>, DiscountRule, u64, Option<u64>, Option<u64>, u64, u64, bool) {
+    assert_template_matches_shop!(shop, template);
+    discount_template_values_for_template(template)
 }
 
 /// Quotes the coin amount for a price info object with guardrails.
@@ -2332,6 +2349,396 @@ entry fun quote_amount_for_price_info_object(
     )
 }
 
+// === Public helper API ===
+public fun template_id(template: &DiscountTemplate): ID {
+    template.id.to_inner()
+}
+
+// === Public pricing and id helpers ===
+public fun max_price_status_lag_secs(): u64 {
+    DEFAULT_MAX_PRICE_STATUS_LAG_SECS
+}
+
+public fun default_max_price_status_lag_secs(): u64 {
+    DEFAULT_MAX_PRICE_STATUS_LAG_SECS
+}
+
+public fun default_max_price_age_secs(): u64 {
+    DEFAULT_MAX_PRICE_AGE_SECS
+}
+
+public fun default_max_confidence_ratio_bps(): u16 {
+    DEFAULT_MAX_CONFIDENCE_RATIO_BPS
+}
+
+public fun max_decimal_power(): u64 {
+    MAX_DECIMAL_POWER
+}
+
+public fun listing_id_from_value(listing: &ItemListing): ID {
+    listing.id.to_inner()
+}
+
+public fun listing_id(listing: &ItemListing): ID {
+    listing.id.to_inner()
+}
+
+public fun discount_claim_exists(template: &DiscountTemplate, claimer: address): bool {
+    dynamic_field::exists_with_type<DiscountClaimKey, DiscountClaim>(
+        &template.id,
+        DiscountClaimKey(claimer),
+    )
+}
+
+// === Public discount and event helpers ===
+public fun discount_rule_kind(rule: DiscountRule): u8 {
+    match (rule) {
+        DiscountRule::Fixed { .. } => 0,
+        DiscountRule::Percent { .. } => 1,
+    }
+}
+
+public fun discount_rule_value(rule: DiscountRule): u64 {
+    match (rule) {
+        DiscountRule::Fixed { amount_cents } => amount_cents,
+        DiscountRule::Percent { bps } => bps as u64,
+    }
+}
+
+public fun apply_percent_discount(base_price_usd_cents: u64, bps: u16): u64 {
+    apply_discount(
+        base_price_usd_cents,
+        &DiscountRule::Percent { bps },
+    )
+}
+
+public fun discount_template_created_shop(event: &DiscountTemplateCreatedEvent): ID {
+    event.shop_id
+}
+
+public fun discount_template_created_id(event: &DiscountTemplateCreatedEvent): ID {
+    event.discount_template_id
+}
+
+public fun discount_template_created_rule(event: &DiscountTemplateCreatedEvent): DiscountRule {
+    event.rule
+}
+
+public fun discount_template_updated_shop(event: &DiscountTemplateUpdatedEvent): ID {
+    event.shop_id
+}
+
+public fun discount_template_updated_id(event: &DiscountTemplateUpdatedEvent): ID {
+    event.discount_template_id
+}
+
+public fun discount_template_toggled_shop(event: &DiscountTemplateToggledEvent): ID {
+    event.shop_id
+}
+
+public fun discount_template_toggled_id(event: &DiscountTemplateToggledEvent): ID {
+    event.discount_template_id
+}
+
+public fun discount_template_toggled_active(event: &DiscountTemplateToggledEvent): bool {
+    event.active
+}
+
+public fun purchase_completed_discounted_price(event: &PurchaseCompletedEvent): u64 {
+    event.discounted_price_usd_cents
+}
+
+public fun purchase_completed_shop(event: &PurchaseCompletedEvent): ID {
+    event.shop_id
+}
+
+public fun purchase_completed_listing(event: &PurchaseCompletedEvent): ID {
+    event.item_listing_id
+}
+
+public fun purchase_completed_buyer(event: &PurchaseCompletedEvent): address {
+    event.buyer
+}
+
+public fun purchase_completed_mint_to(event: &PurchaseCompletedEvent): address {
+    event.mint_to
+}
+
+public fun purchase_completed_coin_type(event: &PurchaseCompletedEvent): TypeName {
+    event.coin_type
+}
+
+public fun purchase_completed_amount_paid(event: &PurchaseCompletedEvent): u64 {
+    event.amount_paid
+}
+
+public fun purchase_completed_discount_template_id(
+    event: &PurchaseCompletedEvent,
+): Option<ID> {
+    event.discount_template_id
+}
+
+public fun purchase_completed_accepted_currency_id(event: &PurchaseCompletedEvent): ID {
+    event.accepted_currency_id
+}
+
+public fun purchase_completed_feed_id(event: &PurchaseCompletedEvent): vector<u8> {
+    event.feed_id
+}
+
+public fun purchase_completed_base_price_usd_cents(event: &PurchaseCompletedEvent): u64 {
+    event.base_price_usd_cents
+}
+
+public fun purchase_completed_quote_amount(event: &PurchaseCompletedEvent): u64 {
+    event.quote_amount
+}
+
+public fun minting_completed_shop(event: &MintingCompletedEvent): ID {
+    event.shop_id
+}
+
+public fun minting_completed_listing(event: &MintingCompletedEvent): ID {
+    event.item_listing_id
+}
+
+public fun minting_completed_buyer(event: &MintingCompletedEvent): address {
+    event.buyer
+}
+
+public fun minting_completed_minted_item_id(event: &MintingCompletedEvent): ID {
+    event.minted_item_id
+}
+
+public fun minting_completed_mint_to(event: &MintingCompletedEvent): address {
+    event.mint_to
+}
+
+public fun minting_completed_refund_to(event: &MintingCompletedEvent): address {
+    event.refund_to
+}
+
+public fun minting_completed_change_amount(event: &MintingCompletedEvent): u64 {
+    event.change_amount
+}
+
+public fun minting_completed_coin_type(event: &MintingCompletedEvent): TypeName {
+    event.coin_type
+}
+
+public fun discount_redeemed_shop(event: &DiscountRedeemedEvent): ID {
+    event.shop_id
+}
+
+public fun discount_redeemed_template_id(event: &DiscountRedeemedEvent): ID {
+    event.discount_template_id
+}
+
+public fun discount_redeemed_discount_id(event: &DiscountRedeemedEvent): ID {
+    event.discount_id
+}
+
+public fun discount_redeemed_listing_id(event: &DiscountRedeemedEvent): ID {
+    event.listing_id
+}
+
+public fun discount_redeemed_buyer(event: &DiscountRedeemedEvent): address {
+    event.buyer
+}
+
+public fun discount_claimed_shop(event: &DiscountClaimedEvent): ID {
+    event.shop_id
+}
+
+public fun discount_claimed_template_id(event: &DiscountClaimedEvent): ID {
+    event.discount_template_id
+}
+
+public fun discount_claimed_claimer(event: &DiscountClaimedEvent): address {
+    event.claimer
+}
+
+public fun discount_claimed_discount_id(event: &DiscountClaimedEvent): ID {
+    event.discount_id
+}
+
+public fun discount_ticket_values(ticket: &DiscountTicket): (ID, ID, Option<ID>, address) {
+    (ticket.discount_template_id, ticket.shop_id, ticket.listing_id, ticket.claimer)
+}
+
+// === Public state and event field accessors ===
+public fun shop_id(shop: &Shop): ID {
+    shop.id.to_inner()
+}
+
+public fun shop_owner(shop: &Shop): address {
+    shop.owner
+}
+
+public fun shop_name(shop: &Shop): String {
+    shop.name
+}
+
+public fun shop_disabled(shop: &Shop): bool {
+    shop.disabled
+}
+
+public fun shop_owner_cap_id(owner_cap: &ShopOwnerCap): ID {
+    owner_cap.id.to_inner()
+}
+
+public fun shop_owner_cap_shop_id(owner_cap: &ShopOwnerCap): ID {
+    owner_cap.shop_id
+}
+
+public fun shop_item_id<TItem>(shop_item: &ShopItem<TItem>): ID {
+    shop_item.id.to_inner()
+}
+
+public fun shop_item_shop_id<TItem>(shop_item: &ShopItem<TItem>): ID {
+    shop_item.shop_id
+}
+
+public fun shop_item_listing_id<TItem>(shop_item: &ShopItem<TItem>): ID {
+    shop_item.item_listing_id
+}
+
+public fun shop_item_type<TItem>(shop_item: &ShopItem<TItem>): TypeName {
+    shop_item.item_type
+}
+
+public fun shop_item_name<TItem>(shop_item: &ShopItem<TItem>): String {
+    shop_item.name
+}
+
+public fun shop_item_acquired_at<TItem>(shop_item: &ShopItem<TItem>): u64 {
+    shop_item.acquired_at
+}
+
+public fun shop_created_owner(event: &ShopCreatedEvent): address {
+    event.owner
+}
+
+public fun shop_created_name(event: &ShopCreatedEvent): String {
+    event.name
+}
+
+public fun shop_created_owner_cap_id(event: &ShopCreatedEvent): ID {
+    event.shop_owner_cap_id
+}
+
+public fun shop_created_shop_id(event: &ShopCreatedEvent): ID {
+    event.shop_id
+}
+
+public fun shop_owner_updated_shop(event: &ShopOwnerUpdatedEvent): ID {
+    event.shop_id
+}
+
+public fun shop_owner_updated_previous(event: &ShopOwnerUpdatedEvent): address {
+    event.previous_owner
+}
+
+public fun shop_owner_updated_new(event: &ShopOwnerUpdatedEvent): address {
+    event.new_owner
+}
+
+public fun shop_owner_updated_cap_id(event: &ShopOwnerUpdatedEvent): ID {
+    event.shop_owner_cap_id
+}
+
+public fun shop_owner_updated_rotated_by(event: &ShopOwnerUpdatedEvent): address {
+    event.rotated_by
+}
+
+public fun shop_disabled_shop(event: &ShopDisabledEvent): ID {
+    event.shop_id
+}
+
+public fun shop_disabled_owner(event: &ShopDisabledEvent): address {
+    event.owner
+}
+
+public fun shop_disabled_cap_id(event: &ShopDisabledEvent): ID {
+    event.shop_owner_cap_id
+}
+
+public fun shop_disabled_by(event: &ShopDisabledEvent): address {
+    event.disabled_by
+}
+
+public fun item_listing_stock_updated_shop(event: &ItemListingStockUpdatedEvent): ID {
+    event.shop_id
+}
+
+public fun item_listing_stock_updated_listing(event: &ItemListingStockUpdatedEvent): ID {
+    event.item_listing_id
+}
+
+public fun item_listing_stock_updated_new_stock(event: &ItemListingStockUpdatedEvent): u64 {
+    event.new_stock
+}
+
+public fun item_listing_added_shop(event: &ItemListingAddedEvent): ID {
+    event.shop_id
+}
+
+public fun item_listing_added_listing(event: &ItemListingAddedEvent): ID {
+    event.item_listing_id
+}
+
+public fun item_listing_added_name(event: &ItemListingAddedEvent): String {
+    event.name
+}
+
+public fun item_listing_added_base_price_usd_cents(event: &ItemListingAddedEvent): u64 {
+    event.base_price_usd_cents
+}
+
+public fun item_listing_added_spotlight_template(event: &ItemListingAddedEvent): Option<ID> {
+    event.spotlight_discount_template_id
+}
+
+public fun item_listing_added_stock(event: &ItemListingAddedEvent): u64 {
+    event.stock
+}
+
+public fun item_listing_removed_shop(event: &ItemListingRemovedEvent): ID {
+    event.shop_id
+}
+
+public fun item_listing_removed_listing(event: &ItemListingRemovedEvent): ID {
+    event.item_listing_id
+}
+
+public fun accepted_coin_added_shop(event: &AcceptedCoinAddedEvent): ID {
+    event.shop_id
+}
+
+public fun accepted_coin_added_coin_type(event: &AcceptedCoinAddedEvent): TypeName {
+    event.coin_type
+}
+
+public fun accepted_coin_added_feed_id(event: &AcceptedCoinAddedEvent): vector<u8> {
+    event.feed_id
+}
+
+public fun accepted_coin_added_pyth_object_id(event: &AcceptedCoinAddedEvent): ID {
+    event.pyth_object_id
+}
+
+public fun accepted_coin_added_decimals(event: &AcceptedCoinAddedEvent): u8 {
+    event.decimals
+}
+
+public fun accepted_coin_removed_shop(event: &AcceptedCoinRemovedEvent): ID {
+    event.shop_id
+}
+
+public fun accepted_coin_removed_coin_type(event: &AcceptedCoinRemovedEvent): TypeName {
+    event.coin_type
+}
+
 // === #[test_only] API ===
 
 #[test_only]
@@ -2355,11 +2762,6 @@ public fun test_setup_shop(owner: address, ctx: &mut TxContext): (Shop, ShopOwne
         shop_id: shop.id.to_inner(),
     };
     (shop, owner_cap)
-}
-
-#[test_only]
-public fun test_template_id(template: &DiscountTemplate): ID {
-    template.id.to_inner()
 }
 
 #[test_only]
@@ -2393,130 +2795,8 @@ public fun test_create_discount_template_local(
 }
 
 #[test_only]
-public fun test_quote_amount_from_usd_cents(
-    usd_cents: u64,
-    coin_decimals: u8,
-    price: &price::Price,
-    max_confidence_ratio_bps: u16,
-): u64 {
-    quote_amount_from_usd_cents(
-        usd_cents,
-        coin_decimals,
-        price,
-        max_confidence_ratio_bps,
-    )
-}
-
-#[test_only]
-public fun test_quote_amount_for_price_info_object(
-    shop: &Shop,
-    accepted_currency: &AcceptedCurrency,
-    price_info_object: &price_info::PriceInfoObject,
-    price_usd_cents: u64,
-    max_price_age_secs: Option<u64>,
-    max_confidence_ratio_bps: Option<u16>,
-    clock: &clock::Clock,
-): u64 {
-    shop.quote_amount_for_price_info_object(
-        accepted_currency,
-        price_info_object,
-        price_usd_cents,
-        max_price_age_secs,
-        max_confidence_ratio_bps,
-        clock,
-    )
-}
-
-#[test_only]
-public fun test_max_price_status_lag_secs(): u64 {
-    DEFAULT_MAX_PRICE_STATUS_LAG_SECS
-}
-
-#[test_only]
-public fun test_default_max_price_status_lag_secs(): u64 {
-    DEFAULT_MAX_PRICE_STATUS_LAG_SECS
-}
-
-#[test_only]
 public fun test_assert_price_status_trading(price_info_object: &price_info::PriceInfoObject) {
     assert_price_status_trading!(price_info_object, DEFAULT_MAX_PRICE_STATUS_LAG_SECS);
-}
-
-#[test_only]
-public fun test_default_max_price_age_secs(): u64 {
-    DEFAULT_MAX_PRICE_AGE_SECS
-}
-
-#[test_only]
-public fun test_default_max_confidence_ratio_bps(): u16 {
-    DEFAULT_MAX_CONFIDENCE_RATIO_BPS
-}
-
-#[test_only]
-public fun test_max_decimal_power(): u64 {
-    MAX_DECIMAL_POWER
-}
-
-#[test_only]
-public fun test_listing_values(
-    shop: &Shop,
-    listing: &ItemListing,
-): (String, u64, u64, ID, Option<ID>) {
-    shop.listing_values(listing)
-}
-
-#[test_only]
-public fun test_listing_exists(shop: &Shop, listing_id: ID): bool {
-    shop.listing_exists(listing_id)
-}
-
-#[test_only]
-public fun test_listing_id_from_value(listing: &ItemListing): ID {
-    listing.id.to_inner()
-}
-
-#[test_only]
-public fun test_listing_id(listing: &ItemListing): ID {
-    listing.id.to_inner()
-}
-
-#[test_only]
-public fun test_accepted_currency_exists(shop: &Shop, accepted_currency_id: ID): bool {
-    shop.accepted_currency_exists(accepted_currency_id)
-}
-
-#[test_only]
-public fun test_accepted_currency_values(
-    shop: &Shop,
-    accepted_currency: &AcceptedCurrency,
-): (ID, TypeName, vector<u8>, ID, u8, String, u64, u16, u64) {
-    shop.accepted_currency_values(accepted_currency)
-}
-
-#[test_only]
-public fun test_accepted_currency_id_for_type(shop: &Shop, coin_type: TypeName): ID {
-    shop.accepted_currency_id_for_type(coin_type).destroy_or!(abort EAcceptedCurrencyMissing)
-}
-
-#[test_only]
-public fun test_discount_template_exists(shop: &Shop, template_id: ID): bool {
-    shop.discount_template_exists(template_id)
-}
-
-#[test_only]
-public fun test_discount_template_values(
-    shop: &Shop,
-    template: &DiscountTemplate,
-): (ID, Option<ID>, DiscountRule, u64, Option<u64>, Option<u64>, u64, u64, bool) {
-    shop.discount_template_values(template)
-}
-
-#[test_only]
-public fun test_discount_claim_exists(template: &DiscountTemplate, claimer: address): bool {
-    dynamic_field::exists_with_type<DiscountClaimKey, DiscountClaim>(
-        &template.id,
-        DiscountClaimKey(claimer),
-    )
 }
 
 #[test_only]
@@ -2527,27 +2807,6 @@ public fun test_abort_invalid_owner_cap() {
 #[test_only]
 public fun test_abort_accepted_currency_missing() {
     abort EAcceptedCurrencyMissing
-}
-
-#[test_only]
-public fun test_claim_discount_ticket(
-    shop: &Shop,
-    template: &mut DiscountTemplate,
-    clock: &clock::Clock,
-    ctx: &mut TxContext,
-): () {
-    shop.claim_discount_ticket(template, clock, ctx)
-}
-
-#[test_only]
-public fun test_claim_discount_ticket_inline(
-    shop: &Shop,
-    template: &mut DiscountTemplate,
-    now_secs: u64,
-    ctx: &mut TxContext,
-): DiscountTicket {
-    assert_template_matches_shop!(shop, template);
-    template.claim_discount_ticket_inline(now_secs, ctx)
 }
 
 #[test_only]
@@ -2624,227 +2883,6 @@ public fun test_claim_and_buy_with_ids<TItem: store, TCoin>(
 }
 
 #[test_only]
-public fun test_discount_rule_kind(rule: DiscountRule): u8 {
-    match (rule) {
-        DiscountRule::Fixed { .. } => 0,
-        DiscountRule::Percent { .. } => 1,
-    }
-}
-
-#[test_only]
-public fun test_discount_rule_value(rule: DiscountRule): u64 {
-    match (rule) {
-        DiscountRule::Fixed { amount_cents } => amount_cents,
-        DiscountRule::Percent { bps } => bps as u64,
-    }
-}
-
-#[test_only]
-public fun test_apply_percent_discount(base_price_usd_cents: u64, bps: u16): u64 {
-    apply_discount(
-        base_price_usd_cents,
-        &DiscountRule::Percent { bps },
-    )
-}
-
-#[test_only]
-public fun test_discount_template_created_shop(event: &DiscountTemplateCreatedEvent): ID {
-    event.shop_id
-}
-
-#[test_only]
-public fun test_discount_template_created_id(event: &DiscountTemplateCreatedEvent): ID {
-    event.discount_template_id
-}
-
-#[test_only]
-public fun test_discount_template_created_rule(event: &DiscountTemplateCreatedEvent): DiscountRule {
-    event.rule
-}
-
-#[test_only]
-public fun test_discount_template_updated_shop(event: &DiscountTemplateUpdatedEvent): ID {
-    event.shop_id
-}
-
-#[test_only]
-public fun test_discount_template_updated_id(event: &DiscountTemplateUpdatedEvent): ID {
-    event.discount_template_id
-}
-
-#[test_only]
-public fun test_discount_template_toggled_shop(event: &DiscountTemplateToggledEvent): ID {
-    event.shop_id
-}
-
-#[test_only]
-public fun test_discount_template_toggled_id(event: &DiscountTemplateToggledEvent): ID {
-    event.discount_template_id
-}
-
-#[test_only]
-public fun test_discount_template_toggled_active(event: &DiscountTemplateToggledEvent): bool {
-    event.active
-}
-
-#[test_only]
-public fun test_purchase_completed_discounted_price(event: &PurchaseCompletedEvent): u64 {
-    event.discounted_price_usd_cents
-}
-
-#[test_only]
-public fun test_purchase_completed_shop(event: &PurchaseCompletedEvent): ID {
-    event.shop_id
-}
-
-#[test_only]
-public fun test_purchase_completed_listing(event: &PurchaseCompletedEvent): ID {
-    event.item_listing_id
-}
-
-#[test_only]
-public fun test_purchase_completed_buyer(event: &PurchaseCompletedEvent): address {
-    event.buyer
-}
-
-#[test_only]
-public fun test_purchase_completed_mint_to(event: &PurchaseCompletedEvent): address {
-    event.mint_to
-}
-
-#[test_only]
-public fun test_purchase_completed_coin_type(event: &PurchaseCompletedEvent): TypeName {
-    event.coin_type
-}
-
-#[test_only]
-public fun test_purchase_completed_amount_paid(event: &PurchaseCompletedEvent): u64 {
-    event.amount_paid
-}
-
-#[test_only]
-public fun test_purchase_completed_discount_template_id(
-    event: &PurchaseCompletedEvent,
-): Option<ID> {
-    event.discount_template_id
-}
-
-#[test_only]
-public fun test_purchase_completed_accepted_currency_id(event: &PurchaseCompletedEvent): ID {
-    event.accepted_currency_id
-}
-
-#[test_only]
-public fun test_purchase_completed_feed_id(event: &PurchaseCompletedEvent): vector<u8> {
-    event.feed_id
-}
-
-#[test_only]
-public fun test_purchase_completed_base_price_usd_cents(event: &PurchaseCompletedEvent): u64 {
-    event.base_price_usd_cents
-}
-
-#[test_only]
-public fun test_purchase_completed_quote_amount(event: &PurchaseCompletedEvent): u64 {
-    event.quote_amount
-}
-
-#[test_only]
-public fun test_minting_completed_shop(event: &MintingCompletedEvent): ID {
-    event.shop_id
-}
-
-#[test_only]
-public fun test_minting_completed_listing(event: &MintingCompletedEvent): ID {
-    event.item_listing_id
-}
-
-#[test_only]
-public fun test_minting_completed_buyer(event: &MintingCompletedEvent): address {
-    event.buyer
-}
-
-#[test_only]
-public fun test_minting_completed_minted_item_id(event: &MintingCompletedEvent): ID {
-    event.minted_item_id
-}
-
-#[test_only]
-public fun test_minting_completed_mint_to(event: &MintingCompletedEvent): address {
-    event.mint_to
-}
-
-#[test_only]
-public fun test_minting_completed_refund_to(event: &MintingCompletedEvent): address {
-    event.refund_to
-}
-
-#[test_only]
-public fun test_minting_completed_change_amount(event: &MintingCompletedEvent): u64 {
-    event.change_amount
-}
-
-#[test_only]
-public fun test_minting_completed_coin_type(event: &MintingCompletedEvent): TypeName {
-    event.coin_type
-}
-
-#[test_only]
-public fun test_discount_redeemed_shop(event: &DiscountRedeemedEvent): ID {
-    event.shop_id
-}
-
-#[test_only]
-public fun test_discount_redeemed_template_id(event: &DiscountRedeemedEvent): ID {
-    event.discount_template_id
-}
-
-#[test_only]
-public fun test_discount_redeemed_discount_id(event: &DiscountRedeemedEvent): ID {
-    event.discount_id
-}
-
-#[test_only]
-public fun test_discount_redeemed_listing_id(event: &DiscountRedeemedEvent): ID {
-    event.listing_id
-}
-
-#[test_only]
-public fun test_discount_redeemed_buyer(event: &DiscountRedeemedEvent): address {
-    event.buyer
-}
-
-#[test_only]
-public fun test_discount_claimed_shop(event: &DiscountClaimedEvent): ID {
-    event.shop_id
-}
-
-#[test_only]
-public fun test_discount_claimed_template_id(event: &DiscountClaimedEvent): ID {
-    event.discount_template_id
-}
-
-#[test_only]
-public fun test_discount_claimed_claimer(event: &DiscountClaimedEvent): address {
-    event.claimer
-}
-
-#[test_only]
-public fun test_discount_claimed_discount_id(event: &DiscountClaimedEvent): ID {
-    event.discount_id
-}
-
-#[test_only]
-public fun test_discount_ticket_values(ticket: &DiscountTicket): (ID, ID, Option<ID>, address) {
-    (ticket.discount_template_id, ticket.shop_id, ticket.listing_id, ticket.claimer)
-}
-
-#[test_only]
-public fun test_last_created_id(ctx: &TxContext): ID {
-    tx_context::last_created_object_id(ctx).to_id()
-}
-
-#[test_only]
 public fun test_add_item_listing_local<T: store>(
     shop: &mut Shop,
     owner_cap: &ShopOwnerCap,
@@ -2867,13 +2905,7 @@ public fun test_add_item_listing_local<T: store>(
 
 #[test_only]
 public fun test_listing_values_local(listing: &ItemListing): (String, u64, u64, ID, Option<ID>) {
-    (
-        listing.name,
-        listing.base_price_usd_cents,
-        listing.stock,
-        listing.shop_id,
-        listing.spotlight_discount_template_id,
-    )
+    listing_values_for_listing(listing)
 }
 
 #[test_only]
@@ -2909,189 +2941,4 @@ public fun test_remove_template(shop: &mut Shop, template_id: ID) {
             DiscountTemplateKey(template_id),
         );
     };
-}
-
-#[test_only]
-public fun test_shop_id(shop: &Shop): ID {
-    shop.id.to_inner()
-}
-
-#[test_only]
-public fun test_shop_owner(shop: &Shop): address {
-    shop.owner
-}
-
-#[test_only]
-public fun test_shop_name(shop: &Shop): String {
-    shop.name
-}
-
-#[test_only]
-public fun test_shop_disabled(shop: &Shop): bool {
-    shop.disabled
-}
-
-#[test_only]
-public fun test_shop_owner_cap_id(owner_cap: &ShopOwnerCap): ID {
-    owner_cap.id.to_inner()
-}
-
-#[test_only]
-public fun test_shop_owner_cap_shop_id(owner_cap: &ShopOwnerCap): ID {
-    owner_cap.shop_id
-}
-
-#[test_only]
-public fun test_shop_created_owner(event: &ShopCreatedEvent): address {
-    event.owner
-}
-
-#[test_only]
-public fun test_shop_created_name(event: &ShopCreatedEvent): String {
-    event.name
-}
-
-#[test_only]
-public fun test_shop_created_owner_cap_id(event: &ShopCreatedEvent): ID {
-    event.shop_owner_cap_id
-}
-
-#[test_only]
-public fun test_shop_created_shop_id(event: &ShopCreatedEvent): ID {
-    event.shop_id
-}
-
-#[test_only]
-public fun test_shop_owner_updated_shop(event: &ShopOwnerUpdatedEvent): ID {
-    event.shop_id
-}
-
-#[test_only]
-public fun test_shop_owner_updated_previous(event: &ShopOwnerUpdatedEvent): address {
-    event.previous_owner
-}
-
-#[test_only]
-public fun test_shop_owner_updated_new(event: &ShopOwnerUpdatedEvent): address {
-    event.new_owner
-}
-
-#[test_only]
-public fun test_shop_owner_updated_cap_id(event: &ShopOwnerUpdatedEvent): ID {
-    event.shop_owner_cap_id
-}
-
-#[test_only]
-public fun test_shop_owner_updated_rotated_by(event: &ShopOwnerUpdatedEvent): address {
-    event.rotated_by
-}
-
-#[test_only]
-public fun test_shop_disabled_shop(event: &ShopDisabledEvent): ID {
-    event.shop_id
-}
-
-#[test_only]
-public fun test_shop_disabled_owner(event: &ShopDisabledEvent): address {
-    event.owner
-}
-
-#[test_only]
-public fun test_shop_disabled_cap_id(event: &ShopDisabledEvent): ID {
-    event.shop_owner_cap_id
-}
-
-#[test_only]
-public fun test_shop_disabled_by(event: &ShopDisabledEvent): address {
-    event.disabled_by
-}
-
-#[test_only]
-public fun test_item_listing_stock_updated_shop(event: &ItemListingStockUpdatedEvent): ID {
-    event.shop_id
-}
-
-#[test_only]
-public fun test_item_listing_stock_updated_listing(event: &ItemListingStockUpdatedEvent): ID {
-    event.item_listing_id
-}
-
-#[test_only]
-public fun test_item_listing_stock_updated_new_stock(event: &ItemListingStockUpdatedEvent): u64 {
-    event.new_stock
-}
-
-#[test_only]
-public fun test_item_listing_added_shop(event: &ItemListingAddedEvent): ID {
-    event.shop_id
-}
-
-#[test_only]
-public fun test_item_listing_added_listing(event: &ItemListingAddedEvent): ID {
-    event.item_listing_id
-}
-
-#[test_only]
-public fun test_item_listing_added_name(event: &ItemListingAddedEvent): String {
-    event.name
-}
-
-#[test_only]
-public fun test_item_listing_added_base_price_usd_cents(event: &ItemListingAddedEvent): u64 {
-    event.base_price_usd_cents
-}
-
-#[test_only]
-public fun test_item_listing_added_spotlight_template(event: &ItemListingAddedEvent): Option<ID> {
-    event.spotlight_discount_template_id
-}
-
-#[test_only]
-public fun test_item_listing_added_stock(event: &ItemListingAddedEvent): u64 {
-    event.stock
-}
-
-#[test_only]
-public fun test_item_listing_removed_shop(event: &ItemListingRemovedEvent): ID {
-    event.shop_id
-}
-
-#[test_only]
-public fun test_item_listing_removed_listing(event: &ItemListingRemovedEvent): ID {
-    event.item_listing_id
-}
-
-#[test_only]
-public fun test_accepted_coin_added_shop(event: &AcceptedCoinAddedEvent): ID {
-    event.shop_id
-}
-
-#[test_only]
-public fun test_accepted_coin_added_coin_type(event: &AcceptedCoinAddedEvent): TypeName {
-    event.coin_type
-}
-
-#[test_only]
-public fun test_accepted_coin_added_feed_id(event: &AcceptedCoinAddedEvent): vector<u8> {
-    event.feed_id
-}
-
-#[test_only]
-public fun test_accepted_coin_added_pyth_object_id(event: &AcceptedCoinAddedEvent): ID {
-    event.pyth_object_id
-}
-
-#[test_only]
-public fun test_accepted_coin_added_decimals(event: &AcceptedCoinAddedEvent): u8 {
-    event.decimals
-}
-
-#[test_only]
-public fun test_accepted_coin_removed_shop(event: &AcceptedCoinRemovedEvent): ID {
-    event.shop_id
-}
-
-#[test_only]
-public fun test_accepted_coin_removed_coin_type(event: &AcceptedCoinRemovedEvent): TypeName {
-    event.coin_type
 }
