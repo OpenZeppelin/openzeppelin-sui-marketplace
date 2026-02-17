@@ -1384,7 +1384,7 @@ fun quote_view_matches_internal_math() {
     let derived_quote = shop::test_quote_amount_from_usd_cents(
         price_usd_cents,
         decimals,
-        &price,
+        price,
         shop::test_default_max_confidence_ratio_bps(),
     );
 
@@ -1412,7 +1412,7 @@ fun quote_amount_rejects_overflow_before_runtime_abort() {
     shop::test_quote_amount_from_usd_cents(
         max_usd_cents,
         38, // MAX_DECIMAL_POWER; forces usd_cents * 10^38 to overflow u128.
-        &price,
+        price,
         shop::test_default_max_confidence_ratio_bps(),
     );
 
@@ -4241,7 +4241,7 @@ fun quote_amount_with_positive_exponent() {
     let amount = shop::test_quote_amount_from_usd_cents(
         100,
         9,
-        &price,
+        price,
         shop::test_default_max_confidence_ratio_bps(),
     );
     assert!(amount > 0);
@@ -4253,7 +4253,7 @@ fun quote_amount_rejects_large_exponent() {
     let _ = shop::test_quote_amount_from_usd_cents(
         100,
         39,
-        &price,
+        price,
         shop::test_default_max_confidence_ratio_bps(),
     );
     abort EAssertFailure
@@ -6218,7 +6218,7 @@ fun quote_amount_from_usd_cents_rejects_negative_price() {
     let _ = shop::test_quote_amount_from_usd_cents(
         100,
         9,
-        &price,
+        price,
         shop::test_default_max_confidence_ratio_bps(),
     );
     abort EAssertFailure
@@ -6716,7 +6716,7 @@ fun quote_amount_from_usd_cents_rejects_confidence_exceeds_price() {
     let _ = shop::test_quote_amount_from_usd_cents(
         100,
         9,
-        &price,
+        price,
         shop::test_default_max_confidence_ratio_bps(),
     );
     abort EAssertFailure
@@ -6730,7 +6730,7 @@ fun quote_amount_from_usd_cents_rejects_confidence_interval_too_wide() {
     let _ = shop::test_quote_amount_from_usd_cents(
         100,
         9,
-        &price,
+        price,
         shop::test_default_max_confidence_ratio_bps(),
     );
     abort EAssertFailure

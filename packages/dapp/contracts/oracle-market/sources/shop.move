@@ -557,7 +557,7 @@ fun add_item_listing_core<T: store>(
         &name,
         base_price_usd_cents,
         stock,
-        &spotlight_discount_template_id,
+        spotlight_discount_template_id,
     );
 
     let shop_id = shop.id.to_inner();
@@ -573,7 +573,7 @@ fun add_item_listing_core<T: store>(
     assert_spotlight_template_matches_listing!(
         shop,
         listing_id,
-        &listing.spotlight_discount_template_id,
+        listing.spotlight_discount_template_id,
     );
 
     event::emit(ItemListingAddedEvent {
@@ -698,9 +698,9 @@ entry fun add_accepted_currency<T>(
     // Bind this currency to a specific PriceInfoObject to prevent oracle feed spoofing.
     validate_accepted_currency_inputs!(
         shop,
-        &coin_type,
-        &feed_id,
-        &pyth_object_id,
+        coin_type,
+        feed_id,
+        pyth_object_id,
         price_info_object,
     );
 
@@ -793,7 +793,7 @@ fun create_discount_template_core(
     max_redemptions: Option<u64>,
     ctx: &mut TxContext,
 ): (DiscountTemplate, ID, DiscountRule) {
-    validate_discount_template_inputs!(shop, &applies_to_listing, starts_at, &expires_at);
+    validate_discount_template_inputs!(shop, applies_to_listing, starts_at, expires_at);
 
     let discount_rule_kind = parse_rule_kind(rule_kind);
     let discount_rule = discount_rule_kind.build_discount_rule(rule_value);
@@ -883,7 +883,7 @@ entry fun update_discount_template(
 ) {
     assert_owner_cap!(shop, owner_cap);
     assert_template_matches_shop!(shop, discount_template);
-    assert_schedule!(starts_at, &expires_at);
+    assert_schedule!(starts_at, expires_at);
 
     let discount_rule_kind = parse_rule_kind(rule_kind);
     let discount_rule = discount_rule_kind.build_discount_rule(rule_value);
@@ -937,7 +937,7 @@ entry fun attach_template_to_listing(
     assert_spotlight_template_matches_listing!(
         shop,
         item_listing.id.to_inner(),
-        &option::some(discount_template.id.to_inner()),
+        option::some(discount_template.id.to_inner()),
     );
 
     item_listing.spotlight_discount_template_id = option::some(discount_template.id.to_inner());
@@ -1151,7 +1151,7 @@ entry fun buy_item_with_discount<TItem: store, TCoin>(
 
     let discounted_price_usd_cents = apply_discount(
         item_listing.base_price_usd_cents,
-        &discount_template.rule,
+        discount_template.rule,
     );
     let discount_template_id = option::some(discount_template.id.to_inner());
     let ticket_id = discount_ticket.id.to_inner();
@@ -1551,7 +1551,7 @@ fun quote_amount_with_guardrails(
         price_info_object,
     );
     let publish_time = price::get_timestamp(
-        &price_feed::get_price(price_info::get_price_feed(&price_info)),
+        price_feed::get_price(*price_info::get_price_feed(&price_info)),
     );
     let now = now_secs(clock);
     assert!(now >= publish_time, EPriceTooStale);
@@ -1564,7 +1564,7 @@ fun quote_amount_with_guardrails(
     quote_amount_from_usd_cents(
         price_usd_cents,
         accepted_currency.decimals,
-        &price,
+        price,
         effective_confidence_ratio,
     )
 }
@@ -1705,18 +1705,18 @@ fun now_secs(clock: &clock::Clock): u64 {
 fun quote_amount_from_usd_cents(
     usd_cents: u64,
     coin_decimals: u8,
-    price: &price::Price,
+    price: price::Price,
     max_confidence_ratio_bps: u16,
 ): u64 {
     let price_value = price::get_price(price);
-    let mantissa = positive_price_to_u128(&price_value);
+    let mantissa = positive_price_to_u128(price_value);
     let confidence = price::get_conf(price) as u128;
     let exponent = price::get_expo(price);
-    let exponent_is_negative = i64::get_is_negative(&exponent);
+    let exponent_is_negative = i64::get_is_negative(exponent);
     let exponent_magnitude = if (exponent_is_negative) {
-        i64::get_magnitude_if_negative(&exponent)
+        i64::get_magnitude_if_negative(exponent)
     } else {
-        i64::get_magnitude_if_positive(&exponent)
+        i64::get_magnitude_if_positive(exponent)
     };
     let conservative_mantissa = conservative_price_mantissa(
         mantissa,
@@ -1768,7 +1768,7 @@ fun ceil_div_u128(numerator: u128, denominator: u128): u128 {
     numerator.divide_and_round_up(denominator)
 }
 
-fun positive_price_to_u128(value: &i64::I64): u128 {
+fun positive_price_to_u128(value: i64::I64): u128 {
     assert!(!i64::get_is_negative(value), EPriceNonPositive);
     i64::get_magnitude_if_positive(value) as u128
 }
@@ -1822,17 +1822,17 @@ fun mint_shop_item<TItem: store>(
     }
 }
 
-fun apply_discount(base_price_usd_cents: u64, rule: &DiscountRule): u64 {
+fun apply_discount(base_price_usd_cents: u64, rule: DiscountRule): u64 {
     match (rule) {
         DiscountRule::Fixed { amount_cents } => {
-            if (*amount_cents >= base_price_usd_cents) {
+            if (amount_cents >= base_price_usd_cents) {
                 0
             } else {
-                base_price_usd_cents - *amount_cents
+                base_price_usd_cents - amount_cents
             }
         },
         DiscountRule::Percent { bps } => {
-            let remaining_bps = BASIS_POINT_DENOMINATOR - (*bps as u64);
+            let remaining_bps = BASIS_POINT_DENOMINATOR - (bps as u64);
             let product = (base_price_usd_cents as u128) * (remaining_bps as u128);
             let discounted = ceil_div_u128(
                 product,
@@ -1872,7 +1872,7 @@ macro fun assert_stock_available($item_listing: &ItemListing) {
     assert!(item_listing.stock > 0, EOutOfStock);
 }
 
-macro fun assert_schedule($starts_at: u64, $expires_at: &Option<u64>) {
+macro fun assert_schedule($starts_at: u64, $expires_at: Option<u64>) {
     let starts_at = $starts_at;
     let expires_at = $expires_at;
     expires_at.do_ref!(|expires_at_value| {
@@ -1885,7 +1885,7 @@ macro fun validate_listing_inputs(
     $name: &String,
     $base_price_usd_cents: u64,
     $stock: u64,
-    $spotlight_discount_template_id: &Option<ID>,
+    $spotlight_discount_template_id: Option<ID>,
 ) {
     let shop = $shop;
     let name = $name;
@@ -1907,9 +1907,9 @@ macro fun validate_shop_name($name: &String) {
 
 macro fun validate_discount_template_inputs(
     $shop: &Shop,
-    $applies_to_listing: &Option<ID>,
+    $applies_to_listing: Option<ID>,
     $starts_at: u64,
-    $expires_at: &Option<u64>,
+    $expires_at: Option<u64>,
 ) {
     let shop = $shop;
     let applies_to_listing = $applies_to_listing;
@@ -2003,9 +2003,9 @@ macro fun assert_ticket_matches_context(
 
 macro fun validate_accepted_currency_inputs(
     $shop: &Shop,
-    $coin_type: &TypeName,
-    $feed_id: &vector<u8>,
-    $pyth_object_id: &ID,
+    $coin_type: TypeName,
+    $feed_id: vector<u8>,
+    $pyth_object_id: ID,
     $price_info_object: &price_info::PriceInfoObject,
 ) {
     let shop = $shop;
@@ -2019,38 +2019,38 @@ macro fun validate_accepted_currency_inputs(
     assert_price_info_identity!(feed_id, pyth_object_id, price_info_object);
 }
 
-macro fun assert_valid_feed_id($feed_id: &vector<u8>) {
+macro fun assert_valid_feed_id($feed_id: vector<u8>) {
     let feed_id = $feed_id;
     assert!(!feed_id.is_empty(), EEmptyFeedId);
     assert!(feed_id.length() == PYTH_PRICE_IDENTIFIER_LENGTH, EInvalidFeedIdLength);
 }
 
 macro fun assert_price_info_identity(
-    $expected_feed_id: &vector<u8>,
-    $expected_pyth_object_id: &ID,
+    $expected_feed_id: vector<u8>,
+    $expected_pyth_object_id: ID,
     $price_info_object: &price_info::PriceInfoObject,
 ) {
     let expected_feed_id = $expected_feed_id;
     let expected_pyth_object_id = $expected_pyth_object_id;
     let price_info_object = $price_info_object;
     let confirmed_price_object = price_info::uid_to_inner(price_info_object);
-    assert!(confirmed_price_object == *expected_pyth_object_id, EPythObjectMismatch);
+    assert!(confirmed_price_object == expected_pyth_object_id, EPythObjectMismatch);
 
     let price_info = price_info::get_price_info_from_price_info_object(
         price_info_object,
     );
-    let identifier = price_info::get_price_identifier(&price_info);
-    let identifier_bytes = price_identifier::get_bytes(&identifier);
+    let identifier = price_info::get_price_identifier(price_info);
+    let identifier_bytes = price_identifier::get_bytes(identifier);
     assert!(expected_feed_id == identifier_bytes, EFeedIdentifierMismatch);
 }
 
-macro fun assert_currency_not_registered($shop: &Shop, $coin_type: &TypeName) {
+macro fun assert_currency_not_registered($shop: &Shop, $coin_type: TypeName) {
     let shop = $shop;
     let coin_type = $coin_type;
     assert!(
         !dynamic_field::exists_<AcceptedCurrencyTypeKey>(
             &shop.id,
-            AcceptedCurrencyTypeKey(*coin_type),
+            AcceptedCurrencyTypeKey(coin_type),
         ),
         EAcceptedCurrencyExists,
     );
@@ -2080,8 +2080,8 @@ macro fun ensure_price_info_matches_currency(
     let accepted_currency = $accepted_currency;
     let price_info_object = $price_info_object;
     assert_price_info_identity!(
-        &accepted_currency.feed_id,
-        &accepted_currency.pyth_object_id,
+        accepted_currency.feed_id,
+        accepted_currency.pyth_object_id,
         price_info_object,
     );
 }
@@ -2095,9 +2095,9 @@ macro fun assert_price_status_trading(
     let price_info = price_info::get_price_info_from_price_info_object(
         price_info_object,
     );
-    let attestation_time = price_info::get_attestation_time(&price_info);
+    let attestation_time = price_info::get_attestation_time(price_info);
     let publish_time = price::get_timestamp(
-        &price_feed::get_price(price_info::get_price_feed(&price_info)),
+        price_feed::get_price(*price_info::get_price_feed(&price_info)),
     );
     // Treat feeds with stale attestations as unavailable even if Pyth doesn't expose an explicit status.
     assert!(attestation_time >= publish_time, EPriceStatusNotTrading);
@@ -2132,7 +2132,7 @@ public enum ReferenceKind has copy, drop {
 macro fun assert_belongs_to_shop_if_some(
     $shop: &Shop,
     $kind: ReferenceKind,
-    $maybe_id: &Option<ID>,
+    $maybe_id: Option<ID>,
 ) {
     let shop = $shop;
     let kind = $kind;
@@ -2148,7 +2148,7 @@ macro fun assert_belongs_to_shop_if_some(
 macro fun assert_spotlight_template_matches_listing(
     $shop: &Shop,
     $listing_id: ID,
-    $discount_template_id: &Option<ID>,
+    $discount_template_id: Option<ID>,
 ) {
     let shop = $shop;
     let listing_id = $listing_id;
@@ -2396,7 +2396,7 @@ public fun test_create_discount_template_local(
 public fun test_quote_amount_from_usd_cents(
     usd_cents: u64,
     coin_decimals: u8,
-    price: &price::Price,
+    price: price::Price,
     max_confidence_ratio_bps: u16,
 ): u64 {
     quote_amount_from_usd_cents(
@@ -2579,7 +2579,7 @@ public fun test_claim_and_buy_with_ids<TItem: store, TCoin>(
 
     let discounted_price_usd_cents = apply_discount(
         item_listing.base_price_usd_cents,
-        &discount_template.rule,
+        discount_template.rule,
     );
     let discount_template_id = option::some(discount_template.id.to_inner());
     let ticket_id = discount_ticket.id.to_inner();
@@ -2643,7 +2643,7 @@ public fun test_discount_rule_value(rule: DiscountRule): u64 {
 public fun test_apply_percent_discount(base_price_usd_cents: u64, bps: u16): u64 {
     apply_discount(
         base_price_usd_cents,
-        &DiscountRule::Percent { bps },
+        DiscountRule::Percent { bps },
     )
 }
 
