@@ -6,7 +6,7 @@ use pyth::price_feed;
 use pyth::price_identifier;
 use pyth::price_info;
 use pyth::pyth;
-use std::string::{Self, String};
+use std::string::String;
 use std::type_name::{Self, TypeName};
 use std::u128;
 use sui::clock;
@@ -696,13 +696,7 @@ entry fun add_accepted_currency<T>(
     let coin_type = currency_type<T>();
 
     // Bind this currency to a specific PriceInfoObject to prevent oracle feed spoofing.
-    validate_accepted_currency_inputs!(
-        shop,
-        coin_type,
-        feed_id,
-        pyth_object_id,
-        price_info_object,
-    );
+    validate_accepted_currency_inputs!(shop, coin_type, feed_id, pyth_object_id, price_info_object);
 
     let decimals = coin_registry::decimals(currency);
     assert_supported_decimals!(decimals);
@@ -1894,7 +1888,7 @@ macro fun validate_listing_inputs(
     let spotlight_discount_template_id = $spotlight_discount_template_id;
 
     assert_non_zero_stock!(stock);
-    assert!(!string::as_bytes(name).is_empty(), EEmptyItemName);
+    assert!(!name.is_empty(), EEmptyItemName);
     assert!(base_price_usd_cents > 0, EInvalidPrice);
 
     assert_belongs_to_shop_if_some!(shop, ReferenceKind::Template, spotlight_discount_template_id);
@@ -1902,7 +1896,7 @@ macro fun validate_listing_inputs(
 
 macro fun validate_shop_name($name: &String) {
     let name = $name;
-    assert!(!string::as_bytes(name).is_empty(), EEmptyShopName);
+    assert!(!name.is_empty(), EEmptyShopName);
 }
 
 macro fun validate_discount_template_inputs(
