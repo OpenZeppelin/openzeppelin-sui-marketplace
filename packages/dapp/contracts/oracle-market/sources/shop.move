@@ -2383,13 +2383,13 @@ public fun test_create_discount_template_local(
 public fun test_quote_amount_from_usd_cents(
     usd_cents: u64,
     coin_decimals: u8,
-    price: price::Price,
+    price: &price::Price,
     max_confidence_ratio_bps: u64,
 ): u64 {
     quote_amount_from_usd_cents(
         usd_cents,
         coin_decimals,
-        price,
+        *price,
         max_confidence_ratio_bps,
     )
 }
