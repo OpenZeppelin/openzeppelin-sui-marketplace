@@ -27,16 +27,16 @@ public fun new(magnitude: u64, negative: bool): I64 {
     }
 }
 
-public fun get_is_negative(i: &I64): bool {
+public fun get_is_negative(i: I64): bool {
     i.negative
 }
 
-public fun get_magnitude_if_positive(input: &I64): u64 {
+public fun get_magnitude_if_positive(input: I64): u64 {
     assert!(!input.negative, 0);
     input.magnitude
 }
 
-public fun get_magnitude_if_negative(input: &I64): u64 {
+public fun get_magnitude_if_negative(input: I64): u64 {
     assert!(input.negative, 0);
     input.magnitude
 }
