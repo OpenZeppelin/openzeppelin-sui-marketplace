@@ -78,6 +78,33 @@ export type ShopCreatedSummary = {
   ownerCapId?: string
   createdAtMs?: string
   txDigest?: string
+  errors?: ShopCreatedEnrichmentError[]
+}
+
+export type ShopCreatedEnrichmentError = {
+  stage: "fetchObject" | "parseObject"
+  message: string
+  name?: string
+  shopId: string
+}
+
+const buildShopCreatedEnrichmentError = (
+  stage: ShopCreatedEnrichmentError["stage"],
+  error: unknown,
+  shopId: string
+): ShopCreatedEnrichmentError => {
+  if (error instanceof Error) {
+    return { stage, message: error.message, name: error.name, shopId }
+  }
+
+  return { stage, message: String(error), shopId }
+}
+
+const appendShopCreatedError = (
+  summary: ShopCreatedSummary,
+  error: ShopCreatedEnrichmentError
+) => {
+  summary.errors = summary.errors ? [...summary.errors, error] : [error]
 }
 
 const parseShopCreatedEvent = (
@@ -91,14 +118,18 @@ const parseShopCreatedEvent = (
     )
       return undefined
     const fields = event.parsedJson as Record<string, unknown>
-    const shopId = normalizeOptionalIdFromValue(fields.shop_id)
+    const shopId = normalizeOptionalIdFromValue(
+      fields.shop_id ?? fields.shop_address
+    )
     if (!shopId) return undefined
 
     return {
       shopId,
       ownerAddress: normalizeOptionalIdFromValue(fields.owner),
       name: readMoveStringOrVector(fields.name),
-      ownerCapId: normalizeOptionalIdFromValue(fields.shop_owner_cap_id),
+      ownerCapId: normalizeOptionalIdFromValue(
+        fields.shop_owner_cap_id ?? fields.shop_owner_cap_address
+      ),
       createdAtMs: event.timestampMs ? String(event.timestampMs) : undefined,
       txDigest: event.id?.txDigest
     }
@@ -139,6 +170,38 @@ export const getShopCreatedSummaries = async ({
       const summary = parseShopCreatedEvent(event)
       if (!summary || seen.has(summary.shopId)) continue
       seen.add(summary.shopId)
+      if (!summary.ownerAddress || !summary.name) {
+        try {
+          const { object } = await getSuiObject(
+            { objectId: summary.shopId, options: { showContent: true } },
+            { suiClient }
+          )
+
+          try {
+            summary.ownerAddress =
+              summary.ownerAddress ?? getShopOwnerAddressFromObject(object)
+            summary.name = summary.name ?? getShopNameFromObject(object)
+          } catch (error) {
+            appendShopCreatedError(
+              summary,
+              buildShopCreatedEnrichmentError(
+                "parseObject",
+                error,
+                summary.shopId
+              )
+            )
+          }
+        } catch (error) {
+          appendShopCreatedError(
+            summary,
+            buildShopCreatedEnrichmentError(
+              "fetchObject",
+              error,
+              summary.shopId
+            )
+          )
+        }
+      }
       summaries.push(summary)
     }
 
