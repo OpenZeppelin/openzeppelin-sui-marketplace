@@ -172,8 +172,8 @@ const BASIS_POINT_DENOMINATOR: u64 = 10_000;
 const DEFAULT_MAX_PRICE_AGE_SECS: u64 = 60;
 const MAX_PRICE_AGE_SECS_CAP: u64 = DEFAULT_MAX_PRICE_AGE_SECS;
 const MAX_DECIMAL_POWER: u64 = 38;
-const DEFAULT_MAX_CONFIDENCE_RATIO_BPS: u64 = 1_000; // Reject price feeds with sigma/mu above 10%.
-const MAX_CONFIDENCE_RATIO_BPS_CAP: u64 = DEFAULT_MAX_CONFIDENCE_RATIO_BPS;
+const DEFAULT_MAX_CONFIDENCE_RATIO_BPS: u16 = 1_000; // Reject price feeds with sigma/mu above 10%.
+const MAX_CONFIDENCE_RATIO_BPS_CAP: u16 = DEFAULT_MAX_CONFIDENCE_RATIO_BPS;
 const PYTH_PRICE_IDENTIFIER_LENGTH: u64 = 32;
 const DEFAULT_MAX_PRICE_STATUS_LAG_SECS: u64 = 5; // Allow small attestation/publish skew without halting checkout.
 const MAX_PRICE_STATUS_LAG_SECS_CAP: u64 = DEFAULT_MAX_PRICE_STATUS_LAG_SECS;
@@ -256,7 +256,7 @@ public struct AcceptedCurrency has key, store {
     decimals: u8,
     symbol: vector<u8>,
     max_price_age_secs_cap: u64,
-    max_confidence_ratio_bps_cap: u64,
+    max_confidence_ratio_bps_cap: u16,
     max_price_status_lag_secs_cap: u64,
 }
 
@@ -667,7 +667,7 @@ entry fun add_accepted_currency<T>(
     feed_id: vector<u8>,
     pyth_object_id: object::ID,
     max_price_age_secs_cap: Option<u64>,
-    max_confidence_ratio_bps_cap: Option<u64>,
+    max_confidence_ratio_bps_cap: Option<u16>,
     max_price_status_lag_secs_cap: Option<u64>,
     ctx: &mut TxContext,
 ) {
@@ -682,15 +682,15 @@ entry fun add_accepted_currency<T>(
     assert_supported_decimals!(decimals);
     let symbol: vector<u8> = string::into_bytes(coin_registry::symbol(currency));
     let shop_address: address = shop.id.to_address();
-    let age_cap: u64 = resolve_guardrail_cap(
+    let age_cap: u64 = resolve_guardrail_cap!(
         max_price_age_secs_cap,
         MAX_PRICE_AGE_SECS_CAP,
     );
-    let confidence_cap = resolve_guardrail_cap(
+    let confidence_cap = resolve_guardrail_cap!(
         max_confidence_ratio_bps_cap,
         MAX_CONFIDENCE_RATIO_BPS_CAP,
     );
-    let status_lag_cap = resolve_guardrail_cap(
+    let status_lag_cap = resolve_guardrail_cap!(
         max_price_status_lag_secs_cap,
         MAX_PRICE_STATUS_LAG_SECS_CAP,
     );
@@ -1061,7 +1061,7 @@ entry fun buy_item<TItem: store, TCoin>(
     mint_to: address,
     refund_extra_to: address,
     max_price_age_secs: Option<u64>,
-    max_confidence_ratio_bps: Option<u64>,
+    max_confidence_ratio_bps: Option<u16>,
     clock: &clock::Clock,
     ctx: &mut TxContext,
 ) {
@@ -1124,7 +1124,7 @@ entry fun buy_item_with_discount<TItem: store, TCoin>(
     mint_to: address,
     refund_extra_to: address,
     max_price_age_secs: Option<u64>,
-    max_confidence_ratio_bps: Option<u64>,
+    max_confidence_ratio_bps: Option<u16>,
     clock: &clock::Clock,
     ctx: &mut TxContext,
 ) {
@@ -1207,7 +1207,7 @@ entry fun claim_and_buy_item_with_discount<TItem: store, TCoin>(
     mint_to: address,
     refund_extra_to: address,
     max_price_age_secs: Option<u64>,
-    max_confidence_ratio_bps: Option<u64>,
+    max_confidence_ratio_bps: Option<u16>,
     clock: &clock::Clock,
     ctx: &mut TxContext,
 ) {
@@ -1258,7 +1258,7 @@ fun new_accepted_currency(
     decimals: u8,
     symbol: vector<u8>,
     max_price_age_secs_cap: u64,
-    max_confidence_ratio_bps_cap: u64,
+    max_confidence_ratio_bps_cap: u16,
     max_price_status_lag_secs_cap: u64,
     ctx: &mut TxContext,
 ): (AcceptedCurrency, address) {
@@ -1509,7 +1509,9 @@ macro fun assert_listing_matches_shop($shop: &Shop, $listing: &ItemListing) {
 }
 
 /// Normalize a seller-provided guardrail cap, enforcing module-level ceilings and non-zero.
-fun resolve_guardrail_cap(proposed_cap: Option<u64>, module_cap: u64): u64 {
+macro fun resolve_guardrail_cap<$T>($proposed_cap: Option<$T>, $module_cap: $T): $T {
+    let proposed_cap = $proposed_cap;
+    let module_cap = $module_cap;
     let value = proposed_cap.destroy_or!(module_cap);
     assert!(value > 0, EInvalidGuardrailCap);
     value.min(module_cap)
@@ -1518,9 +1520,9 @@ fun resolve_guardrail_cap(proposed_cap: Option<u64>, module_cap: u64): u64 {
 /// Resolve caller overrides against seller caps so pricing guardrails stay tight.
 fun resolve_effective_guardrails(
     max_price_age_secs: Option<u64>,
-    max_confidence_ratio_bps: Option<u64>,
+    max_confidence_ratio_bps: Option<u16>,
     accepted_currency: &AcceptedCurrency,
-): (u64, u64) {
+): (u64, u16) {
     let requested_max_age = max_price_age_secs.destroy_or!(
         accepted_currency.max_price_age_secs_cap,
     );
@@ -1537,7 +1539,7 @@ fun quote_amount_with_guardrails(
     price_info_object: &price_info::PriceInfoObject,
     price_usd_cents: u64,
     max_price_age_secs: Option<u64>,
-    max_confidence_ratio_bps: Option<u64>,
+    max_confidence_ratio_bps: Option<u16>,
     clock: &clock::Clock,
 ): u64 {
     let (effective_max_age, effective_confidence_ratio) = resolve_effective_guardrails(
@@ -1578,7 +1580,7 @@ fun process_purchase_core<TItem: store, TCoin>(
     discounted_price_usd_cents: u64,
     discount_template_id: Option<address>,
     max_price_age_secs: Option<u64>,
-    max_confidence_ratio_bps: Option<u64>,
+    max_confidence_ratio_bps: Option<u16>,
     clock: &clock::Clock,
     ctx: &mut TxContext,
 ): (Option<coin::Coin<TCoin>>, coin::Coin<TCoin>, ShopItem<TItem>) {
@@ -1670,7 +1672,7 @@ fun quote_amount_from_usd_cents(
     usd_cents: u64,
     coin_decimals: u8,
     price: price::Price,
-    max_confidence_ratio_bps: u64,
+    max_confidence_ratio_bps: u16,
 ): u64 {
     let price_value = price::get_price(price);
     let mantissa = positive_price_to_u128(price_value);
@@ -1741,7 +1743,7 @@ fun positive_price_to_u128(value: i64::I64): u128 {
 fun conservative_price_mantissa(
     mantissa: u128,
     confidence: u128,
-    max_confidence_ratio_bps: u64,
+    max_confidence_ratio_bps: u16,
 ): u128 {
     assert!(mantissa > confidence, EConfidenceExceedsPrice);
     let scaled_confidence = confidence * (BASIS_POINT_DENOMINATOR as u128);
@@ -2223,7 +2225,7 @@ public fun listing_values(
 public fun accepted_currency_values(
     shop: &Shop,
     accepted_currency: &AcceptedCurrency,
-): (address, TypeName, vector<u8>, object::ID, u8, vector<u8>, u64, u64, u64) {
+): (address, TypeName, vector<u8>, object::ID, u8, vector<u8>, u64, u16, u64) {
     assert_currency_matches_shop!(shop, accepted_currency);
     (
         accepted_currency.shop_address,
@@ -2264,7 +2266,7 @@ entry fun quote_amount_for_price_info_object(
     price_info_object: &price_info::PriceInfoObject,
     price_usd_cents: u64,
     max_price_age_secs: Option<u64>,
-    max_confidence_ratio_bps: Option<u64>,
+    max_confidence_ratio_bps: Option<u16>,
     clock: &clock::Clock,
 ): u64 {
     assert_currency_matches_shop!(shop, accepted_currency);
@@ -2354,7 +2356,7 @@ public fun test_quote_amount_from_usd_cents(
     usd_cents: u64,
     coin_decimals: u8,
     price: &price::Price,
-    max_confidence_ratio_bps: u64,
+    max_confidence_ratio_bps: u16,
 ): u64 {
     quote_amount_from_usd_cents(
         usd_cents,
@@ -2371,7 +2373,7 @@ public fun test_quote_amount_for_price_info_object(
     price_info_object: &price_info::PriceInfoObject,
     price_usd_cents: u64,
     max_price_age_secs: Option<u64>,
-    max_confidence_ratio_bps: Option<u64>,
+    max_confidence_ratio_bps: Option<u16>,
     clock: &clock::Clock,
 ): u64 {
     shop.quote_amount_for_price_info_object(
@@ -2405,7 +2407,7 @@ public fun test_default_max_price_age_secs(): u64 {
 }
 
 #[test_only]
-public fun test_default_max_confidence_ratio_bps(): u64 {
+public fun test_default_max_confidence_ratio_bps(): u16 {
     DEFAULT_MAX_CONFIDENCE_RATIO_BPS
 }
 
@@ -2446,7 +2448,7 @@ public fun test_accepted_currency_exists(shop: &Shop, accepted_currency_id: obje
 public fun test_accepted_currency_values(
     shop: &Shop,
     accepted_currency: &AcceptedCurrency,
-): (address, TypeName, vector<u8>, object::ID, u8, vector<u8>, u64, u64, u64) {
+): (address, TypeName, vector<u8>, object::ID, u8, vector<u8>, u64, u16, u64) {
     shop.accepted_currency_values(accepted_currency)
 }
 
@@ -2518,7 +2520,7 @@ public fun test_claim_and_buy_with_ids<TItem: store, TCoin>(
     mint_to: address,
     refund_extra_to: address,
     max_price_age_secs: Option<u64>,
-    max_confidence_ratio_bps: Option<u64>,
+    max_confidence_ratio_bps: Option<u16>,
     clock: &clock::Clock,
     ctx: &mut TxContext,
 ) {
