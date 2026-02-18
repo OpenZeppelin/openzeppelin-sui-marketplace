@@ -704,7 +704,7 @@ entry fun add_accepted_currency<T>(
         confidence_cap,
         status_lag_cap,
     );
-    table::add(&mut shop.accepted_currencies, coin_type, accepted_currency);
+    shop.accepted_currencies.add(coin_type, accepted_currency);
 
     event::emit(AcceptedCoinAddedEvent {
         shop_id,
@@ -1418,13 +1418,13 @@ fun resolve_effective_guardrails(
 }
 
 fun borrow_registered_accepted_currency(shop: &Shop, coin_type: TypeName): &AcceptedCurrency {
-    assert!(table::contains(&shop.accepted_currencies, coin_type), EAcceptedCurrencyMissing);
-    table::borrow(&shop.accepted_currencies, coin_type)
+    assert!(shop.accepted_currencies.contains(coin_type), EAcceptedCurrencyMissing);
+    shop.accepted_currencies.borrow(coin_type)
 }
 
 fun remove_registered_accepted_currency(shop: &mut Shop, coin_type: TypeName): AcceptedCurrency {
-    assert!(table::contains(&shop.accepted_currencies, coin_type), EAcceptedCurrencyMissing);
-    table::remove(&mut shop.accepted_currencies, coin_type)
+    assert!(shop.accepted_currencies.contains(coin_type), EAcceptedCurrencyMissing);
+    shop.accepted_currencies.remove(coin_type)
 }
 
 fun quote_amount_with_guardrails(
@@ -1940,7 +1940,7 @@ macro fun assert_price_info_identity(
 macro fun assert_currency_not_registered($shop: &Shop, $coin_type: &TypeName) {
     let shop = $shop;
     let coin_type = $coin_type;
-    assert!(!table::contains(&shop.accepted_currencies, *coin_type), EAcceptedCurrencyExists);
+    assert!(!shop.accepted_currencies.contains(*coin_type), EAcceptedCurrencyExists);
 }
 
 macro fun assert_supported_decimals($decimals: u8) {
@@ -2086,7 +2086,7 @@ public fun discount_template_exists(shop: &Shop, template_id: ID): bool {
 
 /// Returns true if the accepted currency is registered under the shop.
 public fun accepted_currency_exists(shop: &Shop, coin_type: TypeName): bool {
-    table::contains(&shop.accepted_currencies, coin_type)
+    shop.accepted_currencies.contains(coin_type)
 }
 
 /// Returns the listing ID for a listing address if registered.
