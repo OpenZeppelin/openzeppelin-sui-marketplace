@@ -235,7 +235,7 @@ const ListingSummarySection = ({
         <CopyableId
           value={summary.listingId}
           label="Listing ID"
-          explorerUrl={explorerUrl}
+          showExplorer={false}
         />
       ) : undefined}
       {shopId ? (

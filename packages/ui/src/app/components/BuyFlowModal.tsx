@@ -487,8 +487,8 @@ const BuyFlowModal = ({
               listing ? (
                 <CopyableId
                   value={listing.itemListingId}
-                  label="Listing"
-                  explorerUrl={explorerUrl}
+                  label="Listing ID"
+                  showExplorer={false}
                 />
               ) : undefined
             }

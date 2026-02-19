@@ -11,7 +11,10 @@ import {
 import type { SuiTransactionBlockResponse } from "@mysten/sui/client"
 import type { IdentifierString } from "@mysten/wallet-standard"
 import type { ItemListingSummary } from "@sui-oracle-market/domain-core/models/item-listing"
-import { getItemListingSummary } from "@sui-oracle-market/domain-core/models/item-listing"
+import {
+  getItemListingSummary,
+  requireListingIdFromItemListingAddedEvents
+} from "@sui-oracle-market/domain-core/models/item-listing"
 import { parseUsdToCents } from "@sui-oracle-market/domain-core/models/shop"
 import { buildAddItemListingTransaction } from "@sui-oracle-market/domain-core/ptb/item-listing"
 import {
@@ -41,7 +44,6 @@ import {
   safeJsonStringify,
   serializeForJson
 } from "../helpers/transactionErrors"
-import { extractCreatedObjects } from "../helpers/transactionFormat"
 import { waitForTransactionBlock } from "../helpers/transactionWait"
 import { useIdleFieldValidation } from "./useIdleFieldValidation"
 import useNetworkConfig from "./useNetworkConfig"
@@ -66,21 +68,6 @@ export type ListingTransactionSummary = ListingInputs & {
   digest: string
   transactionBlock: SuiTransactionBlockResponse
   listingId?: string
-}
-
-const stripGenericType = (objectType: string) => {
-  const genericStartIndex = objectType.indexOf("<")
-  return genericStartIndex === -1
-    ? objectType
-    : objectType.slice(0, genericStartIndex)
-}
-
-const matchesShopStructType = (
-  objectType: string | undefined,
-  structName: string
-) => {
-  if (!objectType) return false
-  return stripGenericType(objectType).endsWith(`::shop::${structName}`)
 }
 
 type TransactionState =
@@ -427,25 +414,10 @@ export const useAddItemModalState = ({
         transactionBlock = await waitForTransactionBlock(suiClient, digest)
       }
 
-      const createdObjects = extractCreatedObjects(transactionBlock)
-      const listingId = createdObjects.find((change) =>
-        matchesShopStructType(change.objectType, "ItemListing")
-      )?.objectId
-      const markerObjectId = createdObjects.find((change) =>
-        matchesShopStructType(change.objectType, "ItemListingMarker")
-      )?.objectId
-
-      const optimisticListing = listingId
-        ? {
-            itemListingId: listingId,
-            markerObjectId: markerObjectId ?? listingId,
-            name: listingInputs.itemName,
-            itemType: listingInputs.itemType,
-            basePriceUsdCents: listingInputs.basePriceUsdCents.toString(),
-            stock: listingInputs.stock.toString(),
-            spotlightTemplateId: listingInputs.spotlightDiscountId
-          }
-        : undefined
+      const listingId = requireListingIdFromItemListingAddedEvents({
+        events: transactionBlock.events,
+        shopId: resolvedShopId
+      })
 
       setTransactionState({
         status: "success",
@@ -457,13 +429,9 @@ export const useAddItemModalState = ({
         }
       })
 
-      onListingCreated?.(optimisticListing)
-
-      if (listingId) {
-        void getItemListingSummary(resolvedShopId, listingId, suiClient)
-          .then((summary) => onListingCreated?.(summary))
-          .catch(() => {})
-      }
+      void getItemListingSummary(resolvedShopId, listingId, suiClient)
+        .then((summary) => onListingCreated?.(summary))
+        .catch(() => {})
     } catch (error) {
       const errorDetails = extractErrorDetails(error)
       const localnetSupportNote =
