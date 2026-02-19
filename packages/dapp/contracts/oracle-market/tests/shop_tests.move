@@ -1411,7 +1411,7 @@ fun quote_amount_rejects_overflow_before_runtime_abort() {
 
     shop::test_quote_amount_from_usd_cents(
         max_usd_cents,
-        24, // MAX_DECIMAL_POWER
+        shop::test_max_decimal_power() as u8, // MAX_DECIMAL_POWER
         &price,
         shop::test_default_max_confidence_ratio_bps(),
     );
@@ -4326,7 +4326,7 @@ fun quote_amount_rejects_large_exponent() {
     let price = price::new(
         i64::new(1, false),
         0,
-        i64::new(25, false), // Exceeds MAX_DECIMAL_POWER via exponent magnitude.
+        i64::new(shop::test_max_decimal_power() + 1, false), // Exceeds MAX_DECIMAL_POWER via exponent magnitude.
         0,
     );
     let _ = shop::test_quote_amount_from_usd_cents(

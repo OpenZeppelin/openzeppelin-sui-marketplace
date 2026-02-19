@@ -1716,36 +1716,36 @@ fun quote_amount_from_usd_cents(
     let mut numerator_multiplier = coin_decimals_pow10;
     if (exponent_is_negative) {
         numerator_multiplier =
-            mul_div_u128(
+            u128::mul_div(
                 numerator_multiplier,
                 exponent_pow10,
                 1,
                 rounding::down(),
-            );
+            ).destroy_or!(abort EPriceOverflow);
     };
 
-    let mut denominator_multiplier = mul_div_u128(
+    let mut denominator_multiplier = u128::mul_div(
         conservative_mantissa,
         CENTS_PER_DOLLAR as u128,
         1,
         rounding::down(),
-    );
+    ).destroy_or!(abort EPriceOverflow);
     if (!exponent_is_negative) {
         denominator_multiplier =
-            mul_div_u128(
+            u128::mul_div(
                 denominator_multiplier,
                 exponent_pow10,
                 1,
                 rounding::down(),
-            );
+            ).destroy_or!(abort EPriceOverflow);
     };
 
-    let amount = mul_div_u128(
+    let amount = u128::mul_div(
         usd_cents as u128,
         numerator_multiplier,
         denominator_multiplier,
         rounding::up(),
-    );
+    ).destroy_or!(abort EPriceOverflow);
     let maybe_amount_u64 = amount.try_as_u64();
     maybe_amount_u64.destroy_or!(abort EPriceOverflow)
 }
@@ -1758,21 +1758,6 @@ fun decimals_pow10_u128(coin_decimals: u8): u128 {
         coin_decimals,
     ).try_as_u128();
     maybe_coin_decimals_pow10.destroy_or!(abort EPriceOverflow)
-}
-
-fun mul_div_u128(
-    lhs: u128,
-    rhs: u128,
-    denominator: u128,
-    rounding_mode: rounding::RoundingMode,
-): u128 {
-    let maybe_result = u128::mul_div(
-        lhs,
-        rhs,
-        denominator,
-        rounding_mode,
-    );
-    maybe_result.destroy_or!(abort EPriceOverflow)
 }
 
 fun pow10_u128(exponent: u64): u128 {
