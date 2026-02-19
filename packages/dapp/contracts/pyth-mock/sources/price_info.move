@@ -77,7 +77,7 @@ public fun update_price_feed(
     clock: &Clock,
 ) {
     let price_identifier = price_feed::get_price_identifier(
-        *get_price_feed(&price_info_object.price_info),
+        get_price_feed(&price_info_object.price_info),
     );
     let price_value = price::new(
         i64::new(price_magnitude, price_is_negative),
@@ -110,18 +110,18 @@ public fun get_price_info_from_price_info_object(price_info_object: &PriceInfoOb
     price_info_object.price_info
 }
 
-public fun get_price_identifier(price_info: PriceInfo): PriceIdentifier {
-    price_feed::get_price_identifier(price_info.price_feed)
+public fun get_price_identifier(price_info: &PriceInfo): PriceIdentifier {
+    price_feed::get_price_identifier(&price_info.price_feed)
 }
 
 public fun get_price_feed(price_info: &PriceInfo): &PriceFeed {
     &price_info.price_feed
 }
 
-public fun get_attestation_time(price_info: PriceInfo): u64 {
+public fun get_attestation_time(price_info: &PriceInfo): u64 {
     price_info.attestation_time
 }
 
-public fun get_arrival_time(price_info: PriceInfo): u64 {
+public fun get_arrival_time(price_info: &PriceInfo): u64 {
     price_info.arrival_time
 }

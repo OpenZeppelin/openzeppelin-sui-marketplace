@@ -13,6 +13,6 @@ public fun from_byte_vec(bytes: vector<u8>): PriceIdentifier {
     PriceIdentifier { bytes }
 }
 
-public fun get_bytes(price_identifier: PriceIdentifier): vector<u8> {
+public fun get_bytes(price_identifier: &PriceIdentifier): vector<u8> {
     price_identifier.bytes
 }
