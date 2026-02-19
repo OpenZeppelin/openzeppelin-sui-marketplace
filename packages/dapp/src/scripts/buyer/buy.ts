@@ -23,7 +23,10 @@ import {
   getDiscountTemplateSummary,
   type DiscountContext
 } from "@sui-oracle-market/domain-core/models/discount"
-import { getItemListingSummary } from "@sui-oracle-market/domain-core/models/item-listing"
+import {
+  getItemListingSummary,
+  normalizeListingId
+} from "@sui-oracle-market/domain-core/models/item-listing"
 import type { PriceUpdatePolicy } from "@sui-oracle-market/domain-core/models/pyth"
 import { findCreatedShopItemIds } from "@sui-oracle-market/domain-core/models/shop-item"
 import { planSuiPaymentSplitTransaction } from "@sui-oracle-market/tooling-core/coin"
@@ -81,11 +84,8 @@ runSuiScript(
     const mintTo = inputs.mintTo ?? signerAddress
     const refundTo = inputs.refundTo ?? signerAddress
 
-    const shopShared = await tooling.getImmutableSharedObject({
+    const shopShared = await tooling.getMutableSharedObject({
       objectId: inputs.shopId
-    })
-    const itemListingShared = await tooling.getMutableSharedObject({
-      objectId: inputs.itemListingId
     })
 
     const shopPackageId = deriveRelevantPackageId(shopShared.object.type)
@@ -230,7 +230,7 @@ runSuiScript(
       {
         shopPackageId,
         shopShared,
-        itemListingShared,
+        itemListingId: inputs.itemListingId,
         pythPriceInfoShared,
         pythFeedIdHex: acceptedCurrencySummary.feedIdHex,
         paymentCoinObjectId,
@@ -304,7 +304,7 @@ runSuiScript(
     .option("itemListingId", {
       alias: ["item-listing-id", "listing-id"],
       type: "string",
-      description: "ItemListing object ID to buy.",
+      description: "Item listing ID to buy (u64).",
       demandOption: true
     })
     .option("coinType", {
@@ -460,7 +460,7 @@ const normalizeInputs = async (
 
   return {
     shopId,
-    itemListingId: normalizeSuiObjectId(cliArguments.itemListingId),
+    itemListingId: normalizeListingId(cliArguments.itemListingId),
     coinType,
     paymentCoinObjectId: cliArguments.paymentCoinObjectId
       ? normalizeSuiObjectId(cliArguments.paymentCoinObjectId)

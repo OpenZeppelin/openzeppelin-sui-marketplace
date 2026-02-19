@@ -1,23 +1,22 @@
 /**
- * Adds a new ItemListing shared object and registers its marker under the Shop.
+ * Adds a new table-backed ItemListing entry under the Shop.
  * Uses the listing's TypeName to enforce typed receipts.
  * Requires the ShopOwnerCap capability.
  */
 import { normalizeSuiObjectId } from "@mysten/sui/utils"
 import yargs from "yargs"
 
-import { getItemListingSummary } from "@sui-oracle-market/domain-core/models/item-listing"
+import {
+  getItemListingSummary,
+  requireListingIdFromItemListingAddedEvents
+} from "@sui-oracle-market/domain-core/models/item-listing"
 import { parseUsdToCents } from "@sui-oracle-market/domain-core/models/shop"
 import { buildAddItemListingTransaction } from "@sui-oracle-market/domain-core/ptb/item-listing"
-import {
-  normalizeIdOrThrow,
-  normalizeOptionalId
-} from "@sui-oracle-market/tooling-core/object"
+import { normalizeOptionalId } from "@sui-oracle-market/tooling-core/object"
 import { parsePositiveU64 } from "@sui-oracle-market/tooling-core/utils/utility"
 import { emitJsonOutput } from "@sui-oracle-market/tooling-node/json"
 import { logKeyValueGreen } from "@sui-oracle-market/tooling-node/log"
 import { runSuiScript } from "@sui-oracle-market/tooling-node/process"
-import { ensureCreatedObject } from "@sui-oracle-market/tooling-node/transactions"
 import { logItemListingSummary } from "../../utils/log-summaries.ts"
 import { resolveOwnerShopIdentifiers } from "../../utils/shop-context.ts"
 
@@ -54,16 +53,10 @@ runSuiScript(
     if (!execution) return
 
     const { transactionResult } = execution
-
-    const createdListingChange = ensureCreatedObject(
-      "::shop::ItemListing",
-      transactionResult
-    )
-
-    const listingId = normalizeIdOrThrow(
-      createdListingChange.objectId,
-      "Expected an ItemListing to be created."
-    )
+    const listingId = requireListingIdFromItemListingAddedEvents({
+      events: transactionResult.events,
+      shopId: inputs.shopId
+    })
     const listingSummary = await getItemListingSummary(
       inputs.shopId,
       listingId,
@@ -74,7 +67,7 @@ runSuiScript(
       emitJsonOutput(
         {
           itemListing: listingSummary,
-          digest: createdListingChange.digest,
+          digest: transactionResult.digest,
           transactionSummary: summary
         },
         cliArguments.json
@@ -83,8 +76,8 @@ runSuiScript(
       return
 
     logItemListingSummary(listingSummary)
-    if (createdListingChange.digest)
-      logKeyValueGreen("digest")(createdListingChange.digest)
+    if (transactionResult.digest)
+      logKeyValueGreen("digest")(transactionResult.digest)
   },
   yargs()
     .option("shopPackageId", {
