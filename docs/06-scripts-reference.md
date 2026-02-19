@@ -339,6 +339,7 @@ Owner scripts default `--shop-package-id`, `--shop-id`, and `--owner-cap-id` fro
 
 ### `pnpm script buyer:buy:list`
 - Lists `ShopItem` receipts owned by an address (default: configured account) with optional shop filtering.
+- Receipt payloads expose `listingId` as a numeric `u64` string (not a Sui object ID).
 - Flags:
 	- `--address <0x...>`: owner address to list; defaults to configured account.
 	- `--shop-package-id <id>`: `sui_oracle_market` package ID for type filtering; inferred from artifacts when omitted.

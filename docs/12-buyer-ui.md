@@ -156,7 +156,7 @@ const discountContext = await resolveDiscountContext({
 
 ## 9. Exercises
 1. Pay with SUI while you only have one SUI coin object. Expected outcome: error explaining you need a second coin for gas in `packages/domain/core/src/flows/buy.ts`.
-2. Buy an item from the UI and verify a `ShopItem` receipt appears in the wallet panel. Expected outcome: receipt IDs listed in the UI.
+2. Buy an item from the UI and verify a `ShopItem` receipt appears in the wallet panel. Expected outcome: receipt IDs and numeric `listingId` values (`u64`) are listed in the UI.
 
 ## 10. Diagram: buy PTB
 ```
