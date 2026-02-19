@@ -89,25 +89,26 @@ entry fun buy_item<TItem: store, TCoin>(
   max_price_age_secs: Option<u64>,
   max_confidence_ratio_bps: Option<u16>,
   clock: &clock::Clock,
-  ctx: &mut tx::TxContext,
+  ctx: &mut TxContext,
 ) {
-  assert_shop_active(shop);
-  assert_listing_matches_shop(shop, item_listing);
+  assert_shop_active!(shop);
+  assert_listing_matches_shop!(shop, item_listing);
   let base_price_usd_cents = item_listing.base_price_usd_cents;
   let (owed_coin_opt, change_coin, minted_item) = shop.process_purchase<TItem, TCoin>(
     item_listing,
     price_info_object,
     payment,
-    mint_to,
-    refund_extra_to,
     base_price_usd_cents,
-    opt::none(),
+    option::none(),
     max_price_age_secs,
     max_confidence_ratio_bps,
     clock,
     ctx,
   );
-  // transfer owed coin, refund change, transfer minted item
+  owed_coin_opt.do!(|owed_coin| {
+    transfer::public_transfer(owed_coin, shop.owner);
+  });
+  // refund change and transfer minted item
 }
 ```
 

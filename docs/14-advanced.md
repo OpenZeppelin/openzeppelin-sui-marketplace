@@ -88,7 +88,7 @@ public fun accepted_currency_exists(
   shop: &Shop,
   coin_type: TypeName,
 ): bool {
-  table::contains(&shop.accepted_currencies, coin_type)
+  shop.accepted_currencies.contains(coin_type)
 }
 ```
 
@@ -120,7 +120,7 @@ entry fun buy_item<TItem: store, TCoin>(
   max_price_age_secs: Option<u64>,
   max_confidence_ratio_bps: Option<u16>,
   clock: &clock::Clock,
-  ctx: &mut tx::TxContext
+  ctx: &mut TxContext
 ) {
   // listing + currency checks
   // oracle guardrails

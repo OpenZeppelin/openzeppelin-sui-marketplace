@@ -40,11 +40,11 @@ The shop now stores accepted currencies in `Table<TypeName, AcceptedCurrency>` i
 1. **Keyed lookup is the core operation**: checkout and removal need `coin type -> currency config` directly. `Table` gives typed `contains/borrow/remove` by key.
 2. **Strong typing matches the domain**: keys are always `TypeName` and values are always `AcceptedCurrency`; `Bag` is better when key/value types vary.
 3. **No index semantics needed**: `TableVec` is for index-based collection behavior. Currency access is by coin type, not by numeric position.
-4. **Still dynamic-field backed under the hood**: `Table` compiles to dynamic-field storage but exposes a safer, clearer API in Move.
+4. **Still dynamic-field backed under the hood**: `Table` is implemented with dynamic fields but exposes a safer, clearer API in Move.
 
 ## 6. Concept deep dive: coins, registry, and oracles
 - **`Coin<T>` as payment resource**: checkout consumes `Coin<T>` inputs; no `approve/transferFrom` model.
-  Code: `packages/dapp/contracts/oracle-market/sources/shop.move` (`process_purchase`, `split_payment`, `finalize_purchase_transfers`)
+  Code: `packages/dapp/contracts/oracle-market/sources/shop.move` (`buy_item`, `process_purchase`, `split_payment`)
 - **Coin registry metadata**: `coin_registry::Currency<T>` provides symbol/decimals copied into `AcceptedCurrency` during registration.
   Code: `packages/dapp/contracts/oracle-market/sources/shop.move` (`add_accepted_currency`)
 - **Strict oracle identity checks**: both `pyth_object_id` and `feed_id` must match the provided `PriceInfoObject`.
@@ -96,7 +96,7 @@ entry fun add_accepted_currency<T>(
     resolve_guardrail_cap!(max_price_status_lag_secs_cap, DEFAULT_MAX_PRICE_STATUS_LAG_SECS),
   );
 
-  table::add(&mut shop.accepted_currencies, coin_type, accepted_currency);
+  shop.accepted_currencies.add(coin_type, accepted_currency);
 }
 ```
 
