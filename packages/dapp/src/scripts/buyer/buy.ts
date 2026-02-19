@@ -39,7 +39,8 @@ import {
 } from "@sui-oracle-market/tooling-core/object"
 import {
   parseOptionalU16,
-  parseOptionalU64
+  parseOptionalU64,
+  parseNonNegativeU64
 } from "@sui-oracle-market/tooling-core/utils/utility"
 import { emitJsonOutput } from "@sui-oracle-market/tooling-node/json"
 import {
@@ -83,11 +84,8 @@ runSuiScript(
     const mintTo = inputs.mintTo ?? signerAddress
     const refundTo = inputs.refundTo ?? signerAddress
 
-    const shopShared = await tooling.getImmutableSharedObject({
+    const shopShared = await tooling.getMutableSharedObject({
       objectId: inputs.shopId
-    })
-    const itemListingShared = await tooling.getMutableSharedObject({
-      objectId: inputs.itemListingId
     })
 
     const shopPackageId = deriveRelevantPackageId(shopShared.object.type)
@@ -241,7 +239,7 @@ runSuiScript(
       {
         shopPackageId,
         shopShared,
-        itemListingShared,
+        itemListingId: inputs.itemListingId,
         acceptedCurrencyShared,
         pythPriceInfoShared,
         pythFeedIdHex: acceptedCurrencySummary.feedIdHex,
@@ -316,7 +314,7 @@ runSuiScript(
     .option("itemListingId", {
       alias: ["item-listing-id", "listing-id"],
       type: "string",
-      description: "ItemListing object ID to buy.",
+      description: "Listing id (u64) to buy.",
       demandOption: true
     })
     .option("coinType", {
@@ -472,7 +470,10 @@ const normalizeInputs = async (
 
   return {
     shopId,
-    itemListingId: normalizeSuiObjectId(cliArguments.itemListingId),
+    itemListingId: parseNonNegativeU64(
+      cliArguments.itemListingId,
+      "itemListingId"
+    ).toString(),
     coinType,
     paymentCoinObjectId: cliArguments.paymentCoinObjectId
       ? normalizeSuiObjectId(cliArguments.paymentCoinObjectId)

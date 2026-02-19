@@ -17,7 +17,6 @@ import {
   type DiscountRuleKindLabel
 } from "@sui-oracle-market/domain-core/models/discount"
 import { buildCreateDiscountTemplateTransaction } from "@sui-oracle-market/domain-core/ptb/discount-template"
-import { normalizeOptionalId } from "@sui-oracle-market/tooling-core/object"
 import {
   parseNonNegativeU64,
   parseOptionalU64
@@ -136,7 +135,7 @@ runSuiScript(
       alias: ["listing-id", "applies-to"],
       type: "string",
       description:
-        "Optional ItemListing object ID to pin this template to a single SKU."
+        "Optional listing id (u64) to pin this template to a single SKU."
     })
     .option("shopPackageId", {
       alias: "shop-package-id",
@@ -217,7 +216,10 @@ const normalizeInputs = async (
     packageId,
     shopId,
     ownerCapId,
-    appliesToListingId: normalizeOptionalId(cliArguments.listingId),
+    appliesToListingId: parseOptionalU64(
+      cliArguments.listingId,
+      "listingId"
+    )?.toString(),
     ruleKind,
     ruleValue: parseDiscountRuleValue(ruleKind, cliArguments.value),
     startsAt,

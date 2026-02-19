@@ -1,8 +1,7 @@
 /**
- * Updates inventory on an ItemListing shared object.
+ * Updates inventory for a listing stored in the Shop table.
  * Requires the ShopOwnerCap capability and emits stock update events.
  */
-import { normalizeSuiObjectId } from "@mysten/sui/utils"
 import yargs from "yargs"
 
 import { getItemListingSummary } from "@sui-oracle-market/domain-core/models/item-listing"
@@ -32,17 +31,14 @@ runSuiScript(
       cliArguments,
       tooling.network.networkName
     )
-    const shopSharedObject = await tooling.getImmutableSharedObject({
+    const shopSharedObject = await tooling.getMutableSharedObject({
       objectId: inputs.shopId
-    })
-    const itemListingSharedObject = await tooling.getMutableSharedObject({
-      objectId: inputs.itemListingId
     })
 
     const updateStockTransaction = buildUpdateItemListingStockTransaction({
       packageId: inputs.packageId,
       shop: shopSharedObject,
-      itemListing: itemListingSharedObject,
+      itemListingId: inputs.itemListingId,
       ownerCapId: inputs.ownerCapId,
       newStock: inputs.newStock
     })
@@ -84,8 +80,7 @@ runSuiScript(
     .option("itemListingId", {
       alias: ["item-listing-id", "item-id", "listing-id"],
       type: "string",
-      description:
-        "ItemListing object ID to update (object ID, not a type tag).",
+      description: "Listing id (u64) to update.",
       demandOption: true
     })
     .option("stock", {
@@ -154,7 +149,10 @@ const normalizeInputs = async (
     packageId,
     shopId,
     ownerCapId,
-    itemListingId: normalizeSuiObjectId(cliArguments.itemListingId),
+    itemListingId: parseNonNegativeU64(
+      cliArguments.itemListingId,
+      "itemListingId"
+    ).toString(),
     newStock: parseNonNegativeU64(cliArguments.stock, "stock")
   }
 }

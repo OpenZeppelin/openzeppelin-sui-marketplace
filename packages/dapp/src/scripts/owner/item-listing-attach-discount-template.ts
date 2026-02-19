@@ -11,6 +11,7 @@ import {
   buildAttachDiscountTemplateTransaction,
   validateTemplateAndListing
 } from "@sui-oracle-market/domain-core/ptb/item-listing"
+import { parseNonNegativeU64 } from "@sui-oracle-market/tooling-core/utils/utility"
 import { emitJsonOutput } from "@sui-oracle-market/tooling-node/json"
 import { logKeyValueGreen } from "@sui-oracle-market/tooling-node/log"
 import { runSuiScript } from "@sui-oracle-market/tooling-node/process"
@@ -34,11 +35,8 @@ runSuiScript(
       suiClient: tooling.suiClient
     })
 
-    const shopSharedObject = await tooling.getImmutableSharedObject({
+    const shopSharedObject = await tooling.getMutableSharedObject({
       objectId: inputs.shopId
-    })
-    const itemListingSharedObject = await tooling.getMutableSharedObject({
-      objectId: resolvedIds.itemListingId
     })
     const discountTemplateSharedObject = await tooling.getImmutableSharedObject(
       { objectId: resolvedIds.discountTemplateId }
@@ -48,7 +46,7 @@ runSuiScript(
       buildAttachDiscountTemplateTransaction({
         packageId: inputs.packageId,
         shop: shopSharedObject,
-        itemListing: itemListingSharedObject,
+        itemListingId: resolvedIds.itemListingId,
         discountTemplate: discountTemplateSharedObject,
         ownerCapId: inputs.ownerCapId
       })
@@ -99,8 +97,7 @@ runSuiScript(
     .option("itemListingId", {
       alias: ["item-listing-id", "item-id", "listing-id"],
       type: "string",
-      description:
-        "ItemListing object ID to attach the discount to (object ID, not a type tag).",
+      description: "Listing id (u64) to attach the discount to.",
       demandOption: true
     })
     .option("discountTemplateId", {
@@ -169,7 +166,10 @@ const normalizeInputs = async (
     packageId,
     shopId,
     ownerCapId,
-    itemListingId: normalizeSuiObjectId(cliArguments.itemListingId),
+    itemListingId: parseNonNegativeU64(
+      cliArguments.itemListingId,
+      "itemListingId"
+    ).toString(),
     discountTemplateId: normalizeSuiObjectId(cliArguments.discountTemplateId)
   }
 }

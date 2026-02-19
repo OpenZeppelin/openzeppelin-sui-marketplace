@@ -29,6 +29,7 @@ import {
   type DiscountTemplateSummary
 } from "@sui-oracle-market/domain-core/models/discount"
 import {
+  findAddedItemListingId,
   getItemListingSummaries,
   getItemListingSummary,
   type ItemListingSummary
@@ -69,7 +70,6 @@ import {
   assertBytesLength,
   hexToBytes
 } from "@sui-oracle-market/tooling-core/hex"
-import { normalizeIdOrThrow } from "@sui-oracle-market/tooling-core/object"
 import { isStaleObjectVersionError } from "@sui-oracle-market/tooling-core/transactions"
 import { readMoveString } from "@sui-oracle-market/tooling-core/utils/formatters"
 import { retryWithDelay } from "@sui-oracle-market/tooling-core/utils/retry"
@@ -98,7 +98,6 @@ import {
 } from "@sui-oracle-market/tooling-node/log"
 import { runSuiScript } from "@sui-oracle-market/tooling-node/process"
 import {
-  ensureCreatedObject,
   findCreatedArtifactIdBySuffix,
   requireCreatedArtifactIdBySuffix
 } from "@sui-oracle-market/tooling-node/transactions"
@@ -1267,15 +1266,11 @@ const ensureItemListing = async ({
       })
   })
 
-  const createdListingChange = ensureCreatedObject(
-    "::shop::ItemListing",
-    transactionResult
-  )
-
-  const listingId = normalizeIdOrThrow(
-    createdListingChange.objectId,
-    "Expected an ItemListing to be created."
-  )
+  const listingId = findAddedItemListingId(transactionResult)
+  if (!listingId)
+    throw new Error(
+      "Expected ItemListingAddedEvent to include listing_id during shop seed."
+    )
   const listingSummary = await getItemListingSummary(
     shopIdentifiers.shopId,
     listingId,
@@ -1460,11 +1455,8 @@ const ensureFixedDiscountSpotlight = async ({
     suiClient
   })
 
-  const shopSharedObject = await tooling.getImmutableSharedObject({
+  const shopSharedObject = await tooling.getMutableSharedObject({
     objectId: shopIdentifiers.shopId
-  })
-  const itemListingSharedObject = await tooling.getMutableSharedObject({
-    objectId: resolvedIds.itemListingId
   })
   const discountTemplateSharedObject = await tooling.getImmutableSharedObject({
     objectId: resolvedIds.discountTemplateId
@@ -1476,7 +1468,7 @@ const ensureFixedDiscountSpotlight = async ({
       buildAttachDiscountTemplateTransaction({
         packageId: shopIdentifiers.packageId,
         shop: shopSharedObject,
-        itemListing: itemListingSharedObject,
+        itemListingId: resolvedIds.itemListingId,
         discountTemplate: discountTemplateSharedObject,
         ownerCapId: shopIdentifiers.ownerCapId
       })
