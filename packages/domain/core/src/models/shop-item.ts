@@ -11,6 +11,8 @@ import {
   readMoveStringOrVector
 } from "@sui-oracle-market/tooling-core/utils/formatters"
 import { formatTypeNameFromFieldValue } from "@sui-oracle-market/tooling-core/utils/type-name"
+import { requireValue } from "@sui-oracle-market/tooling-core/utils/utility"
+import { normalizeOptionalListingIdFromValue } from "./item-listing.ts"
 
 export const SHOP_ITEM_TYPE_FRAGMENT = "::shop::ShopItem"
 
@@ -94,8 +96,8 @@ export const parseShopItemReceiptFromObject = (
     normalizeOptionalIdFromValue(shopItemFields.shop_id),
     `Missing shop_id for ShopItem ${shopItemId}.`
   )
-  const itemListingId = normalizeIdOrThrow(
-    normalizeOptionalIdFromValue(shopItemFields.item_listing_id),
+  const itemListingId = requireValue(
+    normalizeOptionalListingIdFromValue(shopItemFields.item_listing_id),
     `Missing item_listing_id for ShopItem ${shopItemId}.`
   )
   const itemType =

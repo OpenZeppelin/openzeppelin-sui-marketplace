@@ -37,6 +37,7 @@ import type {
   DiscountTemplateSummary
 } from "../models/discount.ts"
 import { parseDiscountTicketFromObject } from "../models/discount.ts"
+import { normalizeListingId } from "../models/item-listing.ts"
 import type { PriceUpdatePolicy, PythPullOracleConfig } from "../models/pyth.ts"
 import { resolvePythPullOracleConfig } from "../models/pyth.ts"
 
@@ -555,7 +556,7 @@ export const buildBuyTransaction = async (
   {
     shopPackageId,
     shopShared,
-    itemListingShared,
+    itemListingId,
     pythPriceInfoShared,
     pythFeedIdHex,
     paymentCoinObjectId,
@@ -577,7 +578,7 @@ export const buildBuyTransaction = async (
   }: {
     shopPackageId: string
     shopShared: Awaited<ReturnType<typeof getSuiSharedObject>>
-    itemListingShared: Awaited<ReturnType<typeof getSuiSharedObject>>
+    itemListingId: string
     pythPriceInfoShared: Awaited<ReturnType<typeof getSuiSharedObject>>
     pythFeedIdHex: string
     paymentCoinObjectId: string
@@ -614,9 +615,7 @@ export const buildBuyTransaction = async (
   }
 
   const shopArgument = transaction.sharedObjectRef(shopShared.sharedRef)
-  const listingArgument = transaction.sharedObjectRef(
-    itemListingShared.sharedRef
-  )
+  const listingId = BigInt(normalizeListingId(itemListingId))
 
   const clockShared = await getSuiSharedObject(
     {
@@ -703,7 +702,7 @@ export const buildBuyTransaction = async (
       typeArguments,
       arguments: [
         shopArgument,
-        listingArgument,
+        transaction.pure.u64(listingId),
         transaction.sharedObjectRef(discountTemplateShared.sharedRef),
         pythPriceInfoArgument,
         paymentArgument,
@@ -729,7 +728,7 @@ export const buildBuyTransaction = async (
       typeArguments,
       arguments: [
         shopArgument,
-        listingArgument,
+        transaction.pure.u64(listingId),
         transaction.sharedObjectRef(discountTemplateShared.sharedRef),
         transaction.object(discountContext.discountTicketId),
         pythPriceInfoArgument,
@@ -750,7 +749,7 @@ export const buildBuyTransaction = async (
     typeArguments,
     arguments: [
       shopArgument,
-      listingArgument,
+      transaction.pure.u64(listingId),
       pythPriceInfoArgument,
       paymentArgument,
       transaction.pure.address(mintTo),
