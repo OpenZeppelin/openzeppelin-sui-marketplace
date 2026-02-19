@@ -1410,16 +1410,16 @@ fun allocate_listing_id(shop: &mut Shop): u64 {
 }
 
 fun add_listing(shop: &mut Shop, listing_id: u64, listing: ItemListing) {
-    table::add(&mut shop.listings, listing_id, listing);
+    shop.listings.add(listing_id, listing);
 }
 
 fun remove_listing(shop: &mut Shop, listing_id: u64) {
-    let _listing = table::remove(&mut shop.listings, listing_id);
+    let _listing = shop.listings.remove(listing_id);
 }
 
 fun borrow_listing(shop: &Shop, listing_id: u64): &ItemListing {
     assert_listing_registered!(shop, listing_id);
-    let listing = table::borrow(&shop.listings, listing_id);
+    let listing = shop.listings.borrow(listing_id);
     assert!(listing.listing_id == listing_id, EListingShopMismatch);
     assert!(listing.shop_address == shop.id.to_address(), EListingShopMismatch);
     listing
@@ -1427,7 +1427,7 @@ fun borrow_listing(shop: &Shop, listing_id: u64): &ItemListing {
 
 fun borrow_listing_mut(shop: &mut Shop, listing_id: u64, shop_address: address): &mut ItemListing {
     assert_listing_registered!(shop, listing_id);
-    let listing = table::borrow_mut(&mut shop.listings, listing_id);
+    let listing = shop.listings.borrow_mut(listing_id);
     assert!(listing.listing_id == listing_id, EListingShopMismatch);
     assert!(listing.shop_address == shop_address, EListingShopMismatch);
     listing
@@ -1482,7 +1482,7 @@ macro fun assert_currency_registered($shop: &Shop, $accepted_currency_id: object
 macro fun assert_listing_registered($shop: &Shop, $listing_id: u64) {
     let shop = $shop;
     let listing_id = $listing_id;
-    assert!(table::contains(&shop.listings, listing_id), EListingShopMismatch);
+    assert!(shop.listings.contains(listing_id), EListingShopMismatch);
 }
 
 macro fun assert_template_matches_shop($shop: &Shop, $template: &DiscountTemplate) {
@@ -2150,7 +2150,7 @@ macro fun assert_template_claimable(
 
 /// Returns true if the listing is registered under the shop.
 public fun listing_exists(shop: &Shop, listing_id: u64): bool {
-    table::contains(&shop.listings, listing_id)
+    shop.listings.contains(listing_id)
 }
 
 /// Returns true if the discount template is registered under the shop.
