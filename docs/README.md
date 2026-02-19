@@ -30,7 +30,7 @@ Use this page as the navigation hub for the docs. Each chapter ends with Prev/Ne
 
 ## 2. Jump to a goal
 1. I want a local chain and published package -> [05 Localnet workflow (end-to-end)](05-localnet-workflow.md)
-2. I want to understand shared objects + dynamic fields -> [07 Shop Object + Capability Auth](07-shop-capabilities.md) then [08 Listings + Typed Receipts](08-listings-receipts.md)
+2. I want to understand shared objects + tables/dynamic fields -> [07 Shop Object + Capability Auth](07-shop-capabilities.md) then [08 Listings + Typed Receipts](08-listings-receipts.md)
 3. I want to wire currencies + oracles -> [09 Currencies + Oracles](09-currencies-oracles.md)
 4. I want the UI flow -> [11 UI reference (setup + localnet execution)](11-ui-reference.md) then [12 Buyer Flow + UI](12-buyer-ui.md)
 5. I want tests -> [15 Testing (integration + unit + script framework)](15-testing.md)
@@ -48,12 +48,12 @@ Use this page as the navigation hub for the docs. Each chapter ends with Prev/Ne
 
 | Concept | Why it matters | Code anchor | Docs |
 | --- | --- | --- | --- |
-| Shared objects | Concurrency boundary; avoid global storage contention | `packages/dapp/contracts/oracle-market/sources/shop.move` (Shop, ItemListing) | `docs/07-shop-capabilities.md`, `docs/08-listings-receipts.md` |
+| Shared objects | Concurrency boundary; avoid global storage contention | `packages/dapp/contracts/oracle-market/sources/shop.move` (Shop, DiscountTemplate) | `docs/07-shop-capabilities.md`, `docs/08-listings-receipts.md` |
 | Address-owned objects | Capabilities and receipts live in wallets | `packages/dapp/contracts/oracle-market/sources/shop.move` (ShopOwnerCap, ShopItem) | `docs/07-shop-capabilities.md`, `docs/08-listings-receipts.md` |
-| Object-owned children | Dynamic-field markers are owned by parent objects | `packages/dapp/contracts/oracle-market/sources/shop.move` (ItemListingMarker, DiscountClaim) | `docs/08-listings-receipts.md`, `docs/10-discounts-tickets.md` |
+| Object-owned children | Table entries and claim markers are owned by parent objects | `packages/dapp/contracts/oracle-market/sources/shop.move` (Shop.listings table entries, DiscountClaim) | `docs/08-listings-receipts.md`, `docs/10-discounts-tickets.md` |
 | Ownership types | Fastpath vs consensus trade-offs | `packages/tooling/core/src/object-info.ts` (owner labels) | `docs/16-object-ownership.md` |
 | Capabilities | Explicit admin auth via owned objects | `packages/dapp/contracts/oracle-market/sources/shop.move` (ShopOwnerCap) | `docs/07-shop-capabilities.md` |
-| Dynamic fields | Membership index and discovery without monolithic maps | `packages/dapp/contracts/oracle-market/sources/shop.move` (ItemListingMarker, DiscountClaim) | `docs/08-listings-receipts.md`, `docs/10-discounts-tickets.md` |
+| Dynamic fields / Table | Typed collections in `Shop` plus per-template claim tracking | `packages/dapp/contracts/oracle-market/sources/shop.move` (`Table<u64, ItemListing>`, `Table<TypeName, AcceptedCurrency>`, `DiscountClaim`) | `docs/08-listings-receipts.md`, `docs/10-discounts-tickets.md` |
 | Type tags / TypeName | Runtime type names for listings and coins; compile-time safety still comes from generics | `packages/dapp/contracts/oracle-market/sources/shop.move` (item_type, coin_type) | `docs/08-listings-receipts.md`, `docs/09-currencies-oracles.md` |
 | Phantom types | Typed receipts without storing the value | `packages/dapp/contracts/oracle-market/sources/shop.move` (`ShopItem<phantom TItem>`) | `docs/08-listings-receipts.md` |
 | `Coin<T>` resources | Payment as objects, not allowances | `packages/dapp/contracts/oracle-market/sources/shop.move` (process_purchase, split_payment, finalize_purchase_transfers) | `docs/09-currencies-oracles.md` |
@@ -67,4 +67,4 @@ Use this page as the navigation hub for the docs. Each chapter ends with Prev/Ne
 | Publisher / init | Publish-time metadata | `packages/dapp/contracts/oracle-market/sources/shop.move` (init, package::claim_and_keep) | `docs/04-localnet-publish.md` |
 | UpgradeCap | Package upgrades and access control | `packages/dapp/deployments/deployment.localnet.json` | `docs/04-localnet-publish.md`, `docs/14-advanced.md` |
 | test_only helpers | Test scaffolding without prod entry points | `packages/dapp/contracts/oracle-market/sources/shop.move` (#[test_only]) | `docs/14-advanced.md` |
-| Data access | Objects + events + dynamic fields in UI | `packages/domain/core/src/models/shop.ts` (event queries) | `docs/18-data-access.md` |
+| Data access | Objects + events + table-entry reads in UI | `packages/domain/core/src/models/shop.ts` (event queries) | `docs/18-data-access.md` |

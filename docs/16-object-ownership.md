@@ -7,7 +7,7 @@ This chapter clarifies Sui ownership types, how versioning works, and how this r
 ## 1. Learning goals
 1. Understand the ownership types Sui exposes and when each is appropriate.
 2. Learn the difference between fastpath (single-owner) and consensus objects.
-3. Map ownership and versioning to the Shop, listings, currencies, and tickets.
+3. Map ownership and versioning to the Shop, table-backed listings/currencies, and tickets.
 
 ## 2. Prerequisites
 None. This is a conceptual chapter that builds on earlier examples.
@@ -21,18 +21,18 @@ None. This is a conceptual chapter that builds on earlier examples.
 - **Address-owned objects (fastpath)**: owned by a wallet address. These can execute on the fastpath with low latency. Examples here: `ShopOwnerCap`, `DiscountTicket`, and `ShopItem`.
 - **Shared objects (consensus)**: anyone can include them in a transaction, and mutations are
   sequenced by consensus, but module checks still gate what can change. Examples here: `Shop`,
-  `ItemListing`, `AcceptedCurrency`, `DiscountTemplate`, and the Pyth `PriceInfoObject`.
-- **Object-owned objects**: children owned by another object. This is how dynamic-field markers and per-claimer claims work.
+  `DiscountTemplate`, and the Pyth `PriceInfoObject`.
+- **Object-owned objects**: children owned by another object. This is how table entries and per-claimer claim markers work.
 - **Immutable objects**: globally readable, never mutable. Common for package-published constants or registry-like data.
 
 ## 5. Concept deep dive: versioning paths
 - **Fastpath objects**: address-owned objects execute without consensus and require the latest version in each transaction input. Conflicting transactions from the same owner fail, so avoid signing two transactions against the same version.
 - **Immutable objects**: read-only inputs that never change, so they do not participate in version contention.
 - **Consensus objects**: shared objects are sequenced by consensus, which simplifies coordination at the cost of higher latency.
-- **What this repo chooses**: the Shop and its child shared objects use consensus so listings and currencies can be accessed by anyone. Owned capabilities and tickets use fastpath for low-latency user interactions.
+- **What this repo chooses**: listing/currency mutations happen through the shared `Shop` object, while templates are separate shared objects. Owned capabilities and tickets use fastpath for low-latency user interactions.
 
 ## 6. Code references
-1. `packages/dapp/contracts/oracle-market/sources/shop.move` (Shop, ShopOwnerCap, DiscountTicket, ItemListingMarker)
+1. `packages/dapp/contracts/oracle-market/sources/shop.move` (Shop, ShopOwnerCap, DiscountTicket, table usage)
 2. `packages/domain/core/src/models/shop.ts` (event queries and shop inspection)
 3. `packages/tooling/core/src/object-info.ts` (ownership labels and version metadata)
 
@@ -48,12 +48,18 @@ public struct DiscountTicket has key, store {
   id: UID,
   discount_template_id: ID,
   shop_id: ID,
-  listing_id: Option<ID>,
+  listing_id: Option<u64>,
   claimer: address,
 }
 
-public struct ItemListingMarker has copy, drop, store {
-  listing_id: ID,
+public struct Shop has key, store {
+  id: UID,
+  owner: address,
+  name: String,
+  disabled: bool,
+  accepted_currencies: Table<TypeName, AcceptedCurrency>,
+  listings: Table<u64, ItemListing>,
+  next_listing_id: u64,
 }
 ```
 
@@ -64,8 +70,8 @@ public struct ItemListingMarker has copy, drop, store {
 ## 8. Diagram: ownership layout
 ```
 Address-owned (fastpath): ShopOwnerCap, DiscountTicket, ShopItem
-Shared (consensus): Shop, ItemListing, AcceptedCurrency, DiscountTemplate, PriceInfoObject
-Object-owned: ItemListingMarker, AcceptedCurrencyMarker, DiscountClaim
+Shared (consensus): Shop, DiscountTemplate, PriceInfoObject
+Object-owned: table entries for Shop.listings / Shop.accepted_currencies, DiscountClaim
 ```
 
 ## 9. Further reading (Sui docs)
