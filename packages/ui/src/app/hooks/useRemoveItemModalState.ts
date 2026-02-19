@@ -187,16 +187,11 @@ export const useRemoveItemModalState = ({
         ownerAddress: walletAddress,
         suiClient
       })
-      const listingShared = await getSuiSharedObject(
-        { objectId: listing.itemListingId, mutable: false },
-        { suiClient }
-      )
-
       const removeListingTransaction = buildRemoveItemListingTransaction({
         packageId: shopPackageId,
         shop: shopShared,
         ownerCapId: ownerCapabilityId,
-        itemListing: listingShared
+        itemListingId: listing.itemListingId
       })
       removeListingTransaction.setSender(walletAddress)
 

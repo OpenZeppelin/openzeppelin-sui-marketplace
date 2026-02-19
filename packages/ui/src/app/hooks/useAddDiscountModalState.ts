@@ -23,10 +23,7 @@ import {
   type NormalizedRuleKind
 } from "@sui-oracle-market/domain-core/models/discount"
 import { buildCreateDiscountTemplateTransaction } from "@sui-oracle-market/domain-core/ptb/discount-template"
-import {
-  deriveRelevantPackageId,
-  normalizeOptionalId
-} from "@sui-oracle-market/tooling-core/object"
+import { deriveRelevantPackageId } from "@sui-oracle-market/tooling-core/object"
 import { getSuiSharedObject } from "@sui-oracle-market/tooling-core/shared-object"
 import { ENetwork } from "@sui-oracle-market/tooling-core/types"
 import {
@@ -36,10 +33,7 @@ import {
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { EXPLORER_URL_VARIABLE_NAME } from "../config/network"
 import { formatDiscountRulePreview } from "../helpers/discountPreview"
-import {
-  resolveValidationMessage,
-  validateOptionalSuiObjectId
-} from "../helpers/inputValidation"
+import { resolveValidationMessage } from "../helpers/inputValidation"
 import {
   getLocalnetClient,
   makeLocalnetExecutor,
@@ -180,11 +174,16 @@ const buildDiscountFieldErrors = (
     }
   }
 
-  const listingError = validateOptionalSuiObjectId(
-    formState.appliesToListingId,
-    "Listing id"
-  )
-  if (listingError) errors.appliesToListingId = listingError
+  if (formState.appliesToListingId.trim()) {
+    try {
+      parseOptionalU64(formState.appliesToListingId, "Listing id")
+    } catch (error) {
+      errors.appliesToListingId = resolveValidationMessage(
+        error,
+        "Listing id must be a valid u64."
+      )
+    }
+  }
 
   return errors
 }
@@ -210,9 +209,10 @@ const parseDiscountInputs = (formState: DiscountFormState): DiscountInputs => {
     startsAt,
     expiresAt,
     maxRedemptions,
-    appliesToListingId: normalizeOptionalId(
-      formState.appliesToListingId.trim() || undefined
-    )
+    appliesToListingId: parseOptionalU64(
+      formState.appliesToListingId.trim() || undefined,
+      "appliesToListingId"
+    )?.toString()
   }
 }
 

@@ -752,11 +752,7 @@ export const useBuyFlowModalState = ({
       )
 
       const shopShared = await getSuiSharedObject(
-        { objectId: shopId, mutable: false },
-        { suiClient }
-      )
-      const listingShared = await getSuiSharedObject(
-        { objectId: listingSnapshot.itemListingId, mutable: true },
+        { objectId: shopId, mutable: true },
         { suiClient }
       )
       const acceptedCurrencyShared = await getSuiSharedObject(
@@ -921,7 +917,7 @@ export const useBuyFlowModalState = ({
         {
           shopPackageId,
           shopShared,
-          itemListingShared: listingShared,
+          itemListingId: listingSnapshot.itemListingId,
           acceptedCurrencyShared,
           pythPriceInfoShared,
           pythFeedIdHex: currencySnapshot.feedIdHex,
