@@ -60,7 +60,10 @@ describe("buyer shop-view integration", () => {
 
       const itemListings = viewPayload.itemListings
       expect(itemListings.length).toBeGreaterThan(0)
-      const seededListing = findListingById(itemListings, itemListing.itemListingId)
+      const seededListing = findListingById(
+        itemListings,
+        itemListing.itemListingId
+      )
       expect(seededListing).toBeTruthy()
       itemListings.forEach((listing) => {
         expect(listing.itemListingId).toBeTruthy()

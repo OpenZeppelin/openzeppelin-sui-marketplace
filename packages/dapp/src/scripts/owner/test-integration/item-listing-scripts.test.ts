@@ -334,7 +334,10 @@ describe("owner item listing scripts integration", () => {
       "owner-item-listing-clear-discount",
       async (context) => {
         const { publisher, scriptRunner, shopId, itemType } =
-          await createShopWithItemType(context, "Item Listing Clear Discount Shop")
+          await createShopWithItemType(
+            context,
+            "Item Listing Clear Discount Shop"
+          )
         const listing = await createItemListingFixture({
           scriptRunner,
           publisher,
