@@ -86,11 +86,7 @@ const DiscountSummarySection = ({
         explorerUrl={explorerUrl}
       />
       {template.appliesToListingId ? (
-        <CopyableId
-          value={template.appliesToListingId}
-          label="Listing"
-          explorerUrl={explorerUrl}
-        />
+        <CopyableId value={template.appliesToListingId} label="Listing ID" />
       ) : undefined}
       {shopId ? (
         <CopyableId value={shopId} label="Shop ID" explorerUrl={explorerUrl} />

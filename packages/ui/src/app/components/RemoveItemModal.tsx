@@ -63,11 +63,7 @@ const ListingSummarySection = ({
       </div>
     </div>
     <div className="mt-4 flex flex-wrap items-center gap-3 text-xs">
-      <CopyableId
-        value={listing.itemListingId}
-        label="Listing ID"
-        explorerUrl={explorerUrl}
-      />
+      <CopyableId value={listing.itemListingId} label="Listing ID" />
       {shopId ? (
         <CopyableId value={shopId} label="Shop ID" explorerUrl={explorerUrl} />
       ) : undefined}
@@ -210,11 +206,7 @@ const RemoveItemModal = ({
             description="Delist this item from the storefront."
             onClose={onClose}
             footer={
-              <CopyableId
-                value={listing.itemListingId}
-                label="Listing"
-                explorerUrl={explorerUrl}
-              />
+              <CopyableId value={listing.itemListingId} label="Listing ID" />
             }
           />
           <ModalBody>

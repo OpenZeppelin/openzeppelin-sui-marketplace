@@ -232,11 +232,7 @@ const ListingSummarySection = ({
     </div>
     <div className="mt-4 flex flex-wrap items-center gap-3 text-xs">
       {summary.listingId ? (
-        <CopyableId
-          value={summary.listingId}
-          label="Listing ID"
-          explorerUrl={explorerUrl}
-        />
+        <CopyableId value={summary.listingId} label="Listing ID" />
       ) : undefined}
       {shopId ? (
         <CopyableId value={shopId} label="Shop ID" explorerUrl={explorerUrl} />

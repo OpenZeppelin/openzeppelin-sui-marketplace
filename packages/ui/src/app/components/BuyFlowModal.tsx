@@ -485,11 +485,7 @@ const BuyFlowModal = ({
             onClose={onClose}
             footer={
               listing ? (
-                <CopyableId
-                  value={listing.itemListingId}
-                  label="Listing"
-                  explorerUrl={explorerUrl}
-                />
+                <CopyableId value={listing.itemListingId} label="Listing ID" />
               ) : undefined
             }
           />
