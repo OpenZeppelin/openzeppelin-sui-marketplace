@@ -821,7 +821,7 @@ fun quote_rejects_attestation_lag_above_currency_cap() {
 
     let _ = test_scenario::next_tx(&mut scn, TEST_OWNER);
 
-    let mut shared_shop = test_scenario::take_shared_by_id(&scn, shop_id);
+    let shared_shop = test_scenario::take_shared_by_id(&scn, shop_id);
     let mut clock_obj = clock::create_for_testing(test_scenario::ctx(&mut scn));
     clock::set_for_testing(&mut clock_obj, (attestation_time + 1) * 1000);
 
@@ -887,7 +887,7 @@ fun quote_rejects_price_timestamp_older_than_max_age() {
 
     let _ = test_scenario::next_tx(&mut scn, TEST_OWNER);
 
-    let mut shared_shop = test_scenario::take_shared_by_id(&scn, shop_id);
+    let shared_shop = test_scenario::take_shared_by_id(&scn, shop_id);
     let mut clock_obj = clock::create_for_testing(test_scenario::ctx(&mut scn));
     clock::set_for_testing(&mut clock_obj, 200_000);
 
@@ -6190,7 +6190,7 @@ fun buy_item_with_discount_rejects_ticket_shop_mismatch() {
         &scn,
         template_a_id,
     );
-    let mut shared_shop_b = test_scenario::take_shared_by_id(&scn, shop_b_id);
+    let shared_shop_b = test_scenario::take_shared_by_id(&scn, shop_b_id);
     let mut template_b = test_scenario::take_shared_by_id<shop::DiscountTemplate>(
         &scn,
         template_b_id,
