@@ -498,11 +498,7 @@ fun add_item_listing_core<T: store>(
 
     let shop_id = shop.id.to_inner();
     let listing_id = shop.allocate_listing_id();
-    assert_spotlight_template_matches_listing!(
-        shop,
-        listing_id,
-        spotlight_discount_template_id,
-    );
+    assert_spotlight_template_matches_listing!(shop, listing_id, spotlight_discount_template_id);
     let listing = new_item_listing<T>(
         shop_id,
         listing_id,
@@ -1892,10 +1888,7 @@ macro fun assert_template_belongs_to_shop($shop: &Shop, $discount_template_id: I
     assert_template_registered!(shop, discount_template_id);
 }
 
-macro fun assert_template_belongs_to_shop_if_some(
-    $shop: &Shop,
-    $maybe_id: Option<ID>,
-) {
+macro fun assert_template_belongs_to_shop_if_some($shop: &Shop, $maybe_id: Option<ID>) {
     let shop = $shop;
     let maybe_id = $maybe_id;
     maybe_id.do_ref!(|id| {
@@ -1909,10 +1902,7 @@ macro fun assert_listing_belongs_to_shop($shop: &Shop, $listing_id: u64) {
     assert_listing_registered!(shop, listing_id);
 }
 
-macro fun assert_listing_belongs_to_shop_if_some(
-    $shop: &Shop,
-    $maybe_id: Option<u64>,
-) {
+macro fun assert_listing_belongs_to_shop_if_some($shop: &Shop, $maybe_id: Option<u64>) {
     let shop = $shop;
     let maybe_id = $maybe_id;
     maybe_id.do_ref!(|id| {
@@ -1997,10 +1987,7 @@ public fun discount_template_id_for_address(shop: &Shop, template_address: addre
 }
 
 /// Returns listing fields after validating shop membership.
-public fun listing_values(
-    shop: &Shop,
-    listing_id: u64,
-): (String, u64, u64, ID, Option<ID>) {
+public fun listing_values(shop: &Shop, listing_id: u64): (String, u64, u64, ID, Option<ID>) {
     let listing = shop.borrow_listing(listing_id);
     (
         listing.name,
@@ -2198,10 +2185,7 @@ public fun test_max_decimal_power(): u64 {
 }
 
 #[test_only]
-public fun test_listing_values(
-    shop: &Shop,
-    listing_id: u64,
-): (String, u64, u64, ID, Option<ID>) {
+public fun test_listing_values(shop: &Shop, listing_id: u64): (String, u64, u64, ID, Option<ID>) {
     shop.listing_values(listing_id)
 }
 
