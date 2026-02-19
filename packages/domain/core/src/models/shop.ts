@@ -284,8 +284,13 @@ export const resolveOwnerCapabilityId = async ({
 
   const ownedCapabilitySummaries = ownerCapabilityObjects.map((object) => {
     try {
-      const fields = unwrapMoveObjectFields<{ shop_id: unknown }>(object)
-      const shopIdField = normalizeOptionalIdFromValue(fields.shop_id)
+      const fields = unwrapMoveObjectFields<{
+        shop_address?: unknown
+        shop_id?: unknown
+      }>(object)
+      const shopIdField = normalizeOptionalIdFromValue(
+        fields.shop_address ?? fields.shop_id
+      )
       return {
         objectId: object.objectId,
         shopId: shopIdField
@@ -301,8 +306,13 @@ export const resolveOwnerCapabilityId = async ({
 
   const matchingCapability = ownerCapabilityObjects.find((object) => {
     try {
-      const fields = unwrapMoveObjectFields<{ shop_id: unknown }>(object)
-      const shopIdField = normalizeOptionalIdFromValue(fields.shop_id)
+      const fields = unwrapMoveObjectFields<{
+        shop_address?: unknown
+        shop_id?: unknown
+      }>(object)
+      const shopIdField = normalizeOptionalIdFromValue(
+        fields.shop_address ?? fields.shop_id
+      )
       return shopIdField === normalizedShopId
     } catch {
       return false

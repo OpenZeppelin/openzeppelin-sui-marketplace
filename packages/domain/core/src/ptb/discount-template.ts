@@ -31,7 +31,10 @@ export const buildCreateDiscountTemplateTransaction = ({
     arguments: [
       shopArgument,
       transaction.object(ownerCapId),
-      transaction.pure.option("address", appliesToListingId ?? null),
+      transaction.pure.option(
+        "u64",
+        appliesToListingId ? BigInt(appliesToListingId) : null
+      ),
       transaction.pure.u8(ruleKind),
       transaction.pure.u64(ruleValue),
       transaction.pure.u64(startsAt),

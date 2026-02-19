@@ -77,6 +77,20 @@ export const normalizeBigIntFromMoveValue = (
   return undefined
 }
 
+const U64_MAX_VALUE = (1n << 64n) - 1n
+
+/**
+ * Normalizes a Move value into a u64 string when possible.
+ */
+export const normalizeU64StringFromMoveValue = (
+  value: unknown
+): string | undefined => {
+  const parsedValue = normalizeBigIntFromMoveValue(value)
+  if (parsedValue === undefined) return undefined
+  if (parsedValue < 0n || parsedValue > U64_MAX_VALUE) return undefined
+  return parsedValue.toString()
+}
+
 /**
  * Normalizes a boolean from Move-like values (Option, nested fields, or primitives).
  */

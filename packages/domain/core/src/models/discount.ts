@@ -19,6 +19,7 @@ import {
 import {
   extractFieldValueByKeys,
   normalizeBigIntFromMoveValue,
+  normalizeU64StringFromMoveValue,
   unwrapMoveFields
 } from "@sui-oracle-market/tooling-core/utils/move-values"
 import { requireValue } from "@sui-oracle-market/tooling-core/utils/utility"
@@ -446,8 +447,10 @@ const buildDiscountTemplateSummary = (
   markerObjectId: string
 ): DiscountTemplateSummary => {
   const discountTemplateFields = unwrapMoveObjectFields(discountTemplateObject)
-  const shopId = normalizeOptionalIdFromValue(discountTemplateFields.shop_id)
-  const appliesToListingId = normalizeOptionalIdFromValue(
+  const shopId = normalizeOptionalIdFromValue(
+    discountTemplateFields.shop_address ?? discountTemplateFields.shop_id
+  )
+  const appliesToListingId = normalizeU64StringFromMoveValue(
     discountTemplateFields.applies_to_listing
   )
 
@@ -529,12 +532,13 @@ export const parseDiscountTicketFromObject = (
 
   const discountTicketFields = unwrapMoveObjectFields<{
     discount_template_id: unknown
-    shop_id: unknown
+    shop_address?: unknown
+    shop_id?: unknown
     listing_id: unknown
     claimer: unknown
   }>(discountTicketObject)
 
-  const listingId = normalizeOptionalIdFromValue(
+  const listingId = normalizeU64StringFromMoveValue(
     discountTicketFields.listing_id
   )
 
@@ -545,10 +549,12 @@ export const parseDiscountTicketFromObject = (
       `Missing discount_template_id for DiscountTicket ${discountTicketId}.`
     ),
     shopId: normalizeIdOrThrow(
-      normalizeOptionalIdFromValue(discountTicketFields.shop_id),
+      normalizeOptionalIdFromValue(
+        discountTicketFields.shop_address ?? discountTicketFields.shop_id
+      ),
       `Missing shop_id for DiscountTicket ${discountTicketId}.`
     ),
-    listingId: listingId ? normalizeSuiObjectId(listingId) : undefined,
+    listingId,
     claimer: requireValue(
       normalizeOptionalAddress(
         discountTicketFields.claimer as string | undefined

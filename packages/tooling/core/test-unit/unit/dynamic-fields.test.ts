@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest"
 import { createSuiClientMock } from "../../../tests-integration/helpers/sui.ts"
 import {
   getAllDynamicFields,
+  getSuiDynamicFieldObjectByName,
   getObjectIdFromDynamicFieldObject,
   getObjectWithDynamicFieldFallback,
   hasDynamicFieldValueId,
@@ -83,5 +84,39 @@ describe("dynamic field helpers", () => {
     )
 
     expect(result.objectId).toBe("0x5")
+  })
+
+  it("fetches u64-keyed dynamic fields by name fallback", async () => {
+    const { client } = createSuiClientMock({
+      getDynamicFieldObject: vi.fn().mockResolvedValue({
+        data: undefined,
+        error: undefined
+      }),
+      getDynamicFields: vi.fn().mockResolvedValue({
+        data: [
+          {
+            objectId: "0xfield",
+            objectType: "0x2::dynamic_field::Field<u64, 0x1::example::Value>",
+            name: { type: "u64", value: "7" }
+          }
+        ],
+        hasNextPage: false,
+        nextCursor: null
+      }),
+      getObject: vi.fn().mockResolvedValue({
+        data: { objectId: "0xfield", digest: "digest", version: "1" }
+      })
+    })
+
+    const result = await getSuiDynamicFieldObjectByName(
+      {
+        parentObjectId: "0xparent",
+        name: { type: "u64", value: "7" }
+      },
+      { suiClient: client }
+    )
+
+    expect(result.dynamicFieldId).toBe("0xfield")
+    expect(result.childObjectId).toBe("7")
   })
 })

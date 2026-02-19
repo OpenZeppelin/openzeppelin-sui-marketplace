@@ -8,6 +8,7 @@ import { normalizeSuiObjectId } from "@mysten/sui/utils"
 import type { ToolingCoreContext } from "./context.ts"
 import type { WrappedSuiObject } from "./object.ts"
 import { getSuiObject, normalizeOptionalIdFromValue } from "./object.ts"
+import { normalizeBigIntFromMoveValue } from "./utils/move-values.ts"
 import { isRecord } from "./utils/utility.ts"
 
 export type WrappedSuiDynamicFieldObject = WrappedSuiObject & {
@@ -19,6 +20,9 @@ export type WrappedSuiDynamicFieldObject = WrappedSuiObject & {
 type DynamicFieldInfo = Awaited<
   ReturnType<SuiClient["getDynamicFields"]>
 >["data"][number]
+type DynamicFieldName = Parameters<
+  SuiClient["getDynamicFieldObject"]
+>[0]["name"]
 
 /**
  * Lists all dynamic field entries under a parent object.
@@ -158,32 +162,118 @@ export const getSuiDynamicFieldObject = async (
     childObjectId: string
     parentObjectId: string
   },
-  { suiClient }: ToolingCoreContext
-): Promise<WrappedSuiDynamicFieldObject> => {
-  const normalizedChildObjectId = normalizeSuiObjectId(childObjectId)
-  const { data: dynamicFieldObject, error } =
-    await suiClient.getDynamicFieldObject({
-      parentId: normalizeSuiObjectId(parentObjectId),
+  context: ToolingCoreContext
+): Promise<WrappedSuiDynamicFieldObject> =>
+  getSuiDynamicFieldObjectByName(
+    {
+      parentObjectId,
       name: {
         type: "0x2::object::ID",
-        value: normalizedChildObjectId
+        value: normalizeSuiObjectId(childObjectId)
       }
+    },
+    context
+  )
+
+const normalizeDynamicFieldNameValue = (value: unknown): string | undefined => {
+  if (typeof value === "string") {
+    const trimmedValue = value.trim()
+    if (!trimmedValue) return undefined
+
+    // Preserve numeric keys like u64 ("7") instead of coercing them into object IDs.
+    if (!trimmedValue.startsWith("0x")) {
+      const normalizedNumericValue = normalizeBigIntFromMoveValue(trimmedValue)
+      if (normalizedNumericValue !== undefined)
+        return normalizedNumericValue.toString()
+      return trimmedValue
+    }
+
+    const normalizedHexId = normalizeOptionalIdFromValue(trimmedValue)
+    if (normalizedHexId) return normalizedHexId
+    return trimmedValue
+  }
+
+  const normalizedObjectId = normalizeOptionalIdFromValue(value)
+  if (normalizedObjectId) return normalizedObjectId
+
+  const normalizedNumericValue = normalizeBigIntFromMoveValue(value)
+  if (normalizedNumericValue !== undefined)
+    return normalizedNumericValue.toString()
+
+  if (typeof value === "number") return Math.trunc(value).toString()
+  if (typeof value === "bigint") return value.toString()
+
+  return undefined
+}
+
+const normalizeDynamicFieldNameType = (value: unknown): string | undefined => {
+  if (typeof value !== "string") return undefined
+  const normalizedType = value.trim().toLowerCase()
+  if (!normalizedType) return undefined
+  if (normalizedType === "address") return "object::id"
+  if (normalizedType.includes("::object::id")) return "object::id"
+  return normalizedType
+}
+
+const hasMatchingDynamicFieldName = ({
+  expectedName,
+  candidateField
+}: {
+  expectedName: DynamicFieldName
+  candidateField: DynamicFieldInfo
+}) => {
+  const expectedType = normalizeDynamicFieldNameType(expectedName.type)
+  const candidateType = normalizeDynamicFieldNameType(candidateField.name.type)
+  if (expectedType && candidateType && expectedType !== candidateType)
+    return false
+
+  const expectedValue = normalizeDynamicFieldNameValue(expectedName.value)
+  const candidateValue = normalizeDynamicFieldNameValue(
+    candidateField.name.value
+  )
+
+  return expectedValue !== undefined && candidateValue === expectedValue
+}
+
+/**
+ * Fetches a single dynamic field object by parent/name pair.
+ * Supports non-object keys such as `u64` for Table entries.
+ */
+export const getSuiDynamicFieldObjectByName = async (
+  {
+    parentObjectId,
+    name
+  }: {
+    parentObjectId: string
+    name: DynamicFieldName
+  },
+  { suiClient }: ToolingCoreContext
+): Promise<WrappedSuiDynamicFieldObject> => {
+  const normalizedParentObjectId = normalizeSuiObjectId(parentObjectId)
+  const normalizedNameValue =
+    normalizeDynamicFieldNameValue(name.value) ?? String(name.value)
+
+  const { data: dynamicFieldObject, error } =
+    await suiClient.getDynamicFieldObject({
+      parentId: normalizedParentObjectId,
+      name
     })
 
   if (!dynamicFieldObject) {
     const dynamicFields = await getAllDynamicFields(
-      { parentObjectId },
+      { parentObjectId: normalizedParentObjectId },
       { suiClient }
     )
-    const matchingField = dynamicFields.find(
-      (dynamicField) =>
-        normalizeOptionalIdFromValue(dynamicField.name.value) ===
-        normalizedChildObjectId
+    const matchingField = dynamicFields.find((dynamicField) =>
+      hasMatchingDynamicFieldName({
+        expectedName: name,
+        candidateField: dynamicField
+      })
     )
 
     if (!matchingField)
       throw new Error(
-        `Could not fetch dynamic field for ${normalizedChildObjectId}`
+        `Could not fetch dynamic field for key ${normalizedNameValue}`
       )
 
     const { object, error: objectError } = await getSuiObject(
@@ -196,8 +286,8 @@ export const getSuiDynamicFieldObject = async (
 
     return {
       object,
-      parentObjectId,
-      childObjectId: normalizedChildObjectId,
+      parentObjectId: normalizedParentObjectId,
+      childObjectId: normalizedNameValue,
       dynamicFieldId: matchingField.objectId,
       error: objectError || undefined
     }
@@ -205,8 +295,8 @@ export const getSuiDynamicFieldObject = async (
 
   return {
     object: dynamicFieldObject,
-    parentObjectId,
-    childObjectId: normalizedChildObjectId,
+    parentObjectId: normalizedParentObjectId,
+    childObjectId: normalizedNameValue,
     dynamicFieldId: dynamicFieldObject.objectId,
     error: error || undefined
   }

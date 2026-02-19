@@ -1,18 +1,16 @@
 import type { SuiClient } from "@mysten/sui/client"
 import { normalizeSuiObjectId } from "@mysten/sui/utils"
 
-import { getObjectWithDynamicFieldFallback } from "@sui-oracle-market/tooling-core/dynamic-fields"
+import { getItemListingSummary } from "../models/item-listing.ts"
 import {
+  getSuiObject,
   normalizeOptionalIdFromValue,
   unwrapMoveObjectFields
 } from "@sui-oracle-market/tooling-core/object"
 import type { WrappedSuiSharedObject } from "@sui-oracle-market/tooling-core/shared-object"
 import { newTransaction } from "@sui-oracle-market/tooling-core/transactions"
-
-type ListingMetadata = {
-  id: string
-  shopId: string
-}
+import { normalizeBigIntFromMoveValue } from "@sui-oracle-market/tooling-core/utils/move-values"
+import { parseNonNegativeU64 } from "@sui-oracle-market/tooling-core/utils/utility"
 
 type DiscountTemplateMetadata = {
   id: string
@@ -20,44 +18,34 @@ type DiscountTemplateMetadata = {
   appliesToListing?: string
 }
 
-export const getItemListingMetadata = async (
-  listingId: string,
-  shopId: string,
-  suiClient: SuiClient
-): Promise<ListingMetadata> => {
-  const object = await getObjectWithDynamicFieldFallback(
-    { objectId: listingId, parentObjectId: shopId },
-    { suiClient }
-  )
-
-  const fields = unwrapMoveObjectFields(object)
-  const listingShopId = normalizeOptionalIdFromValue(fields.shop_id)
-  if (!listingShopId)
-    throw new Error(`Item listing ${listingId} is missing a shop_id field.`)
-  const normalizedListingId =
-    normalizeOptionalIdFromValue(fields.id) ?? normalizeSuiObjectId(listingId)
-
-  return {
-    id: normalizedListingId,
-    shopId: listingShopId
-  }
+const normalizeListingIdFromMoveValue = (value: unknown) => {
+  const parsedListingId = normalizeBigIntFromMoveValue(value)
+  if (parsedListingId === undefined || parsedListingId < 0n) return undefined
+  return parsedListingId.toString()
 }
+
+const normalizeListingIdInput = (listingId: string, label: string) =>
+  parseNonNegativeU64(listingId, label).toString()
 
 export const getDiscountTemplateMetadata = async (
   templateId: string,
-  shopId: string,
   suiClient: SuiClient
 ): Promise<DiscountTemplateMetadata> => {
-  const object = await getObjectWithDynamicFieldFallback(
-    { objectId: templateId, parentObjectId: shopId },
+  const { object } = await getSuiObject(
+    {
+      objectId: templateId,
+      options: { showContent: true, showType: true }
+    },
     { suiClient }
   )
 
   const fields = unwrapMoveObjectFields(object)
-  const templateShopId = normalizeOptionalIdFromValue(fields.shop_id)
+  const templateShopId = normalizeOptionalIdFromValue(
+    fields.shop_address ?? fields.shop_id
+  )
   if (!templateShopId)
     throw new Error(
-      `Discount template ${templateId} is missing a shop_id field.`
+      `Discount template ${templateId} is missing a shop address field.`
     )
 
   return {
@@ -65,7 +53,7 @@ export const getDiscountTemplateMetadata = async (
       normalizeOptionalIdFromValue(fields.id) ??
       normalizeSuiObjectId(templateId),
     shopId: templateShopId,
-    appliesToListing: normalizeOptionalIdFromValue(fields.applies_to_listing)
+    appliesToListing: normalizeListingIdFromMoveValue(fields.applies_to_listing)
   }
 }
 
@@ -80,31 +68,25 @@ export const validateTemplateAndListing = async ({
   discountTemplateId: string
   suiClient: SuiClient
 }): Promise<{ itemListingId: string; discountTemplateId: string }> => {
-  const [listing, template] = await Promise.all([
-    getItemListingMetadata(itemListingId, shopId, suiClient),
-    getDiscountTemplateMetadata(discountTemplateId, shopId, suiClient)
+  const [listingId, template] = await Promise.all([
+    resolveListingIdForShop({ shopId, itemListingId, suiClient }),
+    getDiscountTemplateMetadata(discountTemplateId, suiClient)
   ])
 
   const normalizedShopId = normalizeSuiObjectId(shopId)
-
-  // Defensive cross-shop check: prevents attaching a foreign listing/template to this Shop.
-  if (listing.shopId !== normalizedShopId)
-    throw new Error(
-      `Item listing ${listing.id} belongs to shop ${listing.shopId}, not ${normalizedShopId}.`
-    )
 
   if (template.shopId !== normalizedShopId)
     throw new Error(
       `Discount template ${template.id} belongs to shop ${template.shopId}, not ${normalizedShopId}.`
     )
 
-  if (template.appliesToListing && template.appliesToListing !== listing.id)
+  if (template.appliesToListing && template.appliesToListing !== listingId)
     throw new Error(
-      `Discount template ${template.id} is pinned to listing ${template.appliesToListing} and cannot be attached to ${listing.id}. Create a template for this listing or use the pinned listing.`
+      `Discount template ${template.id} is pinned to listing ${template.appliesToListing} and cannot be attached to ${listingId}. Create a template for this listing or use the pinned listing.`
     )
 
   return {
-    itemListingId: listing.id,
+    itemListingId: listingId,
     discountTemplateId: template.id
   }
 }
@@ -118,15 +100,13 @@ export const resolveListingIdForShop = async ({
   itemListingId: string
   suiClient: SuiClient
 }): Promise<string> => {
-  const listing = await getItemListingMetadata(itemListingId, shopId, suiClient)
-  const normalizedShopId = normalizeSuiObjectId(shopId)
+  const normalizedListingId = normalizeListingIdInput(
+    itemListingId,
+    "itemListingId"
+  )
 
-  if (listing.shopId !== normalizedShopId)
-    throw new Error(
-      `Item listing ${itemListingId} belongs to shop ${listing.shopId}, not ${normalizedShopId}.`
-    )
-
-  return listing.id
+  await getItemListingSummary(shopId, normalizedListingId, suiClient)
+  return normalizedListingId
 }
 
 export const buildAddItemListingTransaction = ({
@@ -173,20 +153,24 @@ export const buildRemoveItemListingTransaction = ({
   packageId,
   shop,
   ownerCapId,
-  itemListing
+  itemListingId
 }: {
   packageId: string
   shop: WrappedSuiSharedObject
   ownerCapId: string
-  itemListing: WrappedSuiSharedObject
+  itemListingId: string
 }) => {
   const transaction = newTransaction()
   const shopArgument = transaction.sharedObjectRef(shop.sharedRef)
-  const listingArgument = transaction.sharedObjectRef(itemListing.sharedRef)
+  const listingId = normalizeListingIdInput(itemListingId, "itemListingId")
 
   transaction.moveCall({
     target: `${packageId}::shop::remove_item_listing`,
-    arguments: [shopArgument, transaction.object(ownerCapId), listingArgument]
+    arguments: [
+      shopArgument,
+      transaction.object(ownerCapId),
+      transaction.pure.u64(BigInt(listingId))
+    ]
   })
 
   return transaction
@@ -195,26 +179,26 @@ export const buildRemoveItemListingTransaction = ({
 export const buildUpdateItemListingStockTransaction = ({
   packageId,
   shop,
-  itemListing,
+  itemListingId,
   ownerCapId,
   newStock
 }: {
   packageId: string
   shop: WrappedSuiSharedObject
-  itemListing: WrappedSuiSharedObject
+  itemListingId: string
   ownerCapId: string
   newStock: bigint
 }) => {
   const transaction = newTransaction()
   const shopArgument = transaction.sharedObjectRef(shop.sharedRef)
-  const listingArgument = transaction.sharedObjectRef(itemListing.sharedRef)
+  const listingId = normalizeListingIdInput(itemListingId, "itemListingId")
 
   transaction.moveCall({
     target: `${packageId}::shop::update_item_listing_stock`,
     arguments: [
       shopArgument,
       transaction.object(ownerCapId),
-      listingArgument,
+      transaction.pure.u64(BigInt(listingId)),
       transaction.pure.u64(newStock)
     ]
   })
@@ -225,29 +209,29 @@ export const buildUpdateItemListingStockTransaction = ({
 export const buildAttachDiscountTemplateTransaction = ({
   packageId,
   shop,
-  itemListing,
+  itemListingId,
   discountTemplate,
   ownerCapId
 }: {
   packageId: string
   shop: WrappedSuiSharedObject
-  itemListing: WrappedSuiSharedObject
+  itemListingId: string
   discountTemplate: WrappedSuiSharedObject
   ownerCapId: string
 }) => {
   const transaction = newTransaction()
   const shopArgument = transaction.sharedObjectRef(shop.sharedRef)
-  const listingArgument = transaction.sharedObjectRef(itemListing.sharedRef)
   const templateArgument = transaction.sharedObjectRef(
     discountTemplate.sharedRef
   )
+  const listingId = normalizeListingIdInput(itemListingId, "itemListingId")
 
   transaction.moveCall({
     target: `${packageId}::shop::attach_template_to_listing`,
     arguments: [
       shopArgument,
       transaction.object(ownerCapId),
-      listingArgument,
+      transaction.pure.u64(BigInt(listingId)),
       templateArgument
     ]
   })
@@ -258,21 +242,25 @@ export const buildAttachDiscountTemplateTransaction = ({
 export const buildClearDiscountTemplateTransaction = ({
   packageId,
   shop,
-  itemListing,
+  itemListingId,
   ownerCapId
 }: {
   packageId: string
   shop: WrappedSuiSharedObject
-  itemListing: WrappedSuiSharedObject
+  itemListingId: string
   ownerCapId: string
 }) => {
   const transaction = newTransaction()
   const shopArgument = transaction.sharedObjectRef(shop.sharedRef)
-  const listingArgument = transaction.sharedObjectRef(itemListing.sharedRef)
+  const listingId = normalizeListingIdInput(itemListingId, "itemListingId")
 
   transaction.moveCall({
     target: `${packageId}::shop::clear_template_from_listing`,
-    arguments: [shopArgument, transaction.object(ownerCapId), listingArgument]
+    arguments: [
+      shopArgument,
+      transaction.object(ownerCapId),
+      transaction.pure.u64(BigInt(listingId))
+    ]
   })
 
   return transaction

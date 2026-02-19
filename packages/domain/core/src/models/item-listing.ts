@@ -1,7 +1,11 @@
-import type { SuiClient, SuiObjectData } from "@mysten/sui/client"
+import type {
+  SuiClient,
+  SuiObjectData,
+  SuiTransactionBlockResponse
+} from "@mysten/sui/client"
 import {
   getAllDynamicFields,
-  getSuiDynamicFieldObject
+  getSuiDynamicFieldObjectByName
 } from "@sui-oracle-market/tooling-core/dynamic-fields"
 import {
   getSuiObject,
@@ -13,9 +17,10 @@ import {
   formatOptionalNumericValue,
   readMoveStringOrVector
 } from "@sui-oracle-market/tooling-core/utils/formatters"
+import { normalizeBigIntFromMoveValue } from "@sui-oracle-market/tooling-core/utils/move-values"
 import { formatTypeNameFromFieldValue } from "@sui-oracle-market/tooling-core/utils/type-name"
 
-export const ITEM_LISTING_MARKER_TYPE_FRAGMENT = "::shop::ItemListingMarker"
+const ITEM_LISTING_ADDED_EVENT_TYPE_SUFFIX = "::shop::ItemListingAddedEvent"
 
 export type ItemListingDetails = {
   itemListingId: string
@@ -31,46 +36,96 @@ export type ItemListingSummary = ItemListingDetails & {
   markerObjectId: string
 }
 
-export const getItemListingSummaries = async (
-  shopId: string,
-  suiClient: SuiClient
-): Promise<ItemListingSummary[]> => {
-  const itemListingFields = await getAllDynamicFields(
+const normalizeListingIdFromValue = (value: unknown) => {
+  const parsedListingId = normalizeBigIntFromMoveValue(value)
+  if (parsedListingId === undefined || parsedListingId < 0n) return undefined
+  return parsedListingId.toString()
+}
+
+const normalizeListingIdOrThrow = (value: unknown, errorMessage: string) => {
+  const listingId = normalizeListingIdFromValue(value)
+  if (!listingId) throw new Error(errorMessage)
+  return listingId
+}
+
+const resolveListingsTableId = async (shopId: string, suiClient: SuiClient) => {
+  const { object: shopObject } = await getSuiObject(
     {
-      parentObjectId: shopId,
-      objectTypeFilter: ITEM_LISTING_MARKER_TYPE_FRAGMENT
+      objectId: shopId,
+      options: { showContent: true, showType: true }
     },
     { suiClient }
   )
 
-  if (itemListingFields.length === 0) return []
+  const shopFields = unwrapMoveObjectFields<{ listings?: unknown }>(shopObject)
 
-  const listingIds = itemListingFields.map((field) =>
-    normalizeIdOrThrow(
-      normalizeOptionalIdFromValue((field.name as { value?: string })?.value),
-      `Missing listing id for marker ${field.objectId}.`
-    )
+  return normalizeIdOrThrow(
+    normalizeOptionalIdFromValue(shopFields.listings),
+    `Shop ${shopId} is missing its listings table id.`
+  )
+}
+
+export const findAddedItemListingId = (
+  transactionResult: SuiTransactionBlockResponse
+): string | undefined => {
+  const addedListingEvent = (transactionResult.events ?? []).find((event) =>
+    event.type.endsWith(ITEM_LISTING_ADDED_EVENT_TYPE_SUFFIX)
+  )
+  if (!addedListingEvent?.parsedJson) return undefined
+  if (
+    typeof addedListingEvent.parsedJson !== "object" ||
+    Array.isArray(addedListingEvent.parsedJson)
+  ) {
+    return undefined
+  }
+
+  const parsedFields = addedListingEvent.parsedJson as Record<string, unknown>
+
+  return normalizeListingIdFromValue(parsedFields.listing_id)
+}
+
+export const getItemListingSummaries = async (
+  shopId: string,
+  suiClient: SuiClient
+): Promise<ItemListingSummary[]> => {
+  const listingsTableId = await resolveListingsTableId(shopId, suiClient)
+  const listingDynamicFields = await getAllDynamicFields(
+    {
+      parentObjectId: listingsTableId
+    },
+    { suiClient }
   )
 
-  const itemListingObjects = await Promise.all(
-    listingIds.map((listingId) =>
-      getSuiObject(
+  if (listingDynamicFields.length === 0) return []
+
+  const listingEntries = await Promise.all(
+    listingDynamicFields.map(async (dynamicField) => {
+      const listingId = normalizeListingIdOrThrow(
+        (dynamicField.name as { value?: unknown })?.value,
+        `Missing listing id for dynamic field ${dynamicField.objectId}.`
+      )
+      const { object: listingFieldObject } = await getSuiObject(
         {
-          objectId: listingId,
+          objectId: dynamicField.objectId,
           options: { showContent: true, showType: true }
         },
         { suiClient }
       )
-    )
+
+      return buildItemListingSummary(
+        listingFieldObject,
+        listingId,
+        dynamicField.objectId
+      )
+    })
   )
 
-  return itemListingObjects.map((response, index) =>
-    buildItemListingSummary(
-      response.object,
-      listingIds[index],
-      itemListingFields[index].objectId
-    )
-  )
+  return listingEntries.sort((left, right) => {
+    const leftId = BigInt(left.itemListingId)
+    const rightId = BigInt(right.itemListingId)
+    if (leftId === rightId) return 0
+    return leftId < rightId ? -1 : 1
+  })
 }
 
 export const getItemListingDetails = async (
@@ -78,27 +133,27 @@ export const getItemListingDetails = async (
   itemListingId: string,
   suiClient: SuiClient
 ): Promise<ItemListingDetails> => {
-  const { object } = await getSuiObject(
+  const listingId = normalizeListingIdOrThrow(
+    itemListingId,
+    "Listing id must be a non-negative u64."
+  )
+  const listingsTableId = await resolveListingsTableId(shopId, suiClient)
+  const listingDynamicField = await getSuiDynamicFieldObjectByName(
     {
-      objectId: itemListingId,
-      options: { showContent: true, showType: true }
+      parentObjectId: listingsTableId,
+      name: {
+        type: "u64",
+        value: listingId
+      }
     },
     { suiClient }
   )
 
-  let markerObjectId: string | undefined
-
-  try {
-    const marker = await getSuiDynamicFieldObject(
-      { parentObjectId: shopId, childObjectId: itemListingId },
-      { suiClient }
-    )
-    markerObjectId = marker.dynamicFieldId
-  } catch {
-    markerObjectId = undefined
-  }
-
-  return buildItemListingDetails(object, itemListingId, markerObjectId)
+  return buildItemListingDetails(
+    listingDynamicField.object,
+    listingId,
+    listingDynamicField.dynamicFieldId
+  )
 }
 
 export const getItemListingSummary = async (
@@ -106,19 +161,21 @@ export const getItemListingSummary = async (
   itemListingId: string,
   suiClient: SuiClient
 ): Promise<ItemListingSummary> => {
-  const { object } = await getSuiObject(
-    {
-      objectId: itemListingId,
-      options: { showContent: true, showType: true }
-    },
-    { suiClient }
-  )
-  const marker = await getSuiDynamicFieldObject(
-    { parentObjectId: shopId, childObjectId: itemListingId },
-    { suiClient }
+  const listingDetails = await getItemListingDetails(
+    shopId,
+    itemListingId,
+    suiClient
   )
 
-  return buildItemListingSummary(object, itemListingId, marker.dynamicFieldId)
+  if (!listingDetails.markerObjectId)
+    throw new Error(
+      `Listing ${itemListingId} is missing the dynamic field marker object id.`
+    )
+
+  return {
+    ...listingDetails,
+    markerObjectId: listingDetails.markerObjectId
+  }
 }
 
 const buildItemListingSummary = (
@@ -135,9 +192,23 @@ const buildItemListingDetails = (
   listingId: string,
   markerObjectId?: string
 ): ItemListingDetails => {
-  const itemListingFields = unwrapMoveObjectFields(listingObject)
+  const itemListingFields = unwrapMoveObjectFields<{
+    listing_id?: unknown
+    item_type?: unknown
+    name?: unknown
+    base_price_usd_cents?: unknown
+    stock?: unknown
+    spotlight_discount_template_id?: unknown
+  }>(listingObject)
   const itemType =
     formatTypeNameFromFieldValue(itemListingFields.item_type) || "Unknown"
+  const listingIdFromField = normalizeListingIdFromValue(
+    itemListingFields.listing_id
+  )
+  if (listingIdFromField && listingIdFromField !== listingId)
+    throw new Error(
+      `Listing id mismatch: dynamic field key ${listingId} does not match listing payload ${listingIdFromField}.`
+    )
 
   return {
     itemListingId: listingId,

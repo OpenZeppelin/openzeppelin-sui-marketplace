@@ -3,6 +3,7 @@ import {
   extractFieldValueByKeys,
   normalizeBigIntFromMoveValue,
   normalizeBooleanFromMoveValue,
+  normalizeU64StringFromMoveValue,
   parseI64FromMoveValue,
   unwrapMoveFields,
   unwrapMoveOptionValue
@@ -41,6 +42,14 @@ describe("move value helpers", () => {
     expect(normalizeBooleanFromMoveValue({ fields: { value: "true" } })).toBe(
       true
     )
+  })
+
+  it("normalizes u64 strings from move-like values", () => {
+    expect(normalizeU64StringFromMoveValue({ fields: { value: "77" } })).toBe(
+      "77"
+    )
+    expect(normalizeU64StringFromMoveValue(-1)).toBeUndefined()
+    expect(normalizeU64StringFromMoveValue(1n << 65n)).toBeUndefined()
   })
 
   it("parses i64 values from move-like structures", () => {

@@ -10,7 +10,9 @@ import {
   formatOptionalNumericValue,
   readMoveStringOrVector
 } from "@sui-oracle-market/tooling-core/utils/formatters"
+import { normalizeU64StringFromMoveValue } from "@sui-oracle-market/tooling-core/utils/move-values"
 import { formatTypeNameFromFieldValue } from "@sui-oracle-market/tooling-core/utils/type-name"
+import { requireValue } from "@sui-oracle-market/tooling-core/utils/utility"
 
 export const SHOP_ITEM_TYPE_FRAGMENT = "::shop::ShopItem"
 
@@ -28,7 +30,7 @@ export const findCreatedShopItemIds = (createdObjects: CreatedObjectLike[]) =>
 export type ShopItemReceiptSummary = {
   shopItemId: string
   shopId: string
-  itemListingId: string
+  listingId: string
   itemType: string
   name?: string
   acquiredAt?: string
@@ -83,7 +85,8 @@ export const parseShopItemReceiptFromObject = (
     "ShopItem object is missing an id."
   )
   const shopItemFields = unwrapMoveObjectFields<{
-    shop_id: unknown
+    shop_address: unknown
+    shop_id?: unknown
     item_listing_id: unknown
     item_type: unknown
     name: unknown
@@ -91,11 +94,13 @@ export const parseShopItemReceiptFromObject = (
   }>(shopItemObject)
 
   const shopId = normalizeIdOrThrow(
-    normalizeOptionalIdFromValue(shopItemFields.shop_id),
+    normalizeOptionalIdFromValue(
+      shopItemFields.shop_address ?? shopItemFields.shop_id
+    ),
     `Missing shop_id for ShopItem ${shopItemId}.`
   )
-  const itemListingId = normalizeIdOrThrow(
-    normalizeOptionalIdFromValue(shopItemFields.item_listing_id),
+  const listingId = requireValue(
+    normalizeU64StringFromMoveValue(shopItemFields.item_listing_id),
     `Missing item_listing_id for ShopItem ${shopItemId}.`
   )
   const itemType =
@@ -104,7 +109,7 @@ export const parseShopItemReceiptFromObject = (
   return {
     shopItemId,
     shopId,
-    itemListingId,
+    listingId,
     itemType,
     name: readMoveStringOrVector(shopItemFields.name),
     acquiredAt: formatOptionalNumericValue(shopItemFields.acquired_at)
