@@ -1443,9 +1443,8 @@ fun quote_amount_with_guardrails(
     let price_info = price_info::get_price_info_from_price_info_object(
         price_info_object,
     );
-    let publish_time = price::get_timestamp(
-        &price_feed::get_price(price_info::get_price_feed(&price_info)),
-    );
+    let current_price = price_feed::get_price(price_info::get_price_feed(&price_info));
+    let publish_time = price::get_timestamp(&current_price);
     let now = now_secs(clock);
     assert!(now >= publish_time, EPriceTooStale);
     assert!(now - publish_time <= effective_max_age, EPriceTooStale);
@@ -1602,7 +1601,7 @@ fun quote_amount_from_usd_cents(
     max_confidence_ratio_bps: u16,
 ): u64 {
     let price_value = price::get_price(price);
-    let mantissa = positive_price_to_u128(&price_value);
+    let mantissa = positive_price_to_u128(price_value);
     let confidence = price::get_conf(price) as u128;
     let exponent = price::get_expo(price);
     let exponent_is_negative = i64::get_is_negative(&exponent);
@@ -1661,9 +1660,9 @@ fun ceil_div_u128(numerator: u128, denominator: u128): u128 {
     numerator.divide_and_round_up(denominator)
 }
 
-fun positive_price_to_u128(value: &i64::I64): u128 {
-    assert!(!i64::get_is_negative(value), EPriceNonPositive);
-    i64::get_magnitude_if_positive(value) as u128
+fun positive_price_to_u128(value: i64::I64): u128 {
+    assert!(!i64::get_is_negative(&value), EPriceNonPositive);
+    i64::get_magnitude_if_positive(&value) as u128
 }
 
 /// Apply mu-sigma per Pyth best practices to avoid undercharging when prices are uncertain.
@@ -1977,9 +1976,8 @@ macro fun assert_price_status_trading(
         price_info_object,
     );
     let attestation_time = price_info::get_attestation_time(&price_info);
-    let publish_time = price::get_timestamp(
-        &price_feed::get_price(price_info::get_price_feed(&price_info)),
-    );
+    let current_price = price_feed::get_price(price_info::get_price_feed(&price_info));
+    let publish_time = price::get_timestamp(&current_price);
     // Treat feeds with stale attestations as unavailable even if Pyth doesn't expose an explicit status.
     assert!(attestation_time >= publish_time, EPriceStatusNotTrading);
     let attestation_lag_secs = attestation_time - publish_time;
