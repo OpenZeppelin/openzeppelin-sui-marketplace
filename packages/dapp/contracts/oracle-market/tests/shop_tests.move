@@ -4211,7 +4211,7 @@ fun quote_amount_with_zero_usd_cents_is_zero() {
     let amount = shop::test_quote_amount_from_usd_cents(
         0,
         9,
-        &price,
+        price,
         shop::test_default_max_confidence_ratio_bps(),
     );
     assert_eq!(amount, 0);
@@ -4229,7 +4229,7 @@ fun quote_amount_supports_max_coin_decimals() {
     let amount = shop::test_quote_amount_from_usd_cents(
         1,
         max_decimal_power as u8,
-        &price,
+        price,
         shop::test_default_max_confidence_ratio_bps(),
     );
     assert_eq!(amount, 10_000_000_000_000_000_000);
@@ -4247,7 +4247,7 @@ fun quote_amount_supports_max_positive_exponent() {
     let amount = shop::test_quote_amount_from_usd_cents(
         1,
         0,
-        &price,
+        price,
         shop::test_default_max_confidence_ratio_bps(),
     );
     assert_eq!(amount, 1);
@@ -4302,7 +4302,7 @@ fun quote_amount_rejects_unsupported_coin_decimals() {
     let _ = shop::test_quote_amount_from_usd_cents(
         100,
         unsupported_decimals,
-        &sample_price(),
+        sample_price(),
         shop::test_default_max_confidence_ratio_bps(),
     );
     abort EAssertFailure
