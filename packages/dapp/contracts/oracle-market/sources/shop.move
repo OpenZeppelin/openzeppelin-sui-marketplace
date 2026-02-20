@@ -627,13 +627,7 @@ entry fun add_accepted_currency<T>(
     let coin_type = currency_type<T>();
 
     // Bind this currency to a specific PriceInfoObject to prevent oracle feed spoofing.
-    validate_accepted_currency_inputs!(
-        shop,
-        &coin_type,
-        &feed_id,
-        &pyth_object_id,
-        price_info_object,
-    );
+    validate_accepted_currency_inputs!(shop, coin_type, feed_id, pyth_object_id, price_info_object);
 
     let decimals = coin_registry::decimals(currency);
     assert_supported_decimals!(decimals);
@@ -1809,9 +1803,9 @@ macro fun assert_ticket_matches_context(
 
 macro fun validate_accepted_currency_inputs(
     $shop: &Shop,
-    $coin_type: &TypeName,
-    $feed_id: &vector<u8>,
-    $pyth_object_id: &ID,
+    $coin_type: TypeName,
+    $feed_id: vector<u8>,
+    $pyth_object_id: ID,
     $price_info_object: &price_info::PriceInfoObject,
 ) {
     let shop = $shop;
@@ -1825,22 +1819,22 @@ macro fun validate_accepted_currency_inputs(
     assert_price_info_identity!(feed_id, pyth_object_id, price_info_object);
 }
 
-macro fun assert_valid_feed_id($feed_id: &vector<u8>) {
+macro fun assert_valid_feed_id($feed_id: vector<u8>) {
     let feed_id = $feed_id;
     assert!(!feed_id.is_empty(), EEmptyFeedId);
     assert!(feed_id.length() == PYTH_PRICE_IDENTIFIER_LENGTH, EInvalidFeedIdLength);
 }
 
 macro fun assert_price_info_identity(
-    $expected_feed_id: &vector<u8>,
-    $expected_pyth_object_id: &ID,
+    $expected_feed_id: vector<u8>,
+    $expected_pyth_object_id: ID,
     $price_info_object: &price_info::PriceInfoObject,
 ) {
     let expected_feed_id = $expected_feed_id;
     let expected_pyth_object_id = $expected_pyth_object_id;
     let price_info_object = $price_info_object;
     let confirmed_price_object = price_info::uid_to_inner(price_info_object);
-    assert!(confirmed_price_object == *expected_pyth_object_id, EPythObjectMismatch);
+    assert!(confirmed_price_object == expected_pyth_object_id, EPythObjectMismatch);
 
     let price_info = price_info::get_price_info_from_price_info_object(
         price_info_object,
@@ -1850,10 +1844,10 @@ macro fun assert_price_info_identity(
     assert!(expected_feed_id == identifier_bytes, EFeedIdentifierMismatch);
 }
 
-macro fun assert_currency_not_registered($shop: &Shop, $coin_type: &TypeName) {
+macro fun assert_currency_not_registered($shop: &Shop, $coin_type: TypeName) {
     let shop = $shop;
     let coin_type = $coin_type;
-    assert!(!shop.accepted_currencies.contains(*coin_type), EAcceptedCurrencyExists);
+    assert!(!shop.accepted_currencies.contains(coin_type), EAcceptedCurrencyExists);
 }
 
 macro fun assert_supported_decimals($decimals: u8) {
@@ -1861,10 +1855,7 @@ macro fun assert_supported_decimals($decimals: u8) {
     assert!(decimals as u64 <= MAX_DECIMAL_POWER, EUnsupportedCurrencyDecimals);
 }
 
-macro fun assert_listing_currency_match(
-    $shop: &Shop,
-    $item_listing: &ItemListing,
-) {
+macro fun assert_listing_currency_match($shop: &Shop, $item_listing: &ItemListing) {
     let shop = $shop;
     let item_listing = $item_listing;
     assert!(item_listing.shop_id == shop.id.to_inner(), EListingShopMismatch);
@@ -1877,8 +1868,8 @@ macro fun ensure_price_info_matches_currency(
     let accepted_currency = $accepted_currency;
     let price_info_object = $price_info_object;
     assert_price_info_identity!(
-        &accepted_currency.feed_id,
-        &accepted_currency.pyth_object_id,
+        accepted_currency.feed_id,
+        accepted_currency.pyth_object_id,
         price_info_object,
     );
 }
