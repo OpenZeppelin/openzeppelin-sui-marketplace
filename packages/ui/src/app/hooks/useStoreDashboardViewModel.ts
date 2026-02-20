@@ -280,9 +280,9 @@ export const useStoreDashboardViewModel = ({
   )
 
   const handleCurrencyRemoved = useCallback(
-    (currencyId?: string) => {
-      if (currencyId) {
-        removeAcceptedCurrency(currencyId)
+    (tableEntryFieldId?: string) => {
+      if (tableEntryFieldId) {
+        removeAcceptedCurrency(tableEntryFieldId)
         return
       }
 

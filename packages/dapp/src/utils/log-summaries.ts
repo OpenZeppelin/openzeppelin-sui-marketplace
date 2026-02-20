@@ -47,7 +47,7 @@ export const logAcceptedCurrencySummary = (
   index?: number
 ) => {
   if (index !== undefined) logKeyValueGreen("Currency")(index)
-  logKeyValueGreen("Object")(acceptedCurrency.acceptedCurrencyId)
+  logKeyValueGreen("Table-entry-field")(acceptedCurrency.tableEntryFieldId)
   logKeyValueGreen("Coin-type")(acceptedCurrency.coinType)
   if (acceptedCurrency.symbol)
     logKeyValueGreen("Symbol")(acceptedCurrency.symbol)
@@ -65,7 +65,6 @@ export const logAcceptedCurrencySummary = (
   logKeyValueGreen("Max-status-lag")(
     acceptedCurrency.maxPriceStatusLagSecsCap ?? "module default"
   )
-  logKeyValueGreen("Marker-id")(acceptedCurrency.markerObjectId)
   console.log("")
 }
 

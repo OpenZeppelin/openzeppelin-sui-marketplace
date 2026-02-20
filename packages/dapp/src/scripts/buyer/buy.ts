@@ -15,7 +15,6 @@ import {
   resolvePaymentCoinObjectId
 } from "@sui-oracle-market/domain-core/flows/buy"
 import {
-  getAcceptedCurrencySummary,
   normalizeCoinType,
   requireAcceptedCurrencyByCoinType
 } from "@sui-oracle-market/domain-core/models/currency"
@@ -30,6 +29,7 @@ import { findCreatedShopItemIds } from "@sui-oracle-market/domain-core/models/sh
 import { planSuiPaymentSplitTransaction } from "@sui-oracle-market/tooling-core/coin"
 import {
   DEFAULT_TX_GAS_BUDGET,
+  NORMALIZED_SUI_COIN_TYPE,
   SUI_CLOCK_ID
 } from "@sui-oracle-market/tooling-core/constants"
 import type { ObjectArtifact } from "@sui-oracle-market/tooling-core/object"
@@ -70,8 +70,6 @@ type BuyArguments = {
   json?: boolean
 }
 
-const SUI_COIN_TYPE = normalizeCoinType("0x2::sui::SUI")
-
 runSuiScript(
   async (tooling, cliArguments: BuyArguments) => {
     const inputs = await normalizeInputs(
@@ -92,26 +90,16 @@ runSuiScript(
 
     const shopPackageId = deriveRelevantPackageId(shopShared.object.type)
 
-    const acceptedCurrencyMatch = await requireAcceptedCurrencyByCoinType({
+    const acceptedCurrencySummary = await requireAcceptedCurrencyByCoinType({
       coinType: inputs.coinType,
       shopId: inputs.shopId,
       suiClient: tooling.suiClient
     })
 
-    const acceptedCurrencySummary = await getAcceptedCurrencySummary(
-      inputs.shopId,
-      acceptedCurrencyMatch.acceptedCurrencyId,
-      tooling.suiClient
-    )
-
     const pythPriceInfoObjectId = normalizeIdOrThrow(
       acceptedCurrencySummary.pythObjectId,
-      `AcceptedCurrency ${acceptedCurrencySummary.acceptedCurrencyId} is missing a pyth_object_id.`
+      `Accepted currency ${acceptedCurrencySummary.coinType} is missing a pyth_object_id.`
     )
-
-    const acceptedCurrencyShared = await tooling.getImmutableSharedObject({
-      objectId: acceptedCurrencySummary.acceptedCurrencyId
-    })
     const pythPriceInfoShared = await tooling.getImmutableSharedObject({
       objectId: pythPriceInfoObjectId
     })
@@ -129,7 +117,7 @@ runSuiScript(
       suiClient: tooling.suiClient
     })
 
-    const isSuiPayment = inputs.coinType === SUI_COIN_TYPE
+    const isSuiPayment = inputs.coinType === NORMALIZED_SUI_COIN_TYPE
     const quotePriceUpdateMode =
       tooling.network.networkName === "localnet"
         ? "localnet-mock"
@@ -159,7 +147,7 @@ runSuiScript(
       paymentCoinMinimumBalance = await estimateRequiredAmount({
         shopPackageId,
         shopShared,
-        acceptedCurrencyShared,
+        coinType: inputs.coinType,
         pythPriceInfoShared,
         pythFeedIdHex: acceptedCurrencySummary.feedIdHex,
         networkName: tooling.network.networkName,
@@ -230,7 +218,8 @@ runSuiScript(
         listingName: listingSummary.name,
         itemType: listingSummary.itemType,
         coinType: inputs.coinType,
-        acceptedCurrencyId: acceptedCurrencySummary.acceptedCurrencyId,
+        acceptedCurrencyTableEntryFieldId:
+          acceptedCurrencySummary.tableEntryFieldId,
         pythObjectId: pythPriceInfoObjectId,
         paymentCoinObjectId,
         discountContext
@@ -242,7 +231,6 @@ runSuiScript(
         shopPackageId,
         shopShared,
         itemListingShared,
-        acceptedCurrencyShared,
         pythPriceInfoShared,
         pythFeedIdHex: acceptedCurrencySummary.feedIdHex,
         paymentCoinObjectId,
@@ -527,7 +515,7 @@ const logBuyContext = ({
   listingName,
   itemType,
   coinType,
-  acceptedCurrencyId,
+  acceptedCurrencyTableEntryFieldId,
   pythObjectId,
   paymentCoinObjectId,
   discountContext
@@ -540,7 +528,7 @@ const logBuyContext = ({
   listingName?: string
   itemType: string
   coinType: string
-  acceptedCurrencyId: string
+  acceptedCurrencyTableEntryFieldId: string
   pythObjectId: string
   paymentCoinObjectId: string
   discountContext: DiscountContext
@@ -553,7 +541,7 @@ const logBuyContext = ({
   if (listingName) logKeyValueBlue("Listing-name")(listingName)
   logKeyValueBlue("Item-type")(itemType)
   logKeyValueBlue("Coin-type")(coinType)
-  logKeyValueBlue("Accepted-currency")(acceptedCurrencyId)
+  logKeyValueBlue("Accepted-currency-entry")(acceptedCurrencyTableEntryFieldId)
   logKeyValueBlue("Pyth-price-info")(pythObjectId)
   logKeyValueBlue("Payment-coin")(paymentCoinObjectId)
 

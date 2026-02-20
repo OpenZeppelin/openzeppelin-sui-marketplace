@@ -1,6 +1,10 @@
 import type { Transaction } from "@mysten/sui/transactions"
 import { normalizeSuiObjectId } from "@mysten/sui/utils"
-import { DEFAULT_TX_GAS_BUDGET, MINIMUM_GAS_COIN_BALANCE } from "./constants.ts"
+import {
+  DEFAULT_TX_GAS_BUDGET,
+  MINIMUM_GAS_COIN_BALANCE,
+  SUI_COIN_TYPE
+} from "./constants.ts"
 import type { ToolingCoreContext } from "./context.ts"
 import {
   buildSuiObjectRef,
@@ -109,7 +113,7 @@ const fetchSuiCoinBalances = async (
   do {
     const page = await suiClient.getCoins({
       owner,
-      coinType: "0x2::sui::SUI",
+      coinType: SUI_COIN_TYPE,
       limit: 50,
       cursor
     })

@@ -116,10 +116,10 @@ const CurrencySummarySection = ({
       </div>
     </div>
     <div className="mt-4 flex flex-wrap items-center gap-3 text-xs">
-      {summary.acceptedCurrencyId ? (
+      {summary.tableEntryFieldId ? (
         <CopyableId
-          value={summary.acceptedCurrencyId}
-          label="Accepted ID"
+          value={summary.tableEntryFieldId}
+          label="Table Entry"
           explorerUrl={explorerUrl}
         />
       ) : undefined}
@@ -220,7 +220,7 @@ const AvailableFeedsSection = ({
           const registryId = resolveCurrencyRegistryId(currency.coinType)
           return (
             <div
-              key={currency.acceptedCurrencyId}
+              key={currency.tableEntryFieldId}
               className="rounded-xl border border-slate-200/70 bg-white/85 px-4 py-3 text-xs shadow-[0_12px_28px_-24px_rgba(15,23,42,0.3)] dark:border-slate-50/20 dark:bg-slate-950/60"
             >
               <div className="flex items-start justify-between gap-3">
@@ -271,8 +271,8 @@ const AvailableFeedsSection = ({
               </div>
               <div className="mt-3 flex flex-wrap items-center gap-3 text-[0.65rem]">
                 <CopyableId
-                  value={currency.acceptedCurrencyId}
-                  label="Accepted"
+                  value={currency.tableEntryFieldId}
+                  label="Table entry"
                   explorerUrl={explorerUrl}
                 />
                 {currency.pythObjectId ? (

@@ -1,38 +1,14 @@
+import type { ShopSnapshot } from "@sui-oracle-market/domain-core/models/shop"
 import { describe, expect, it } from "vitest"
 
 import {
   createDappIntegrationTestEnv,
+  createShopWithItemExamplesAndAcceptedCurrencyFixture,
   createShopWithItemExamplesFixture,
   resolveItemType,
   runBuyerScriptJson,
   seedShopWithListingAndDiscount
 } from "./helpers.ts"
-
-type ShopViewOutput = {
-  shopOverview?: {
-    shopId?: string
-    ownerAddress?: string
-    name?: string
-  }
-  itemListings?: Array<{
-    itemListingId?: string
-    markerObjectId?: string
-    itemType?: string
-    name?: string
-  }>
-  acceptedCurrencies?: Array<{
-    acceptedCurrencyId?: string
-    markerObjectId?: string
-    coinType?: string
-    feedIdHex?: string
-  }>
-  discountTemplates?: Array<{
-    discountTemplateId?: string
-    markerObjectId?: string
-    shopId?: string
-    status?: string
-  }>
-}
 
 const testEnv = createDappIntegrationTestEnv()
 
@@ -57,7 +33,7 @@ describe("buyer shop-view integration", () => {
         value: "10"
       })
 
-      const viewPayload = await runBuyerScriptJson<ShopViewOutput>(
+      const viewPayload = await runBuyerScriptJson<ShopSnapshot>(
         scriptRunner,
         "shop-view",
         {
@@ -66,17 +42,17 @@ describe("buyer shop-view integration", () => {
         }
       )
 
-      expect(viewPayload.shopOverview?.shopId).toBe(shopId)
-      expect(viewPayload.shopOverview?.name).toBeTruthy()
-      expect(viewPayload.shopOverview?.ownerAddress).toBeTruthy()
+      expect(viewPayload.shopOverview.shopId).toBe(shopId)
+      expect(viewPayload.shopOverview.name).toBeTruthy()
+      expect(viewPayload.shopOverview.ownerAddress).toBeTruthy()
 
       const itemListings = viewPayload.itemListings ?? []
       expect(itemListings.length).toBeGreaterThan(0)
-      itemListings.forEach((listing) => {
-        expect(listing.itemListingId).toBeTruthy()
-        expect(listing.markerObjectId).toBeTruthy()
-        expect(listing.itemType).toBeTruthy()
-        expect(listing.name).toBeTruthy()
+      itemListings.forEach((itemListing) => {
+        expect(itemListing.itemListingId).toBeTruthy()
+        expect(itemListing.markerObjectId).toBeTruthy()
+        expect(itemListing.itemType).toBeTruthy()
+        expect(itemListing.name).toBeTruthy()
       })
 
       const acceptedCurrencies = viewPayload.acceptedCurrencies ?? []
@@ -84,12 +60,46 @@ describe("buyer shop-view integration", () => {
 
       const discountTemplates = viewPayload.discountTemplates ?? []
       expect(discountTemplates.length).toBeGreaterThan(0)
-      discountTemplates.forEach((template) => {
-        expect(template.discountTemplateId).toBeTruthy()
-        expect(template.markerObjectId).toBeTruthy()
-        expect(template.shopId).toBeTruthy()
-        expect(template.status).toBeTruthy()
+      discountTemplates.forEach((discountTemplate) => {
+        expect(discountTemplate.discountTemplateId).toBeTruthy()
+        expect(discountTemplate.markerObjectId).toBeTruthy()
+        expect(discountTemplate.shopId).toBeTruthy()
+        expect(discountTemplate.status).toBeTruthy()
       })
     })
+  })
+
+  it("returns accepted currency details after owner registration", async () => {
+    await testEnv.withTestContext(
+      "buyer-shop-view-currencies",
+      async (context) => {
+        const { publisher, scriptRunner, shopId, acceptedCurrency } =
+          await createShopWithItemExamplesAndAcceptedCurrencyFixture(context, {
+            shopName: "Shop View Currency Integration",
+            publisherLabel: "shop-view-owner"
+          })
+
+        const viewPayload = await runBuyerScriptJson<ShopSnapshot>(
+          scriptRunner,
+          "shop-view",
+          {
+            account: publisher,
+            args: { shopId }
+          }
+        )
+
+        const acceptedCurrencies = viewPayload.acceptedCurrencies ?? []
+        expect(acceptedCurrencies.length).toBeGreaterThan(0)
+        expect(
+          acceptedCurrencies.some(
+            (currency) =>
+              currency.tableEntryFieldId ===
+                acceptedCurrency.tableEntryFieldId &&
+              currency.coinType === acceptedCurrency.coinType &&
+              currency.feedIdHex === acceptedCurrency.feedIdHex
+          )
+        ).toBe(true)
+      }
+    )
   })
 })

@@ -1,6 +1,6 @@
 /**
  * Aggregates a Shop snapshot: metadata, listings, currencies, discounts, and receipts/tickets.
- * The Shop is shared, while listings/currencies/templates are separate shared objects discovered via markers.
+ * The Shop is shared; listings/templates are marker-indexed, while currencies are read from the accepted-currencies table.
  * This script composes multiple reads into a single human-friendly view.
  */
 import { getShopSnapshot } from "@sui-oracle-market/domain-core/models/shop"

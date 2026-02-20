@@ -1,20 +1,19 @@
-import {
+export {
+  createAcceptedCurrencyFixture,
   createDappIntegrationTestEnv,
   createFundedTestAccount,
   createScriptRunner,
   createShopFixture,
+  createShopWithAcceptedCurrencyFixture,
+  createShopWithItemExamplesAndAcceptedCurrencyFixture,
+  createShopWithItemExamplesAndMockSetupFixture,
   createShopWithItemExamplesFixture,
+  createShopWithMockSetupFixture,
   publishMovePackage,
   resolveItemType,
+  resolveMockCurrencyFeedSelection,
+  runMockSetupFixture,
   runOwnerScriptJson
 } from "../../../utils/test-utils/helpers.ts"
-export {
-  createDappIntegrationTestEnv,
-  createFundedTestAccount,
-  createScriptRunner,
-  createShopFixture,
-  createShopWithItemExamplesFixture,
-  publishMovePackage,
-  resolveItemType,
-  runOwnerScriptJson
-}
+
+export type { CurrencyAddScriptOutput } from "../../../utils/test-utils/helpers.ts"

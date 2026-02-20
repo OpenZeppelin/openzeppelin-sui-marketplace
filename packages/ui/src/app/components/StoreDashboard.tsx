@@ -446,7 +446,7 @@ const AcceptedCurrenciesPanel = ({
 
               return (
                 <div
-                  key={currency.acceptedCurrencyId}
+                  key={currency.tableEntryFieldId}
                   className="flex h-full flex-col rounded-xl border border-slate-300/80 bg-white/95 p-4 shadow-[0_12px_30px_-22px_rgba(15,23,42,0.35)] dark:border-slate-50/25 dark:bg-slate-950/60"
                 >
                   <div className="flex items-start justify-between gap-3">
@@ -496,8 +496,8 @@ const AcceptedCurrenciesPanel = ({
                   </div>
                   <div className="mt-4 flex flex-wrap items-center gap-3 text-[0.65rem]">
                     <CopyableId
-                      value={currency.acceptedCurrencyId}
-                      label="Accepted Currency"
+                      value={currency.tableEntryFieldId}
+                      label="Table entry"
                       explorerUrl={explorerUrl}
                     />
                     {currency.pythObjectId ? (
