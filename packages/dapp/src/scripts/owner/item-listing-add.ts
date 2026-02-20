@@ -1,23 +1,34 @@
 /**
- * Adds a new ItemListing shared object and registers its marker under the Shop.
+ * Adds a new table-backed ItemListing entry under the Shop.
  * Uses the listing's TypeName to enforce typed receipts.
  * Requires the ShopOwnerCap capability.
  */
 import { normalizeSuiObjectId } from "@mysten/sui/utils"
 import yargs from "yargs"
 
-import { getItemListingSummary } from "@sui-oracle-market/domain-core/models/item-listing"
+import {
+  defaultStartTimestampSeconds,
+  discountRuleChoices,
+  parseDiscountRuleKind,
+  parseDiscountRuleValue,
+  validateDiscountSchedule,
+  type DiscountRuleKindLabel
+} from "@sui-oracle-market/domain-core/models/discount"
+import {
+  getItemListingSummary,
+  requireListingIdFromItemListingAddedEvents
+} from "@sui-oracle-market/domain-core/models/item-listing"
 import { parseUsdToCents } from "@sui-oracle-market/domain-core/models/shop"
 import { buildAddItemListingTransaction } from "@sui-oracle-market/domain-core/ptb/item-listing"
+import { normalizeOptionalId } from "@sui-oracle-market/tooling-core/object"
 import {
-  normalizeIdOrThrow,
-  normalizeOptionalId
-} from "@sui-oracle-market/tooling-core/object"
-import { parsePositiveU64 } from "@sui-oracle-market/tooling-core/utils/utility"
+  parseNonNegativeU64,
+  parseOptionalU64,
+  parsePositiveU64
+} from "@sui-oracle-market/tooling-core/utils/utility"
 import { emitJsonOutput } from "@sui-oracle-market/tooling-node/json"
 import { logKeyValueGreen } from "@sui-oracle-market/tooling-node/log"
 import { runSuiScript } from "@sui-oracle-market/tooling-node/process"
-import { ensureCreatedObject } from "@sui-oracle-market/tooling-node/transactions"
 import { logItemListingSummary } from "../../utils/log-summaries.ts"
 import { resolveOwnerShopIdentifiers } from "../../utils/shop-context.ts"
 
@@ -40,7 +51,8 @@ runSuiScript(
       itemName: inputs.name,
       basePriceUsdCents: inputs.priceCents,
       stock: inputs.stock,
-      spotlightDiscountId: inputs.spotlightDiscountId
+      spotlightDiscountId: inputs.spotlightDiscountId,
+      createSpotlightDiscountTemplate: inputs.createSpotlightDiscountTemplate
     })
 
     const { execution, summary } = await tooling.executeTransactionWithSummary({
@@ -54,16 +66,10 @@ runSuiScript(
     if (!execution) return
 
     const { transactionResult } = execution
-
-    const createdListingChange = ensureCreatedObject(
-      "::shop::ItemListing",
-      transactionResult
-    )
-
-    const listingId = normalizeIdOrThrow(
-      createdListingChange.objectId,
-      "Expected an ItemListing to be created."
-    )
+    const listingId = requireListingIdFromItemListingAddedEvents({
+      events: transactionResult.events,
+      shopId: inputs.shopId
+    })
     const listingSummary = await getItemListingSummary(
       inputs.shopId,
       listingId,
@@ -74,7 +80,7 @@ runSuiScript(
       emitJsonOutput(
         {
           itemListing: listingSummary,
-          digest: createdListingChange.digest,
+          digest: transactionResult.digest,
           transactionSummary: summary
         },
         cliArguments.json
@@ -83,8 +89,8 @@ runSuiScript(
       return
 
     logItemListingSummary(listingSummary)
-    if (createdListingChange.digest)
-      logKeyValueGreen("digest")(createdListingChange.digest)
+    if (transactionResult.digest)
+      logKeyValueGreen("digest")(transactionResult.digest)
   },
   yargs()
     .option("shopPackageId", {
@@ -152,6 +158,36 @@ runSuiScript(
       description:
         "Optional discount template ID to spotlight for this listing (Shop::DiscountTemplate)"
     })
+    .option("createSpotlightRuleKind", {
+      alias: ["create-spotlight-rule-kind", "spotlight-rule-kind"],
+      choices: discountRuleChoices,
+      description:
+        "Create and attach a new spotlight template atomically: rule kind (fixed or percent)."
+    })
+    .option("createSpotlightValue", {
+      alias: ["create-spotlight-value", "spotlight-value"],
+      type: "string",
+      description:
+        "Rule value for the atomically created spotlight template. fixed expects USD (e.g., 5.25), percent expects percentage (e.g., 12.5)."
+    })
+    .option("createSpotlightStartsAt", {
+      alias: ["create-spotlight-starts-at", "spotlight-starts-at"],
+      type: "string",
+      description:
+        "Optional start epoch seconds for the atomically created spotlight template. Defaults to now when createSpotlightRuleKind is set."
+    })
+    .option("createSpotlightExpiresAt", {
+      alias: ["create-spotlight-expires-at", "spotlight-expires-at"],
+      type: "string",
+      description:
+        "Optional expiry epoch seconds for the atomically created spotlight template."
+    })
+    .option("createSpotlightMaxRedemptions", {
+      alias: ["create-spotlight-max-redemptions", "spotlight-max-redemptions"],
+      type: "string",
+      description:
+        "Optional max redemptions for the atomically created spotlight template."
+    })
     .option("publisherId", {
       alias: "publisher-id",
       type: "string",
@@ -171,6 +207,11 @@ const normalizeInputs = async (
     stock: string
     itemType: string
     spotlightDiscountId?: string
+    createSpotlightRuleKind?: DiscountRuleKindLabel
+    createSpotlightValue?: string
+    createSpotlightStartsAt?: string
+    createSpotlightExpiresAt?: string
+    createSpotlightMaxRedemptions?: string
     publisherId?: string
   },
   networkName: string
@@ -185,6 +226,8 @@ const normalizeInputs = async (
   const spotlightDiscountId = normalizeOptionalId(
     cliArguments.spotlightDiscountId
   )
+  const createSpotlightDiscountTemplate =
+    normalizeCreateSpotlightTemplateInput(cliArguments)
   const itemType = cliArguments.itemType.trim()
 
   if (!itemType)
@@ -195,6 +238,7 @@ const normalizeInputs = async (
     shopId,
     ownerCapId,
     spotlightDiscountId,
+    createSpotlightDiscountTemplate,
     itemType,
     name: cliArguments.name,
     priceCents: parseUsdToCents(cliArguments.price),
@@ -202,5 +246,64 @@ const normalizeInputs = async (
     publisherId: cliArguments.publisherId
       ? normalizeSuiObjectId(cliArguments.publisherId)
       : undefined
+  }
+}
+
+const normalizeCreateSpotlightTemplateInput = (cliArguments: {
+  spotlightDiscountId?: string
+  createSpotlightRuleKind?: DiscountRuleKindLabel
+  createSpotlightValue?: string
+  createSpotlightStartsAt?: string
+  createSpotlightExpiresAt?: string
+  createSpotlightMaxRedemptions?: string
+}) => {
+  const hasAnyCreateTemplateInput = [
+    cliArguments.createSpotlightRuleKind,
+    cliArguments.createSpotlightValue,
+    cliArguments.createSpotlightStartsAt,
+    cliArguments.createSpotlightExpiresAt,
+    cliArguments.createSpotlightMaxRedemptions
+  ].some((value) => value !== undefined)
+
+  if (!hasAnyCreateTemplateInput) return undefined
+
+  if (normalizeOptionalId(cliArguments.spotlightDiscountId))
+    throw new Error(
+      "spotlightDiscountId cannot be used with createSpotlight* options."
+    )
+
+  if (!cliArguments.createSpotlightRuleKind)
+    throw new Error(
+      "createSpotlightRuleKind is required when using createSpotlight* options."
+    )
+  if (!cliArguments.createSpotlightValue)
+    throw new Error(
+      "createSpotlightValue is required when using createSpotlight* options."
+    )
+
+  const ruleKind = parseDiscountRuleKind(cliArguments.createSpotlightRuleKind)
+  const startsAt = parseNonNegativeU64(
+    cliArguments.createSpotlightStartsAt ??
+      defaultStartTimestampSeconds().toString(),
+    "createSpotlightStartsAt"
+  )
+  const expiresAt = parseOptionalU64(
+    cliArguments.createSpotlightExpiresAt,
+    "createSpotlightExpiresAt"
+  )
+  validateDiscountSchedule(startsAt, expiresAt)
+
+  return {
+    ruleKind,
+    ruleValue: parseDiscountRuleValue(
+      ruleKind,
+      cliArguments.createSpotlightValue
+    ),
+    startsAt,
+    expiresAt,
+    maxRedemptions: parseOptionalU64(
+      cliArguments.createSpotlightMaxRedemptions,
+      "createSpotlightMaxRedemptions"
+    )
   }
 }

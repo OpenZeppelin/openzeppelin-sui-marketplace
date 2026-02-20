@@ -16,12 +16,15 @@ import {
   getLatestObjectFromArtifact,
   getObjectArtifactPath,
   getDeploymentArtifactPath,
-  isPublishArtifactNamed,
-  pickRootNonDependencyArtifact,
   readArtifact,
   resolvePublisherCapIdFromObjectArtifacts,
   writeObjectArtifact
 } from "../../src/artifacts.ts"
+import {
+  findPublishedPackageIdByName,
+  isPublishArtifactNamed,
+  pickRootNonDependencyArtifact
+} from "../../src/package.ts"
 
 describe("pickRootNonDependencyArtifact", () => {
   it("selects the first non-dependency artifact", () => {
@@ -168,6 +171,34 @@ describe("isPublishArtifactNamed", () => {
         packagePath: "/tmp/contracts/oracle-market"
       } as PublishArtifact)
     ).toBe(true)
+  })
+})
+
+describe("findPublishedPackageIdByName", () => {
+  it("returns the published package id for a matching package name", () => {
+    const artifacts = [
+      {
+        packageId: "0x1",
+        packageName: "pyth"
+      },
+      {
+        packageId: "0x2",
+        packageName: "sui_oracle_market"
+      }
+    ] as PublishArtifact[]
+
+    expect(findPublishedPackageIdByName(artifacts, "PYTH")).toBe("0x1")
+  })
+
+  it("returns undefined when no package name matches", () => {
+    const artifacts = [
+      {
+        packageId: "0x1",
+        packageName: "sui_oracle_market"
+      }
+    ] as PublishArtifact[]
+
+    expect(findPublishedPackageIdByName(artifacts, "pyth")).toBeUndefined()
   })
 })
 

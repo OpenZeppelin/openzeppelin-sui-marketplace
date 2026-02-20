@@ -145,3 +145,7 @@ When you implement a change:
 	 - `pnpm --filter <pkg> test:integration` (when localnet is involved)
 	 - `pnpm lint` and `pnpm typecheck`
 
+
+## Branch Naming
+
+- Never include `codex` in merge request branch names.

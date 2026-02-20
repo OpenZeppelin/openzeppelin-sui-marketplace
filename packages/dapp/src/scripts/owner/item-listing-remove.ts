@@ -1,11 +1,10 @@
 /**
- * Delists an ItemListing by removing its marker under the Shop.
- * The listing object remains addressable for history and indexers.
+ * Delists an ItemListing by removing its table entry under the Shop.
  * Requires the ShopOwnerCap capability.
  */
-import { normalizeSuiObjectId } from "@mysten/sui/utils"
 import yargs from "yargs"
 
+import { normalizeListingId } from "@sui-oracle-market/domain-core/models/item-listing"
 import { buildRemoveItemListingTransaction } from "@sui-oracle-market/domain-core/ptb/item-listing"
 import { emitJsonOutput } from "@sui-oracle-market/tooling-node/json"
 import { logKeyValueGreen } from "@sui-oracle-market/tooling-node/log"
@@ -29,14 +28,11 @@ runSuiScript(
     const shopSharedObject = await tooling.getMutableSharedObject({
       objectId: inputs.shopId
     })
-    const itemListingSharedObject = await tooling.getImmutableSharedObject({
-      objectId: inputs.itemListingId
-    })
     const removeItemTransaction = buildRemoveItemListingTransaction({
       packageId: inputs.packageId,
       shop: shopSharedObject,
       ownerCapId: inputs.ownerCapId,
-      itemListing: itemListingSharedObject
+      itemListingId: inputs.itemListingId
     })
 
     const { execution, summary } = await tooling.executeTransactionWithSummary({
@@ -69,8 +65,7 @@ runSuiScript(
     .option("itemListingId", {
       alias: ["item-listing-id", "item-id", "listing-id"],
       type: "string",
-      description:
-        "ItemListing object ID to remove (object ID, not a type tag).",
+      description: "Item listing ID to remove (u64).",
       demandOption: true
     })
     .option("shopPackageId", {
@@ -133,6 +128,6 @@ const normalizeInputs = async (
     packageId,
     shopId,
     ownerCapId,
-    itemListingId: normalizeSuiObjectId(cliArguments.itemListingId)
+    itemListingId: normalizeListingId(cliArguments.itemListingId)
   }
 }

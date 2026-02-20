@@ -88,8 +88,8 @@ const DiscountSummarySection = ({
       {template.appliesToListingId ? (
         <CopyableId
           value={template.appliesToListingId}
-          label="Listing"
-          explorerUrl={explorerUrl}
+          label="Listing ID"
+          showExplorer={false}
         />
       ) : undefined}
       {shopId ? (

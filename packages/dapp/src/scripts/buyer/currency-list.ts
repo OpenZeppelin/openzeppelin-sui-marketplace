@@ -1,7 +1,7 @@
 /**
- * Lists AcceptedCurrency objects registered under a Shop.
- * Each accepted currency is a shared object indexed via dynamic fields, not a struct in Shop storage.
- * Coin types are Move type tags and metadata comes from the coin registry.
+ * Lists accepted currencies registered under a Shop.
+ * Currencies are stored in Shop.accepted_currencies (Table<TypeName, AcceptedCurrency>).
+ * This script reads table entries and surfaces coin metadata for the UI/CLI.
  */
 import yargs from "yargs"
 

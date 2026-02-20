@@ -257,7 +257,7 @@ export const useShopDashboardData = ({
     (currency: AcceptedCurrencySummary) => {
       setStorefrontState((previous) => {
         const existingIndex = previous.acceptedCurrencies.findIndex(
-          (item) => item.acceptedCurrencyId === currency.acceptedCurrencyId
+          (item) => item.tableEntryFieldId === currency.tableEntryFieldId
         )
 
         if (existingIndex === -1) {
@@ -317,11 +317,11 @@ export const useShopDashboardData = ({
     }))
   }, [])
 
-  const removeAcceptedCurrency = useCallback((acceptedCurrencyId: string) => {
+  const removeAcceptedCurrency = useCallback((tableEntryFieldId: string) => {
     setStorefrontState((previous) => ({
       ...previous,
       acceptedCurrencies: previous.acceptedCurrencies.filter(
-        (currency) => currency.acceptedCurrencyId !== acceptedCurrencyId
+        (currency) => currency.tableEntryFieldId !== tableEntryFieldId
       )
     }))
   }, [])

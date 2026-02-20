@@ -31,7 +31,7 @@ pnpm script buyer:buy --help
 ```
 
 ## 4. EVM -> Sui translation
-1. **Single-threaded storage -> object-level parallelism**: shared objects lock independently. Listings/currencies/templates are separate shared objects to keep concurrency high. See `ItemListing`, `AcceptedCurrency`, and `DiscountTemplate` in `packages/dapp/contracts/oracle-market/sources/shop.move`.
+1. **Single-threaded storage -> object-level parallelism**: shared objects lock independently. Listings and accepted currencies are table entries under the shared `Shop`, while discount templates remain standalone shared objects. See `Shop`, `ItemListing`, and `DiscountTemplate` in `packages/dapp/contracts/oracle-market/sources/shop.move`.
 2. **Proxy upgrades -> new package IDs**: upgrades publish a new package; callers opt into new IDs. See `packages/dapp/contracts/oracle-market/Move.toml` and `packages/dapp/src/scripts/contracts/publish.ts` for artifacts.
 3. **Blocks -> object DAG**: each object records the last transaction digest that mutated it, giving you causal history per object instead of global block history.
 
@@ -59,8 +59,8 @@ pnpm script buyer:buy --help
   u128 scaling and a pow10 table to avoid floating point math.
   Code: `packages/dapp/contracts/oracle-market/sources/shop.move` (`POW10_U128`, `quote_amount_with_guardrails`)
 - **Fast path vs consensus**: owned-object transactions can execute without consensus ordering,
-  while shared-object mutations require consensus. This is why the design splits listings/currencies
-  into separate shared objects.
+  while shared-object mutations require consensus. This is why checkout/admin listing writes mutate
+  `Shop` (shared), while ticket ownership/capabilities stay address-owned.
   Code: `packages/dapp/contracts/oracle-market/sources/shop.move` (shared object types)
 - **Storage rebates**: destroying objects (e.g., zero-value coins) returns storage rebates, which is
   why `finalize_purchase_transfers` explicitly calls `coin::destroy_zero`.
@@ -77,32 +77,15 @@ pnpm script buyer:buy --help
 **Code spotlight: view helpers used by dev-inspect**
 `packages/dapp/contracts/oracle-market/sources/shop.move`
 ```move
-public fun listing_exists(shop: &Shop, listing_id: ID): bool {
-  dynamic_field::exists_with_type<ItemListingKey, ItemListingMarker>(
-    &shop.id,
-    ItemListingKey(listing_id),
-  )
+public fun listing_exists(shop: &Shop, listing_id: u64): bool {
+  shop.listings.contains(listing_id)
 }
 
-public fun accepted_currency_id_for_type(
+public fun accepted_currency_exists(
   shop: &Shop,
   coin_type: TypeName,
-): Option<ID> {
-  if (
-    dynamic_field::exists_with_type<AcceptedCurrencyTypeKey, ID>(
-      &shop.id,
-      AcceptedCurrencyTypeKey(coin_type),
-    )
-  ) {
-    opt::some(
-      *dynamic_field::borrow<AcceptedCurrencyTypeKey, ID>(
-        &shop.id,
-        AcceptedCurrencyTypeKey(coin_type),
-      )
-    )
-  } else {
-    opt::none()
-  }
+): bool {
+  shop.accepted_currencies.contains(coin_type)
 }
 ```
 
@@ -125,9 +108,8 @@ function buy(uint256 listingId, address payToken) external {
 ```move
 // Move (actual shape)
 entry fun buy_item<TItem: store, TCoin>(
-  shop: &Shop,
-  listing: &mut ItemListing,
-  accepted_currency: &AcceptedCurrency,
+  shop: &mut Shop,
+  listing_id: u64,
   price_info: &price_info::PriceInfoObject,
   payment_coin: coin::Coin<TCoin>,
   mint_to: address,
@@ -135,11 +117,12 @@ entry fun buy_item<TItem: store, TCoin>(
   max_price_age_secs: Option<u64>,
   max_confidence_ratio_bps: Option<u16>,
   clock: &clock::Clock,
-  ctx: &mut tx::TxContext
+  ctx: &mut TxContext
 ) {
-  // listing + currency checks
+  // listing lookup + currency checks
   // oracle guardrails
   // payment coin moved in (convention prefers exact-amount coins; this repo may return change)
+  // listing stock decremented inside Shop.listings
   // receipt minted as ShopItem<TItem>
   // events emitted
 }
@@ -151,7 +134,8 @@ entry fun buy_item<TItem: store, TCoin>(
 
 ## 9. Diagram: shared vs owned objects in tests
 ```
-Shared: Shop, ItemListing, AcceptedCurrency, DiscountTemplate
+Shared: Shop, DiscountTemplate
+Shop table entries: listings[u64] -> ItemListing, accepted_currencies[TypeName] -> AcceptedCurrency
 Owned: ShopOwnerCap, DiscountTicket, ShopItem
 ```
 

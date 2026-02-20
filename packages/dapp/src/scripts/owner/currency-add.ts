@@ -3,23 +3,20 @@
  * Stores coin metadata from the registry and guardrail caps on the currency object.
  * Requires the ShopOwnerCap capability and a valid PriceInfoObject.
  */
-import type { SuiClient } from "@mysten/sui/client"
 import { normalizeSuiObjectId } from "@mysten/sui/utils"
 import yargs from "yargs"
 
 import {
   findAcceptedCurrencyByCoinType,
-  getAcceptedCurrencySummary,
   normalizeCoinType,
   requireAcceptedCurrencyByCoinType,
-  type AcceptedCurrencyMatch
+  type AcceptedCurrencySummary
 } from "@sui-oracle-market/domain-core/models/currency"
 import { buildAddAcceptedCurrencyTransaction } from "@sui-oracle-market/domain-core/ptb/currency"
 import {
   assertBytesLength,
   hexToBytes
 } from "@sui-oracle-market/tooling-core/hex"
-import type { ObjectArtifact } from "@sui-oracle-market/tooling-core/object"
 import {
   parseOptionalPositiveU16,
   parseOptionalPositiveU64
@@ -104,31 +101,18 @@ runSuiScript(
 
     if (!execution) return
 
-    const {
-      objectArtifacts: { created }
-    } = execution
-
-    const createdAcceptedCurrency = findAcceptedCurrency(created)
-    const acceptedCurrencyId =
-      createdAcceptedCurrency?.objectId ||
-      (await requireAcceptedCurrencyId({
-        shopId: inputs.shopId,
-        coinType: inputs.coinType,
-        suiClient: tooling.suiClient
-      }))
-
-    const acceptedCurrencySummary = await getAcceptedCurrencySummary(
-      inputs.shopId,
-      acceptedCurrencyId,
-      tooling.suiClient
-    )
+    const acceptedCurrencySummary = await requireAcceptedCurrencyByCoinType({
+      coinType: inputs.coinType,
+      shopId: inputs.shopId,
+      suiClient: tooling.suiClient
+    })
 
     if (
       emitJsonOutput(
         {
           acceptedCurrency: acceptedCurrencySummary,
           feedId: cliArguments.feedId,
-          digest: createdAcceptedCurrency?.digest,
+          digest: execution.transactionResult.digest,
           transactionSummary: summary
         },
         cliArguments.json
@@ -138,8 +122,7 @@ runSuiScript(
 
     logAcceptedCurrencySummary(acceptedCurrencySummary)
     logKeyValueGreen("feed id")(cliArguments.feedId)
-    if (createdAcceptedCurrency?.digest)
-      logKeyValueGreen("digest")(createdAcceptedCurrency.digest)
+    logKeyValueGreen("digest")(execution.transactionResult.digest)
   },
   yargs()
     .option("shopPackageId", {
@@ -296,44 +279,14 @@ const logExistingAcceptedCurrency = ({
   existingAcceptedCurrency
 }: {
   coinType: string
-  existingAcceptedCurrency: AcceptedCurrencyMatch
+  existingAcceptedCurrency: AcceptedCurrencySummary
 }) => {
   logKeyValueGreen("coin type")(coinType)
   logKeyValueGreen("status")(
     "already registered; skipping add_accepted_currency"
   )
-  if (existingAcceptedCurrency.acceptedCurrencyId)
-    logKeyValueGreen("accepted currency id")(
-      existingAcceptedCurrency.acceptedCurrencyId
-    )
-  if (existingAcceptedCurrency.acceptedCurrencyFieldId)
-    logKeyValueGreen("currency field id")(
-      existingAcceptedCurrency.acceptedCurrencyFieldId
-    )
-  if (existingAcceptedCurrency.typeIndexFieldId)
-    logKeyValueGreen("type index field id")(
-      existingAcceptedCurrency.typeIndexFieldId
-    )
-}
-
-const findAcceptedCurrency = (createdArtifacts?: ObjectArtifact[]) =>
-  createdArtifacts?.find((artifact) =>
-    artifact.objectType?.endsWith("::shop::AcceptedCurrency")
+  logKeyValueGreen("table entry field id")(
+    existingAcceptedCurrency.tableEntryFieldId
   )
-
-const requireAcceptedCurrencyId = async ({
-  shopId,
-  coinType,
-  suiClient
-}: {
-  shopId: string
-  coinType: string
-  suiClient: SuiClient
-}): Promise<string> => {
-  const match = await requireAcceptedCurrencyByCoinType({
-    coinType,
-    shopId,
-    suiClient
-  })
-  return match.acceptedCurrencyId
+  logKeyValueGreen("feed id")(existingAcceptedCurrency.feedIdHex)
 }

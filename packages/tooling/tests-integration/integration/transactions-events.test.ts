@@ -3,7 +3,7 @@ import { describe, it } from "vitest"
 import type { WrappedSuiSharedObject } from "@sui-oracle-market/tooling-core/shared-object"
 import { getSuiSharedObject } from "@sui-oracle-market/tooling-core/shared-object"
 import { newTransaction } from "@sui-oracle-market/tooling-core/transactions"
-import { pickRootNonDependencyArtifact } from "@sui-oracle-market/tooling-node/artifacts"
+import { pickRootNonDependencyArtifact } from "@sui-oracle-market/tooling-node/package"
 
 import {
   assertEventByDigest,

@@ -57,7 +57,6 @@ import {
   safeJsonStringify,
   serializeForJson
 } from "../helpers/transactionErrors"
-import { extractCreatedObjects } from "../helpers/transactionFormat"
 import { waitForTransactionBlock } from "../helpers/transactionWait"
 import { useIdleFieldValidation } from "./useIdleFieldValidation"
 import useNetworkConfig from "./useNetworkConfig"
@@ -90,7 +89,7 @@ export type CurrencyTransactionSummary = Omit<
   currencyObjectId: string
   digest: string
   transactionBlock: SuiTransactionBlockResponse
-  acceptedCurrencyId?: string
+  tableEntryFieldId?: string
 }
 
 type TransactionState =
@@ -570,26 +569,11 @@ export const useAddCurrencyModalState = ({
         transactionBlock = await waitForTransactionBlock(suiClient, digest)
       }
 
-      const acceptedCurrencyId = extractCreatedObjects(transactionBlock).find(
-        (change) => change.objectType.includes("::shop::AcceptedCurrency")
-      )?.objectId
-
-      const optimisticCurrency = acceptedCurrencyId
-        ? {
-            acceptedCurrencyId,
-            markerObjectId: acceptedCurrencyId,
-            coinType: currencyInputs.coinType,
-            symbol: undefined,
-            decimals: undefined,
-            feedIdHex: currencyInputs.feedIdHex,
-            pythObjectId: currencyInputs.priceInfoObjectId,
-            maxPriceAgeSecsCap: currencyInputs.maxPriceAgeSecsCap?.toString(),
-            maxConfidenceRatioBpsCap:
-              currencyInputs.maxConfidenceRatioBpsCap?.toString(),
-            maxPriceStatusLagSecsCap:
-              currencyInputs.maxPriceStatusLagSecsCap?.toString()
-          }
-        : undefined
+      const acceptedCurrencySummary = await getAcceptedCurrencySummary(
+        resolvedShopId,
+        currencyInputs.coinType,
+        suiClient
+      ).catch(() => undefined)
 
       setTransactionState({
         status: "success",
@@ -598,21 +582,11 @@ export const useAddCurrencyModalState = ({
           currencyObjectId: resolvedCurrencyObjectId,
           digest,
           transactionBlock,
-          acceptedCurrencyId
+          tableEntryFieldId: acceptedCurrencySummary?.tableEntryFieldId
         }
       })
 
-      onCurrencyCreated?.(optimisticCurrency)
-
-      if (acceptedCurrencyId) {
-        void getAcceptedCurrencySummary(
-          resolvedShopId,
-          acceptedCurrencyId,
-          suiClient
-        )
-          .then((summary) => onCurrencyCreated?.(summary))
-          .catch(() => {})
-      }
+      onCurrencyCreated?.(acceptedCurrencySummary)
     } catch (error) {
       const errorDetails = extractErrorDetails(error)
       const localnetSupportNote =

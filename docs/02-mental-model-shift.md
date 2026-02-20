@@ -10,7 +10,7 @@ This repo assumes you already think in Solidity. The goal here is not to re-teac
 3. Run a quick environment sanity check before touching code.
 
 ## 2. EVM -> Sui translation
-1. **Contract storage -> objects**: your state lives in owned/shared objects, not in a single contract storage map. See `packages/dapp/contracts/oracle-market/sources/shop.move` (`Shop`, `ItemListing`, `AcceptedCurrency`).
+1. **Contract storage -> objects + tables**: your state lives in owned/shared objects and typed table entries, not in a single contract storage map. See `packages/dapp/contracts/oracle-market/sources/shop.move` (`Shop`, `DiscountTemplate`, `Shop.listings`, `Shop.accepted_currencies`).
 2. **onlyOwner -> capability**: authority is proved by holding a capability object. See `ShopOwnerCap` in `packages/dapp/contracts/oracle-market/sources/shop.move`.
 3. **Deployment -> publish + instantiate**: publishing creates a package object; stateful instances are created later as shared objects. See publish flow in `packages/dapp/src/scripts/contracts/publish.ts` and shop creation in `packages/dapp/src/scripts/owner/shop-create.ts`.
 4. **Inheritance -> modules + generics**: Move has no inheritance or dynamic dispatch; reuse is done through modules, functions, and type parameters. This repo uses `ShopItem<phantom TItem>` and `Coin<T>` to keep types safe without polymorphism.
@@ -28,9 +28,9 @@ This repo assumes you already think in Solidity. The goal here is not to re-teac
   why a `DiscountTicket` can only be redeemed once.
   Code: `packages/dapp/contracts/oracle-market/sources/shop.move` (ShopOwnerCap, DiscountTicket)
 - **Object ownership types**: Sui supports address-owned, shared, immutable, and object-owned
-  objects. This repo uses address-owned capabilities/tickets, shared objects for Shop/listings, and
-  object-owned dynamic-field children under the Shop or templates.
-  Code: `packages/dapp/contracts/oracle-market/sources/shop.move` (ShopOwnerCap, Shop, marker structs)
+  objects. This repo uses address-owned capabilities/tickets, shared objects for `Shop`/templates, and
+  object-owned dynamic-field children under tables or discount templates.
+  Code: `packages/dapp/contracts/oracle-market/sources/shop.move` (ShopOwnerCap, Shop, DiscountClaim)
 - **Strings (`String`)**: Sui Move’s String type is designed for user-facing, human-readable text and is always UTF-8 encoded. This is different from Solidity, where string is a dynamic byte array and encoding is not enforced. Using String ensures your data is valid UTF-8, which is important for interoperability and user interfaces. Many Sui and Move standard library functions expect or return String, making it the idiomatic choice for names, descriptions, and other text fields. Use vector<u8> only when you need to store arbitrary bytes (e.g., binary data, hashes, or non-UTF-8 content).
   Code: `packages/dapp/contracts/oracle-market/sources/shop.move` (Shop.name, ItemListing.name)
 - **Options instead of sentinels**: optional values use `Option` instead of magic constants.
@@ -55,6 +55,9 @@ public struct Shop has key, store {
   owner: address,
   name: string::String,
   disabled: bool,
+  accepted_currencies: table::Table<TypeName, AcceptedCurrency>,
+  listings: table::Table<u64, ItemListing>,
+  next_listing_id: u64,
 }
 ```
 
@@ -116,10 +119,11 @@ EVM: contract storage
   Contract
     mapping(listingId => Listing)
 
-Sui: objects + dynamic fields
+Sui: shared objects + typed tables
   Shop (shared)
-    dynamic field: listing_id -> ItemListingMarker
-  ItemListing (shared)
+    table listings: listing_id (u64) -> ItemListing
+    table accepted_currencies: coin_type (TypeName) -> AcceptedCurrency
+  DiscountTemplate (shared)
 ```
 
 ## 9. Further reading (Sui docs)

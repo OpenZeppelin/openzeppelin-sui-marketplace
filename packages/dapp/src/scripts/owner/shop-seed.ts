@@ -12,10 +12,9 @@ import yargs from "yargs"
 import {
   findAcceptedCurrencyByCoinType,
   getAcceptedCurrencySummaries,
-  getAcceptedCurrencySummary,
   normalizeCoinType,
   requireAcceptedCurrencyByCoinType,
-  type AcceptedCurrencyMatch
+  type AcceptedCurrencySummary
 } from "@sui-oracle-market/domain-core/models/currency"
 import {
   defaultStartTimestampSeconds,
@@ -31,6 +30,7 @@ import {
 import {
   getItemListingSummaries,
   getItemListingSummary,
+  requireListingIdFromItemListingAddedEvents,
   type ItemListingSummary
 } from "@sui-oracle-market/domain-core/models/item-listing"
 import {
@@ -69,7 +69,6 @@ import {
   assertBytesLength,
   hexToBytes
 } from "@sui-oracle-market/tooling-core/hex"
-import { normalizeIdOrThrow } from "@sui-oracle-market/tooling-core/object"
 import { isStaleObjectVersionError } from "@sui-oracle-market/tooling-core/transactions"
 import { readMoveString } from "@sui-oracle-market/tooling-core/utils/formatters"
 import { retryWithDelay } from "@sui-oracle-market/tooling-core/utils/retry"
@@ -86,7 +85,8 @@ import { readArtifact } from "@sui-oracle-market/tooling-node/artifacts"
 import { withMutedConsole } from "@sui-oracle-market/tooling-node/console"
 import {
   DEFAULT_TX_GAS_BUDGET,
-  SUI_COIN_REGISTRY_ID
+  SUI_COIN_REGISTRY_ID,
+  SUI_COIN_TYPE
 } from "@sui-oracle-market/tooling-node/constants"
 import type { Tooling } from "@sui-oracle-market/tooling-node/factory"
 import { emitJsonOutput } from "@sui-oracle-market/tooling-node/json"
@@ -97,11 +97,7 @@ import {
   logWarning
 } from "@sui-oracle-market/tooling-node/log"
 import { runSuiScript } from "@sui-oracle-market/tooling-node/process"
-import {
-  ensureCreatedObject,
-  findCreatedArtifactIdBySuffix,
-  requireCreatedArtifactIdBySuffix
-} from "@sui-oracle-market/tooling-node/transactions"
+import { requireCreatedArtifactIdBySuffix } from "@sui-oracle-market/tooling-node/transactions"
 import { ensureNativeSuiCurrencyRegistration } from "../../utils/coin-registry.ts"
 import {
   logAcceptedCurrencySummary,
@@ -118,8 +114,6 @@ import { mockArtifactPath, writeMockArtifact } from "../../utils/mocks.ts"
 // and pick a `Coin-type`/`Currency-id` pair that matches the coin you can acquire.
 const DEFAULT_USDC_COIN_TYPE =
   "0xa1ec7fc00a6f40db9693ad1415d0c193ad3906494428cf252621037bd7117e29::usdc::USDC"
-// Native SUI coin type; used on testnet to support SUI payments.
-const DEFAULT_SUI_COIN_TYPE = "0x2::sui::SUI"
 // NOTE: Testnet coin package IDs can change over time.
 // If this ever fails to resolve via the coin registry, run:
 //   pnpm -s script owner:pyth:list --network testnet --query wal --quote USD --limit 5
@@ -207,7 +201,7 @@ type AcceptedCurrencySeed = {
 }
 
 const ACCEPTED_CURRENCY_SEEDS: AcceptedCurrencySeedInput[] = [
-  { coinType: DEFAULT_SUI_COIN_TYPE },
+  { coinType: SUI_COIN_TYPE },
   { coinType: DEFAULT_USDC_COIN_TYPE },
   { coinType: DEFAULT_WAL_COIN_TYPE }
 ]
@@ -926,13 +920,10 @@ const buildLocalnetAcceptedCurrencySeeds = async (): Promise<
   return [
     ...coinSeeds.seeds,
     {
-      coinType: DEFAULT_SUI_COIN_TYPE,
+      coinType: SUI_COIN_TYPE,
       feedId: suiFeed.feedIdHex,
       priceInfoObjectId: suiFeed.priceInfoObjectId,
-      currencyId: deriveCurrencyObjectId(
-        DEFAULT_SUI_COIN_TYPE,
-        SUI_COIN_REGISTRY_ID
-      )
+      currencyId: deriveCurrencyObjectId(SUI_COIN_TYPE, SUI_COIN_REGISTRY_ID)
     }
   ]
 }
@@ -1071,9 +1062,7 @@ const ensureAcceptedCurrency = async ({
 
   const gasBudget = tooling.network.gasBudget ?? DEFAULT_TX_GAS_BUDGET
 
-  const {
-    objectArtifacts: { created }
-  } = await signAndExecuteWithRetry({
+  await signAndExecuteWithRetry({
     tooling,
     buildTransaction: () =>
       buildAddAcceptedCurrencyTransaction({
@@ -1092,19 +1081,11 @@ const ensureAcceptedCurrency = async ({
       })
   })
 
-  const acceptedCurrencyId =
-    findCreatedArtifactIdBySuffix(created, "::shop::AcceptedCurrency") ??
-    (await requireAcceptedCurrencyId({
-      shopId: inputs.shopId,
-      coinType: inputs.coinType,
-      suiClient
-    }))
-
-  const acceptedCurrencySummary = await getAcceptedCurrencySummary(
-    inputs.shopId,
-    acceptedCurrencyId,
+  const acceptedCurrencySummary = await requireAcceptedCurrencyByCoinType({
+    coinType: inputs.coinType,
+    shopId: inputs.shopId,
     suiClient
-  )
+  })
 
   logAcceptedCurrencySummary(acceptedCurrencySummary)
   logKeyValueGreen("Feed-id")(currencySeed.feedId)
@@ -1165,32 +1146,16 @@ const normalizeAcceptedCurrencyInputs = async ({
 
 const logExistingAcceptedCurrency = async ({
   coinType,
-  existingAcceptedCurrency,
-  shopId,
-  suiClient
+  existingAcceptedCurrency
 }: {
   coinType: string
-  existingAcceptedCurrency: AcceptedCurrencyMatch
+  existingAcceptedCurrency: AcceptedCurrencySummary
   shopId: string
   suiClient: SuiClient
 }) => {
-  const acceptedCurrencyId =
-    existingAcceptedCurrency.acceptedCurrencyId ||
-    (await requireAcceptedCurrencyId({
-      shopId,
-      coinType,
-      suiClient
-    }))
-
   logKeyValueYellow("Currency")(`${coinType} already registered; skipping.`)
 
-  const acceptedCurrencySummary = await getAcceptedCurrencySummary(
-    shopId,
-    acceptedCurrencyId,
-    suiClient
-  )
-
-  logAcceptedCurrencySummary(acceptedCurrencySummary)
+  logAcceptedCurrencySummary(existingAcceptedCurrency)
 }
 
 const ensureItemListings = async ({
@@ -1267,15 +1232,10 @@ const ensureItemListing = async ({
       })
   })
 
-  const createdListingChange = ensureCreatedObject(
-    "::shop::ItemListing",
-    transactionResult
-  )
-
-  const listingId = normalizeIdOrThrow(
-    createdListingChange.objectId,
-    "Expected an ItemListing to be created."
-  )
+  const listingId = requireListingIdFromItemListingAddedEvents({
+    events: transactionResult.events,
+    shopId: shopIdentifiers.shopId
+  })
   const listingSummary = await getItemListingSummary(
     shopIdentifiers.shopId,
     listingId,
@@ -1460,11 +1420,8 @@ const ensureFixedDiscountSpotlight = async ({
     suiClient
   })
 
-  const shopSharedObject = await tooling.getImmutableSharedObject({
+  const shopSharedObject = await tooling.getMutableSharedObject({
     objectId: shopIdentifiers.shopId
-  })
-  const itemListingSharedObject = await tooling.getMutableSharedObject({
-    objectId: resolvedIds.itemListingId
   })
   const discountTemplateSharedObject = await tooling.getImmutableSharedObject({
     objectId: resolvedIds.discountTemplateId
@@ -1476,7 +1433,7 @@ const ensureFixedDiscountSpotlight = async ({
       buildAttachDiscountTemplateTransaction({
         packageId: shopIdentifiers.packageId,
         shop: shopSharedObject,
-        itemListing: itemListingSharedObject,
+        itemListingId: resolvedIds.itemListingId,
         discountTemplate: discountTemplateSharedObject,
         ownerCapId: shopIdentifiers.ownerCapId
       })
@@ -1541,20 +1498,3 @@ const indexDiscountTemplateSummaries = (
     },
     new Map()
   )
-
-const requireAcceptedCurrencyId = async ({
-  shopId,
-  coinType,
-  suiClient
-}: {
-  shopId: string
-  coinType: string
-  suiClient: SuiClient
-}): Promise<string> => {
-  const match = await requireAcceptedCurrencyByCoinType({
-    coinType,
-    shopId,
-    suiClient
-  })
-  return match.acceptedCurrencyId
-}

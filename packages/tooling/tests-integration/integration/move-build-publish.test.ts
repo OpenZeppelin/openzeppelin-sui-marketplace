@@ -2,7 +2,7 @@ import { readFile } from "node:fs/promises"
 import path from "node:path"
 import { describe, expect, it } from "vitest"
 
-import { pickRootNonDependencyArtifact } from "@sui-oracle-market/tooling-node/artifacts"
+import { pickRootNonDependencyArtifact } from "@sui-oracle-market/tooling-node/package"
 
 import { createToolingIntegrationTestEnv } from "../helpers/env.ts"
 

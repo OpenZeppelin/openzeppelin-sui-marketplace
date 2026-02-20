@@ -7,6 +7,7 @@ import {
 import type { Ed25519Keypair } from "@mysten/sui/keypairs/ed25519"
 import type { Transaction } from "@mysten/sui/transactions"
 import { normalizeSuiObjectId } from "@mysten/sui/utils"
+import { SUI_COIN_TYPE } from "@sui-oracle-market/tooling-core/constants"
 import {
   getObjectIdFromDynamicFieldObject,
   isDynamicFieldObject
@@ -829,7 +830,7 @@ const pickFreshGasCoin = async (
   do {
     const page = await client.getCoins({
       owner,
-      coinType: "0x2::sui::SUI",
+      coinType: SUI_COIN_TYPE,
       limit: 50,
       cursor
     })

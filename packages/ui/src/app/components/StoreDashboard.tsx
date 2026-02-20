@@ -340,13 +340,13 @@ const ItemListingsPanel = ({
                     <div className="mt-4 flex flex-col gap-2 text-[0.65rem]">
                       <CopyableId
                         value={listing.itemListingId}
-                        label="Listing"
+                        label="Listing ID"
                         className="w-full justify-start"
-                        explorerUrl={explorerUrl}
+                        showExplorer={false}
                       />
                       <CopyableId
-                        value={listing.markerObjectId}
-                        label="Marker"
+                        value={listing.tableEntryFieldId}
+                        label="Table Entry"
                         className="w-full justify-start"
                         explorerUrl={explorerUrl}
                       />
@@ -446,7 +446,7 @@ const AcceptedCurrenciesPanel = ({
 
               return (
                 <div
-                  key={currency.acceptedCurrencyId}
+                  key={currency.tableEntryFieldId}
                   className="flex h-full flex-col rounded-xl border border-slate-300/80 bg-white/95 p-4 shadow-[0_12px_30px_-22px_rgba(15,23,42,0.35)] dark:border-slate-50/25 dark:bg-slate-950/60"
                 >
                   <div className="flex items-start justify-between gap-3">
@@ -496,8 +496,8 @@ const AcceptedCurrenciesPanel = ({
                   </div>
                   <div className="mt-4 flex flex-wrap items-center gap-3 text-[0.65rem]">
                     <CopyableId
-                      value={currency.acceptedCurrencyId}
-                      label="Accepted Currency"
+                      value={currency.tableEntryFieldId}
+                      label="Table entry"
                       explorerUrl={explorerUrl}
                     />
                     {currency.pythObjectId ? (
@@ -607,9 +607,9 @@ const PurchasedItemsPanel = ({
                   <div className="mt-4 flex flex-col gap-2 text-[0.65rem]">
                     <CopyableId
                       value={item.itemListingId}
-                      label="Listing"
+                      label="Listing ID"
                       className="w-full justify-start"
-                      explorerUrl={explorerUrl}
+                      showExplorer={false}
                     />
                     <CopyableId
                       value={item.shopId}
@@ -761,7 +761,7 @@ const DiscountsPanel = ({
                                   title="Copy listing id"
                                   className="mt-1 w-full justify-start text-sm font-semibold text-slate-500 dark:text-slate-200/70"
                                   valueClassName="truncate font-semibold text-slate-500 dark:text-slate-200/70"
-                                  explorerUrl={explorerUrl}
+                                  showExplorer={false}
                                 />
                               ) : (
                                 <div className="mt-1 text-sm font-semibold text-slate-500 dark:text-slate-200/70">
@@ -880,7 +880,7 @@ const DiscountsPanel = ({
                                     title="Copy listing id"
                                     className="mt-1 w-full justify-start text-sm font-semibold text-slate-500 dark:text-slate-200/70"
                                     valueClassName="truncate font-semibold text-slate-500 dark:text-slate-200/70"
-                                    explorerUrl={explorerUrl}
+                                    showExplorer={false}
                                   />
                                 ) : (
                                   <div className="mt-1 text-sm font-semibold text-slate-500 dark:text-slate-200/70">

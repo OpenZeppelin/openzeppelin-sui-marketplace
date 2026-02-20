@@ -8,6 +8,7 @@ import type { Ed25519Keypair } from "@mysten/sui/keypairs/ed25519"
 import type { Transaction } from "@mysten/sui/transactions"
 import { normalizeSuiAddress } from "@mysten/sui/utils"
 import { asMinimumBalanceOf } from "@sui-oracle-market/tooling-core/address"
+import { SUI_COIN_TYPE } from "@sui-oracle-market/tooling-core/constants"
 import { newTransaction } from "@sui-oracle-market/tooling-core/transactions"
 import { formatErrorMessage } from "@sui-oracle-market/tooling-core/utils/errors"
 import { wait } from "@sui-oracle-market/tooling-core/utils/utility"
@@ -80,7 +81,7 @@ const getAddressesCoins = async (ownerAddress: string, suiClient: SuiClient) =>
   (
     await suiClient.getCoins({
       owner: normalizeSuiAddress(ownerAddress),
-      coinType: "0x2::sui::SUI",
+      coinType: SUI_COIN_TYPE,
       limit: 10
     })
   ).data || []

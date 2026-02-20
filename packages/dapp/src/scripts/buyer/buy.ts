@@ -15,7 +15,6 @@ import {
   resolvePaymentCoinObjectId
 } from "@sui-oracle-market/domain-core/flows/buy"
 import {
-  getAcceptedCurrencySummary,
   normalizeCoinType,
   requireAcceptedCurrencyByCoinType
 } from "@sui-oracle-market/domain-core/models/currency"
@@ -24,12 +23,16 @@ import {
   getDiscountTemplateSummary,
   type DiscountContext
 } from "@sui-oracle-market/domain-core/models/discount"
-import { getItemListingSummary } from "@sui-oracle-market/domain-core/models/item-listing"
+import {
+  getItemListingSummary,
+  normalizeListingId
+} from "@sui-oracle-market/domain-core/models/item-listing"
 import type { PriceUpdatePolicy } from "@sui-oracle-market/domain-core/models/pyth"
 import { findCreatedShopItemIds } from "@sui-oracle-market/domain-core/models/shop-item"
 import { planSuiPaymentSplitTransaction } from "@sui-oracle-market/tooling-core/coin"
 import {
   DEFAULT_TX_GAS_BUDGET,
+  NORMALIZED_SUI_COIN_TYPE,
   SUI_CLOCK_ID
 } from "@sui-oracle-market/tooling-core/constants"
 import type { ObjectArtifact } from "@sui-oracle-market/tooling-core/object"
@@ -70,8 +73,6 @@ type BuyArguments = {
   json?: boolean
 }
 
-const SUI_COIN_TYPE = normalizeCoinType("0x2::sui::SUI")
-
 runSuiScript(
   async (tooling, cliArguments: BuyArguments) => {
     const inputs = await normalizeInputs(
@@ -83,35 +84,22 @@ runSuiScript(
     const mintTo = inputs.mintTo ?? signerAddress
     const refundTo = inputs.refundTo ?? signerAddress
 
-    const shopShared = await tooling.getImmutableSharedObject({
+    const shopShared = await tooling.getMutableSharedObject({
       objectId: inputs.shopId
-    })
-    const itemListingShared = await tooling.getMutableSharedObject({
-      objectId: inputs.itemListingId
     })
 
     const shopPackageId = deriveRelevantPackageId(shopShared.object.type)
 
-    const acceptedCurrencyMatch = await requireAcceptedCurrencyByCoinType({
+    const acceptedCurrencySummary = await requireAcceptedCurrencyByCoinType({
       coinType: inputs.coinType,
       shopId: inputs.shopId,
       suiClient: tooling.suiClient
     })
 
-    const acceptedCurrencySummary = await getAcceptedCurrencySummary(
-      inputs.shopId,
-      acceptedCurrencyMatch.acceptedCurrencyId,
-      tooling.suiClient
-    )
-
     const pythPriceInfoObjectId = normalizeIdOrThrow(
       acceptedCurrencySummary.pythObjectId,
-      `AcceptedCurrency ${acceptedCurrencySummary.acceptedCurrencyId} is missing a pyth_object_id.`
+      `Accepted currency ${acceptedCurrencySummary.coinType} is missing a pyth_object_id.`
     )
-
-    const acceptedCurrencyShared = await tooling.getImmutableSharedObject({
-      objectId: acceptedCurrencySummary.acceptedCurrencyId
-    })
     const pythPriceInfoShared = await tooling.getImmutableSharedObject({
       objectId: pythPriceInfoObjectId
     })
@@ -129,7 +117,7 @@ runSuiScript(
       suiClient: tooling.suiClient
     })
 
-    const isSuiPayment = inputs.coinType === SUI_COIN_TYPE
+    const isSuiPayment = inputs.coinType === NORMALIZED_SUI_COIN_TYPE
     const quotePriceUpdateMode =
       tooling.network.networkName === "localnet"
         ? "localnet-mock"
@@ -159,7 +147,7 @@ runSuiScript(
       paymentCoinMinimumBalance = await estimateRequiredAmount({
         shopPackageId,
         shopShared,
-        acceptedCurrencyShared,
+        coinType: inputs.coinType,
         pythPriceInfoShared,
         pythFeedIdHex: acceptedCurrencySummary.feedIdHex,
         networkName: tooling.network.networkName,
@@ -230,7 +218,8 @@ runSuiScript(
         listingName: listingSummary.name,
         itemType: listingSummary.itemType,
         coinType: inputs.coinType,
-        acceptedCurrencyId: acceptedCurrencySummary.acceptedCurrencyId,
+        acceptedCurrencyTableEntryFieldId:
+          acceptedCurrencySummary.tableEntryFieldId,
         pythObjectId: pythPriceInfoObjectId,
         paymentCoinObjectId,
         discountContext
@@ -241,8 +230,7 @@ runSuiScript(
       {
         shopPackageId,
         shopShared,
-        itemListingShared,
-        acceptedCurrencyShared,
+        itemListingId: inputs.itemListingId,
         pythPriceInfoShared,
         pythFeedIdHex: acceptedCurrencySummary.feedIdHex,
         paymentCoinObjectId,
@@ -316,7 +304,7 @@ runSuiScript(
     .option("itemListingId", {
       alias: ["item-listing-id", "listing-id"],
       type: "string",
-      description: "ItemListing object ID to buy.",
+      description: "Item listing ID to buy (u64).",
       demandOption: true
     })
     .option("coinType", {
@@ -472,7 +460,7 @@ const normalizeInputs = async (
 
   return {
     shopId,
-    itemListingId: normalizeSuiObjectId(cliArguments.itemListingId),
+    itemListingId: normalizeListingId(cliArguments.itemListingId),
     coinType,
     paymentCoinObjectId: cliArguments.paymentCoinObjectId
       ? normalizeSuiObjectId(cliArguments.paymentCoinObjectId)
@@ -527,7 +515,7 @@ const logBuyContext = ({
   listingName,
   itemType,
   coinType,
-  acceptedCurrencyId,
+  acceptedCurrencyTableEntryFieldId,
   pythObjectId,
   paymentCoinObjectId,
   discountContext
@@ -540,7 +528,7 @@ const logBuyContext = ({
   listingName?: string
   itemType: string
   coinType: string
-  acceptedCurrencyId: string
+  acceptedCurrencyTableEntryFieldId: string
   pythObjectId: string
   paymentCoinObjectId: string
   discountContext: DiscountContext
@@ -553,7 +541,7 @@ const logBuyContext = ({
   if (listingName) logKeyValueBlue("Listing-name")(listingName)
   logKeyValueBlue("Item-type")(itemType)
   logKeyValueBlue("Coin-type")(coinType)
-  logKeyValueBlue("Accepted-currency")(acceptedCurrencyId)
+  logKeyValueBlue("Accepted-currency-entry")(acceptedCurrencyTableEntryFieldId)
   logKeyValueBlue("Pyth-price-info")(pythObjectId)
   logKeyValueBlue("Payment-coin")(paymentCoinObjectId)
 

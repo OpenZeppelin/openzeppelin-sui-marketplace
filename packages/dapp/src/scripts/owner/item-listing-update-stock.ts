@@ -1,11 +1,13 @@
 /**
- * Updates inventory on an ItemListing shared object.
+ * Updates inventory on a table-backed ItemListing.
  * Requires the ShopOwnerCap capability and emits stock update events.
  */
-import { normalizeSuiObjectId } from "@mysten/sui/utils"
 import yargs from "yargs"
 
-import { getItemListingSummary } from "@sui-oracle-market/domain-core/models/item-listing"
+import {
+  getItemListingSummary,
+  normalizeListingId
+} from "@sui-oracle-market/domain-core/models/item-listing"
 import { buildUpdateItemListingStockTransaction } from "@sui-oracle-market/domain-core/ptb/item-listing"
 import { parseNonNegativeU64 } from "@sui-oracle-market/tooling-core/utils/utility"
 import { emitJsonOutput } from "@sui-oracle-market/tooling-node/json"
@@ -32,17 +34,14 @@ runSuiScript(
       cliArguments,
       tooling.network.networkName
     )
-    const shopSharedObject = await tooling.getImmutableSharedObject({
+    const shopMutableSharedObject = await tooling.getMutableSharedObject({
       objectId: inputs.shopId
-    })
-    const itemListingSharedObject = await tooling.getMutableSharedObject({
-      objectId: inputs.itemListingId
     })
 
     const updateStockTransaction = buildUpdateItemListingStockTransaction({
       packageId: inputs.packageId,
-      shop: shopSharedObject,
-      itemListing: itemListingSharedObject,
+      shop: shopMutableSharedObject,
+      itemListingId: inputs.itemListingId,
       ownerCapId: inputs.ownerCapId,
       newStock: inputs.newStock
     })
@@ -84,8 +83,7 @@ runSuiScript(
     .option("itemListingId", {
       alias: ["item-listing-id", "item-id", "listing-id"],
       type: "string",
-      description:
-        "ItemListing object ID to update (object ID, not a type tag).",
+      description: "Item listing ID to update (u64).",
       demandOption: true
     })
     .option("stock", {
@@ -154,7 +152,7 @@ const normalizeInputs = async (
     packageId,
     shopId,
     ownerCapId,
-    itemListingId: normalizeSuiObjectId(cliArguments.itemListingId),
+    itemListingId: normalizeListingId(cliArguments.itemListingId),
     newStock: parseNonNegativeU64(cliArguments.stock, "stock")
   }
 }

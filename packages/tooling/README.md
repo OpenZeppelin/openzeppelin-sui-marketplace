@@ -251,7 +251,7 @@ Use `createSuiScriptRunner(...)` to execute scripts from the `packages/dapp/src/
 
 ```ts
 import { describe, it, expect } from "vitest"
-import { pickRootNonDependencyArtifact } from "_root_package__/tooling-node/artifacts"
+import { pickRootNonDependencyArtifact } from "_root_package__/tooling-node/package"
 import {
   createSuiScriptRunner,
   parseJsonFromScriptOutput
@@ -542,5 +542,4 @@ High-level helpers for localnet + scripts. These are used by the integration tes
 - Transaction helpers normalize ID/owner formats to avoid cross-run diffs.
 
 ---
-
 

@@ -1,9 +1,9 @@
 import { normalizeIdOrThrow } from "@sui-oracle-market/tooling-core/object"
 import {
-  isPublishArtifactNamed,
   loadDeploymentArtifacts,
   findLatestArtifactThat
 } from "@sui-oracle-market/tooling-node/artifacts"
+import { isPublishArtifactNamed } from "@sui-oracle-market/tooling-node/package"
 
 export const isItemExamplesPublishArtifact =
   isPublishArtifactNamed("item_examples")

@@ -2,10 +2,12 @@
  * Clears the listing's spotlight DiscountTemplate reference.
  * Requires the ShopOwnerCap capability.
  */
-import { normalizeSuiObjectId } from "@mysten/sui/utils"
 import yargs from "yargs"
 
-import { getItemListingSummary } from "@sui-oracle-market/domain-core/models/item-listing"
+import {
+  getItemListingSummary,
+  normalizeListingId
+} from "@sui-oracle-market/domain-core/models/item-listing"
 import {
   buildClearDiscountTemplateTransaction,
   resolveListingIdForShop
@@ -27,18 +29,15 @@ runSuiScript(
       itemListingId: inputs.itemListingId,
       suiClient: tooling.suiClient
     })
-    const shopSharedObject = await tooling.getImmutableSharedObject({
+    const shopSharedObject = await tooling.getMutableSharedObject({
       objectId: inputs.shopId
-    })
-    const itemListingSharedObject = await tooling.getMutableSharedObject({
-      objectId: resolvedListingId
     })
 
     const clearDiscountTemplateTransaction =
       buildClearDiscountTemplateTransaction({
         packageId: inputs.packageId,
         shop: shopSharedObject,
-        itemListing: itemListingSharedObject,
+        itemListingId: resolvedListingId,
         ownerCapId: inputs.ownerCapId
       })
 
@@ -80,7 +79,7 @@ runSuiScript(
       alias: ["item-listing-id", "item-id", "listing-id"],
       type: "string",
       description:
-        "ItemListing object ID to clear the spotlighted discount from (object ID, not a type tag).",
+        "Item listing ID to clear the spotlighted discount from (u64).",
       demandOption: true
     })
     .option("shopPackageId", {
@@ -141,6 +140,6 @@ const normalizeInputs = async (
     packageId,
     shopId,
     ownerCapId,
-    itemListingId: normalizeSuiObjectId(cliArguments.itemListingId)
+    itemListingId: normalizeListingId(cliArguments.itemListingId)
   }
 }

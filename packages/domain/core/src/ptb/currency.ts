@@ -59,26 +59,20 @@ export const buildRemoveAcceptedCurrencyTransaction = ({
   packageId,
   shop,
   ownerCapId,
-  acceptedCurrency
+  coinType
 }: {
   packageId: string
   shop: WrappedSuiSharedObject
   ownerCapId: string
-  acceptedCurrency: WrappedSuiSharedObject
+  coinType: string
 }) => {
   const transaction = newTransaction()
   const shopArgument = transaction.sharedObjectRef(shop.sharedRef)
-  const acceptedCurrencyArgument = transaction.sharedObjectRef(
-    acceptedCurrency.sharedRef
-  )
 
   transaction.moveCall({
     target: `${packageId}::shop::remove_accepted_currency`,
-    arguments: [
-      shopArgument,
-      transaction.object(ownerCapId),
-      acceptedCurrencyArgument
-    ]
+    typeArguments: [coinType],
+    arguments: [shopArgument, transaction.object(ownerCapId)]
   })
 
   return transaction

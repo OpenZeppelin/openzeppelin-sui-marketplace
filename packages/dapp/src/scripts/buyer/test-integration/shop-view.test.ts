@@ -1,40 +1,27 @@
+import type { ShopSnapshot } from "@sui-oracle-market/domain-core/models/shop"
 import { describe, expect, it } from "vitest"
 
 import {
   createDappIntegrationTestEnv,
+  createShopWithItemExamplesAndAcceptedCurrencyFixture,
   createShopWithItemExamplesFixture,
   resolveItemType,
   runBuyerScriptJson,
   seedShopWithListingAndDiscount
 } from "./helpers.ts"
 
-type ShopViewOutput = {
-  shopOverview?: {
-    shopId?: string
-    ownerAddress?: string
-    name?: string
-  }
-  itemListings?: Array<{
-    itemListingId?: string
-    markerObjectId?: string
-    itemType?: string
-    name?: string
-  }>
-  acceptedCurrencies?: Array<{
-    acceptedCurrencyId?: string
-    markerObjectId?: string
-    coinType?: string
-    feedIdHex?: string
-  }>
-  discountTemplates?: Array<{
-    discountTemplateId?: string
-    markerObjectId?: string
-    shopId?: string
-    status?: string
-  }>
+const testEnv = createDappIntegrationTestEnv()
+const DEFAULT_LISTING_INPUT = {
+  name: "Roadster",
+  priceUsd: "12.50",
+  priceUsdCents: "1250",
+  stock: "4"
 }
 
-const testEnv = createDappIntegrationTestEnv()
+const findListingById = (
+  listings: ShopSnapshot["itemListings"],
+  listingId: string
+) => listings.find((listing) => listing.itemListingId === listingId)
 
 describe("buyer shop-view integration", () => {
   it("returns seeded shop snapshot details", async () => {
@@ -45,19 +32,20 @@ describe("buyer shop-view integration", () => {
         })
 
       const itemType = resolveItemType(itemExamplesPackageId, "Car")
-      await seedShopWithListingAndDiscount({
-        scriptRunner,
-        publisher,
-        shopId,
-        itemType,
-        listingName: "Roadster",
-        price: "1250",
-        stock: "4",
-        ruleKind: "percent",
-        value: "10"
-      })
+      const { itemListing, discountTemplate } =
+        await seedShopWithListingAndDiscount({
+          scriptRunner,
+          publisher,
+          shopId,
+          itemType,
+          listingName: DEFAULT_LISTING_INPUT.name,
+          price: DEFAULT_LISTING_INPUT.priceUsd,
+          stock: DEFAULT_LISTING_INPUT.stock,
+          ruleKind: "percent",
+          value: "10"
+        })
 
-      const viewPayload = await runBuyerScriptJson<ShopViewOutput>(
+      const viewPayload = await runBuyerScriptJson<ShopSnapshot>(
         scriptRunner,
         "shop-view",
         {
@@ -66,30 +54,76 @@ describe("buyer shop-view integration", () => {
         }
       )
 
-      expect(viewPayload.shopOverview?.shopId).toBe(shopId)
-      expect(viewPayload.shopOverview?.name).toBeTruthy()
-      expect(viewPayload.shopOverview?.ownerAddress).toBeTruthy()
+      expect(viewPayload.shopOverview.shopId).toBe(shopId)
+      expect(viewPayload.shopOverview.name).toBeTruthy()
+      expect(viewPayload.shopOverview.ownerAddress).toBeTruthy()
 
-      const itemListings = viewPayload.itemListings ?? []
+      const itemListings = viewPayload.itemListings
       expect(itemListings.length).toBeGreaterThan(0)
+      const seededListing = findListingById(
+        itemListings,
+        itemListing.itemListingId
+      )
+      expect(seededListing).toBeTruthy()
       itemListings.forEach((listing) => {
         expect(listing.itemListingId).toBeTruthy()
-        expect(listing.markerObjectId).toBeTruthy()
+        expect(listing.tableEntryFieldId).toBeTruthy()
         expect(listing.itemType).toBeTruthy()
         expect(listing.name).toBeTruthy()
       })
+      expect(seededListing?.basePriceUsdCents).toBe(
+        DEFAULT_LISTING_INPUT.priceUsdCents
+      )
+      expect(seededListing?.stock).toBe(DEFAULT_LISTING_INPUT.stock)
+      expect(seededListing?.spotlightTemplateId).toBe(
+        discountTemplate.discountTemplateId
+      )
 
-      const acceptedCurrencies = viewPayload.acceptedCurrencies ?? []
+      const acceptedCurrencies = viewPayload.acceptedCurrencies
       expect(acceptedCurrencies.length).toBe(0)
 
-      const discountTemplates = viewPayload.discountTemplates ?? []
+      const discountTemplates = viewPayload.discountTemplates
       expect(discountTemplates.length).toBeGreaterThan(0)
-      discountTemplates.forEach((template) => {
-        expect(template.discountTemplateId).toBeTruthy()
-        expect(template.markerObjectId).toBeTruthy()
-        expect(template.shopId).toBeTruthy()
-        expect(template.status).toBeTruthy()
+      discountTemplates.forEach((discountTemplate) => {
+        expect(discountTemplate.discountTemplateId).toBeTruthy()
+        expect(discountTemplate.markerObjectId).toBeTruthy()
+        expect(discountTemplate.shopId).toBeTruthy()
+        expect(discountTemplate.status).toBeTruthy()
       })
     })
+  })
+
+  it("returns accepted currency details after owner registration", async () => {
+    await testEnv.withTestContext(
+      "buyer-shop-view-currencies",
+      async (context) => {
+        const { publisher, scriptRunner, shopId, acceptedCurrency } =
+          await createShopWithItemExamplesAndAcceptedCurrencyFixture(context, {
+            shopName: "Shop View Currency Integration",
+            publisherLabel: "shop-view-owner"
+          })
+
+        const viewPayload = await runBuyerScriptJson<ShopSnapshot>(
+          scriptRunner,
+          "shop-view",
+          {
+            account: publisher,
+            args: { shopId }
+          }
+        )
+
+        const acceptedCurrencies = viewPayload.acceptedCurrencies
+        expect(acceptedCurrencies.length).toBeGreaterThan(0)
+        expect(
+          acceptedCurrencies.some(
+            (currency) =>
+              currency.tableEntryFieldId ===
+                acceptedCurrency.tableEntryFieldId &&
+              currency.coinType === acceptedCurrency.coinType &&
+              currency.feedIdHex === acceptedCurrency.feedIdHex
+          )
+        ).toBe(true)
+      }
+    )
   })
 })

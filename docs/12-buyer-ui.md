@@ -58,8 +58,8 @@ pnpm ui dev
 - **Price update policy**: for localnet/testnet/mainnet, the UI requires a Pyth update to be added
   to the PTB; for other networks it can be auto/skip. This keeps pricing deterministic and fresh.
   Code: `packages/ui/src/app/hooks/useBuyFlowModalState.ts`
-- **Shared vs owned reads in UI**: storefront data comes from shared objects (listings, currencies,
-  templates). Wallet data comes from owned objects (tickets, receipts).
+- **Shared vs owned reads in UI**: storefront data comes from shared objects (`Shop`, templates)
+  plus `Shop` table entries (listings, currencies). Wallet data comes from owned objects (tickets, receipts).
   Code: `packages/ui/src/app/hooks/useShopDashboardData.tsx`
 
 ## 7. UI map (buyer path)
@@ -76,13 +76,12 @@ pnpm ui dev
 5. `packages/ui/src/app/hooks/useShopDashboardData.tsx` (shared vs owned reads)
 6. PTB builder definition: `packages/domain/core/src/flows/buy.ts` (buildBuyTransaction)
 
-**Code spotlight: buy entry points accept `Coin<T>` and PriceInfoObject**
+**Code spotlight: buy entry points infer currency from `TCoin`**
 `packages/dapp/contracts/oracle-market/sources/shop.move`
 ```move
 entry fun buy_item<TItem: store, TCoin>(
-  shop: &Shop,
-  item_listing: &mut ItemListing,
-  accepted_currency: &AcceptedCurrency,
+  shop: &mut Shop,
+  listing_id: u64,
   price_info_object: &price_info::PriceInfoObject,
   payment: coin::Coin<TCoin>,
   mint_to: address,
@@ -90,46 +89,41 @@ entry fun buy_item<TItem: store, TCoin>(
   max_price_age_secs: Option<u64>,
   max_confidence_ratio_bps: Option<u16>,
   clock: &clock::Clock,
-  ctx: &mut tx::TxContext,
+  ctx: &mut TxContext,
 ) {
-  assert_shop_active(shop);
-  assert_listing_matches_shop(shop, item_listing);
-  let base_price_usd_cents = item_listing.base_price_usd_cents;
-  shop.process_purchase<TItem, TCoin>(
-    item_listing,
-    accepted_currency,
+  assert_shop_active!(shop);
+  assert_listing_registered!(shop, listing_id);
+  let base_price_usd_cents = shop.borrow_listing(listing_id).base_price_usd_cents;
+  let (owed_coin_opt, change_coin, minted_item) = shop.process_purchase<TItem, TCoin>(
+    listing_id,
     price_info_object,
     payment,
-    mint_to,
-    refund_extra_to,
     base_price_usd_cents,
-    opt::none(),
+    option::none(),
     max_price_age_secs,
     max_confidence_ratio_bps,
     clock,
     ctx,
   );
+  owed_coin_opt.do!(|owed_coin| {
+    transfer::public_transfer(owed_coin, shop.owner);
+  });
+  // refund change and transfer minted item
 }
 ```
 
 **Code spotlight: CLI buy flow resolves pricing + payment inputs**
 `packages/dapp/src/scripts/buyer/buy.ts`
 ```ts
-const acceptedCurrencyMatch = await requireAcceptedCurrencyByCoinType({
+const acceptedCurrencySummary = await requireAcceptedCurrencyByCoinType({
   coinType: inputs.coinType,
   shopId: inputs.shopId,
   suiClient: tooling.suiClient
 })
 
-const acceptedCurrencySummary = await getAcceptedCurrencySummary(
-  inputs.shopId,
-  acceptedCurrencyMatch.acceptedCurrencyId,
-  tooling.suiClient
-)
-
 const pythPriceInfoObjectId = normalizeIdOrThrow(
   acceptedCurrencySummary.pythObjectId,
-  `AcceptedCurrency ${acceptedCurrencySummary.acceptedCurrencyId} is missing a pyth_object_id.`
+  `Accepted currency ${acceptedCurrencySummary.coinType} is missing a pyth_object_id.`
 )
 
 const listingSummary = await getItemListingSummary(

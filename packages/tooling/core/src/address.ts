@@ -1,5 +1,6 @@
 import { normalizeSuiAddress } from "@mysten/sui/utils"
 
+import { SUI_COIN_TYPE } from "./constants.ts"
 import type { ToolingCoreContext } from "./context.ts"
 
 /**
@@ -46,7 +47,7 @@ export const getSuiBalance = async (
 ) => {
   const balance = await suiClient.getBalance({
     owner: normalizeSuiAddress(address),
-    coinType: "0x2::sui::SUI"
+    coinType: SUI_COIN_TYPE
   })
   return BigInt(balance.totalBalance ?? 0n)
 }
