@@ -517,6 +517,54 @@ fun add_item_listing_core<T: store>(
     listing_id
 }
 
+fun link_listing_spotlight_template(shop: &mut Shop, listing_id: u64, discount_template_id: ID) {
+    let listing = shop.borrow_listing_mut(listing_id);
+    listing.spotlight_discount_template_id = option::some(discount_template_id);
+}
+
+fun emit_discount_template_created_event(shop_id: ID, discount_template_id: ID) {
+    event::emit(DiscountTemplateCreatedEvent {
+        shop_id,
+        discount_template_id,
+    });
+}
+
+fun add_item_listing_with_discount_template_core<T: store>(
+    shop: &mut Shop,
+    owner_cap: &ShopOwnerCap,
+    name: String,
+    base_price_usd_cents: u64,
+    stock: u64,
+    rule_kind: u8,
+    rule_value: u64,
+    starts_at: u64,
+    expires_at: Option<u64>,
+    max_redemptions: Option<u64>,
+    ctx: &mut TxContext,
+): (u64, DiscountTemplate, ID) {
+    let listing_id = shop.add_item_listing_core<T>(
+        owner_cap,
+        name,
+        base_price_usd_cents,
+        stock,
+        option::none(),
+        ctx,
+    );
+    let (discount_template, discount_template_id) = shop.create_discount_template_core(
+        option::some(listing_id),
+        rule_kind,
+        rule_value,
+        starts_at,
+        expires_at,
+        max_redemptions,
+        ctx,
+    );
+
+    shop.link_listing_spotlight_template(listing_id, discount_template_id);
+
+    (listing_id, discount_template, discount_template_id)
+}
+
 entry fun add_item_listing<T: store>(
     shop: &mut Shop,
     owner_cap: &ShopOwnerCap,
@@ -534,6 +582,44 @@ entry fun add_item_listing<T: store>(
         spotlight_discount_template_id,
         ctx,
     );
+}
+
+/// Add an item listing and atomically create a listing-scoped discount template in one transaction.
+///
+/// This is useful when callers want a listing-specific template without requiring a pre-existing
+/// listing ID. The new template is automatically attached as the listing's spotlight template.
+entry fun add_item_listing_with_discount_template<T: store>(
+    shop: &mut Shop,
+    owner_cap: &ShopOwnerCap,
+    name: String,
+    base_price_usd_cents: u64,
+    stock: u64,
+    rule_kind: u8,
+    rule_value: u64,
+    starts_at: u64,
+    expires_at: Option<u64>,
+    max_redemptions: Option<u64>,
+    ctx: &mut TxContext,
+) {
+    let (
+        _listing_id,
+        discount_template,
+        discount_template_id,
+    ) = shop.add_item_listing_with_discount_template_core<T>(
+        owner_cap,
+        name,
+        base_price_usd_cents,
+        stock,
+        rule_kind,
+        rule_value,
+        starts_at,
+        expires_at,
+        max_redemptions,
+        ctx,
+    );
+
+    emit_discount_template_created_event(shop.id.to_inner(), discount_template_id);
+    transfer::share_object(discount_template);
 }
 
 /// Update the inventory count for a listing (0 inventory to pause selling).
@@ -733,12 +819,7 @@ entry fun create_discount_template(
     );
 
     transfer::share_object(discount_template);
-
-    let shop_id = shop.id.to_inner();
-    event::emit(DiscountTemplateCreatedEvent {
-        shop_id,
-        discount_template_id,
-    });
+    emit_discount_template_created_event(shop.id.to_inner(), discount_template_id);
 }
 
 /// Update mutable fields on a template (schedule, rule, limits).
@@ -2113,10 +2194,7 @@ public fun test_create_discount_template_local(
         ctx,
     );
 
-    event::emit(DiscountTemplateCreatedEvent {
-        shop_id: shop.id.to_inner(),
-        discount_template_id: template_id,
-    });
+    emit_discount_template_created_event(shop.id.to_inner(), template_id);
 
     (template, template_id)
 }
@@ -2443,6 +2521,38 @@ public fun test_add_item_listing_local<T: store>(
         spotlight_discount_template_id,
         ctx,
     )
+}
+
+#[test_only]
+public fun test_add_item_listing_with_discount_template_local<T: store>(
+    shop: &mut Shop,
+    owner_cap: &ShopOwnerCap,
+    name: String,
+    base_price_usd_cents: u64,
+    stock: u64,
+    rule_kind: u8,
+    rule_value: u64,
+    starts_at: u64,
+    expires_at: Option<u64>,
+    max_redemptions: Option<u64>,
+    ctx: &mut TxContext,
+): (u64, DiscountTemplate, ID) {
+    let (listing_id, template, template_id) = shop.add_item_listing_with_discount_template_core<T>(
+        owner_cap,
+        name,
+        base_price_usd_cents,
+        stock,
+        rule_kind,
+        rule_value,
+        starts_at,
+        expires_at,
+        max_redemptions,
+        ctx,
+    );
+
+    emit_discount_template_created_event(shop.id.to_inner(), template_id);
+
+    (listing_id, template, template_id)
 }
 
 #[test_only]

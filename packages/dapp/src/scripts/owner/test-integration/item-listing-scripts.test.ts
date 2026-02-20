@@ -85,7 +85,7 @@ const expectItemListingSummary = (
     basePriceUsdCents: string
     stock: string
   }
-  ) => {
+) => {
   expect(listing?.itemListingId).toBeTruthy()
   expect(listing?.tableEntryFieldId).toBeTruthy()
   expect(listing?.name).toBe(expectations.name)
@@ -190,6 +190,46 @@ describe("owner item listing scripts integration", () => {
         expect(listingOutput.itemListing?.spotlightTemplateId).toBe(
           discountTemplate.discountTemplateId
         )
+      }
+    )
+  })
+
+  it("adds item listings with atomically created spotlight discounts", async () => {
+    await testEnv.withTestContext(
+      "owner-item-listing-add-create-spotlight",
+      async (context) => {
+        const { publisher, scriptRunner, shopId, itemType } =
+          await createShopWithItemType(
+            context,
+            "Item Listing Create Spotlight Shop"
+          )
+
+        const listingOutput = await runOwnerScriptJson<ItemListingOutput>(
+          scriptRunner,
+          "item-listing-add",
+          {
+            account: publisher,
+            args: {
+              shopId,
+              name: DEFAULT_LISTING_INPUT.name,
+              price: DEFAULT_LISTING_INPUT.priceUsd,
+              stock: DEFAULT_LISTING_INPUT.stock,
+              itemType,
+              createSpotlightRuleKind: "percent",
+              createSpotlightValue: "12.5",
+              createSpotlightMaxRedemptions: "3"
+            }
+          }
+        )
+
+        expectSuccessfulTransaction(listingOutput.transactionSummary)
+        expectItemListingSummary(listingOutput.itemListing, {
+          name: DEFAULT_LISTING_INPUT.name,
+          itemType,
+          basePriceUsdCents: DEFAULT_LISTING_INPUT.priceUsdCents,
+          stock: DEFAULT_LISTING_INPUT.stock
+        })
+        expect(listingOutput.itemListing?.spotlightTemplateId).toBeTruthy()
       }
     )
   })

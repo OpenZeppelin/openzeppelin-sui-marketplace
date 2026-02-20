@@ -32,7 +32,7 @@ ItemListing (table value under Shop.listings)
 Entry Points At A Glance
 ------------------------
 - Shops: `create_shop` mints the shared `Shop` plus the owned `ShopOwnerCap`; `disable_shop` permanently disables buyer flows; `update_shop_owner` rotates the payout/owner fields without touching listings.
-- Listings: `add_item_listing<T>` inserts a listing row in `Shop.listings` with USD-cent price, stock, and optional `spotlight_discount_template_id`; `update_item_listing_stock`/`remove_item_listing` mutate that table row by `listing_id: u64`.
+- Listings: `add_item_listing<T>` inserts a listing row in `Shop.listings` with USD-cent price, stock, and optional `spotlight_discount_template_id`; `add_item_listing_with_discount_template<T>` atomically creates a listing plus a pinned spotlight template; `update_item_listing_stock`/`remove_item_listing` mutate listing rows by `listing_id: u64`.
 - Accepted currencies: `add_accepted_currency<T>` stores an `AcceptedCurrency` value in `shop.accepted_currencies` keyed by `coin_type`, with feed metadata and guardrail caps; `remove_accepted_currency<TCoin>` removes the keyed entry.
 - Discounts: `create_discount_template`, `update_discount_template` (only before claims/redemptions), and `toggle_discount_template` manage templates; `attach_template_to_listing`/`clear_template_from_listing` surface a spotlight template on a listing; `claim_discount_ticket`, `buy_item_with_discount`, `claim_and_buy_item_with_discount`, and `prune_discount_claims` (once finished) govern lifecycle and cleanup.
 - Checkout: `buy_item<TItem, TCoin>` and `buy_item_with_discount<TItem, TCoin>` enforce listing/type matches, registered currency presence, oracle guardrails, and refund change in-line before minting a typed `ShopItem<TItem>` receipt (redemption for the underlying item happens elsewhere).
@@ -176,7 +176,7 @@ claim_and_buy_item_with_discount<ItemType, USDC>(
 Reference
 ---------
 - Module: `sui_oracle_market::shop`
-- Entry functions: `create_shop`, `disable_shop`, `update_shop_owner`, `add_item_listing`, `update_item_listing_stock`, `remove_item_listing`, `add_accepted_currency`, `remove_accepted_currency`, `create_discount_template`, `update_discount_template`, `toggle_discount_template`, `attach_template_to_listing`, `clear_template_from_listing`, `claim_discount_ticket`, `prune_discount_claims`, `buy_item`, `buy_item_with_discount`, `claim_and_buy_item_with_discount`.
+- Entry functions: `create_shop`, `disable_shop`, `update_shop_owner`, `add_item_listing`, `add_item_listing_with_discount_template`, `update_item_listing_stock`, `remove_item_listing`, `add_accepted_currency`, `remove_accepted_currency`, `create_discount_template`, `update_discount_template`, `toggle_discount_template`, `attach_template_to_listing`, `clear_template_from_listing`, `claim_discount_ticket`, `prune_discount_claims`, `buy_item`, `buy_item_with_discount`, `claim_and_buy_item_with_discount`.
 - Key types: `Shop`, `ShopOwnerCap`, `ItemListing`, `AcceptedCurrency`, `DiscountTemplate`, `DiscountTicket`, `ShopItem`
 - Events: `ShopCreatedEvent`, `ShopOwnerUpdatedEvent`, `ShopDisabledEvent`, `ItemListingAddedEvent`, `ItemListingStockUpdatedEvent`, `ItemListingRemovedEvent`, `DiscountTemplateCreatedEvent`, `DiscountTemplateUpdatedEvent`, `DiscountTemplateToggledEvent`, `AcceptedCoinAddedEvent`, `AcceptedCoinRemovedEvent`, `DiscountClaimedEvent`, `DiscountRedeemedEvent`, `PurchaseCompletedEvent`.
 

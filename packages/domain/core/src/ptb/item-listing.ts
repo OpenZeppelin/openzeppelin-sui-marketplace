@@ -8,6 +8,7 @@ import {
 } from "@sui-oracle-market/tooling-core/object"
 import type { WrappedSuiSharedObject } from "@sui-oracle-market/tooling-core/shared-object"
 import { newTransaction } from "@sui-oracle-market/tooling-core/transactions"
+import type { NormalizedRuleKind } from "../models/discount.ts"
 import {
   getItemListingSummary,
   normalizeListingId,
@@ -27,6 +28,14 @@ type DiscountTemplateMetadata = {
 
 const toListingIdU64 = (listingId: string): bigint =>
   BigInt(normalizeListingId(listingId))
+
+export type AddListingSpotlightTemplateInput = {
+  ruleKind: NormalizedRuleKind
+  ruleValue: bigint
+  startsAt: bigint
+  expiresAt?: bigint
+  maxRedemptions?: bigint
+}
 
 export const getItemListingMetadata = async (
   listingId: string,
@@ -130,7 +139,8 @@ export const buildAddItemListingTransaction = ({
   itemName,
   basePriceUsdCents,
   stock,
-  spotlightDiscountId
+  spotlightDiscountId,
+  createSpotlightDiscountTemplate
 }: {
   packageId: string
   itemType: string
@@ -140,24 +150,54 @@ export const buildAddItemListingTransaction = ({
   basePriceUsdCents: bigint
   stock: bigint
   spotlightDiscountId?: string
+  createSpotlightDiscountTemplate?: AddListingSpotlightTemplateInput
 }) => {
   const transaction = newTransaction()
   const shopArgument = transaction.sharedObjectRef(shop.sharedRef)
   const normalizedItemName = itemName.trim()
   if (!normalizedItemName) throw new Error("Item name cannot be empty.")
+  if (spotlightDiscountId && createSpotlightDiscountTemplate)
+    throw new Error(
+      "Choose either spotlightDiscountId or createSpotlightDiscountTemplate, but not both."
+    )
 
-  transaction.moveCall({
-    target: `${packageId}::shop::add_item_listing`,
-    typeArguments: [itemType],
-    arguments: [
-      shopArgument,
-      transaction.object(ownerCapId),
-      transaction.pure.string(normalizedItemName),
-      transaction.pure.u64(basePriceUsdCents),
-      transaction.pure.u64(stock),
-      transaction.pure.option("address", spotlightDiscountId ?? null)
-    ]
-  })
+  if (createSpotlightDiscountTemplate) {
+    transaction.moveCall({
+      target: `${packageId}::shop::add_item_listing_with_discount_template`,
+      typeArguments: [itemType],
+      arguments: [
+        shopArgument,
+        transaction.object(ownerCapId),
+        transaction.pure.string(normalizedItemName),
+        transaction.pure.u64(basePriceUsdCents),
+        transaction.pure.u64(stock),
+        transaction.pure.u8(createSpotlightDiscountTemplate.ruleKind),
+        transaction.pure.u64(createSpotlightDiscountTemplate.ruleValue),
+        transaction.pure.u64(createSpotlightDiscountTemplate.startsAt),
+        transaction.pure.option(
+          "u64",
+          createSpotlightDiscountTemplate.expiresAt ?? null
+        ),
+        transaction.pure.option(
+          "u64",
+          createSpotlightDiscountTemplate.maxRedemptions ?? null
+        )
+      ]
+    })
+  } else {
+    transaction.moveCall({
+      target: `${packageId}::shop::add_item_listing`,
+      typeArguments: [itemType],
+      arguments: [
+        shopArgument,
+        transaction.object(ownerCapId),
+        transaction.pure.string(normalizedItemName),
+        transaction.pure.u64(basePriceUsdCents),
+        transaction.pure.u64(stock),
+        transaction.pure.option("address", spotlightDiscountId ?? null)
+      ]
+    })
+  }
 
   return transaction
 }
