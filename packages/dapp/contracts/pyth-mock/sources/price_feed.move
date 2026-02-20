@@ -18,7 +18,7 @@ public fun new(price_identifier: PriceIdentifier, price: Price, ema_price: Price
     }
 }
 
-public fun from(price_feed: PriceFeed): PriceFeed {
+public fun from(price_feed: &PriceFeed): PriceFeed {
     PriceFeed {
         price_identifier: price_feed.price_identifier,
         price: price_feed.price,
@@ -26,14 +26,14 @@ public fun from(price_feed: PriceFeed): PriceFeed {
     }
 }
 
-public fun get_price_identifier(price_feed: PriceFeed): PriceIdentifier {
+public fun get_price_identifier(price_feed: &PriceFeed): PriceIdentifier {
     price_feed.price_identifier
 }
 
-public fun get_price(price_feed: PriceFeed): Price {
+public fun get_price(price_feed: &PriceFeed): Price {
     price_feed.price
 }
 
-public fun get_ema_price(price_feed: PriceFeed): Price {
+public fun get_ema_price(price_feed: &PriceFeed): Price {
     price_feed.ema_price
 }

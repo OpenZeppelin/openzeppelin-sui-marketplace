@@ -21,12 +21,12 @@ public fun get_price_no_older_than(
 /// Return the cached price without any freshness check.
 public fun get_price_unsafe(price_info_object: &PriceInfoObject): price::Price {
     let price_info = price_info::get_price_info_from_price_info_object(price_info_object);
-    price_feed::get_price(*price_info::get_price_feed(&price_info))
+    price_feed::get_price(price_info::get_price_feed(&price_info))
 }
 
 fun check_price_is_fresh(price: price::Price, max_age_secs: u64, clock: &Clock) {
     let now_secs = clock::timestamp_ms(clock) / 1000;
-    let price_ts = price::get_timestamp(price);
+    let price_ts = price::get_timestamp(&price);
     let age = if (now_secs > price_ts) {
         now_secs - price_ts
     } else {
