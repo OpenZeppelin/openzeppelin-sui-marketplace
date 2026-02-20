@@ -116,9 +116,7 @@ export const logShopItemReceiptSummary = (
     if (listingDetails.spotlightTemplateId)
       logKeyValueGreen("Listing-spotlight")(listingDetails.spotlightTemplateId)
     logKeyValueGreen("Listing-table-entry")(
-      listingDetails.tableEntryFieldId ??
-        listingDetails.markerObjectId ??
-        "Not listed"
+      listingDetails.tableEntryFieldId ?? "Not listed"
     )
   }
   console.log("")

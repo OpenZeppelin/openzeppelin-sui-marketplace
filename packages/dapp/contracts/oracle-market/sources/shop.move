@@ -19,11 +19,11 @@ use sui::package;
 use sui::table::{Self, Table};
 
 // === Concepts used in this module (what/why/how) ===
-// - Shared objects (Shop, ItemListing, DiscountTemplate): shared objects are
+// - Shared objects (Shop, DiscountTemplate): shared objects are
 //   globally addressable. Anyone can include them as inputs and read them, and any transaction
 //   that mutates them goes through consensus. What "can mutate" really means is "can submit a
 //   tx that tries" -- the module still enforces its own authorization checks. Sharding state across
-//   many shared objects means each PTB only locks the listing/template it needs, instead
+//   many shared objects means each PTB only locks the shop/template it needs, instead
 //   of contending on one monolithic map. They are created with object::new and shared via
 //   transfer::share_object.
 //   Docs: docs/07-shop-capabilities.md, docs/08-listings-receipts.md, docs/09-currencies-oracles.md,
@@ -33,13 +33,13 @@ use sui::table::{Self, Table};
 //   docs/08-listings-receipts.md, docs/10-discounts-tickets.md, docs/16-object-ownership.md
 // - Capability-based auth (ShopOwnerCap): admin entry points require the capability object, not
 //   ctx.sender() checks. This replaces Solidity modifiers. Docs: docs/07-shop-capabilities.md
-// - Dynamic fields (markers + per-claimer claims): keyed child storage stored under the Shop or
-//   DiscountTemplate. Lookups by key are cheap, but dynamic fields are not enumerable on-chain,
-//   so discovery still relies on indexing/off-chain queries. This keeps parent objects small and
-//   limits contention to the touched child. See dynamic_field::add/exists/remove/borrow. Docs:
+// - Dynamic fields (template markers + per-claimer claims): keyed child storage stored under the
+//   Shop or DiscountTemplate. Lookups by key are cheap, but dynamic fields are not enumerable
+//   on-chain, so discovery still relies on indexing/off-chain queries. This keeps parent objects
+//   small and limits contention to the touched child. See dynamic_field::add/exists/remove/borrow. Docs:
 //   docs/08-listings-receipts.md, docs/10-discounts-tickets.md
-// - Table collections (accepted currencies): typed `Table<TypeName, AcceptedCurrency>` keeps
-//   currency configs under `Shop` without exposing currencies as standalone objects.
+// - Table collections (listings and accepted currencies): typed tables keep listing/currency config
+//   under `Shop` without exposing them as standalone objects.
 // - Type tags and TypeName: item and coin types are recorded as TypeName for runtime checks,
 //   events, and UI metadata; compile-time correctness still comes from generics (ShopItem<TItem>,
 //   Coin<T>) and explicit comparisons when needed. Docs: docs/08-listings-receipts.md,
@@ -208,8 +208,8 @@ public struct ShopOwnerCap has key, store {
     shop_id: ID,
 }
 
-/// Shared shop that stores item listings and discount templates via dynamic fields, plus accepted
-/// currencies in a typed table keyed by coin type.
+/// Shared shop that stores listings/currencies in typed tables and discount-template markers as
+/// dynamic fields.
 public struct Shop has key, store {
     id: UID,
     owner: address, // Payout recipient for sales.
@@ -409,9 +409,9 @@ public struct PurchaseCompletedEvent has copy, drop {
 /// - Capability > `msg.sender`: ownership lives in a first-class `ShopOwnerCap`. Entry functions
 ///   require the cap, so authority follows the object holder rather than whichever address signs
 ///   the PTB. Solidity relies on `msg.sender` and modifiers; here, capabilities are explicit inputs.
-/// - Shared object composition: the shop is shared, while listings/templates are shared sibling
-///   objects indexed by lightweight markers under the shop and currencies live in a typed table.
-///   State stays sharded so PTBs only touch the listing/template object they mutate.
+/// - Shared object composition: the shop is shared, with listings/currencies stored in typed tables
+///   and discount templates as separate shared objects indexed by markers.
+/// - State stays sharded so PTBs only touch the listing row/template object they mutate.
 entry fun create_shop(name: String, ctx: &mut TxContext) {
     let owner = ctx.sender();
     let shop = new_shop(name, owner, ctx);

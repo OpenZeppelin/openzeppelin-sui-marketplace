@@ -67,7 +67,7 @@ describe("buyer shop-view integration", () => {
       expect(seededListing).toBeTruthy()
       itemListings.forEach((listing) => {
         expect(listing.itemListingId).toBeTruthy()
-        expect(listing.markerObjectId).toBeTruthy()
+        expect(listing.tableEntryFieldId).toBeTruthy()
         expect(listing.itemType).toBeTruthy()
         expect(listing.name).toBeTruthy()
       })

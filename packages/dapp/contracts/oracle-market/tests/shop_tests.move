@@ -4420,7 +4420,7 @@ fun discount_template_maxed_out_by_redemption() {
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::EPythObjectMismatch)]
-fun checkout_rejects_listing_from_other_shop() {
+fun checkout_rejects_price_info_object_from_other_shop() {
     let mut scn = test_scenario::begin(TEST_OWNER);
     let (
         _shop_a_id,
@@ -4450,6 +4450,43 @@ fun checkout_rejects_listing_from_other_shop() {
         &mut shared_shop_b,
         listing_a_id,
         &price_info_a,
+        payment,
+        OTHER_OWNER,
+        OTHER_OWNER,
+        option::none(),
+        option::none(),
+        &clock_obj,
+        test_scenario::ctx(&mut scn),
+    );
+
+    abort EAssertFailure
+}
+
+#[test, expected_failure(abort_code = ::sui_oracle_market::shop::EListingShopMismatch)]
+fun checkout_rejects_listing_not_registered_in_shop() {
+    let mut scn = test_scenario::begin(TEST_OWNER);
+    let (
+        shop_id,
+        _currency_id,
+        _listing_id,
+        price_info_id,
+    ) = setup_shop_with_currency_listing_and_price_info(&mut scn, 100, 1);
+
+    let _ = test_scenario::next_tx(&mut scn, OTHER_OWNER);
+
+    let mut shared_shop = test_scenario::take_shared_by_id(&scn, shop_id);
+    let price_info: price_info::PriceInfoObject = test_scenario::take_shared_by_id(
+        &scn,
+        price_info_id,
+    );
+    let mut clock_obj = clock::create_for_testing(test_scenario::ctx(&mut scn));
+    clock::set_for_testing(&mut clock_obj, 10);
+    let payment = coin::mint_for_testing<TestCoin>(1, test_scenario::ctx(&mut scn));
+
+    shop::buy_item<TestItem, TestCoin>(
+        &mut shared_shop,
+        999,
+        &price_info,
         payment,
         OTHER_OWNER,
         OTHER_OWNER,

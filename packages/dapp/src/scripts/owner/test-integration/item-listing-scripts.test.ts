@@ -17,7 +17,7 @@ type TransactionSummary = {
 
 type ItemListingSummary = {
   itemListingId?: string
-  markerObjectId?: string
+  tableEntryFieldId?: string
   name?: string
   itemType?: string
   basePriceUsdCents?: string
@@ -85,9 +85,9 @@ const expectItemListingSummary = (
     basePriceUsdCents: string
     stock: string
   }
-) => {
+  ) => {
   expect(listing?.itemListingId).toBeTruthy()
-  expect(listing?.markerObjectId).toBeTruthy()
+  expect(listing?.tableEntryFieldId).toBeTruthy()
   expect(listing?.name).toBe(expectations.name)
   expect(listing?.itemType).toBe(expectations.itemType)
   expect(listing?.basePriceUsdCents).toBe(expectations.basePriceUsdCents)
