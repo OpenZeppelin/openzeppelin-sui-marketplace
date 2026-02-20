@@ -10,20 +10,34 @@ import {
 } from "@mysten/dapp-kit"
 import type { SuiTransactionBlockResponse } from "@mysten/sui/client"
 import type { IdentifierString } from "@mysten/wallet-standard"
+import {
+  defaultStartTimestampSeconds,
+  parseDiscountRuleKind,
+  parseDiscountRuleValue,
+  validateDiscountSchedule,
+  type DiscountRuleKindLabel
+} from "@sui-oracle-market/domain-core/models/discount"
 import type { ItemListingSummary } from "@sui-oracle-market/domain-core/models/item-listing"
 import {
   getItemListingSummary,
   requireListingIdFromItemListingAddedEvents
 } from "@sui-oracle-market/domain-core/models/item-listing"
 import { parseUsdToCents } from "@sui-oracle-market/domain-core/models/shop"
-import { buildAddItemListingTransaction } from "@sui-oracle-market/domain-core/ptb/item-listing"
+import {
+  buildAddItemListingTransaction,
+  type AddListingSpotlightTemplateInput
+} from "@sui-oracle-market/domain-core/ptb/item-listing"
 import {
   deriveRelevantPackageId,
   normalizeOptionalId
 } from "@sui-oracle-market/tooling-core/object"
 import { getSuiSharedObject } from "@sui-oracle-market/tooling-core/shared-object"
 import { ENetwork } from "@sui-oracle-market/tooling-core/types"
-import { parsePositiveU64 } from "@sui-oracle-market/tooling-core/utils/utility"
+import {
+  parseNonNegativeU64,
+  parseOptionalU64,
+  parsePositiveU64
+} from "@sui-oracle-market/tooling-core/utils/utility"
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { EXPLORER_URL_VARIABLE_NAME } from "../config/network"
 import { formatUsdFromCents, getStructLabel } from "../helpers/format"
@@ -53,7 +67,13 @@ type ListingFormState = {
   itemType: string
   basePrice: string
   stock: string
+  spotlightTemplateMode: "existing" | "create"
   spotlightDiscountId: string
+  createSpotlightRuleKind: DiscountRuleKindLabel
+  createSpotlightValue: string
+  createSpotlightStartsAt: string
+  createSpotlightExpiresAt: string
+  createSpotlightMaxRedemptions: string
 }
 
 type ListingInputs = {
@@ -62,6 +82,7 @@ type ListingInputs = {
   basePriceUsdCents: bigint
   stock: bigint
   spotlightDiscountId?: string
+  createSpotlightDiscountTemplate?: AddListingSpotlightTemplateInput
 }
 
 export type ListingTransactionSummary = ListingInputs & {
@@ -81,7 +102,13 @@ const emptyFormState = (): ListingFormState => ({
   itemType: "",
   basePrice: "",
   stock: "",
-  spotlightDiscountId: ""
+  spotlightTemplateMode: "existing",
+  spotlightDiscountId: "",
+  createSpotlightRuleKind: "fixed",
+  createSpotlightValue: "",
+  createSpotlightStartsAt: defaultStartTimestampSeconds().toString(),
+  createSpotlightExpiresAt: "",
+  createSpotlightMaxRedemptions: ""
 })
 
 type ListingFieldErrors = Partial<Record<keyof ListingFormState, string>>
@@ -127,11 +154,87 @@ const buildListingFieldErrors = (
     }
   }
 
-  const spotlightError = validateOptionalSuiObjectId(
-    formState.spotlightDiscountId,
-    "Spotlight discount template id"
-  )
-  if (spotlightError) errors.spotlightDiscountId = spotlightError
+  if (formState.spotlightTemplateMode === "existing") {
+    const spotlightError = validateOptionalSuiObjectId(
+      formState.spotlightDiscountId,
+      "Spotlight discount template id"
+    )
+    if (spotlightError) errors.spotlightDiscountId = spotlightError
+  } else {
+    const createSpotlightValue = formState.createSpotlightValue.trim()
+    if (!createSpotlightValue) {
+      errors.createSpotlightValue = "Rule value is required."
+    } else {
+      try {
+        const ruleKind = parseDiscountRuleKind(
+          formState.createSpotlightRuleKind
+        )
+        parseDiscountRuleValue(ruleKind, createSpotlightValue)
+      } catch (error) {
+        errors.createSpotlightValue = resolveValidationMessage(
+          error,
+          "Enter a valid discount value."
+        )
+      }
+    }
+
+    const startsAt = formState.createSpotlightStartsAt.trim()
+    if (!startsAt) {
+      errors.createSpotlightStartsAt = "Start time is required."
+    } else {
+      try {
+        parseNonNegativeU64(startsAt, "createSpotlightStartsAt")
+      } catch (error) {
+        errors.createSpotlightStartsAt = resolveValidationMessage(
+          error,
+          "Start time must be a valid u64."
+        )
+      }
+    }
+
+    const expiresAt = formState.createSpotlightExpiresAt.trim()
+    if (expiresAt) {
+      try {
+        parseOptionalU64(expiresAt, "createSpotlightExpiresAt")
+      } catch (error) {
+        errors.createSpotlightExpiresAt = resolveValidationMessage(
+          error,
+          "Expiry must be a valid u64."
+        )
+      }
+    }
+
+    if (!errors.createSpotlightStartsAt && !errors.createSpotlightExpiresAt) {
+      try {
+        const normalizedStartsAt = parseNonNegativeU64(
+          startsAt,
+          "createSpotlightStartsAt"
+        )
+        const normalizedExpiresAt = parseOptionalU64(
+          expiresAt || undefined,
+          "createSpotlightExpiresAt"
+        )
+        validateDiscountSchedule(normalizedStartsAt, normalizedExpiresAt)
+      } catch (error) {
+        errors.createSpotlightExpiresAt = resolveValidationMessage(
+          error,
+          "Expiry must be after the start time."
+        )
+      }
+    }
+
+    const maxRedemptions = formState.createSpotlightMaxRedemptions.trim()
+    if (maxRedemptions) {
+      try {
+        parseOptionalU64(maxRedemptions, "createSpotlightMaxRedemptions")
+      } catch (error) {
+        errors.createSpotlightMaxRedemptions = resolveValidationMessage(
+          error,
+          "Max redemptions must be a valid u64."
+        )
+      }
+    }
+  }
 
   return errors
 }
@@ -145,16 +248,51 @@ const parseListingInputs = (formState: ListingFormState): ListingInputs => {
 
   const basePriceUsdCents = parseUsdToCents(formState.basePrice)
   const stock = parsePositiveU64(formState.stock, "stock")
-  const spotlightDiscountId = normalizeOptionalId(
-    formState.spotlightDiscountId.trim() || undefined
+  if (formState.spotlightTemplateMode === "existing") {
+    const spotlightDiscountId = normalizeOptionalId(
+      formState.spotlightDiscountId.trim() || undefined
+    )
+
+    return {
+      itemName,
+      itemType,
+      basePriceUsdCents,
+      stock,
+      spotlightDiscountId
+    }
+  }
+
+  const createSpotlightRuleKind = parseDiscountRuleKind(
+    formState.createSpotlightRuleKind
   )
+  const createSpotlightStartsAt = parseNonNegativeU64(
+    formState.createSpotlightStartsAt,
+    "createSpotlightStartsAt"
+  )
+  const createSpotlightExpiresAt = parseOptionalU64(
+    formState.createSpotlightExpiresAt.trim() || undefined,
+    "createSpotlightExpiresAt"
+  )
+  validateDiscountSchedule(createSpotlightStartsAt, createSpotlightExpiresAt)
 
   return {
     itemName,
     itemType,
     basePriceUsdCents,
     stock,
-    spotlightDiscountId
+    createSpotlightDiscountTemplate: {
+      ruleKind: createSpotlightRuleKind,
+      ruleValue: parseDiscountRuleValue(
+        createSpotlightRuleKind,
+        formState.createSpotlightValue
+      ),
+      startsAt: createSpotlightStartsAt,
+      expiresAt: createSpotlightExpiresAt,
+      maxRedemptions: parseOptionalU64(
+        formState.createSpotlightMaxRedemptions.trim() || undefined,
+        "createSpotlightMaxRedemptions"
+      )
+    }
   }
 }
 
@@ -388,7 +526,9 @@ export const useAddItemModalState = ({
         itemName: listingInputs.itemName,
         basePriceUsdCents: listingInputs.basePriceUsdCents,
         stock: listingInputs.stock,
-        spotlightDiscountId: listingInputs.spotlightDiscountId
+        spotlightDiscountId: listingInputs.spotlightDiscountId,
+        createSpotlightDiscountTemplate:
+          listingInputs.createSpotlightDiscountTemplate
       })
       addListingTransaction.setSender(walletAddress)
 
@@ -418,20 +558,37 @@ export const useAddItemModalState = ({
         events: transactionBlock.events,
         shopId: resolvedShopId
       })
+      let listingSummary: ItemListingSummary | undefined
+      try {
+        listingSummary = await getItemListingSummary(
+          resolvedShopId,
+          listingId,
+          suiClient
+        )
+      } catch {
+        listingSummary = undefined
+      }
+      const resolvedSpotlightDiscountId =
+        listingSummary?.spotlightTemplateId ?? listingInputs.spotlightDiscountId
 
       setTransactionState({
         status: "success",
         summary: {
           ...listingInputs,
+          spotlightDiscountId: resolvedSpotlightDiscountId,
           digest,
           transactionBlock,
           listingId
         }
       })
 
-      void getItemListingSummary(resolvedShopId, listingId, suiClient)
-        .then((summary) => onListingCreated?.(summary))
-        .catch(() => {})
+      if (listingSummary) {
+        onListingCreated?.(listingSummary)
+      } else {
+        void getItemListingSummary(resolvedShopId, listingId, suiClient)
+          .then((summary) => onListingCreated?.(summary))
+          .catch(() => {})
+      }
     } catch (error) {
       const errorDetails = extractErrorDetails(error)
       const localnetSupportNote =
