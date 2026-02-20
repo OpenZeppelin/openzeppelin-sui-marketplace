@@ -20,12 +20,12 @@ This chapter explains how to read Sui data for apps: object queries, dynamic fie
 ## 4. Concept deep dive: read paths
 - **Direct RPC (fullnode)**: best for current state and object ownership.
 - **Events**: query by type and sender to track lifecycle changes (listings, purchases, discounts).
-- **Dynamic fields**: enumerate markers under a shared object to discover listings and currencies without scanning storage maps.
+- **Dynamic fields + tables**: listings/templates are discovered from dynamic-field markers; currencies come from `Shop.accepted_currencies` table entries keyed by coin type.
 
 Code:
 1. `packages/domain/core/src/models/shop.ts` (events + shop overview)
 2. `packages/domain/core/src/models/item-listing.ts` (dynamic field lookups)
-3. `packages/domain/core/src/models/currency.ts` (currency markers)
+3. `packages/domain/core/src/models/currency.ts` (currency table lookups)
 
 ## 5. Concept deep dive: indexers and GraphQL
 - **GraphQL RPC**: backed by an indexer and archival store for history and structured queries.
