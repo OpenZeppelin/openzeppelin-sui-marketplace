@@ -1653,12 +1653,13 @@ fun quote_amount_from_usd_cents(
 
 fun decimals_pow10_u128(coin_decimals: u8): u128 {
     assert_supported_decimals!(coin_decimals);
-    let maybe_coin_decimals_pow10 = decimal_scaling::safe_upcast_balance(
+    decimal_scaling::safe_upcast_balance(
         1,
         0,
         coin_decimals,
-    ).try_as_u128();
-    maybe_coin_decimals_pow10.destroy_or!(abort EPriceOverflow)
+    )
+        .try_as_u128()
+        .destroy_or!(abort EPriceOverflow)
 }
 
 fun pow10_u128(exponent: u64): u128 {
