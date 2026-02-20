@@ -611,10 +611,10 @@ entry fun remove_item_listing(
 /// - Sellers can optionally tighten oracle guardrails per currency (`max_price_age_secs_cap`,
 ///   `max_confidence_ratio_bps_cap`, `max_price_status_lag_secs_cap`). Buyers may only tighten
 ///   `max_price_age_secs`/`max_confidence_ratio_bps` further--never loosen.
-entry fun add_accepted_currency<T>(
+entry fun add_accepted_currency<TCoin>(
     shop: &mut Shop,
     owner_cap: &ShopOwnerCap,
-    currency: &coin_registry::Currency<T>,
+    currency: &coin_registry::Currency<TCoin>,
     price_info_object: &price_info::PriceInfoObject,
     feed_id: vector<u8>,
     pyth_object_id: ID,
@@ -624,7 +624,7 @@ entry fun add_accepted_currency<T>(
 ) {
     assert_owner_cap!(shop, owner_cap);
 
-    let coin_type = currency_type<T>();
+    let coin_type = currency_type<TCoin>();
 
     // Bind this currency to a specific PriceInfoObject to prevent oracle feed spoofing.
     validate_accepted_currency_inputs!(shop, coin_type, feed_id, pyth_object_id, price_info_object);
@@ -1255,8 +1255,8 @@ fun apply_discount_template_updates(
     discount_template.max_redemptions = max_redemptions;
 }
 
-fun currency_type<T>(): TypeName {
-    type_name::with_defining_ids<T>()
+fun currency_type<TCoin>(): TypeName {
+    type_name::with_defining_ids<TCoin>()
 }
 
 fun assert_listing_type_matches<TItem: store>(item_listing: &ItemListing) {
