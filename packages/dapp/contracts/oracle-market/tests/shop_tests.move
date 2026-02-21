@@ -3803,6 +3803,40 @@ fun claim_discount_ticket_rejects_duplicate_claim() {
     abort EAssertFailure
 }
 
+#[test, expected_failure(abort_code = ::sui_oracle_market::shop::EListingShopMismatch)]
+fun claim_discount_ticket_rejects_removed_listing_scope() {
+    let mut ctx = tx_context::new_from_hint(TEST_OWNER, 240, 0, 0, 0);
+    let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
+
+    let listing_id = shop::test_add_item_listing_local<TestItem>(
+        &mut shop,
+        &owner_cap,
+        b"Scoped Listing".to_string(),
+        1_250,
+        2,
+        option::none(),
+        &mut ctx,
+    );
+
+    let (mut template, _template_id) = shop::test_create_discount_template_local(
+        &mut shop,
+        option::some(listing_id),
+        0,
+        250,
+        0,
+        option::none(),
+        option::none(),
+        &mut ctx,
+    );
+    shop::test_remove_listing(&mut shop, listing_id);
+
+    let mut clock_obj = clock::create_for_testing(&mut ctx);
+    clock::set_for_testing(&mut clock_obj, 1_000);
+    shop::test_claim_discount_ticket(&shop, &mut template, &clock_obj, &mut ctx);
+
+    abort EAssertFailure
+}
+
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::EDiscountAlreadyClaimed)]
 fun claim_and_buy_rejects_second_claim_after_redeem() {
     let mut scn = test_scenario::begin(TEST_OWNER);

@@ -916,9 +916,11 @@ entry fun claim_discount_ticket(
 ): () {
     assert_shop_active!(shop);
     assert_template_matches_shop!(shop, discount_template);
+    assert_listing_belongs_to_shop_if_some!(shop, discount_template.applies_to_listing);
 
     let now_secs = now_secs(clock);
     let (discount_ticket, claimer) = discount_template.claim_discount_ticket_with_event(
+        shop,
         now_secs,
         ctx,
     );
@@ -931,10 +933,13 @@ entry fun claim_discount_ticket(
 /// The claimer is always bound to `ctx.sender()` to prevent third parties from minting on behalf of
 /// other addresses and exhausting template quotas.
 public fun claim_discount_ticket_inline(
+    shop: &Shop,
     discount_template: &mut DiscountTemplate,
     now_secs: u64,
     ctx: &mut TxContext,
 ): DiscountTicket {
+    assert_template_matches_shop!(shop, discount_template);
+    assert_listing_belongs_to_shop_if_some!(shop, discount_template.applies_to_listing);
     let claimer = ctx.sender();
     assert_template_claimable!(discount_template, claimer, now_secs);
 
@@ -950,10 +955,12 @@ public fun claim_discount_ticket_inline(
 
 fun claim_discount_ticket_with_event(
     discount_template: &mut DiscountTemplate,
+    shop: &Shop,
     now_secs: u64,
     ctx: &mut TxContext,
 ): (DiscountTicket, address) {
-    let discount_ticket = discount_template.claim_discount_ticket_inline(
+    let discount_ticket = shop.claim_discount_ticket_inline(
+        discount_template,
         now_secs,
         ctx,
     );
@@ -1146,6 +1153,7 @@ entry fun claim_and_buy_item_with_discount<TItem: store, TCoin>(
     assert_listing_registered!(shop, listing_id);
     let now_secs = now_secs(clock);
     let (discount_ticket, _claimer) = discount_template.claim_discount_ticket_with_event(
+        shop,
         now_secs,
         ctx,
     );
@@ -2338,8 +2346,7 @@ public fun test_claim_discount_ticket_inline(
     now_secs: u64,
     ctx: &mut TxContext,
 ): DiscountTicket {
-    assert_template_matches_shop!(shop, template);
-    template.claim_discount_ticket_inline(now_secs, ctx)
+    shop.claim_discount_ticket_inline(template, now_secs, ctx)
 }
 
 #[test_only]
@@ -2357,7 +2364,11 @@ public fun test_claim_and_buy_with_ids<TItem: store, TCoin>(
     ctx: &mut TxContext,
 ) {
     let now = now_secs(clock);
-    let (discount_ticket, _claimer) = discount_template.claim_discount_ticket_with_event(now, ctx);
+    let (discount_ticket, _claimer) = discount_template.claim_discount_ticket_with_event(
+        shop,
+        now,
+        ctx,
+    );
     shop.buy_item_with_discount<TItem, TCoin>(
         listing_id,
         discount_template,
