@@ -1382,7 +1382,7 @@ fun quote_amount_rejects_overflow_before_runtime_abort() {
 
     shop::test_quote_amount_from_usd_cents(
         max_usd_cents,
-        38, // MAX_DECIMAL_POWER; forces usd_cents * 10^38 to overflow u128.
+        24, // MAX_DECIMAL_POWER; forces usd_cents * 10^24 to overflow u128.
         price,
         shop::test_default_max_confidence_ratio_bps(),
     );
@@ -4192,7 +4192,7 @@ fun quote_amount_with_positive_exponent() {
     assert!(amount > 0);
 }
 
-#[test, expected_failure(abort_code = ::sui_oracle_market::shop::EPriceOverflow)]
+#[test, expected_failure(abort_code = ::sui_oracle_market::shop::EUnsupportedCurrencyDecimals)]
 fun quote_amount_rejects_large_exponent() {
     let price = sample_price();
     let _ = shop::test_quote_amount_from_usd_cents(
