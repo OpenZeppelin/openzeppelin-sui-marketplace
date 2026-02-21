@@ -681,13 +681,7 @@ entry fun add_accepted_currency<TCoin>(
     let coin_type = currency_type<TCoin>();
 
     // Bind this currency to a specific PriceInfoObject to prevent oracle feed spoofing.
-    validate_accepted_currency_inputs!(
-        shop,
-        coin_type,
-        feed_id,
-        pyth_object_id,
-        price_info_object,
-    );
+    validate_accepted_currency_inputs!(shop, coin_type, feed_id, pyth_object_id, price_info_object);
 
     let decimals = coin_registry::decimals(currency);
     assert_supported_decimals!(decimals);
