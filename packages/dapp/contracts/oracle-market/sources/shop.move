@@ -40,8 +40,8 @@ use sui::table::{Self, Table};
 //   on-chain, so discovery still relies on indexing/off-chain queries. This keeps parent objects
 //   small and limits contention to the touched child. See dynamic_field::add/exists/remove/borrow. Docs:
 //   docs/08-listings-receipts.md, docs/10-discounts-tickets.md
-// - Table collections (listings and accepted currencies): typed tables keep listing/currency config
-//   under `Shop` without exposing them as standalone objects.
+// - Table collections (listings, accepted currencies, and listing-bound template counters): typed
+//   tables keep config under `Shop` without exposing listings/currencies as standalone objects.
 // - Type tags and TypeName: item and coin types are recorded as TypeName for runtime checks,
 //   events, and UI metadata; compile-time correctness still comes from generics (ShopItem<TItem>,
 //   Coin<T>) and explicit comparisons when needed. Docs: docs/08-listings-receipts.md,
@@ -634,6 +634,7 @@ entry fun update_item_listing_stock(
 /// Remove an item listing entirely.
 ///
 /// This delists by removing the listing entry from `Shop.listings`.
+/// Listings with any active listing-bound templates must pause those templates first.
 entry fun remove_item_listing(
     shop: &mut Shop,
     owner_cap: &ShopOwnerCap,
@@ -847,6 +848,7 @@ entry fun update_discount_template(
 }
 
 /// Quickly enable/disable a coupon without deleting it.
+/// Listing-scoped templates also update shop-level active counters used by delist checks.
 entry fun toggle_discount_template(
     shop: &mut Shop,
     owner_cap: &ShopOwnerCap,

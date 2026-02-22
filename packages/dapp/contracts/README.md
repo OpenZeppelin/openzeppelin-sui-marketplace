@@ -22,6 +22,7 @@ Object Graph (shared + tables/markers)
 Shop (shared)
 ├─ listings: Table<u64, ItemListing>
 ├─ accepted_currencies: Table<TypeName, AcceptedCurrency>
+├─ active_listing_template_counts: Table<u64, u64>
 ├─ DiscountTemplateMarker (df: template_id -> DiscountTemplateMarker)
 └─ DiscountTemplate (shared)
     └─ df: claimer_address -> DiscountClaim (enforces one-claim-per-address)
@@ -58,7 +59,7 @@ Shared Object + Table/Marker Pattern (deep dive)
   - Discovery: UIs enumerate listing/currency table entries and template markers. Table keys/markers prove membership without storing large arrays under the shop.
   - Auth: entry functions assert table/marker membership and shop linkage. Foreign rows/templates are rejected.
   - Writes: listing and currency admin ops mutate shop tables; template flows mutate template markers/objects. Buyer flows mutate the touched listing row and optional template path.
-  - Delisting: removing a listing row unregisters that listing ID for checkout.
+  - Delisting: removing a listing row unregisters that listing ID for checkout, but only when no active listing-bound templates remain for that listing.
   - Claims: per-claimer `DiscountClaim` children live under the template, keeping “one claim per address” localized to the template without locking the shop.
 - Why it helps:
   - Low contention: PTBs lock only the touched listing table row/template object plus relevant shop writes, not a monolithic map.
