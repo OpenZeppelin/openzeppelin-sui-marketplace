@@ -16,6 +16,12 @@ import {
   objectTypeMatches,
   unwrapMoveObjectFields
 } from "../../src/object.ts"
+import {
+  findDependencyPackageIdByModuleName,
+  findStructAddressInNormalizedType,
+  findStructAddressInNormalizedTypes,
+  hasMoveModule
+} from "../../src/package.ts"
 
 describe("object helpers", () => {
   it("maps owner structures into artifacts", () => {
@@ -105,6 +111,131 @@ describe("object helpers", () => {
     } as never)
 
     expect(fields).toEqual({ name: "example" })
+  })
+
+  it("detects whether package content contains a module", () => {
+    expect(
+      hasMoveModule(
+        {
+          dataType: "package",
+          disassembled: {
+            price_info: "bytecode"
+          }
+        },
+        "price_info"
+      )
+    ).toBe(true)
+
+    expect(
+      hasMoveModule(
+        {
+          dataType: "package",
+          disassembled: {
+            shop: "bytecode"
+          }
+        },
+        "price_info"
+      )
+    ).toBe(false)
+  })
+
+  it("finds struct addresses in normalized move types", () => {
+    const normalizedType = {
+      Struct: {
+        address: "0x42",
+        module: "container",
+        name: "Container",
+        typeArguments: [
+          {
+            Struct: {
+              address: "0x7",
+              module: "price_info",
+              name: "PriceInfoObject",
+              typeArguments: []
+            }
+          }
+        ]
+      }
+    }
+
+    expect(
+      findStructAddressInNormalizedType({
+        normalizedType,
+        moduleName: "price_info",
+        structName: "PriceInfoObject"
+      })
+    ).toBe("0x7")
+  })
+
+  it("finds struct addresses from normalized move type arrays", () => {
+    const normalizedTypes = [
+      {
+        Struct: {
+          address: "0x1",
+          module: "coin",
+          name: "Coin",
+          typeArguments: []
+        }
+      },
+      {
+        Reference: {
+          Struct: {
+            address: "0x8",
+            module: "price_info",
+            name: "PriceInfoObject",
+            typeArguments: []
+          }
+        }
+      }
+    ]
+
+    expect(
+      findStructAddressInNormalizedTypes({
+        normalizedTypes,
+        moduleName: "price_info",
+        structName: "PriceInfoObject"
+      })
+    ).toBe("0x8")
+  })
+
+  it("finds dependency package ids by module name", async () => {
+    const { client, mocks } = createSuiClientMock({
+      getObject: vi
+        .fn()
+        .mockResolvedValueOnce(
+          buildSuiObjectResponse({
+            data: {
+              content: {
+                dataType: "package",
+                disassembled: {
+                  shop: "bytecode"
+                }
+              } as never
+            }
+          })
+        )
+        .mockResolvedValueOnce(
+          buildSuiObjectResponse({
+            data: {
+              content: {
+                dataType: "package",
+                disassembled: {
+                  price_info: "bytecode"
+                }
+              } as never
+            }
+          })
+        )
+    })
+
+    const packageId = await findDependencyPackageIdByModuleName({
+      suiClient: client,
+      dependencyPackageIds: ["0x1", "0x2"],
+      moduleName: "price_info"
+    })
+
+    expect(packageId).toBe("0x2")
+    expect(mocks.getObject).toHaveBeenCalledTimes(2)
   })
 
   it("derives the relevant package id from type strings", () => {

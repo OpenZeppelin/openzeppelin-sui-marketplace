@@ -14,7 +14,7 @@ public fun get_price_no_older_than(
     max_age_secs: u64,
 ): price::Price {
     let price = get_price_unsafe(price_info_object);
-    check_price_is_fresh(&price, max_age_secs, clock);
+    check_price_is_fresh(price, max_age_secs, clock);
     price
 }
 
@@ -24,9 +24,9 @@ public fun get_price_unsafe(price_info_object: &PriceInfoObject): price::Price {
     price_feed::get_price(price_info::get_price_feed(&price_info))
 }
 
-fun check_price_is_fresh(price: &price::Price, max_age_secs: u64, clock: &Clock) {
+fun check_price_is_fresh(price: price::Price, max_age_secs: u64, clock: &Clock) {
     let now_secs = clock::timestamp_ms(clock) / 1000;
-    let price_ts = price::get_timestamp(price);
+    let price_ts = price::get_timestamp(&price);
     let age = if (now_secs > price_ts) {
         now_secs - price_ts
     } else {

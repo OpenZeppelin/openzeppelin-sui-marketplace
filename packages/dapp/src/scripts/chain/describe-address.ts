@@ -14,6 +14,7 @@ import {
   type OwnedObjectSummary
 } from "@sui-oracle-market/tooling-core/object-info"
 import { resolveOwnerAddress } from "@sui-oracle-market/tooling-node/account"
+import { SUI_COIN_TYPE } from "@sui-oracle-market/tooling-node/constants"
 import type { Tooling } from "@sui-oracle-market/tooling-node/factory"
 import {
   logEachGreen,
@@ -102,7 +103,7 @@ const collectAddressInformation = async ({
     await Promise.all([
       tooling.getCoinBalanceSummary({
         address: normalizedAddress,
-        coinType: "0x2::sui::SUI"
+        coinType: SUI_COIN_TYPE
       }),
       tooling.getCoinBalances({ address: normalizedAddress }),
       getOwnedObjectSummaries(normalizedAddress, tooling.suiClient),

@@ -8,13 +8,14 @@ import {
   deriveRelevantPackageId,
   normalizeIdOrThrow
 } from "@sui-oracle-market/tooling-core/object"
+import { findStructAddressInNormalizedTypes } from "@sui-oracle-market/tooling-core/package"
 import {
   findLatestArtifactThat,
   getLatestDeploymentFromArtifact,
   getLatestObjectFromArtifact,
-  isPublishArtifactNamed,
   loadDeploymentArtifacts
 } from "@sui-oracle-market/tooling-node/artifacts"
+import { isPublishArtifactNamed } from "@sui-oracle-market/tooling-node/package"
 
 export const resolveMaybeLatestShopIdentifiers = async (
   providedIdentifiers: ShopIdentifierInputs,
@@ -156,6 +157,35 @@ export const resolvePriceInfoPackageId = async ({
     )
 
   return deriveRelevantPackageId(objectType)
+}
+
+export const resolvePythPackageIdFromShopModule = async ({
+  shopPackageId,
+  suiClient
+}: {
+  shopPackageId: string
+  suiClient: SuiClient
+}): Promise<string | undefined> => {
+  try {
+    const normalizedShopModule = await suiClient.getNormalizedMoveModule({
+      package: shopPackageId,
+      module: "shop"
+    })
+    const exposedFunctions = normalizedShopModule.exposedFunctions
+    const addAcceptedCurrencyFunction =
+      exposedFunctions?.add_accepted_currency ?? undefined
+    const parameters = Array.isArray(addAcceptedCurrencyFunction?.parameters)
+      ? addAcceptedCurrencyFunction.parameters
+      : []
+
+    return findStructAddressInNormalizedTypes({
+      normalizedTypes: parameters,
+      moduleName: "price_info",
+      structName: "PriceInfoObject"
+    })
+  } catch {
+    return undefined
+  }
 }
 
 export const assertPriceInfoObjectDependency = async ({
