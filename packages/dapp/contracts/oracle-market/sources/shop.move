@@ -97,6 +97,8 @@ const ETemplateShopMismatch: vector<u8> = b"template shop mismatch";
 #[error]
 const EListingShopMismatch: vector<u8> = b"listing shop mismatch";
 #[error]
+const EListingNotFound: vector<u8> = b"listing not found";
+#[error]
 const EListingHasActiveTemplates: vector<u8> = b"listing has active templates";
 #[error]
 const EInvalidRuleKind: vector<u8> = b"invalid rule kind";
@@ -1446,7 +1448,7 @@ macro fun assert_template_registered($shop: &Shop, $template_id: ID) {
 macro fun assert_listing_registered($shop: &Shop, $listing_id: u64) {
     let shop = $shop;
     let listing_id = $listing_id;
-    assert!(shop.listings.contains(listing_id), EListingShopMismatch);
+    assert!(shop.listings.contains(listing_id), EListingNotFound);
 }
 
 macro fun assert_template_matches_shop($shop: &Shop, $template: &DiscountTemplate) {
