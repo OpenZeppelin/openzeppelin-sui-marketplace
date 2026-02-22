@@ -710,11 +710,12 @@ entry fun add_accepted_currency<TCoin>(
         confidence_cap,
         status_lag_cap,
     );
+    let accepted_currency_id = accepted_currency.pyth_object_id;
     shop.accepted_currencies.add(coin_type, accepted_currency);
 
     event::emit(AcceptedCoinAddedEvent {
         shop_id,
-        accepted_currency_id: pyth_object_id,
+        accepted_currency_id,
     })
 }
 

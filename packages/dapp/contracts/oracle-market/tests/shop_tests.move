@@ -463,9 +463,7 @@ fun add_accepted_currency_records_currency_and_event() {
         option::none(),
         option::none(),
     );
-    let accepted_currency_id = shop::test_last_created_id(
-        test_scenario::ctx(&mut scn),
-    );
+    let accepted_currency_id = pyth_object_id;
     let added_events = event::events_by_type<shop::AcceptedCoinAddedEvent>();
     let added_len = added_events.length();
     assert!(added_len > events_before);
@@ -4075,7 +4073,7 @@ fun claim_and_buy_item_with_discount_emits_events_and_covers_helpers() {
         option::none(),
         option::none(),
     );
-    let accepted_currency_id = shop::test_last_created_id(test_scenario::ctx(&mut scn));
+    let accepted_currency_id = price_info_id;
     std::unit_test::destroy(currency);
 
     shop::add_item_listing<TestItem>(
@@ -5050,7 +5048,7 @@ fun remove_accepted_currency_emits_removed_event_fields() {
         option::none(),
         option::none(),
     );
-    let accepted_currency_id = shop::test_last_created_id(test_scenario::ctx(&mut scn));
+    let accepted_currency_id = pyth_object_id;
 
     test_scenario::return_to_sender(&scn, owner_cap_obj);
     test_scenario::return_shared(shop_obj);
@@ -5110,7 +5108,7 @@ fun setup_shop_with_currency_listing_and_price_info(
         option::none(),
         option::none(),
     );
-    let accepted_currency_id = shop::test_last_created_id(test_scenario::ctx(scn));
+    let accepted_currency_id = price_info_id;
     std::unit_test::destroy(currency);
 
     shop::add_item_listing<TestItem>(
@@ -5160,7 +5158,7 @@ fun setup_shop_with_currency_listing_and_price_info_for_item<TItem: store>(
         option::none(),
         option::none(),
     );
-    let accepted_currency_id = shop::test_last_created_id(test_scenario::ctx(scn));
+    let accepted_currency_id = price_info_id;
     std::unit_test::destroy(currency);
 
     shop::add_item_listing<TItem>(
