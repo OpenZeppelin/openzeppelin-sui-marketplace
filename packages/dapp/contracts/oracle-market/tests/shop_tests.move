@@ -213,7 +213,7 @@ fun create_shop_emits_event_and_records_ids() {
     let owner_cap_id = shop::test_last_created_id(&ctx);
 
     assert_eq!(shop::test_shop_created_owner_cap_id(shop_created), owner_cap_id);
-    assert_eq!(tx_context::get_ids_created(&ctx), starting_ids + 4);
+    assert_eq!(tx_context::get_ids_created(&ctx), starting_ids + 5);
 }
 
 #[test]
@@ -226,7 +226,7 @@ fun create_shop_allows_multiple_shops_per_sender() {
 
     let created = event::events_by_type<shop::ShopCreatedEvent>();
     assert_eq!(created.length(), 2);
-    assert_eq!(tx_context::get_ids_created(&ctx), starting_ids + 8);
+    assert_eq!(tx_context::get_ids_created(&ctx), starting_ids + 10);
 }
 
 #[test]
@@ -274,7 +274,7 @@ fun create_shop_handles_existing_id_counts() {
 
     shop::create_shop(DEFAULT_SHOP_NAME.to_string(), &mut ctx);
 
-    assert_eq!(tx_context::get_ids_created(&ctx), starting_ids + 4);
+    assert_eq!(tx_context::get_ids_created(&ctx), starting_ids + 5);
 }
 
 #[test]
@@ -1963,6 +1963,85 @@ fun remove_item_listing_rejects_unknown_listing() {
     abort EAssertFailure
 }
 
+#[test, expected_failure(abort_code = ::sui_oracle_market::shop::EListingHasActiveTemplates)]
+fun remove_item_listing_rejects_listing_with_active_bound_template() {
+    let mut ctx = tx_context::dummy();
+    let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
+    let listing_id = shop::test_add_item_listing_local<TestItem>(
+        &mut shop,
+        &owner_cap,
+        b"Template Locked Listing".to_string(),
+        45_00,
+        2,
+        option::none(),
+        &mut ctx,
+    );
+    let (_template, _template_id) = shop::test_create_discount_template_local(
+        &mut shop,
+        option::some(listing_id),
+        0,
+        500,
+        0,
+        option::none(),
+        option::none(),
+        &mut ctx,
+    );
+
+    shop::remove_item_listing(
+        &mut shop,
+        &owner_cap,
+        listing_id,
+        &ctx,
+    );
+
+    abort EAssertFailure
+}
+
+#[test]
+fun remove_item_listing_allows_listing_with_inactive_bound_template() {
+    let mut ctx = tx_context::dummy();
+    let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
+    let listing_id = shop::test_add_item_listing_local<TestItem>(
+        &mut shop,
+        &owner_cap,
+        b"Template Paused Listing".to_string(),
+        45_00,
+        2,
+        option::none(),
+        &mut ctx,
+    );
+    let (mut template, _template_id) = shop::test_create_discount_template_local(
+        &mut shop,
+        option::some(listing_id),
+        0,
+        500,
+        0,
+        option::none(),
+        option::none(),
+        &mut ctx,
+    );
+
+    shop::toggle_discount_template(
+        &mut shop,
+        &owner_cap,
+        &mut template,
+        false,
+        &ctx,
+    );
+    shop::remove_item_listing(
+        &mut shop,
+        &owner_cap,
+        listing_id,
+        &ctx,
+    );
+
+    assert!(!shop::test_listing_exists(&shop, listing_id));
+
+    std::unit_test::destroy(template);
+    std::unit_test::destroy(owner_cap);
+    std::unit_test::destroy(shop);
+}
+
 #[test]
 fun update_item_listing_stock_accept_zero_stock() {
     let mut ctx = tx_context::dummy();
@@ -2643,7 +2722,7 @@ fun toggle_discount_template_updates_active_and_emits_events() {
 
     assert!(active);
     shop::toggle_discount_template(
-        &shop,
+        &mut shop,
         &owner_cap,
         &mut template,
         false,
@@ -2680,7 +2759,7 @@ fun toggle_discount_template_updates_active_and_emits_events() {
     assert!(!active_after_first);
 
     shop::toggle_discount_template(
-        &shop,
+        &mut shop,
         &owner_cap,
         &mut template,
         true,
@@ -2750,7 +2829,7 @@ fun toggle_discount_template_rejects_foreign_owner_cap() {
     );
 
     shop::toggle_discount_template(
-        &shop,
+        &mut shop,
         &other_cap,
         &mut template,
         false,
@@ -2763,7 +2842,7 @@ fun toggle_discount_template_rejects_foreign_owner_cap() {
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::ETemplateShopMismatch)]
 fun toggle_discount_template_rejects_foreign_template() {
     let mut ctx = tx_context::dummy();
-    let (shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
+    let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
     let (mut other_shop, _other_cap) = shop::test_setup_shop(
         OTHER_OWNER,
         &mut ctx,
@@ -2780,7 +2859,7 @@ fun toggle_discount_template_rejects_foreign_template() {
     );
 
     shop::toggle_discount_template(
-        &shop,
+        &mut shop,
         &owner_cap,
         &mut foreign_template,
         false,
@@ -2807,7 +2886,7 @@ fun toggle_discount_template_rejects_unknown_template() {
     shop::test_remove_template(&mut shop, stray_template_id);
 
     shop::toggle_discount_template(
-        &shop,
+        &mut shop,
         &owner_cap,
         &mut stray_template,
         false,
@@ -3659,7 +3738,7 @@ fun prune_discount_claims_rejects_unexpired_template_even_if_paused() {
     claimers.push_back(claimer);
 
     shop::toggle_discount_template(
-        &shop,
+        &mut shop,
         &owner_cap,
         &mut template,
         false,
@@ -3738,7 +3817,7 @@ fun claim_discount_ticket_rejects_inactive_template() {
         &mut ctx,
     );
     shop::toggle_discount_template(
-        &shop,
+        &mut shop,
         &owner_cap,
         &mut template,
         false,
@@ -6099,13 +6178,13 @@ fun buy_item_with_discount_rejects_inactive_template() {
         &scn,
         owner_cap_id,
     );
-    let shared_shop = test_scenario::take_shared_by_id(&scn, shop_id);
+    let mut shared_shop = test_scenario::take_shared_by_id(&scn, shop_id);
     let mut template = test_scenario::take_shared_by_id<shop::DiscountTemplate>(
         &scn,
         template_id,
     );
     shop::toggle_discount_template(
-        &shared_shop,
+        &mut shared_shop,
         &owner_cap_obj,
         &mut template,
         false,

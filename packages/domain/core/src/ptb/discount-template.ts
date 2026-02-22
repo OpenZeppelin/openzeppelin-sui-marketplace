@@ -109,7 +109,10 @@ export const buildToggleDiscountTemplateTransaction = ({
   ownerCapId: string
 }) => {
   const transaction = newTransaction()
-  const shopArgument = transaction.sharedObjectRef(shop.sharedRef)
+  const shopArgument = transaction.sharedObjectRef({
+    ...shop.sharedRef,
+    mutable: true
+  })
   const discountTemplateArgument = transaction.sharedObjectRef(
     discountTemplate.sharedRef
   )

@@ -194,7 +194,7 @@ export const useRemoveDiscountModalState = ({
 
     try {
       const shopShared = await getSuiSharedObject(
-        { objectId: shopId, mutable: false },
+        { objectId: shopId, mutable: true },
         { suiClient }
       )
       const shopPackageId = deriveRelevantPackageId(shopShared.object.type)

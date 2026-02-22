@@ -97,6 +97,8 @@ const ETemplateShopMismatch: vector<u8> = b"template shop mismatch";
 #[error]
 const EListingShopMismatch: vector<u8> = b"listing shop mismatch";
 #[error]
+const EListingHasActiveTemplates: vector<u8> = b"listing has active templates";
+#[error]
 const EInvalidRuleKind: vector<u8> = b"invalid rule kind";
 #[error]
 const EInvalidRuleValue: vector<u8> = b"invalid rule value";
@@ -202,6 +204,7 @@ public struct Shop has key, store {
     disabled: bool,
     accepted_currencies: Table<TypeName, AcceptedCurrency>,
     listings: Table<u64, ItemListing>,
+    active_listing_template_counts: Table<u64, u64>,
     next_listing_id: u64,
 }
 
@@ -637,6 +640,7 @@ entry fun remove_item_listing(
 ) {
     assert_owner_cap!(shop, owner_cap);
     assert_listing_registered!(shop, listing_id);
+    assert!(!shop.has_active_listing_bound_templates(listing_id), EListingHasActiveTemplates);
     shop.remove_listing(listing_id);
 
     event::emit(ItemListingRemovedEvent {
@@ -753,6 +757,7 @@ fun create_discount_template_core(
         ctx,
     );
     shop.add_template_marker(discount_template_id, applies_to_listing);
+    shop.increment_active_template_count_if_listing_bound(applies_to_listing);
     (discount_template, discount_template_id)
 }
 
@@ -840,7 +845,7 @@ entry fun update_discount_template(
 
 /// Quickly enable/disable a coupon without deleting it.
 entry fun toggle_discount_template(
-    shop: &Shop,
+    shop: &mut Shop,
     owner_cap: &ShopOwnerCap,
     discount_template: &mut DiscountTemplate,
     active: bool,
@@ -848,6 +853,14 @@ entry fun toggle_discount_template(
 ) {
     assert_owner_cap!(shop, owner_cap);
     assert_template_matches_shop!(shop, discount_template);
+    if (active) {
+        assert_listing_belongs_to_shop_if_some!(shop, discount_template.applies_to_listing);
+    };
+    shop.adjust_active_template_count(
+        discount_template.applies_to_listing,
+        discount_template.active,
+        active,
+    );
 
     discount_template.active = active;
 
@@ -1184,6 +1197,7 @@ fun new_shop(name: String, owner: address, ctx: &mut TxContext): Shop {
         disabled: false,
         accepted_currencies: table::new<TypeName, AcceptedCurrency>(ctx),
         listings: table::new<u64, ItemListing>(ctx),
+        active_listing_template_counts: table::new<u64, u64>(ctx),
         next_listing_id: 0,
     }
 }
@@ -1336,6 +1350,57 @@ fun add_listing(shop: &mut Shop, listing_id: u64, listing: ItemListing) {
 
 fun remove_listing(shop: &mut Shop, listing_id: u64) {
     let _listing = shop.listings.remove(listing_id);
+}
+
+fun increment_active_template_count_if_listing_bound(
+    shop: &mut Shop,
+    applies_to_listing: Option<u64>,
+) {
+    applies_to_listing.do_ref!(|listing_id| {
+        shop.increment_active_listing_template_count(*listing_id);
+    });
+}
+
+fun has_active_listing_bound_templates(shop: &Shop, listing_id: u64): bool {
+    shop.active_listing_template_counts.contains(listing_id)
+}
+
+fun adjust_active_template_count(
+    shop: &mut Shop,
+    applies_to_listing: Option<u64>,
+    was_active: bool,
+    is_active: bool,
+) {
+    if (was_active == is_active) return;
+    applies_to_listing.do_ref!(|listing_id| {
+        if (is_active) {
+            shop.increment_active_listing_template_count(*listing_id);
+        } else {
+            shop.decrement_active_listing_template_count(*listing_id);
+        };
+    });
+}
+
+fun increment_active_listing_template_count(shop: &mut Shop, listing_id: u64) {
+    if (!shop.active_listing_template_counts.contains(listing_id)) {
+        shop.active_listing_template_counts.add(listing_id, 1);
+        return
+    };
+    let active_template_count = shop.active_listing_template_counts.borrow_mut(listing_id);
+    *active_template_count = *active_template_count + 1;
+}
+
+fun decrement_active_listing_template_count(shop: &mut Shop, listing_id: u64) {
+    assert!(shop.active_listing_template_counts.contains(listing_id), EListingHasActiveTemplates);
+    let should_remove_entry = {
+        let active_template_count = shop.active_listing_template_counts.borrow_mut(listing_id);
+        assert!(*active_template_count > 0, EListingHasActiveTemplates);
+        *active_template_count = *active_template_count - 1;
+        *active_template_count == 0
+    };
+    if (should_remove_entry) {
+        let _count = shop.active_listing_template_counts.remove(listing_id);
+    };
 }
 
 fun borrow_listing(shop: &Shop, listing_id: u64): &ItemListing {
