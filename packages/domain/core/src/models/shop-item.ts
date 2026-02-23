@@ -30,7 +30,7 @@ export const findCreatedShopItemIds = (createdObjects: CreatedObjectLike[]) =>
 export type ShopItemReceiptSummary = {
   shopItemId: string
   shopId: string
-  itemListingId: string
+  listingId: string
   itemType: string
   name?: string
   acquiredAt?: string
@@ -96,7 +96,7 @@ export const parseShopItemReceiptFromObject = (
     normalizeOptionalIdFromValue(shopItemFields.shop_id),
     `Missing shop_id for ShopItem ${shopItemId}.`
   )
-  const itemListingId = requireValue(
+  const listingId = requireValue(
     normalizeOptionalListingIdFromValue(shopItemFields.item_listing_id),
     `Missing item_listing_id for ShopItem ${shopItemId}.`
   )
@@ -106,7 +106,7 @@ export const parseShopItemReceiptFromObject = (
   return {
     shopItemId,
     shopId,
-    itemListingId,
+    listingId,
     itemType,
     name: readMoveStringOrVector(shopItemFields.name),
     acquiredAt: formatOptionalNumericValue(shopItemFields.acquired_at)

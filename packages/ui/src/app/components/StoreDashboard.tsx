@@ -606,7 +606,7 @@ const PurchasedItemsPanel = ({
                   </div>
                   <div className="mt-4 flex flex-col gap-2 text-[0.65rem]">
                     <CopyableId
-                      value={item.itemListingId}
+                      value={item.listingId}
                       label="Listing ID"
                       className="w-full justify-start"
                       showExplorer={false}

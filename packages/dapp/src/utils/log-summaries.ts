@@ -102,7 +102,7 @@ export const logShopItemReceiptSummary = (
   if (index !== undefined) logKeyValueGreen("Receipt")(index)
   logKeyValueGreen("Object")(shopItem.shopItemId)
   logKeyValueGreen("Shop")(shopItem.shopId)
-  logKeyValueGreen("Listing-id")(shopItem.itemListingId)
+  logKeyValueGreen("Listing-id")(shopItem.listingId)
   logKeyValueGreen("Receipt-name")(shopItem.name ?? "Unknown")
   logKeyValueGreen("Receipt-type")(shopItem.itemType)
   logKeyValueGreen("Acquired-at")(shopItem.acquiredAt ?? "Unknown")
