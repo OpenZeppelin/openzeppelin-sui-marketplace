@@ -260,9 +260,10 @@ fun update_shop_owner_rotates_payout_and_emits_event() {
     assert_eq!(events.length(), 1);
     let rotated = &events[0];
     let cap_id = shop::test_shop_owner_cap_id(&owner_cap);
+    let (rotated_shop_id, rotated_cap_id) = shop::test_shop_owner_updated_values(rotated);
 
-    assert_eq!(shop::test_shop_owner_updated_shop(rotated), shop::test_shop_id(&shop));
-    assert_eq!(shop::test_shop_owner_updated_cap_id(rotated), cap_id);
+    assert_eq!(rotated_shop_id, shop::test_shop_id(&shop));
+    assert_eq!(rotated_cap_id, cap_id);
 
     std::unit_test::destroy(owner_cap);
     std::unit_test::destroy(shop);
@@ -282,9 +283,10 @@ fun update_shop_owner_emits_event_even_when_unchanged() {
     let rotated = &events[0];
     let cap_id = shop::test_shop_owner_cap_id(&owner_cap);
     let shop_id = shop::test_shop_id(&shop);
+    let (rotated_shop_id, rotated_cap_id) = shop::test_shop_owner_updated_values(rotated);
 
-    assert_eq!(shop::test_shop_owner_updated_shop(rotated), shop_id);
-    assert_eq!(shop::test_shop_owner_updated_cap_id(rotated), cap_id);
+    assert_eq!(rotated_shop_id, shop_id);
+    assert_eq!(rotated_cap_id, cap_id);
 
     std::unit_test::destroy(owner_cap);
     std::unit_test::destroy(shop);
@@ -301,10 +303,11 @@ fun update_shop_owner_records_rotated_by_sender() {
     assert_eq!(events.length(), 1);
     let rotated = &events[0];
     let cap_id = shop::test_shop_owner_cap_id(&owner_cap);
+    let (rotated_shop_id, rotated_cap_id) = shop::test_shop_owner_updated_values(rotated);
 
     assert_eq!(shop::test_shop_owner(&shop), OTHER_OWNER);
-    assert_eq!(shop::test_shop_owner_updated_shop(rotated), shop::test_shop_id(&shop));
-    assert_eq!(shop::test_shop_owner_updated_cap_id(rotated), cap_id);
+    assert_eq!(rotated_shop_id, shop::test_shop_id(&shop));
+    assert_eq!(rotated_cap_id, cap_id);
 
     std::unit_test::destroy(owner_cap);
     std::unit_test::destroy(shop);
@@ -324,9 +327,10 @@ fun disable_shop_sets_flag_and_emits_event() {
     let disabled_event = &events[0];
     let shop_id = shop::test_shop_id(&shop);
     let cap_id = shop::test_shop_owner_cap_id(&owner_cap);
+    let (disabled_shop_id, disabled_cap_id) = shop::test_shop_disabled_values(disabled_event);
 
-    assert_eq!(shop::test_shop_disabled_shop(disabled_event), shop_id);
-    assert_eq!(shop::test_shop_disabled_cap_id(disabled_event), cap_id);
+    assert_eq!(disabled_shop_id, shop_id);
+    assert_eq!(disabled_cap_id, cap_id);
 
     std::unit_test::destroy(owner_cap);
     std::unit_test::destroy(shop);
@@ -399,8 +403,11 @@ fun add_accepted_currency_records_currency_and_event() {
     let added_len = added_events.length();
     assert!(added_len > events_before);
     let added_event = &added_events[added_len - 1];
-    assert_eq!(shop::test_accepted_coin_added_shop(added_event), shop::test_shop_id(&shop_obj));
-    assert_eq!(shop::test_accepted_coin_added_id(added_event), accepted_currency_id);
+    let (event_shop_id, event_accepted_currency_id) = shop::test_accepted_coin_added_values(
+        added_event,
+    );
+    assert_eq!(event_shop_id, shop::test_shop_id(&shop_obj));
+    assert_eq!(event_accepted_currency_id, accepted_currency_id);
 
     test_scenario::return_to_sender(&scn, owner_cap_obj);
     test_scenario::return_shared(shop_obj);
@@ -427,7 +434,7 @@ fun add_accepted_currency_records_currency_and_event() {
     assert_eq!(pyth_id, pyth_object_id);
     assert_eq!(decimals, 9);
     assert_eq!(symbol, b"TCO".to_string());
-    assert!(shop::test_accepted_currency_exists(&shared_shop, test_coin_type()));
+    assert!(shop::accepted_currency_exists(&shared_shop, test_coin_type()));
 
     test_scenario::return_shared(shared_shop);
     std::unit_test::destroy(currency);
@@ -649,7 +656,7 @@ fun add_accepted_currency_rejects_short_feed_id() {
 fun attestation_time_within_lag_is_allowed() {
     let mut ctx = tx_context::new_from_hint(@0x0, 16, 0, 0, 0);
     let publish_time = 100;
-    let attestation_time = publish_time + shop::test_max_price_status_lag_secs();
+    let attestation_time = publish_time + shop::test_default_max_price_status_lag_secs();
     let price = price::new(
         i64::new(1_000, false),
         10,
@@ -672,7 +679,7 @@ fun attestation_time_within_lag_is_allowed() {
 fun attestation_time_lag_over_limit_is_rejected() {
     let mut ctx = tx_context::new_from_hint(@0x0, 18, 0, 0, 0);
     let publish_time = 200;
-    let attestation_time = publish_time + shop::test_max_price_status_lag_secs() + 1;
+    let attestation_time = publish_time + shop::test_default_max_price_status_lag_secs() + 1;
     let price = price::new(
         i64::new(1_000, false),
         10,
@@ -1260,7 +1267,7 @@ fun quote_view_matches_internal_math() {
     let mut clock_obj = clock::create_for_testing(test_scenario::ctx(&mut scn));
     clock::set_for_testing(&mut clock_obj, 1);
     let price_usd_cents = 10_000;
-    let (_, _, _, _, decimals, _, _, _, _) = shop::test_accepted_currency_values<TestCoin>(
+    let (_, _, _, _, decimals, _, _, _, _) = shop::accepted_currency_values<TestCoin>(
         &shared_shop,
     );
 
@@ -1391,14 +1398,14 @@ fun add_item_listing_stores_metadata() {
         option::none(),
         &mut ctx,
     );
-    assert!(shop::test_listing_exists(&shop, listing_id));
+    assert!(shop::listing_exists(&shop, listing_id));
     let (
         name,
         base_price_usd_cents,
         stock,
         shop_id,
         spotlight_template_id,
-    ) = shop::test_listing_values_local(&listing);
+    ) = shop::listing_values(&shop, &listing);
     let added_events = event::events_by_type<shop::ItemListingAddedEvent>();
     assert_eq!(added_events.length(), 1);
     let added_event = &added_events[0];
@@ -1410,8 +1417,9 @@ fun add_item_listing_stores_metadata() {
     assert!(option::is_none(&spotlight_template_id));
     let shop_id = shop::test_shop_id(&shop);
     let listing_id = shop::test_listing_id(&listing);
-    assert_eq!(shop::test_item_listing_added_shop(added_event), shop_id);
-    assert_eq!(shop::test_item_listing_added_listing(added_event), listing_id);
+    let (event_shop_id, event_listing_id) = shop::test_item_listing_added_values(added_event);
+    assert_eq!(event_shop_id, shop_id);
+    assert_eq!(event_listing_id, listing_id);
 
     shop::test_remove_listing(&mut shop, listing_id);
     std::unit_test::destroy(listing);
@@ -1438,7 +1446,8 @@ fun add_item_listing_links_spotlight_template() {
         option::some(template_id),
         &mut ctx,
     );
-    let (_, _, _, _, spotlight_template_id) = shop::test_listing_values_local(
+    let (_, _, _, _, spotlight_template_id) = shop::listing_values(
+        &shop,
         &listing,
     );
     let added_events = event::events_by_type<shop::ItemListingAddedEvent>();
@@ -1450,8 +1459,9 @@ fun add_item_listing_links_spotlight_template() {
     spotlight_template_id.do_ref!(|value| {
         assert_eq!(*value, template_id);
     });
-    assert_eq!(shop::test_item_listing_added_shop(added_event), shop_id);
-    assert_eq!(shop::test_item_listing_added_listing(added_event), listing_id);
+    let (event_shop_id, event_listing_id) = shop::test_item_listing_added_values(added_event);
+    assert_eq!(event_shop_id, shop_id);
+    assert_eq!(event_listing_id, listing_id);
 
     shop::test_remove_listing(&mut shop, listing_id);
     shop::test_remove_template(&mut shop, template_id);
@@ -1587,7 +1597,7 @@ fun update_item_listing_stock_updates_listing_and_emits_events() {
         stock,
         shop_id,
         spotlight_template,
-    ) = shop::test_listing_values_local(&listing);
+    ) = shop::listing_values(&shop, &listing);
     assert_eq!(name, b"Helmet".to_string());
     assert_eq!(base_price_usd_cents, 48_00);
     assert!(option::is_none(&spotlight_template));
@@ -1596,8 +1606,11 @@ fun update_item_listing_stock_updates_listing_and_emits_events() {
     let stock_events = event::events_by_type<shop::ItemListingStockUpdatedEvent>();
     assert_eq!(stock_events.length(), 1);
     let stock_event = &stock_events[0];
-    assert_eq!(shop::test_item_listing_stock_updated_shop(stock_event), shop_id);
-    assert_eq!(shop::test_item_listing_stock_updated_listing(stock_event), listing_id);
+    let (event_shop_id, event_listing_id) = shop::test_item_listing_stock_updated_values(
+        stock_event,
+    );
+    assert_eq!(event_shop_id, shop_id);
+    assert_eq!(event_listing_id, listing_id);
 
     shop::test_remove_listing(&mut shop, listing_id);
     std::unit_test::destroy(listing);
@@ -1695,15 +1708,17 @@ fun update_item_listing_stock_handles_multiple_updates_and_events() {
         &ctx,
     );
 
-    let (_, _, stock, _, _) = shop::test_listing_values_local(&listing);
+    let (_, _, stock, _, _) = shop::listing_values(&shop, &listing);
     assert_eq!(stock, 3);
 
     let stock_events = event::events_by_type<shop::ItemListingStockUpdatedEvent>();
     assert_eq!(stock_events.length(), 2);
     let first = &stock_events[0];
     let second = &stock_events[1];
-    assert_eq!(shop::test_item_listing_stock_updated_listing(first), listing_id);
-    assert_eq!(shop::test_item_listing_stock_updated_listing(second), listing_id);
+    let (_, first_listing_id) = shop::test_item_listing_stock_updated_values(first);
+    let (_, second_listing_id) = shop::test_item_listing_stock_updated_values(second);
+    assert_eq!(first_listing_id, listing_id);
+    assert_eq!(second_listing_id, listing_id);
 
     shop::test_remove_listing(&mut shop, listing_id);
     std::unit_test::destroy(listing);
@@ -1747,12 +1762,16 @@ fun remove_item_listing_removes_listing_and_emits_event() {
     let removed_events = event::events_by_type<shop::ItemListingRemovedEvent>();
     assert_eq!(removed_events.length(), 1);
     let removed = &removed_events[0];
-    assert_eq!(shop::test_item_listing_removed_shop(removed), shop_id);
-    assert_eq!(shop::test_item_listing_removed_listing(removed), removed_listing_id);
-    assert!(!shop::test_listing_exists(&shop, removed_listing_id));
+    let (removed_shop_id, removed_event_listing_id) = shop::test_item_listing_removed_values(
+        removed,
+    );
+    assert_eq!(removed_shop_id, shop_id);
+    assert_eq!(removed_event_listing_id, removed_listing_id);
+    assert!(!shop::listing_exists(&shop, removed_listing_id));
 
-    assert!(shop::test_listing_exists(&shop, remaining_listing_id));
-    let (name, price, stock, listing_shop_id, spotlight) = shop::test_listing_values_local(
+    assert!(shop::listing_exists(&shop, remaining_listing_id));
+    let (name, price, stock, listing_shop_id, spotlight) = shop::listing_values(
+        &shop,
         &remaining_listing,
     );
     assert_eq!(name, b"Repair Kit".to_string());
@@ -1870,7 +1889,7 @@ fun create_discount_template_persists_fields_and_emits_event() {
         option::some(5),
         &mut ctx,
     );
-    assert!(shop::test_discount_template_exists(&shop, template_id));
+    assert!(shop::discount_template_exists(&shop, template_id));
 
     let (
         shop_id,
@@ -1882,15 +1901,16 @@ fun create_discount_template_persists_fields_and_emits_event() {
         claims_issued,
         redemptions,
         active,
-    ) = shop::test_discount_template_values(
+    ) = shop::discount_template_values(
         &shop,
         &template,
     );
 
     assert_eq!(shop_id, shop::test_shop_id(&shop));
     assert!(option::is_none(&applies_to_listing));
-    assert_eq!(shop::test_discount_rule_kind(rule), 0);
-    assert_eq!(shop::test_discount_rule_value(rule), 1_250);
+    let (rule_kind, rule_value) = shop::test_discount_rule_values(rule);
+    assert_eq!(rule_kind, 0);
+    assert_eq!(rule_value, 1_250);
     assert_eq!(starts_at, 10);
     assert!(option::is_some(&expires_at));
     expires_at.do_ref!(|value| {
@@ -1907,8 +1927,11 @@ fun create_discount_template_persists_fields_and_emits_event() {
     let created_events = event::events_by_type<shop::DiscountTemplateCreatedEvent>();
     assert_eq!(created_events.length(), 1);
     let created = &created_events[0];
-    assert_eq!(shop::test_discount_template_created_shop(created), shop::test_shop_id(&shop));
-    assert_eq!(shop::test_discount_template_created_id(created), template_id);
+    let (created_shop_id, created_template_id) = shop::test_discount_template_created_values(
+        created,
+    );
+    assert_eq!(created_shop_id, shop::test_shop_id(&shop));
+    assert_eq!(created_template_id, template_id);
 
     shop::test_remove_template(&mut shop, template_id);
     std::unit_test::destroy(template);
@@ -1942,7 +1965,7 @@ fun create_discount_template_links_listing_and_percent_rule() {
         option::none(),
         &mut ctx,
     );
-    assert!(shop::test_discount_template_exists(&shop, template_id));
+    assert!(shop::discount_template_exists(&shop, template_id));
     let (
         shop_id,
         applies_to_listing,
@@ -1953,7 +1976,7 @@ fun create_discount_template_links_listing_and_percent_rule() {
         claims_issued,
         redemptions,
         active,
-    ) = shop::test_discount_template_values(
+    ) = shop::discount_template_values(
         &shop,
         &template,
     );
@@ -1963,8 +1986,9 @@ fun create_discount_template_links_listing_and_percent_rule() {
     applies_to_listing.do_ref!(|value| {
         assert_eq!(*value, listing_id);
     });
-    assert_eq!(shop::test_discount_rule_kind(rule), 1);
-    assert_eq!(shop::test_discount_rule_value(rule), 2_500);
+    let (rule_kind, rule_value) = shop::test_discount_rule_values(rule);
+    assert_eq!(rule_kind, 1);
+    assert_eq!(rule_value, 2_500);
     assert_eq!(starts_at, 0);
     assert!(option::is_none(&expires_at));
     assert!(option::is_none(&max_redemptions));
@@ -1975,8 +1999,11 @@ fun create_discount_template_links_listing_and_percent_rule() {
     let created_events = event::events_by_type<shop::DiscountTemplateCreatedEvent>();
     assert_eq!(created_events.length(), 1);
     let created = &created_events[0];
-    assert_eq!(shop::test_discount_template_created_shop(created), shop::test_shop_id(&shop));
-    assert_eq!(shop::test_discount_template_created_id(created), template_id);
+    let (created_shop_id, created_template_id) = shop::test_discount_template_created_values(
+        created,
+    );
+    assert_eq!(created_shop_id, shop::test_shop_id(&shop));
+    assert_eq!(created_template_id, template_id);
 
     shop::test_remove_template(&mut shop, template_id);
     std::unit_test::destroy(template);
@@ -2165,14 +2192,15 @@ fun update_discount_template_updates_fields_and_emits_event() {
         claims_issued,
         redemptions,
         active,
-    ) = shop::test_discount_template_values(&shop, &template);
+    ) = shop::discount_template_values(&shop, &template);
     assert_eq!(shop_id, shop::test_shop_id(&shop));
     assert!(option::is_some(&applies_to_listing));
     applies_to_listing.do_ref!(|value| {
         assert_eq!(*value, listing_id);
     });
-    assert_eq!(shop::test_discount_rule_kind(rule), 1);
-    assert_eq!(shop::test_discount_rule_value(rule), 750);
+    let (rule_kind, rule_value) = shop::test_discount_rule_values(rule);
+    assert_eq!(rule_kind, 1);
+    assert_eq!(rule_value, 750);
     assert_eq!(starts_at, 50);
     assert!(option::is_some(&expires_at));
     expires_at.do_ref!(|value| {
@@ -2189,8 +2217,11 @@ fun update_discount_template_updates_fields_and_emits_event() {
     let updated_events = event::events_by_type<shop::DiscountTemplateUpdatedEvent>();
     assert_eq!(updated_events.length(), 1);
     let updated = &updated_events[0];
-    assert_eq!(shop::test_discount_template_updated_shop(updated), shop::test_shop_id(&shop));
-    assert_eq!(shop::test_discount_template_updated_id(updated), template_id);
+    let (updated_shop_id, updated_template_id) = shop::test_discount_template_updated_values(
+        updated,
+    );
+    assert_eq!(updated_shop_id, shop::test_shop_id(&shop));
+    assert_eq!(updated_template_id, template_id);
 
     shop::test_remove_template(&mut shop, template_id);
     std::unit_test::destroy(template);
@@ -2506,7 +2537,7 @@ fun toggle_discount_template_updates_active_and_emits_events() {
         claims_issued,
         redemptions,
         active,
-    ) = shop::test_discount_template_values(&shop, &template);
+    ) = shop::discount_template_values(&shop, &template);
 
     assert!(active);
     shop::toggle_discount_template(
@@ -2527,18 +2558,16 @@ fun toggle_discount_template_updates_active_and_emits_events() {
         claims_issued_after_first,
         redemptions_after_first,
         active_after_first,
-    ) = shop::test_discount_template_values(&shop, &template);
+    ) = shop::discount_template_values(&shop, &template);
 
     assert_eq!(shop_id_after_first, shop_id);
     assert_eq!(applies_to_listing_after_first, applies_to_listing);
-    assert_eq!(
-        shop::test_discount_rule_kind(rule_after_first),
-        shop::test_discount_rule_kind(rule),
+    let (rule_after_first_kind, rule_after_first_value) = shop::test_discount_rule_values(
+        rule_after_first,
     );
-    assert_eq!(
-        shop::test_discount_rule_value(rule_after_first),
-        shop::test_discount_rule_value(rule),
-    );
+    let (rule_kind, rule_value) = shop::test_discount_rule_values(rule);
+    assert_eq!(rule_after_first_kind, rule_kind);
+    assert_eq!(rule_after_first_value, rule_value);
     assert_eq!(starts_at_after_first, starts_at);
     assert_eq!(expires_at_after_first, expires_at);
     assert_eq!(max_redemptions_after_first, max_redemptions);
@@ -2564,17 +2593,14 @@ fun toggle_discount_template_updates_active_and_emits_events() {
         claims_issued_after_second,
         redemptions_after_second,
         active_after_second,
-    ) = shop::test_discount_template_values(&shop, &template);
+    ) = shop::discount_template_values(&shop, &template);
     assert_eq!(shop_id_after_second, shop_id);
     assert_eq!(applies_to_listing_after_second, applies_to_listing);
-    assert_eq!(
-        shop::test_discount_rule_kind(rule_after_second),
-        shop::test_discount_rule_kind(rule),
+    let (rule_after_second_kind, rule_after_second_value) = shop::test_discount_rule_values(
+        rule_after_second,
     );
-    assert_eq!(
-        shop::test_discount_rule_value(rule_after_second),
-        shop::test_discount_rule_value(rule),
-    );
+    assert_eq!(rule_after_second_kind, rule_kind);
+    assert_eq!(rule_after_second_value, rule_value);
     assert_eq!(starts_at_after_second, starts_at);
     assert_eq!(expires_at_after_second, expires_at);
     assert_eq!(max_redemptions_after_second, max_redemptions);
@@ -2585,14 +2611,20 @@ fun toggle_discount_template_updates_active_and_emits_events() {
     let toggled_events_after_first = event::events_by_type<shop::DiscountTemplateToggledEvent>();
     assert_eq!(toggled_events_after_first.length(), 2);
     let first = &toggled_events_after_first[0];
-    assert_eq!(shop::test_discount_template_toggled_shop(first), shop_id);
-    assert_eq!(shop::test_discount_template_toggled_id(first), template_id);
+    let (first_toggled_shop_id, first_toggled_template_id) = shop::test_discount_template_toggled_values(
+        first,
+    );
+    assert_eq!(first_toggled_shop_id, shop_id);
+    assert_eq!(first_toggled_template_id, template_id);
 
     let toggled_events_after_second = event::events_by_type<shop::DiscountTemplateToggledEvent>();
     assert_eq!(toggled_events_after_second.length(), 2);
     let second = &toggled_events_after_second[1];
-    assert_eq!(shop::test_discount_template_toggled_shop(second), shop_id);
-    assert_eq!(shop::test_discount_template_toggled_id(second), template_id);
+    let (second_toggled_shop_id, second_toggled_template_id) = shop::test_discount_template_toggled_values(
+        second,
+    );
+    assert_eq!(second_toggled_shop_id, shop_id);
+    assert_eq!(second_toggled_template_id, template_id);
 
     shop::test_remove_template(&mut shop, template_id);
     std::unit_test::destroy(template);
@@ -2710,7 +2742,8 @@ fun toggle_template_on_listing_sets_and_clears_spotlight() {
     );
     let ids_before_toggle = tx_context::get_ids_created(&ctx);
 
-    let (_, _, _, _, spotlight_before) = shop::test_listing_values_local(
+    let (_, _, _, _, spotlight_before) = shop::listing_values(
+        &shop,
         &listing,
     );
     assert!(option::is_none(&spotlight_before));
@@ -2724,7 +2757,8 @@ fun toggle_template_on_listing_sets_and_clears_spotlight() {
         &ctx,
     );
 
-    let (_, _, _, _, spotlight_after_set) = shop::test_listing_values_local(
+    let (_, _, _, _, spotlight_after_set) = shop::listing_values(
+        &shop,
         &listing,
     );
     assert!(option::is_some(&spotlight_after_set));
@@ -2741,7 +2775,8 @@ fun toggle_template_on_listing_sets_and_clears_spotlight() {
         &ctx,
     );
 
-    let (_, _, _, _, spotlight_after_clear) = shop::test_listing_values_local(
+    let (_, _, _, _, spotlight_after_clear) = shop::listing_values(
+        &shop,
         &listing,
     );
     assert!(option::is_none(&spotlight_after_clear));
@@ -2940,7 +2975,8 @@ fun attach_template_to_listing_sets_spotlight_without_emitting_events() {
         &ctx,
     );
 
-    let (_, _, _, shop_id, spotlight) = shop::test_listing_values_local(
+    let (_, _, _, shop_id, spotlight) = shop::listing_values(
+        &shop,
         &listing,
     );
     assert_eq!(shop_id, shop::test_shop_id(&shop));
@@ -2953,7 +2989,7 @@ fun attach_template_to_listing_sets_spotlight_without_emitting_events() {
         event::events_by_type<shop::DiscountTemplateToggledEvent>().length(),
         toggled_before,
     );
-    assert!(shop::test_discount_template_exists(&shop, template_id));
+    assert!(shop::discount_template_exists(&shop, template_id));
 
     shop::test_remove_template(&mut shop, template_id);
     shop::test_remove_listing(&mut shop, listing_id);
@@ -2989,7 +3025,8 @@ fun attach_template_to_listing_overwrites_existing_spotlight() {
     );
     let ids_before = tx_context::get_ids_created(&ctx);
 
-    let (_, _, _, _, spotlight_before) = shop::test_listing_values_local(
+    let (_, _, _, _, spotlight_before) = shop::listing_values(
+        &shop,
         &listing,
     );
     assert!(option::is_some(&spotlight_before));
@@ -3005,7 +3042,8 @@ fun attach_template_to_listing_overwrites_existing_spotlight() {
         &ctx,
     );
 
-    let (_, _, _, _, spotlight_after) = shop::test_listing_values_local(
+    let (_, _, _, _, spotlight_after) = shop::listing_values(
+        &shop,
         &listing,
     );
     assert!(option::is_some(&spotlight_after));
@@ -3013,8 +3051,8 @@ fun attach_template_to_listing_overwrites_existing_spotlight() {
         assert_eq!(*value, second_template);
     });
     assert_eq!(tx_context::get_ids_created(&ctx), ids_before);
-    assert!(shop::test_discount_template_exists(&shop, first_template));
-    assert!(shop::test_discount_template_exists(&shop, second_template));
+    assert!(shop::discount_template_exists(&shop, first_template));
+    assert!(shop::discount_template_exists(&shop, second_template));
     assert_eq!(event::events_by_type<shop::DiscountTemplateToggledEvent>().length(), 0);
 
     shop::test_remove_template(&mut shop, second_template);
@@ -3060,7 +3098,7 @@ fun attach_template_to_listing_accepts_matching_listing() {
         &ctx,
     );
 
-    let (_, _, _, _, spotlight) = shop::test_listing_values_local(&listing);
+    let (_, _, _, _, spotlight) = shop::listing_values(&shop, &listing);
     assert!(option::is_some(&spotlight));
     spotlight.do_ref!(|value| {
         assert_eq!(*value, template_id);
@@ -3238,7 +3276,8 @@ fun clear_template_from_listing_removes_spotlight_without_side_effects() {
         &ctx,
     );
 
-    let (_, _, _, _, spotlight_before) = shop::test_listing_values_local(
+    let (_, _, _, _, spotlight_before) = shop::listing_values(
+        &shop,
         &listing,
     );
     let created_before = tx_context::get_ids_created(&ctx);
@@ -3255,7 +3294,8 @@ fun clear_template_from_listing_removes_spotlight_without_side_effects() {
         &ctx,
     );
 
-    let (_, _, _, _, spotlight_after) = shop::test_listing_values_local(
+    let (_, _, _, _, spotlight_after) = shop::listing_values(
+        &shop,
         &listing,
     );
     assert!(option::is_none(&spotlight_after));
@@ -3264,7 +3304,7 @@ fun clear_template_from_listing_removes_spotlight_without_side_effects() {
         event::events_by_type<shop::DiscountTemplateToggledEvent>().length(),
         toggled_before,
     );
-    assert!(shop::test_discount_template_exists(&shop, template_id));
+    assert!(shop::discount_template_exists(&shop, template_id));
 
     shop::test_remove_template(&mut shop, template_id);
     shop::test_remove_listing(&mut shop, listing_id);
@@ -3298,7 +3338,8 @@ fun clear_template_from_listing_is_noop_when_no_spotlight_set() {
         &ctx,
     );
 
-    let (_, _, _, _, spotlight_after) = shop::test_listing_values_local(
+    let (_, _, _, _, spotlight_after) = shop::listing_values(
+        &shop,
         &listing,
     );
     assert!(option::is_none(&spotlight_after));
@@ -3424,7 +3465,7 @@ fun claim_discount_ticket_mints_transfers_and_records_claim() {
         &scn,
         template_id,
     );
-    let (_, _, _, _, _, _, claims_issued_before, _, _) = shop::test_discount_template_values(
+    let (_, _, _, _, _, _, claims_issued_before, _, _) = shop::discount_template_values(
         &shared_shop,
         &template_obj,
     );
@@ -3436,7 +3477,7 @@ fun claim_discount_ticket_mints_transfers_and_records_claim() {
         test_scenario::ctx(&mut scn),
     );
 
-    let (_, _, _, _, _, _, claims_issued_after, _, _) = shop::test_discount_template_values(
+    let (_, _, _, _, _, _, claims_issued_after, _, _) = shop::discount_template_values(
         &shared_shop,
         &template_obj,
     );
@@ -3453,8 +3494,8 @@ fun claim_discount_ticket_mints_transfers_and_records_claim() {
     assert!(claim_events_len > 0);
     let claimed = &claim_events[claim_events_len - 1];
     let shop_id = shop_id;
-    assert_eq!(shop::test_discount_claimed_shop(claimed), shop_id);
-    let ticket_id = shop::test_discount_claimed_discount_id(claimed);
+    let (claimed_shop_id, ticket_id) = shop::test_discount_claimed_values(claimed);
+    assert_eq!(claimed_shop_id, shop_id);
 
     test_scenario::return_shared(template_obj);
     test_scenario::return_shared(shared_shop);
@@ -3936,19 +3977,26 @@ fun claim_and_buy_item_with_discount_emits_events_and_covers_helpers() {
 
     let purchase_events = event::events_by_type<shop::PurchaseCompletedEvent>();
     let purchase_event = &purchase_events[purchase_events.length() - 1];
-    assert_eq!(shop::test_purchase_completed_shop(purchase_event), shop_id);
-    assert_eq!(shop::test_purchase_completed_listing(purchase_event), listing_id);
-    assert_eq!(
-        shop::test_purchase_completed_accepted_currency_id(purchase_event),
-        accepted_currency_id,
-    );
-    let _ = shop::test_purchase_completed_minted_item_id(purchase_event);
+    let (
+        purchase_shop_id,
+        purchase_listing_id,
+        purchase_accepted_currency_id,
+        _purchase_template_id,
+        _purchase_minted_item_id,
+        _purchase_amount_paid,
+        _purchase_discounted_price,
+    ) = shop::test_purchase_completed_values(purchase_event);
+    assert_eq!(purchase_shop_id, shop_id);
+    assert_eq!(purchase_listing_id, listing_id);
+    assert_eq!(purchase_accepted_currency_id, accepted_currency_id);
 
     let redeemed_events = event::events_by_type<shop::DiscountRedeemedEvent>();
     let redeemed_event = &redeemed_events[redeemed_events.length() - 1];
-    assert_eq!(shop::test_discount_redeemed_shop(redeemed_event), shop_id);
-    assert_eq!(shop::test_discount_redeemed_template_id(redeemed_event), template_id);
-    let _ = shop::test_discount_redeemed_discount_id(redeemed_event);
+    let (redeemed_shop_id, redeemed_template_id, _redeemed_discount_id) = shop::test_discount_redeemed_values(
+        redeemed_event,
+    );
+    assert_eq!(redeemed_shop_id, shop_id);
+    assert_eq!(redeemed_template_id, template_id);
 
     let listing_address = listing_id.to_address();
     let listing_id_opt = shop::listing_id_for_address(&shared_shop, listing_address);
@@ -3957,14 +4005,17 @@ fun claim_and_buy_item_with_discount_emits_events_and_covers_helpers() {
     let template_id_opt = shop::discount_template_id_for_address(&shared_shop, template_address);
     assert!(option::is_some(&template_id_opt));
 
-    let (_name, _price, _stock, _shop_id, _spotlight) = shop::test_listing_values(
+    let (_name, _price, _stock, _shop_id, _spotlight) = shop::listing_values(
         &shared_shop,
         &listing_obj,
     );
-    let _listing_id_from_value = shop::test_listing_id_from_value(&listing_obj);
-    let _template_id = shop::test_template_id(&template_obj);
+    let _listing_id_from_value = shop::test_listing_id(&listing_obj);
+    let (_template_shop_id, _, _, _, _, _, _, _, _) = shop::discount_template_values(
+        &shared_shop,
+        &template_obj,
+    );
     assert!(
-        shop::test_accepted_currency_exists(
+        shop::accepted_currency_exists(
             &shared_shop,
             test_coin_type(),
         ),
@@ -4041,7 +4092,7 @@ fun listing_values_rejects_foreign_shop() {
         &mut ctx,
     );
 
-    shop::test_listing_values(&shop_b, &listing);
+    shop::listing_values(&shop_b, &listing);
     abort EAssertFailure
 }
 
@@ -4061,7 +4112,7 @@ fun discount_template_values_rejects_foreign_shop() {
         &mut ctx,
     );
 
-    shop::test_discount_template_values(&shop_b, &template);
+    shop::discount_template_values(&shop_b, &template);
     abort EAssertFailure
 }
 
@@ -4316,7 +4367,10 @@ fun discount_redemption_without_listing_restriction_allows_zero_price() {
 
     let purchase_events = event::events_by_type<shop::PurchaseCompletedEvent>();
     let purchase_event = &purchase_events[purchase_events.length() - 1];
-    assert_eq!(shop::test_purchase_completed_discounted_price(purchase_event), 0);
+    let (_, _, _, _, _, _, discounted_price_usd_cents) = shop::test_purchase_completed_values(
+        purchase_event,
+    );
+    assert_eq!(discounted_price_usd_cents, 0);
 
     test_scenario::return_shared(shared_shop);
     test_scenario::return_shared(listing_obj);
@@ -4838,7 +4892,7 @@ fun accepted_currency_values_rejects_foreign_shop() {
 
     let shared_shop_b = test_scenario::take_shared_by_id(&scn, shop_b_id);
 
-    shop::test_accepted_currency_values<TestCoin>(&shared_shop_b);
+    shop::accepted_currency_values<TestCoin>(&shared_shop_b);
     abort EAssertFailure
 }
 
@@ -4875,7 +4929,7 @@ fun remove_currency_field_clears_mapping() {
     );
 
     shop::test_remove_currency_field<TestCoin>(&mut shop_obj);
-    assert!(!shop::test_accepted_currency_exists(&shop_obj, test_coin_type()));
+    assert!(!shop::accepted_currency_exists(&shop_obj, test_coin_type()));
 
     test_scenario::return_to_sender(&scn, owner_cap_obj);
     test_scenario::return_shared(shop_obj);
@@ -4935,11 +4989,14 @@ fun remove_accepted_currency_emits_removed_event_fields() {
 
     let removed_events = event::events_by_type<shop::AcceptedCoinRemovedEvent>();
     let removed_event = &removed_events[removed_events.length() - 1];
+    let (removed_shop_id, removed_currency_id) = shop::test_accepted_coin_removed_values(
+        removed_event,
+    );
     assert_eq!(
-        shop::test_accepted_coin_removed_shop(removed_event),
+        removed_shop_id,
         shop::test_shop_id(&shared_shop),
     );
-    assert_eq!(shop::test_accepted_coin_removed_id(removed_event), accepted_currency_id);
+    assert_eq!(removed_currency_id, accepted_currency_id);
 
     test_scenario::return_shared(shared_shop);
     test_scenario::return_to_sender(&scn, owner_cap);
@@ -5105,19 +5162,28 @@ fun buy_item_emits_events_decrements_stock_and_refunds_change() {
     let purchases = event::events_by_type<shop::PurchaseCompletedEvent>();
     assert_eq!(purchases.length(), purchase_before + 1);
     let purchase = &purchases[purchases.length() - 1];
-    assert_eq!(shop::test_purchase_completed_shop(purchase), shop::test_shop_id(&shared_shop));
-    assert_eq!(shop::test_purchase_completed_listing(purchase), shop::test_listing_id(&listing));
-    assert_eq!(shop::test_purchase_completed_amount_paid(purchase), quote_amount);
-    assert_eq!(shop::test_purchase_completed_discounted_price(purchase), 100);
-    assert_eq!(shop::test_purchase_completed_accepted_currency_id(purchase), accepted_currency_id);
-    assert!(option::is_none(&shop::test_purchase_completed_discount_template_id(purchase)));
-    let _ = shop::test_purchase_completed_minted_item_id(purchase);
+    let (
+        purchase_shop_id,
+        purchase_listing_id,
+        purchase_currency_id,
+        purchase_template_id_opt,
+        _minted_item_id,
+        purchase_amount_paid,
+        purchase_discounted_price,
+    ) = shop::test_purchase_completed_values(purchase);
+    assert_eq!(purchase_shop_id, shop::test_shop_id(&shared_shop));
+    assert_eq!(purchase_listing_id, shop::test_listing_id(&listing));
+    assert_eq!(purchase_amount_paid, quote_amount);
+    assert_eq!(purchase_discounted_price, 100);
+    assert_eq!(purchase_currency_id, accepted_currency_id);
+    assert!(option::is_none(&purchase_template_id_opt));
 
     let stock_events = event::events_by_type<shop::ItemListingStockUpdatedEvent>();
     assert_eq!(stock_events.length(), stock_before + 1);
     let stock_event = &stock_events[stock_events.length() - 1];
+    let (_, stock_listing_id) = shop::test_item_listing_stock_updated_values(stock_event);
     assert_eq!(
-        shop::test_item_listing_stock_updated_listing(stock_event),
+        stock_listing_id,
         shop::test_listing_id(&listing),
     );
 
@@ -5189,7 +5255,7 @@ fun buy_item_supports_example_car_receipts() {
     let purchases = event::events_by_type<shop::PurchaseCompletedEvent>();
     assert_eq!(purchases.length(), purchase_before + 1);
     let purchase = &purchases[purchases.length() - 1];
-    let _ = shop::test_purchase_completed_minted_item_id(purchase);
+    let (_, _, _, _, _minted_item_id, _, _) = shop::test_purchase_completed_values(purchase);
 
     test_scenario::return_shared(shared_shop);
     test_scenario::return_shared(listing);
@@ -5259,7 +5325,7 @@ fun buy_item_supports_example_bike_receipts() {
     let purchases = event::events_by_type<shop::PurchaseCompletedEvent>();
     assert_eq!(purchases.length(), purchase_before + 1);
     let purchase = &purchases[purchases.length() - 1];
-    let _ = shop::test_purchase_completed_minted_item_id(purchase);
+    let (_, _, _, _, _minted_item_id, _, _) = shop::test_purchase_completed_values(purchase);
 
     test_scenario::return_shared(shared_shop);
     test_scenario::return_shared(listing);
@@ -5325,7 +5391,7 @@ fun buy_item_emits_events_with_exact_payment_and_zero_change() {
     let purchases = event::events_by_type<shop::PurchaseCompletedEvent>();
     assert_eq!(purchases.length(), purchase_before + 1);
     let purchase = &purchases[purchases.length() - 1];
-    let _ = shop::test_purchase_completed_minted_item_id(purchase);
+    let (_, _, _, _, _minted_item_id, _, _) = shop::test_purchase_completed_values(purchase);
 
     test_scenario::return_shared(shared_shop);
     test_scenario::return_shared(listing);
@@ -5635,13 +5701,16 @@ fun buy_item_with_discount_emits_discount_redeemed_and_records_template_id() {
     let purchases = event::events_by_type<shop::PurchaseCompletedEvent>();
     assert_eq!(purchases.length(), purchase_before + 1);
     let purchase = &purchases[purchases.length() - 1];
-    assert_eq!(
-        shop::test_purchase_completed_discounted_price(purchase),
-        discounted_price_usd_cents,
-    );
-    let template_id_opt = shop::test_purchase_completed_discount_template_id(
-        purchase,
-    );
+    let (
+        _purchase_shop_id,
+        _purchase_listing_id,
+        _purchase_currency_id,
+        template_id_opt,
+        _purchase_minted_item_id,
+        _purchase_amount_paid,
+        purchase_discounted_price,
+    ) = shop::test_purchase_completed_values(purchase);
+    assert_eq!(purchase_discounted_price, discounted_price_usd_cents);
     assert!(option::is_some(&template_id_opt));
     template_id_opt.do_ref!(|value| {
         assert_eq!(*value, template_id);
@@ -5650,9 +5719,11 @@ fun buy_item_with_discount_emits_discount_redeemed_and_records_template_id() {
     let redeems = event::events_by_type<shop::DiscountRedeemedEvent>();
     assert_eq!(redeems.length(), redeem_before + 1);
     let redeem = &redeems[redeems.length() - 1];
-    assert_eq!(shop::test_discount_redeemed_shop(redeem), shop::test_shop_id(&shared_shop));
-    assert_eq!(shop::test_discount_redeemed_template_id(redeem), template_id);
-    let _ = shop::test_discount_redeemed_discount_id(redeem);
+    let (redeemed_shop_id, redeemed_template_id, _redeemed_discount_id) = shop::test_discount_redeemed_values(
+        redeem,
+    );
+    assert_eq!(redeemed_shop_id, shop::test_shop_id(&shared_shop));
+    assert_eq!(redeemed_template_id, template_id);
 
     let (
         _shop_id,
@@ -5664,7 +5735,7 @@ fun buy_item_with_discount_emits_discount_redeemed_and_records_template_id() {
         claims_issued,
         redemptions,
         _active,
-    ) = shop::test_discount_template_values(&shared_shop, &template);
+    ) = shop::discount_template_values(&shared_shop, &template);
     assert_eq!(claims_issued, 1);
     assert_eq!(redemptions, 1);
 
