@@ -19,13 +19,6 @@ export const withArtifactsRoot = async <T>(
   return await artifactsRootStore.run(resolved, action)
 }
 
-export const pickRootNonDependencyArtifact = (artifacts: PublishArtifact[]) => {
-  const artifact =
-    artifacts.find((candidate) => !candidate.isDependency) ?? artifacts[0]
-  if (artifact) return artifact
-  throw new Error("No artifacts to select from.")
-}
-
 const resolveArtifactKey = (value: unknown): string | undefined => {
   if (!value || typeof value !== "object") return undefined
   const record = value as Record<string, unknown>
@@ -260,15 +253,6 @@ export const findLatestArtifactThat = (
   predicate: (artifact: PublishArtifact) => boolean,
   deploymentArtifacts: PublishArtifact[]
 ) => getLatestArtifact(deploymentArtifacts.filter(predicate))
-
-export const isPublishArtifactNamed =
-  (artifactName: string) =>
-  (artifact: PublishArtifact): boolean => {
-    const normalizedPackageName = artifact.packageName?.trim().toLowerCase()
-    if (normalizedPackageName === artifactName) return true
-
-    return false
-  }
 
 export const resolvePublisherCapIdFromObjectArtifacts = async ({
   networkName,

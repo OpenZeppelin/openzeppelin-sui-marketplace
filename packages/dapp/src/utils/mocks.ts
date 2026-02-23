@@ -37,7 +37,7 @@ export type MockArtifact = Partial<{
     coinType: string
     feedIdHex: string
     priceInfoObjectId: string
-    acceptedCurrencyId: string
+    tableEntryFieldId: string
     shopId: string
     initialSharedVersion?: number
   }[]

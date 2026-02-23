@@ -535,8 +535,8 @@ const BuyFlowModal = ({
                     >
                       {availableCurrencies.map((currency) => (
                         <option
-                          key={currency.acceptedCurrencyId}
-                          value={currency.acceptedCurrencyId}
+                          key={currency.tableEntryFieldId}
+                          value={currency.tableEntryFieldId}
                         >
                           {getCurrencyLabel(currency)}
                         </option>

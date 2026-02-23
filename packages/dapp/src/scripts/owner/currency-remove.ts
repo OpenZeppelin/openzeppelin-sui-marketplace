@@ -1,18 +1,12 @@
 /**
- * Unregisters an AcceptedCurrency by removing its markers and type index.
- * The currency object remains addressable for history.
+ * Unregisters an accepted coin type from the shop.
  * Requires the ShopOwnerCap capability.
  */
-import type { SuiClient } from "@mysten/sui/client"
 import yargs from "yargs"
 
-import {
-  type AcceptedCurrencyMatch,
-  requireAcceptedCurrencyByCoinType
-} from "@sui-oracle-market/domain-core/models/currency"
+import { requireAcceptedCurrencyByCoinType } from "@sui-oracle-market/domain-core/models/currency"
 import { buildRemoveAcceptedCurrencyTransaction } from "@sui-oracle-market/domain-core/ptb/currency"
 import { normalizeOptionalCoinType } from "@sui-oracle-market/tooling-core/coin"
-import { normalizeOptionalId } from "@sui-oracle-market/tooling-core/object"
 import { emitJsonOutput } from "@sui-oracle-market/tooling-node/json"
 import { logKeyValueGreen } from "@sui-oracle-market/tooling-node/log"
 import { runSuiScript } from "@sui-oracle-market/tooling-node/process"
@@ -22,8 +16,7 @@ type NormalizedInputs = {
   packageId: string
   shopId: string
   ownerCapId: string
-  acceptedCurrencyId?: string
-  coinType?: string
+  coinType: string
 }
 
 runSuiScript(
@@ -33,23 +26,21 @@ runSuiScript(
       tooling.network.networkName
     )
 
-    const acceptedCurrency = await resolveAcceptedCurrency(
-      inputs,
-      tooling.suiClient
-    )
+    const acceptedCurrency = await requireAcceptedCurrencyByCoinType({
+      coinType: inputs.coinType,
+      shopId: inputs.shopId,
+      suiClient: tooling.suiClient
+    })
 
     const shop = await tooling.getMutableSharedObject({
       objectId: inputs.shopId
-    })
-    const acceptedCurrencyShared = await tooling.getImmutableSharedObject({
-      objectId: acceptedCurrency.acceptedCurrencyId
     })
 
     const removeCurrencyTransaction = buildRemoveAcceptedCurrencyTransaction({
       packageId: inputs.packageId,
       shop,
       ownerCapId: inputs.ownerCapId,
-      acceptedCurrency: acceptedCurrencyShared
+      coinType: inputs.coinType
     })
 
     const { execution, summary } = await tooling.executeTransactionWithSummary({
@@ -66,7 +57,8 @@ runSuiScript(
     if (
       emitJsonOutput(
         {
-          deleted: acceptedCurrency.acceptedCurrencyId,
+          removedCoinType: inputs.coinType,
+          tableEntryFieldId: acceptedCurrency.tableEntryFieldId,
           digest,
           transactionSummary: summary
         },
@@ -75,21 +67,16 @@ runSuiScript(
     )
       return
 
-    logKeyValueGreen("deleted")(acceptedCurrency.acceptedCurrencyId)
+    logKeyValueGreen("coin type")(inputs.coinType)
+    logKeyValueGreen("table entry field id")(acceptedCurrency.tableEntryFieldId)
     if (digest) logKeyValueGreen("digest")(digest)
   },
   yargs()
-    .option("acceptedCurrencyId", {
-      alias: ["accepted-currency-id", "currency-id"],
-      type: "string",
-      description:
-        "AcceptedCurrency object ID to remove. If omitted, provide --coin-type to resolve it from dynamic fields."
-    })
     .option("coinType", {
       alias: ["coin-type", "type"],
       type: "string",
-      description:
-        "Fully qualified Move coin type to deregister (e.g., 0x2::sui::SUI). Only required when --accepted-currency-id is not provided."
+      demandOption: true,
+      description: "Fully qualified Move coin type to deregister."
     })
     .option("shopPackageId", {
       alias: "shop-package-id",
@@ -126,13 +113,6 @@ runSuiScript(
       default: false,
       description: "Output results as JSON."
     })
-    .check((argv) => {
-      if (!argv.acceptedCurrencyId && !argv.coinType)
-        throw new Error(
-          "Provide either --accepted-currency-id or --coin-type to remove a currency."
-        )
-      return true
-    })
     .strict()
 )
 
@@ -141,8 +121,7 @@ const normalizeInputs = async (
     shopPackageId?: string
     shopId?: string
     ownerCapId?: string
-    acceptedCurrencyId?: string
-    coinType?: string
+    coinType: string
   },
   networkName: string
 ): Promise<NormalizedInputs> => {
@@ -153,31 +132,13 @@ const normalizeInputs = async (
     ownerCapId: cliArguments.ownerCapId
   })
 
+  const normalizedCoinType = normalizeOptionalCoinType(cliArguments.coinType)
+  if (!normalizedCoinType) throw new Error("coinType is required.")
+
   return {
     packageId,
     shopId,
     ownerCapId,
-    acceptedCurrencyId: normalizeOptionalId(cliArguments.acceptedCurrencyId),
-    coinType: normalizeOptionalCoinType(cliArguments.coinType)
+    coinType: normalizedCoinType
   }
-}
-
-const resolveAcceptedCurrency = async (
-  inputs: NormalizedInputs,
-  suiClient: SuiClient
-): Promise<AcceptedCurrencyMatch> => {
-  if (inputs.acceptedCurrencyId)
-    return {
-      coinType: inputs.coinType,
-      acceptedCurrencyId: inputs.acceptedCurrencyId
-    }
-
-  if (!inputs.coinType)
-    throw new Error("coinType is required when acceptedCurrencyId is omitted.")
-
-  return requireAcceptedCurrencyByCoinType({
-    coinType: inputs.coinType,
-    shopId: inputs.shopId,
-    suiClient
-  })
 }

@@ -27,6 +27,7 @@
     "./testing/vitest-plugin": "./src/testing/vitest-plugin.ts",
     "./move": "./src/move.ts",
     "./move-lock": "./src/move-lock.ts",
+    "./package": "./src/package.ts",
     "./process": "./src/process.ts",
     "./publish": "./src/publish.ts",
     "./suiCli": "./src/suiCli.ts",

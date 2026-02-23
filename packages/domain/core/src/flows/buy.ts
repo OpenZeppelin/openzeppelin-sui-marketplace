@@ -9,6 +9,8 @@ import {
 
 import {
   DEFAULT_TX_GAS_BUDGET,
+  NORMALIZED_SUI_COIN_TYPE,
+  SUI_COIN_TYPE,
   SUI_CLOCK_ID
 } from "@sui-oracle-market/tooling-core/constants"
 import {
@@ -39,7 +41,7 @@ import type { PriceUpdatePolicy, PythPullOracleConfig } from "../models/pyth.ts"
 import { resolvePythPullOracleConfig } from "../models/pyth.ts"
 
 const isSuiCoinType = (coinType: string) =>
-  normalizeCoinType(coinType) === "0x2::sui::SUI"
+  normalizeCoinType(coinType) === NORMALIZED_SUI_COIN_TYPE
 
 const getObjectRef = async (objectId: string, suiClient: SuiClient) => {
   const response = await suiClient.getObject({
@@ -167,7 +169,7 @@ export type EstimateRequiredAmountPriceUpdateMode =
 export const estimateRequiredAmount = async ({
   shopPackageId,
   shopShared,
-  acceptedCurrencyShared,
+  coinType,
   pythPriceInfoShared,
   pythFeedIdHex,
   networkName,
@@ -184,7 +186,7 @@ export const estimateRequiredAmount = async ({
 }: {
   shopPackageId: string
   shopShared: Awaited<ReturnType<typeof getSuiSharedObject>>
-  acceptedCurrencyShared: Awaited<ReturnType<typeof getSuiSharedObject>>
+  coinType: string
   pythPriceInfoShared: Awaited<ReturnType<typeof getSuiSharedObject>>
   pythFeedIdHex?: string
   networkName?: string
@@ -203,9 +205,6 @@ export const estimateRequiredAmount = async ({
   quoteTransaction.setSender(signerAddress)
 
   const shopArgument = quoteTransaction.sharedObjectRef(shopShared.sharedRef)
-  const acceptedCurrencyArgument = quoteTransaction.sharedObjectRef(
-    acceptedCurrencyShared.sharedRef
-  )
   const pythPriceInfoSharedRef =
     priceUpdateMode === "localnet-mock" || priceUpdateMode === "pyth-update"
       ? { ...pythPriceInfoShared.sharedRef, mutable: true }
@@ -256,9 +255,9 @@ export const estimateRequiredAmount = async ({
 
   quoteTransaction.moveCall({
     target: `${shopPackageId}::shop::quote_amount_for_price_info_object`,
+    typeArguments: [coinType],
     arguments: [
       shopArgument,
-      acceptedCurrencyArgument,
       pythPriceInfoArgument,
       quoteTransaction.pure.u64(priceUsdCents),
       quoteTransaction.pure.option("u64", maxPriceAgeSecs ?? null),
@@ -300,7 +299,7 @@ const maybeSetDedicatedGasForSuiPayments = async ({
   // When paying with SUI, one coin must cover gas and a different coin must be the payment input.
   const coins = await suiClient.getCoins({
     owner: signerAddress,
-    coinType: "0x2::sui::SUI",
+    coinType: SUI_COIN_TYPE,
     limit: 50
   })
 
@@ -557,7 +556,6 @@ export const buildBuyTransaction = async (
     shopPackageId,
     shopShared,
     itemListingShared,
-    acceptedCurrencyShared,
     pythPriceInfoShared,
     pythFeedIdHex,
     paymentCoinObjectId,
@@ -580,7 +578,6 @@ export const buildBuyTransaction = async (
     shopPackageId: string
     shopShared: Awaited<ReturnType<typeof getSuiSharedObject>>
     itemListingShared: Awaited<ReturnType<typeof getSuiSharedObject>>
-    acceptedCurrencyShared: Awaited<ReturnType<typeof getSuiSharedObject>>
     pythPriceInfoShared: Awaited<ReturnType<typeof getSuiSharedObject>>
     pythFeedIdHex: string
     paymentCoinObjectId: string
@@ -619,9 +616,6 @@ export const buildBuyTransaction = async (
   const shopArgument = transaction.sharedObjectRef(shopShared.sharedRef)
   const listingArgument = transaction.sharedObjectRef(
     itemListingShared.sharedRef
-  )
-  const acceptedCurrencyArgument = transaction.sharedObjectRef(
-    acceptedCurrencyShared.sharedRef
   )
 
   const clockShared = await getSuiSharedObject(
@@ -710,7 +704,6 @@ export const buildBuyTransaction = async (
       arguments: [
         shopArgument,
         listingArgument,
-        acceptedCurrencyArgument,
         transaction.sharedObjectRef(discountTemplateShared.sharedRef),
         pythPriceInfoArgument,
         paymentArgument,
@@ -737,7 +730,6 @@ export const buildBuyTransaction = async (
       arguments: [
         shopArgument,
         listingArgument,
-        acceptedCurrencyArgument,
         transaction.sharedObjectRef(discountTemplateShared.sharedRef),
         transaction.object(discountContext.discountTicketId),
         pythPriceInfoArgument,
@@ -759,7 +751,6 @@ export const buildBuyTransaction = async (
     arguments: [
       shopArgument,
       listingArgument,
-      acceptedCurrencyArgument,
       pythPriceInfoArgument,
       paymentArgument,
       transaction.pure.address(mintTo),

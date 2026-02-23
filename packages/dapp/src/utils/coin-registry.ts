@@ -2,6 +2,7 @@ import type { Ed25519Keypair } from "@mysten/sui/keypairs/ed25519"
 import { normalizeSuiObjectId } from "@mysten/sui/utils"
 
 import { deriveCurrencyObjectId } from "@sui-oracle-market/tooling-core/coin-registry"
+import { SUI_COIN_TYPE } from "@sui-oracle-market/tooling-core/constants"
 import { objectTypeMatches } from "@sui-oracle-market/tooling-core/object"
 import type { WrappedSuiSharedObject } from "@sui-oracle-market/tooling-core/shared-object"
 import {
@@ -15,8 +16,7 @@ import {
 } from "@sui-oracle-market/tooling-node/log"
 import { newTransaction } from "@sui-oracle-market/tooling-node/transactions"
 
-const NATIVE_SUI_COIN_TYPE = "0x2::sui::SUI"
-const CURRENCY_TYPE = `0x2::coin_registry::Currency<${NATIVE_SUI_COIN_TYPE}>`
+const CURRENCY_TYPE = `0x2::coin_registry::Currency<${SUI_COIN_TYPE}>`
 
 let nativeSuiCurrencyRegistered = false
 
@@ -37,7 +37,7 @@ export const ensureNativeSuiCurrencyRegistration = async (
     )
 
   const currencyObjectId = deriveCurrencyObjectId(
-    NATIVE_SUI_COIN_TYPE,
+    SUI_COIN_TYPE,
     SUI_COIN_REGISTRY_ID
   )
   const existingCurrency = await tooling.getObjectSafe({
@@ -54,7 +54,7 @@ export const ensureNativeSuiCurrencyRegistration = async (
   }
 
   const metadata = await tooling.suiClient.getCoinMetadata({
-    coinType: NATIVE_SUI_COIN_TYPE
+    coinType: SUI_COIN_TYPE
   })
   const metadataId = metadata?.id
     ? normalizeSuiObjectId(metadata.id)
@@ -77,7 +77,7 @@ export const ensureNativeSuiCurrencyRegistration = async (
 
   transaction.moveCall({
     target: "0x2::coin_registry::migrate_legacy_metadata",
-    typeArguments: [NATIVE_SUI_COIN_TYPE],
+    typeArguments: [SUI_COIN_TYPE],
     arguments: [
       transaction.sharedObjectRef(registryObject.sharedRef),
       transaction.object(metadataId)
