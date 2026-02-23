@@ -420,7 +420,7 @@ fun add_accepted_currency_records_currency_and_event() {
         _,
         _,
         _,
-    ) = shop::accepted_currency_values<TestCoin>(&shared_shop);
+    ) = shop::test_accepted_currency_values<TestCoin>(&shared_shop);
     assert_eq!(shop_id, shop::test_shop_id(&shared_shop));
     assert_eq!(coin_type, test_coin_type());
     assert_eq!(feed_id, expected_feed_id);
@@ -477,7 +477,7 @@ fun add_accepted_currency_stores_custom_guardrail_caps() {
 
     let _ = test_scenario::next_tx(&mut scn, TEST_OWNER);
     let shared_shop = test_scenario::take_shared_by_id(&scn, shop_id);
-    let (_, _, _, _, _, _, max_age_cap, conf_cap, status_cap) = shop::accepted_currency_values<TestCoin>(
+    let (_, _, _, _, _, _, max_age_cap, conf_cap, status_cap) = shop::test_accepted_currency_values<TestCoin>(
         &shared_shop,
     );
     assert_eq!(max_age_cap, custom_age_cap);
@@ -532,7 +532,7 @@ fun add_accepted_currency_clamps_guardrail_caps_to_defaults() {
 
     let _ = test_scenario::next_tx(&mut scn, TEST_OWNER);
     let shared_shop = test_scenario::take_shared_by_id(&scn, shop_id);
-    let (_, _, _, _, _, _, max_age_cap, conf_cap, status_cap) = shop::accepted_currency_values<TestCoin>(
+    let (_, _, _, _, _, _, max_age_cap, conf_cap, status_cap) = shop::test_accepted_currency_values<TestCoin>(
         &shared_shop,
     );
     assert_eq!(max_age_cap, shop::test_default_max_price_age_secs());
