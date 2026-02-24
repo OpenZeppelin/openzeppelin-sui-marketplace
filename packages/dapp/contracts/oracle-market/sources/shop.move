@@ -475,7 +475,6 @@ fun add_item_listing_core<T: store>(
     base_price_usd_cents: u64,
     stock: u64,
     spotlight_discount_template_id: Option<ID>,
-    _ctx: &mut TxContext,
 ): u64 {
     assert_owner_cap!(shop, owner_cap);
     validate_listing_inputs!(
@@ -538,7 +537,6 @@ fun add_item_listing_with_discount_template_core<T: store>(
         base_price_usd_cents,
         stock,
         option::none(),
-        ctx,
     );
     let (discount_template, discount_template_id) = shop.create_discount_template_core(
         option::some(listing_id),
@@ -562,7 +560,7 @@ entry fun add_item_listing<T: store>(
     base_price_usd_cents: u64,
     stock: u64,
     spotlight_discount_template_id: Option<ID>,
-    ctx: &mut TxContext,
+    _ctx: &mut TxContext,
 ) {
     shop.add_item_listing_core<T>(
         owner_cap,
@@ -570,7 +568,6 @@ entry fun add_item_listing<T: store>(
         base_price_usd_cents,
         stock,
         spotlight_discount_template_id,
-        ctx,
     );
 }
 
@@ -937,7 +934,8 @@ entry fun claim_discount_ticket(
     assert_listing_belongs_to_shop_if_some!(shop, discount_template.applies_to_listing);
 
     let now_secs = now_secs(clock);
-    let (discount_ticket, claimer) = discount_template.claim_discount_ticket_with_event(
+    let claimer = ctx.sender();
+    let discount_ticket = discount_template.claim_discount_ticket_with_event(
         shop,
         now_secs,
         ctx,
@@ -976,20 +974,19 @@ fun claim_discount_ticket_with_event(
     shop: &Shop,
     now_secs: u64,
     ctx: &mut TxContext,
-): (DiscountTicket, address) {
+): DiscountTicket {
     let discount_ticket = shop.claim_discount_ticket_inline(
         discount_template,
         now_secs,
         ctx,
     );
-    let claimer = ctx.sender();
 
     event::emit(DiscountClaimedEvent {
         shop_id: discount_template.shop_id,
         discount_id: discount_ticket.id.to_inner(),
     });
 
-    (discount_ticket, claimer)
+    discount_ticket
 }
 
 /// Remove recorded claim markers for a template that is no longer serving new tickets.
@@ -1168,9 +1165,9 @@ entry fun claim_and_buy_item_with_discount<TItem: store, TCoin>(
 ) {
     assert_shop_active!(shop);
     assert_template_matches_shop!(shop, discount_template);
-    assert_listing_registered!(shop, listing_id);
+    assert!(shop.listings.contains(listing_id), EListingNotFound);
     let now_secs = now_secs(clock);
-    let (discount_ticket, _claimer) = discount_template.claim_discount_ticket_with_event(
+    let discount_ticket = discount_template.claim_discount_ticket_with_event(
         shop,
         now_secs,
         ctx,
@@ -2432,7 +2429,7 @@ public fun test_claim_and_buy_with_ids<TItem: store, TCoin>(
     ctx: &mut TxContext,
 ) {
     let now = now_secs(clock);
-    let (discount_ticket, _claimer) = discount_template.claim_discount_ticket_with_event(
+    let discount_ticket = discount_template.claim_discount_ticket_with_event(
         shop,
         now,
         ctx,
@@ -2586,7 +2583,7 @@ public fun test_add_item_listing_local<T: store>(
     base_price_usd_cents: u64,
     stock: u64,
     spotlight_discount_template_id: Option<ID>,
-    ctx: &mut TxContext,
+    _ctx: &mut TxContext,
 ): u64 {
     shop.add_item_listing_core<T>(
         owner_cap,
@@ -2594,7 +2591,6 @@ public fun test_add_item_listing_local<T: store>(
         base_price_usd_cents,
         stock,
         spotlight_discount_template_id,
-        ctx,
     )
 }
 
