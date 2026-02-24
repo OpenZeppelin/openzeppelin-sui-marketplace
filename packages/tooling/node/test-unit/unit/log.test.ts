@@ -17,9 +17,9 @@ import {
   logEachBlue,
   logKeyValueBlue,
   logSimpleBlue,
-  logStructuredJson,
-  toKebabCase
+  logStructuredJson
 } from "../../src/log.ts"
+import { toKebabCase } from "../../src/utils/string.ts"
 
 describe("log helpers", () => {
   it("converts camelCase to kebab-case", () => {

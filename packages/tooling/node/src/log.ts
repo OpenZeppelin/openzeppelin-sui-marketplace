@@ -1,4 +1,5 @@
 import chalk, { type ColorName } from "chalk"
+import { toKebabCase } from "./utils/string.ts"
 
 /**
  * Builds a logger that prints a colored key followed by a gray value.
@@ -51,12 +52,6 @@ export const logError = logKeyValueRed("Error")
  * Logs a warning entry with a yellow prefix.
  */
 export const logWarning = logKeyValueYellow("Warning")
-
-/**
- * Converts camelCase or PascalCase to kebab-case for log labels.
- */
-export const toKebabCase = (value: string) =>
-  value.replace(/([a-z0-9])([A-Z])/g, "$1-$2").toLowerCase()
 
 /**
  * Logs each key/value pair using a provided log function.

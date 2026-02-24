@@ -12,6 +12,7 @@ import type { SuiResolvedConfig } from "./config.ts"
 import { getNetworkConfig, loadSuiConfig } from "./config.ts"
 import type { Tooling } from "./factory.ts"
 import { createTooling } from "./factory.ts"
+import { logLocalnetMoveEnvironmentSyncResult } from "./move.ts"
 import {
   logEachBlue,
   logError,
@@ -268,23 +269,12 @@ const syncLocalnetMoveEnvironmentChainIdForTooling = async (
 ) => {
   if (process.env.SUI_SKIP_MOVE_CHAIN_ID_SYNC === "1") return
 
-  const { chainId, updatedFiles, didAttempt } =
-    await tooling.syncLocalnetMoveEnvironmentChainId({
-      moveRootPath: tooling.suiConfig.paths.move,
-      environmentName: tooling.suiConfig.network.networkName
-    })
+  const syncResult = await tooling.syncLocalnetMoveEnvironmentChainId({
+    moveRootPath: tooling.suiConfig.paths.move,
+    environmentName: tooling.suiConfig.network.networkName
+  })
 
-  if (didAttempt && !chainId) {
-    logWarning(
-      "Unable to resolve localnet chain id; Move.toml environments were not updated."
-    )
-  }
-
-  if (updatedFiles.length) {
-    logKeyValueBlue("Move.toml")(
-      `updated ${updatedFiles.length} test-publish environment entries`
-    )
-  }
+  logLocalnetMoveEnvironmentSyncResult(syncResult)
 }
 
 const isSuiCliEnvironmentConfigured = (
