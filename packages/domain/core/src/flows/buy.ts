@@ -1,5 +1,5 @@
 import { bcs } from "@mysten/sui/bcs"
-import type { SuiClient, SuiObjectData } from "@mysten/sui/client"
+import type { SuiClient, SuiObjectData, SuiObjectRef } from "@mysten/sui/client"
 import type { Transaction } from "@mysten/sui/transactions"
 import { fromB64, normalizeSuiObjectId } from "@mysten/sui/utils"
 import {
@@ -59,6 +59,11 @@ const getObjectRef = async (objectId: string, suiClient: SuiClient) => {
     digest: response.data.digest
   }
 }
+
+const normalizeObjectRef = (objectRef: SuiObjectRef): SuiObjectRef => ({
+  ...objectRef,
+  objectId: normalizeSuiObjectId(objectRef.objectId)
+})
 
 const parseMockPriceInfoUpdateFields = (
   priceInfoObject: SuiObjectData
@@ -288,15 +293,32 @@ const maybeSetDedicatedGasForSuiPayments = async ({
   transaction,
   signerAddress,
   paymentCoinObjectId,
+  dedicatedGasPaymentRef,
   gasBudget,
   suiClient
 }: {
   transaction: Transaction
   signerAddress: string
   paymentCoinObjectId: string
+  dedicatedGasPaymentRef?: SuiObjectRef
   gasBudget?: number
   suiClient: SuiClient
 }) => {
+  const normalizedPaymentCoinObjectId =
+    normalizeSuiObjectId(paymentCoinObjectId)
+
+  if (dedicatedGasPaymentRef) {
+    const normalizedGasPaymentRef = normalizeObjectRef(dedicatedGasPaymentRef)
+    if (normalizedGasPaymentRef.objectId === normalizedPaymentCoinObjectId)
+      throw new Error(
+        "SUI payment coin cannot also be used as gas. Provide a different gas coin."
+      )
+
+    transaction.setGasOwner(signerAddress)
+    transaction.setGasPayment([normalizedGasPaymentRef])
+    return
+  }
+
   // When paying with SUI, one coin must cover gas and a different coin must be the payment input.
   const coins = await suiClient.getCoins({
     owner: signerAddress,
@@ -312,7 +334,7 @@ const maybeSetDedicatedGasForSuiPayments = async ({
     }))
     .filter(
       (coin) =>
-        coin.coinObjectId !== paymentCoinObjectId &&
+        coin.coinObjectId !== normalizedPaymentCoinObjectId &&
         coin.balance >= minimumGasBalance
     )
     .reduce<{
@@ -560,6 +582,7 @@ export const buildBuyTransaction = async (
     pythPriceInfoShared,
     pythFeedIdHex,
     paymentCoinObjectId,
+    dedicatedGasPaymentRef,
     coinType,
     itemType,
     mintTo,
@@ -582,6 +605,7 @@ export const buildBuyTransaction = async (
     pythPriceInfoShared: Awaited<ReturnType<typeof getSuiSharedObject>>
     pythFeedIdHex: string
     paymentCoinObjectId: string
+    dedicatedGasPaymentRef?: SuiObjectRef
     coinType: string
     itemType: string
     mintTo: string
@@ -609,6 +633,7 @@ export const buildBuyTransaction = async (
       transaction,
       signerAddress,
       paymentCoinObjectId,
+      dedicatedGasPaymentRef,
       gasBudget,
       suiClient
     })

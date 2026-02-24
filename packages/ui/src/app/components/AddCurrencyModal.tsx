@@ -132,12 +132,14 @@ const CurrencySummarySection = ({
 
 const CurrencySuccessView = ({
   summary,
+  warning,
   shopId,
   explorerUrl,
   onClose,
   onReset
 }: {
   summary: CurrencyTransactionSummary
+  warning?: string
   shopId?: string
   explorerUrl?: string
   onClose: () => void
@@ -162,6 +164,11 @@ const CurrencySuccessView = ({
         digest={summary.digest}
         explorerUrl={explorerUrl}
       />
+      {warning ? (
+        <p className={clsx("mt-3", modalFieldWarningTextClassName)}>
+          {warning}
+        </p>
+      ) : undefined}
     </ModalBody>
     <ModalSuccessFooter
       actionLabel="Add another"
@@ -272,7 +279,7 @@ const AvailableFeedsSection = ({
               <div className="mt-3 flex flex-wrap items-center gap-3 text-[0.65rem]">
                 <CopyableId
                   value={currency.tableEntryFieldId}
-                  label="Table entry"
+                  label="Table Entry"
                   explorerUrl={explorerUrl}
                 />
                 {currency.pythObjectId ? (
@@ -322,6 +329,7 @@ const AddCurrencyModal = ({
     guardrailPreview,
     transactionState,
     transactionSummary,
+    transactionWarning,
     isSuccessState,
     isErrorState,
     canSubmit,
@@ -343,6 +351,7 @@ const AddCurrencyModal = ({
       {isSuccessState && transactionSummary ? (
         <CurrencySuccessView
           summary={transactionSummary}
+          warning={transactionWarning}
           shopId={shopId}
           explorerUrl={explorerUrl}
           onClose={onClose}

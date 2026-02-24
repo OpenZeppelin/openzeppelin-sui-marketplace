@@ -18,7 +18,7 @@ Mental Model Shift
 
 Object Graph (shared + tables/markers)
 --------------------------------------
-```
+```text
 Shop (shared)
 ├─ listings: Table<u64, ItemListing>
 ├─ accepted_currencies: Table<TypeName, AcceptedCurrency>
@@ -99,12 +99,12 @@ Sui Fundamentals (EVM contrasts)
 Minimal PTB Examples
 --------------------
 **Create shop**
-```
+```move
 create_shop(b"Shop".to_string(), &mut ctx);
 ```
 
 **Rotate payout address**
-```
+```move
 update_shop_owner(
     &mut shop,
     &mut owner_cap,
@@ -114,7 +114,7 @@ update_shop_owner(
 ```
 
 **List an item**
-```
+```move
 add_item_listing<ItemType>(
     &mut shop,
     b"Example Item".to_string(),
@@ -127,7 +127,7 @@ add_item_listing<ItemType>(
 ```
 
 **Register USDC feed**
-```
+```move
 add_accepted_currency<USDC>(
     &mut shop,
     &owner_cap,
@@ -142,7 +142,7 @@ add_accepted_currency<USDC>(
 ```
 
 **Buy with price guardrails**
-```
+```move
 buy_item<ItemType, USDC>(
     &mut shop,
     /* listing_id */ 0,
@@ -158,7 +158,7 @@ buy_item<ItemType, USDC>(
 ```
 
 **Claim and spend a discount in one PTB**
-```
+```move
 claim_and_buy_item_with_discount<ItemType, USDC>(
     &mut shop,
     /* listing_id */ 0,

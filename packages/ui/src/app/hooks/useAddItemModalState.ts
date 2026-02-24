@@ -8,7 +8,7 @@ import {
   useSuiClient,
   useSuiClientContext
 } from "@mysten/dapp-kit"
-import type { SuiTransactionBlockResponse } from "@mysten/sui/client"
+import type { SuiClient, SuiTransactionBlockResponse } from "@mysten/sui/client"
 import type { IdentifierString } from "@mysten/wallet-standard"
 import {
   defaultStartTimestampSeconds,
@@ -96,6 +96,13 @@ type TransactionState =
   | { status: "processing" }
   | { status: "success"; summary: ListingTransactionSummary }
   | { status: "error"; error: string; details?: string }
+
+const listingSummaryRetryDelaysMs = [200, 500, 1000]
+
+const waitMs = (delayMs: number) =>
+  new Promise<void>((resolve) => {
+    setTimeout(resolve, delayMs)
+  })
 
 const emptyFormState = (): ListingFormState => ({
   itemName: "",
@@ -294,6 +301,33 @@ const parseListingInputs = (formState: ListingFormState): ListingInputs => {
       )
     }
   }
+}
+
+const getItemListingSummaryWithRetry = async ({
+  shopId,
+  listingId,
+  suiClient,
+  retryDelaysMs = listingSummaryRetryDelaysMs
+}: {
+  shopId: string
+  listingId: string
+  suiClient: SuiClient
+  retryDelaysMs?: number[]
+}): Promise<ItemListingSummary | undefined> => {
+  for (
+    let attemptIndex = 0;
+    attemptIndex <= retryDelaysMs.length;
+    attemptIndex += 1
+  ) {
+    try {
+      return await getItemListingSummary(shopId, listingId, suiClient)
+    } catch {
+      if (attemptIndex >= retryDelaysMs.length) return undefined
+      await waitMs(retryDelaysMs[attemptIndex])
+    }
+  }
+
+  return undefined
 }
 
 type AddItemModalState = {
@@ -558,16 +592,11 @@ export const useAddItemModalState = ({
         events: transactionBlock.events,
         shopId: resolvedShopId
       })
-      let listingSummary: ItemListingSummary | undefined
-      try {
-        listingSummary = await getItemListingSummary(
-          resolvedShopId,
-          listingId,
-          suiClient
-        )
-      } catch {
-        listingSummary = undefined
-      }
+      const listingSummary = await getItemListingSummaryWithRetry({
+        shopId: resolvedShopId,
+        listingId,
+        suiClient
+      })
       const resolvedSpotlightDiscountId =
         listingSummary?.spotlightTemplateId ?? listingInputs.spotlightDiscountId
 
@@ -582,13 +611,7 @@ export const useAddItemModalState = ({
         }
       })
 
-      if (listingSummary) {
-        onListingCreated?.(listingSummary)
-      } else {
-        void getItemListingSummary(resolvedShopId, listingId, suiClient)
-          .then((summary) => onListingCreated?.(summary))
-          .catch(() => {})
-      }
+      onListingCreated?.(listingSummary)
     } catch (error) {
       const errorDetails = extractErrorDetails(error)
       const localnetSupportNote =

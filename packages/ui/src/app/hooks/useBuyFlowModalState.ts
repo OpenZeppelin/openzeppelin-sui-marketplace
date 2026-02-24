@@ -8,9 +8,12 @@ import {
   useSuiClient,
   useSuiClientContext
 } from "@mysten/dapp-kit"
-import type { SuiTransactionBlockResponse } from "@mysten/sui/client"
+import type {
+  SuiObjectRef,
+  SuiTransactionBlockResponse
+} from "@mysten/sui/client"
 import type { Transaction } from "@mysten/sui/transactions"
-import { normalizeSuiAddress } from "@mysten/sui/utils"
+import { normalizeSuiAddress, normalizeSuiObjectId } from "@mysten/sui/utils"
 import type { IdentifierString } from "@mysten/wallet-standard"
 import type { EstimateRequiredAmountPriceUpdateMode } from "@sui-oracle-market/domain-core/flows/buy"
 import {
@@ -40,7 +43,10 @@ import {
   findCreatedShopItemIds,
   parseShopItemReceiptFromObject
 } from "@sui-oracle-market/domain-core/models/shop-item"
-import { planSuiPaymentSplitTransaction } from "@sui-oracle-market/tooling-core/coin"
+import {
+  findCreatedCoinObjectRefs,
+  planSuiPaymentSplitTransaction
+} from "@sui-oracle-market/tooling-core/coin"
 import {
   DEFAULT_TX_GAS_BUDGET,
   NORMALIZED_SUI_COIN_TYPE,
@@ -87,6 +93,26 @@ type BuyFieldErrors = {
 }
 
 const ORACLE_QUOTE_REFRESH_INTERVAL_MS = 15_000
+
+const pickDedicatedGasPaymentRefFromSplit = ({
+  splitTransactionBlock,
+  paymentCoinObjectId
+}: {
+  splitTransactionBlock: SuiTransactionBlockResponse
+  paymentCoinObjectId: string
+}): SuiObjectRef | undefined => {
+  const normalizedPaymentCoinObjectId =
+    normalizeSuiObjectId(paymentCoinObjectId)
+
+  return findCreatedCoinObjectRefs(
+    splitTransactionBlock,
+    NORMALIZED_SUI_COIN_TYPE
+  ).find(
+    (candidateObjectRef) =>
+      normalizeSuiObjectId(candidateObjectRef.objectId) !==
+      normalizedPaymentCoinObjectId
+  )
+}
 
 const buildBuyFieldErrors = ({
   selectedCurrencyId,
@@ -844,7 +870,13 @@ export const useBuyFlowModalState = ({
             chain: expectedChain
           })
           digest = result.digest
-          transactionBlock = result
+
+          // Wait for the local RPC to index object versions before dependent transactions.
+          failureStage = "fetch"
+          transactionBlock = await waitForTransactionBlock(
+            localnetClient,
+            digest
+          )
         } else {
           failureStage = "execute"
           const result = await signAndExecuteTransaction.mutateAsync({
@@ -861,6 +893,7 @@ export const useBuyFlowModalState = ({
       }
 
       let paymentCoinObjectId: string
+      let dedicatedGasPaymentRef: SuiObjectRef | undefined
 
       if (isSuiPayment) {
         const paymentMinimum = requireValue(
@@ -890,7 +923,18 @@ export const useBuyFlowModalState = ({
 
         if (splitPlan.needsSplit && splitPlan.transaction) {
           failureStage = "execute"
-          await executeTransaction(splitPlan.transaction)
+          const splitExecution = await executeTransaction(splitPlan.transaction)
+          dedicatedGasPaymentRef = pickDedicatedGasPaymentRefFromSplit({
+            splitTransactionBlock: splitExecution.transactionBlock,
+            paymentCoinObjectId: splitPlan.paymentCoinObjectId
+          })
+
+          debugContext = {
+            ...(debugContext ?? {}),
+            suiSplitExecution: {
+              dedicatedGasCoinObjectId: dedicatedGasPaymentRef?.objectId
+            }
+          }
         }
         paymentCoinObjectId = splitPlan.paymentCoinObjectId
       } else {
@@ -911,6 +955,7 @@ export const useBuyFlowModalState = ({
           pythPriceInfoShared,
           pythFeedIdHex: currencySnapshot.feedIdHex,
           paymentCoinObjectId,
+          dedicatedGasPaymentRef,
           coinType: currencySnapshot.coinType,
           itemType: listingSnapshot.itemType,
           mintTo: normalizedMintTo,
@@ -1002,6 +1047,7 @@ export const useBuyFlowModalState = ({
     lastWalletContext,
     listing,
     localnetExecutor,
+    localnetClient,
     mintTo,
     hydrateShopItemReceipts,
     onPurchaseSuccess,

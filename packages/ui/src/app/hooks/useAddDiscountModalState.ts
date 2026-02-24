@@ -204,6 +204,7 @@ const parseDiscountInputs = (formState: DiscountFormState): DiscountInputs => {
   )
 
   validateDiscountSchedule(startsAt, expiresAt)
+  const trimmedListingId = formState.appliesToListingId.trim()
 
   return {
     ruleKind,
@@ -211,8 +212,8 @@ const parseDiscountInputs = (formState: DiscountFormState): DiscountInputs => {
     startsAt,
     expiresAt,
     maxRedemptions,
-    appliesToListingId: formState.appliesToListingId.trim()
-      ? normalizeListingId(formState.appliesToListingId.trim(), "listingId")
+    appliesToListingId: trimmedListingId
+      ? normalizeListingId(trimmedListingId, "listingId")
       : undefined
   }
 }

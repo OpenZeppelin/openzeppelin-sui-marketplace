@@ -497,7 +497,7 @@ const AcceptedCurrenciesPanel = ({
                   <div className="mt-4 flex flex-wrap items-center gap-3 text-[0.65rem]">
                     <CopyableId
                       value={currency.tableEntryFieldId}
-                      label="Table entry"
+                      label="Table Entry"
                       explorerUrl={explorerUrl}
                     />
                     {currency.pythObjectId ? (

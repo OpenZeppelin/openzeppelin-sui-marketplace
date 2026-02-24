@@ -4,6 +4,10 @@
  * The PTB can update Pyth and then call buy_item/claim_and_buy_item_with_discount in one atomic flow.
  * Oracle freshness and confidence guardrails are enforced on-chain using PriceInfoObject + Clock.
  */
+import type {
+  SuiObjectRef,
+  SuiTransactionBlockResponse
+} from "@mysten/sui/client"
 import { normalizeSuiAddress, normalizeSuiObjectId } from "@mysten/sui/utils"
 import yargs from "yargs"
 
@@ -29,7 +33,10 @@ import {
 } from "@sui-oracle-market/domain-core/models/item-listing"
 import type { PriceUpdatePolicy } from "@sui-oracle-market/domain-core/models/pyth"
 import { findCreatedShopItemIds } from "@sui-oracle-market/domain-core/models/shop-item"
-import { planSuiPaymentSplitTransaction } from "@sui-oracle-market/tooling-core/coin"
+import {
+  findCreatedCoinObjectRefs,
+  planSuiPaymentSplitTransaction
+} from "@sui-oracle-market/tooling-core/coin"
 import {
   DEFAULT_TX_GAS_BUDGET,
   NORMALIZED_SUI_COIN_TYPE,
@@ -71,6 +78,26 @@ type BuyArguments = {
   devInspect?: boolean
   dryRun?: boolean
   json?: boolean
+}
+
+const pickDedicatedGasPaymentRefFromSplit = ({
+  splitTransactionBlock,
+  paymentCoinObjectId
+}: {
+  splitTransactionBlock: SuiTransactionBlockResponse
+  paymentCoinObjectId: string
+}): SuiObjectRef | undefined => {
+  const normalizedPaymentCoinObjectId =
+    normalizeSuiObjectId(paymentCoinObjectId)
+
+  return findCreatedCoinObjectRefs(
+    splitTransactionBlock,
+    NORMALIZED_SUI_COIN_TYPE
+  ).find(
+    (candidateObjectRef) =>
+      normalizeSuiObjectId(candidateObjectRef.objectId) !==
+      normalizedPaymentCoinObjectId
+  )
 }
 
 runSuiScript(
@@ -126,6 +153,7 @@ runSuiScript(
           : "pyth-update"
     let paymentCoinMinimumBalance: bigint | undefined = undefined
     let paymentCoinObjectId: string | undefined = undefined
+    let dedicatedGasPaymentRef: SuiObjectRef | undefined
 
     if (isSuiPayment) {
       const discountedPriceUsdCents =
@@ -193,6 +221,11 @@ runSuiScript(
         })
 
         if (cliArguments.dryRun || !splitExecution.execution) return
+
+        dedicatedGasPaymentRef = pickDedicatedGasPaymentRefFromSplit({
+          splitTransactionBlock: splitExecution.execution.transactionResult,
+          paymentCoinObjectId: splitPlan.paymentCoinObjectId
+        })
       }
 
       paymentCoinObjectId = splitPlan.paymentCoinObjectId
@@ -234,6 +267,7 @@ runSuiScript(
         pythPriceInfoShared,
         pythFeedIdHex: acceptedCurrencySummary.feedIdHex,
         paymentCoinObjectId,
+        dedicatedGasPaymentRef,
         coinType: inputs.coinType,
         itemType: listingSummary.itemType,
         mintTo,

@@ -47,45 +47,31 @@ type ShopSeedPayload = {
   }>
 }
 
-type CurrencyAddArguments = {
-  shopId: string
-  shopPackageId: string
-  coinType: string
-  feedId: string
-  priceInfoObjectId: string
-  currencyId?: string
-  maxPriceAgeSecsCap?: string
-  maxConfidenceRatioBpsCap?: string
-  maxPriceStatusLagSecsCap?: string
-}
-
 const expectSuccessfulTransaction = (status?: string) =>
   expect(status).toBe("success")
 
 const listCoinTypes = (acceptedCurrencies: AcceptedCurrencySummary[] = []) =>
   acceptedCurrencies.map((currency) => currency.coinType)
 
-const buildCurrencyAddArguments = ({
-  shopId,
-  shopPackageId,
-  coinType,
-  feedId,
-  priceInfoObjectId,
-  currencyId,
-  maxPriceAgeSecsCap,
-  maxConfidenceRatioBpsCap,
-  maxPriceStatusLagSecsCap
-}: CurrencyAddArguments) => ({
-  shopId,
-  shopPackageId,
-  coinType,
-  feedId,
-  priceInfoObjectId,
-  currencyId,
-  maxPriceAgeSecsCap,
-  maxConfidenceRatioBpsCap,
-  maxPriceStatusLagSecsCap
-})
+type ExpectedAcceptedCurrencyFields = {
+  coinType: string
+  feedIdHex: string
+  tableEntryFieldId?: string
+  pythObjectId?: string
+  maxPriceAgeSecsCap?: string
+  maxConfidenceRatioBpsCap?: string
+  maxPriceStatusLagSecsCap?: string
+}
+
+const expectAcceptedCurrencyMatches = (
+  acceptedCurrency: Partial<AcceptedCurrencySummary> | undefined,
+  expected: ExpectedAcceptedCurrencyFields
+) => {
+  expect(acceptedCurrency).toBeDefined()
+  expect(acceptedCurrency).toMatchObject(expected)
+  if (!expected.tableEntryFieldId)
+    expect(acceptedCurrency?.tableEntryFieldId).toBeTruthy()
+}
 
 const testEnv = createDappIntegrationTestEnv()
 
@@ -134,18 +120,12 @@ describe("owner scripts integration", () => {
       const currencyAddPayload = acceptedCurrency.currencyAddOutput
       expectSuccessfulTransaction(currencyAddPayload.transactionSummary?.status)
       expect(currencyAddPayload.status).toBeUndefined()
-      expect(currencyAddPayload.acceptedCurrency?.tableEntryFieldId).toBe(
-        acceptedCurrency.tableEntryFieldId
-      )
-      expect(currencyAddPayload.acceptedCurrency?.coinType).toBe(
-        acceptedCurrency.coinType
-      )
-      expect(currencyAddPayload.acceptedCurrency?.feedIdHex).toBe(
-        acceptedCurrency.feedIdHex
-      )
-      expect(currencyAddPayload.acceptedCurrency?.pythObjectId).toBe(
-        acceptedCurrency.priceInfoObjectId
-      )
+      expectAcceptedCurrencyMatches(currencyAddPayload.acceptedCurrency, {
+        coinType: acceptedCurrency.coinType,
+        feedIdHex: acceptedCurrency.feedIdHex,
+        tableEntryFieldId: acceptedCurrency.tableEntryFieldId,
+        pythObjectId: acceptedCurrency.priceInfoObjectId
+      })
     })
   })
 
@@ -162,6 +142,13 @@ describe("owner scripts integration", () => {
         const selection = resolveMockCurrencyFeedSelection({
           mockArtifact
         })
+        const baseCurrencyAddArguments = {
+          shopId,
+          shopPackageId,
+          coinType: selection.coinType,
+          feedId: selection.feedIdHex,
+          priceInfoObjectId: selection.priceInfoObjectId
+        }
 
         const currencyAddPayload =
           await runOwnerScriptJson<CurrencyAddScriptOutput>(
@@ -169,29 +156,20 @@ describe("owner scripts integration", () => {
             "currency-add",
             {
               account: publisher,
-              args: buildCurrencyAddArguments({
-                shopId,
-                shopPackageId,
-                coinType: selection.coinType,
-                feedId: selection.feedIdHex,
-                priceInfoObjectId: selection.priceInfoObjectId,
+              args: {
+                ...baseCurrencyAddArguments,
                 currencyId: selection.currencyObjectId
-              })
+              }
             }
           )
 
         expectSuccessfulTransaction(
           currencyAddPayload.transactionSummary?.status
         )
-        expect(
-          currencyAddPayload.acceptedCurrency?.tableEntryFieldId
-        ).toBeTruthy()
-        expect(currencyAddPayload.acceptedCurrency?.coinType).toBe(
-          selection.coinType
-        )
-        expect(currencyAddPayload.acceptedCurrency?.feedIdHex).toBe(
-          selection.feedIdHex
-        )
+        expectAcceptedCurrencyMatches(currencyAddPayload.acceptedCurrency, {
+          coinType: selection.coinType,
+          feedIdHex: selection.feedIdHex
+        })
       }
     )
   })
@@ -210,6 +188,13 @@ describe("owner scripts integration", () => {
           shopName: "Owner Currency Add Existing Integration",
           publisherLabel: "owner-currency-publisher"
         })
+        const baseCurrencyAddArguments = {
+          shopId,
+          shopPackageId,
+          coinType: acceptedCurrency.coinType,
+          feedId: acceptedCurrency.feedIdHex,
+          priceInfoObjectId: acceptedCurrency.priceInfoObjectId
+        }
 
         const existingCurrencyPayload =
           await runOwnerScriptJson<CurrencyAddScriptOutput>(
@@ -217,22 +202,21 @@ describe("owner scripts integration", () => {
             "currency-add",
             {
               account: publisher,
-              args: buildCurrencyAddArguments({
-                shopId,
-                shopPackageId,
-                coinType: acceptedCurrency.coinType,
-                feedId: acceptedCurrency.feedIdHex,
-                priceInfoObjectId: acceptedCurrency.priceInfoObjectId
-              })
+              args: baseCurrencyAddArguments
             }
           )
 
         expect(existingCurrencyPayload.status).toBe("already-registered")
         expect(existingCurrencyPayload.coinType).toBe(acceptedCurrency.coinType)
         expect(existingCurrencyPayload.transactionSummary).toBeUndefined()
-        expect(
-          existingCurrencyPayload.acceptedCurrency?.tableEntryFieldId
-        ).toBe(acceptedCurrency.tableEntryFieldId)
+        expectAcceptedCurrencyMatches(
+          existingCurrencyPayload.acceptedCurrency,
+          {
+            coinType: acceptedCurrency.coinType,
+            feedIdHex: acceptedCurrency.feedIdHex,
+            tableEntryFieldId: acceptedCurrency.tableEntryFieldId
+          }
+        )
       }
     )
   })
@@ -249,6 +233,13 @@ describe("owner scripts integration", () => {
         const selection = resolveMockCurrencyFeedSelection({
           mockArtifact
         })
+        const baseCurrencyAddArguments = {
+          shopId,
+          shopPackageId,
+          coinType: selection.coinType,
+          feedId: selection.feedIdHex,
+          priceInfoObjectId: selection.priceInfoObjectId
+        }
 
         const currencyAddPayload =
           await runOwnerScriptJson<CurrencyAddScriptOutput>(
@@ -256,37 +247,25 @@ describe("owner scripts integration", () => {
             "currency-add",
             {
               account: publisher,
-              args: buildCurrencyAddArguments({
-                shopId,
-                shopPackageId,
-                coinType: selection.coinType,
-                feedId: selection.feedIdHex,
-                priceInfoObjectId: selection.priceInfoObjectId,
+              args: {
+                ...baseCurrencyAddArguments,
                 maxPriceAgeSecsCap: "120",
                 maxConfidenceRatioBpsCap: "250",
                 maxPriceStatusLagSecsCap: "4"
-              })
+              }
             }
           )
 
         expectSuccessfulTransaction(
           currencyAddPayload.transactionSummary?.status
         )
-        expect(currencyAddPayload.acceptedCurrency?.coinType).toBe(
-          selection.coinType
-        )
-        expect(currencyAddPayload.acceptedCurrency?.feedIdHex).toBe(
-          selection.feedIdHex
-        )
-        expect(currencyAddPayload.acceptedCurrency?.maxPriceAgeSecsCap).toBe(
-          MAX_PRICE_AGE_SECS_CAP.toString()
-        )
-        expect(
-          currencyAddPayload.acceptedCurrency?.maxConfidenceRatioBpsCap
-        ).toBe("250")
-        expect(
-          currencyAddPayload.acceptedCurrency?.maxPriceStatusLagSecsCap
-        ).toBe("4")
+        expectAcceptedCurrencyMatches(currencyAddPayload.acceptedCurrency, {
+          coinType: selection.coinType,
+          feedIdHex: selection.feedIdHex,
+          maxPriceAgeSecsCap: MAX_PRICE_AGE_SECS_CAP.toString(),
+          maxConfidenceRatioBpsCap: "250",
+          maxPriceStatusLagSecsCap: "4"
+        })
       }
     )
   })
@@ -303,6 +282,13 @@ describe("owner scripts integration", () => {
         shopName: "Owner Currency Remove Integration",
         publisherLabel: "owner-currency-publisher"
       })
+      const baseCurrencyAddArguments = {
+        shopId,
+        shopPackageId,
+        coinType: acceptedCurrency.coinType,
+        feedId: acceptedCurrency.feedIdHex,
+        priceInfoObjectId: acceptedCurrency.priceInfoObjectId
+      }
 
       const removePayload = await runOwnerScriptJson<CurrencyRemovePayload>(
         scriptRunner,
@@ -327,18 +313,15 @@ describe("owner scripts integration", () => {
         "currency-add",
         {
           account: publisher,
-          args: buildCurrencyAddArguments({
-            shopId,
-            shopPackageId,
-            coinType: acceptedCurrency.coinType,
-            feedId: acceptedCurrency.feedIdHex,
-            priceInfoObjectId: acceptedCurrency.priceInfoObjectId
-          })
+          args: baseCurrencyAddArguments
         }
       )
 
       expectSuccessfulTransaction(reAddPayload.transactionSummary?.status)
-      expect(reAddPayload.acceptedCurrency?.tableEntryFieldId).toBeTruthy()
+      expectAcceptedCurrencyMatches(reAddPayload.acceptedCurrency, {
+        coinType: acceptedCurrency.coinType,
+        feedIdHex: acceptedCurrency.feedIdHex
+      })
     })
   })
 
@@ -356,6 +339,13 @@ describe("owner scripts integration", () => {
           shopName: "Owner Currency Remove by ID Integration",
           publisherLabel: "owner-currency-publisher"
         })
+        const baseCurrencyAddArguments = {
+          shopId,
+          shopPackageId,
+          coinType: acceptedCurrency.coinType,
+          feedId: acceptedCurrency.feedIdHex,
+          priceInfoObjectId: acceptedCurrency.priceInfoObjectId
+        }
 
         const removePayload = await runOwnerScriptJson<CurrencyRemovePayload>(
           scriptRunner,
@@ -380,18 +370,15 @@ describe("owner scripts integration", () => {
           "currency-add",
           {
             account: publisher,
-            args: buildCurrencyAddArguments({
-              shopId,
-              shopPackageId,
-              coinType: acceptedCurrency.coinType,
-              feedId: acceptedCurrency.feedIdHex,
-              priceInfoObjectId: acceptedCurrency.priceInfoObjectId
-            })
+            args: baseCurrencyAddArguments
           }
         )
 
         expectSuccessfulTransaction(reAddPayload.transactionSummary?.status)
-        expect(reAddPayload.acceptedCurrency?.tableEntryFieldId).toBeTruthy()
+        expectAcceptedCurrencyMatches(reAddPayload.acceptedCurrency, {
+          coinType: acceptedCurrency.coinType,
+          feedIdHex: acceptedCurrency.feedIdHex
+        })
       }
     )
   })

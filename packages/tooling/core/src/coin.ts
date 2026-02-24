@@ -1,3 +1,7 @@
+import type {
+  SuiObjectRef,
+  SuiTransactionBlockResponse
+} from "@mysten/sui/client"
 import type { Transaction } from "@mysten/sui/transactions"
 import { normalizeSuiObjectId } from "@mysten/sui/utils"
 import {
@@ -11,6 +15,7 @@ import {
   extractOwnerAddress,
   getSuiObject
 } from "./object.ts"
+import { extractCreatedObjects } from "./transactions.ts"
 import { newTransaction, resolveSplitCoinResult } from "./transactions.ts"
 import { formatTypeName, parseTypeNameFromString } from "./utils/type-name.ts"
 import { parseBalance } from "./utils/utility.ts"
@@ -66,6 +71,56 @@ export const normalizeCoinType = (coinType: string): string => {
 
 export const normalizeOptionalCoinType = (coinType?: string) =>
   coinType ? normalizeCoinType(coinType) : undefined
+
+const parseCoinStructTypeArgument = (
+  objectType: string
+): string | undefined => {
+  const coinPrefix = "::coin::Coin<"
+  const prefixIndex = objectType.indexOf(coinPrefix)
+  if (prefixIndex < 0) return undefined
+
+  const argumentStart = prefixIndex + coinPrefix.length
+  const argumentEnd = objectType.lastIndexOf(">")
+  if (argumentEnd <= argumentStart) return undefined
+
+  return objectType.slice(argumentStart, argumentEnd)
+}
+
+const doesObjectTypeMatchCoinType = ({
+  objectType,
+  coinType
+}: {
+  objectType: string
+  coinType: string
+}) => {
+  const structTypeArgument = parseCoinStructTypeArgument(objectType)
+  if (!structTypeArgument) return false
+  return normalizeCoinType(structTypeArgument) === normalizeCoinType(coinType)
+}
+
+/**
+ * Finds created Coin<T> object references for a target coin type in a transaction result.
+ */
+export const findCreatedCoinObjectRefs = (
+  transactionBlock: SuiTransactionBlockResponse,
+  coinType: string
+): SuiObjectRef[] =>
+  extractCreatedObjects(transactionBlock)
+    .filter(
+      (createdObject) =>
+        createdObject.objectType &&
+        doesObjectTypeMatchCoinType({
+          objectType: createdObject.objectType,
+          coinType
+        })
+    )
+    .map(
+      (createdObject): SuiObjectRef => ({
+        objectId: normalizeSuiObjectId(createdObject.objectId),
+        version: createdObject.version,
+        digest: createdObject.digest
+      })
+    )
 
 export const resolveCoinOwnership = async (
   {

@@ -84,11 +84,11 @@ describe("buyer shop-view integration", () => {
 
       const discountTemplates = viewPayload.discountTemplates
       expect(discountTemplates.length).toBeGreaterThan(0)
-      discountTemplates.forEach((discountTemplate) => {
-        expect(discountTemplate.discountTemplateId).toBeTruthy()
-        expect(discountTemplate.markerObjectId).toBeTruthy()
-        expect(discountTemplate.shopId).toBeTruthy()
-        expect(discountTemplate.status).toBeTruthy()
+      discountTemplates.forEach((templateSummary) => {
+        expect(templateSummary.discountTemplateId).toBeTruthy()
+        expect(templateSummary.markerObjectId).toBeTruthy()
+        expect(templateSummary.shopId).toBeTruthy()
+        expect(templateSummary.status).toBeTruthy()
       })
     })
   })

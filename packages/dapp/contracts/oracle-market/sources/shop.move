@@ -1411,7 +1411,6 @@ fun decrement_active_listing_template_count(shop: &mut Shop, listing_id: u64) {
 fun borrow_listing(shop: &Shop, listing_id: u64): &ItemListing {
     assert_listing_registered!(shop, listing_id);
     let listing = shop.listings.borrow(listing_id);
-    assert!(listing.listing_id == listing_id, EListingShopMismatch);
     assert!(listing.shop_id == shop.id.to_inner(), EListingShopMismatch);
     listing
 }
@@ -1419,7 +1418,6 @@ fun borrow_listing(shop: &Shop, listing_id: u64): &ItemListing {
 fun borrow_listing_mut(shop: &mut Shop, listing_id: u64): &mut ItemListing {
     assert_listing_registered!(shop, listing_id);
     let listing = shop.listings.borrow_mut(listing_id);
-    assert!(listing.listing_id == listing_id, EListingShopMismatch);
     assert!(listing.shop_id == shop.id.to_inner(), EListingShopMismatch);
     listing
 }

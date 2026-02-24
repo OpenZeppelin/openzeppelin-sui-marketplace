@@ -1,6 +1,5 @@
 "use client"
 
-import { discountRuleChoices } from "@sui-oracle-market/domain-core/models/discount"
 import type { DiscountTemplateSummary } from "@sui-oracle-market/domain-core/models/discount"
 import type { ItemListingSummary } from "@sui-oracle-market/domain-core/models/item-listing"
 import clsx from "clsx"
@@ -117,13 +116,11 @@ const SpotlightTemplateSelector = ({
   templates,
   selectedTemplateId,
   onSelectTemplate,
-  onClearSelection,
   explorerUrl
 }: {
   templates: DiscountTemplateSummary[]
   selectedTemplateId?: string
   onSelectTemplate: (templateId: string) => void
-  onClearSelection: () => void
   explorerUrl?: string
 }) => {
   if (templates.length === 0)
@@ -134,33 +131,17 @@ const SpotlightTemplateSelector = ({
       </div>
     )
 
-  const noSelection = !selectedTemplateId
-
   return (
-    <div className="space-y-3">
-      <button
-        type="button"
-        onClick={onClearSelection}
-        className={clsx(
-          "inline-flex items-center rounded-full border px-3 py-1 text-[0.65rem] font-semibold uppercase tracking-[0.18em] transition",
-          noSelection
-            ? "border-sds-primary bg-sds-primary/10 text-sds-primary"
-            : "hover:border-sds-primary/60 border-slate-200/70 text-slate-500 dark:border-slate-50/15 dark:text-slate-200/70"
-        )}
-      >
-        No spotlight discount
-      </button>
-      <div className="grid gap-3 sm:grid-cols-2">
-        {templates.map((template) => (
-          <SpotlightTemplateCard
-            key={template.discountTemplateId}
-            template={template}
-            selected={template.discountTemplateId === selectedTemplateId}
-            onSelect={onSelectTemplate}
-            explorerUrl={explorerUrl}
-          />
-        ))}
-      </div>
+    <div className="grid gap-3 sm:grid-cols-2">
+      {templates.map((template) => (
+        <SpotlightTemplateCard
+          key={template.discountTemplateId}
+          template={template}
+          selected={template.discountTemplateId === selectedTemplateId}
+          onSelect={onSelectTemplate}
+          explorerUrl={explorerUrl}
+        />
+      ))}
     </div>
   )
 }
@@ -218,9 +199,7 @@ const ListingSummarySection = ({
         <div className="mt-1 text-sm font-semibold text-sds-dark dark:text-sds-light">
           {summary.spotlightDiscountId
             ? shortenId(summary.spotlightDiscountId)
-            : summary.createSpotlightDiscountTemplate
-              ? "Created in this transaction"
-              : "None"}
+            : "None"}
         </div>
         {summary.spotlightDiscountId ? (
           <div className="mt-2">
@@ -359,25 +338,14 @@ const AddItemModal = ({
   )
   const selectedSpotlightTemplateId =
     formState.spotlightDiscountId.trim() || undefined
-  const isCreateSpotlightMode = formState.spotlightTemplateMode === "create"
   const handleSpotlightTemplateCardSelect = useCallback(
     (templateId: string) => {
-      handleInputChange("spotlightTemplateMode", "existing")
-      handleInputChange("spotlightDiscountId", templateId)
+      const nextTemplateId =
+        selectedSpotlightTemplateId === templateId ? "" : templateId
+      handleInputChange("spotlightDiscountId", nextTemplateId)
     },
-    [handleInputChange]
+    [handleInputChange, selectedSpotlightTemplateId]
   )
-  const clearSpotlightTemplateSelection = useCallback(() => {
-    handleInputChange("spotlightTemplateMode", "existing")
-    handleInputChange("spotlightDiscountId", "")
-  }, [handleInputChange])
-  const enableCreateSpotlightMode = useCallback(() => {
-    handleInputChange("spotlightTemplateMode", "create")
-    handleInputChange("spotlightDiscountId", "")
-  }, [handleInputChange])
-  const enableExistingSpotlightMode = useCallback(() => {
-    handleInputChange("spotlightTemplateMode", "existing")
-  }, [handleInputChange])
   const errorState =
     transactionState.status === "error" ? transactionState : undefined
 
@@ -548,293 +516,17 @@ const AddItemModal = ({
                       Spotlight discount template (optional)
                     </span>
                     <span className={modalFieldDescriptionClassName}>
-                      DiscountTemplate object ID to highlight on the listing.
+                      Click a template to highlight it. Leave all templates
+                      unselected to skip spotlighting.
                     </span>
                   </div>
                   <div className="mt-3">
-                    <div className="mb-4 flex flex-wrap items-center gap-2 text-[0.65rem] uppercase tracking-[0.18em]">
-                      <button
-                        type="button"
-                        onClick={enableExistingSpotlightMode}
-                        className={clsx(
-                          "inline-flex items-center rounded-full border px-3 py-1 font-semibold transition",
-                          !isCreateSpotlightMode
-                            ? "border-sds-primary bg-sds-primary/10 text-sds-primary"
-                            : "hover:border-sds-primary/60 border-slate-200/70 text-slate-500 dark:border-slate-50/15 dark:text-slate-200/70"
-                        )}
-                      >
-                        Use existing template
-                      </button>
-                      <button
-                        type="button"
-                        onClick={enableCreateSpotlightMode}
-                        className={clsx(
-                          "inline-flex items-center rounded-full border px-3 py-1 font-semibold transition",
-                          isCreateSpotlightMode
-                            ? "border-sds-primary bg-sds-primary/10 text-sds-primary"
-                            : "hover:border-sds-primary/60 border-slate-200/70 text-slate-500 dark:border-slate-50/15 dark:text-slate-200/70"
-                        )}
-                      >
-                        Create new template
-                      </button>
-                    </div>
-
-                    {isCreateSpotlightMode ? (
-                      <div className="grid gap-4 rounded-2xl border border-slate-200/70 bg-white/70 p-4 dark:border-slate-50/15 dark:bg-slate-950/50">
-                        <div className="grid gap-4 md:grid-cols-2">
-                          <label className={modalFieldLabelClassName}>
-                            <span className={modalFieldTitleClassName}>
-                              Rule type
-                            </span>
-                            <span className={modalFieldDescriptionClassName}>
-                              Choose fixed USD discount or percent-off.
-                            </span>
-                            <select
-                              value={formState.createSpotlightRuleKind}
-                              onChange={(event) =>
-                                handleInputChange(
-                                  "createSpotlightRuleKind",
-                                  event.target
-                                    .value as typeof formState.createSpotlightRuleKind
-                                )
-                              }
-                              onBlur={() =>
-                                markFieldBlur("createSpotlightRuleKind")
-                              }
-                              className={clsx(
-                                modalFieldInputClassName,
-                                shouldShowFieldError(
-                                  "createSpotlightRuleKind",
-                                  fieldErrors.createSpotlightRuleKind
-                                ) && modalFieldInputErrorClassName
-                              )}
-                            >
-                              {discountRuleChoices.map((ruleKindOption) => (
-                                <option
-                                  key={ruleKindOption}
-                                  value={ruleKindOption}
-                                >
-                                  {ruleKindOption === "fixed"
-                                    ? "Fixed amount"
-                                    : "Percent off"}
-                                </option>
-                              ))}
-                            </select>
-                            {shouldShowFieldError(
-                              "createSpotlightRuleKind",
-                              fieldErrors.createSpotlightRuleKind
-                            ) ? (
-                              <span className={modalFieldErrorTextClassName}>
-                                {fieldErrors.createSpotlightRuleKind}
-                              </span>
-                            ) : undefined}
-                          </label>
-                          <label className={modalFieldLabelClassName}>
-                            <span className={modalFieldTitleClassName}>
-                              Rule value
-                            </span>
-                            <span className={modalFieldDescriptionClassName}>
-                              {formState.createSpotlightRuleKind === "fixed"
-                                ? "USD amount (e.g. 5.25)."
-                                : "Percentage with up to 2 decimals (e.g. 12.5)."}
-                            </span>
-                            <input
-                              type="text"
-                              inputMode="decimal"
-                              value={formState.createSpotlightValue}
-                              onChange={(event) =>
-                                handleInputChange(
-                                  "createSpotlightValue",
-                                  event.target.value
-                                )
-                              }
-                              onBlur={() =>
-                                markFieldBlur("createSpotlightValue")
-                              }
-                              placeholder={
-                                formState.createSpotlightRuleKind === "fixed"
-                                  ? "5.25"
-                                  : "12.5"
-                              }
-                              className={clsx(
-                                modalFieldInputClassName,
-                                shouldShowFieldError(
-                                  "createSpotlightValue",
-                                  fieldErrors.createSpotlightValue
-                                ) && modalFieldInputErrorClassName
-                              )}
-                            />
-                            {shouldShowFieldError(
-                              "createSpotlightValue",
-                              fieldErrors.createSpotlightValue
-                            ) ? (
-                              <span className={modalFieldErrorTextClassName}>
-                                {fieldErrors.createSpotlightValue}
-                              </span>
-                            ) : undefined}
-                          </label>
-                        </div>
-                        <div className="grid gap-4 md:grid-cols-2">
-                          <label className={modalFieldLabelClassName}>
-                            <span className={modalFieldTitleClassName}>
-                              Starts at (epoch seconds)
-                            </span>
-                            <span className={modalFieldDescriptionClassName}>
-                              Template activation time. Default is now.
-                            </span>
-                            <input
-                              type="text"
-                              inputMode="numeric"
-                              value={formState.createSpotlightStartsAt}
-                              onChange={(event) =>
-                                handleInputChange(
-                                  "createSpotlightStartsAt",
-                                  event.target.value
-                                )
-                              }
-                              onBlur={() =>
-                                markFieldBlur("createSpotlightStartsAt")
-                              }
-                              placeholder="e.g. 1735689600"
-                              className={clsx(
-                                modalFieldInputClassName,
-                                shouldShowFieldError(
-                                  "createSpotlightStartsAt",
-                                  fieldErrors.createSpotlightStartsAt
-                                ) && modalFieldInputErrorClassName
-                              )}
-                            />
-                            {shouldShowFieldError(
-                              "createSpotlightStartsAt",
-                              fieldErrors.createSpotlightStartsAt
-                            ) ? (
-                              <span className={modalFieldErrorTextClassName}>
-                                {fieldErrors.createSpotlightStartsAt}
-                              </span>
-                            ) : undefined}
-                          </label>
-                          <label className={modalFieldLabelClassName}>
-                            <span className={modalFieldTitleClassName}>
-                              Expires at (optional)
-                            </span>
-                            <span className={modalFieldDescriptionClassName}>
-                              Leave blank for no expiry.
-                            </span>
-                            <input
-                              type="text"
-                              inputMode="numeric"
-                              value={formState.createSpotlightExpiresAt}
-                              onChange={(event) =>
-                                handleInputChange(
-                                  "createSpotlightExpiresAt",
-                                  event.target.value
-                                )
-                              }
-                              onBlur={() =>
-                                markFieldBlur("createSpotlightExpiresAt")
-                              }
-                              placeholder="e.g. 1738281600"
-                              className={clsx(
-                                modalFieldInputClassName,
-                                shouldShowFieldError(
-                                  "createSpotlightExpiresAt",
-                                  fieldErrors.createSpotlightExpiresAt
-                                ) && modalFieldInputErrorClassName
-                              )}
-                            />
-                            {shouldShowFieldError(
-                              "createSpotlightExpiresAt",
-                              fieldErrors.createSpotlightExpiresAt
-                            ) ? (
-                              <span className={modalFieldErrorTextClassName}>
-                                {fieldErrors.createSpotlightExpiresAt}
-                              </span>
-                            ) : undefined}
-                          </label>
-                        </div>
-                        <label className={modalFieldLabelClassName}>
-                          <span className={modalFieldTitleClassName}>
-                            Max redemptions (optional)
-                          </span>
-                          <span className={modalFieldDescriptionClassName}>
-                            Global cap for claims/redemptions.
-                          </span>
-                          <input
-                            type="text"
-                            inputMode="numeric"
-                            value={formState.createSpotlightMaxRedemptions}
-                            onChange={(event) =>
-                              handleInputChange(
-                                "createSpotlightMaxRedemptions",
-                                event.target.value
-                              )
-                            }
-                            onBlur={() =>
-                              markFieldBlur("createSpotlightMaxRedemptions")
-                            }
-                            placeholder="e.g. 500"
-                            className={clsx(
-                              modalFieldInputClassName,
-                              shouldShowFieldError(
-                                "createSpotlightMaxRedemptions",
-                                fieldErrors.createSpotlightMaxRedemptions
-                              ) && modalFieldInputErrorClassName
-                            )}
-                          />
-                          {shouldShowFieldError(
-                            "createSpotlightMaxRedemptions",
-                            fieldErrors.createSpotlightMaxRedemptions
-                          ) ? (
-                            <span className={modalFieldErrorTextClassName}>
-                              {fieldErrors.createSpotlightMaxRedemptions}
-                            </span>
-                          ) : undefined}
-                        </label>
-                      </div>
-                    ) : (
-                      <>
-                        <SpotlightTemplateSelector
-                          templates={availableSpotlightTemplates}
-                          selectedTemplateId={selectedSpotlightTemplateId}
-                          onSelectTemplate={handleSpotlightTemplateCardSelect}
-                          onClearSelection={clearSpotlightTemplateSelection}
-                          explorerUrl={explorerUrl}
-                        />
-                        <label className="mt-4 block">
-                          <span className={modalFieldDescriptionClassName}>
-                            Custom template ID
-                          </span>
-                          <br />
-                          <input
-                            type="text"
-                            value={formState.spotlightDiscountId}
-                            onChange={(event) =>
-                              handleInputChange(
-                                "spotlightDiscountId",
-                                event.target.value
-                              )
-                            }
-                            onBlur={() => markFieldBlur("spotlightDiscountId")}
-                            placeholder="0x... discount template id"
-                            className={clsx(
-                              modalFieldInputClassName,
-                              shouldShowFieldError(
-                                "spotlightDiscountId",
-                                fieldErrors.spotlightDiscountId
-                              ) && modalFieldInputErrorClassName
-                            )}
-                          />
-                        </label>
-                        {shouldShowFieldError(
-                          "spotlightDiscountId",
-                          fieldErrors.spotlightDiscountId
-                        ) ? (
-                          <span className={modalFieldErrorTextClassName}>
-                            {fieldErrors.spotlightDiscountId}
-                          </span>
-                        ) : undefined}
-                      </>
-                    )}
+                    <SpotlightTemplateSelector
+                      templates={availableSpotlightTemplates}
+                      selectedTemplateId={selectedSpotlightTemplateId}
+                      onSelectTemplate={handleSpotlightTemplateCardSelect}
+                      explorerUrl={explorerUrl}
+                    />
                   </div>
                 </div>
               </div>
@@ -887,11 +579,9 @@ const AddItemModal = ({
                     Spotlight discount
                   </div>
                   <div className="mt-1 text-sm font-semibold text-sds-dark dark:text-sds-light">
-                    {isCreateSpotlightMode
-                      ? "Create new template in transaction"
-                      : formState.spotlightDiscountId
-                        ? shortenId(formState.spotlightDiscountId)
-                        : "None"}
+                    {formState.spotlightDiscountId
+                      ? shortenId(formState.spotlightDiscountId)
+                      : "None"}
                   </div>
                 </div>
               </div>
