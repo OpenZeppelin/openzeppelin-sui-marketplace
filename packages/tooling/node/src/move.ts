@@ -5,6 +5,7 @@ import { runSuiCli } from "./suiCli.ts"
 export { buildMovePackage, runMoveBuild } from "./move-build.ts"
 export {
   clearPublishedEntryForNetwork,
+  logLocalnetMoveEnvironmentSyncResult,
   resolveChainIdentifier,
   syncLocalnetMoveEnvironmentChainId,
   syncMoveEnvironmentChainId,
