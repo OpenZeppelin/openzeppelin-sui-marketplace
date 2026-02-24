@@ -39,6 +39,7 @@ import {
   buildMoveEnvironmentFlags,
   buildMovePackage,
   clearPublishedEntryForNetwork,
+  logLocalnetMoveEnvironmentSyncResult,
   syncLocalnetMoveEnvironmentChainId
 } from "./move.ts"
 import { pickRootNonDependencyArtifact } from "./package.ts"
@@ -97,26 +98,15 @@ const syncLocalnetMoveEnvironmentChainIdForPublish = async (
     packagePath,
     moveRootPath
   )
-  const { chainId, updatedFiles, didAttempt } =
-    await syncLocalnetMoveEnvironmentChainId(
-      {
-        moveRootPath: resolvedMoveRootPath,
-        environmentName: network.networkName
-      },
-      toolingContext
-    )
+  const syncResult = await syncLocalnetMoveEnvironmentChainId(
+    {
+      moveRootPath: resolvedMoveRootPath,
+      environmentName: network.networkName
+    },
+    toolingContext
+  )
 
-  if (didAttempt && !chainId) {
-    logWarning(
-      "Unable to resolve localnet chain id; Move.toml environments were not updated."
-    )
-  }
-
-  if (updatedFiles.length) {
-    logKeyValueBlue("Move.toml")(
-      `updated ${updatedFiles.length} test-publish environment entries`
-    )
-  }
+  logLocalnetMoveEnvironmentSyncResult(syncResult)
 }
 
 /**

@@ -1,13 +1,11 @@
 import type { SuiClient } from "@mysten/sui/client"
+import { isRecord } from "./utils/utility.ts"
 
 type UnknownRecord = Record<string, unknown>
 type StructSearchCriteria = {
   moduleName: string
   structName: string
 }
-
-const isRecord = (value: unknown): value is UnknownRecord =>
-  value !== null && typeof value === "object"
 
 const resolvePackageDisassembledModules = (
   content: unknown

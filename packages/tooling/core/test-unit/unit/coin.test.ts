@@ -2,10 +2,15 @@ import { describe, expect, it, vi } from "vitest"
 import { normalizeSuiAddress, normalizeSuiObjectId } from "@mysten/sui/utils"
 import {
   buildCoinTransferTransaction,
+  findCreatedCoinObjectRefs,
   normalizeCoinType,
   resolveCoinOwnership
 } from "../../src/coin.ts"
-import { createSuiClientMock } from "../../../tests-integration/helpers/sui.ts"
+import {
+  buildCreatedObjectChange,
+  buildTransactionResponse,
+  createSuiClientMock
+} from "../../../tests-integration/helpers/sui.ts"
 
 describe("coin helpers", () => {
   it("normalizes coin types", () => {
@@ -43,5 +48,37 @@ describe("coin helpers", () => {
 
     expect(ownership.coinType).toBe("0x2::coin::Coin<0x2::sui::SUI>")
     expect(ownership.ownerAddress).toBe(normalizeSuiAddress("0x2"))
+  })
+
+  it("finds created coin object references by coin type", () => {
+    const transactionBlock = buildTransactionResponse({
+      objectChanges: [
+        buildCreatedObjectChange({
+          objectType: "0x2::coin::Coin<0x2::sui::SUI>",
+          objectId: "0x5",
+          version: "7",
+          digest: "digest-a"
+        }),
+        buildCreatedObjectChange({
+          objectType: "0x2::coin::Coin<0x2::usdc::USDC>",
+          objectId: "0x6",
+          version: "9",
+          digest: "digest-b"
+        })
+      ]
+    })
+
+    const references = findCreatedCoinObjectRefs(
+      transactionBlock,
+      "0x2::sui::SUI"
+    )
+
+    expect(references).toEqual([
+      {
+        objectId: normalizeSuiObjectId("0x5"),
+        version: "7",
+        digest: "digest-a"
+      }
+    ])
   })
 })
