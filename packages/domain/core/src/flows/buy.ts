@@ -1,5 +1,5 @@
 import { bcs } from "@mysten/sui/bcs"
-import type { SuiClient, SuiObjectData } from "@mysten/sui/client"
+import type { SuiClient, SuiObjectData, SuiObjectRef } from "@mysten/sui/client"
 import type { Transaction } from "@mysten/sui/transactions"
 import { fromB64, normalizeSuiObjectId } from "@mysten/sui/utils"
 import {
@@ -37,6 +37,7 @@ import type {
   DiscountTemplateSummary
 } from "../models/discount.ts"
 import { parseDiscountTicketFromObject } from "../models/discount.ts"
+import { normalizeListingId } from "../models/item-listing.ts"
 import type { PriceUpdatePolicy, PythPullOracleConfig } from "../models/pyth.ts"
 import { resolvePythPullOracleConfig } from "../models/pyth.ts"
 
@@ -58,6 +59,11 @@ const getObjectRef = async (objectId: string, suiClient: SuiClient) => {
     digest: response.data.digest
   }
 }
+
+const normalizeObjectRef = (objectRef: SuiObjectRef): SuiObjectRef => ({
+  ...objectRef,
+  objectId: normalizeSuiObjectId(objectRef.objectId)
+})
 
 const parseMockPriceInfoUpdateFields = (
   priceInfoObject: SuiObjectData
@@ -287,15 +293,32 @@ const maybeSetDedicatedGasForSuiPayments = async ({
   transaction,
   signerAddress,
   paymentCoinObjectId,
+  dedicatedGasPaymentRef,
   gasBudget,
   suiClient
 }: {
   transaction: Transaction
   signerAddress: string
   paymentCoinObjectId: string
+  dedicatedGasPaymentRef?: SuiObjectRef
   gasBudget?: number
   suiClient: SuiClient
 }) => {
+  const normalizedPaymentCoinObjectId =
+    normalizeSuiObjectId(paymentCoinObjectId)
+
+  if (dedicatedGasPaymentRef) {
+    const normalizedGasPaymentRef = normalizeObjectRef(dedicatedGasPaymentRef)
+    if (normalizedGasPaymentRef.objectId === normalizedPaymentCoinObjectId)
+      throw new Error(
+        "SUI payment coin cannot also be used as gas. Provide a different gas coin."
+      )
+
+    transaction.setGasOwner(signerAddress)
+    transaction.setGasPayment([normalizedGasPaymentRef])
+    return
+  }
+
   // When paying with SUI, one coin must cover gas and a different coin must be the payment input.
   const coins = await suiClient.getCoins({
     owner: signerAddress,
@@ -311,7 +334,7 @@ const maybeSetDedicatedGasForSuiPayments = async ({
     }))
     .filter(
       (coin) =>
-        coin.coinObjectId !== paymentCoinObjectId &&
+        coin.coinObjectId !== normalizedPaymentCoinObjectId &&
         coin.balance >= minimumGasBalance
     )
     .reduce<{
@@ -555,10 +578,11 @@ export const buildBuyTransaction = async (
   {
     shopPackageId,
     shopShared,
-    itemListingShared,
+    itemListingId,
     pythPriceInfoShared,
     pythFeedIdHex,
     paymentCoinObjectId,
+    dedicatedGasPaymentRef,
     coinType,
     itemType,
     mintTo,
@@ -577,10 +601,11 @@ export const buildBuyTransaction = async (
   }: {
     shopPackageId: string
     shopShared: Awaited<ReturnType<typeof getSuiSharedObject>>
-    itemListingShared: Awaited<ReturnType<typeof getSuiSharedObject>>
+    itemListingId: string
     pythPriceInfoShared: Awaited<ReturnType<typeof getSuiSharedObject>>
     pythFeedIdHex: string
     paymentCoinObjectId: string
+    dedicatedGasPaymentRef?: SuiObjectRef
     coinType: string
     itemType: string
     mintTo: string
@@ -608,15 +633,14 @@ export const buildBuyTransaction = async (
       transaction,
       signerAddress,
       paymentCoinObjectId,
+      dedicatedGasPaymentRef,
       gasBudget,
       suiClient
     })
   }
 
   const shopArgument = transaction.sharedObjectRef(shopShared.sharedRef)
-  const listingArgument = transaction.sharedObjectRef(
-    itemListingShared.sharedRef
-  )
+  const listingId = BigInt(normalizeListingId(itemListingId))
 
   const clockShared = await getSuiSharedObject(
     {
@@ -703,7 +727,7 @@ export const buildBuyTransaction = async (
       typeArguments,
       arguments: [
         shopArgument,
-        listingArgument,
+        transaction.pure.u64(listingId),
         transaction.sharedObjectRef(discountTemplateShared.sharedRef),
         pythPriceInfoArgument,
         paymentArgument,
@@ -729,7 +753,7 @@ export const buildBuyTransaction = async (
       typeArguments,
       arguments: [
         shopArgument,
-        listingArgument,
+        transaction.pure.u64(listingId),
         transaction.sharedObjectRef(discountTemplateShared.sharedRef),
         transaction.object(discountContext.discountTicketId),
         pythPriceInfoArgument,
@@ -750,7 +774,7 @@ export const buildBuyTransaction = async (
     typeArguments,
     arguments: [
       shopArgument,
-      listingArgument,
+      transaction.pure.u64(listingId),
       pythPriceInfoArgument,
       paymentArgument,
       transaction.pure.address(mintTo),

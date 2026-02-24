@@ -1,6 +1,7 @@
 import type { WrappedSuiSharedObject } from "@sui-oracle-market/tooling-core/shared-object"
 import { newTransaction } from "@sui-oracle-market/tooling-core/transactions"
 import type { NormalizedRuleKind } from "../models/discount.ts"
+import { normalizeListingId } from "../models/item-listing.ts"
 
 export const buildCreateDiscountTemplateTransaction = ({
   packageId,
@@ -25,13 +26,16 @@ export const buildCreateDiscountTemplateTransaction = ({
 }) => {
   const transaction = newTransaction()
   const shopArgument = transaction.sharedObjectRef(shop.sharedRef)
+  const normalizedAppliesToListingId = appliesToListingId
+    ? BigInt(normalizeListingId(appliesToListingId, "appliesToListingId"))
+    : null
 
   transaction.moveCall({
     target: `${packageId}::shop::create_discount_template`,
     arguments: [
       shopArgument,
       transaction.object(ownerCapId),
-      transaction.pure.option("address", appliesToListingId ?? null),
+      transaction.pure.option("u64", normalizedAppliesToListingId),
       transaction.pure.u8(ruleKind),
       transaction.pure.u64(ruleValue),
       transaction.pure.u64(startsAt),
@@ -105,7 +109,10 @@ export const buildToggleDiscountTemplateTransaction = ({
   ownerCapId: string
 }) => {
   const transaction = newTransaction()
-  const shopArgument = transaction.sharedObjectRef(shop.sharedRef)
+  const shopArgument = transaction.sharedObjectRef({
+    ...shop.sharedRef,
+    mutable: true
+  })
   const discountTemplateArgument = transaction.sharedObjectRef(
     discountTemplate.sharedRef
   )

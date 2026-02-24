@@ -264,6 +264,8 @@ const getAcceptedCurrencySummaryByLegacyTableEntryFieldId = async ({
   )
 }
 
+// Heuristic: fully qualified Move types include "::" (for example 0x2::sui::SUI);
+// this is not a full parser, so callers must still treat results as untrusted input.
 const isCoinTypeCandidate = (value: string) => value.includes("::")
 
 export const findAcceptedCurrencyByCoinType = async ({
