@@ -3,6 +3,7 @@ import { access, writeFile } from "node:fs/promises"
 import path from "node:path"
 
 import { parseJsonFromOutput } from "../json.ts"
+import { toKebabCase } from "../utils/string.ts"
 import type { TestAccount, TestContext } from "./localnet.ts"
 import {
   resolveDappConfigPath,
@@ -63,16 +64,10 @@ export const resolveBuyerScriptPath = (scriptName: string) =>
 export const resolveOwnerScriptPath = (scriptName: string) =>
   resolveScriptPath(["owner", normalizeScriptName(scriptName)])
 
-const toKebabCase = (value: string) =>
-  value
-    .replace(/([a-z0-9])([A-Z])/g, "$1-$2")
-    .replace(/_/g, "-")
-    .toLowerCase()
-
 const buildArgumentEntries = (key: string, value: ScriptArgumentValue) => {
   if (value === undefined) return []
 
-  const normalizedKey = toKebabCase(key)
+  const normalizedKey = toKebabCase(key, { replaceUnderscores: true })
   const flag = `--${normalizedKey}`
 
   if (value === true) return [flag]
