@@ -345,7 +345,9 @@ const ItemListingsPanel = ({
                         showExplorer={false}
                       />
                       <CopyableId
-                        value={listing.tableEntryFieldId}
+                        value={
+                          listing.tableEntryFieldId ?? listing.markerObjectId
+                        }
                         label="Table Entry"
                         className="w-full justify-start"
                         explorerUrl={explorerUrl}
