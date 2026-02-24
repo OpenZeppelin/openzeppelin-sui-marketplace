@@ -584,7 +584,10 @@ type BuildBuyTransactionListingInput = {
 
 type BuyListingArgument =
   | { mode: "listing-id"; listingId: bigint }
-  | { mode: "shared-listing"; listing: ReturnType<Transaction["sharedObjectRef"]> }
+  | {
+      mode: "shared-listing"
+      listing: ReturnType<Transaction["sharedObjectRef"]>
+    }
 
 const resolveBuyListingArgument = ({
   transaction,

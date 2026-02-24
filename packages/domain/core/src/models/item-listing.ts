@@ -34,7 +34,7 @@ export type ItemListingDetails = {
 }
 
 export type ItemListingSummary = ItemListingDetails & {
-  tableEntryFieldId: string
+  tableEntryFieldId?: string
   markerObjectId: string
 }
 
