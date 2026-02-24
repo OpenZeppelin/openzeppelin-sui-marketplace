@@ -11,28 +11,29 @@ Mental Model Shift
 ------------------
 - **Capabilities, not msg.sender:** Admin entry points require the owned `ShopOwnerCap`; buyers never handle capabilities during checkout. Payout rotation is explicit through `update_shop_owner`.
 - **Permissionless instantiation:** `create_shop` takes a shop name and mints the shared `Shop` plus the `ShopOwnerCap` for the caller.
-- **Objects over contract storage:** The shop is a shared object. Listings and discount templates are shared objects indexed by dynamic-field markers, while accepted currencies live in `Shop.accepted_currencies: Table<TypeName, AcceptedCurrency>`. Edits touch only relevant objects/table entries to reduce contention.
+- **Objects over contract storage:** The shop is a shared object. Listings/currencies live in typed tables on `Shop` (`Shop.listings`, `Shop.accepted_currencies`), while discount templates are shared objects indexed by dynamic-field markers. Edits touch only relevant table rows/objects.
 - **Typed coins and receipts:** Payment assets are `Coin<T>` resources with no approvals; receipts are `ShopItem<TItem>` whose type must match the listing to keep downstream logic strongly typed. These receipts can be exchanged in a separate fulfillment or on-chain redemption flow for the actual `TItem`.
 - **Clocked, guarded pricing:** Callers pass a refreshed `PriceInfoObject`; the module checks identity, freshness, confidence, and price-status lag against the shared `Clock` before quoting.
 - **Events over historical arrays:** Lifecycle events (`PurchaseCompletedEvent`, `DiscountRedeemedEvent`, etc.) are emitted for indexers/UIs instead of storing growing arrays on-chain.
 
-Object Graph (shared + dynamic-field index)
--------------------------------------------
-```
+Object Graph (shared + tables/markers)
+--------------------------------------
+```text
 Shop (shared)
+├─ listings: Table<u64, ItemListing>
 ├─ accepted_currencies: Table<TypeName, AcceptedCurrency>
-├─ ItemListingMarker (df: listing_id -> ItemListingMarker)
+├─ active_listing_template_counts: Table<u64, u64>
 ├─ DiscountTemplateMarker (df: template_id -> DiscountTemplateMarker)
 └─ DiscountTemplate (shared)
     └─ df: claimer_address -> DiscountClaim (enforces one-claim-per-address)
-ItemListing (shared)
-└─ spotlight_discount_template_id: Option<ID>
+ItemListing (table value under Shop.listings)
+└─ fields: listing_id (u64), item_type, price, stock, spotlight_discount_template_id
 ```
 
 Entry Points At A Glance
 ------------------------
 - Shops: `create_shop` mints the shared `Shop` plus the owned `ShopOwnerCap`; `disable_shop` permanently disables buyer flows; `update_shop_owner` rotates the payout/owner fields without touching listings.
-- Listings: `add_item_listing<T>` shares a listing object and registers a marker with USD-cent price, stock, and optional `spotlight_discount_template_id`; `update_item_listing_stock` changes inventory through the listing object; `remove_item_listing` removes the marker (delists) while keeping the shared listing addressable for history.
+- Listings: `add_item_listing<T>` inserts a listing row in `Shop.listings` with USD-cent price, stock, and optional `spotlight_discount_template_id`; `add_item_listing_with_discount_template<T>` atomically creates a listing plus a pinned spotlight template; `update_item_listing_stock`/`remove_item_listing` mutate listing rows by `listing_id: u64`.
 - Accepted currencies: `add_accepted_currency<T>` stores an `AcceptedCurrency` value in `shop.accepted_currencies` keyed by `coin_type`, with feed metadata and guardrail caps; `remove_accepted_currency<TCoin>` removes the keyed entry.
 - Discounts: `create_discount_template`, `update_discount_template` (only before claims/redemptions), and `toggle_discount_template` manage templates; `attach_template_to_listing`/`clear_template_from_listing` surface a spotlight template on a listing; `claim_discount_ticket`, `buy_item_with_discount`, `claim_and_buy_item_with_discount`, and `prune_discount_claims` (once finished) govern lifecycle and cleanup.
 - Checkout: `buy_item<TItem, TCoin>` and `buy_item_with_discount<TItem, TCoin>` enforce listing/type matches, registered currency presence, oracle guardrails, and refund change in-line before minting a typed `ShopItem<TItem>` receipt (redemption for the underlying item happens elsewhere).
@@ -51,27 +52,26 @@ Discount Lifecycle Notes
 - Claim limits are enforced via per-claimer `DiscountClaim` children; `prune_discount_claims` only works after a template is irrevocably finished.
 - Tickets are owned resources bound to the claimer and are burned on redemption to guarantee single-use semantics.
 
-Shared Object + Marker Pattern (deep dive)
-------------------------------------------
-- What it is: the shop is a shared root. Listings and discount templates are shared sibling objects discovered via dynamic-field markers. Accepted currencies are stored in a typed `Table<TypeName, AcceptedCurrency>` on the shop. Claims stay as dynamic-field children under each template.
+Shared Object + Table/Marker Pattern (deep dive)
+------------------------------------------------
+- What it is: the shop is a shared root. Listings and accepted currencies are stored in typed tables on the shop, while discount templates remain shared objects discovered via dynamic-field markers. Claims stay as dynamic-field children under each template.
 - How it works:
-  - Discovery: UIs enumerate listing/template markers via dynamic fields, and enumerate accepted currencies through table entries. Markers/table keys prove membership without storing large arrays under the shop.
-  - Auth: entry functions assert both marker presence and that the child’s embedded `shop_id` matches. Forged or foreign objects are rejected even if someone passes an arbitrary shared object.
-  - Writes: admin ops mutate marker/table membership plus the specific listing/template object. Buyer flows read shop membership but mainly mutate the touched listing/template path.
-  - Delisting: removing a listing/template marker unregisters that object while preserving history.
+  - Discovery: UIs enumerate listing/currency table entries and template markers. Table keys/markers prove membership without storing large arrays under the shop.
+  - Auth: entry functions assert table/marker membership and shop linkage. Foreign rows/templates are rejected.
+  - Writes: listing and currency admin ops mutate shop tables; template flows mutate template markers/objects. Buyer flows mutate the touched listing row and optional template path.
+  - Delisting: removing a listing row unregisters that listing ID for checkout, but only when no active listing-bound templates remain for that listing.
   - Claims: per-claimer `DiscountClaim` children live under the template, keeping “one claim per address” localized to the template without locking the shop.
 - Why it helps:
-  - Low contention: PTBs lock only touched listing/template objects and relevant shop membership writes, not a monolithic map.
-  - Stable addresses: listings/templates are first-class shared objects with stable IDs, so indexers/UIs can link to them after delisting.
-  - Lightweight discovery: dynamic-field enumeration plus table entry lookup avoids global scans.
-  - Cleaner auth and safety: marker + address checks enforce membership on-chain; no trusted off-chain registry is needed.
-  - Composable cleanup: delisting/removal stops future use via the marker while preserving the object for audit/history.
+  - Low contention: PTBs lock only the touched listing table row/template object plus relevant shop writes, not a monolithic map.
+  - Stable primary keys: listings use monotonic `u64` IDs and templates keep object IDs, which are both indexer/UI-friendly.
+  - Lightweight discovery: table-entry enumeration plus marker lookup avoids global scans.
+  - Cleaner auth and safety: table/marker checks enforce membership on-chain; no trusted off-chain registry is needed.
 
 Sui Move Principles, Applied
 ----------------------------
 - Resource-first design: coins, tickets, receipts, and capabilities are owned objects moved in/out of entry functions instead of balances in contract storage.
 - Capability-based auth: every admin path requires `ShopOwnerCap`.
-- Shared-object composition: the `Shop` is shared; listings/templates are shared objects indexed by markers, and currencies are stored in a typed table keyed by coin type.
+- Shared-object composition: the `Shop` is shared; listings/currencies are table-backed, and templates are shared objects indexed by markers.
 - Strong typing over metadata: listings embed `TypeName` for runtime checks and UI metadata, while
   checkout asserts the `TItem` type to mint the correct `ShopItem<TItem>` with no opaque "token type" ints.
 - Explicit data freshness: time comes from `Clock`, price data from `PriceInfoObject`, and both are validated inline so view-only RPC calls are unnecessary.
@@ -81,8 +81,8 @@ Sui Fundamentals (EVM contrasts)
 --------------------------------
 - **Explicit capabilities over modifiers:** Admin flows require the owned `ShopOwnerCap` instead of `msg.sender` checks (`add_item_listing`, `update_shop_owner` in `contracts/oracle-market/sources/shop.move`). Docs: Move concepts (https://docs.sui.io/concepts/sui-move-concepts) and object ownership (https://docs.sui.io/guides/developer/objects/object-ownership). Compared to Solidity, callers must physically present the capability object, so auth is enforced by the type system.
 - **Typed events for off-chain sync:** Events are structs with `has copy, drop` and are emitted explicitly (`event::emit` blocks across `contracts/oracle-market/sources/shop.move`), which indexers/GraphQL pick up without scanning storage. Solidity logs are untyped bytes; here the struct layout is part of the ABI. Docs: https://docs.sui.io/guides/developer/sui-101/using-events.
-- **Object-oriented state and concurrency:** The `Shop` is shared; listings/templates are shared objects indexed by markers and currencies are keyed table entries by coin type. PTBs lock only the touched paths, enabling parallelism versus EVM’s single storage map. Docs: https://docs.sui.io/guides/developer/objects/object-model and https://docs.sui.io/concepts/dynamic-fields.
-- **Shared vs owned paths:** Checkout uses shared listings plus shop currency-table reads for discovery, but burns an owned `DiscountTicket` to keep redemption parallel. Sui’s fast path for owned objects has no consensus hop, unlike EVM where all state writes are sequenced in the same block. Docs: ownership and shared objects (https://docs.sui.io/guides/developer/objects/object-ownership).
+- **Object-oriented state and concurrency:** The `Shop` is shared; listings/currencies are keyed table entries and templates are marker-indexed shared objects. PTBs lock only the touched paths, enabling parallelism versus EVM’s single storage map. Docs: https://docs.sui.io/guides/developer/objects/object-model and https://docs.sui.io/concepts/dynamic-fields.
+- **Shared vs owned paths:** Checkout mutates the shared `Shop` (listing table row) and optional shared template state, while burning an owned `DiscountTicket` to keep redemption single-use. Sui’s fast path for owned objects has no consensus hop, unlike EVM where all state writes are sequenced in the same block. Docs: ownership and shared objects (https://docs.sui.io/guides/developer/objects/object-ownership).
 - **Packages are objects (immutable code):** Publishing creates an immutable package object. There is no mutable “contract code” slot like `delegatecall` proxies in Solidity. Docs: packages (https://docs.sui.io/concepts/sui-move-concepts/packages).
 - **Upgrading with UpgradeCap:** New versions are published alongside the old one; data migrations are explicit, gated by `UpgradeCap`, and callers opt into the new package ID. Solidity-style in-place proxy upgrades aren’t available. Docs: https://docs.sui.io/concepts/sui-move-concepts/packages/upgrade.
 - **No inheritance, compose with modules/generics:** Move has no inheritance or dynamic dispatch; reuse is via modules, functions, and type parameters (e.g., `ShopItem<phantom TItem>`). Docs: https://docs.sui.io/concepts/sui-move-concepts
@@ -99,12 +99,12 @@ Sui Fundamentals (EVM contrasts)
 Minimal PTB Examples
 --------------------
 **Create shop**
-```
+```move
 create_shop(b"Shop".to_string(), &mut ctx);
 ```
 
 **Rotate payout address**
-```
+```move
 update_shop_owner(
     &mut shop,
     &mut owner_cap,
@@ -114,7 +114,7 @@ update_shop_owner(
 ```
 
 **List an item**
-```
+```move
 add_item_listing<ItemType>(
     &mut shop,
     b"Example Item".to_string(),
@@ -127,7 +127,7 @@ add_item_listing<ItemType>(
 ```
 
 **Register USDC feed**
-```
+```move
 add_accepted_currency<USDC>(
     &mut shop,
     &owner_cap,
@@ -142,10 +142,10 @@ add_accepted_currency<USDC>(
 ```
 
 **Buy with price guardrails**
-```
+```move
 buy_item<ItemType, USDC>(
-    &shop,
-    &mut listing,
+    &mut shop,
+    /* listing_id */ 0,
     &price_info_object,
     payment_coin,
     /* mint_to */ recipient,
@@ -158,10 +158,10 @@ buy_item<ItemType, USDC>(
 ```
 
 **Claim and spend a discount in one PTB**
-```
+```move
 claim_and_buy_item_with_discount<ItemType, USDC>(
-    &shop,
-    &mut listing,
+    &mut shop,
+    /* listing_id */ 0,
     &mut discount_template,
     &price_info_object,
     payment_coin,
@@ -177,7 +177,7 @@ claim_and_buy_item_with_discount<ItemType, USDC>(
 Reference
 ---------
 - Module: `sui_oracle_market::shop`
-- Entry functions: `create_shop`, `disable_shop`, `update_shop_owner`, `add_item_listing`, `update_item_listing_stock`, `remove_item_listing`, `add_accepted_currency`, `remove_accepted_currency`, `create_discount_template`, `update_discount_template`, `toggle_discount_template`, `attach_template_to_listing`, `clear_template_from_listing`, `claim_discount_ticket`, `prune_discount_claims`, `buy_item`, `buy_item_with_discount`, `claim_and_buy_item_with_discount`.
+- Entry functions: `create_shop`, `disable_shop`, `update_shop_owner`, `add_item_listing`, `add_item_listing_with_discount_template`, `update_item_listing_stock`, `remove_item_listing`, `add_accepted_currency`, `remove_accepted_currency`, `create_discount_template`, `update_discount_template`, `toggle_discount_template`, `attach_template_to_listing`, `clear_template_from_listing`, `claim_discount_ticket`, `prune_discount_claims`, `buy_item`, `buy_item_with_discount`, `claim_and_buy_item_with_discount`.
 - Key types: `Shop`, `ShopOwnerCap`, `ItemListing`, `AcceptedCurrency`, `DiscountTemplate`, `DiscountTicket`, `ShopItem`
 - Events: `ShopCreatedEvent`, `ShopOwnerUpdatedEvent`, `ShopDisabledEvent`, `ItemListingAddedEvent`, `ItemListingStockUpdatedEvent`, `ItemListingRemovedEvent`, `DiscountTemplateCreatedEvent`, `DiscountTemplateUpdatedEvent`, `DiscountTemplateToggledEvent`, `AcceptedCoinAddedEvent`, `AcceptedCoinRemovedEvent`, `DiscountClaimedEvent`, `DiscountRedeemedEvent`, `PurchaseCompletedEvent`.
 
