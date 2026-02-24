@@ -26,8 +26,30 @@ type DiscountTemplateMetadata = {
   appliesToListing?: string
 }
 
+type ListingArgumentInput = {
+  itemListingId?: string
+  itemListing?: WrappedSuiSharedObject
+}
+
 const toListingIdU64 = (listingId: string): bigint =>
   BigInt(normalizeListingId(listingId))
+
+const looksLikeObjectId = (value: string) => value.startsWith("0x")
+
+const resolveListingMoveArgument = ({
+  transaction,
+  itemListingId,
+  itemListing
+}: {
+  transaction: ReturnType<typeof newTransaction>
+} & ListingArgumentInput) => {
+  if (itemListing) return transaction.sharedObjectRef(itemListing.sharedRef)
+
+  if (!itemListingId)
+    throw new Error("Either itemListingId or itemListing must be provided.")
+
+  return transaction.pure.u64(toListingIdU64(itemListingId))
+}
 
 export type AddListingSpotlightTemplateInput = {
   ruleKind: NormalizedRuleKind
@@ -122,14 +144,18 @@ export const resolveListingIdForShop = async ({
   shopId: string
   itemListingId: string
   suiClient: SuiClient
-}): Promise<string> =>
-  (
+}): Promise<string> => {
+  if (looksLikeObjectId(itemListingId))
+    return normalizeSuiObjectId(itemListingId)
+
+  return (
     await getItemListingMetadata(
       itemListingId,
       normalizeSuiObjectId(shopId),
       suiClient
     )
   ).id
+}
 
 export const buildAddItemListingTransaction = ({
   packageId,
@@ -206,23 +232,26 @@ export const buildRemoveItemListingTransaction = ({
   packageId,
   shop,
   ownerCapId,
-  itemListingId
+  itemListingId,
+  itemListing
 }: {
   packageId: string
   shop: WrappedSuiSharedObject
   ownerCapId: string
-  itemListingId: string
+  itemListingId?: string
+  itemListing?: WrappedSuiSharedObject
 }) => {
   const transaction = newTransaction()
   const shopArgument = transaction.sharedObjectRef(shop.sharedRef)
+  const listingArgument = resolveListingMoveArgument({
+    transaction,
+    itemListingId,
+    itemListing
+  })
 
   transaction.moveCall({
     target: `${packageId}::shop::remove_item_listing`,
-    arguments: [
-      shopArgument,
-      transaction.object(ownerCapId),
-      transaction.pure.u64(toListingIdU64(itemListingId))
-    ]
+    arguments: [shopArgument, transaction.object(ownerCapId), listingArgument]
   })
 
   return transaction
@@ -232,24 +261,31 @@ export const buildUpdateItemListingStockTransaction = ({
   packageId,
   shop,
   itemListingId,
+  itemListing,
   ownerCapId,
   newStock
 }: {
   packageId: string
   shop: WrappedSuiSharedObject
-  itemListingId: string
+  itemListingId?: string
+  itemListing?: WrappedSuiSharedObject
   ownerCapId: string
   newStock: bigint
 }) => {
   const transaction = newTransaction()
   const shopArgument = transaction.sharedObjectRef(shop.sharedRef)
+  const listingArgument = resolveListingMoveArgument({
+    transaction,
+    itemListingId,
+    itemListing
+  })
 
   transaction.moveCall({
     target: `${packageId}::shop::update_item_listing_stock`,
     arguments: [
       shopArgument,
       transaction.object(ownerCapId),
-      transaction.pure.u64(toListingIdU64(itemListingId)),
+      listingArgument,
       transaction.pure.u64(newStock)
     ]
   })
@@ -261,17 +297,24 @@ export const buildAttachDiscountTemplateTransaction = ({
   packageId,
   shop,
   itemListingId,
+  itemListing,
   discountTemplate,
   ownerCapId
 }: {
   packageId: string
   shop: WrappedSuiSharedObject
-  itemListingId: string
+  itemListingId?: string
+  itemListing?: WrappedSuiSharedObject
   discountTemplate: WrappedSuiSharedObject
   ownerCapId: string
 }) => {
   const transaction = newTransaction()
   const shopArgument = transaction.sharedObjectRef(shop.sharedRef)
+  const listingArgument = resolveListingMoveArgument({
+    transaction,
+    itemListingId,
+    itemListing
+  })
   const templateArgument = transaction.sharedObjectRef(
     discountTemplate.sharedRef
   )
@@ -281,7 +324,7 @@ export const buildAttachDiscountTemplateTransaction = ({
     arguments: [
       shopArgument,
       transaction.object(ownerCapId),
-      transaction.pure.u64(toListingIdU64(itemListingId)),
+      listingArgument,
       templateArgument
     ]
   })
@@ -293,23 +336,26 @@ export const buildClearDiscountTemplateTransaction = ({
   packageId,
   shop,
   itemListingId,
+  itemListing,
   ownerCapId
 }: {
   packageId: string
   shop: WrappedSuiSharedObject
-  itemListingId: string
+  itemListingId?: string
+  itemListing?: WrappedSuiSharedObject
   ownerCapId: string
 }) => {
   const transaction = newTransaction()
   const shopArgument = transaction.sharedObjectRef(shop.sharedRef)
+  const listingArgument = resolveListingMoveArgument({
+    transaction,
+    itemListingId,
+    itemListing
+  })
 
   transaction.moveCall({
     target: `${packageId}::shop::clear_template_from_listing`,
-    arguments: [
-      shopArgument,
-      transaction.object(ownerCapId),
-      transaction.pure.u64(toListingIdU64(itemListingId))
-    ]
+    arguments: [shopArgument, transaction.object(ownerCapId), listingArgument]
   })
 
   return transaction

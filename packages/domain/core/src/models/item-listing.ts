@@ -25,6 +25,7 @@ const SHOP_LISTINGS_FIELD = "listings"
 export type ItemListingDetails = {
   itemListingId: string
   tableEntryFieldId?: string
+  markerObjectId?: string
   name?: string
   itemType: string
   basePriceUsdCents?: string
@@ -34,6 +35,7 @@ export type ItemListingDetails = {
 
 export type ItemListingSummary = ItemListingDetails & {
   tableEntryFieldId: string
+  markerObjectId: string
 }
 
 type ItemListingTableEntryField = Awaited<
@@ -285,7 +287,8 @@ const buildItemListingSummary = (
   tableEntryFieldId: string
 ): ItemListingSummary => ({
   ...buildItemListingDetails(listingObject, listingId, tableEntryFieldId),
-  tableEntryFieldId
+  tableEntryFieldId,
+  markerObjectId: tableEntryFieldId
 })
 
 const buildItemListingDetails = (
@@ -300,6 +303,7 @@ const buildItemListingDetails = (
   return {
     itemListingId: listingId,
     tableEntryFieldId,
+    markerObjectId: tableEntryFieldId,
     name: readMoveStringOrVector(itemListingFields.name),
     itemType,
     basePriceUsdCents: formatOptionalNumericValue(

@@ -19,7 +19,10 @@ import {
   normalizeIdOrThrow,
   unwrapMoveObjectFields
 } from "@sui-oracle-market/tooling-core/object"
-import { getSuiSharedObject } from "@sui-oracle-market/tooling-core/shared-object"
+import {
+  getSuiSharedObject,
+  type WrappedSuiSharedObject
+} from "@sui-oracle-market/tooling-core/shared-object"
 import { newTransaction } from "@sui-oracle-market/tooling-core/transactions"
 import {
   extractFieldValueByKeys,
@@ -574,11 +577,45 @@ export const resolvePaymentCoinObjectId = async ({
   return normalizeSuiObjectId(selectedCoin.coinObjectId)
 }
 
+type BuildBuyTransactionListingInput = {
+  itemListingId?: string
+  itemListingShared?: WrappedSuiSharedObject
+}
+
+type BuyListingArgument =
+  | { mode: "listing-id"; listingId: bigint }
+  | { mode: "shared-listing"; listing: ReturnType<Transaction["sharedObjectRef"]> }
+
+const resolveBuyListingArgument = ({
+  transaction,
+  itemListingId,
+  itemListingShared
+}: {
+  transaction: Transaction
+} & BuildBuyTransactionListingInput): BuyListingArgument => {
+  if (itemListingId)
+    return {
+      mode: "listing-id",
+      listingId: BigInt(normalizeListingId(itemListingId))
+    }
+
+  const listingShared = requireValue(
+    itemListingShared,
+    "Either itemListingId or itemListingShared is required."
+  )
+
+  return {
+    mode: "shared-listing",
+    listing: transaction.sharedObjectRef(listingShared.sharedRef)
+  }
+}
+
 export const buildBuyTransaction = async (
   {
     shopPackageId,
     shopShared,
     itemListingId,
+    itemListingShared,
     pythPriceInfoShared,
     pythFeedIdHex,
     paymentCoinObjectId,
@@ -601,7 +638,8 @@ export const buildBuyTransaction = async (
   }: {
     shopPackageId: string
     shopShared: Awaited<ReturnType<typeof getSuiSharedObject>>
-    itemListingId: string
+    itemListingId?: string
+    itemListingShared?: Awaited<ReturnType<typeof getSuiSharedObject>>
     pythPriceInfoShared: Awaited<ReturnType<typeof getSuiSharedObject>>
     pythFeedIdHex: string
     paymentCoinObjectId: string
@@ -640,7 +678,15 @@ export const buildBuyTransaction = async (
   }
 
   const shopArgument = transaction.sharedObjectRef(shopShared.sharedRef)
-  const listingId = BigInt(normalizeListingId(itemListingId))
+  const listingArgument = resolveBuyListingArgument({
+    transaction,
+    itemListingId,
+    itemListingShared
+  })
+  const moveListingArgument =
+    listingArgument.mode === "shared-listing"
+      ? listingArgument.listing
+      : transaction.pure.u64(listingArgument.listingId)
 
   const clockShared = await getSuiSharedObject(
     {
@@ -727,7 +773,7 @@ export const buildBuyTransaction = async (
       typeArguments,
       arguments: [
         shopArgument,
-        transaction.pure.u64(listingId),
+        moveListingArgument,
         transaction.sharedObjectRef(discountTemplateShared.sharedRef),
         pythPriceInfoArgument,
         paymentArgument,
@@ -753,7 +799,7 @@ export const buildBuyTransaction = async (
       typeArguments,
       arguments: [
         shopArgument,
-        transaction.pure.u64(listingId),
+        moveListingArgument,
         transaction.sharedObjectRef(discountTemplateShared.sharedRef),
         transaction.object(discountContext.discountTicketId),
         pythPriceInfoArgument,
@@ -774,7 +820,7 @@ export const buildBuyTransaction = async (
     typeArguments,
     arguments: [
       shopArgument,
-      transaction.pure.u64(listingId),
+      moveListingArgument,
       pythPriceInfoArgument,
       paymentArgument,
       transaction.pure.address(mintTo),

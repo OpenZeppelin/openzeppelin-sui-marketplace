@@ -31,6 +31,7 @@ export type ShopItemReceiptSummary = {
   shopItemId: string
   shopId: string
   listingId: string
+  itemListingId: string
   itemType: string
   name?: string
   acquiredAt?: string
@@ -107,6 +108,7 @@ export const parseShopItemReceiptFromObject = (
     shopItemId,
     shopId,
     listingId,
+    itemListingId: listingId,
     itemType,
     name: readMoveStringOrVector(shopItemFields.name),
     acquiredAt: formatOptionalNumericValue(shopItemFields.acquired_at)
