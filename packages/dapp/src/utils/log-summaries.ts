@@ -29,7 +29,7 @@ export const logItemListingSummary = (
   index?: number
 ) => {
   if (index !== undefined) logKeyValueGreen("Item")(index)
-  logKeyValueGreen("Object")(itemListing.itemListingId)
+  logKeyValueGreen("Listing-id")(itemListing.itemListingId)
   logKeyValueGreen("Name")(itemListing.name ?? "Unknown")
   logKeyValueGreen("Item-type")(itemListing.itemType)
   logKeyValueGreen("USD-cents")(
@@ -38,7 +38,7 @@ export const logItemListingSummary = (
   logKeyValueGreen("Stock")(itemListing.stock ?? "Unknown stock")
   if (itemListing.spotlightTemplateId)
     logKeyValueGreen("Spotlight")(itemListing.spotlightTemplateId)
-  logKeyValueGreen("Marker-id")(itemListing.markerObjectId)
+  logKeyValueGreen("Table-entry-field")(itemListing.tableEntryFieldId)
   console.log("")
 }
 
@@ -102,7 +102,7 @@ export const logShopItemReceiptSummary = (
   if (index !== undefined) logKeyValueGreen("Receipt")(index)
   logKeyValueGreen("Object")(shopItem.shopItemId)
   logKeyValueGreen("Shop")(shopItem.shopId)
-  logKeyValueGreen("Listing")(shopItem.itemListingId)
+  logKeyValueGreen("Listing-id")(shopItem.listingId)
   logKeyValueGreen("Receipt-name")(shopItem.name ?? "Unknown")
   logKeyValueGreen("Receipt-type")(shopItem.itemType)
   logKeyValueGreen("Acquired-at")(shopItem.acquiredAt ?? "Unknown")
@@ -115,8 +115,8 @@ export const logShopItemReceiptSummary = (
     logKeyValueGreen("Listing-stock")(listingDetails.stock ?? "Unknown stock")
     if (listingDetails.spotlightTemplateId)
       logKeyValueGreen("Listing-spotlight")(listingDetails.spotlightTemplateId)
-    logKeyValueGreen("Listing-marker")(
-      listingDetails.markerObjectId ?? "Not listed"
+    logKeyValueGreen("Listing-table-entry")(
+      listingDetails.tableEntryFieldId ?? "Not listed"
     )
   }
   console.log("")

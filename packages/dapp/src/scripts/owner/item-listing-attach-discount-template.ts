@@ -6,7 +6,10 @@ import { normalizeSuiObjectId } from "@mysten/sui/utils"
 import yargs from "yargs"
 
 import { getDiscountTemplateSummary } from "@sui-oracle-market/domain-core/models/discount"
-import { getItemListingSummary } from "@sui-oracle-market/domain-core/models/item-listing"
+import {
+  getItemListingSummary,
+  normalizeListingId
+} from "@sui-oracle-market/domain-core/models/item-listing"
 import {
   buildAttachDiscountTemplateTransaction,
   validateTemplateAndListing
@@ -34,11 +37,8 @@ runSuiScript(
       suiClient: tooling.suiClient
     })
 
-    const shopSharedObject = await tooling.getImmutableSharedObject({
+    const shopSharedObject = await tooling.getMutableSharedObject({
       objectId: inputs.shopId
-    })
-    const itemListingSharedObject = await tooling.getMutableSharedObject({
-      objectId: resolvedIds.itemListingId
     })
     const discountTemplateSharedObject = await tooling.getImmutableSharedObject(
       { objectId: resolvedIds.discountTemplateId }
@@ -48,7 +48,7 @@ runSuiScript(
       buildAttachDiscountTemplateTransaction({
         packageId: inputs.packageId,
         shop: shopSharedObject,
-        itemListing: itemListingSharedObject,
+        itemListingId: resolvedIds.itemListingId,
         discountTemplate: discountTemplateSharedObject,
         ownerCapId: inputs.ownerCapId
       })
@@ -99,8 +99,7 @@ runSuiScript(
     .option("itemListingId", {
       alias: ["item-listing-id", "item-id", "listing-id"],
       type: "string",
-      description:
-        "ItemListing object ID to attach the discount to (object ID, not a type tag).",
+      description: "Item listing ID to attach the discount to (u64).",
       demandOption: true
     })
     .option("discountTemplateId", {
@@ -169,7 +168,7 @@ const normalizeInputs = async (
     packageId,
     shopId,
     ownerCapId,
-    itemListingId: normalizeSuiObjectId(cliArguments.itemListingId),
+    itemListingId: normalizeListingId(cliArguments.itemListingId),
     discountTemplateId: normalizeSuiObjectId(cliArguments.discountTemplateId)
   }
 }

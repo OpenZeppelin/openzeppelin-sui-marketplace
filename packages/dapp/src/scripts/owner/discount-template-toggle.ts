@@ -19,7 +19,7 @@ runSuiScript(
       cliArguments,
       tooling.network.networkName
     )
-    const shopSharedObject = await tooling.getImmutableSharedObject({
+    const shopSharedObject = await tooling.getMutableSharedObject({
       objectId: inputs.shopId
     })
     const discountTemplateShared = await tooling.getMutableSharedObject({
