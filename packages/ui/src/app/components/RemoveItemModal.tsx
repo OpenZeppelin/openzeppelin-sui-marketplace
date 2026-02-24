@@ -66,7 +66,7 @@ const ListingSummarySection = ({
       <CopyableId
         value={listing.itemListingId}
         label="Listing ID"
-        explorerUrl={explorerUrl}
+        showExplorer={false}
       />
       {shopId ? (
         <CopyableId value={shopId} label="Shop ID" explorerUrl={explorerUrl} />
@@ -212,8 +212,8 @@ const RemoveItemModal = ({
             footer={
               <CopyableId
                 value={listing.itemListingId}
-                label="Listing"
-                explorerUrl={explorerUrl}
+                label="Listing ID"
+                showExplorer={false}
               />
             }
           />
