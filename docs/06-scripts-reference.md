@@ -129,7 +129,7 @@ Owner scripts default `--shop-package-id`, `--shop-id`, and `--owner-cap-id` fro
 	- **Localnet**: reads `packages/dapp/deployments/mock.localnet.json` for mock coins + feeds (requires `pnpm script mock:setup --buyer-address <0x...> --network localnet`).
 - Seeded data:
 	- 4 low-price listings (Car, Bike, ConcertTicket, DigitalPass).
-	- 2 discount templates (10% percent + $2 fixed) and attaches the fixed discount to the Bike listing.
+	- 2 discount templates (10% percent + $2 fixed) and attaches the fixed discount to the Bike listing ID.
 - Flags:
 	- `--shop-package-id <id>`: only used if a shop needs to be created (when `--shop-id` or `--owner-cap-id` is missing).
 	- `--shop-name <string>`: shop name stored on-chain when creating a new shop (defaults to `Shop`).
@@ -210,7 +210,7 @@ Owner scripts default `--shop-package-id`, `--shop-id`, and `--owner-cap-id` fro
 	- `--shop-package-id <id>` / `--shop-id <id>` / `--owner-cap-id <id>`: override artifact defaults.
 
 ### `pnpm script owner:item-listing:add`
-- Creates an item listing with a USD price, stock count, Move item type, and optional spotlighted discount template.
+- Creates a table-backed item listing (`Shop.listings`) with a USD price, stock count, Move item type, and optional spotlighted discount template.
 - Flags:
 	- `--name <string>`: item name (required; UTF-8 encoded).
 	- `--price <usd-or-cents>`: USD string (`12.50`) or integer cents (`1250`) (required).
@@ -221,16 +221,15 @@ Owner scripts default `--shop-package-id`, `--shop-id`, and `--owner-cap-id` fro
 	- `--shop-package-id <id>` / `--shop-id <id>` / `--owner-cap-id <id>`: override artifact defaults.
 
 ### `pnpm script owner:item-listing:remove`
-- Delists the item by removing its marker under the Shop. The shared `ItemListing` object remains
-  addressable for history and analytics.
+- Delists the item by removing its row from `Shop.listings` (fails if active listing-bound templates still target that listing).
 - Flags:
-	- `--item-listing-id <id>`: listing object ID to remove (required).
+	- `--item-listing-id <u64>`: listing ID to remove (required).
 	- `--shop-package-id <id>` / `--shop-id <id>` / `--owner-cap-id <id>`: override artifact defaults.
 
 ### `pnpm script owner:item-listing:update-stock`
 - Updates inventory for an existing listing; setting `0` pauses sales without removing the listing.
 - Flags:
-	- `--item-listing-id <id>`: listing object ID (required).
+	- `--item-listing-id <u64>`: listing ID (required).
 	- `--stock <u64>`: new quantity (required; can be zero).
 	- `--shop-package-id <id>` / `--shop-id <id>` / `--owner-cap-id <id>`: override artifact defaults.
 
@@ -242,7 +241,7 @@ Owner scripts default `--shop-package-id`, `--shop-id`, and `--owner-cap-id` fro
 	- `--starts-at <epoch-seconds>`: activation time (defaults to now).
 	- `--expires-at <epoch-seconds>`: optional expiry (must be > `starts-at` when set).
 	- `--max-redemptions <u64>`: optional redemption cap.
-	- `--listing-id <id>`: optional ItemListing to pin this template to.
+	- `--listing-id <u64>`: optional listing ID to pin this template to.
 	- `--publisher-id <id>`: optional metadata-only field; not passed on-chain.
 	- `--shop-package-id <id>` / `--shop-id <id>` / `--owner-cap-id <id>`: override artifact defaults.
 
@@ -273,14 +272,14 @@ Owner scripts default `--shop-package-id`, `--shop-id`, and `--owner-cap-id` fro
 ### `pnpm script owner:item-listing:attach-discount-template`
 - Attaches a discount template to a listing for spotlighting.
 - Flags:
-	- `--item-listing-id <id>`: listing object ID to attach to (required).
+	- `--item-listing-id <u64>`: listing ID to attach to (required).
 	- `--discount-template-id <id>`: template object ID to attach (required).
 	- `--shop-package-id <id>` / `--shop-id <id>` / `--owner-cap-id <id>`: override artifact defaults.
 
 ### `pnpm script owner:item-listing:clear-discount-template`
 - Clears the spotlighted template from a listing (does not delete the template).
 - Flags:
-	- `--item-listing-id <id>`: listing object ID to clear (required).
+	- `--item-listing-id <u64>`: listing ID to clear (required).
 	- `--shop-package-id <id>` / `--shop-id <id>` / `--owner-cap-id <id>`: override artifact defaults.
 
 ---
@@ -324,7 +323,7 @@ Owner scripts default `--shop-package-id`, `--shop-id`, and `--owner-cap-id` fro
 - Executes checkout with oracle guardrails and optional discounts.
 	- Flags:
 		- `--shop-id <id>`: shared Shop object ID; defaults to the latest Shop artifact.
-		- `--item-listing-id <id>`: listing object ID to purchase (required).
+		- `--item-listing-id <u64>`: listing ID to purchase (required).
 		- `--coin-type <0x...::Coin>`: payment coin type (must be registered as an AcceptedCurrency) (required).
 		- `--payment-coin-object-id <id>`: specific Coin object ID to use; otherwise the script picks the richest owned coin of that type.
 		- `--mint-to <0x...>`: address that receives the ShopItem receipt (defaults to signer); redeeming the receipt for the actual item happens in a separate flow.
@@ -382,7 +381,7 @@ Artifacts land in `packages/dapp/deployments` after running scripts. Use them to
 	- `priceFeeds`: array of mock Pyth feeds with `feedIdHex` and `priceInfoObjectId`.
 
 ### `packages/dapp/deployments/objects.<network>.json`
-- List of on-chain objects created by owner scripts (shops, caps, listings, discounts).
+- List of on-chain objects created by owner scripts (shops, caps, discount templates, and dynamic-field/table-entry objects).
 - Key fields per entry:
 	- `packageId` / `publisherId`: package that defines the object and its publisher object.
 	- `signer`: address that created the object.
