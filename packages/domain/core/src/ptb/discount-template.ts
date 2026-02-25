@@ -27,7 +27,7 @@ export const buildCreateDiscountTemplateTransaction = ({
   const transaction = newTransaction()
   const shopArgument = transaction.sharedObjectRef(shop.sharedRef)
   const normalizedAppliesToListingId = appliesToListingId
-    ? BigInt(normalizeListingId(appliesToListingId, "appliesToListingId"))
+    ? normalizeListingId(appliesToListingId, "appliesToListingId")
     : null
 
   transaction.moveCall({
@@ -35,7 +35,7 @@ export const buildCreateDiscountTemplateTransaction = ({
     arguments: [
       shopArgument,
       transaction.object(ownerCapId),
-      transaction.pure.option("u64", normalizedAppliesToListingId),
+      transaction.pure.option("address", normalizedAppliesToListingId),
       transaction.pure.u8(ruleKind),
       transaction.pure.u64(ruleValue),
       transaction.pure.u64(startsAt),

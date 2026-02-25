@@ -338,7 +338,7 @@ runSuiScript(
     .option("itemListingId", {
       alias: ["item-listing-id", "listing-id"],
       type: "string",
-      description: "Item listing ID to buy (u64).",
+      description: "Item listing object ID to buy.",
       demandOption: true
     })
     .option("coinType", {

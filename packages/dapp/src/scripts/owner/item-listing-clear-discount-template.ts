@@ -79,7 +79,7 @@ runSuiScript(
       alias: ["item-listing-id", "item-id", "listing-id"],
       type: "string",
       description:
-        "Item listing ID to clear the spotlighted discount from (u64).",
+        "Item listing object ID to clear the spotlighted discount from.",
       demandOption: true
     })
     .option("shopPackageId", {

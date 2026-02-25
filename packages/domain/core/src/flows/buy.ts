@@ -640,7 +640,7 @@ export const buildBuyTransaction = async (
   }
 
   const shopArgument = transaction.sharedObjectRef(shopShared.sharedRef)
-  const listingId = BigInt(normalizeListingId(itemListingId))
+  const listingId = normalizeListingId(itemListingId)
 
   const clockShared = await getSuiSharedObject(
     {
@@ -727,10 +727,10 @@ export const buildBuyTransaction = async (
       typeArguments,
       arguments: [
         shopArgument,
-        transaction.pure.u64(listingId),
         transaction.sharedObjectRef(discountTemplateShared.sharedRef),
         pythPriceInfoArgument,
         paymentArgument,
+        transaction.pure.address(listingId),
         transaction.pure.address(mintTo),
         transaction.pure.address(refundTo),
         transaction.pure.option("u64", maxPriceAgeSecs ?? null),
@@ -753,11 +753,11 @@ export const buildBuyTransaction = async (
       typeArguments,
       arguments: [
         shopArgument,
-        transaction.pure.u64(listingId),
         transaction.sharedObjectRef(discountTemplateShared.sharedRef),
         transaction.object(discountContext.discountTicketId),
         pythPriceInfoArgument,
         paymentArgument,
+        transaction.pure.address(listingId),
         transaction.pure.address(mintTo),
         transaction.pure.address(refundTo),
         transaction.pure.option("u64", maxPriceAgeSecs ?? null),
@@ -774,9 +774,9 @@ export const buildBuyTransaction = async (
     typeArguments,
     arguments: [
       shopArgument,
-      transaction.pure.u64(listingId),
       pythPriceInfoArgument,
       paymentArgument,
+      transaction.pure.address(listingId),
       transaction.pure.address(mintTo),
       transaction.pure.address(refundTo),
       transaction.pure.option("u64", maxPriceAgeSecs ?? null),

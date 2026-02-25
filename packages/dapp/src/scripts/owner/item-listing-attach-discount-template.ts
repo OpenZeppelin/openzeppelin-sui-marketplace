@@ -99,7 +99,7 @@ runSuiScript(
     .option("itemListingId", {
       alias: ["item-listing-id", "item-id", "listing-id"],
       type: "string",
-      description: "Item listing ID to attach the discount to (u64).",
+      description: "Item listing object ID to attach the discount to.",
       demandOption: true
     })
     .option("discountTemplateId", {

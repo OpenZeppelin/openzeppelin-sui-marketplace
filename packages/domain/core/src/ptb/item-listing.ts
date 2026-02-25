@@ -26,8 +26,13 @@ type DiscountTemplateMetadata = {
   appliesToListing?: string
 }
 
-const toListingIdU64 = (listingId: string): bigint =>
-  BigInt(normalizeListingId(listingId))
+const toListingIdAddress = (listingId: string): string =>
+  normalizeListingId(listingId)
+
+const buildListingIdArgument = (
+  transaction: ReturnType<typeof newTransaction>,
+  listingId: string
+) => transaction.pure.address(toListingIdAddress(listingId))
 
 export type AddListingSpotlightTemplateInput = {
   ruleKind: NormalizedRuleKind
@@ -221,7 +226,7 @@ export const buildRemoveItemListingTransaction = ({
     arguments: [
       shopArgument,
       transaction.object(ownerCapId),
-      transaction.pure.u64(toListingIdU64(itemListingId))
+      buildListingIdArgument(transaction, itemListingId)
     ]
   })
 
@@ -249,7 +254,7 @@ export const buildUpdateItemListingStockTransaction = ({
     arguments: [
       shopArgument,
       transaction.object(ownerCapId),
-      transaction.pure.u64(toListingIdU64(itemListingId)),
+      buildListingIdArgument(transaction, itemListingId),
       transaction.pure.u64(newStock)
     ]
   })
@@ -281,8 +286,8 @@ export const buildAttachDiscountTemplateTransaction = ({
     arguments: [
       shopArgument,
       transaction.object(ownerCapId),
-      transaction.pure.u64(toListingIdU64(itemListingId)),
-      templateArgument
+      templateArgument,
+      buildListingIdArgument(transaction, itemListingId)
     ]
   })
 
@@ -308,7 +313,7 @@ export const buildClearDiscountTemplateTransaction = ({
     arguments: [
       shopArgument,
       transaction.object(ownerCapId),
-      transaction.pure.u64(toListingIdU64(itemListingId))
+      buildListingIdArgument(transaction, itemListingId)
     ]
   })
 
