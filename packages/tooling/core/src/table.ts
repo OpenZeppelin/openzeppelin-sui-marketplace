@@ -1,3 +1,6 @@
+import type { SuiObjectData } from "@mysten/sui/client"
+import { normalizeSuiObjectId } from "@mysten/sui/utils"
+import type { ToolingCoreContext } from "./context.ts"
 import { getAllDynamicFields } from "./dynamic-fields.ts"
 import {
   normalizeIdOrThrow,
@@ -38,3 +41,29 @@ export const getTableEntryDynamicFields = async (
     { parentObjectId: tableObjectId, objectTypeFilter },
     context
   )
+
+/**
+ * Fetches a single table entry dynamic field object by typed key.
+ */
+export const getTableEntryDynamicFieldObject = async (
+  {
+    tableObjectId,
+    keyType,
+    keyValue
+  }: {
+    tableObjectId: string
+    keyType: string
+    keyValue: unknown
+  },
+  { suiClient }: ToolingCoreContext
+): Promise<SuiObjectData | undefined> => {
+  const { data: dynamicFieldObject } = await suiClient.getDynamicFieldObject({
+    parentId: normalizeSuiObjectId(tableObjectId),
+    name: {
+      type: keyType,
+      value: keyValue
+    }
+  })
+
+  return dynamicFieldObject || undefined
+}
