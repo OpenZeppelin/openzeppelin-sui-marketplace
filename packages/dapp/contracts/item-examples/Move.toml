@@ -3,4 +3,4 @@ name = "item_examples"
 edition = "2024"
 
 [environments]
-test-publish = "3e2f6ab2"
+test-publish = "8a87f7ae"
