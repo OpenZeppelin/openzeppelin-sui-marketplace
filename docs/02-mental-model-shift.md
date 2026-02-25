@@ -56,8 +56,8 @@ public struct Shop has key, store {
   name: string::String,
   disabled: bool,
   accepted_currencies: table::Table<TypeName, AcceptedCurrency>,
-  listings: table::Table<u64, ItemListing>,
-  next_listing_id: u64,
+  listings: table_vec::TableVec<Option<ItemListing>>,
+  listing_indices: table::Table<ID, u64>,
 }
 ```
 
@@ -121,7 +121,8 @@ EVM: contract storage
 
 Sui: shared objects + typed tables
   Shop (shared)
-    table listings: listing_id (u64) -> ItemListing
+    table_vec listings: index (u64) -> Option<ItemListing>
+    table listing_indices: listing_id (ID) -> index (u64)
     table accepted_currencies: coin_type (TypeName) -> AcceptedCurrency
   DiscountTemplate (shared)
 ```

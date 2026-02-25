@@ -69,7 +69,7 @@ pnpm script buyer:discount-ticket:list
 entry fun create_discount_template(
   shop: &mut Shop,
   owner_cap: &ShopOwnerCap,
-  applies_to_listing: Option<u64>,
+  applies_to_listing: Option<ID>,
   rule_kind: u8,
   rule_value: u64,
   starts_at: u64,

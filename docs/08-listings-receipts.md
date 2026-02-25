@@ -2,7 +2,7 @@
 
 **Path:** [Learning Path](./) > 08 Listings + Typed Receipts
 
-Listings are stored inside the shared `Shop` via `Table<u64, ItemListing>`, and purchases mint typed receipts (`ShopItem<TItem>`).
+Listings are stored inside the shared `Shop` via `TableVec<Option<ItemListing>>` plus a `listing_indices: Table<ID, u64>` lookup map, and purchases mint typed receipts (`ShopItem<TItem>`).
 
 ## 1. Learning goals
 1. Publish example item types.
@@ -26,14 +26,14 @@ pnpm script buyer:item-listing:list --shop-id <shopId>
 ```
 
 ## 4. EVM -> Sui translation
-1. **Mapping entries -> table entries under a shared object**: listings are rows in `Shop.listings: Table<u64, ItemListing>`, keyed by monotonic `u64` listing IDs.
+1. **Mapping entries -> table entries under a shared object**: listings are rows in `Shop.listings: TableVec<Option<ItemListing>>`, keyed by stable `ID` listing IDs resolved through `Shop.listing_indices`.
 2. **ERC-721 receipt -> typed resource**: the receipt is a `ShopItem<TItem>` whose type must match the listing. See `ShopItem` in `packages/dapp/contracts/oracle-market/sources/shop.move`.
 
 ## 5. Concept deep dive: tables and type tags
-- **Table-backed listings**: listing create/update/remove paths mutate `Shop.listings` directly with `add`, `borrow_mut`, and `remove`.
+- **TableVec-backed listings**: listing create/update/remove paths mutate `Shop.listings` slots with tombstones (`Option<ItemListing>`) and use `Shop.listing_indices` for ID lookup.
   Code: `packages/dapp/contracts/oracle-market/sources/shop.move` (`add_item_listing_core`, `borrow_listing_mut`, `remove_listing`)
-- **Listing IDs are `u64`**: IDs are allocated by `Shop.next_listing_id`, emitted in events, and reused by scripts/UI as stable primary keys.
-  Code: `packages/dapp/contracts/oracle-market/sources/shop.move` (`allocate_listing_id`, `ItemListingAddedEvent`)
+- **Listing IDs are `ID`**: IDs are allocated from `TxContext` (`object::new(...).to_inner()`), emitted in events, and reused by scripts/UI as stable primary keys.
+  Code: `packages/dapp/contracts/oracle-market/sources/shop.move` (`new_listing_id`, `ItemListingAddedEvent`)
 - **Off-chain enumeration still reads dynamic-field table entries**: `Table` is backed by dynamic fields, so the SDK discovers rows by reading table entry objects.
   Code: `packages/domain/core/src/models/item-listing.ts` (`getItemListingSummaries`)
 - **TypeName and type tags**: listing types are stored as `TypeName` for runtime checks, events, and UI metadata. Compile-time safety still comes from generics (`ShopItem<TItem>`), not from the stored value.
@@ -60,8 +60,8 @@ fun add_item_listing_core<T: store>(
   base_price_usd_cents: u64,
   stock: u64,
   spotlight_discount_template_id: Option<ID>,
-  _ctx: &mut TxContext,
-): u64 {
+  ctx: &mut TxContext,
+): ID {
   assert_owner_cap!(shop, owner_cap);
   validate_listing_inputs!(
     shop,
@@ -72,7 +72,7 @@ fun add_item_listing_core<T: store>(
   );
 
   let shop_id = shop.id.to_inner();
-  let listing_id = shop.allocate_listing_id();
+  let listing_id = new_listing_id(ctx);
   let listing = new_item_listing<T>(
     shop_id,
     listing_id,
@@ -81,13 +81,13 @@ fun add_item_listing_core<T: store>(
     stock,
     spotlight_discount_template_id,
   );
-  shop.add_listing(listing_id, listing);
+  shop.add_listing(listing);
   event::emit(ItemListingAddedEvent { shop_id, listing_id });
   listing_id
 }
 ```
 
-**Code spotlight: typed receipt minting uses numeric listing ID**
+**Code spotlight: typed receipt minting uses listing object ID**
 `packages/dapp/contracts/oracle-market/sources/shop.move`
 ```move
 fun mint_shop_item<TItem: store>(
@@ -127,13 +127,14 @@ const listingSummary = await getItemListingSummary(
 - [/reading/move-readme](/reading/move-readme) -> "Shared Object + Marker Pattern (deep dive)"
 
 ## 7. Exercises
-1. Update stock with `pnpm script owner:item-listing:update-stock --item-listing-id <u64> --stock 1`. Expected outcome: stock changes on-chain.
-2. Remove a listing with `pnpm script owner:item-listing:remove --item-listing-id <u64>`. Expected outcome: it disappears from list output and cannot be fetched by that listing ID.
+1. Update stock with `pnpm script owner:item-listing:update-stock --item-listing-id <id> --stock 1`. Expected outcome: stock changes on-chain.
+2. Remove a listing with `pnpm script owner:item-listing:remove --item-listing-id <id>`. Expected outcome: it disappears from list output and cannot be fetched by that listing ID.
 
 ## 8. Diagram: table-backed listings
 ```
 Shop (shared)
-  table listings: listing_id (u64) -> ItemListing
+  table_vec listings: index (u64) -> Option<ItemListing>
+  table listing_indices: listing_id (ID) -> index (u64)
   table accepted_currencies: coin_type (TypeName) -> AcceptedCurrency
 ```
 

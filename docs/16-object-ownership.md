@@ -48,7 +48,7 @@ public struct DiscountTicket has key, store {
   id: UID,
   discount_template_id: ID,
   shop_id: ID,
-  listing_id: Option<u64>,
+  listing_id: Option<ID>,
   claimer: address,
 }
 
@@ -58,8 +58,8 @@ public struct Shop has key, store {
   name: String,
   disabled: bool,
   accepted_currencies: Table<TypeName, AcceptedCurrency>,
-  listings: Table<u64, ItemListing>,
-  next_listing_id: u64,
+  listings: table_vec::TableVec<Option<ItemListing>>,
+  listing_indices: Table<ID, u64>,
 }
 ```
 

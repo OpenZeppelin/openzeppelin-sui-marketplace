@@ -20,20 +20,20 @@ Object Graph (shared + tables/markers)
 --------------------------------------
 ```text
 Shop (shared)
-├─ listings: Table<u64, ItemListing>
+├─ listings: TableVec<Option<ItemListing>>
+├─ listing_indices: Table<ID, u64>
 ├─ accepted_currencies: Table<TypeName, AcceptedCurrency>
-├─ active_listing_template_counts: Table<u64, u64>
 ├─ DiscountTemplateMarker (df: template_id -> DiscountTemplateMarker)
 └─ DiscountTemplate (shared)
     └─ df: claimer_address -> DiscountClaim (enforces one-claim-per-address)
 ItemListing (table value under Shop.listings)
-└─ fields: listing_id (u64), item_type, price, stock, spotlight_discount_template_id
+└─ fields: listing_id (ID), item_type, base_price_usd_cents, stock, spotlight_discount_template_id, active_bound_template_count
 ```
 
 Entry Points At A Glance
 ------------------------
 - Shops: `create_shop` mints the shared `Shop` plus the owned `ShopOwnerCap`; `disable_shop` permanently disables buyer flows; `update_shop_owner` rotates the payout/owner fields without touching listings.
-- Listings: `add_item_listing<T>` inserts a listing row in `Shop.listings` with USD-cent price, stock, and optional `spotlight_discount_template_id`; `add_item_listing_with_discount_template<T>` atomically creates a listing plus a pinned spotlight template; `update_item_listing_stock`/`remove_item_listing` mutate listing rows by `listing_id: u64`.
+- Listings: `add_item_listing<T>` inserts a listing row in `Shop.listings` with USD-cent price, stock, and optional `spotlight_discount_template_id`; `add_item_listing_with_discount_template<T>` atomically creates a listing plus a pinned spotlight template; `update_item_listing_stock`/`remove_item_listing` mutate listing rows by `listing_id: ID`.
 - Accepted currencies: `add_accepted_currency<T>` stores an `AcceptedCurrency` value in `shop.accepted_currencies` keyed by `coin_type`, with feed metadata and guardrail caps; `remove_accepted_currency<TCoin>` removes the keyed entry.
 - Discounts: `create_discount_template`, `update_discount_template` (only before claims/redemptions), and `toggle_discount_template` manage templates; `attach_template_to_listing`/`clear_template_from_listing` surface a spotlight template on a listing; `claim_discount_ticket`, `buy_item_with_discount`, `claim_and_buy_item_with_discount`, and `prune_discount_claims` (once finished) govern lifecycle and cleanup.
 - Checkout: `buy_item<TItem, TCoin>` and `buy_item_with_discount<TItem, TCoin>` enforce listing/type matches, registered currency presence, oracle guardrails, and refund change in-line before minting a typed `ShopItem<TItem>` receipt (redemption for the underlying item happens elsewhere).
@@ -63,7 +63,7 @@ Shared Object + Table/Marker Pattern (deep dive)
   - Claims: per-claimer `DiscountClaim` children live under the template, keeping “one claim per address” localized to the template without locking the shop.
 - Why it helps:
   - Low contention: PTBs lock only the touched listing table row/template object plus relevant shop writes, not a monolithic map.
-  - Stable primary keys: listings use monotonic `u64` IDs and templates keep object IDs, which are both indexer/UI-friendly.
+  - Stable primary keys: listings and templates both use object IDs, which remain indexer/UI-friendly across tombstoned deletions.
   - Lightweight discovery: table-entry enumeration plus marker lookup avoids global scans.
   - Cleaner auth and safety: table/marker checks enforce membership on-chain; no trusted off-chain registry is needed.
 
@@ -145,7 +145,7 @@ add_accepted_currency<USDC>(
 ```move
 buy_item<ItemType, USDC>(
     &mut shop,
-    /* listing_id */ 0,
+    /* listing_id */ listing_id,
     &price_info_object,
     payment_coin,
     /* mint_to */ recipient,
@@ -161,7 +161,7 @@ buy_item<ItemType, USDC>(
 ```move
 claim_and_buy_item_with_discount<ItemType, USDC>(
     &mut shop,
-    /* listing_id */ 0,
+    /* listing_id */ listing_id,
     &mut discount_template,
     &price_info_object,
     payment_coin,
