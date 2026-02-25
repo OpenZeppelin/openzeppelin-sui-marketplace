@@ -2914,7 +2914,6 @@ fun toggle_template_on_listing_sets_and_clears_spotlight() {
         listing_id,
     );
 
-
     let (_, _, _, _, spotlight_after_set) = shop::test_listing_values_local(&shop, listing_id);
     assert!(option::is_some(&spotlight_after_set));
     spotlight_after_set.do_ref!(|value| {
@@ -2974,7 +2973,6 @@ fun toggle_template_on_listing_rejects_foreign_owner_cap() {
         listing_id,
     );
 
-
     abort EAssertFailure
 }
 
@@ -3013,7 +3011,6 @@ fun toggle_template_on_listing_rejects_foreign_listing() {
         &template,
         foreign_listing_id,
     );
-
 
     abort EAssertFailure
 }
@@ -3054,7 +3051,6 @@ fun toggle_template_on_listing_rejects_foreign_template() {
         listing_id,
     );
 
-
     abort EAssertFailure
 }
 
@@ -3091,7 +3087,6 @@ fun toggle_template_on_listing_rejects_unknown_template() {
         listing_id,
     );
 
-
     abort EAssertFailure
 }
 
@@ -3123,7 +3118,6 @@ fun attach_template_to_listing_sets_spotlight_without_emitting_events() {
         &template,
         listing_id,
     );
-
 
     let (_, _, _, shop_id, spotlight) = shop::test_listing_values_local(&shop, listing_id);
     assert_eq!(shop_id, shop::test_shop_id(&shop));
@@ -3184,7 +3178,6 @@ fun attach_template_to_listing_overwrites_existing_spotlight() {
         listing_id,
     );
 
-
     let (_, _, _, _, spotlight_after) = shop::test_listing_values_local(&shop, listing_id);
     assert!(option::is_some(&spotlight_after));
     spotlight_after.do_ref!(|value| {
@@ -3236,7 +3229,6 @@ fun attach_template_to_listing_accepts_matching_listing() {
         listing_id,
     );
 
-
     let (_, _, _, _, spotlight) = shop::test_listing_values_local(&shop, listing_id);
     assert!(option::is_some(&spotlight));
     spotlight.do_ref!(|value| {
@@ -3276,7 +3268,6 @@ fun attach_template_to_listing_rejects_foreign_owner_cap() {
         listing_id,
     );
 
-
     abort EAssertFailure
 }
 
@@ -3311,7 +3302,6 @@ fun attach_template_to_listing_rejects_foreign_listing() {
         foreign_listing_id,
     );
 
-
     abort EAssertFailure
 }
 
@@ -3345,7 +3335,6 @@ fun attach_template_to_listing_rejects_foreign_template() {
         &foreign_template,
         listing_id,
     );
-
 
     abort EAssertFailure
 }
@@ -3383,7 +3372,6 @@ fun attach_template_to_listing_rejects_unknown_template() {
         listing_id,
     );
 
-
     abort EAssertFailure
 }
 
@@ -3412,7 +3400,6 @@ fun clear_template_from_listing_removes_spotlight_without_side_effects() {
         &template,
         listing_id,
     );
-
 
     let (_, _, _, _, spotlight_before) = shop::test_listing_values_local(&shop, listing_id);
     let created_before = tx_context::get_ids_created(&ctx);

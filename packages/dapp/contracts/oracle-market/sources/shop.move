@@ -436,11 +436,7 @@ entry fun disable_shop(shop: &mut Shop, owner_cap: &ShopOwnerCap) {
 /// - Access control is explicit: the operator must show the `ShopOwnerCap` rather than relying on
 ///   `ctx.sender()`. Rotating the cap keeps payouts aligned to the current operator.
 /// - Buyers never handle capabilities--checkout remains permissionless against the shared `Shop`.
-entry fun update_shop_owner(
-    shop: &mut Shop,
-    owner_cap: &ShopOwnerCap,
-    new_owner: address,
-) {
+entry fun update_shop_owner(shop: &mut Shop, owner_cap: &ShopOwnerCap, new_owner: address) {
     assert_owner_cap!(shop, owner_cap);
 
     shop.owner = new_owner;
@@ -631,11 +627,7 @@ entry fun update_item_listing_stock(
 ///
 /// This delists by removing the listing entry from `Shop.listings`.
 /// Listings with any active listing-bound templates must pause those templates first.
-entry fun remove_item_listing(
-    shop: &mut Shop,
-    owner_cap: &ShopOwnerCap,
-    listing_id: ID,
-) {
+entry fun remove_item_listing(shop: &mut Shop, owner_cap: &ShopOwnerCap, listing_id: ID) {
     assert_owner_cap!(shop, owner_cap);
     assert!(!shop.has_active_listing_bound_templates(listing_id), EListingHasActiveTemplates);
     shop.remove_listing(listing_id);
@@ -888,11 +880,7 @@ entry fun attach_template_to_listing(
 }
 
 /// Remove the promotion banner from a listing.
-entry fun clear_template_from_listing(
-    shop: &mut Shop,
-    owner_cap: &ShopOwnerCap,
-    listing_id: ID,
-) {
+entry fun clear_template_from_listing(shop: &mut Shop, owner_cap: &ShopOwnerCap, listing_id: ID) {
     assert_owner_cap!(shop, owner_cap);
     let item_listing = shop.borrow_listing_mut(listing_id);
     item_listing.spotlight_discount_template_id = option::none();
