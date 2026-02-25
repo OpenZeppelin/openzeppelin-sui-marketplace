@@ -56,7 +56,7 @@ pnpm script buyer:buy --help
 - **TxContext usage**: `tx::TxContext` is needed for object creation (`object::new`) and coin splits.
   Code: `packages/dapp/contracts/oracle-market/sources/shop.move` (`split_payment`, `create_shop`)
 - **Fixed-point math**: prices are stored in USD cents; discounts use basis points; conversion uses
-  u128 scaling with OZ decimal helpers to avoid floating point math.
+  u128 scaling with OZ decimal helpers to avoid floating-point math.
   Code: `packages/dapp/contracts/oracle-market/sources/shop.move` (`decimals_pow10_u128`, `quote_amount_with_guardrails`)
 - **Fast path vs consensus**: owned-object transactions can execute without consensus ordering,
   while shared-object mutations require consensus. This is why checkout/admin listing writes mutate
