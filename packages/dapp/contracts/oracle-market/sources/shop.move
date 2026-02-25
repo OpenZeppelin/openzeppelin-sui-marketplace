@@ -169,10 +169,10 @@ const CENTS_PER_DOLLAR: u64 = 100;
 const BASIS_POINT_DENOMINATOR: u64 = 10_000;
 const DEFAULT_MAX_PRICE_AGE_SECS: u64 = 60;
 const MAX_DECIMAL_POWER: u64 = 24;
-// Reject price feeds with sigma/mu above 10%.
+/// Reject price feeds with sigma/mu above 10%.
 const DEFAULT_MAX_CONFIDENCE_RATIO_BPS: u16 = 1_000;
 const PYTH_PRICE_IDENTIFIER_LENGTH: u64 = 32;
-// Allow small attestation/publish skew without halting checkout.
+/// Allow small attestation/publish skew without halting checkout.
 const DEFAULT_MAX_PRICE_STATUS_LAG_SECS: u64 = 5;
 
 /// Claims and returns the module's Publisher object during publish.
@@ -187,55 +187,86 @@ fun init(publisher_witness: SHOP, ctx: &mut TxContext) {
 /// Capability that proves the caller can administer a specific `Shop`.
 /// Holding and using this object is the Sui-native equivalent of matching `onlyOwner` criteria in Solidity.
 public struct ShopOwnerCap has key, store {
-    id: UID, // Object ID for this capability.
-    shop_id: ID, // Shop governed by this capability.
+    /// Object ID for this capability.
+    id: UID,
+    /// Shop governed by this capability.
+    shop_id: ID,
 }
 
 /// Shared shop that stores listings, currencies, and discount templates in typed dynamic collections.
 public struct Shop has key, store {
-    id: UID, // Shared object ID for this shop.
-    owner: address, // Payout recipient for sales.
-    name: String, // Human-readable storefront name.
-    disabled: bool, // Hard stop for buyer-facing purchase/claim flows.
-    accepted_currencies: Table<TypeName, AcceptedCurrency>, // Registered coin metadata by `TypeName`.
-    listings: table_vec::TableVec<Option<ItemListing>>, // Stable listing slots (removed entries become `none`).
-    listing_indices: Table<ID, u64>, // Reverse index from listing ID to `listings` slot.
-    discount_templates: Table<ID, DiscountTemplate>, // Discount templates keyed by template ID.
+    /// Shared object ID for this shop.
+    id: UID,
+    /// Payout recipient for sales.
+    owner: address,
+    /// Human-readable storefront name.
+    name: String,
+    /// Hard stop for buyer-facing purchase/claim flows.
+    disabled: bool,
+    /// Registered coin metadata by `TypeName`.
+    accepted_currencies: Table<TypeName, AcceptedCurrency>,
+    /// Stable listing slots (removed entries become `none`).
+    listings: table_vec::TableVec<Option<ItemListing>>,
+    /// Reverse index from listing ID to `listings` slot.
+    listing_indices: Table<ID, u64>,
+    /// Discount templates keyed by template ID.
+    discount_templates: Table<ID, DiscountTemplate>,
 }
 
 /// Item listing metadata keyed under the shared `Shop`, used to mint specific items on purchase.
 /// Discounts can be attached to highlight promotions in the UI.
 public struct ItemListing has drop, store {
-    listing_id: ID, // Stable listing identifier.
-    shop_id: ID, // Owning shop ID.
-    item_type: TypeName, // Runtime type that checkout must mint.
-    name: String, // Display name shown to buyers.
-    base_price_usd_cents: u64, // Stored in USD cents to avoid floating point math.
-    stock: u64, // Remaining inventory for this listing.
-    active_bound_template_count: u64, // Number of active templates pinned to this listing.
-    spotlight_discount_template_id: Option<ID>, // Optional template highlighted in storefront UIs.
+    /// Stable listing identifier.
+    listing_id: ID,
+    /// Owning shop ID.
+    shop_id: ID,
+    /// Runtime type that checkout must mint.
+    item_type: TypeName,
+    /// Display name shown to buyers.
+    name: String,
+    /// Stored in USD cents to avoid floating point math.
+    base_price_usd_cents: u64,
+    /// Remaining inventory for this listing.
+    stock: u64,
+    /// Number of active templates pinned to this listing.
+    active_bound_template_count: u64,
+    /// Optional template highlighted in storefront UIs.
+    spotlight_discount_template_id: Option<ID>,
 }
 
 /// Shop item type for receipts. `TItem` is enforced at mint time so downstream
 /// Move code can depend on the type system instead of opaque metadata alone.
 public struct ShopItem<phantom TItem> has key, store {
-    id: UID, // Receipt object ID.
-    shop_id: ID, // Shop that minted this item.
-    item_listing_id: ID, // Listing that produced this item.
-    item_type: TypeName, // Type snapshot for downstream verification.
-    name: String, // Listing name snapshot at purchase time.
-    acquired_at: u64, // Timestamp seconds when purchase completed.
+    /// Receipt object ID.
+    id: UID,
+    /// Shop that minted this item.
+    shop_id: ID,
+    /// Listing that produced this item.
+    item_listing_id: ID,
+    /// Type snapshot for downstream verification.
+    item_type: TypeName,
+    /// Listing name snapshot at purchase time.
+    name: String,
+    /// Timestamp seconds when purchase completed.
+    acquired_at: u64,
 }
 
 /// Defines which external coins the shop is able to price/accept.
 public struct AcceptedCurrency has drop, store {
-    feed_id: vector<u8>, // Pyth price feed identifier (32 bytes).
-    pyth_object_id: ID, // ID of Pyth PriceInfoObject
-    decimals: u8, // Coin decimal precision from registry metadata.
-    symbol: String, // Display symbol for UIs/logging.
-    max_price_age_secs_cap: u64, // Upper bound on caller-provided max age override.
-    max_confidence_ratio_bps_cap: u16, // Upper bound on caller-provided confidence override.
-    max_price_status_lag_secs_cap: u64, // Upper bound on publish/attestation lag override.
+    /// Pyth price feed identifier (32 bytes).
+    feed_id: vector<u8>,
+    /// ID of Pyth PriceInfoObject
+    pyth_object_id: ID,
+    /// Coin decimal precision from registry metadata.
+    decimals: u8,
+    /// Display symbol for UIs/logging.
+    symbol: String,
+    /// Upper bound on caller-provided max age override.
+    max_price_age_secs_cap: u64,
+    /// Upper bound on caller-provided confidence override.
+    max_confidence_ratio_bps_cap: u16,
+    /// Upper bound on publish/attestation lag override.
+    max_price_status_lag_secs_cap: u64,
 }
 
 /// Discount rules mirror the spec: fixed (USD cents) or percentage basis points off.
@@ -252,119 +283,168 @@ public enum DiscountRuleKind has copy, drop {
 
 /// Coupon template for creating discounts tracked under the shop.
 public struct DiscountTemplate has store {
-    id: ID, // Template identifier and key in `Shop.discount_templates`.
-    shop_id: ID, // Parent shop ID.
-    applies_to_listing: Option<ID>, // Optional listing scope restriction.
-    rule: DiscountRule, // Fixed/percent discount payload.
-    starts_at: u64, // Activation timestamp (seconds).
-    expires_at: Option<u64>, // Optional expiration timestamp (seconds).
-    max_redemptions: Option<u64>, // Optional global redemption cap.
-    claims_issued: u64, // Number of tickets claimed from this template.
-    redemptions: u64, // Number of tickets redeemed in checkout.
-    active: bool, // Owner-controlled enable/disable flag.
-    claims_by_claimer: Table<address, bool>, // One-claim-per-address marker table.
+    /// Template identifier and key in `Shop.discount_templates`.
+    id: ID,
+    /// Parent shop ID.
+    shop_id: ID,
+    /// Optional listing scope restriction.
+    applies_to_listing: Option<ID>,
+    /// Fixed/percent discount payload.
+    rule: DiscountRule,
+    /// Activation timestamp (seconds).
+    starts_at: u64,
+    /// Optional expiration timestamp (seconds).
+    expires_at: Option<u64>,
+    /// Optional global redemption cap.
+    max_redemptions: Option<u64>,
+    /// Number of tickets claimed from this template.
+    claims_issued: u64,
+    /// Number of tickets redeemed in checkout.
+    redemptions: u64,
+    /// Owner-controlled enable/disable flag.
+    active: bool,
+    /// One-claim-per-address marker table.
+    claims_by_claimer: Table<address, bool>,
 }
 
 /// Discount ticket that future buyers will redeem during purchase flow.
 /// Tickets are owned objects. They can be transferred, but redemption enforces the original claimer
 /// so "transferable" does not mean "redeemable."
 public struct DiscountTicket has key, store {
-    id: UID, // Ticket object ID.
-    discount_template_id: ID, // Template this ticket redeems against.
-    shop_id: ID, // Shop context captured at claim time.
-    listing_id: Option<ID>, // Optional listing scope captured from template.
-    claimer: address, // Address authorized to redeem this ticket.
+    /// Ticket object ID.
+    id: UID,
+    /// Template this ticket redeems against.
+    discount_template_id: ID,
+    /// Shop context captured at claim time.
+    shop_id: ID,
+    /// Optional listing scope captured from template.
+    listing_id: Option<ID>,
+    /// Address authorized to redeem this ticket.
+    claimer: address,
 }
 
 // === Event Definitions ===
 /// Event emitted when a shop is created.
 public struct ShopCreatedEvent has copy, drop {
-    shop_id: ID, // Created shop ID.
-    shop_owner_cap_id: ID, // Created owner capability ID.
+    /// Created shop ID.
+    shop_id: ID,
+    /// Created owner capability ID.
+    shop_owner_cap_id: ID,
 }
 
 /// Event emitted when a shop owner is updated.
 public struct ShopOwnerUpdatedEvent has copy, drop {
-    shop_id: ID, // Shop whose owner changed.
-    shop_owner_cap_id: ID, // Owner capability used for the update.
+    /// Shop whose owner changed.
+    shop_id: ID,
+    /// Owner capability used for the update.
+    shop_owner_cap_id: ID,
 }
 
 /// Event emitted when a shop is disabled.
 public struct ShopDisabledEvent has copy, drop {
-    shop_id: ID, // Shop that was disabled.
-    shop_owner_cap_id: ID, // Owner capability used for disable.
+    /// Shop that was disabled.
+    shop_id: ID,
+    /// Owner capability used for disable.
+    shop_owner_cap_id: ID,
 }
 
 /// Event emitted when an item listing is added.
 public struct ItemListingAddedEvent has copy, drop {
-    shop_id: ID, // Shop that owns the new listing.
-    listing_id: ID, // Created listing ID.
+    /// Shop that owns the new listing.
+    shop_id: ID,
+    /// Created listing ID.
+    listing_id: ID,
 }
 
 /// Event emitted when listing stock is updated.
 public struct ItemListingStockUpdatedEvent has copy, drop {
-    shop_id: ID, // Shop that owns the listing.
-    listing_id: ID, // Listing whose stock changed.
+    /// Shop that owns the listing.
+    shop_id: ID,
+    /// Listing whose stock changed.
+    listing_id: ID,
 }
 
 /// Event emitted when an item listing is removed.
 public struct ItemListingRemovedEvent has copy, drop {
-    shop_id: ID, // Shop that owned the removed listing.
-    listing_id: ID, // Removed listing ID.
+    /// Shop that owned the removed listing.
+    shop_id: ID,
+    /// Removed listing ID.
+    listing_id: ID,
 }
 
 /// Event emitted when a discount template is created.
 public struct DiscountTemplateCreatedEvent has copy, drop {
-    shop_id: ID, // Shop that created the template.
-    discount_template_id: ID, // Created template ID.
+    /// Shop that created the template.
+    shop_id: ID,
+    /// Created template ID.
+    discount_template_id: ID,
 }
 
 /// Event emitted when a discount template is updated.
 public struct DiscountTemplateUpdatedEvent has copy, drop {
-    shop_id: ID, // Shop that owns the updated template.
-    discount_template_id: ID, // Updated template ID.
+    /// Shop that owns the updated template.
+    shop_id: ID,
+    /// Updated template ID.
+    discount_template_id: ID,
 }
 
 /// Event emitted when a discount template is toggled.
 public struct DiscountTemplateToggledEvent has copy, drop {
-    shop_id: ID, // Shop that owns the toggled template.
-    discount_template_id: ID, // Toggled template ID.
+    /// Shop that owns the toggled template.
+    shop_id: ID,
+    /// Toggled template ID.
+    discount_template_id: ID,
 }
 
 /// Event emitted when an accepted coin is added.
 public struct AcceptedCoinAddedEvent has copy, drop {
-    shop_id: ID, // Shop that registered the accepted currency.
-    accepted_currency_id: ID, // Pyth price-info object ID bound to the accepted currency.
+    /// Shop that registered the accepted currency.
+    shop_id: ID,
+    /// Pyth price-info object ID bound to the accepted currency.
+    accepted_currency_id: ID,
 }
 
 /// Event emitted when an accepted coin is removed.
 public struct AcceptedCoinRemovedEvent has copy, drop {
-    shop_id: ID, // Shop that removed the accepted currency.
-    accepted_currency_id: ID, // Pyth price-info object ID that was deregistered.
+    /// Shop that removed the accepted currency.
+    shop_id: ID,
+    /// Pyth price-info object ID that was deregistered.
+    accepted_currency_id: ID,
 }
 
 /// Event emitted when a discount ticket is claimed.
 public struct DiscountClaimedEvent has copy, drop {
-    shop_id: ID, // Shop that issued the ticket.
-    discount_id: ID, // Claimed discount ticket ID.
+    /// Shop that issued the ticket.
+    shop_id: ID,
+    /// Claimed discount ticket ID.
+    discount_id: ID,
 }
 
 /// Event emitted when a discount ticket is redeemed.
 public struct DiscountRedeemedEvent has copy, drop {
-    shop_id: ID, // Shop where redemption occurred.
-    discount_template_id: ID, // Template used for redemption.
-    discount_id: ID, // Redeemed discount ticket ID.
+    /// Shop where redemption occurred.
+    shop_id: ID,
+    /// Template used for redemption.
+    discount_template_id: ID,
+    /// Redeemed discount ticket ID.
+    discount_id: ID,
 }
 
 /// Event emitted when a purchase completes.
 public struct PurchaseCompletedEvent has copy, drop {
-    shop_id: ID, // Shop where checkout completed.
-    listing_id: ID, // Listing purchased in this checkout.
-    accepted_currency_id: ID, // Accepted currency entry used for pricing.
-    discount_template_id: Option<ID>, // Template applied to the purchase, if any.
-    minted_item_id: ID, // Newly minted `ShopItem` receipt ID.
+    /// Shop where checkout completed.
+    shop_id: ID,
+    /// Listing purchased in this checkout.
+    listing_id: ID,
+    /// Accepted currency entry used for pricing.
+    accepted_currency_id: ID,
+    /// Template applied to the purchase, if any.
+    discount_template_id: Option<ID>,
+    /// Newly minted `ShopItem` receipt ID.
+    minted_item_id: ID,
     /// These checkout values are not persisted on any object and must remain in the event.
     amount_paid: u64,
+    /// Final price in USD cents after discounts, used for analytics and indexing.
     discounted_price_usd_cents: u64,
 }
 
