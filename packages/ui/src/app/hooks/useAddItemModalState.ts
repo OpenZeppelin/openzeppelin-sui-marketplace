@@ -105,6 +105,13 @@ const waitMs = (delayMs: number) =>
     setTimeout(resolve, delayMs)
   })
 
+const toError = (error: unknown): Error =>
+  error instanceof Error ? error : new Error(String(error))
+
+type ItemListingSummaryRetryResult =
+  | { ok: true; listingSummary: ItemListingSummary }
+  | { ok: false; error: Error }
+
 const emptyFormState = (): ListingFormState => ({
   itemName: "",
   itemType: "",
@@ -300,21 +307,37 @@ const getItemListingSummaryWithRetry = async ({
   listingId: string
   suiClient: SuiClient
   retryDelaysMs?: number[]
-}): Promise<ItemListingSummary | undefined> => {
+}): Promise<ItemListingSummaryRetryResult> => {
+  let lastError: Error | undefined
+
   for (
     let attemptIndex = 0;
     attemptIndex <= retryDelaysMs.length;
     attemptIndex += 1
   ) {
     try {
-      return await getItemListingSummary(shopId, listingId, suiClient)
-    } catch {
-      if (attemptIndex >= retryDelaysMs.length) return undefined
+      return {
+        ok: true,
+        listingSummary: await getItemListingSummary(
+          shopId,
+          listingId,
+          suiClient
+        )
+      }
+    } catch (error) {
+      lastError = toError(error)
+      if (attemptIndex >= retryDelaysMs.length)
+        return { ok: false, error: lastError }
       await waitMs(retryDelaysMs[attemptIndex])
     }
   }
 
-  return undefined
+  return {
+    ok: false,
+    error:
+      lastError ??
+      new Error("Failed to fetch item listing summary after all retries.")
+  }
 }
 
 type AddItemModalState = {
@@ -579,11 +602,21 @@ export const useAddItemModalState = ({
         events: transactionBlock.events,
         shopId: resolvedShopId
       })
-      const listingSummary = await getItemListingSummaryWithRetry({
+      const listingSummaryResult = await getItemListingSummaryWithRetry({
         shopId: resolvedShopId,
         listingId,
         suiClient
       })
+      const listingSummary = listingSummaryResult.ok
+        ? listingSummaryResult.listingSummary
+        : undefined
+      if (!listingSummaryResult.ok) {
+        console.warn("Failed to fetch listing summary after retries.", {
+          listingId,
+          shopId: resolvedShopId,
+          error: listingSummaryResult.error
+        })
+      }
       const resolvedSpotlightDiscountId =
         listingSummary?.spotlightTemplateId ?? listingInputs.spotlightDiscountId
 
