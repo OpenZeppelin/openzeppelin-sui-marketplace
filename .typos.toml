@@ -5,4 +5,6 @@ extend-exclude = []
 extend-ignore-re = [
     # Ignore base58/base64 hashes and digests
     '"digest":\s*"[A-Za-z0-9]+"',
+    # Ignore short hex publish aliases in Move manifests
+    '(?m)^test-publish\s*=\s*"[0-9a-f]{8,}"$',
 ]

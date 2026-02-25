@@ -1,4 +1,5 @@
 import { escapeRegExp } from "./utils/regex.ts"
+import { sliceTomlSection } from "./utils/toml.ts"
 
 export type MoveLockFormat = "pinned" | "legacy" | "unknown"
 
@@ -19,33 +20,6 @@ const detectMoveLockFormat = (lockContents: string): MoveLockFormat => {
   if (/^\s*\[move\]\s*$/m.test(lockContents)) return "pinned"
   if (/\[\[move\.package\]\]/.test(lockContents)) return "legacy"
   return "unknown"
-}
-
-const sliceTomlSection = (
-  contents: string,
-  headerPattern: RegExp
-): string | undefined => {
-  const lines = contents.split(/\r?\n/)
-  const lineOffsets: number[] = [0]
-  for (let index = 0; index < contents.length; index += 1) {
-    if (contents[index] === "\n") lineOffsets.push(index + 1)
-  }
-
-  const headerIndex = lines.findIndex((line) => headerPattern.test(line))
-  if (headerIndex < 0) return undefined
-
-  const anyHeaderRegex = /^\s*\[[^\]]+\]\s*(#.*)?$/
-  const nextHeaderIndex = lines.findIndex(
-    (line, index) => index > headerIndex && anyHeaderRegex.test(line)
-  )
-
-  const start = lineOffsets[headerIndex] ?? 0
-  const end =
-    nextHeaderIndex >= 0
-      ? (lineOffsets[nextHeaderIndex] ?? contents.length)
-      : contents.length
-
-  return contents.slice(start, end)
 }
 
 const extractSuiGitRevisionFromPinnedSection = (
@@ -117,7 +91,7 @@ const extractSuiFrameworkPinnedEntriesFromPinnedLock = ({
       `^\\s*${escapeRegExp(sectionHeader)}\\s*$`,
       "m"
     )
-    const section = sliceTomlSection(lockContents, sectionHeaderPattern)
+    const section = sliceTomlSection(lockContents, sectionHeaderPattern)?.block
     if (!section) continue
 
     const revision = extractSuiGitRevisionFromPinnedSection(section)
@@ -164,7 +138,7 @@ const extractSuiGitRevisionsFromPinnedLock = ({
     const section = sliceTomlSection(
       lockContents,
       new RegExp(`^\\s*${escapedHeader}\\s*$`, "m")
-    )
+    )?.block
     if (!section) continue
 
     const revision = extractSuiGitRevisionFromPinnedSection(section)

@@ -3,11 +3,12 @@ import path from "node:path"
 
 import { formatErrorMessage } from "@sui-oracle-market/tooling-core/utils/errors"
 import type { ToolingContext } from "./factory.ts"
-import { logWarning } from "./log.ts"
+import { logKeyValueBlue, logWarning } from "./log.ts"
 import { resolveMoveCliEnvironmentName } from "./move.ts"
 import { getSuiCliEnvironmentChainId } from "./suiCli.ts"
 import { isErrnoWithCode } from "./utils/fs.ts"
 import { escapeRegExp } from "./utils/regex.ts"
+import { findTomlSectionByName } from "./utils/toml.ts"
 
 type MoveEnvironmentSyncResult = {
   updatedFiles: string[]
@@ -19,61 +20,41 @@ export type MoveEnvironmentChainIdSyncResult = {
   didAttempt: boolean
 }
 
+export const logLocalnetMoveEnvironmentSyncResult = ({
+  chainId,
+  updatedFiles,
+  didAttempt
+}: MoveEnvironmentChainIdSyncResult) => {
+  if (didAttempt && !chainId) {
+    logWarning(
+      "Unable to resolve localnet chain id; Move.toml environments were not updated."
+    )
+  }
+
+  if (updatedFiles.length) {
+    logKeyValueBlue("Move.toml")(
+      `updated ${updatedFiles.length} test-publish environment entries`
+    )
+  }
+}
+
 const resolveLineEnding = (contents: string) =>
   contents.includes("\r\n") ? "\r\n" : "\n"
 
-const getLineStartOffsets = (contents: string) => {
-  const offsets = [0]
-  for (let index = 0; index < contents.length; index += 1) {
-    if (contents[index] === "\n") offsets.push(index + 1)
-  }
-  return offsets
-}
-
-const listMoveTomlFiles = async (rootPath: string): Promise<string[]> => {
+export const listMoveTomlFiles = async (
+  rootPath: string
+): Promise<string[]> => {
   const entries = await fs.readdir(rootPath, { withFileTypes: true })
-  const files: string[] = []
-
-  await Promise.all(
-    entries.map(async (entry) => {
+  const filesByEntry = await Promise.all(
+    entries.map(async (entry): Promise<string[]> => {
       const fullPath = path.join(rootPath, entry.name)
-      if (entry.isDirectory()) {
-        files.push(...(await listMoveTomlFiles(fullPath)))
-      } else if (entry.isFile() && entry.name === "Move.toml") {
-        files.push(fullPath)
-      }
+      if (entry.isDirectory()) return listMoveTomlFiles(fullPath)
+      if (entry.isFile() && entry.name === "Move.toml") return [fullPath]
+      return []
     })
   )
 
-  return files
-}
-
-const findSectionBlock = (
-  contents: string,
-  sectionName: string
-): { block: string; start: number; end: number } | undefined => {
-  const escapedSection = escapeRegExp(sectionName)
-  const lines = contents.split(/\r?\n/)
-  const lineOffsets = getLineStartOffsets(contents)
-  const sectionHeaderRegex = new RegExp(
-    `^\\s*\\[${escapedSection}\\]\\s*(#.*)?$`
-  )
-  const anySectionHeaderRegex = /^\s*\[[^\]]+\]\s*(#.*)?$/
-
-  const headerIndex = lines.findIndex((line) => sectionHeaderRegex.test(line))
-  if (headerIndex < 0) return undefined
-
-  const nextHeaderIndex = lines.findIndex(
-    (line, index) => index > headerIndex && anySectionHeaderRegex.test(line)
-  )
-
-  const start = lineOffsets[headerIndex] ?? 0
-  const end =
-    nextHeaderIndex >= 0
-      ? (lineOffsets[nextHeaderIndex] ?? contents.length)
-      : contents.length
-
-  return { block: contents.slice(start, end), start, end }
+  return filesByEntry.flat()
 }
 
 const trimLeadingEmptyLines = (contents: string) =>
@@ -96,7 +77,7 @@ const removePublishedSectionForNetwork = (
   networkName: string
 ): { updatedContents: string; didUpdate: boolean } => {
   const sectionName = `published.${networkName}`
-  const sectionBlock = findSectionBlock(contents, sectionName)
+  const sectionBlock = findTomlSectionByName(contents, sectionName)
   if (!sectionBlock) return { updatedContents: contents, didUpdate: false }
 
   const lineEnding = resolveLineEnding(contents)
@@ -128,7 +109,7 @@ const hasDepReplacementSection = (contents: string, environmentName: string) =>
   ).test(contents)
 
 const hasEnvironmentEntry = (contents: string, environmentName: string) => {
-  const environmentBlock = findSectionBlock(contents, "environments")
+  const environmentBlock = findTomlSectionByName(contents, "environments")
   if (!environmentBlock) return false
 
   const entryRegex = new RegExp(
@@ -181,9 +162,11 @@ const updateEnvironmentBlock = ({
     }
     const indent = match?.[1] ?? ""
     const commentSuffix = match?.[3] ?? ""
-    lines[entryIndex] =
-      `${indent}${environmentName} = "${chainId}"${commentSuffix}`
-    return { updatedBlock: lines.join(lineEnding), didUpdate: true }
+    const updatedEntryLine = `${indent}${environmentName} = "${chainId}"${commentSuffix}`
+    const updatedLines = lines.map((line, index) =>
+      index === entryIndex ? updatedEntryLine : line
+    )
+    return { updatedBlock: updatedLines.join(lineEnding), didUpdate: true }
   }
 
   const indent = resolveEnvironmentEntryIndent(lines, headerIndex)
@@ -194,8 +177,13 @@ const updateEnvironmentBlock = ({
     return headerIndex
   })()
   const insertIndex = lastContentIndex + 1
-  lines.splice(insertIndex, 0, `${indent}${environmentName} = "${chainId}"`)
-  return { updatedBlock: lines.join(lineEnding), didUpdate: true }
+  const newEntryLine = `${indent}${environmentName} = "${chainId}"`
+  const updatedLines = [
+    ...lines.slice(0, insertIndex),
+    newEntryLine,
+    ...lines.slice(insertIndex)
+  ]
+  return { updatedBlock: updatedLines.join(lineEnding), didUpdate: true }
 }
 
 const insertEnvironmentBlock = (contents: string, block: string): string => {
@@ -227,22 +215,24 @@ const insertEnvironmentBlock = (contents: string, block: string): string => {
 const updateMoveTomlEnvironmentChainId = ({
   contents,
   environmentName,
-  chainId
+  chainId,
+  shouldRequireManagedEnvironment = true
 }: {
   contents: string
   environmentName: string
   chainId: string
+  shouldRequireManagedEnvironment?: boolean
 }): { updatedContents: string; didUpdate: boolean } => {
   const lineEnding = resolveLineEnding(contents)
   const shouldManageEnvironment =
     hasDepReplacementSection(contents, environmentName) ||
     hasEnvironmentEntry(contents, environmentName)
 
-  if (!shouldManageEnvironment) {
+  if (shouldRequireManagedEnvironment && !shouldManageEnvironment) {
     return { updatedContents: contents, didUpdate: false }
   }
 
-  const environmentBlock = findSectionBlock(contents, "environments")
+  const environmentBlock = findTomlSectionByName(contents, "environments")
   const newEntryBlock = `[environments]${lineEnding}${environmentName} = "${chainId}"`
 
   if (!environmentBlock) {
@@ -266,6 +256,28 @@ const updateMoveTomlEnvironmentChainId = ({
       contents.slice(environmentBlock.end),
     didUpdate: true
   }
+}
+
+export const ensureMoveTomlEnvironmentChainId = async ({
+  moveTomlPath,
+  environmentName,
+  chainId
+}: {
+  moveTomlPath: string
+  environmentName: string
+  chainId: string
+}): Promise<boolean> => {
+  const contents = await fs.readFile(moveTomlPath, "utf8")
+  const { updatedContents, didUpdate } = updateMoveTomlEnvironmentChainId({
+    contents,
+    environmentName,
+    chainId,
+    shouldRequireManagedEnvironment: false
+  })
+  if (!didUpdate) return false
+
+  await fs.writeFile(moveTomlPath, updatedContents)
+  return true
 }
 
 /**

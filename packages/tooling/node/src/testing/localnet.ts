@@ -52,7 +52,11 @@ import {
   readKeystoreEntries
 } from "../keypair.ts"
 import { probeRpcHealth } from "../localnet.ts"
-import { resolveChainIdentifier } from "../move-toml.ts"
+import {
+  ensureMoveTomlEnvironmentChainId,
+  listMoveTomlFiles,
+  resolveChainIdentifier
+} from "../move-toml.ts"
 import {
   buildMoveEnvironmentFlags,
   buildMovePackage,
@@ -1224,63 +1228,8 @@ const copyMoveSources = async (
   await removeMoveBuildArtifacts(destinationRoot)
 }
 
-const listMoveTomlFiles = async (rootDir: string): Promise<string[]> => {
-  const entries = await readdir(rootDir, { withFileTypes: true })
-  const files: string[] = []
-
-  await Promise.all(
-    entries.map(async (entry) => {
-      const fullPath = path.join(rootDir, entry.name)
-      if (entry.isDirectory()) {
-        files.push(...(await listMoveTomlFiles(fullPath)))
-      } else if (entry.isFile() && entry.name === "Move.toml") {
-        files.push(fullPath)
-      }
-    })
-  )
-
-  return files
-}
-
 const resolveLocalnetMoveEnvironmentName = () =>
   resolveMoveCliEnvironmentName("localnet") ?? "test-publish"
-
-const buildEnvironmentEntryLine = (environmentName: string, chainId: string) =>
-  `${environmentName} = "${chainId}"`
-
-const buildEnvironmentEntryRegex = (environmentName: string) =>
-  new RegExp(`^\\s*${environmentName}\\s*=\\s*"[^"]*"`, "m")
-
-const ensureMoveTomlEnvironmentEntry = async ({
-  moveTomlPath,
-  environmentName,
-  chainId
-}: {
-  moveTomlPath: string
-  environmentName: string
-  chainId: string
-}) => {
-  const contents = await readFile(moveTomlPath, "utf8")
-  const entryRegex = buildEnvironmentEntryRegex(environmentName)
-  if (entryRegex.test(contents)) return
-
-  const entryLine = buildEnvironmentEntryLine(environmentName, chainId)
-
-  if (/^\s*\[environments\]\s*$/m.test(contents)) {
-    const updated = contents.replace(
-      /^\s*\[environments\]\s*$/m,
-      `[environments]\n${entryLine}`
-    )
-    if (updated !== contents) {
-      await writeFile(moveTomlPath, updated, "utf8")
-    }
-    return
-  }
-
-  const suffix = contents.endsWith("\n") ? "" : "\n"
-  const updated = `${contents}${suffix}\n[environments]\n${entryLine}\n`
-  await writeFile(moveTomlPath, updated, "utf8")
-}
 
 const ensureLocalnetEnvironmentEntry = async (
   moveRootPath: string,
@@ -1291,7 +1240,7 @@ const ensureLocalnetEnvironmentEntry = async (
 
   await Promise.all(
     moveTomlFiles.map(async (moveTomlPath) => {
-      await ensureMoveTomlEnvironmentEntry({
+      await ensureMoveTomlEnvironmentChainId({
         moveTomlPath,
         environmentName: moveEnvironmentName,
         chainId
@@ -1306,7 +1255,7 @@ const ensureLocalnetEnvironmentEntryForPackage = async (
 ) => {
   const moveEnvironmentName = resolveLocalnetMoveEnvironmentName()
   const moveTomlPath = path.join(packagePath, "Move.toml")
-  await ensureMoveTomlEnvironmentEntry({
+  await ensureMoveTomlEnvironmentChainId({
     moveTomlPath,
     environmentName: moveEnvironmentName,
     chainId
