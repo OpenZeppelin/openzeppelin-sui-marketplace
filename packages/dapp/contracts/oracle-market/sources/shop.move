@@ -276,7 +276,6 @@ public struct DiscountTicket has key, store {
     claimer: address, // Address authorized to redeem this ticket.
 }
 
-
 // === Event Definitions ===
 /// Event emitted when a shop is created.
 public struct ShopCreatedEvent has copy, drop {
@@ -826,11 +825,7 @@ entry fun toggle_discount_template(
     assert_template_registered!(shop, discount_template_id);
     let (applies_to_listing, was_active, template_shop_id) = {
         let discount_template = shop.borrow_discount_template(discount_template_id);
-        (
-            discount_template.applies_to_listing,
-            discount_template.active,
-            discount_template.shop_id,
-        )
+        (discount_template.applies_to_listing, discount_template.active, discount_template.shop_id)
     };
     if (active) {
         assert_listing_belongs_to_shop_if_some!(shop, applies_to_listing);
@@ -1073,12 +1068,7 @@ entry fun buy_item_with_discount<TItem: store, TCoin>(
     };
     let (discounted_price_usd_cents, discount_template_id_option, template_id_for_event) = {
         let discount_template = shop.borrow_discount_template_mut(discount_template_id);
-        assert_discount_redemption_allowed!(
-            discount_template,
-            listing_shop_id,
-            listing_id,
-            now,
-        );
+        assert_discount_redemption_allowed!(discount_template, listing_shop_id, listing_id, now);
         assert_ticket_matches_context!(
             &discount_ticket,
             discount_template,
@@ -1154,7 +1144,11 @@ entry fun claim_and_buy_item_with_discount<TItem: store, TCoin>(
 ) {
     assert_shop_active!(shop);
     let now_secs = now_secs(clock);
-    let discount_ticket = shop.claim_discount_ticket_with_event(discount_template_id, now_secs, ctx);
+    let discount_ticket = shop.claim_discount_ticket_with_event(
+        discount_template_id,
+        now_secs,
+        ctx,
+    );
 
     shop.buy_item_with_discount<TItem, TCoin>(
         discount_template_id,
@@ -1930,10 +1924,7 @@ macro fun assert_ticket_matches_context(
     let listing_id = $listing_id;
     let buyer = $buyer;
     assert!(discount_ticket.shop_id == listing_shop_id, EDiscountTicketShopMismatch);
-    assert!(
-        discount_ticket.discount_template_id == discount_template.id,
-        EDiscountTicketMismatch,
-    );
+    assert!(discount_ticket.discount_template_id == discount_template.id, EDiscountTicketMismatch);
     assert!(discount_ticket.claimer == buyer, EDiscountTicketOwnerMismatch);
 
     discount_ticket.listing_id.do_ref!(|ticket_listing_id| {
