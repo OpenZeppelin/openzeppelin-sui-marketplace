@@ -81,9 +81,9 @@ pnpm ui dev
 ```move
 entry fun buy_item<TItem: store, TCoin>(
   shop: &mut Shop,
-  listing_id: u64,
   price_info_object: &price_info::PriceInfoObject,
   payment: coin::Coin<TCoin>,
+  listing_id: ID,
   mint_to: address,
   refund_extra_to: address,
   max_price_age_secs: Option<u64>,

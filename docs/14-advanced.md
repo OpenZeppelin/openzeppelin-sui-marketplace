@@ -77,7 +77,7 @@ pnpm script buyer:buy --help
 **Code spotlight: view helpers used by dev-inspect**
 `packages/dapp/contracts/oracle-market/sources/shop.move`
 ```move
-public fun listing_exists(shop: &Shop, listing_id: u64): bool {
+public fun listing_exists(shop: &Shop, listing_id: ID): bool {
   shop.listings.contains(listing_id)
 }
 
@@ -109,9 +109,9 @@ function buy(uint256 listingId, address payToken) external {
 // Move (actual shape)
 entry fun buy_item<TItem: store, TCoin>(
   shop: &mut Shop,
-  listing_id: u64,
   price_info: &price_info::PriceInfoObject,
   payment_coin: coin::Coin<TCoin>,
+  listing_id: ID,
   mint_to: address,
   refund_to: address,
   max_price_age_secs: Option<u64>,
@@ -135,7 +135,7 @@ entry fun buy_item<TItem: store, TCoin>(
 ## 9. Diagram: shared vs owned objects in tests
 ```
 Shared: Shop, DiscountTemplate
-Shop table entries: listings[u64] -> ItemListing, accepted_currencies[TypeName] -> AcceptedCurrency
+Shop table entries: listings[ID] -> ItemListing, accepted_currencies[TypeName] -> AcceptedCurrency
 Owned: ShopOwnerCap, DiscountTicket, ShopItem
 ```
 

@@ -1,5 +1,4 @@
 import type { SuiClient } from "@mysten/sui/client"
-import type { Transaction } from "@mysten/sui/transactions"
 import { normalizeSuiObjectId } from "@mysten/sui/utils"
 
 import type { WrappedSuiSharedObject } from "@sui-oracle-market/tooling-core/shared-object"
@@ -9,9 +8,13 @@ import {
 } from "../models/discount.ts"
 import {
   getItemListingSummary,
-  normalizeListingId,
-  normalizeListingIdAsBigIntU64
+  normalizeListingId
 } from "../models/item-listing.ts"
+import {
+  buildListingIdArgument,
+  buildObjectIdArgument,
+  buildOptionalObjectIdArgument
+} from "./id-arguments.ts"
 import { buildShopOwnerTransactionContext } from "./shop-owner-arguments.ts"
 
 type ListingMetadata = {
@@ -24,17 +27,6 @@ type DiscountTemplateMetadata = {
   shopId: string
   appliesToListing?: string
 }
-
-const toListingIdU64 = (listingId: string): bigint =>
-  normalizeListingIdAsBigIntU64(listingId)
-
-const buildListingIdArgument = (transaction: Transaction, listingId: string) =>
-  transaction.pure.u64(toListingIdU64(listingId))
-
-const normalizeOptionalSpotlightDiscountTemplateId = (
-  spotlightDiscountId?: string
-): string | null =>
-  spotlightDiscountId ? normalizeSuiObjectId(spotlightDiscountId) : null
 
 export type AddListingSpotlightTemplateInput = {
   ruleKind: NormalizedRuleKind
@@ -194,9 +186,10 @@ export const buildAddItemListingTransaction = ({
         transaction.pure.string(normalizedItemName),
         transaction.pure.u64(basePriceUsdCents),
         transaction.pure.u64(stock),
-        transaction.pure.option(
-          "address",
-          normalizeOptionalSpotlightDiscountTemplateId(spotlightDiscountId)
+        buildOptionalObjectIdArgument(
+          transaction,
+          spotlightDiscountId,
+          "spotlightDiscountId"
         )
       ]
     })
@@ -290,7 +283,11 @@ export const buildAttachDiscountTemplateTransaction = ({
     arguments: [
       shopArgument,
       ownerCapabilityArgument,
-      transaction.pure.address(discountTemplateId),
+      buildObjectIdArgument(
+        transaction,
+        discountTemplateId,
+        "discountTemplateId"
+      ),
       buildListingIdArgument(transaction, itemListingId)
     ]
   })

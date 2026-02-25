@@ -1,6 +1,6 @@
 /**
  * Lists table-backed ItemListings for a Shop by enumerating Shop.listings table entries.
- * Listing identifiers are shop-scoped u64 values.
+ * Listing identifiers are object IDs, sorted lexicographically for deterministic output.
  * Read-only: no transaction is executed.
  */
 import yargs from "yargs"

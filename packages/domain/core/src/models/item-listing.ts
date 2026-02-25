@@ -6,7 +6,7 @@ import {
   unwrapMoveObjectFields
 } from "@sui-oracle-market/tooling-core/object"
 import {
-  TABLE_KEY_TYPE_U64,
+  TABLE_KEY_TYPE_OBJECT_ID,
   getTableEntryDynamicFieldObject,
   getTableEntryDynamicFields,
   resolveTableObjectIdFromField
@@ -15,8 +15,6 @@ import {
   formatOptionalNumericValue,
   readMoveStringOrVector
 } from "@sui-oracle-market/tooling-core/utils/formatters"
-import { normalizeBigIntFromMoveValue } from "@sui-oracle-market/tooling-core/utils/move-values"
-import { parseNonNegativeU64 } from "@sui-oracle-market/tooling-core/utils/utility"
 import { formatTypeNameFromFieldValue } from "@sui-oracle-market/tooling-core/utils/type-name"
 
 export const ITEM_LISTING_TYPE_FRAGMENT = "::shop::ItemListing"
@@ -47,23 +45,38 @@ type OrderedItemListingTableEntry = {
   listingId: string
 }
 
+const requireListingIdInput = (listingId: string, label: string): string => {
+  const normalizedListingIdInput = listingId.trim()
+  if (!normalizedListingIdInput) throw new Error(`Missing ${label}.`)
+  return normalizedListingIdInput
+}
+
+const isLegacyNumericListingId = (listingId: string): boolean =>
+  /^\d+$/.test(listingId)
+
 export const normalizeListingId = (
   listingId: string,
   label = "listingId"
-): string => parseNonNegativeU64(listingId, label).toString()
+): string => {
+  const normalizedListingIdInput = requireListingIdInput(listingId, label)
 
-export const normalizeListingIdAsBigIntU64 = (
-  listingId: string,
-  label = "listingId"
-): bigint => BigInt(normalizeListingId(listingId, label))
+  if (isLegacyNumericListingId(normalizedListingIdInput))
+    throw new Error(
+      `Invalid ${label}: expected a Sui object ID (0x...). Numeric u64 listing IDs are no longer supported.`
+    )
+
+  try {
+    return normalizeSuiObjectId(normalizedListingIdInput)
+  } catch {
+    throw new Error(
+      `Invalid ${label}: expected a Sui object ID (0x...). Received "${listingId}".`
+    )
+  }
+}
 
 export const normalizeOptionalListingIdFromValue = (
   value: unknown
-): string | undefined => {
-  const listingId = normalizeBigIntFromMoveValue(value)
-  if (listingId === undefined || listingId < 0n) return undefined
-  return listingId.toString()
-}
+): string | undefined => normalizeOptionalIdFromValue(value)
 
 export const extractListingIdFromItemListingAddedEvents = ({
   events,
@@ -172,11 +185,10 @@ const getListingIdFromTableEntryField = (
 const compareListingIdStrings = (
   leftListingId: string,
   rightListingId: string
-) => {
-  const left = BigInt(leftListingId)
-  const right = BigInt(rightListingId)
-  if (left === right) return 0
-  return left < right ? -1 : 1
+): number => {
+  // Object IDs are canonical lowercase hex strings; lexical ordering is deterministic.
+  if (leftListingId === rightListingId) return 0
+  return leftListingId < rightListingId ? -1 : 1
 }
 
 const sortListingTableEntriesByListingId = (
@@ -208,7 +220,7 @@ const requireItemListingTableEntryObject = async ({
   const tableEntryObject = await getTableEntryDynamicFieldObject(
     {
       tableObjectId: listingsTableObjectId,
-      keyType: TABLE_KEY_TYPE_U64,
+      keyType: TABLE_KEY_TYPE_OBJECT_ID,
       keyValue: listingId
     },
     { suiClient }

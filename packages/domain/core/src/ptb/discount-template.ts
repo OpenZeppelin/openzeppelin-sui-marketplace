@@ -1,6 +1,9 @@
 import type { WrappedSuiSharedObject } from "@sui-oracle-market/tooling-core/shared-object"
 import type { NormalizedRuleKind } from "../models/discount.ts"
-import { normalizeListingIdAsBigIntU64 } from "../models/item-listing.ts"
+import {
+  buildObjectIdArgument,
+  buildOptionalListingIdArgument
+} from "./id-arguments.ts"
 import { buildShopOwnerTransactionContext } from "./shop-owner-arguments.ts"
 
 export const buildCreateDiscountTemplateTransaction = ({
@@ -29,16 +32,17 @@ export const buildCreateDiscountTemplateTransaction = ({
       shop,
       ownerCapId
     })
-  const normalizedAppliesToListingId = appliesToListingId
-    ? normalizeListingIdAsBigIntU64(appliesToListingId, "appliesToListingId")
-    : null
 
   transaction.moveCall({
     target: `${packageId}::shop::create_discount_template`,
     arguments: [
       shopArgument,
       ownerCapabilityArgument,
-      transaction.pure.option("u64", normalizedAppliesToListingId),
+      buildOptionalListingIdArgument(
+        transaction,
+        appliesToListingId,
+        "appliesToListingId"
+      ),
       transaction.pure.u8(ruleKind),
       transaction.pure.u64(ruleValue),
       transaction.pure.u64(startsAt),
@@ -85,7 +89,11 @@ export const buildUpdateDiscountTemplateTransaction = ({
     arguments: [
       shopArgument,
       ownerCapabilityArgument,
-      transaction.pure.address(discountTemplateId),
+      buildObjectIdArgument(
+        transaction,
+        discountTemplateId,
+        "discountTemplateId"
+      ),
       transaction.pure.u8(ruleKind),
       transaction.pure.u64(ruleValue),
       transaction.pure.u64(startsAt),
@@ -122,7 +130,11 @@ export const buildToggleDiscountTemplateTransaction = ({
     arguments: [
       shopArgument,
       ownerCapabilityArgument,
-      transaction.pure.address(discountTemplateId),
+      buildObjectIdArgument(
+        transaction,
+        discountTemplateId,
+        "discountTemplateId"
+      ),
       transaction.pure.bool(active)
     ]
   })
@@ -157,7 +169,11 @@ export const buildPruneDiscountClaimsTransaction = ({
     arguments: [
       shopArgument,
       ownerCapabilityArgument,
-      transaction.pure.address(discountTemplateId),
+      buildObjectIdArgument(
+        transaction,
+        discountTemplateId,
+        "discountTemplateId"
+      ),
       transaction.pure.vector("address", claimers),
       clockArgument
     ]

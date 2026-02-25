@@ -223,13 +223,13 @@ Owner scripts default `--shop-package-id`, `--shop-id`, and `--owner-cap-id` fro
 ### `pnpm script owner:item-listing:remove`
 - Delists the item by removing its row from `Shop.listings` (fails if active listing-bound templates still target that listing).
 - Flags:
-	- `--item-listing-id <u64>`: listing ID to remove (required).
+	- `--item-listing-id <id>`: listing object ID to remove (required).
 	- `--shop-package-id <id>` / `--shop-id <id>` / `--owner-cap-id <id>`: override artifact defaults.
 
 ### `pnpm script owner:item-listing:update-stock`
 - Updates inventory for an existing listing; setting `0` pauses sales without removing the listing.
 - Flags:
-	- `--item-listing-id <u64>`: listing ID (required).
+	- `--item-listing-id <id>`: listing object ID (required).
 	- `--stock <u64>`: new quantity (required; can be zero).
 	- `--shop-package-id <id>` / `--shop-id <id>` / `--owner-cap-id <id>`: override artifact defaults.
 
@@ -241,7 +241,7 @@ Owner scripts default `--shop-package-id`, `--shop-id`, and `--owner-cap-id` fro
 	- `--starts-at <epoch-seconds>`: activation time (defaults to now).
 	- `--expires-at <epoch-seconds>`: optional expiry (must be > `starts-at` when set).
 	- `--max-redemptions <u64>`: optional redemption cap.
-	- `--listing-id <u64>`: optional listing ID to pin this template to.
+	- `--listing-id <id>`: optional listing object ID to pin this template to.
 	- `--publisher-id <id>`: optional metadata-only field; not passed on-chain.
 	- `--shop-package-id <id>` / `--shop-id <id>` / `--owner-cap-id <id>`: override artifact defaults.
 
@@ -272,14 +272,14 @@ Owner scripts default `--shop-package-id`, `--shop-id`, and `--owner-cap-id` fro
 ### `pnpm script owner:item-listing:attach-discount-template`
 - Attaches a discount template to a listing for spotlighting.
 - Flags:
-	- `--item-listing-id <u64>`: listing ID to attach to (required).
+	- `--item-listing-id <id>`: listing object ID to attach to (required).
 	- `--discount-template-id <id>`: template object ID to attach (required).
 	- `--shop-package-id <id>` / `--shop-id <id>` / `--owner-cap-id <id>`: override artifact defaults.
 
 ### `pnpm script owner:item-listing:clear-discount-template`
 - Clears the spotlighted template from a listing (does not delete the template).
 - Flags:
-	- `--item-listing-id <u64>`: listing ID to clear (required).
+	- `--item-listing-id <id>`: listing object ID to clear (required).
 	- `--shop-package-id <id>` / `--shop-id <id>` / `--owner-cap-id <id>`: override artifact defaults.
 
 ---
@@ -321,19 +321,19 @@ Owner scripts default `--shop-package-id`, `--shop-id`, and `--owner-cap-id` fro
 
 ### `pnpm script buyer:buy`
 - Executes checkout with oracle guardrails and optional discounts.
-	- Flags:
-		- `--shop-id <id>`: shared Shop object ID; defaults to the latest Shop artifact.
-		- `--item-listing-id <u64>`: listing ID to purchase (required).
-		- `--coin-type <0x...::Coin>`: payment coin type (must be registered as an AcceptedCurrency) (required).
-		- `--payment-coin-object-id <id>`: specific Coin object ID to use; otherwise the script picks the richest owned coin of that type.
-		- `--mint-to <0x...>`: address that receives the ShopItem receipt (defaults to signer); redeeming the receipt for the actual item happens in a separate flow.
-		- `--refund-to <0x...>`: address that receives any refund change (defaults to signer).
-		- `--discount-ticket-id <id>`: redeem an existing DiscountTicket during checkout.
-		- `--discount-template-id <id>` / `--claim-discount`: claim + redeem a ticket atomically in one PTB.
-		- `--max-price-age-secs <u64>` / `--max-confidence-ratio-bps <u64>`: tighter oracle guardrails (cannot exceed per-currency caps).
-		- `--skip-price-update`: skip Hermes price refresh (not recommended on shared networks).
-		- `--hermes-url <url>`: override the Hermes endpoint for price updates.
-		- Note: `--claim-discount` and `--discount-ticket-id` are mutually exclusive.
+- Flags:
+	- `--shop-id <id>`: shared Shop object ID; defaults to the latest Shop artifact.
+	- `--item-listing-id <id>`: listing object ID to purchase (required).
+	- `--coin-type <0x...::Coin>`: payment coin type (must be registered as an AcceptedCurrency) (required).
+	- `--payment-coin-object-id <id>`: specific Coin object ID to use; otherwise the script picks the richest owned coin of that type.
+	- `--mint-to <0x...>`: address that receives the ShopItem receipt (defaults to signer); redeeming the receipt for the actual item happens in a separate flow.
+	- `--refund-to <0x...>`: address that receives any refund change (defaults to signer).
+	- `--discount-ticket-id <id>`: redeem an existing DiscountTicket during checkout.
+	- `--discount-template-id <id>` / `--claim-discount`: claim + redeem a ticket atomically in one PTB.
+	- `--max-price-age-secs <u64>` / `--max-confidence-ratio-bps <u64>`: tighter oracle guardrails (cannot exceed per-currency caps).
+	- `--skip-price-update`: skip Hermes price refresh (not recommended on shared networks).
+	- `--hermes-url <url>`: override the Hermes endpoint for price updates.
+	- Note: `--claim-discount` and `--discount-ticket-id` are mutually exclusive.
 
 ### `pnpm script buyer:buy:list`
 - Lists `ShopItem` receipts owned by an address (default: configured account) with optional shop filtering.

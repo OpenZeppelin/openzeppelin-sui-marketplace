@@ -37,9 +37,12 @@ import type {
   DiscountTemplateSummary
 } from "../models/discount.ts"
 import { parseDiscountTicketFromObject } from "../models/discount.ts"
-import { normalizeListingIdAsBigIntU64 } from "../models/item-listing.ts"
 import type { PriceUpdatePolicy, PythPullOracleConfig } from "../models/pyth.ts"
 import { resolvePythPullOracleConfig } from "../models/pyth.ts"
+import {
+  buildListingIdArgument,
+  buildObjectIdArgument
+} from "../ptb/id-arguments.ts"
 
 const isSuiCoinType = (coinType: string) =>
   normalizeCoinType(coinType) === NORMALIZED_SUI_COIN_TYPE
@@ -640,7 +643,11 @@ export const buildBuyTransaction = async (
   }
 
   const shopArgument = transaction.sharedObjectRef(shopShared.sharedRef)
-  const listingId = normalizeListingIdAsBigIntU64(itemListingId)
+  const listingIdArgument = buildListingIdArgument(
+    transaction,
+    itemListingId,
+    "itemListingId"
+  )
 
   const clockShared = await getSuiSharedObject(
     {
@@ -718,7 +725,7 @@ export const buildBuyTransaction = async (
   const buildCommonBuyArguments = () => [
     pythPriceInfoArgument,
     paymentArgument,
-    transaction.pure.u64(listingId),
+    listingIdArgument,
     transaction.pure.address(mintTo),
     transaction.pure.address(refundTo),
     transaction.pure.option("u64", maxPriceAgeSecs ?? null),
@@ -732,7 +739,11 @@ export const buildBuyTransaction = async (
       typeArguments,
       arguments: [
         shopArgument,
-        transaction.pure.address(discountContext.discountTemplateId),
+        buildObjectIdArgument(
+          transaction,
+          discountContext.discountTemplateId,
+          "discountTemplateId"
+        ),
         ...buildCommonBuyArguments()
       ]
     })
@@ -746,7 +757,11 @@ export const buildBuyTransaction = async (
       typeArguments,
       arguments: [
         shopArgument,
-        transaction.pure.address(discountContext.discountTemplateId),
+        buildObjectIdArgument(
+          transaction,
+          discountContext.discountTemplateId,
+          "discountTemplateId"
+        ),
         transaction.object(discountContext.discountTicketId),
         ...buildCommonBuyArguments()
       ]
