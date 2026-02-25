@@ -47,7 +47,9 @@ The shop now stores accepted currencies in `Table<TypeName, AcceptedCurrency>` i
   Code: `packages/dapp/contracts/oracle-market/sources/shop.move` (`buy_item`, `process_purchase`, `split_payment`)
 - **Coin registry metadata**: `coin_registry::Currency<T>` provides symbol/decimals copied into `AcceptedCurrency` during registration.
   Code: `packages/dapp/contracts/oracle-market/sources/shop.move` (`add_accepted_currency`)
-- **Strict oracle identity checks**: both `pyth_object_id` and `feed_id` must match the provided `PriceInfoObject`.
+- **Strict oracle identity checks**: both `pyth_object_id` and `feed_id` must match the provided
+  `PriceInfoObject`. Clients pass a refreshed object into the PTB, and the module validates
+  identity and freshness on-chain.
   Code: `packages/dapp/contracts/oracle-market/sources/shop.move` (`assert_price_info_identity`)
 - **Clock-based freshness**: age and status-lag are verified on-chain with `clock::Clock`.
   Code: `packages/dapp/contracts/oracle-market/sources/shop.move` (`quote_amount_for_price_info_object`)
@@ -78,7 +80,7 @@ entry fun add_accepted_currency<T>(
   assert_owner_cap!(shop, owner_cap);
 
   let coin_type = currency_type<T>();
-  validate_accepted_currency_inputs!(
+  assert_accepted_currency_inputs!(
     shop,
     &coin_type,
     &feed_id,
