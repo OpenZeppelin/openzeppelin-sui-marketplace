@@ -31,6 +31,11 @@ const toListingIdU64 = (listingId: string): bigint =>
 const buildListingIdArgument = (transaction: Transaction, listingId: string) =>
   transaction.pure.u64(toListingIdU64(listingId))
 
+const normalizeOptionalSpotlightDiscountTemplateId = (
+  spotlightDiscountId?: string
+): string | null =>
+  spotlightDiscountId ? normalizeSuiObjectId(spotlightDiscountId) : null
+
 export type AddListingSpotlightTemplateInput = {
   ruleKind: NormalizedRuleKind
   ruleValue: bigint
@@ -189,7 +194,10 @@ export const buildAddItemListingTransaction = ({
         transaction.pure.string(normalizedItemName),
         transaction.pure.u64(basePriceUsdCents),
         transaction.pure.u64(stock),
-        transaction.pure.option("address", spotlightDiscountId ?? null)
+        transaction.pure.option(
+          "address",
+          normalizeOptionalSpotlightDiscountTemplateId(spotlightDiscountId)
+        )
       ]
     })
   }
