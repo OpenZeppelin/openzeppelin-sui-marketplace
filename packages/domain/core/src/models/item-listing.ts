@@ -45,6 +45,11 @@ export const normalizeListingId = (
   label = "listingId"
 ): string => parseNonNegativeU64(listingId, label).toString()
 
+export const normalizeListingIdAsBigIntU64 = (
+  listingId: string,
+  label = "listingId"
+): bigint => BigInt(normalizeListingId(listingId, label))
+
 export const normalizeOptionalListingIdFromValue = (
   value: unknown
 ): string | undefined => {
@@ -169,6 +174,50 @@ const findItemListingTableEntryFieldByListingId = ({
       getListingIdFromTableEntryField(tableEntryField) === listingId
   )
 
+const requireItemListingTableEntryField = async ({
+  shopId,
+  listingId,
+  suiClient
+}: {
+  shopId: string
+  listingId: string
+  suiClient: SuiClient
+}): Promise<ItemListingTableEntryField> => {
+  const listingsTableObjectId = await getListingsTableObjectId({
+    shopId,
+    suiClient
+  })
+  const tableEntryFields = await getItemListingTableEntryFields({
+    tableObjectId: listingsTableObjectId,
+    suiClient
+  })
+  const tableEntryField = findItemListingTableEntryFieldByListingId({
+    listingId,
+    tableEntryFields
+  })
+  if (!tableEntryField)
+    throw new Error(`No listing ${listingId} found in shop ${shopId}.`)
+
+  return tableEntryField
+}
+
+const getItemListingObjectByTableEntryField = async ({
+  tableEntryField,
+  suiClient
+}: {
+  tableEntryField: ItemListingTableEntryField
+  suiClient: SuiClient
+}): Promise<SuiObjectData> =>
+  (
+    await getSuiObject(
+      {
+        objectId: tableEntryField.objectId,
+        options: { showContent: true, showType: true }
+      },
+      { suiClient }
+    )
+  ).object
+
 export const getItemListingSummaries = async (
   shopId: string,
   suiClient: SuiClient
@@ -210,30 +259,15 @@ export const getItemListingDetails = async (
   suiClient: SuiClient
 ): Promise<ItemListingDetails> => {
   const normalizedListingId = normalizeListingId(itemListingId)
-  const listingsTableObjectId = await getListingsTableObjectId({
+  const tableEntryField = await requireItemListingTableEntryField({
     shopId,
-    suiClient
-  })
-  const tableEntryFields = await getItemListingTableEntryFields({
-    tableObjectId: listingsTableObjectId,
-    suiClient
-  })
-  const tableEntryField = findItemListingTableEntryFieldByListingId({
     listingId: normalizedListingId,
-    tableEntryFields
+    suiClient
   })
-  if (!tableEntryField)
-    throw new Error(
-      `No listing ${normalizedListingId} found in shop ${shopId}.`
-    )
-
-  const { object } = await getSuiObject(
-    {
-      objectId: tableEntryField.objectId,
-      options: { showContent: true, showType: true }
-    },
-    { suiClient }
-  )
+  const object = await getItemListingObjectByTableEntryField({
+    tableEntryField,
+    suiClient
+  })
   return buildItemListingDetails(
     object,
     normalizedListingId,
@@ -247,30 +281,15 @@ export const getItemListingSummary = async (
   suiClient: SuiClient
 ): Promise<ItemListingSummary> => {
   const normalizedListingId = normalizeListingId(itemListingId)
-  const listingsTableObjectId = await getListingsTableObjectId({
+  const tableEntryField = await requireItemListingTableEntryField({
     shopId,
-    suiClient
-  })
-  const tableEntryFields = await getItemListingTableEntryFields({
-    tableObjectId: listingsTableObjectId,
-    suiClient
-  })
-  const tableEntryField = findItemListingTableEntryFieldByListingId({
     listingId: normalizedListingId,
-    tableEntryFields
+    suiClient
   })
-  if (!tableEntryField)
-    throw new Error(
-      `No listing ${normalizedListingId} found in shop ${shopId}.`
-    )
-
-  const { object } = await getSuiObject(
-    {
-      objectId: tableEntryField.objectId,
-      options: { showContent: true, showType: true }
-    },
-    { suiClient }
-  )
+  const object = await getItemListingObjectByTableEntryField({
+    tableEntryField,
+    suiClient
+  })
 
   return buildItemListingSummary(
     object,

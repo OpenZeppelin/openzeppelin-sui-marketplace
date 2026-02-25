@@ -1,7 +1,7 @@
 import type { WrappedSuiSharedObject } from "@sui-oracle-market/tooling-core/shared-object"
 import { newTransaction } from "@sui-oracle-market/tooling-core/transactions"
 import type { NormalizedRuleKind } from "../models/discount.ts"
-import { normalizeListingId } from "../models/item-listing.ts"
+import { normalizeListingIdAsBigIntU64 } from "../models/item-listing.ts"
 import { buildShopOwnerCapabilityArguments } from "./shop-owner-arguments.ts"
 
 export const buildCreateDiscountTemplateTransaction = ({
@@ -33,7 +33,7 @@ export const buildCreateDiscountTemplateTransaction = ({
       ownerCapId
     })
   const normalizedAppliesToListingId = appliesToListingId
-    ? BigInt(normalizeListingId(appliesToListingId, "appliesToListingId"))
+    ? normalizeListingIdAsBigIntU64(appliesToListingId, "appliesToListingId")
     : null
 
   transaction.moveCall({

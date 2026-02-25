@@ -9,7 +9,8 @@ import {
 } from "../models/discount.ts"
 import {
   getItemListingSummary,
-  normalizeListingId
+  normalizeListingId,
+  normalizeListingIdAsBigIntU64
 } from "../models/item-listing.ts"
 import { buildShopOwnerCapabilityArguments } from "./shop-owner-arguments.ts"
 
@@ -25,7 +26,7 @@ type DiscountTemplateMetadata = {
 }
 
 const toListingIdU64 = (listingId: string): bigint =>
-  BigInt(normalizeListingId(listingId))
+  normalizeListingIdAsBigIntU64(listingId)
 
 const buildListingIdArgument = (
   transaction: ReturnType<typeof newTransaction>,

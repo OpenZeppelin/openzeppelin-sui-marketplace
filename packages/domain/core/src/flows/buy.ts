@@ -37,7 +37,7 @@ import type {
   DiscountTemplateSummary
 } from "../models/discount.ts"
 import { parseDiscountTicketFromObject } from "../models/discount.ts"
-import { normalizeListingId } from "../models/item-listing.ts"
+import { normalizeListingIdAsBigIntU64 } from "../models/item-listing.ts"
 import type { PriceUpdatePolicy, PythPullOracleConfig } from "../models/pyth.ts"
 import { resolvePythPullOracleConfig } from "../models/pyth.ts"
 
@@ -640,7 +640,7 @@ export const buildBuyTransaction = async (
   }
 
   const shopArgument = transaction.sharedObjectRef(shopShared.sharedRef)
-  const listingId = BigInt(normalizeListingId(itemListingId))
+  const listingId = normalizeListingIdAsBigIntU64(itemListingId)
 
   const clockShared = await getSuiSharedObject(
     {
