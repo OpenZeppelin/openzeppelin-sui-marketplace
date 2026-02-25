@@ -90,7 +90,7 @@ export const logDiscountTemplateSummary = (
   else logKeyValueGreen("Max-redemptions")("Unlimited")
   logKeyValueGreen("Claims")(discountTemplate.claimsIssued ?? "Unknown")
   logKeyValueGreen("Redeemed")(discountTemplate.redemptions ?? "Unknown")
-  logKeyValueGreen("Marker-id")(discountTemplate.markerObjectId)
+  logKeyValueGreen("Table-entry-field")(discountTemplate.tableEntryFieldId)
   console.log("")
 }
 

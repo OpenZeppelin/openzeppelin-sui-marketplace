@@ -13,7 +13,8 @@ import type { IdentifierString } from "@mysten/wallet-standard"
 import {
   defaultStartTimestampSeconds,
   deriveTemplateStatus,
-  DISCOUNT_TEMPLATE_TYPE_FRAGMENT,
+  extractDiscountTemplateIdFromCreatedEvents,
+  extractDiscountTemplateTableEntryFieldIdFromCreatedObjects,
   getDiscountTemplateSummary,
   parseDiscountRuleKind,
   parseDiscountRuleValue,
@@ -450,14 +451,20 @@ export const useAddDiscountModalState = ({
         transactionBlock = await waitForTransactionBlock(suiClient, digest)
       }
 
-      const discountTemplateId = extractCreatedObjects(transactionBlock).find(
-        (change) => change.objectType.endsWith(DISCOUNT_TEMPLATE_TYPE_FRAGMENT)
-      )?.objectId
+      const discountTemplateId = extractDiscountTemplateIdFromCreatedEvents({
+        events: transactionBlock.events,
+        shopId: resolvedShopId
+      })
+      const discountTemplateTableEntryFieldId =
+        extractDiscountTemplateTableEntryFieldIdFromCreatedObjects({
+          createdObjects: extractCreatedObjects(transactionBlock)
+        })
 
       const optimisticTemplate = discountTemplateId
         ? {
             discountTemplateId,
-            markerObjectId: discountTemplateId,
+            tableEntryFieldId:
+              discountTemplateTableEntryFieldId ?? discountTemplateId,
             shopId: resolvedShopId,
             appliesToListingId: discountInputs.appliesToListingId,
             ruleDescription: formatDiscountRulePreview({

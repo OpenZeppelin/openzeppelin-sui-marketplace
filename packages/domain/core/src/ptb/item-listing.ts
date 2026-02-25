@@ -1,19 +1,17 @@
 import type { SuiClient } from "@mysten/sui/client"
 import { normalizeSuiObjectId } from "@mysten/sui/utils"
 
-import { getObjectWithDynamicFieldFallback } from "@sui-oracle-market/tooling-core/dynamic-fields"
-import {
-  normalizeOptionalIdFromValue,
-  unwrapMoveObjectFields
-} from "@sui-oracle-market/tooling-core/object"
 import type { WrappedSuiSharedObject } from "@sui-oracle-market/tooling-core/shared-object"
 import { newTransaction } from "@sui-oracle-market/tooling-core/transactions"
-import type { NormalizedRuleKind } from "../models/discount.ts"
+import {
+  getDiscountTemplateSummary,
+  type NormalizedRuleKind
+} from "../models/discount.ts"
 import {
   getItemListingSummary,
-  normalizeListingId,
-  normalizeOptionalListingIdFromValue
+  normalizeListingId
 } from "../models/item-listing.ts"
+import { buildShopOwnerCapabilityArguments } from "./shop-owner-arguments.ts"
 
 type ListingMetadata = {
   id: string
@@ -63,26 +61,16 @@ export const getDiscountTemplateMetadata = async (
   shopId: string,
   suiClient: SuiClient
 ): Promise<DiscountTemplateMetadata> => {
-  const object = await getObjectWithDynamicFieldFallback(
-    { objectId: templateId, parentObjectId: shopId },
-    { suiClient }
+  const templateSummary = await getDiscountTemplateSummary(
+    shopId,
+    templateId,
+    suiClient
   )
 
-  const fields = unwrapMoveObjectFields(object)
-  const templateShopId = normalizeOptionalIdFromValue(fields.shop_id)
-  if (!templateShopId)
-    throw new Error(
-      `Discount template ${templateId} is missing a shop_id field.`
-    )
-
   return {
-    id:
-      normalizeOptionalIdFromValue(fields.id) ??
-      normalizeSuiObjectId(templateId),
-    shopId: templateShopId,
-    appliesToListing: normalizeOptionalListingIdFromValue(
-      fields.applies_to_listing
-    )
+    id: templateSummary.discountTemplateId,
+    shopId: templateSummary.shopId,
+    appliesToListing: templateSummary.appliesToListingId
   }
 }
 
@@ -158,7 +146,12 @@ export const buildAddItemListingTransaction = ({
   createSpotlightDiscountTemplate?: AddListingSpotlightTemplateInput
 }) => {
   const transaction = newTransaction()
-  const shopArgument = transaction.sharedObjectRef(shop.sharedRef)
+  const [shopArgument, ownerCapabilityArgument] =
+    buildShopOwnerCapabilityArguments({
+      transaction,
+      shop,
+      ownerCapId
+    })
   const normalizedItemName = itemName.trim()
   if (!normalizedItemName) throw new Error("Item name cannot be empty.")
   if (spotlightDiscountId && createSpotlightDiscountTemplate)
@@ -172,7 +165,7 @@ export const buildAddItemListingTransaction = ({
       typeArguments: [itemType],
       arguments: [
         shopArgument,
-        transaction.object(ownerCapId),
+        ownerCapabilityArgument,
         transaction.pure.string(normalizedItemName),
         transaction.pure.u64(basePriceUsdCents),
         transaction.pure.u64(stock),
@@ -195,7 +188,7 @@ export const buildAddItemListingTransaction = ({
       typeArguments: [itemType],
       arguments: [
         shopArgument,
-        transaction.object(ownerCapId),
+        ownerCapabilityArgument,
         transaction.pure.string(normalizedItemName),
         transaction.pure.u64(basePriceUsdCents),
         transaction.pure.u64(stock),
@@ -219,13 +212,18 @@ export const buildRemoveItemListingTransaction = ({
   itemListingId: string
 }) => {
   const transaction = newTransaction()
-  const shopArgument = transaction.sharedObjectRef(shop.sharedRef)
+  const [shopArgument, ownerCapabilityArgument] =
+    buildShopOwnerCapabilityArguments({
+      transaction,
+      shop,
+      ownerCapId
+    })
 
   transaction.moveCall({
     target: `${packageId}::shop::remove_item_listing`,
     arguments: [
       shopArgument,
-      transaction.object(ownerCapId),
+      ownerCapabilityArgument,
       buildListingIdArgument(transaction, itemListingId)
     ]
   })
@@ -247,13 +245,18 @@ export const buildUpdateItemListingStockTransaction = ({
   newStock: bigint
 }) => {
   const transaction = newTransaction()
-  const shopArgument = transaction.sharedObjectRef(shop.sharedRef)
+  const [shopArgument, ownerCapabilityArgument] =
+    buildShopOwnerCapabilityArguments({
+      transaction,
+      shop,
+      ownerCapId
+    })
 
   transaction.moveCall({
     target: `${packageId}::shop::update_item_listing_stock`,
     arguments: [
       shopArgument,
-      transaction.object(ownerCapId),
+      ownerCapabilityArgument,
       buildListingIdArgument(transaction, itemListingId),
       transaction.pure.u64(newStock)
     ]
@@ -266,27 +269,29 @@ export const buildAttachDiscountTemplateTransaction = ({
   packageId,
   shop,
   itemListingId,
-  discountTemplate,
+  discountTemplateId,
   ownerCapId
 }: {
   packageId: string
   shop: WrappedSuiSharedObject
   itemListingId: string
-  discountTemplate: WrappedSuiSharedObject
+  discountTemplateId: string
   ownerCapId: string
 }) => {
   const transaction = newTransaction()
-  const shopArgument = transaction.sharedObjectRef(shop.sharedRef)
-  const templateArgument = transaction.sharedObjectRef(
-    discountTemplate.sharedRef
-  )
+  const [shopArgument, ownerCapabilityArgument] =
+    buildShopOwnerCapabilityArguments({
+      transaction,
+      shop,
+      ownerCapId
+    })
 
   transaction.moveCall({
     target: `${packageId}::shop::attach_template_to_listing`,
     arguments: [
       shopArgument,
-      transaction.object(ownerCapId),
-      templateArgument,
+      ownerCapabilityArgument,
+      transaction.pure.address(discountTemplateId),
       buildListingIdArgument(transaction, itemListingId)
     ]
   })
@@ -306,13 +311,18 @@ export const buildClearDiscountTemplateTransaction = ({
   ownerCapId: string
 }) => {
   const transaction = newTransaction()
-  const shopArgument = transaction.sharedObjectRef(shop.sharedRef)
+  const [shopArgument, ownerCapabilityArgument] =
+    buildShopOwnerCapabilityArguments({
+      transaction,
+      shop,
+      ownerCapId
+    })
 
   transaction.moveCall({
     target: `${packageId}::shop::clear_template_from_listing`,
     arguments: [
       shopArgument,
-      transaction.object(ownerCapId),
+      ownerCapabilityArgument,
       buildListingIdArgument(transaction, itemListingId)
     ]
   })

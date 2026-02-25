@@ -39,9 +39,6 @@ runSuiScript(
     const shopShared = await tooling.getMutableSharedObject({
       objectId: shopId
     })
-    const discountTemplateShared = await tooling.getMutableSharedObject({
-      objectId: discountTemplateId
-    })
 
     const shopPackageId = deriveRelevantPackageId(shopShared.object.type)
 
@@ -58,7 +55,7 @@ runSuiScript(
     const claimDiscountTicketTransaction = buildClaimDiscountTicketTransaction({
       packageId: shopPackageId,
       shopShared,
-      discountTemplateShared,
+      discountTemplateId,
       sharedClockObject: await tooling.getImmutableSharedObject({
         objectId: SUI_CLOCK_ID
       })
@@ -109,8 +106,7 @@ runSuiScript(
     .option("discountTemplateId", {
       alias: ["discount-template-id", "template-id"],
       type: "string",
-      description:
-        "DiscountTemplate object ID to claim a single-use ticket from.",
+      description: "Discount template ID to claim a single-use ticket from.",
       demandOption: true
     })
     .option("devInspect", {

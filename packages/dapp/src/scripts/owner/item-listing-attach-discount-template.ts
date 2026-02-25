@@ -40,16 +40,13 @@ runSuiScript(
     const shopSharedObject = await tooling.getMutableSharedObject({
       objectId: inputs.shopId
     })
-    const discountTemplateSharedObject = await tooling.getImmutableSharedObject(
-      { objectId: resolvedIds.discountTemplateId }
-    )
 
     const attachDiscountTemplateTransaction =
       buildAttachDiscountTemplateTransaction({
         packageId: inputs.packageId,
         shop: shopSharedObject,
         itemListingId: resolvedIds.itemListingId,
-        discountTemplate: discountTemplateSharedObject,
+        discountTemplateId: resolvedIds.discountTemplateId,
         ownerCapId: inputs.ownerCapId
       })
 
@@ -105,8 +102,7 @@ runSuiScript(
     .option("discountTemplateId", {
       alias: ["discount-template-id", "template-id"],
       type: "string",
-      description:
-        "DiscountTemplate object ID to spotlight on the listing (object ID).",
+      description: "Discount template ID to spotlight on the listing.",
       demandOption: true
     })
     .option("shopPackageId", {

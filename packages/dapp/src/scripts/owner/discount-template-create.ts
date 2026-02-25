@@ -1,5 +1,5 @@
 /**
- * Creates a DiscountTemplate shared object with rule + schedule.
+ * Creates a DiscountTemplate entry in the Shop's template table.
  * Templates can be global or scoped to a listing; the Clock enforces time windows.
  * Requires the ShopOwnerCap capability.
  */
@@ -8,24 +8,19 @@ import yargs from "yargs"
 
 import {
   defaultStartTimestampSeconds,
-  DISCOUNT_TEMPLATE_TYPE_FRAGMENT,
   discountRuleChoices,
-  getDiscountTemplateSummary,
-  parseDiscountRuleKind,
-  parseDiscountRuleValue,
-  validateDiscountSchedule,
+  requireDiscountTemplateIdFromCreatedEvents,
   type DiscountRuleKindLabel
 } from "@sui-oracle-market/domain-core/models/discount"
 import { normalizeListingId } from "@sui-oracle-market/domain-core/models/item-listing"
 import { buildCreateDiscountTemplateTransaction } from "@sui-oracle-market/domain-core/ptb/discount-template"
-import {
-  parseNonNegativeU64,
-  parseOptionalU64
-} from "@sui-oracle-market/tooling-core/utils/utility"
-import { emitJsonOutput } from "@sui-oracle-market/tooling-node/json"
-import { logKeyValueGreen } from "@sui-oracle-market/tooling-node/log"
 import { runSuiScript } from "@sui-oracle-market/tooling-node/process"
-import { logDiscountTemplateSummary } from "../../utils/log-summaries.ts"
+import {
+  emitOrLogDiscountTemplateMutationResult,
+  executeDiscountTemplateMutation,
+  fetchDiscountTemplateSummaryForMutation,
+  parseDiscountTemplateRuleScheduleInputs
+} from "./discount-template-script-helpers.ts"
 import { resolveOwnerShopIdentifiers } from "../../utils/shop-context.ts"
 
 runSuiScript(
@@ -52,51 +47,34 @@ runSuiScript(
         ownerCapId: inputs.ownerCapId
       })
 
-    const { execution, summary } = await tooling.executeTransactionWithSummary({
+    const mutationResult = await executeDiscountTemplateMutation({
+      tooling,
       transaction: createDiscountTemplateTransaction,
-      signer: tooling.loadedEd25519KeyPair,
       summaryLabel: "create-discount-template",
       devInspect: cliArguments.devInspect,
       dryRun: cliArguments.dryRun
     })
 
-    if (!execution) return
+    if (!mutationResult) return
+    const { execution, summary } = mutationResult
 
-    const {
-      objectArtifacts: { created: createdObjects }
-    } = execution
+    const discountTemplateId = requireDiscountTemplateIdFromCreatedEvents({
+      events: execution.transactionResult.events,
+      shopId: inputs.shopId
+    })
+    const discountTemplateSummary =
+      await fetchDiscountTemplateSummaryForMutation({
+        shopId: inputs.shopId,
+        discountTemplateId,
+        tooling
+      })
 
-    const createdDiscountTemplate = createdObjects.find((artifact) =>
-      artifact.objectType.endsWith(DISCOUNT_TEMPLATE_TYPE_FRAGMENT)
-    )
-    if (!createdDiscountTemplate)
-      throw new Error(
-        "Expected a DiscountTemplate object to be created, but it was not found in transaction artifacts."
-      )
-
-    const discountTemplateId = createdDiscountTemplate.objectId
-
-    const discountTemplateSummary = await getDiscountTemplateSummary(
-      inputs.shopId,
-      discountTemplateId,
-      tooling.suiClient
-    )
-
-    if (
-      emitJsonOutput(
-        {
-          discountTemplate: discountTemplateSummary,
-          digest: createdDiscountTemplate.digest,
-          transactionSummary: summary
-        },
-        cliArguments.json
-      )
-    )
-      return
-
-    logDiscountTemplateSummary(discountTemplateSummary)
-    if (createdDiscountTemplate.digest)
-      logKeyValueGreen("digest")(createdDiscountTemplate.digest)
+    emitOrLogDiscountTemplateMutationResult({
+      discountTemplateSummary,
+      digest: execution.transactionResult.digest,
+      transactionSummary: summary,
+      json: cliArguments.json
+    })
   },
   yargs()
     .option("ruleKind", {
@@ -204,14 +182,13 @@ const normalizeInputs = async (
     ownerCapId: cliArguments.ownerCapId
   })
 
-  const ruleKind = parseDiscountRuleKind(cliArguments.ruleKind)
-  const startsAt = parseNonNegativeU64(
-    cliArguments.startsAt ?? defaultStartTimestampSeconds().toString(),
-    "startsAt"
-  )
-  const expiresAt = parseOptionalU64(cliArguments.expiresAt, "expiresAt")
-
-  validateDiscountSchedule(startsAt, expiresAt)
+  const parsedRuleScheduleInputs = parseDiscountTemplateRuleScheduleInputs({
+    ruleKind: cliArguments.ruleKind,
+    value: cliArguments.value,
+    startsAt: cliArguments.startsAt,
+    expiresAt: cliArguments.expiresAt,
+    maxRedemptions: cliArguments.maxRedemptions
+  })
 
   return {
     packageId,
@@ -220,14 +197,7 @@ const normalizeInputs = async (
     appliesToListingId: cliArguments.listingId
       ? normalizeListingId(cliArguments.listingId, "listingId")
       : undefined,
-    ruleKind,
-    ruleValue: parseDiscountRuleValue(ruleKind, cliArguments.value),
-    startsAt,
-    expiresAt,
-    maxRedemptions: parseOptionalU64(
-      cliArguments.maxRedemptions,
-      "maxRedemptions"
-    ),
+    ...parsedRuleScheduleInputs,
     publisherId: cliArguments.publisherId
       ? normalizeSuiObjectId(cliArguments.publisherId)
       : undefined

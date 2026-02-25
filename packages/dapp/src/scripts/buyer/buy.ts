@@ -376,7 +376,7 @@ runSuiScript(
       alias: ["discount-template-id", "template-id"],
       type: "string",
       description:
-        "Optional DiscountTemplate object ID. Required when using --claim-discount."
+        "Optional discount template ID. Required when using --claim-discount."
     })
     .option("claimDiscount", {
       alias: ["claim-discount", "claim-and-buy"],
