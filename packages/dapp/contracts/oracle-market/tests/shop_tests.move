@@ -134,7 +134,7 @@ fun add_currency_with_feed<T>(
 
 fun assert_listing_spotlight_template_id(
     shop: &shop::Shop,
-    listing_id: ID,
+    listing_id: u64,
     expected_template_id: ID,
 ) {
     let (_, _, _, _, spotlight_template_id) = shop::test_listing_values_local(
@@ -150,7 +150,7 @@ fun assert_listing_spotlight_template_id(
 fun assert_listing_scoped_percent_template(
     shop: &shop::Shop,
     template_id: ID,
-    listing_id: ID,
+    listing_id: u64,
     expected_rule_value: u64,
     expected_starts_at: u64,
     expected_max_redemptions: u64,
@@ -184,7 +184,7 @@ fun assert_listing_scoped_percent_template(
     assert!(active);
 }
 
-fun assert_single_listing_added_event(shop: &shop::Shop, listing_id: ID) {
+fun assert_single_listing_added_event(shop: &shop::Shop, listing_id: u64) {
     let listing_added_events = event::events_by_type<shop::ItemListingAddedEvent>();
     assert_eq!(listing_added_events.length(), 1);
     let listing_added_event = &listing_added_events[0];
@@ -4159,7 +4159,7 @@ fun test_abort_accepted_currency_missing_is_reachable() {
 fun listing_and_template_id_for_address_return_none_when_missing() {
     let mut ctx = tx_context::new_from_hint(TEST_OWNER, 9993, 0, 0, 0);
     let (shop_obj, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
-    let missing_listing_id = shop::test_shop_id(&shop_obj);
+    let missing_listing_id = 0;
 
     assert!(!shop::test_listing_exists(&shop_obj, missing_listing_id));
     let missing_address = @0x1234;
@@ -4224,7 +4224,7 @@ fun remove_listing_and_template_noop_when_missing() {
     let dummy_uid = object::new(&mut ctx);
     let dummy_id = dummy_uid.to_inner();
     dummy_uid.delete();
-    let missing_listing_id = shop::test_shop_id(&shop_obj);
+    let missing_listing_id = 0;
 
     shop::test_remove_listing(&mut shop_obj, missing_listing_id);
     shop::test_remove_template(&mut shop_obj, dummy_id);
@@ -4667,7 +4667,7 @@ fun checkout_rejects_listing_not_registered_in_shop() {
         &mut shared_shop,
         &price_info,
         payment,
-        shop_id,
+        99_999,
         OTHER_OWNER,
         OTHER_OWNER,
         option::none(),
@@ -5013,7 +5013,7 @@ fun setup_shop_with_currency_listing_and_price_info(
     scn: &mut test_scenario::Scenario,
     base_price_usd_cents: u64,
     stock: u64,
-): (ID, ID, ID, ID) {
+): (ID, ID, u64, ID) {
     let currency = prepare_test_currency_for_owner(scn, TEST_OWNER);
 
     let (mut shop_obj, owner_cap) = shop::test_setup_shop(
@@ -5063,7 +5063,7 @@ fun setup_shop_with_currency_listing_and_price_info_for_item<TItem: store>(
     item_name: vector<u8>,
     base_price_usd_cents: u64,
     stock: u64,
-): (ID, ID, ID, ID) {
+): (ID, ID, u64, ID) {
     let currency = prepare_test_currency_for_owner(scn, TEST_OWNER);
 
     let (mut shop_obj, owner_cap) = shop::test_setup_shop(
@@ -6515,7 +6515,7 @@ fun test_coin_type(): type_name::TypeName {
     type_name::with_defining_ids<TestCoin>()
 }
 
-fun last_created_listing_id(): ID {
+fun last_created_listing_id(): u64 {
     let listing_added_events = event::events_by_type<shop::ItemListingAddedEvent>();
     let listing_added_count = listing_added_events.length();
     assert!(listing_added_count > 0);
