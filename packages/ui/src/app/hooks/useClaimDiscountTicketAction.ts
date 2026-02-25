@@ -141,10 +141,6 @@ export const useClaimDiscountTicketAction = ({
           { objectId: shopId, mutable: true },
           { suiClient }
         )
-        const discountTemplateShared = await getSuiSharedObject(
-          { objectId: template.discountTemplateId, mutable: true },
-          { suiClient }
-        )
         const clockShared = await getSuiSharedObject(
           { objectId: SUI_CLOCK_ID, mutable: false },
           { suiClient }
@@ -154,7 +150,7 @@ export const useClaimDiscountTicketAction = ({
         const claimTransaction = buildClaimDiscountTicketTransaction({
           packageId: shopPackageId,
           shopShared,
-          discountTemplateShared,
+          discountTemplateId: template.discountTemplateId,
           sharedClockObject: clockShared
         })
         claimTransaction.setSender(walletAddress)

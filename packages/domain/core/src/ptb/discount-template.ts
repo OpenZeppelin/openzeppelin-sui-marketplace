@@ -2,6 +2,7 @@ import type { WrappedSuiSharedObject } from "@sui-oracle-market/tooling-core/sha
 import { newTransaction } from "@sui-oracle-market/tooling-core/transactions"
 import type { NormalizedRuleKind } from "../models/discount.ts"
 import { normalizeListingId } from "../models/item-listing.ts"
+import { buildShopOwnerCapabilityArguments } from "./shop-owner-arguments.ts"
 
 export const buildCreateDiscountTemplateTransaction = ({
   packageId,
@@ -25,17 +26,22 @@ export const buildCreateDiscountTemplateTransaction = ({
   ownerCapId: string
 }) => {
   const transaction = newTransaction()
-  const shopArgument = transaction.sharedObjectRef(shop.sharedRef)
+  const [shopArgument, ownerCapabilityArgument] =
+    buildShopOwnerCapabilityArguments({
+      transaction,
+      shop,
+      ownerCapId
+    })
   const normalizedAppliesToListingId = appliesToListingId
-    ? BigInt(normalizeListingId(appliesToListingId, "appliesToListingId"))
+    ? normalizeListingId(appliesToListingId, "appliesToListingId")
     : null
 
   transaction.moveCall({
     target: `${packageId}::shop::create_discount_template`,
     arguments: [
       shopArgument,
-      transaction.object(ownerCapId),
-      transaction.pure.option("u64", normalizedAppliesToListingId),
+      ownerCapabilityArgument,
+      transaction.pure.option("address", normalizedAppliesToListingId),
       transaction.pure.u8(ruleKind),
       transaction.pure.u64(ruleValue),
       transaction.pure.u64(startsAt),
@@ -50,7 +56,7 @@ export const buildCreateDiscountTemplateTransaction = ({
 export const buildUpdateDiscountTemplateTransaction = ({
   packageId,
   shop,
-  discountTemplate,
+  discountTemplateId,
   ruleKind,
   ruleValue,
   startsAt,
@@ -61,7 +67,7 @@ export const buildUpdateDiscountTemplateTransaction = ({
 }: {
   packageId: string
   shop: WrappedSuiSharedObject
-  discountTemplate: WrappedSuiSharedObject
+  discountTemplateId: string
   ruleKind: NormalizedRuleKind
   ruleValue: bigint
   startsAt: bigint
@@ -71,18 +77,20 @@ export const buildUpdateDiscountTemplateTransaction = ({
   sharedClockObject: WrappedSuiSharedObject
 }) => {
   const transaction = newTransaction()
-  const shopArgument = transaction.sharedObjectRef(shop.sharedRef)
-  const discountTemplateArgument = transaction.sharedObjectRef(
-    discountTemplate.sharedRef
-  )
+  const [shopArgument, ownerCapabilityArgument] =
+    buildShopOwnerCapabilityArguments({
+      transaction,
+      shop,
+      ownerCapId
+    })
   const clockArgument = transaction.sharedObjectRef(sharedClockObject.sharedRef)
 
   transaction.moveCall({
     target: `${packageId}::shop::update_discount_template`,
     arguments: [
       shopArgument,
-      transaction.object(ownerCapId),
-      discountTemplateArgument,
+      ownerCapabilityArgument,
+      transaction.pure.address(discountTemplateId),
       transaction.pure.u8(ruleKind),
       transaction.pure.u64(ruleValue),
       transaction.pure.u64(startsAt),
@@ -98,31 +106,30 @@ export const buildUpdateDiscountTemplateTransaction = ({
 export const buildToggleDiscountTemplateTransaction = ({
   packageId,
   shop,
-  discountTemplate,
+  discountTemplateId,
   active,
   ownerCapId
 }: {
   packageId: string
   shop: WrappedSuiSharedObject
-  discountTemplate: WrappedSuiSharedObject
+  discountTemplateId: string
   active: boolean
   ownerCapId: string
 }) => {
   const transaction = newTransaction()
-  const shopArgument = transaction.sharedObjectRef({
-    ...shop.sharedRef,
-    mutable: true
-  })
-  const discountTemplateArgument = transaction.sharedObjectRef(
-    discountTemplate.sharedRef
-  )
-
+  const [shopArgument, ownerCapabilityArgument] =
+    buildShopOwnerCapabilityArguments({
+      transaction,
+      shop,
+      ownerCapId,
+      shopMutable: true
+    })
   transaction.moveCall({
     target: `${packageId}::shop::toggle_discount_template`,
     arguments: [
       shopArgument,
-      transaction.object(ownerCapId),
-      discountTemplateArgument,
+      ownerCapabilityArgument,
+      transaction.pure.address(discountTemplateId),
       transaction.pure.bool(active)
     ]
   })
@@ -133,31 +140,33 @@ export const buildToggleDiscountTemplateTransaction = ({
 export const buildPruneDiscountClaimsTransaction = ({
   packageId,
   shop,
-  discountTemplate,
+  discountTemplateId,
   claimers,
   ownerCapId,
   sharedClockObject
 }: {
   packageId: string
   shop: WrappedSuiSharedObject
-  discountTemplate: WrappedSuiSharedObject
+  discountTemplateId: string
   claimers: string[]
   ownerCapId: string
   sharedClockObject: WrappedSuiSharedObject
 }) => {
   const transaction = newTransaction()
-  const shopArgument = transaction.sharedObjectRef(shop.sharedRef)
-  const discountTemplateArgument = transaction.sharedObjectRef(
-    discountTemplate.sharedRef
-  )
+  const [shopArgument, ownerCapabilityArgument] =
+    buildShopOwnerCapabilityArguments({
+      transaction,
+      shop,
+      ownerCapId
+    })
   const clockArgument = transaction.sharedObjectRef(sharedClockObject.sharedRef)
 
   transaction.moveCall({
     target: `${packageId}::shop::prune_discount_claims`,
     arguments: [
       shopArgument,
-      transaction.object(ownerCapId),
-      discountTemplateArgument,
+      ownerCapabilityArgument,
+      transaction.pure.address(discountTemplateId),
       transaction.pure.vector("address", claimers),
       clockArgument
     ]

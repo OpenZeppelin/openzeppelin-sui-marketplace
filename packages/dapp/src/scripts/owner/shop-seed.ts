@@ -18,9 +18,9 @@ import {
 } from "@sui-oracle-market/domain-core/models/currency"
 import {
   defaultStartTimestampSeconds,
-  DISCOUNT_TEMPLATE_TYPE_FRAGMENT,
   getDiscountTemplateSummaries,
   getDiscountTemplateSummary,
+  requireDiscountTemplateIdFromCreatedEvents,
   parseDiscountRuleKind,
   parseDiscountRuleValue,
   validateDiscountSchedule,
@@ -1336,9 +1336,7 @@ const ensureDiscountTemplate = async ({
 
   validateDiscountSchedule(startsAt, expiresAt)
 
-  const {
-    objectArtifacts: { created: createdObjects }
-  } = await signAndExecuteWithRetry({
+  const { transactionResult } = await signAndExecuteWithRetry({
     tooling,
     buildTransaction: () =>
       buildCreateDiscountTemplateTransaction({
@@ -1354,10 +1352,9 @@ const ensureDiscountTemplate = async ({
       })
   })
 
-  const createdTemplateId = requireCreatedArtifactIdBySuffix({
-    createdArtifacts: createdObjects,
-    suffix: DISCOUNT_TEMPLATE_TYPE_FRAGMENT,
-    label: "DiscountTemplate"
+  const createdTemplateId = requireDiscountTemplateIdFromCreatedEvents({
+    events: transactionResult.events,
+    shopId: shopIdentifiers.shopId
   })
 
   const discountTemplateSummary = await getDiscountTemplateSummary(
@@ -1423,9 +1420,6 @@ const ensureFixedDiscountSpotlight = async ({
   const shopSharedObject = await tooling.getMutableSharedObject({
     objectId: shopIdentifiers.shopId
   })
-  const discountTemplateSharedObject = await tooling.getImmutableSharedObject({
-    objectId: resolvedIds.discountTemplateId
-  })
 
   await signAndExecuteWithRetry({
     tooling,
@@ -1434,7 +1428,7 @@ const ensureFixedDiscountSpotlight = async ({
         packageId: shopIdentifiers.packageId,
         shop: shopSharedObject,
         itemListingId: resolvedIds.itemListingId,
-        discountTemplate: discountTemplateSharedObject,
+        discountTemplateId: resolvedIds.discountTemplateId,
         ownerCapId: shopIdentifiers.ownerCapId
       })
   })

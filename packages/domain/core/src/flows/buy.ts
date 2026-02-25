@@ -640,7 +640,7 @@ export const buildBuyTransaction = async (
   }
 
   const shopArgument = transaction.sharedObjectRef(shopShared.sharedRef)
-  const listingId = BigInt(normalizeListingId(itemListingId))
+  const listingId = normalizeListingId(itemListingId)
 
   const clockShared = await getSuiSharedObject(
     {
@@ -715,27 +715,25 @@ export const buildBuyTransaction = async (
 
   const paymentArgument = transaction.object(paymentCoinObjectId)
   const typeArguments = [itemType, coinType]
+  const buildCommonBuyArguments = () => [
+    pythPriceInfoArgument,
+    paymentArgument,
+    transaction.pure.address(listingId),
+    transaction.pure.address(mintTo),
+    transaction.pure.address(refundTo),
+    transaction.pure.option("u64", maxPriceAgeSecs ?? null),
+    transaction.pure.option("u16", maxConfidenceRatioBps ?? null),
+    clockArgument
+  ]
 
   if (discountContext.mode === "claim") {
-    const discountTemplateShared = await getSuiSharedObject(
-      { objectId: discountContext.discountTemplateId, mutable: true },
-      toolingCoreContext
-    )
-
     transaction.moveCall({
       target: `${shopPackageId}::shop::claim_and_buy_item_with_discount`,
       typeArguments,
       arguments: [
         shopArgument,
-        transaction.pure.u64(listingId),
-        transaction.sharedObjectRef(discountTemplateShared.sharedRef),
-        pythPriceInfoArgument,
-        paymentArgument,
-        transaction.pure.address(mintTo),
-        transaction.pure.address(refundTo),
-        transaction.pure.option("u64", maxPriceAgeSecs ?? null),
-        transaction.pure.option("u16", maxConfidenceRatioBps ?? null),
-        clockArgument
+        transaction.pure.address(discountContext.discountTemplateId),
+        ...buildCommonBuyArguments()
       ]
     })
 
@@ -743,26 +741,14 @@ export const buildBuyTransaction = async (
   }
 
   if (discountContext.mode === "ticket") {
-    const discountTemplateShared = await getSuiSharedObject(
-      { objectId: discountContext.discountTemplateId, mutable: true },
-      toolingCoreContext
-    )
-
     transaction.moveCall({
       target: `${shopPackageId}::shop::buy_item_with_discount`,
       typeArguments,
       arguments: [
         shopArgument,
-        transaction.pure.u64(listingId),
-        transaction.sharedObjectRef(discountTemplateShared.sharedRef),
+        transaction.pure.address(discountContext.discountTemplateId),
         transaction.object(discountContext.discountTicketId),
-        pythPriceInfoArgument,
-        paymentArgument,
-        transaction.pure.address(mintTo),
-        transaction.pure.address(refundTo),
-        transaction.pure.option("u64", maxPriceAgeSecs ?? null),
-        transaction.pure.option("u16", maxConfidenceRatioBps ?? null),
-        clockArgument
+        ...buildCommonBuyArguments()
       ]
     })
 
@@ -772,17 +758,7 @@ export const buildBuyTransaction = async (
   transaction.moveCall({
     target: `${shopPackageId}::shop::buy_item`,
     typeArguments,
-    arguments: [
-      shopArgument,
-      transaction.pure.u64(listingId),
-      pythPriceInfoArgument,
-      paymentArgument,
-      transaction.pure.address(mintTo),
-      transaction.pure.address(refundTo),
-      transaction.pure.option("u64", maxPriceAgeSecs ?? null),
-      transaction.pure.option("u16", maxConfidenceRatioBps ?? null),
-      clockArgument
-    ]
+    arguments: [shopArgument, ...buildCommonBuyArguments()]
   })
 
   return transaction

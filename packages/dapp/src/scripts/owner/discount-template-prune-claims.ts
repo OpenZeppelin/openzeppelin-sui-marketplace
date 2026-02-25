@@ -1,20 +1,20 @@
 /**
  * Prunes per-claimer DiscountClaim entries from a finished template.
- * Removes dynamic-field children after the template is done.
+ * Removes `claims_by_claimer` table entries after the template is done.
  * Requires the ShopOwnerCap capability and the Clock.
  */
-import { normalizeSuiObjectId } from "@mysten/sui/utils"
 import yargs from "yargs"
 
-import { getDiscountTemplateSummary } from "@sui-oracle-market/domain-core/models/discount"
 import { SUI_CLOCK_ID } from "@sui-oracle-market/domain-core/models/pyth"
 import { buildPruneDiscountClaimsTransaction } from "@sui-oracle-market/domain-core/ptb/discount-template"
 import { parseAddressList } from "@sui-oracle-market/tooling-core/address"
-import { emitJsonOutput } from "@sui-oracle-market/tooling-node/json"
-import { logKeyValueGreen } from "@sui-oracle-market/tooling-node/log"
 import { runSuiScript } from "@sui-oracle-market/tooling-node/process"
-import { logDiscountTemplateSummary } from "../../utils/log-summaries.ts"
-import { resolveOwnerShopIdentifiers } from "../../utils/shop-context.ts"
+import {
+  emitOrLogDiscountTemplateMutationResult,
+  executeDiscountTemplateMutation,
+  fetchDiscountTemplateSummaryForMutation,
+  resolveOwnerTemplateMutationContext
+} from "./discount-template-script-helpers.ts"
 
 runSuiScript(
   async (tooling, cliArguments) => {
@@ -23,11 +23,8 @@ runSuiScript(
       tooling.network.networkName
     )
 
-    const shopSharedObject = await tooling.getImmutableSharedObject({
+    const shopSharedObject = await tooling.getMutableSharedObject({
       objectId: inputs.shopId
-    })
-    const discountTemplateShared = await tooling.getMutableSharedObject({
-      objectId: inputs.discountTemplateId
     })
     const sharedClockObject = await tooling.getImmutableSharedObject({
       objectId: SUI_CLOCK_ID
@@ -36,52 +33,48 @@ runSuiScript(
     const pruneDiscountClaimsTransaction = buildPruneDiscountClaimsTransaction({
       packageId: inputs.packageId,
       shop: shopSharedObject,
-      discountTemplate: discountTemplateShared,
+      discountTemplateId: inputs.discountTemplateId,
       claimers: inputs.claimers,
       ownerCapId: inputs.ownerCapId,
       sharedClockObject
     })
 
-    const { execution, summary } = await tooling.executeTransactionWithSummary({
+    const mutationResult = await executeDiscountTemplateMutation({
+      tooling,
       transaction: pruneDiscountClaimsTransaction,
-      signer: tooling.loadedEd25519KeyPair,
       summaryLabel: "prune-discount-claims",
       devInspect: cliArguments.devInspect,
       dryRun: cliArguments.dryRun
     })
 
-    if (!execution) return
-
-    const digest = execution.transactionResult.digest
-
-    const discountTemplateSummary = await getDiscountTemplateSummary(
-      inputs.shopId,
-      inputs.discountTemplateId,
-      tooling.suiClient
-    )
-
-    if (
-      emitJsonOutput(
+    if (!mutationResult) return
+    const discountTemplateSummary =
+      await fetchDiscountTemplateSummaryForMutation({
+        shopId: inputs.shopId,
+        discountTemplateId: inputs.discountTemplateId,
+        tooling
+      })
+    emitOrLogDiscountTemplateMutationResult({
+      discountTemplateSummary,
+      digest: mutationResult.execution.transactionResult.digest,
+      transactionSummary: mutationResult.summary,
+      json: cliArguments.json,
+      extraJsonFields: {
+        prunedClaims: inputs.claimers.length
+      },
+      extraLogFields: [
         {
-          discountTemplate: discountTemplateSummary,
-          prunedClaims: inputs.claimers.length,
-          digest,
-          transactionSummary: summary
-        },
-        cliArguments.json
-      )
-    )
-      return
-
-    logDiscountTemplateSummary(discountTemplateSummary)
-    logKeyValueGreen("pruned-claims")(inputs.claimers.length)
-    if (digest) logKeyValueGreen("digest")(digest)
+          label: "pruned-claims",
+          value: inputs.claimers.length
+        }
+      ]
+    })
   },
   yargs()
     .option("discountTemplateId", {
       alias: ["discount-template-id", "template-id"],
       type: "string",
-      description: "DiscountTemplate object ID to prune claims from.",
+      description: "Discount template ID to prune claims from.",
       demandOption: true
     })
     .option("claimers", {
@@ -140,18 +133,17 @@ const normalizeInputs = async (
   },
   networkName: string
 ) => {
-  const { packageId, shopId, ownerCapId } = await resolveOwnerShopIdentifiers({
-    networkName,
-    shopPackageId: cliArguments.shopPackageId,
-    shopId: cliArguments.shopId,
-    ownerCapId: cliArguments.ownerCapId
-  })
+  const ownerTemplateMutationContext =
+    await resolveOwnerTemplateMutationContext({
+      networkName,
+      shopPackageId: cliArguments.shopPackageId,
+      shopId: cliArguments.shopId,
+      ownerCapId: cliArguments.ownerCapId,
+      discountTemplateId: cliArguments.discountTemplateId
+    })
 
   return {
-    packageId,
-    shopId,
-    ownerCapId,
-    discountTemplateId: normalizeSuiObjectId(cliArguments.discountTemplateId),
+    ...ownerTemplateMutationContext,
     claimers: parseAddressList({
       rawAddresses: cliArguments.claimers,
       label: "claimers"
