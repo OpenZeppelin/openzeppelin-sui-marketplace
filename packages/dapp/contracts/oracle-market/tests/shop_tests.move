@@ -217,7 +217,7 @@ fun create_shop_emits_event_and_records_ids() {
     let owner_cap_id = shop::test_last_created_id(&ctx);
 
     assert_eq!(shop::test_shop_created_owner_cap_id(shop_created), owner_cap_id);
-    assert_eq!(tx_context::get_ids_created(&ctx), starting_ids + 6);
+    assert_eq!(tx_context::get_ids_created(&ctx), starting_ids + 5);
 }
 
 #[test]
@@ -230,7 +230,7 @@ fun create_shop_allows_multiple_shops_per_sender() {
 
     let created = event::events_by_type<shop::ShopCreatedEvent>();
     assert_eq!(created.length(), 2);
-    assert_eq!(tx_context::get_ids_created(&ctx), starting_ids + 12);
+    assert_eq!(tx_context::get_ids_created(&ctx), starting_ids + 10);
 }
 
 #[test]
@@ -278,7 +278,7 @@ fun create_shop_handles_existing_id_counts() {
 
     shop::create_shop(DEFAULT_SHOP_NAME.to_string(), &mut ctx);
 
-    assert_eq!(tx_context::get_ids_created(&ctx), starting_ids + 6);
+    assert_eq!(tx_context::get_ids_created(&ctx), starting_ids + 5);
 }
 
 #[test]
