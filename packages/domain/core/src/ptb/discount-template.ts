@@ -33,7 +33,7 @@ export const buildCreateDiscountTemplateTransaction = ({
       ownerCapId
     })
   const normalizedAppliesToListingId = appliesToListingId
-    ? normalizeListingId(appliesToListingId, "appliesToListingId")
+    ? BigInt(normalizeListingId(appliesToListingId, "appliesToListingId"))
     : null
 
   transaction.moveCall({
@@ -41,7 +41,7 @@ export const buildCreateDiscountTemplateTransaction = ({
     arguments: [
       shopArgument,
       ownerCapabilityArgument,
-      transaction.pure.option("address", normalizedAppliesToListingId),
+      transaction.pure.option("u64", normalizedAppliesToListingId),
       transaction.pure.u8(ruleKind),
       transaction.pure.u64(ruleValue),
       transaction.pure.u64(startsAt),

@@ -24,13 +24,13 @@ type DiscountTemplateMetadata = {
   appliesToListing?: string
 }
 
-const toListingIdAddress = (listingId: string): string =>
-  normalizeListingId(listingId)
+const toListingIdU64 = (listingId: string): bigint =>
+  BigInt(normalizeListingId(listingId))
 
 const buildListingIdArgument = (
   transaction: ReturnType<typeof newTransaction>,
   listingId: string
-) => transaction.pure.address(toListingIdAddress(listingId))
+) => transaction.pure.u64(toListingIdU64(listingId))
 
 export type AddListingSpotlightTemplateInput = {
   ruleKind: NormalizedRuleKind
