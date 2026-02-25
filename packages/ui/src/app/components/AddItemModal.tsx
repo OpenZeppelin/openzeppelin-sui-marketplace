@@ -3,7 +3,7 @@
 import type { DiscountTemplateSummary } from "@sui-oracle-market/domain-core/models/discount"
 import type { ItemListingSummary } from "@sui-oracle-market/domain-core/models/item-listing"
 import clsx from "clsx"
-import { useCallback, useMemo } from "react"
+import { useCallback, useEffect, useMemo } from "react"
 import {
   formatUsdFromCents,
   getStructLabel,
@@ -145,6 +145,18 @@ const SpotlightTemplateSelector = ({
     </div>
   )
 }
+
+const hasSpotlightTemplateId = ({
+  templates,
+  templateId
+}: {
+  templates: DiscountTemplateSummary[]
+  templateId?: string
+}): boolean =>
+  Boolean(
+    templateId &&
+    templates.some((template) => template.discountTemplateId === templateId)
+  )
 
 const ListingSummarySection = ({
   summary,
@@ -346,6 +358,21 @@ const AddItemModal = ({
     },
     [handleInputChange, selectedSpotlightTemplateId]
   )
+  useEffect(() => {
+    if (!selectedSpotlightTemplateId) return
+    if (
+      hasSpotlightTemplateId({
+        templates: availableSpotlightTemplates,
+        templateId: selectedSpotlightTemplateId
+      })
+    )
+      return
+    handleInputChange("spotlightDiscountId", "")
+  }, [
+    availableSpotlightTemplates,
+    handleInputChange,
+    selectedSpotlightTemplateId
+  ])
   const errorState =
     transactionState.status === "error" ? transactionState : undefined
 
