@@ -13,7 +13,7 @@ import type {
   SuiTransactionBlockResponse
 } from "@mysten/sui/client"
 import type { Transaction } from "@mysten/sui/transactions"
-import { normalizeSuiAddress, normalizeSuiObjectId } from "@mysten/sui/utils"
+import { normalizeSuiAddress } from "@mysten/sui/utils"
 import type { IdentifierString } from "@mysten/wallet-standard"
 import type { EstimateRequiredAmountPriceUpdateMode } from "@sui-oracle-market/domain-core/flows/buy"
 import {
@@ -44,7 +44,7 @@ import {
   parseShopItemReceiptFromObject
 } from "@sui-oracle-market/domain-core/models/shop-item"
 import {
-  findCreatedCoinObjectRefs,
+  pickDedicatedGasPaymentRefFromSplit,
   planSuiPaymentSplitTransaction
 } from "@sui-oracle-market/tooling-core/coin"
 import {
@@ -93,26 +93,6 @@ type BuyFieldErrors = {
 }
 
 const ORACLE_QUOTE_REFRESH_INTERVAL_MS = 15_000
-
-const pickDedicatedGasPaymentRefFromSplit = ({
-  splitTransactionBlock,
-  paymentCoinObjectId
-}: {
-  splitTransactionBlock: SuiTransactionBlockResponse
-  paymentCoinObjectId: string
-}): SuiObjectRef | undefined => {
-  const normalizedPaymentCoinObjectId =
-    normalizeSuiObjectId(paymentCoinObjectId)
-
-  return findCreatedCoinObjectRefs(
-    splitTransactionBlock,
-    NORMALIZED_SUI_COIN_TYPE
-  ).find(
-    (candidateObjectRef) =>
-      normalizeSuiObjectId(candidateObjectRef.objectId) !==
-      normalizedPaymentCoinObjectId
-  )
-}
 
 const buildBuyFieldErrors = ({
   selectedCurrencyId,

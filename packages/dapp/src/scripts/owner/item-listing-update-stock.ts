@@ -4,17 +4,15 @@
  */
 import yargs from "yargs"
 
-import {
-  getItemListingSummary,
-  normalizeListingId
-} from "@sui-oracle-market/domain-core/models/item-listing"
 import { buildUpdateItemListingStockTransaction } from "@sui-oracle-market/domain-core/ptb/item-listing"
 import { parseNonNegativeU64 } from "@sui-oracle-market/tooling-core/utils/utility"
-import { emitJsonOutput } from "@sui-oracle-market/tooling-node/json"
-import { logKeyValueGreen } from "@sui-oracle-market/tooling-node/log"
 import { runSuiScript } from "@sui-oracle-market/tooling-node/process"
-import { logItemListingSummary } from "../../utils/log-summaries.ts"
-import { resolveOwnerShopIdentifiers } from "../../utils/shop-context.ts"
+import {
+  emitOrLogItemListingMutationResult,
+  executeItemListingMutation,
+  fetchItemListingSummaryForMutation,
+  resolveOwnerListingMutationContext
+} from "./item-listing-script-helpers.ts"
 
 runSuiScript(
   async (
@@ -46,38 +44,30 @@ runSuiScript(
       newStock: inputs.newStock
     })
 
-    const { execution, summary } = await tooling.executeTransactionWithSummary({
+    const mutationResult = await executeItemListingMutation({
+      tooling,
       transaction: updateStockTransaction,
-      signer: tooling.loadedEd25519KeyPair,
       summaryLabel: "update-item-stock",
       devInspect: cliArguments.devInspect,
       dryRun: cliArguments.dryRun
     })
 
-    if (!execution) return
+    if (!mutationResult) return
 
-    const digest = execution.transactionResult.digest
+    const { execution, summary } = mutationResult
 
-    const listingSummary = await getItemListingSummary(
-      inputs.shopId,
-      inputs.itemListingId,
-      tooling.suiClient
-    )
+    const listingSummary = await fetchItemListingSummaryForMutation({
+      shopId: inputs.shopId,
+      itemListingId: inputs.itemListingId,
+      tooling
+    })
 
-    if (
-      emitJsonOutput(
-        {
-          itemListing: listingSummary,
-          digest,
-          transactionSummary: summary
-        },
-        cliArguments.json
-      )
-    )
-      return
-
-    logItemListingSummary(listingSummary)
-    if (digest) logKeyValueGreen("digest")(digest)
+    emitOrLogItemListingMutationResult({
+      itemListingSummary: listingSummary,
+      digest: execution.transactionResult.digest,
+      transactionSummary: summary,
+      json: cliArguments.json
+    })
   },
   yargs()
     .option("itemListingId", {
@@ -141,18 +131,20 @@ const normalizeInputs = async (
   },
   networkName: string
 ) => {
-  const { packageId, shopId, ownerCapId } = await resolveOwnerShopIdentifiers({
-    networkName,
-    shopPackageId: cliArguments.shopPackageId,
-    shopId: cliArguments.shopId,
-    ownerCapId: cliArguments.ownerCapId
-  })
+  const { packageId, shopId, ownerCapId, itemListingId } =
+    await resolveOwnerListingMutationContext({
+      networkName,
+      shopPackageId: cliArguments.shopPackageId,
+      shopId: cliArguments.shopId,
+      ownerCapId: cliArguments.ownerCapId,
+      itemListingId: cliArguments.itemListingId
+    })
 
   return {
     packageId,
     shopId,
     ownerCapId,
-    itemListingId: normalizeListingId(cliArguments.itemListingId),
+    itemListingId,
     newStock: parseNonNegativeU64(cliArguments.stock, "stock")
   }
 }

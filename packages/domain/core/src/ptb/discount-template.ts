@@ -1,8 +1,7 @@
 import type { WrappedSuiSharedObject } from "@sui-oracle-market/tooling-core/shared-object"
-import { newTransaction } from "@sui-oracle-market/tooling-core/transactions"
 import type { NormalizedRuleKind } from "../models/discount.ts"
 import { normalizeListingIdAsBigIntU64 } from "../models/item-listing.ts"
-import { buildShopOwnerCapabilityArguments } from "./shop-owner-arguments.ts"
+import { buildShopOwnerTransactionContext } from "./shop-owner-arguments.ts"
 
 export const buildCreateDiscountTemplateTransaction = ({
   packageId,
@@ -25,10 +24,8 @@ export const buildCreateDiscountTemplateTransaction = ({
   maxRedemptions?: bigint
   ownerCapId: string
 }) => {
-  const transaction = newTransaction()
-  const [shopArgument, ownerCapabilityArgument] =
-    buildShopOwnerCapabilityArguments({
-      transaction,
+  const { transaction, shopArgument, ownerCapabilityArgument } =
+    buildShopOwnerTransactionContext({
       shop,
       ownerCapId
     })
@@ -76,10 +73,8 @@ export const buildUpdateDiscountTemplateTransaction = ({
   ownerCapId: string
   sharedClockObject: WrappedSuiSharedObject
 }) => {
-  const transaction = newTransaction()
-  const [shopArgument, ownerCapabilityArgument] =
-    buildShopOwnerCapabilityArguments({
-      transaction,
+  const { transaction, shopArgument, ownerCapabilityArgument } =
+    buildShopOwnerTransactionContext({
       shop,
       ownerCapId
     })
@@ -116,10 +111,8 @@ export const buildToggleDiscountTemplateTransaction = ({
   active: boolean
   ownerCapId: string
 }) => {
-  const transaction = newTransaction()
-  const [shopArgument, ownerCapabilityArgument] =
-    buildShopOwnerCapabilityArguments({
-      transaction,
+  const { transaction, shopArgument, ownerCapabilityArgument } =
+    buildShopOwnerTransactionContext({
       shop,
       ownerCapId,
       shopMutable: true
@@ -152,10 +145,8 @@ export const buildPruneDiscountClaimsTransaction = ({
   ownerCapId: string
   sharedClockObject: WrappedSuiSharedObject
 }) => {
-  const transaction = newTransaction()
-  const [shopArgument, ownerCapabilityArgument] =
-    buildShopOwnerCapabilityArguments({
-      transaction,
+  const { transaction, shopArgument, ownerCapabilityArgument } =
+    buildShopOwnerTransactionContext({
       shop,
       ownerCapId
     })

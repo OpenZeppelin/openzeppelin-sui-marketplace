@@ -12,6 +12,7 @@ import type { SuiClient, SuiTransactionBlockResponse } from "@mysten/sui/client"
 import type { IdentifierString } from "@mysten/wallet-standard"
 import {
   defaultStartTimestampSeconds,
+  parseDiscountRuleScheduleStringInputs,
   parseDiscountRuleKind,
   parseDiscountRuleValue,
   validateDiscountSchedule,
@@ -269,37 +270,23 @@ const parseListingInputs = (formState: ListingFormState): ListingInputs => {
     }
   }
 
-  const createSpotlightRuleKind = parseDiscountRuleKind(
-    formState.createSpotlightRuleKind
-  )
-  const createSpotlightStartsAt = parseNonNegativeU64(
-    formState.createSpotlightStartsAt,
-    "createSpotlightStartsAt"
-  )
-  const createSpotlightExpiresAt = parseOptionalU64(
-    formState.createSpotlightExpiresAt.trim() || undefined,
-    "createSpotlightExpiresAt"
-  )
-  validateDiscountSchedule(createSpotlightStartsAt, createSpotlightExpiresAt)
+  const parsedCreateSpotlightTemplate = parseDiscountRuleScheduleStringInputs({
+    ruleKind: formState.createSpotlightRuleKind,
+    value: formState.createSpotlightValue,
+    startsAt: formState.createSpotlightStartsAt,
+    expiresAt: formState.createSpotlightExpiresAt.trim() || undefined,
+    maxRedemptions: formState.createSpotlightMaxRedemptions.trim() || undefined,
+    startsAtLabel: "createSpotlightStartsAt",
+    expiresAtLabel: "createSpotlightExpiresAt",
+    maxRedemptionsLabel: "createSpotlightMaxRedemptions"
+  })
 
   return {
     itemName,
     itemType,
     basePriceUsdCents,
     stock,
-    createSpotlightDiscountTemplate: {
-      ruleKind: createSpotlightRuleKind,
-      ruleValue: parseDiscountRuleValue(
-        createSpotlightRuleKind,
-        formState.createSpotlightValue
-      ),
-      startsAt: createSpotlightStartsAt,
-      expiresAt: createSpotlightExpiresAt,
-      maxRedemptions: parseOptionalU64(
-        formState.createSpotlightMaxRedemptions.trim() || undefined,
-        "createSpotlightMaxRedemptions"
-      )
-    }
+    createSpotlightDiscountTemplate: parsedCreateSpotlightTemplate
   }
 }
 

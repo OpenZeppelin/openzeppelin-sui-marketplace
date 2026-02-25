@@ -7,30 +7,22 @@ import { normalizeSuiObjectId } from "@mysten/sui/utils"
 import yargs from "yargs"
 
 import {
-  defaultStartTimestampSeconds,
   discountRuleChoices,
-  parseDiscountRuleKind,
-  parseDiscountRuleValue,
-  validateDiscountSchedule,
+  parseDiscountRuleScheduleStringInputs,
   type DiscountRuleKindLabel
 } from "@sui-oracle-market/domain-core/models/discount"
-import {
-  getItemListingSummary,
-  requireListingIdFromItemListingAddedEvents
-} from "@sui-oracle-market/domain-core/models/item-listing"
+import { requireListingIdFromItemListingAddedEvents } from "@sui-oracle-market/domain-core/models/item-listing"
 import { parseUsdToCents } from "@sui-oracle-market/domain-core/models/shop"
 import { buildAddItemListingTransaction } from "@sui-oracle-market/domain-core/ptb/item-listing"
 import { normalizeOptionalId } from "@sui-oracle-market/tooling-core/object"
-import {
-  parseNonNegativeU64,
-  parseOptionalU64,
-  parsePositiveU64
-} from "@sui-oracle-market/tooling-core/utils/utility"
-import { emitJsonOutput } from "@sui-oracle-market/tooling-node/json"
-import { logKeyValueGreen } from "@sui-oracle-market/tooling-node/log"
+import { parsePositiveU64 } from "@sui-oracle-market/tooling-core/utils/utility"
 import { runSuiScript } from "@sui-oracle-market/tooling-node/process"
-import { logItemListingSummary } from "../../utils/log-summaries.ts"
-import { resolveOwnerShopIdentifiers } from "../../utils/shop-context.ts"
+import {
+  emitOrLogItemListingMutationResult,
+  executeItemListingMutation,
+  fetchItemListingSummaryForMutation,
+  resolveOwnerListingCreationContext
+} from "./item-listing-script-helpers.ts"
 
 runSuiScript(
   async (tooling, cliArguments) => {
@@ -55,42 +47,36 @@ runSuiScript(
       createSpotlightDiscountTemplate: inputs.createSpotlightDiscountTemplate
     })
 
-    const { execution, summary } = await tooling.executeTransactionWithSummary({
+    const mutationResult = await executeItemListingMutation({
+      tooling,
       transaction: addItemTransaction,
-      signer: tooling.loadedEd25519KeyPair,
       summaryLabel: "add-item-listing",
       devInspect: cliArguments.devInspect,
       dryRun: cliArguments.dryRun
     })
 
-    if (!execution) return
+    if (!mutationResult) return
 
-    const { transactionResult } = execution
+    const {
+      execution: { transactionResult },
+      summary
+    } = mutationResult
     const listingId = requireListingIdFromItemListingAddedEvents({
       events: transactionResult.events,
       shopId: inputs.shopId
     })
-    const listingSummary = await getItemListingSummary(
-      inputs.shopId,
-      listingId,
-      tooling.suiClient
-    )
+    const listingSummary = await fetchItemListingSummaryForMutation({
+      shopId: inputs.shopId,
+      itemListingId: listingId,
+      tooling
+    })
 
-    if (
-      emitJsonOutput(
-        {
-          itemListing: listingSummary,
-          digest: transactionResult.digest,
-          transactionSummary: summary
-        },
-        cliArguments.json
-      )
-    )
-      return
-
-    logItemListingSummary(listingSummary)
-    if (transactionResult.digest)
-      logKeyValueGreen("digest")(transactionResult.digest)
+    emitOrLogItemListingMutationResult({
+      itemListingSummary: listingSummary,
+      digest: transactionResult.digest,
+      transactionSummary: summary,
+      json: cliArguments.json
+    })
   },
   yargs()
     .option("shopPackageId", {
@@ -216,12 +202,13 @@ const normalizeInputs = async (
   },
   networkName: string
 ) => {
-  const { packageId, shopId, ownerCapId } = await resolveOwnerShopIdentifiers({
-    networkName,
-    shopPackageId: cliArguments.shopPackageId,
-    shopId: cliArguments.shopId,
-    ownerCapId: cliArguments.ownerCapId
-  })
+  const { packageId, shopId, ownerCapId } =
+    await resolveOwnerListingCreationContext({
+      networkName,
+      shopPackageId: cliArguments.shopPackageId,
+      shopId: cliArguments.shopId,
+      ownerCapId: cliArguments.ownerCapId
+    })
 
   const spotlightDiscountId = normalizeOptionalId(
     cliArguments.spotlightDiscountId
@@ -281,29 +268,16 @@ const normalizeCreateSpotlightTemplateInput = (cliArguments: {
       "createSpotlightValue is required when using createSpotlight* options."
     )
 
-  const ruleKind = parseDiscountRuleKind(cliArguments.createSpotlightRuleKind)
-  const startsAt = parseNonNegativeU64(
-    cliArguments.createSpotlightStartsAt ??
-      defaultStartTimestampSeconds().toString(),
-    "createSpotlightStartsAt"
-  )
-  const expiresAt = parseOptionalU64(
-    cliArguments.createSpotlightExpiresAt,
-    "createSpotlightExpiresAt"
-  )
-  validateDiscountSchedule(startsAt, expiresAt)
+  const parsedSpotlightRuleSchedule = parseDiscountRuleScheduleStringInputs({
+    ruleKind: cliArguments.createSpotlightRuleKind,
+    value: cliArguments.createSpotlightValue,
+    startsAt: cliArguments.createSpotlightStartsAt,
+    expiresAt: cliArguments.createSpotlightExpiresAt,
+    maxRedemptions: cliArguments.createSpotlightMaxRedemptions,
+    startsAtLabel: "createSpotlightStartsAt",
+    expiresAtLabel: "createSpotlightExpiresAt",
+    maxRedemptionsLabel: "createSpotlightMaxRedemptions"
+  })
 
-  return {
-    ruleKind,
-    ruleValue: parseDiscountRuleValue(
-      ruleKind,
-      cliArguments.createSpotlightValue
-    ),
-    startsAt,
-    expiresAt,
-    maxRedemptions: parseOptionalU64(
-      cliArguments.createSpotlightMaxRedemptions,
-      "createSpotlightMaxRedemptions"
-    )
-  }
+  return parsedSpotlightRuleSchedule
 }

@@ -4,12 +4,14 @@
  */
 import yargs from "yargs"
 
-import { normalizeListingId } from "@sui-oracle-market/domain-core/models/item-listing"
 import { buildRemoveItemListingTransaction } from "@sui-oracle-market/domain-core/ptb/item-listing"
 import { emitJsonOutput } from "@sui-oracle-market/tooling-node/json"
 import { logKeyValueGreen } from "@sui-oracle-market/tooling-node/log"
 import { runSuiScript } from "@sui-oracle-market/tooling-node/process"
-import { resolveOwnerShopIdentifiers } from "../../utils/shop-context.ts"
+import {
+  executeItemListingMutation,
+  resolveOwnerListingMutationContext
+} from "./item-listing-script-helpers.ts"
 
 type RemoveItemArguments = {
   shopPackageId?: string
@@ -35,16 +37,17 @@ runSuiScript(
       itemListingId: inputs.itemListingId
     })
 
-    const { execution, summary } = await tooling.executeTransactionWithSummary({
+    const mutationResult = await executeItemListingMutation({
+      tooling,
       transaction: removeItemTransaction,
-      signer: tooling.loadedEd25519KeyPair,
       summaryLabel: "remove-item-listing",
       devInspect: cliArguments.devInspect,
       dryRun: cliArguments.dryRun
     })
 
-    if (!execution) return
+    if (!mutationResult) return
 
+    const { execution, summary } = mutationResult
     const digest = execution.transactionResult.digest
     if (
       emitJsonOutput(
@@ -117,17 +120,19 @@ const normalizeInputs = async (
   cliArguments: RemoveItemArguments,
   networkName: string
 ): Promise<NormalizedInputs> => {
-  const { packageId, shopId, ownerCapId } = await resolveOwnerShopIdentifiers({
-    networkName,
-    shopPackageId: cliArguments.shopPackageId,
-    shopId: cliArguments.shopId,
-    ownerCapId: cliArguments.ownerCapId
-  })
+  const { packageId, shopId, ownerCapId, itemListingId } =
+    await resolveOwnerListingMutationContext({
+      networkName,
+      shopPackageId: cliArguments.shopPackageId,
+      shopId: cliArguments.shopId,
+      ownerCapId: cliArguments.ownerCapId,
+      itemListingId: cliArguments.itemListingId
+    })
 
   return {
     packageId,
     shopId,
     ownerCapId,
-    itemListingId: normalizeListingId(cliArguments.itemListingId)
+    itemListingId
   }
 }

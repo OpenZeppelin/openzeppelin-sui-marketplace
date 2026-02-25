@@ -16,6 +16,7 @@ import {
   extractDiscountTemplateIdFromCreatedEvents,
   extractDiscountTemplateTableEntryFieldIdFromCreatedObjects,
   getDiscountTemplateSummary,
+  parseDiscountRuleScheduleStringInputs,
   parseDiscountRuleKind,
   parseDiscountRuleValue,
   validateDiscountSchedule,
@@ -192,27 +193,20 @@ const buildDiscountFieldErrors = (
 }
 
 const parseDiscountInputs = (formState: DiscountFormState): DiscountInputs => {
-  const ruleKind = parseDiscountRuleKind(formState.ruleKind)
-  const ruleValue = parseDiscountRuleValue(ruleKind, formState.ruleValue)
-  const startsAt = parseNonNegativeU64(formState.startsAt, "startsAt")
-  const expiresAt = parseOptionalU64(
-    formState.expiresAt.trim() || undefined,
-    "expiresAt"
-  )
-  const maxRedemptions = parseOptionalU64(
-    formState.maxRedemptions.trim() || undefined,
-    "maxRedemptions"
-  )
-
-  validateDiscountSchedule(startsAt, expiresAt)
+  const parsedRuleScheduleInputs = parseDiscountRuleScheduleStringInputs({
+    ruleKind: formState.ruleKind,
+    value: formState.ruleValue,
+    startsAt: formState.startsAt,
+    expiresAt: formState.expiresAt.trim() || undefined,
+    maxRedemptions: formState.maxRedemptions.trim() || undefined,
+    startsAtLabel: "startsAt",
+    expiresAtLabel: "expiresAt",
+    maxRedemptionsLabel: "maxRedemptions"
+  })
   const trimmedListingId = formState.appliesToListingId.trim()
 
   return {
-    ruleKind,
-    ruleValue,
-    startsAt,
-    expiresAt,
-    maxRedemptions,
+    ...parsedRuleScheduleInputs,
     appliesToListingId: trimmedListingId
       ? normalizeListingId(trimmedListingId, "listingId")
       : undefined

@@ -1,5 +1,6 @@
 import type { Transaction } from "@mysten/sui/transactions"
 import type { WrappedSuiSharedObject } from "@sui-oracle-market/tooling-core/shared-object"
+import { newTransaction } from "@sui-oracle-market/tooling-core/transactions"
 
 type TransactionBuilder = Transaction
 
@@ -51,3 +52,24 @@ export const buildShopOwnerCapabilityArguments = ({
       ownerCapId
     })
   ] as const
+
+export const buildShopOwnerTransactionContext = ({
+  shop,
+  ownerCapId,
+  shopMutable
+}: {
+  shop: WrappedSuiSharedObject
+  ownerCapId: string
+  shopMutable?: boolean
+}) => {
+  const transaction = newTransaction()
+  const [shopArgument, ownerCapabilityArgument] =
+    buildShopOwnerCapabilityArguments({
+      transaction,
+      shop,
+      ownerCapId,
+      shopMutable
+    })
+
+  return { transaction, shopArgument, ownerCapabilityArgument } as const
+}

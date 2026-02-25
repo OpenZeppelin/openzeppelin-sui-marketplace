@@ -4,10 +4,7 @@
  * The PTB can update Pyth and then call buy_item/claim_and_buy_item_with_discount in one atomic flow.
  * Oracle freshness and confidence guardrails are enforced on-chain using PriceInfoObject + Clock.
  */
-import type {
-  SuiObjectRef,
-  SuiTransactionBlockResponse
-} from "@mysten/sui/client"
+import type { SuiObjectRef } from "@mysten/sui/client"
 import { normalizeSuiAddress, normalizeSuiObjectId } from "@mysten/sui/utils"
 import yargs from "yargs"
 
@@ -34,7 +31,7 @@ import {
 import type { PriceUpdatePolicy } from "@sui-oracle-market/domain-core/models/pyth"
 import { findCreatedShopItemIds } from "@sui-oracle-market/domain-core/models/shop-item"
 import {
-  findCreatedCoinObjectRefs,
+  pickDedicatedGasPaymentRefFromSplit,
   planSuiPaymentSplitTransaction
 } from "@sui-oracle-market/tooling-core/coin"
 import {
@@ -78,26 +75,6 @@ type BuyArguments = {
   devInspect?: boolean
   dryRun?: boolean
   json?: boolean
-}
-
-const pickDedicatedGasPaymentRefFromSplit = ({
-  splitTransactionBlock,
-  paymentCoinObjectId
-}: {
-  splitTransactionBlock: SuiTransactionBlockResponse
-  paymentCoinObjectId: string
-}): SuiObjectRef | undefined => {
-  const normalizedPaymentCoinObjectId =
-    normalizeSuiObjectId(paymentCoinObjectId)
-
-  return findCreatedCoinObjectRefs(
-    splitTransactionBlock,
-    NORMALIZED_SUI_COIN_TYPE
-  ).find(
-    (candidateObjectRef) =>
-      normalizeSuiObjectId(candidateObjectRef.objectId) !==
-      normalizedPaymentCoinObjectId
-  )
 }
 
 runSuiScript(

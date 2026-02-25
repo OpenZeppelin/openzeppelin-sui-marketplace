@@ -9,6 +9,7 @@ import {
   unwrapMoveObjectFields
 } from "@sui-oracle-market/tooling-core/object"
 import {
+  TABLE_KEY_TYPE_OBJECT_ID,
   getTableEntryDynamicFieldObject,
   getTableEntryDynamicFields,
   resolveTableObjectIdFromField
@@ -22,7 +23,11 @@ import {
   normalizeBigIntFromMoveValue,
   unwrapMoveFields
 } from "@sui-oracle-market/tooling-core/utils/move-values"
-import { requireValue } from "@sui-oracle-market/tooling-core/utils/utility"
+import {
+  parseNonNegativeU64,
+  parseOptionalU64,
+  requireValue
+} from "@sui-oracle-market/tooling-core/utils/utility"
 import type { ItemListingSummary } from "./item-listing.ts"
 import { normalizeOptionalListingIdFromValue } from "./item-listing.ts"
 import { parseUsdToCents } from "./shop.ts"
@@ -31,7 +36,6 @@ export const DISCOUNT_TEMPLATE_TYPE_FRAGMENT = "::shop::DiscountTemplate"
 export const DISCOUNT_TEMPLATE_CREATED_EVENT_TYPE_FRAGMENT =
   "::shop::DiscountTemplateCreatedEvent"
 const SHOP_DISCOUNT_TEMPLATES_FIELD = "discount_templates"
-const TABLE_KEY_TYPE_ID = "0x2::object::ID"
 
 export const discountRuleChoices = ["fixed", "percent"] as const
 
@@ -66,6 +70,48 @@ export const parseDiscountRuleValue = (
   ruleKind === 0
     ? parseUsdToCents(rawValue)
     : parsePercentToBasisPoints(rawValue)
+
+export const parseDiscountRuleScheduleStringInputs = ({
+  ruleKind,
+  value,
+  startsAt,
+  expiresAt,
+  maxRedemptions,
+  startsAtLabel = "startsAt",
+  expiresAtLabel = "expiresAt",
+  maxRedemptionsLabel = "maxRedemptions"
+}: {
+  ruleKind: DiscountRuleKindLabel
+  value: string
+  startsAt?: string
+  expiresAt?: string
+  maxRedemptions?: string
+  startsAtLabel?: string
+  expiresAtLabel?: string
+  maxRedemptionsLabel?: string
+}): {
+  ruleKind: NormalizedRuleKind
+  ruleValue: bigint
+  startsAt: bigint
+  expiresAt?: bigint
+  maxRedemptions?: bigint
+} => {
+  const normalizedRuleKind = parseDiscountRuleKind(ruleKind)
+  const normalizedStartsAt = parseNonNegativeU64(
+    startsAt ?? defaultStartTimestampSeconds().toString(),
+    startsAtLabel
+  )
+  const normalizedExpiresAt = parseOptionalU64(expiresAt, expiresAtLabel)
+  validateDiscountSchedule(normalizedStartsAt, normalizedExpiresAt)
+
+  return {
+    ruleKind: normalizedRuleKind,
+    ruleValue: parseDiscountRuleValue(normalizedRuleKind, value),
+    startsAt: normalizedStartsAt,
+    expiresAt: normalizedExpiresAt,
+    maxRedemptions: parseOptionalU64(maxRedemptions, maxRedemptionsLabel)
+  }
+}
 
 export const parsePercentToBasisPoints = (rawPercent: string): bigint => {
   const normalized = rawPercent.trim()
@@ -340,18 +386,23 @@ export type DiscountTemplateSummary = {
   status: string
 }
 
+type DiscountTemplateTableEntryField = Awaited<
+  ReturnType<typeof getTableEntryDynamicFields>
+>[number]
+
+type OrderedDiscountTemplateTableEntry = {
+  tableEntryField: DiscountTemplateTableEntryField
+  discountTemplateId: string
+}
+
 /**
  * Builds a lookup map for discount templates by ID.
  */
 export const buildDiscountTemplateLookup = (
   templates: DiscountTemplateSummary[]
-) =>
-  templates.reduce<Record<string, DiscountTemplateSummary>>(
-    (accumulator, template) => ({
-      ...accumulator,
-      [template.discountTemplateId]: template
-    }),
-    {}
+): Record<string, DiscountTemplateSummary> =>
+  Object.fromEntries(
+    templates.map((template) => [template.discountTemplateId, template])
   )
 
 export type DiscountOption = {
@@ -475,31 +526,27 @@ export const getDiscountTemplateSummaries = async (
 
   if (discountTemplateTableEntryFields.length === 0) return []
 
-  const discountTemplateIds = discountTemplateTableEntryFields.map(
-    (tableEntryField) =>
-      normalizeIdOrThrow(
-        normalizeOptionalIdFromValue(tableEntryField.name.value),
-        `Missing DiscountTemplate id for table entry ${tableEntryField.objectId}.`
+  const orderedTableEntries: OrderedDiscountTemplateTableEntry[] =
+    discountTemplateTableEntryFields
+      .map((tableEntryField) => ({
+        tableEntryField,
+        discountTemplateId: normalizeIdOrThrow(
+          normalizeOptionalIdFromValue(tableEntryField.name.value),
+          `Missing DiscountTemplate id for table entry ${tableEntryField.objectId}.`
+        )
+      }))
+      .sort((leftEntry, rightEntry) =>
+        leftEntry.discountTemplateId.localeCompare(
+          rightEntry.discountTemplateId
+        )
       )
-  )
 
-  const discountTemplateTableEntryObjects = await Promise.all(
-    discountTemplateTableEntryFields.map((tableEntryField) =>
-      getSuiObject(
-        {
-          objectId: tableEntryField.objectId,
-          options: { showContent: true, showType: true }
-        },
-        { suiClient }
-      )
-    )
-  )
-
-  return discountTemplateTableEntryObjects.map((response, index) =>
-    buildDiscountTemplateSummary(
-      response.object,
-      discountTemplateIds[index],
-      discountTemplateTableEntryFields[index].objectId
+  return Promise.all(
+    orderedTableEntries.map((orderedTableEntry) =>
+      getDiscountTemplateSummaryFromOrderedTableEntry({
+        orderedTableEntry,
+        suiClient
+      })
     )
   )
 }
@@ -519,7 +566,7 @@ export const getDiscountTemplateSummary = async (
     await getTableEntryDynamicFieldObject(
       {
         tableObjectId: discountTemplatesTableObjectId,
-        keyType: TABLE_KEY_TYPE_ID,
+        keyType: TABLE_KEY_TYPE_OBJECT_ID,
         keyValue: normalizedDiscountTemplateId
       },
       { suiClient }
@@ -566,6 +613,28 @@ const getDiscountTemplatesTableObjectId = async ({
       fieldName: SHOP_DISCOUNT_TEMPLATES_FIELD
     })
   }
+}
+
+const getDiscountTemplateSummaryFromOrderedTableEntry = async ({
+  orderedTableEntry,
+  suiClient
+}: {
+  orderedTableEntry: OrderedDiscountTemplateTableEntry
+  suiClient: SuiClient
+}): Promise<DiscountTemplateSummary> => {
+  const { object } = await getSuiObject(
+    {
+      objectId: orderedTableEntry.tableEntryField.objectId,
+      options: { showContent: true, showType: true }
+    },
+    { suiClient }
+  )
+
+  return buildDiscountTemplateSummary(
+    object,
+    orderedTableEntry.discountTemplateId,
+    orderedTableEntry.tableEntryField.objectId
+  )
 }
 
 const buildDiscountTemplateSummary = (

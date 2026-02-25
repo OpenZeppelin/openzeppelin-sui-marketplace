@@ -6,6 +6,8 @@ import {
   unwrapMoveObjectFields
 } from "@sui-oracle-market/tooling-core/object"
 import {
+  TABLE_KEY_TYPE_U64,
+  getTableEntryDynamicFieldObject,
   getTableEntryDynamicFields,
   resolveTableObjectIdFromField
 } from "@sui-oracle-market/tooling-core/table"
@@ -39,6 +41,11 @@ export type ItemListingSummary = ItemListingDetails & {
 type ItemListingTableEntryField = Awaited<
   ReturnType<typeof getTableEntryDynamicFields>
 >[number]
+
+type OrderedItemListingTableEntry = {
+  tableEntryField: ItemListingTableEntryField
+  listingId: string
+}
 
 export const normalizeListingId = (
   listingId: string,
@@ -162,19 +169,29 @@ const getListingIdFromTableEntryField = (
   return listingId
 }
 
-const findItemListingTableEntryFieldByListingId = ({
-  listingId,
-  tableEntryFields
-}: {
-  listingId: string
-  tableEntryFields: ItemListingTableEntryField[]
-}): ItemListingTableEntryField | undefined =>
-  tableEntryFields.find(
-    (tableEntryField) =>
-      getListingIdFromTableEntryField(tableEntryField) === listingId
-  )
+const compareListingIdStrings = (
+  leftListingId: string,
+  rightListingId: string
+) => {
+  const left = BigInt(leftListingId)
+  const right = BigInt(rightListingId)
+  if (left === right) return 0
+  return left < right ? -1 : 1
+}
 
-const requireItemListingTableEntryField = async ({
+const sortListingTableEntriesByListingId = (
+  tableEntryFields: ItemListingTableEntryField[]
+): OrderedItemListingTableEntry[] =>
+  tableEntryFields
+    .map((tableEntryField) => ({
+      tableEntryField,
+      listingId: getListingIdFromTableEntryField(tableEntryField)
+    }))
+    .sort((leftEntry, rightEntry) =>
+      compareListingIdStrings(leftEntry.listingId, rightEntry.listingId)
+    )
+
+const requireItemListingTableEntryObject = async ({
   shopId,
   listingId,
   suiClient
@@ -182,23 +199,24 @@ const requireItemListingTableEntryField = async ({
   shopId: string
   listingId: string
   suiClient: SuiClient
-}): Promise<ItemListingTableEntryField> => {
+}): Promise<SuiObjectData> => {
   const listingsTableObjectId = await getListingsTableObjectId({
     shopId,
     suiClient
   })
-  const tableEntryFields = await getItemListingTableEntryFields({
-    tableObjectId: listingsTableObjectId,
-    suiClient
-  })
-  const tableEntryField = findItemListingTableEntryFieldByListingId({
-    listingId,
-    tableEntryFields
-  })
-  if (!tableEntryField)
+
+  const tableEntryObject = await getTableEntryDynamicFieldObject(
+    {
+      tableObjectId: listingsTableObjectId,
+      keyType: TABLE_KEY_TYPE_U64,
+      keyValue: listingId
+    },
+    { suiClient }
+  )
+  if (!tableEntryObject)
     throw new Error(`No listing ${listingId} found in shop ${shopId}.`)
 
-  return tableEntryField
+  return tableEntryObject
 }
 
 const getItemListingObjectByTableEntryField = async ({
@@ -218,6 +236,25 @@ const getItemListingObjectByTableEntryField = async ({
     )
   ).object
 
+const getItemListingSummaryFromOrderedTableEntry = async ({
+  orderedTableEntry,
+  suiClient
+}: {
+  orderedTableEntry: OrderedItemListingTableEntry
+  suiClient: SuiClient
+}): Promise<ItemListingSummary> => {
+  const tableEntryObject = await getItemListingObjectByTableEntryField({
+    tableEntryField: orderedTableEntry.tableEntryField,
+    suiClient
+  })
+
+  return buildItemListingSummary(
+    tableEntryObject,
+    orderedTableEntry.listingId,
+    orderedTableEntry.tableEntryField.objectId
+  )
+}
+
 export const getItemListingSummaries = async (
   shopId: string,
   suiClient: SuiClient
@@ -231,24 +268,15 @@ export const getItemListingSummaries = async (
     suiClient
   })
   if (tableEntryFields.length === 0) return []
+  const orderedTableEntries =
+    sortListingTableEntriesByListingId(tableEntryFields)
 
-  const itemListingTableEntryObjects = await Promise.all(
-    tableEntryFields.map((tableEntryField) =>
-      getSuiObject(
-        {
-          objectId: tableEntryField.objectId,
-          options: { showContent: true, showType: true }
-        },
-        { suiClient }
-      )
-    )
-  )
-
-  return itemListingTableEntryObjects.map((response, index) =>
-    buildItemListingSummary(
-      response.object,
-      getListingIdFromTableEntryField(tableEntryFields[index]),
-      tableEntryFields[index].objectId
+  return Promise.all(
+    orderedTableEntries.map((orderedTableEntry) =>
+      getItemListingSummaryFromOrderedTableEntry({
+        orderedTableEntry,
+        suiClient
+      })
     )
   )
 }
@@ -259,19 +287,15 @@ export const getItemListingDetails = async (
   suiClient: SuiClient
 ): Promise<ItemListingDetails> => {
   const normalizedListingId = normalizeListingId(itemListingId)
-  const tableEntryField = await requireItemListingTableEntryField({
+  const tableEntryObject = await requireItemListingTableEntryObject({
     shopId,
     listingId: normalizedListingId,
     suiClient
   })
-  const object = await getItemListingObjectByTableEntryField({
-    tableEntryField,
-    suiClient
-  })
   return buildItemListingDetails(
-    object,
+    tableEntryObject,
     normalizedListingId,
-    tableEntryField.objectId
+    tableEntryObject.objectId
   )
 }
 
@@ -281,20 +305,16 @@ export const getItemListingSummary = async (
   suiClient: SuiClient
 ): Promise<ItemListingSummary> => {
   const normalizedListingId = normalizeListingId(itemListingId)
-  const tableEntryField = await requireItemListingTableEntryField({
+  const tableEntryObject = await requireItemListingTableEntryObject({
     shopId,
     listingId: normalizedListingId,
     suiClient
   })
-  const object = await getItemListingObjectByTableEntryField({
-    tableEntryField,
-    suiClient
-  })
 
   return buildItemListingSummary(
-    object,
+    tableEntryObject,
     normalizedListingId,
-    tableEntryField.objectId
+    tableEntryObject.objectId
   )
 }
 

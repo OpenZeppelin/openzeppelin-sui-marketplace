@@ -1,8 +1,8 @@
 import type { SuiClient } from "@mysten/sui/client"
+import type { Transaction } from "@mysten/sui/transactions"
 import { normalizeSuiObjectId } from "@mysten/sui/utils"
 
 import type { WrappedSuiSharedObject } from "@sui-oracle-market/tooling-core/shared-object"
-import { newTransaction } from "@sui-oracle-market/tooling-core/transactions"
 import {
   getDiscountTemplateSummary,
   type NormalizedRuleKind
@@ -12,7 +12,7 @@ import {
   normalizeListingId,
   normalizeListingIdAsBigIntU64
 } from "../models/item-listing.ts"
-import { buildShopOwnerCapabilityArguments } from "./shop-owner-arguments.ts"
+import { buildShopOwnerTransactionContext } from "./shop-owner-arguments.ts"
 
 type ListingMetadata = {
   id: string
@@ -28,10 +28,8 @@ type DiscountTemplateMetadata = {
 const toListingIdU64 = (listingId: string): bigint =>
   normalizeListingIdAsBigIntU64(listingId)
 
-const buildListingIdArgument = (
-  transaction: ReturnType<typeof newTransaction>,
-  listingId: string
-) => transaction.pure.u64(toListingIdU64(listingId))
+const buildListingIdArgument = (transaction: Transaction, listingId: string) =>
+  transaction.pure.u64(toListingIdU64(listingId))
 
 export type AddListingSpotlightTemplateInput = {
   ruleKind: NormalizedRuleKind
@@ -146,10 +144,8 @@ export const buildAddItemListingTransaction = ({
   spotlightDiscountId?: string
   createSpotlightDiscountTemplate?: AddListingSpotlightTemplateInput
 }) => {
-  const transaction = newTransaction()
-  const [shopArgument, ownerCapabilityArgument] =
-    buildShopOwnerCapabilityArguments({
-      transaction,
+  const { transaction, shopArgument, ownerCapabilityArgument } =
+    buildShopOwnerTransactionContext({
       shop,
       ownerCapId
     })
@@ -212,10 +208,8 @@ export const buildRemoveItemListingTransaction = ({
   ownerCapId: string
   itemListingId: string
 }) => {
-  const transaction = newTransaction()
-  const [shopArgument, ownerCapabilityArgument] =
-    buildShopOwnerCapabilityArguments({
-      transaction,
+  const { transaction, shopArgument, ownerCapabilityArgument } =
+    buildShopOwnerTransactionContext({
       shop,
       ownerCapId
     })
@@ -245,10 +239,8 @@ export const buildUpdateItemListingStockTransaction = ({
   ownerCapId: string
   newStock: bigint
 }) => {
-  const transaction = newTransaction()
-  const [shopArgument, ownerCapabilityArgument] =
-    buildShopOwnerCapabilityArguments({
-      transaction,
+  const { transaction, shopArgument, ownerCapabilityArgument } =
+    buildShopOwnerTransactionContext({
       shop,
       ownerCapId
     })
@@ -279,10 +271,8 @@ export const buildAttachDiscountTemplateTransaction = ({
   discountTemplateId: string
   ownerCapId: string
 }) => {
-  const transaction = newTransaction()
-  const [shopArgument, ownerCapabilityArgument] =
-    buildShopOwnerCapabilityArguments({
-      transaction,
+  const { transaction, shopArgument, ownerCapabilityArgument } =
+    buildShopOwnerTransactionContext({
       shop,
       ownerCapId
     })
@@ -311,10 +301,8 @@ export const buildClearDiscountTemplateTransaction = ({
   itemListingId: string
   ownerCapId: string
 }) => {
-  const transaction = newTransaction()
-  const [shopArgument, ownerCapabilityArgument] =
-    buildShopOwnerCapabilityArguments({
-      transaction,
+  const { transaction, shopArgument, ownerCapabilityArgument } =
+    buildShopOwnerTransactionContext({
       shop,
       ownerCapId
     })

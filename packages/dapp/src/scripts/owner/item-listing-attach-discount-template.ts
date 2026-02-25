@@ -7,10 +7,6 @@ import yargs from "yargs"
 
 import { getDiscountTemplateSummary } from "@sui-oracle-market/domain-core/models/discount"
 import {
-  getItemListingSummary,
-  normalizeListingId
-} from "@sui-oracle-market/domain-core/models/item-listing"
-import {
   buildAttachDiscountTemplateTransaction,
   validateTemplateAndListing
 } from "@sui-oracle-market/domain-core/ptb/item-listing"
@@ -21,7 +17,11 @@ import {
   logDiscountTemplateSummary,
   logItemListingSummary
 } from "../../utils/log-summaries.ts"
-import { resolveOwnerShopIdentifiers } from "../../utils/shop-context.ts"
+import {
+  executeItemListingMutation,
+  fetchItemListingSummaryForMutation,
+  resolveOwnerListingMutationContext
+} from "./item-listing-script-helpers.ts"
 
 runSuiScript(
   async (tooling, cliArguments) => {
@@ -50,24 +50,25 @@ runSuiScript(
         ownerCapId: inputs.ownerCapId
       })
 
-    const { execution, summary } = await tooling.executeTransactionWithSummary({
+    const mutationResult = await executeItemListingMutation({
+      tooling,
       transaction: attachDiscountTemplateTransaction,
-      signer: tooling.loadedEd25519KeyPair,
       summaryLabel: "attach-discount-template",
       devInspect: cliArguments.devInspect,
       dryRun: cliArguments.dryRun
     })
 
-    if (!execution) return
+    if (!mutationResult) return
 
+    const { execution, summary } = mutationResult
     const digest = execution.transactionResult.digest
 
     const [listingSummary, discountTemplateSummary] = await Promise.all([
-      getItemListingSummary(
-        inputs.shopId,
-        resolvedIds.itemListingId,
-        tooling.suiClient
-      ),
+      fetchItemListingSummaryForMutation({
+        shopId: inputs.shopId,
+        itemListingId: resolvedIds.itemListingId,
+        tooling
+      }),
       getDiscountTemplateSummary(
         inputs.shopId,
         resolvedIds.discountTemplateId,
@@ -153,18 +154,20 @@ const normalizeInputs = async (
   },
   networkName: string
 ) => {
-  const { packageId, shopId, ownerCapId } = await resolveOwnerShopIdentifiers({
-    networkName,
-    shopPackageId: cliArguments.shopPackageId,
-    shopId: cliArguments.shopId,
-    ownerCapId: cliArguments.ownerCapId
-  })
+  const { packageId, shopId, ownerCapId, itemListingId } =
+    await resolveOwnerListingMutationContext({
+      networkName,
+      shopPackageId: cliArguments.shopPackageId,
+      shopId: cliArguments.shopId,
+      ownerCapId: cliArguments.ownerCapId,
+      itemListingId: cliArguments.itemListingId
+    })
 
   return {
     packageId,
     shopId,
     ownerCapId,
-    itemListingId: normalizeListingId(cliArguments.itemListingId),
+    itemListingId,
     discountTemplateId: normalizeSuiObjectId(cliArguments.discountTemplateId)
   }
 }

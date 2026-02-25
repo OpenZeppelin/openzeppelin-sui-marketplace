@@ -7,6 +7,7 @@ import { normalizeSuiObjectId } from "@mysten/sui/utils"
 import {
   DEFAULT_TX_GAS_BUDGET,
   MINIMUM_GAS_COIN_BALANCE,
+  NORMALIZED_SUI_COIN_TYPE,
   SUI_COIN_TYPE
 } from "./constants.ts"
 import type { ToolingCoreContext } from "./context.ts"
@@ -121,6 +122,26 @@ export const findCreatedCoinObjectRefs = (
         digest: createdObject.digest
       })
     )
+
+export const pickDedicatedGasPaymentRefFromSplit = ({
+  splitTransactionBlock,
+  paymentCoinObjectId
+}: {
+  splitTransactionBlock: SuiTransactionBlockResponse
+  paymentCoinObjectId: string
+}): SuiObjectRef | undefined => {
+  const normalizedPaymentCoinObjectId =
+    normalizeSuiObjectId(paymentCoinObjectId)
+
+  return findCreatedCoinObjectRefs(
+    splitTransactionBlock,
+    NORMALIZED_SUI_COIN_TYPE
+  ).find(
+    (candidateObjectRef) =>
+      normalizeSuiObjectId(candidateObjectRef.objectId) !==
+      normalizedPaymentCoinObjectId
+  )
+}
 
 export const resolveCoinOwnership = async (
   {
