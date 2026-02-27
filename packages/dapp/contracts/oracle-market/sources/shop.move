@@ -1085,14 +1085,15 @@ entry fun buy_item<TItem: store, TCoin>(
         clock,
         ctx,
     );
-    settle_purchase_transfers<TItem, TCoin>(
-        owed_coin_opt,
-        change_coin,
-        minted_item,
-        shop_owner,
-        refund_extra_to,
-        mint_to,
-    );
+    owed_coin_opt.do!(|owed_coin| {
+        transfer::public_transfer(owed_coin, shop_owner);
+    });
+    if (change_coin.value() == 0) {
+        change_coin.destroy_zero();
+    } else {
+        transfer::public_transfer(change_coin, refund_extra_to);
+    };
+    transfer::public_transfer(minted_item, mint_to);
 }
 
 /// Same as `buy_item` but also validates and burns a `DiscountTicket`.
@@ -1153,14 +1154,15 @@ entry fun buy_item_with_discount<TItem: store, TCoin>(
         clock,
         ctx,
     );
-    settle_purchase_transfers<TItem, TCoin>(
-        owed_coin_opt,
-        change_coin,
-        minted_item,
-        shop.owner,
-        refund_extra_to,
-        mint_to,
-    );
+    owed_coin_opt.do!(|owed_coin| {
+        transfer::public_transfer(owed_coin, shop.owner);
+    });
+    if (change_coin.value() == 0) {
+        change_coin.destroy_zero();
+    } else {
+        transfer::public_transfer(change_coin, refund_extra_to);
+    };
+    transfer::public_transfer(minted_item, mint_to);
 
     event::emit(event);
     discount_ticket.burn_discount_ticket();
@@ -1570,26 +1572,6 @@ fun process_purchase_core<TItem: store, TCoin>(
         discounted_price_usd_cents,
     });
     (owed_coin_opt, payment, minted_item)
-}
-
-fun settle_purchase_transfers<TItem: store, TCoin>(
-    owed_coin_opt: Option<coin::Coin<TCoin>>,
-    change_coin: coin::Coin<TCoin>,
-    minted_item: ShopItem<TItem>,
-    shop_owner: address,
-    refund_extra_to: address,
-    mint_to: address,
-) {
-    owed_coin_opt.do!(|owed_coin| {
-        transfer::public_transfer(owed_coin, shop_owner);
-    });
-
-    if (change_coin.value() == 0) {
-        change_coin.destroy_zero();
-    } else {
-        transfer::public_transfer(change_coin, refund_extra_to);
-    };
-    transfer::public_transfer(minted_item, mint_to);
 }
 
 fun parse_rule_kind(raw_kind: u8): DiscountRuleKind {
