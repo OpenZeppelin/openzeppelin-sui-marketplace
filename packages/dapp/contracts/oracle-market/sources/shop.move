@@ -1143,33 +1143,35 @@ entry fun buy_item_with_discount<TItem: store, TCoin>(
         let item_listing = shop.borrow_listing(listing_id);
         (item_listing.shop_id, item_listing.base_price_usd_cents)
     };
-    let (discounted_price_usd_cents, discount_template_id_option, template_id_for_event) = {
-        let discount_template = shop.borrow_discount_template_mut(discount_template_id);
-        assert_discount_redemption_allowed!(discount_template, listing_shop_id, listing_id, now);
-        assert_ticket_matches_context!(
-            &discount_ticket,
-            discount_template,
-            listing_shop_id,
-            listing_id,
-            buyer,
-        );
-        discount_template.redemptions = discount_template.redemptions + 1;
-        (
-            apply_discount(listing_price_usd_cents, discount_template.rule),
-            option::some(discount_template.id),
-            discount_template.id,
-        )
-    };
-    let ticket_id = discount_ticket.id.to_inner();
+
     let shop_id = shop.id.to_inner();
-    let shop_owner = shop.owner;
+    let discount_template = shop.borrow_discount_template_mut(discount_template_id);
+    assert_discount_redemption_allowed!(discount_template, listing_shop_id, listing_id, now);
+    assert_ticket_matches_context!(
+        &discount_ticket,
+        discount_template,
+        listing_shop_id,
+        listing_id,
+        buyer,
+    );
+    discount_template.redemptions = discount_template.redemptions + 1;
+    let discounted_price_usd_cents = apply_discount(
+        listing_price_usd_cents,
+        discount_template.rule,
+    );
+
+    let event = DiscountRedeemedEvent {
+        shop_id,
+        discount_template_id: discount_template.id,
+        discount_id: discount_ticket.id.to_inner(),
+    };
 
     let (owed_coin_opt, change_coin, minted_item) = shop.process_purchase<TItem, TCoin>(
         price_info_object,
         payment,
         listing_id,
         discounted_price_usd_cents,
-        discount_template_id_option,
+        option::some(discount_template.id),
         max_price_age_secs,
         max_confidence_ratio_bps,
         clock,
@@ -1179,17 +1181,12 @@ entry fun buy_item_with_discount<TItem: store, TCoin>(
         owed_coin_opt,
         change_coin,
         minted_item,
-        shop_owner,
+        shop.owner,
         refund_extra_to,
         mint_to,
     );
 
-    event::emit(DiscountRedeemedEvent {
-        shop_id,
-        discount_template_id: template_id_for_event,
-        discount_id: ticket_id,
-    });
-
+    event::emit(event);
     discount_ticket.burn_discount_ticket();
 }
 
