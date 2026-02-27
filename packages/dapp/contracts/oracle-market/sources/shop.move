@@ -900,16 +900,14 @@ entry fun toggle_discount_template(
 ) {
     assert_owner_cap!(shop, owner_cap);
     assert_template_registered!(shop, discount_template_id);
-    let (applies_to_listing, was_active, template_shop_id) = {
-        let discount_template = shop.borrow_discount_template(discount_template_id);
-        (discount_template.applies_to_listing, discount_template.active, discount_template.shop_id)
-    };
+
+    let discount_template = shop.borrow_discount_template(discount_template_id);
     if (active) {
-        assert_listing_belongs_to_shop_if_some!(shop, applies_to_listing);
+        assert_listing_belongs_to_shop_if_some!(shop, discount_template.applies_to_listing);
     };
     shop.adjust_active_template_count(
-        applies_to_listing,
-        was_active,
+        discount_template.applies_to_listing,
+        discount_template.active,
         active,
     );
 
@@ -917,7 +915,7 @@ entry fun toggle_discount_template(
     discount_template.active = active;
 
     event::emit(DiscountTemplateToggledEvent {
-        shop_id: template_shop_id,
+        shop_id: shop.id.to_inner(),
         discount_template_id,
     });
 }
@@ -1581,7 +1579,7 @@ fun process_purchase<TItem: store, TCoin>(
     );
     let accepted_currency_id = accepted_currency.pyth_object_id;
     let shop_id = shop.id.to_inner();
-    
+
     let item_listing = shop.borrow_listing_mut(listing_id);
     assert_listing_type_matches<TItem>(item_listing);
     item_listing.process_purchase_core<TItem, TCoin>(
