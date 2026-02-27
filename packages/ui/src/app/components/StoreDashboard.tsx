@@ -340,13 +340,13 @@ const ItemListingsPanel = ({
                     <div className="mt-4 flex flex-col gap-2 text-[0.65rem]">
                       <CopyableId
                         value={listing.itemListingId}
-                        label="Listing"
+                        label="Listing ID"
                         className="w-full justify-start"
-                        explorerUrl={explorerUrl}
+                        showExplorer={false}
                       />
                       <CopyableId
-                        value={listing.markerObjectId}
-                        label="Marker"
+                        value={listing.tableEntryFieldId}
+                        label="Table Entry"
                         className="w-full justify-start"
                         explorerUrl={explorerUrl}
                       />
@@ -497,7 +497,7 @@ const AcceptedCurrenciesPanel = ({
                   <div className="mt-4 flex flex-wrap items-center gap-3 text-[0.65rem]">
                     <CopyableId
                       value={currency.tableEntryFieldId}
-                      label="Table entry"
+                      label="Table Entry"
                       explorerUrl={explorerUrl}
                     />
                     {currency.pythObjectId ? (
@@ -606,10 +606,10 @@ const PurchasedItemsPanel = ({
                   </div>
                   <div className="mt-4 flex flex-col gap-2 text-[0.65rem]">
                     <CopyableId
-                      value={item.itemListingId}
-                      label="Listing"
+                      value={item.listingId}
+                      label="Listing ID"
                       className="w-full justify-start"
-                      explorerUrl={explorerUrl}
+                      showExplorer={false}
                     />
                     <CopyableId
                       value={item.shopId}
@@ -761,7 +761,7 @@ const DiscountsPanel = ({
                                   title="Copy listing id"
                                   className="mt-1 w-full justify-start text-sm font-semibold text-slate-500 dark:text-slate-200/70"
                                   valueClassName="truncate font-semibold text-slate-500 dark:text-slate-200/70"
-                                  explorerUrl={explorerUrl}
+                                  showExplorer={false}
                                 />
                               ) : (
                                 <div className="mt-1 text-sm font-semibold text-slate-500 dark:text-slate-200/70">
@@ -880,7 +880,7 @@ const DiscountsPanel = ({
                                     title="Copy listing id"
                                     className="mt-1 w-full justify-start text-sm font-semibold text-slate-500 dark:text-slate-200/70"
                                     valueClassName="truncate font-semibold text-slate-500 dark:text-slate-200/70"
-                                    explorerUrl={explorerUrl}
+                                    showExplorer={false}
                                   />
                                 ) : (
                                   <div className="mt-1 text-sm font-semibold text-slate-500 dark:text-slate-200/70">

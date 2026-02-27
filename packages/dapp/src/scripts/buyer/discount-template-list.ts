@@ -1,6 +1,6 @@
 /**
  * Fetches DiscountTemplate objects for a Shop so buyers can see current offers.
- * Templates are shared objects indexed by dynamic-field markers under the Shop.
+ * Templates are table-backed entries stored under the shared Shop.
  * Read-only: no transaction is submitted.
  */
 import yargs from "yargs"

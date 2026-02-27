@@ -4,6 +4,7 @@ import {
   buildCoinTransferTransaction,
   findCreatedCoinObjectRefs,
   normalizeCoinType,
+  pickDedicatedGasPaymentRefFromSplit,
   resolveCoinOwnership
 } from "../../src/coin.ts"
 import {
@@ -80,5 +81,75 @@ describe("coin helpers", () => {
         digest: "digest-a"
       }
     ])
+  })
+
+  it("picks a dedicated gas coin ref from split results", () => {
+    const splitTransactionBlock = buildTransactionResponse({
+      objectChanges: [
+        buildCreatedObjectChange({
+          objectType: "0x2::coin::Coin<0x2::sui::SUI>",
+          objectId: "0x5",
+          version: "10",
+          digest: "digest-payment"
+        }),
+        buildCreatedObjectChange({
+          objectType: "0x2::coin::Coin<0x2::sui::SUI>",
+          objectId: "0x7",
+          version: "11",
+          digest: "digest-gas"
+        })
+      ]
+    })
+
+    const dedicatedGasPaymentRef = pickDedicatedGasPaymentRefFromSplit({
+      splitTransactionBlock,
+      paymentCoinObjectId: "0x0005"
+    })
+
+    expect(dedicatedGasPaymentRef).toEqual({
+      objectId: normalizeSuiObjectId("0x7"),
+      version: "11",
+      digest: "digest-gas"
+    })
+  })
+
+  it("returns undefined when split only creates the payment SUI coin", () => {
+    const splitTransactionBlock = buildTransactionResponse({
+      objectChanges: [
+        buildCreatedObjectChange({
+          objectType: "0x2::coin::Coin<0x2::sui::SUI>",
+          objectId: "0x9",
+          version: "12",
+          digest: "digest-payment-only"
+        })
+      ]
+    })
+
+    const dedicatedGasPaymentRef = pickDedicatedGasPaymentRefFromSplit({
+      splitTransactionBlock,
+      paymentCoinObjectId: "0x9"
+    })
+
+    expect(dedicatedGasPaymentRef).toBeUndefined()
+  })
+
+  it("returns undefined when split creates no SUI coins", () => {
+    const splitTransactionBlock = buildTransactionResponse({
+      objectChanges: [
+        buildCreatedObjectChange({
+          objectType: "0x2::coin::Coin<0x2::usdc::USDC>",
+          objectId: "0xa",
+          version: "13",
+          digest: "digest-usdc"
+        })
+      ]
+    })
+
+    const dedicatedGasPaymentRef = pickDedicatedGasPaymentRefFromSplit({
+      splitTransactionBlock,
+      paymentCoinObjectId: "0x9"
+    })
+
+    expect(dedicatedGasPaymentRef).toBeUndefined()
   })
 })
