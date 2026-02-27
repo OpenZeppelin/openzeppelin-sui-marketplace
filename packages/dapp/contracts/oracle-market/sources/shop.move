@@ -1129,13 +1129,7 @@ entry fun buy_item_with_discount<TItem: store, TCoin>(
     let shop_id = shop.id.to_inner();
     let discount_template = shop.borrow_discount_template_mut(discount_template_id);
     assert_discount_redemption_allowed!(discount_template, listing_id, now);
-    assert_ticket_matches_context!(
-        &discount_ticket,
-        discount_template,
-        shop_id,
-        listing_id,
-        buyer,
-    );
+    assert_ticket_matches_context!(&discount_ticket, discount_template, shop_id, listing_id, buyer);
     discount_template.redemptions = discount_template.redemptions + 1;
     let discounted_price_usd_cents = apply_discount(
         listing_price_usd_cents,
