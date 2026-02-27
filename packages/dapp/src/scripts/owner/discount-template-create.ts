@@ -114,7 +114,7 @@ runSuiScript(
       alias: ["listing-id", "applies-to"],
       type: "string",
       description:
-        "Optional item listing object ID to pin this template to a single SKU."
+        "Optional item listing ID to pin this template to a single SKU."
     })
     .option("shopPackageId", {
       alias: "shop-package-id",
