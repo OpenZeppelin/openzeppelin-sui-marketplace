@@ -31,9 +31,9 @@ pnpm script buyer:item-listing:list --shop-id <shopId>
 
 ## 5. Concept deep dive: tables and type tags
 - **Table-backed listings**: listing create/update/remove paths mutate `Shop.listings` directly with `add`, `borrow_mut`, and `remove`.
-  Code: `packages/dapp/contracts/oracle-market/sources/shop.move` (`add_item_listing_core`, `borrow_listing_mut`, `remove_listing`)
+  Code: `packages/dapp/contracts/oracle-market/sources/shop.move` (`add_item_listing_core`, `borrow_listing_mut`, `remove_item_listing`)
 - **Listing IDs are object `ID`s**: IDs are allocated from `TxContext`, emitted in events, and reused by scripts/UI as stable primary keys.
-  Code: `packages/dapp/contracts/oracle-market/sources/shop.move` (`allocate_listing_id`, `ItemListingAddedEvent`)
+  Code: `packages/dapp/contracts/oracle-market/sources/shop.move` (`new_object_id`, `ItemListingAddedEvent`)
 - **Off-chain enumeration still reads dynamic-field table entries**: `Table` is backed by dynamic fields, so the SDK discovers rows by reading table entry objects.
   Code: `packages/domain/core/src/models/item-listing.ts` (`getItemListingSummaries`)
 - **TypeName and type tags**: listing types are stored as `TypeName` for runtime checks, events, and UI metadata. Compile-time safety still comes from generics (`ShopItem<TItem>`), not from the stored value.
@@ -72,16 +72,15 @@ fun add_item_listing_core<T: store>(
   );
 
   let shop_id = shop.id.to_inner();
-  let listing_id = allocate_listing_id(ctx);
+  let listing_id = new_object_id(ctx);
   let listing = new_item_listing<T>(
-    shop_id,
     listing_id,
     name,
     base_price_usd_cents,
     stock,
     spotlight_discount_template_id,
   );
-  shop.add_listing(listing_id, listing);
+  shop.listings.add(listing_id, listing);
   event::emit(ItemListingAddedEvent { shop_id, listing_id });
   listing_id
 }
@@ -92,6 +91,7 @@ fun add_item_listing_core<T: store>(
 ```move
 fun mint_shop_item<TItem: store>(
   item_listing: &ItemListing,
+  shop_id: ID,
   clock: &clock::Clock,
   ctx: &mut TxContext,
 ): ShopItem<TItem> {
@@ -99,7 +99,7 @@ fun mint_shop_item<TItem: store>(
 
   ShopItem {
     id: object::new(ctx),
-    shop_id: item_listing.shop_id,
+    shop_id,
     item_listing_id: item_listing.listing_id,
     item_type: item_listing.item_type,
     name: item_listing.name,

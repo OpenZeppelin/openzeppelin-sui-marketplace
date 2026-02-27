@@ -511,7 +511,7 @@ export const getDiscountTemplateSummaries = async (
   shopId: string,
   suiClient: SuiClient
 ): Promise<DiscountTemplateSummary[]> => {
-  const { discountTemplatesTableObjectId } =
+  const { normalizedShopId, discountTemplatesTableObjectId } =
     await getDiscountTemplatesTableObjectId({
       shopId,
       suiClient
@@ -545,6 +545,7 @@ export const getDiscountTemplateSummaries = async (
     orderedTableEntries.map((orderedTableEntry) =>
       getDiscountTemplateSummaryFromOrderedTableEntry({
         orderedTableEntry,
+        shopId: normalizedShopId,
         suiClient
       })
     )
@@ -583,7 +584,8 @@ export const getDiscountTemplateSummary = async (
     normalizeIdOrThrow(
       discountTemplateTableEntryObject.objectId,
       `Missing table entry id for DiscountTemplate ${normalizedDiscountTemplateId}.`
-    )
+    ),
+    normalizedShopId
   )
 }
 
@@ -617,9 +619,11 @@ const getDiscountTemplatesTableObjectId = async ({
 
 const getDiscountTemplateSummaryFromOrderedTableEntry = async ({
   orderedTableEntry,
+  shopId,
   suiClient
 }: {
   orderedTableEntry: OrderedDiscountTemplateTableEntry
+  shopId: string
   suiClient: SuiClient
 }): Promise<DiscountTemplateSummary> => {
   const { object } = await getSuiObject(
@@ -633,19 +637,20 @@ const getDiscountTemplateSummaryFromOrderedTableEntry = async ({
   return buildDiscountTemplateSummary(
     object,
     orderedTableEntry.discountTemplateId,
-    orderedTableEntry.tableEntryField.objectId
+    orderedTableEntry.tableEntryField.objectId,
+    shopId
   )
 }
 
 const buildDiscountTemplateSummary = (
   discountTemplateTableEntryObject: SuiObjectData,
   discountTemplateId: string,
-  tableEntryFieldId: string
+  tableEntryFieldId: string,
+  shopId: string
 ): DiscountTemplateSummary => {
   const discountTemplateFields = unwrapMoveObjectFields(
     discountTemplateTableEntryObject
   )
-  const shopId = normalizeOptionalIdFromValue(discountTemplateFields.shop_id)
   const appliesToListingId = normalizeOptionalListingIdFromValue(
     discountTemplateFields.applies_to_listing
   )
@@ -671,10 +676,7 @@ const buildDiscountTemplateSummary = (
   return {
     discountTemplateId,
     tableEntryFieldId,
-    shopId: normalizeIdOrThrow(
-      shopId,
-      `Missing shop_id for DiscountTemplate ${discountTemplateId}.`
-    ),
+    shopId,
     appliesToListingId,
     ruleDescription: formatOnChainDiscountRule(rule),
     ruleKind: rule.kind,

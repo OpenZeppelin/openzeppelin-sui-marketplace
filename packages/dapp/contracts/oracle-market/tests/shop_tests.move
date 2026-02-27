@@ -1683,7 +1683,7 @@ fun add_item_listing_rejects_zero_stock() {
     abort EAssertFailure
 }
 
-#[test, expected_failure(abort_code = ::sui_oracle_market::shop::ETemplateShopMismatch)]
+#[test, expected_failure(abort_code = ::sui_oracle_market::shop::ETemplateNotFound)]
 fun add_item_listing_rejects_foreign_template() {
     let mut ctx = tx_context::dummy();
     let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
@@ -2436,7 +2436,7 @@ fun update_discount_template_rejects_foreign_owner_cap() {
     abort EAssertFailure
 }
 
-#[test, expected_failure(abort_code = ::sui_oracle_market::shop::ETemplateShopMismatch)]
+#[test, expected_failure(abort_code = ::sui_oracle_market::shop::ETemplateNotFound)]
 fun update_discount_template_rejects_foreign_template() {
     let mut ctx = tx_context::dummy();
     let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
@@ -2827,7 +2827,7 @@ fun toggle_discount_template_rejects_foreign_owner_cap() {
     abort EAssertFailure
 }
 
-#[test, expected_failure(abort_code = ::sui_oracle_market::shop::ETemplateShopMismatch)]
+#[test, expected_failure(abort_code = ::sui_oracle_market::shop::ETemplateNotFound)]
 fun toggle_discount_template_rejects_foreign_template() {
     let mut ctx = tx_context::dummy();
     let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
@@ -2856,7 +2856,7 @@ fun toggle_discount_template_rejects_foreign_template() {
     abort EAssertFailure
 }
 
-#[test, expected_failure(abort_code = ::sui_oracle_market::shop::ETemplateShopMismatch)]
+#[test, expected_failure(abort_code = ::sui_oracle_market::shop::ETemplateNotFound)]
 fun toggle_discount_template_rejects_unknown_template() {
     let mut ctx = tx_context::dummy();
     let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
@@ -3019,7 +3019,7 @@ fun toggle_template_on_listing_rejects_foreign_listing() {
     abort EAssertFailure
 }
 
-#[test, expected_failure(abort_code = ::sui_oracle_market::shop::ETemplateShopMismatch)]
+#[test, expected_failure(abort_code = ::sui_oracle_market::shop::ETemplateNotFound)]
 fun toggle_template_on_listing_rejects_foreign_template() {
     let mut ctx = tx_context::dummy();
     let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
@@ -3058,7 +3058,7 @@ fun toggle_template_on_listing_rejects_foreign_template() {
     abort EAssertFailure
 }
 
-#[test, expected_failure(abort_code = ::sui_oracle_market::shop::ETemplateShopMismatch)]
+#[test, expected_failure(abort_code = ::sui_oracle_market::shop::ETemplateNotFound)]
 fun toggle_template_on_listing_rejects_unknown_template() {
     let mut ctx = tx_context::dummy();
     let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
@@ -3304,7 +3304,7 @@ fun attach_template_to_listing_rejects_foreign_listing() {
     abort EAssertFailure
 }
 
-#[test, expected_failure(abort_code = ::sui_oracle_market::shop::ETemplateShopMismatch)]
+#[test, expected_failure(abort_code = ::sui_oracle_market::shop::ETemplateNotFound)]
 fun attach_template_to_listing_rejects_foreign_template() {
     let mut ctx = tx_context::dummy();
     let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
@@ -3338,7 +3338,7 @@ fun attach_template_to_listing_rejects_foreign_template() {
     abort EAssertFailure
 }
 
-#[test, expected_failure(abort_code = ::sui_oracle_market::shop::ETemplateShopMismatch)]
+#[test, expected_failure(abort_code = ::sui_oracle_market::shop::ETemplateNotFound)]
 fun attach_template_to_listing_rejects_unknown_template() {
     let mut ctx = tx_context::dummy();
     let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
@@ -4202,7 +4202,7 @@ fun listing_values_rejects_foreign_shop() {
     abort EAssertFailure
 }
 
-#[test, expected_failure(abort_code = ::sui_oracle_market::shop::ETemplateShopMismatch)]
+#[test, expected_failure(abort_code = ::sui_oracle_market::shop::ETemplateNotFound)]
 fun discount_template_values_rejects_foreign_shop() {
     let mut ctx = tx_context::new_from_hint(TEST_OWNER, 10003, 0, 0, 0);
     let (mut shop_a, _owner_cap_a) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
