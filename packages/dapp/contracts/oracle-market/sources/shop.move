@@ -2339,16 +2339,19 @@ public fun test_apply_percent_discount(base_price_usd_cents: u64, bps: u16): u64
 
 #[test_only]
 public fun test_discount_template_created_values(event: &DiscountTemplateCreatedEvent): (ID, ID) {
+    // TODO#q: refactor to event creation pattern
     (event.shop_id, event.discount_template_id)
 }
 
 #[test_only]
 public fun test_discount_template_updated_values(event: &DiscountTemplateUpdatedEvent): (ID, ID) {
+    // TODO#q: refactor to event creation pattern
     (event.shop_id, event.discount_template_id)
 }
 
 #[test_only]
 public fun test_discount_template_toggled_values(event: &DiscountTemplateToggledEvent): (ID, ID) {
+    // TODO#q: refactor to event creation pattern
     (event.shop_id, event.discount_template_id)
 }
 
@@ -2356,6 +2359,7 @@ public fun test_discount_template_toggled_values(event: &DiscountTemplateToggled
 public fun test_purchase_completed_values(
     event: &PurchaseCompletedEvent,
 ): (ID, ID, ID, Option<ID>, ID, u64, u64) {
+    // TODO#q: refactor to event creation pattern
     (
         event.shop_id,
         event.item_listing_id,
@@ -2369,11 +2373,13 @@ public fun test_purchase_completed_values(
 
 #[test_only]
 public fun test_discount_redeemed_values(event: &DiscountRedeemedEvent): (ID, ID, ID) {
+    // TODO#q: refactor to event creation pattern
     (event.shop_id, event.discount_template_id, event.discount_id)
 }
 
 #[test_only]
 public fun test_discount_claimed_values(event: &DiscountClaimedEvent): (ID, ID) {
+    // TODO#q: refactor to event creation pattern
     (event.shop_id, event.discount_id)
 }
 
@@ -2478,45 +2484,64 @@ public fun test_shop_owner_cap_shop_id(owner_cap: &ShopOwnerCap): ID {
 
 #[test_only]
 public fun test_shop_created_owner_cap_id(event: &ShopCreatedEvent): ID {
+    // TODO#q: refactor to event creation pattern
     event.shop_owner_cap_id
 }
 
 #[test_only]
 public fun test_shop_created_shop_id(event: &ShopCreatedEvent): ID {
+    // TODO#q: refactor to event creation pattern
     event.shop_id
 }
 
 #[test_only]
 public fun test_shop_owner_updated_values(event: &ShopOwnerUpdatedEvent): (ID, ID) {
+    // TODO#q: refactor to event creation pattern
     (event.shop_id, event.shop_owner_cap_id)
+}
+
+public(package) fun new_shop_owner_updated_event(
+    shop_id: ID,
+    shop_owner_cap_id: ID,
+): ShopOwnerUpdatedEvent {
+    ShopOwnerUpdatedEvent {
+        shop_id,
+        shop_owner_cap_id,
+    }
 }
 
 #[test_only]
 public fun test_shop_disabled_values(event: &ShopDisabledEvent): (ID, ID) {
+    // TODO#q: refactor to event creation pattern
     (event.shop_id, event.shop_owner_cap_id)
 }
 
 #[test_only]
 public fun test_item_listing_stock_updated_values(event: &ItemListingStockUpdatedEvent): (ID, ID) {
+    // TODO#q: refactor to event creation pattern
     (event.shop_id, event.item_listing_id)
 }
 
 #[test_only]
 public fun test_item_listing_added_values(event: &ItemListingAddedEvent): (ID, ID) {
+    // TODO#q: refactor to event creation pattern
     (event.shop_id, event.item_listing_id)
 }
 
 #[test_only]
 public fun test_item_listing_removed_values(event: &ItemListingRemovedEvent): (ID, ID) {
+    // TODO#q: refactor to event creation pattern
     (event.shop_id, event.item_listing_id)
 }
 
 #[test_only]
 public fun test_accepted_coin_added_values(event: &AcceptedCoinAddedEvent): (ID, ID) {
+    // TODO#q: refactor to event creation pattern
     (event.shop_id, event.accepted_currency_id)
 }
 
 #[test_only]
 public fun test_accepted_coin_removed_values(event: &AcceptedCoinRemovedEvent): (ID, ID) {
+    // TODO#q: refactor to event creation pattern
     (event.shop_id, event.accepted_currency_id)
 }
