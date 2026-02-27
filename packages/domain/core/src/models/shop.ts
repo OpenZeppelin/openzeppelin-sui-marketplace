@@ -88,6 +88,13 @@ export type ShopCreatedEnrichmentError = {
   shopId: string
 }
 
+type ShopObjectFetchResult = {
+  object?: SuiObjectData
+  error?: unknown
+}
+
+const SHOP_CREATED_OBJECT_BATCH_SIZE = 50
+
 const buildShopCreatedEnrichmentError = (
   stage: ShopCreatedEnrichmentError["stage"],
   error: unknown,
@@ -103,8 +110,122 @@ const buildShopCreatedEnrichmentError = (
 const appendShopCreatedError = (
   summary: ShopCreatedSummary,
   error: ShopCreatedEnrichmentError
+): ShopCreatedSummary => ({
+  ...summary,
+  errors: summary.errors ? [...summary.errors, error] : [error]
+})
+
+const requiresShopCreatedEnrichment = (summary: ShopCreatedSummary) =>
+  !summary.ownerAddress || !summary.name
+
+const chunkIds = (ids: string[], chunkSize: number): string[][] => {
+  const chunks: string[][] = []
+  for (let index = 0; index < ids.length; index += chunkSize) {
+    chunks.push(ids.slice(index, index + chunkSize))
+  }
+  return chunks
+}
+
+const buildMissingShopObjectError = (
+  shopId: string,
+  responseError?: { code?: string } | null
 ) => {
-  summary.errors = summary.errors ? [...summary.errors, error] : [error]
+  if (responseError?.code) {
+    return new Error(
+      `Could not fetch shop object ${shopId}: ${responseError.code}.`
+    )
+  }
+
+  return new Error(`Could not fetch shop object ${shopId}.`)
+}
+
+const fetchShopObjectsById = async ({
+  shopIds,
+  suiClient
+}: {
+  shopIds: string[]
+  suiClient: SuiClient
+}): Promise<Map<string, ShopObjectFetchResult>> => {
+  const objectByShopId = new Map<string, ShopObjectFetchResult>()
+  if (shopIds.length === 0) return objectByShopId
+
+  for (const shopIdChunk of chunkIds(shopIds, SHOP_CREATED_OBJECT_BATCH_SIZE)) {
+    try {
+      const responses = await suiClient.multiGetObjects({
+        ids: shopIdChunk,
+        options: { showContent: true }
+      })
+
+      shopIdChunk.forEach((shopId, index) => {
+        const response = responses[index]
+        if (response?.data) {
+          objectByShopId.set(shopId, { object: response.data })
+          return
+        }
+
+        objectByShopId.set(shopId, {
+          error: buildMissingShopObjectError(shopId, response?.error)
+        })
+      })
+    } catch (error) {
+      shopIdChunk.forEach((shopId) => {
+        objectByShopId.set(shopId, { error })
+      })
+    }
+  }
+
+  return objectByShopId
+}
+
+const collectPageSummaries = (
+  events: SuiEvent[],
+  seenShopIds: Set<string>
+): ShopCreatedSummary[] => {
+  const pageSummaries: ShopCreatedSummary[] = []
+
+  for (const event of events) {
+    const summary = parseShopCreatedEvent(event)
+    if (!summary || seenShopIds.has(summary.shopId)) continue
+    seenShopIds.add(summary.shopId)
+    pageSummaries.push(summary)
+  }
+
+  return pageSummaries
+}
+
+const enrichShopCreatedSummary = (
+  summary: ShopCreatedSummary,
+  shopObjectResults: Map<string, ShopObjectFetchResult>
+): ShopCreatedSummary => {
+  if (!requiresShopCreatedEnrichment(summary)) return summary
+
+  const fetchResult = shopObjectResults.get(summary.shopId)
+  if (!fetchResult?.object) {
+    return appendShopCreatedError(
+      summary,
+      buildShopCreatedEnrichmentError(
+        "fetchObject",
+        fetchResult?.error ??
+          buildMissingShopObjectError(summary.shopId, undefined),
+        summary.shopId
+      )
+    )
+  }
+
+  try {
+    return {
+      ...summary,
+      ownerAddress:
+        summary.ownerAddress ??
+        getShopOwnerAddressFromObject(fetchResult.object),
+      name: summary.name ?? getShopNameFromObject(fetchResult.object)
+    }
+  } catch (error) {
+    return appendShopCreatedError(
+      summary,
+      buildShopCreatedEnrichmentError("parseObject", error, summary.shopId)
+    )
+  }
 }
 
 const parseShopCreatedEvent = (
@@ -166,44 +287,19 @@ export const getShopCreatedSummaries = async ({
       order: "descending"
     })
 
-    for (const event of response.data) {
-      const summary = parseShopCreatedEvent(event)
-      if (!summary || seen.has(summary.shopId)) continue
-      seen.add(summary.shopId)
-      if (!summary.ownerAddress || !summary.name) {
-        try {
-          const { object } = await getSuiObject(
-            { objectId: summary.shopId, options: { showContent: true } },
-            { suiClient }
-          )
-
-          try {
-            summary.ownerAddress =
-              summary.ownerAddress ?? getShopOwnerAddressFromObject(object)
-            summary.name = summary.name ?? getShopNameFromObject(object)
-          } catch (error) {
-            appendShopCreatedError(
-              summary,
-              buildShopCreatedEnrichmentError(
-                "parseObject",
-                error,
-                summary.shopId
-              )
-            )
-          }
-        } catch (error) {
-          appendShopCreatedError(
-            summary,
-            buildShopCreatedEnrichmentError(
-              "fetchObject",
-              error,
-              summary.shopId
-            )
-          )
-        }
-      }
-      summaries.push(summary)
-    }
+    const pageSummaries = collectPageSummaries(response.data, seen)
+    const shopIdsNeedingEnrichment = pageSummaries
+      .filter(requiresShopCreatedEnrichment)
+      .map((summary) => summary.shopId)
+    const shopObjectResults = await fetchShopObjectsById({
+      shopIds: shopIdsNeedingEnrichment,
+      suiClient
+    })
+    summaries.push(
+      ...pageSummaries.map((summary) =>
+        enrichShopCreatedSummary(summary, shopObjectResults)
+      )
+    )
 
     if (!response.hasNextPage || !response.nextCursor) break
     cursor = response.nextCursor

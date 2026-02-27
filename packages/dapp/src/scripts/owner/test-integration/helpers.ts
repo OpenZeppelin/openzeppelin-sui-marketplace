@@ -1,7 +1,10 @@
 export {
+  attachDiscountTemplateToListing,
   createAcceptedCurrencyFixture,
   createDappIntegrationTestEnv,
+  createDiscountTemplateFixture,
   createFundedTestAccount,
+  createItemListingFixture,
   createScriptRunner,
   createShopFixture,
   createShopWithAcceptedCurrencyFixture,
@@ -12,6 +15,7 @@ export {
   publishMovePackage,
   resolveItemType,
   resolveMockCurrencyFeedSelection,
+  runBuyerScriptJson,
   runMockSetupFixture,
   runOwnerScriptJson
 } from "../../../utils/test-utils/helpers.ts"

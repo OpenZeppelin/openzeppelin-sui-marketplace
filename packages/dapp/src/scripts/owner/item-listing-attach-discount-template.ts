@@ -6,7 +6,6 @@ import { normalizeSuiObjectId } from "@mysten/sui/utils"
 import yargs from "yargs"
 
 import { getDiscountTemplateSummary } from "@sui-oracle-market/domain-core/models/discount"
-import { getItemListingSummary } from "@sui-oracle-market/domain-core/models/item-listing"
 import {
   buildAttachDiscountTemplateTransaction,
   validateTemplateAndListing
@@ -18,7 +17,11 @@ import {
   logDiscountTemplateSummary,
   logItemListingSummary
 } from "../../utils/log-summaries.ts"
-import { resolveOwnerShopIdentifiers } from "../../utils/shop-context.ts"
+import {
+  executeItemListingMutation,
+  fetchItemListingSummaryForMutation,
+  resolveOwnerListingMutationContext
+} from "./item-listing-script-helpers.ts"
 
 runSuiScript(
   async (tooling, cliArguments) => {
@@ -34,43 +37,38 @@ runSuiScript(
       suiClient: tooling.suiClient
     })
 
-    const shopSharedObject = await tooling.getImmutableSharedObject({
+    const shopSharedObject = await tooling.getMutableSharedObject({
       objectId: inputs.shopId
     })
-    const itemListingSharedObject = await tooling.getMutableSharedObject({
-      objectId: resolvedIds.itemListingId
-    })
-    const discountTemplateSharedObject = await tooling.getImmutableSharedObject(
-      { objectId: resolvedIds.discountTemplateId }
-    )
 
     const attachDiscountTemplateTransaction =
       buildAttachDiscountTemplateTransaction({
         packageId: inputs.packageId,
         shop: shopSharedObject,
-        itemListing: itemListingSharedObject,
-        discountTemplate: discountTemplateSharedObject,
+        itemListingId: resolvedIds.itemListingId,
+        discountTemplateId: resolvedIds.discountTemplateId,
         ownerCapId: inputs.ownerCapId
       })
 
-    const { execution, summary } = await tooling.executeTransactionWithSummary({
+    const mutationResult = await executeItemListingMutation({
+      tooling,
       transaction: attachDiscountTemplateTransaction,
-      signer: tooling.loadedEd25519KeyPair,
       summaryLabel: "attach-discount-template",
       devInspect: cliArguments.devInspect,
       dryRun: cliArguments.dryRun
     })
 
-    if (!execution) return
+    if (!mutationResult) return
 
+    const { execution, summary } = mutationResult
     const digest = execution.transactionResult.digest
 
     const [listingSummary, discountTemplateSummary] = await Promise.all([
-      getItemListingSummary(
-        inputs.shopId,
-        resolvedIds.itemListingId,
-        tooling.suiClient
-      ),
+      fetchItemListingSummaryForMutation({
+        shopId: inputs.shopId,
+        itemListingId: resolvedIds.itemListingId,
+        tooling
+      }),
       getDiscountTemplateSummary(
         inputs.shopId,
         resolvedIds.discountTemplateId,
@@ -99,15 +97,13 @@ runSuiScript(
     .option("itemListingId", {
       alias: ["item-listing-id", "item-id", "listing-id"],
       type: "string",
-      description:
-        "ItemListing object ID to attach the discount to (object ID, not a type tag).",
+      description: "Item listing ID to attach the discount to.",
       demandOption: true
     })
     .option("discountTemplateId", {
       alias: ["discount-template-id", "template-id"],
       type: "string",
-      description:
-        "DiscountTemplate object ID to spotlight on the listing (object ID).",
+      description: "Discount template ID to spotlight on the listing.",
       demandOption: true
     })
     .option("shopPackageId", {
@@ -158,18 +154,20 @@ const normalizeInputs = async (
   },
   networkName: string
 ) => {
-  const { packageId, shopId, ownerCapId } = await resolveOwnerShopIdentifiers({
-    networkName,
-    shopPackageId: cliArguments.shopPackageId,
-    shopId: cliArguments.shopId,
-    ownerCapId: cliArguments.ownerCapId
-  })
+  const { packageId, shopId, ownerCapId, itemListingId } =
+    await resolveOwnerListingMutationContext({
+      networkName,
+      shopPackageId: cliArguments.shopPackageId,
+      shopId: cliArguments.shopId,
+      ownerCapId: cliArguments.ownerCapId,
+      itemListingId: cliArguments.itemListingId
+    })
 
   return {
     packageId,
     shopId,
     ownerCapId,
-    itemListingId: normalizeSuiObjectId(cliArguments.itemListingId),
+    itemListingId,
     discountTemplateId: normalizeSuiObjectId(cliArguments.discountTemplateId)
   }
 }

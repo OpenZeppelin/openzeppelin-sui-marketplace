@@ -58,8 +58,8 @@ pnpm ui dev
 - **Price update policy**: for localnet/testnet/mainnet, the UI requires a Pyth update to be added
   to the PTB; for other networks it can be auto/skip. This keeps pricing deterministic and fresh.
   Code: `packages/ui/src/app/hooks/useBuyFlowModalState.ts`
-- **Shared vs owned reads in UI**: storefront data comes from shared objects (listings, currencies,
-  templates). Wallet data comes from owned objects (tickets, receipts).
+- **Shared vs owned reads in UI**: storefront data comes from shared objects (`Shop`, templates)
+  plus `Shop` table entries (listings, currencies). Wallet data comes from owned objects (tickets, receipts).
   Code: `packages/ui/src/app/hooks/useShopDashboardData.tsx`
 
 ## 7. UI map (buyer path)
@@ -80,10 +80,10 @@ pnpm ui dev
 `packages/dapp/contracts/oracle-market/sources/shop.move`
 ```move
 entry fun buy_item<TItem: store, TCoin>(
-  shop: &Shop,
-  item_listing: &mut ItemListing,
+  shop: &mut Shop,
   price_info_object: &price_info::PriceInfoObject,
   payment: coin::Coin<TCoin>,
+  listing_id: ID,
   mint_to: address,
   refund_extra_to: address,
   max_price_age_secs: Option<u64>,
@@ -92,10 +92,10 @@ entry fun buy_item<TItem: store, TCoin>(
   ctx: &mut TxContext,
 ) {
   assert_shop_active!(shop);
-  assert_listing_matches_shop!(shop, item_listing);
-  let base_price_usd_cents = item_listing.base_price_usd_cents;
+  assert_listing_registered!(shop, listing_id);
+  let base_price_usd_cents = shop.borrow_listing(listing_id).base_price_usd_cents;
   let (owed_coin_opt, change_coin, minted_item) = shop.process_purchase<TItem, TCoin>(
-    item_listing,
+    listing_id,
     price_info_object,
     payment,
     base_price_usd_cents,

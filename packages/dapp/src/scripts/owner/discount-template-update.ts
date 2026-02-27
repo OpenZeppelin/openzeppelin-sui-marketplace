@@ -3,29 +3,23 @@
  * On-chain guards block updates after claims/redemptions begin.
  * Requires the ShopOwnerCap capability and the Clock for time checks.
  */
-import { normalizeSuiObjectId } from "@mysten/sui/utils"
 import yargs from "yargs"
 
 import {
   defaultStartTimestampSeconds,
   discountRuleChoices,
-  getDiscountTemplateSummary,
-  parseDiscountRuleKind,
-  parseDiscountRuleValue,
-  validateDiscountSchedule,
   type DiscountRuleKindLabel
 } from "@sui-oracle-market/domain-core/models/discount"
 import { SUI_CLOCK_ID } from "@sui-oracle-market/domain-core/models/pyth"
 import { buildUpdateDiscountTemplateTransaction } from "@sui-oracle-market/domain-core/ptb/discount-template"
-import {
-  parseNonNegativeU64,
-  parseOptionalU64
-} from "@sui-oracle-market/tooling-core/utils/utility"
-import { emitJsonOutput } from "@sui-oracle-market/tooling-node/json"
-import { logKeyValueGreen } from "@sui-oracle-market/tooling-node/log"
 import { runSuiScript } from "@sui-oracle-market/tooling-node/process"
-import { logDiscountTemplateSummary } from "../../utils/log-summaries.ts"
-import { resolveOwnerShopIdentifiers } from "../../utils/shop-context.ts"
+import {
+  emitOrLogDiscountTemplateMutationResult,
+  executeDiscountTemplateMutation,
+  fetchDiscountTemplateSummaryForMutation,
+  parseDiscountTemplateRuleScheduleInputs,
+  resolveOwnerTemplateMutationContext
+} from "./discount-template-script-helpers.ts"
 
 runSuiScript(
   async (tooling, cliArguments) => {
@@ -34,11 +28,8 @@ runSuiScript(
       tooling.network.networkName
     )
 
-    const shopSharedObject = await tooling.getImmutableSharedObject({
+    const shopSharedObject = await tooling.getMutableSharedObject({
       objectId: inputs.shopId
-    })
-    const discountTemplateShared = await tooling.getMutableSharedObject({
-      objectId: inputs.discountTemplateId
     })
     const sharedClockObject = await tooling.getImmutableSharedObject({
       objectId: SUI_CLOCK_ID
@@ -48,7 +39,7 @@ runSuiScript(
       buildUpdateDiscountTemplateTransaction({
         packageId: inputs.packageId,
         shop: shopSharedObject,
-        discountTemplate: discountTemplateShared,
+        discountTemplateId: inputs.discountTemplateId,
         ruleKind: inputs.ruleKind,
         ruleValue: inputs.ruleValue,
         startsAt: inputs.startsAt,
@@ -58,44 +49,33 @@ runSuiScript(
         sharedClockObject
       })
 
-    const { execution, summary } = await tooling.executeTransactionWithSummary({
+    const mutationResult = await executeDiscountTemplateMutation({
+      tooling,
       transaction: updateDiscountTemplateTransaction,
-      signer: tooling.loadedEd25519KeyPair,
       summaryLabel: "update-discount-template",
       devInspect: cliArguments.devInspect,
       dryRun: cliArguments.dryRun
     })
 
-    if (!execution) return
-
-    const digest = execution.transactionResult.digest
-
-    const discountTemplateSummary = await getDiscountTemplateSummary(
-      inputs.shopId,
-      inputs.discountTemplateId,
-      tooling.suiClient
-    )
-
-    if (
-      emitJsonOutput(
-        {
-          discountTemplate: discountTemplateSummary,
-          digest,
-          transactionSummary: summary
-        },
-        cliArguments.json
-      )
-    )
-      return
-
-    logDiscountTemplateSummary(discountTemplateSummary)
-    if (digest) logKeyValueGreen("digest")(digest)
+    if (!mutationResult) return
+    const discountTemplateSummary =
+      await fetchDiscountTemplateSummaryForMutation({
+        shopId: inputs.shopId,
+        discountTemplateId: inputs.discountTemplateId,
+        tooling
+      })
+    emitOrLogDiscountTemplateMutationResult({
+      discountTemplateSummary,
+      digest: mutationResult.execution.transactionResult.digest,
+      transactionSummary: mutationResult.summary,
+      json: cliArguments.json
+    })
   },
   yargs()
     .option("discountTemplateId", {
       alias: ["discount-template-id", "template-id"],
       type: "string",
-      description: "DiscountTemplate object ID to update.",
+      description: "Discount template ID to update.",
       demandOption: true
     })
     .option("ruleKind", {
@@ -183,34 +163,24 @@ const normalizeInputs = async (
   },
   networkName: string
 ) => {
-  const { packageId, shopId, ownerCapId } = await resolveOwnerShopIdentifiers({
-    networkName,
-    shopPackageId: cliArguments.shopPackageId,
-    shopId: cliArguments.shopId,
-    ownerCapId: cliArguments.ownerCapId
+  const ownerTemplateMutationContext =
+    await resolveOwnerTemplateMutationContext({
+      networkName,
+      shopPackageId: cliArguments.shopPackageId,
+      shopId: cliArguments.shopId,
+      ownerCapId: cliArguments.ownerCapId,
+      discountTemplateId: cliArguments.discountTemplateId
+    })
+  const parsedRuleScheduleInputs = parseDiscountTemplateRuleScheduleInputs({
+    ruleKind: cliArguments.ruleKind,
+    value: cliArguments.value,
+    startsAt: cliArguments.startsAt,
+    expiresAt: cliArguments.expiresAt,
+    maxRedemptions: cliArguments.maxRedemptions
   })
 
-  const ruleKind = parseDiscountRuleKind(cliArguments.ruleKind)
-  const startsAt = parseNonNegativeU64(
-    cliArguments.startsAt ?? defaultStartTimestampSeconds().toString(),
-    "startsAt"
-  )
-  const expiresAt = parseOptionalU64(cliArguments.expiresAt, "expiresAt")
-
-  validateDiscountSchedule(startsAt, expiresAt)
-
   return {
-    packageId,
-    shopId,
-    ownerCapId,
-    discountTemplateId: normalizeSuiObjectId(cliArguments.discountTemplateId),
-    ruleKind,
-    ruleValue: parseDiscountRuleValue(ruleKind, cliArguments.value),
-    startsAt,
-    expiresAt,
-    maxRedemptions: parseOptionalU64(
-      cliArguments.maxRedemptions,
-      "maxRedemptions"
-    )
+    ...ownerTemplateMutationContext,
+    ...parsedRuleScheduleInputs
   }
 }
