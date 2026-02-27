@@ -1565,23 +1565,23 @@ fun process_purchase<TItem: store, TCoin>(
     ctx: &mut TxContext,
 ): (Option<coin::Coin<TCoin>>, coin::Coin<TCoin>, ShopItem<TItem>) {
     let coin_type = currency_type<TCoin>();
-    let (accepted_currency_id, quote_amount) = {
-        let accepted_currency = shop.borrow_registered_accepted_currency(coin_type);
-        ensure_price_info_matches_currency!(accepted_currency, price_info_object);
-        assert_price_status_trading!(
-            price_info_object,
-            accepted_currency.max_price_status_lag_secs_cap,
-        );
-        let quote_amount = accepted_currency.quote_amount_with_guardrails(
-            price_info_object,
-            discounted_price_usd_cents,
-            max_price_age_secs,
-            max_confidence_ratio_bps,
-            clock,
-        );
-        (accepted_currency.pyth_object_id, quote_amount)
-    };
+
+    let accepted_currency = shop.borrow_registered_accepted_currency(coin_type);
+    ensure_price_info_matches_currency!(accepted_currency, price_info_object);
+    assert_price_status_trading!(
+        price_info_object,
+        accepted_currency.max_price_status_lag_secs_cap,
+    );
+    let quote_amount = accepted_currency.quote_amount_with_guardrails(
+        price_info_object,
+        discounted_price_usd_cents,
+        max_price_age_secs,
+        max_confidence_ratio_bps,
+        clock,
+    );
+    let accepted_currency_id = accepted_currency.pyth_object_id;
     let shop_id = shop.id.to_inner();
+    
     let item_listing = shop.borrow_listing_mut(listing_id);
     assert_listing_type_matches<TItem>(item_listing);
     item_listing.process_purchase_core<TItem, TCoin>(
