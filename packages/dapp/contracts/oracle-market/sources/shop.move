@@ -1374,7 +1374,7 @@ fun assert_listing_type_matches<TItem: store>(item_listing: &ItemListing) {
 // === Helpers ===
 
 fun new_object_id(ctx: &mut TxContext): ID {
-    object::id_from_address(tx_context::fresh_object_address(ctx))
+    ctx.fresh_object_address().to_id()
 }
 
 fun allocate_listing_id(ctx: &mut TxContext): ID {
