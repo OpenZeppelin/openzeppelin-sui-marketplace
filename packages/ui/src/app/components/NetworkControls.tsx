@@ -37,7 +37,7 @@ const NetworkControls = () => {
 
       const params = new URLSearchParams(searchParams.toString())
       params.set("network", nextNetwork)
-      params.delete("networ")
+      params.delete("network")
       const query = params.toString()
       const href = query ? `${pathname}?${query}` : pathname
       router.replace(href)
