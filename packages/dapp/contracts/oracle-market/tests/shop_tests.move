@@ -137,21 +137,26 @@ fun add_currency_with_feed<T>(
     price_info_id
 }
 
+/// Asserts that `expected_event_count` events of type `T` were emitted and the latest
+/// emitted event matches `expected_event`.
+macro fun assert_emitted<$T>($expected_event_count: u64, $expected_event: $T) {
+    let expected_event_count = $expected_event_count;
+    let events = event::events_by_type<$T>();
+    assert!(expected_event_count > 0);
+    assert_eq!(events.length(), expected_event_count);
+    let emitted_event = events[expected_event_count - 1];
+    assert_eq!(emitted_event, $expected_event);
+}
+
 /// Asserts that one event of type `T` was emitted and matches `expected_event`.
 macro fun assert_emitted_once<$T>($expected_event: $T) {
-    let events = event::events_by_type<$T>();
-    assert_eq!(events.length(), 1);
-    let emitted_event = events[0];
-    assert_eq!(emitted_event, $expected_event);
+    assert_emitted!(1, $expected_event);
 }
 
 /// Asserts the latest event of type `T` was newly emitted and matches `expected_event`.
 macro fun assert_last_emitted<$T>($event_count_before: u64, $expected_event: $T) {
     let event_count_before = $event_count_before;
-    let events = event::events_by_type<$T>();
-    assert_eq!(events.length(), event_count_before + 1);
-    let emitted_event = events[events.length() - 1];
-    assert_eq!(emitted_event, $expected_event);
+    assert_emitted!(event_count_before + 1, $expected_event);
 }
 
 fun assert_listing_spotlight_template_id(
@@ -1740,16 +1745,18 @@ fun update_item_listing_stock_updates_listing_and_emits_events() {
     let name = shop::listing_values_name(&listing_values);
     let base_price_usd_cents = shop::listing_values_base_price_usd_cents(&listing_values);
     let stock = shop::listing_values_stock(&listing_values);
-    let shop_id = shop::listing_values_shop_id(&listing_values);
     let spotlight_template = shop::listing_values_spotlight_discount_template_id(&listing_values);
     assert_eq!(name, b"Helmet".to_string());
     assert_eq!(base_price_usd_cents, 48_00);
     assert!(option::is_none(&spotlight_template));
     assert_eq!(stock, 11);
 
-    let stock_events = event::events_by_type<shop::ItemListingStockUpdatedEvent>();
-    assert_eq!(stock_events.length(), 1);
-    assert_eq!(stock_events[0], shop::new_item_listing_stock_updated_event(shop_id, listing_id));
+    assert_emitted_once!(
+        shop::new_item_listing_stock_updated_event(
+            shop::shop_id(&shop),
+            listing_id,
+        ),
+    );
 
     shop::test_remove_listing(&mut shop, listing_id);
     std::unit_test::destroy(owner_cap);
@@ -1829,31 +1836,28 @@ fun update_item_listing_stock_handles_multiple_updates_and_events() {
         &mut ctx,
     );
 
+    let expected_stock_updated_event = shop::new_item_listing_stock_updated_event(
+        shop::shop_id(&shop),
+        listing_id,
+    );
     shop::update_item_listing_stock(
         &mut shop,
         &owner_cap,
         listing_id,
         8,
     );
+    assert_emitted!(1, expected_stock_updated_event);
     shop::update_item_listing_stock(
         &mut shop,
         &owner_cap,
         listing_id,
         3,
     );
+    assert_emitted!(2, expected_stock_updated_event);
 
     let listing_values = shop::listing_values(&shop, listing_id);
     let stock = shop::listing_values_stock(&listing_values);
     assert_eq!(stock, 3);
-
-    let stock_events = event::events_by_type<shop::ItemListingStockUpdatedEvent>();
-    assert_eq!(stock_events.length(), 2);
-    let expected_event = shop::new_item_listing_stock_updated_event(
-        shop::shop_id(&shop),
-        listing_id,
-    );
-    assert_eq!(stock_events[0], expected_event);
-    assert_eq!(stock_events[1], expected_event);
 
     shop::test_remove_listing(&mut shop, listing_id);
     std::unit_test::destroy(owner_cap);
