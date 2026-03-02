@@ -22,7 +22,7 @@ const ShopDashboardShell = () => {
   const searchParams = useSearchParams()
   const urlShopId = searchParams.get("shopId") ?? undefined
   const urlNetwork = normalizeNetworkKey(
-    searchParams.get("network") ?? searchParams.get("networ")
+    searchParams.get("network") ?? searchParams.get("network")
   )
   const packageId = useResolvedPackageId()
   const currentAccount = useCurrentAccount()
@@ -107,7 +107,7 @@ const ShopDashboardShell = () => {
     {
       const params = new URLSearchParams(searchParams.toString())
       params.delete("shopId")
-      params.delete("networ")
+      params.delete("network")
       if (normalizedCurrentNetwork) {
         params.set("network", normalizedCurrentNetwork)
       }
