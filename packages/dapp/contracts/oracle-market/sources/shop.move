@@ -2277,30 +2277,37 @@ entry fun quote_amount_for_price_info_object<TCoin>(
     )
 }
 
+/// Returns the listing ID from an `ItemListing` reference.
 public fun listing_id(listing: &ItemListing): ID {
     listing.listing_id
 }
 
+/// Returns the `Shop` object ID.
 public fun shop_id(shop: &Shop): ID {
     shop.id.to_inner()
 }
 
+/// Returns the payout owner address for the shop.
 public fun shop_owner(shop: &Shop): address {
     shop.owner
 }
 
+/// Returns the shop display name.
 public fun shop_name(shop: &Shop): String {
     shop.name
 }
 
+/// Returns whether the shop is permanently disabled.
 public fun shop_disabled(shop: &Shop): bool {
     shop.disabled
 }
 
+/// Returns the object ID of a `ShopOwnerCap`.
 public fun shop_owner_cap_id(owner_cap: &ShopOwnerCap): ID {
     owner_cap.id.to_inner()
 }
 
+/// Returns the shop ID linked to a `ShopOwnerCap`.
 public fun shop_owner_cap_shop_id(owner_cap: &ShopOwnerCap): ID {
     owner_cap.shop_id
 }
