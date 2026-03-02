@@ -601,10 +601,6 @@ public(package) fun new_discount_claimed_event(shop_id: ID, discount_id: ID): Di
     }
 }
 
-public(package) fun discount_claimed_event_discount_id(event: &DiscountClaimedEvent): ID {
-    event.discount_id
-}
-
 public(package) fun new_discount_redeemed_event(
     shop_id: ID,
     discount_template_id: ID,
@@ -2499,14 +2495,6 @@ public fun shop_owner_cap_shop_id(owner_cap: &ShopOwnerCap): ID {
     owner_cap.shop_id
 }
 
-public fun shop_created_owner_cap_id(event: &ShopCreatedEvent): ID {
-    event.shop_owner_cap_id
-}
-
-public fun shop_created_shop_id(event: &ShopCreatedEvent): ID {
-    event.shop_id
-}
-
 // === #[test_only] API ===
 
 #[test_only]
@@ -2660,9 +2648,10 @@ public fun test_claim_and_buy_with_ids<TItem: store, TCoin>(
     max_confidence_ratio_bps: Option<u16>,
     clock: &clock::Clock,
     ctx: &mut TxContext,
-) {
+): ID {
     let now = now_secs(clock);
     let discount_ticket = shop.claim_discount_ticket_with_event(discount_template_id, now, ctx);
+    let discount_id = discount_ticket.id.to_inner();
     shop.buy_item_with_discount<TItem, TCoin>(
         discount_template_id,
         discount_ticket,
@@ -2676,6 +2665,7 @@ public fun test_claim_and_buy_with_ids<TItem: store, TCoin>(
         clock,
         ctx,
     );
+    discount_id
 }
 
 #[test_only]
