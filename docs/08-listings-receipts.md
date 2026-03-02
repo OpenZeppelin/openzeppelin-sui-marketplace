@@ -63,7 +63,7 @@ fun add_item_listing_core<T: store>(
   ctx: &mut TxContext,
 ): ID {
   assert_owner_cap!(shop, owner_cap);
-  assert_listing_inputs!(
+  validate_listing_inputs!(
     shop,
     &name,
     base_price_usd_cents,
