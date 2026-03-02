@@ -166,26 +166,30 @@ export const resolvePythPackageIdFromShopModule = async ({
   shopPackageId: string
   suiClient: SuiClient
 }): Promise<string | undefined> => {
-  try {
-    const normalizedShopModule = await suiClient.getNormalizedMoveModule({
+  const normalizedShopModule = await suiClient
+    .getNormalizedMoveModule({
       package: shopPackageId,
       module: "shop"
     })
-    const exposedFunctions = normalizedShopModule.exposedFunctions
-    const addAcceptedCurrencyFunction =
-      exposedFunctions?.add_accepted_currency ?? undefined
-    const parameters = Array.isArray(addAcceptedCurrencyFunction?.parameters)
-      ? addAcceptedCurrencyFunction.parameters
-      : []
-
-    return findStructAddressInNormalizedTypes({
-      normalizedTypes: parameters,
-      moduleName: "price_info",
-      structName: "PriceInfoObject"
+    .catch((error) => {
+      throw new Error(
+        `Failed to resolve Pyth package ID from shop package ${shopPackageId} while calling suiClient.getNormalizedMoveModule(shop).`,
+        { cause: error }
+      )
     })
-  } catch {
-    return undefined
-  }
+
+  const exposedFunctions = normalizedShopModule.exposedFunctions
+  const addAcceptedCurrencyFunction =
+    exposedFunctions?.add_accepted_currency ?? undefined
+  const parameters = Array.isArray(addAcceptedCurrencyFunction?.parameters)
+    ? addAcceptedCurrencyFunction.parameters
+    : []
+
+  return findStructAddressInNormalizedTypes({
+    normalizedTypes: parameters,
+    moduleName: "price_info",
+    structName: "PriceInfoObject"
+  })
 }
 
 export const assertPriceInfoObjectDependency = async ({

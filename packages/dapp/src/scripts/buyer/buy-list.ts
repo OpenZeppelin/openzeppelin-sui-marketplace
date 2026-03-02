@@ -30,7 +30,7 @@ type ListPurchasesArguments = {
 }
 
 type ListingDetailsWarning = {
-  itemListingId: string
+  listingId: string
   shopId: string
   error: string
 }
@@ -56,7 +56,7 @@ runSuiScript(
       tooling.suiClient,
       (receipt, reason) => {
         const warning = {
-          itemListingId: receipt.itemListingId,
+          listingId: receipt.listingId,
           shopId: receipt.shopId,
           error: reason instanceof Error ? reason.message : String(reason)
         }
@@ -64,7 +64,7 @@ runSuiScript(
         if (cliArguments.json) listingWarnings.push(warning)
         else
           logWarning(
-            `Unable to fetch listing ${warning.itemListingId}: ${warning.error}`
+            `Unable to fetch listing ${warning.listingId}: ${warning.error}`
           )
       }
     )
@@ -157,13 +157,13 @@ const getListingDetailsForReceipts = async (
   shopItemReceipts: Awaited<ReturnType<typeof getShopItemReceiptSummaries>>,
   suiClient: SuiClient,
   onError: (
-    receipt: { itemListingId: string; shopId: string },
+    receipt: { listingId: string; shopId: string },
     reason: unknown
   ) => void
 ) =>
   mapSettledWithWarnings({
     items: shopItemReceipts,
     task: (receipt) =>
-      getItemListingDetails(receipt.shopId, receipt.itemListingId, suiClient),
+      getItemListingDetails(receipt.shopId, receipt.listingId, suiClient),
     onError
   })

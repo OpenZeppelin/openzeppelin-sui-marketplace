@@ -8,19 +8,37 @@ import {
   useSuiClient,
   useSuiClientContext
 } from "@mysten/dapp-kit"
-import type { SuiTransactionBlockResponse } from "@mysten/sui/client"
+import type { SuiClient, SuiTransactionBlockResponse } from "@mysten/sui/client"
 import type { IdentifierString } from "@mysten/wallet-standard"
+import {
+  defaultStartTimestampSeconds,
+  parseDiscountRuleScheduleStringInputs,
+  parseDiscountRuleKind,
+  parseDiscountRuleValue,
+  validateDiscountSchedule,
+  type DiscountRuleKindLabel
+} from "@sui-oracle-market/domain-core/models/discount"
 import type { ItemListingSummary } from "@sui-oracle-market/domain-core/models/item-listing"
-import { getItemListingSummary } from "@sui-oracle-market/domain-core/models/item-listing"
+import {
+  getItemListingSummary,
+  requireListingIdFromItemListingAddedEvents
+} from "@sui-oracle-market/domain-core/models/item-listing"
 import { parseUsdToCents } from "@sui-oracle-market/domain-core/models/shop"
-import { buildAddItemListingTransaction } from "@sui-oracle-market/domain-core/ptb/item-listing"
+import {
+  buildAddItemListingTransaction,
+  type AddListingSpotlightTemplateInput
+} from "@sui-oracle-market/domain-core/ptb/item-listing"
 import {
   deriveRelevantPackageId,
   normalizeOptionalId
 } from "@sui-oracle-market/tooling-core/object"
 import { getSuiSharedObject } from "@sui-oracle-market/tooling-core/shared-object"
 import { ENetwork } from "@sui-oracle-market/tooling-core/types"
-import { parsePositiveU64 } from "@sui-oracle-market/tooling-core/utils/utility"
+import {
+  parseNonNegativeU64,
+  parseOptionalU64,
+  parsePositiveU64
+} from "@sui-oracle-market/tooling-core/utils/utility"
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { EXPLORER_URL_VARIABLE_NAME } from "../config/network"
 import { formatUsdFromCents, getStructLabel } from "../helpers/format"
@@ -41,7 +59,6 @@ import {
   safeJsonStringify,
   serializeForJson
 } from "../helpers/transactionErrors"
-import { extractCreatedObjects } from "../helpers/transactionFormat"
 import { waitForTransactionBlock } from "../helpers/transactionWait"
 import { useIdleFieldValidation } from "./useIdleFieldValidation"
 import useNetworkConfig from "./useNetworkConfig"
@@ -51,7 +68,13 @@ type ListingFormState = {
   itemType: string
   basePrice: string
   stock: string
+  spotlightTemplateMode: "existing" | "create"
   spotlightDiscountId: string
+  createSpotlightRuleKind: DiscountRuleKindLabel
+  createSpotlightValue: string
+  createSpotlightStartsAt: string
+  createSpotlightExpiresAt: string
+  createSpotlightMaxRedemptions: string
 }
 
 type ListingInputs = {
@@ -60,6 +83,7 @@ type ListingInputs = {
   basePriceUsdCents: bigint
   stock: bigint
   spotlightDiscountId?: string
+  createSpotlightDiscountTemplate?: AddListingSpotlightTemplateInput
 }
 
 export type ListingTransactionSummary = ListingInputs & {
@@ -68,33 +92,38 @@ export type ListingTransactionSummary = ListingInputs & {
   listingId?: string
 }
 
-const stripGenericType = (objectType: string) => {
-  const genericStartIndex = objectType.indexOf("<")
-  return genericStartIndex === -1
-    ? objectType
-    : objectType.slice(0, genericStartIndex)
-}
-
-const matchesShopStructType = (
-  objectType: string | undefined,
-  structName: string
-) => {
-  if (!objectType) return false
-  return stripGenericType(objectType).endsWith(`::shop::${structName}`)
-}
-
 type TransactionState =
   | { status: "idle" }
   | { status: "processing" }
   | { status: "success"; summary: ListingTransactionSummary }
   | { status: "error"; error: string; details?: string }
 
+const listingSummaryRetryDelaysMs = [200, 500, 1000]
+
+const waitMs = (delayMs: number) =>
+  new Promise<void>((resolve) => {
+    setTimeout(resolve, delayMs)
+  })
+
+const toError = (error: unknown): Error =>
+  error instanceof Error ? error : new Error(String(error))
+
+type ItemListingSummaryRetryResult =
+  | { ok: true; listingSummary: ItemListingSummary }
+  | { ok: false; error: Error }
+
 const emptyFormState = (): ListingFormState => ({
   itemName: "",
   itemType: "",
   basePrice: "",
   stock: "",
-  spotlightDiscountId: ""
+  spotlightTemplateMode: "existing",
+  spotlightDiscountId: "",
+  createSpotlightRuleKind: "fixed",
+  createSpotlightValue: "",
+  createSpotlightStartsAt: defaultStartTimestampSeconds().toString(),
+  createSpotlightExpiresAt: "",
+  createSpotlightMaxRedemptions: ""
 })
 
 type ListingFieldErrors = Partial<Record<keyof ListingFormState, string>>
@@ -140,11 +169,87 @@ const buildListingFieldErrors = (
     }
   }
 
-  const spotlightError = validateOptionalSuiObjectId(
-    formState.spotlightDiscountId,
-    "Spotlight discount template id"
-  )
-  if (spotlightError) errors.spotlightDiscountId = spotlightError
+  if (formState.spotlightTemplateMode === "existing") {
+    const spotlightError = validateOptionalSuiObjectId(
+      formState.spotlightDiscountId,
+      "Spotlight discount template id"
+    )
+    if (spotlightError) errors.spotlightDiscountId = spotlightError
+  } else {
+    const createSpotlightValue = formState.createSpotlightValue.trim()
+    if (!createSpotlightValue) {
+      errors.createSpotlightValue = "Rule value is required."
+    } else {
+      try {
+        const ruleKind = parseDiscountRuleKind(
+          formState.createSpotlightRuleKind
+        )
+        parseDiscountRuleValue(ruleKind, createSpotlightValue)
+      } catch (error) {
+        errors.createSpotlightValue = resolveValidationMessage(
+          error,
+          "Enter a valid discount value."
+        )
+      }
+    }
+
+    const startsAt = formState.createSpotlightStartsAt.trim()
+    if (!startsAt) {
+      errors.createSpotlightStartsAt = "Start time is required."
+    } else {
+      try {
+        parseNonNegativeU64(startsAt, "createSpotlightStartsAt")
+      } catch (error) {
+        errors.createSpotlightStartsAt = resolveValidationMessage(
+          error,
+          "Start time must be a valid u64."
+        )
+      }
+    }
+
+    const expiresAt = formState.createSpotlightExpiresAt.trim()
+    if (expiresAt) {
+      try {
+        parseOptionalU64(expiresAt, "createSpotlightExpiresAt")
+      } catch (error) {
+        errors.createSpotlightExpiresAt = resolveValidationMessage(
+          error,
+          "Expiry must be a valid u64."
+        )
+      }
+    }
+
+    if (!errors.createSpotlightStartsAt && !errors.createSpotlightExpiresAt) {
+      try {
+        const normalizedStartsAt = parseNonNegativeU64(
+          startsAt,
+          "createSpotlightStartsAt"
+        )
+        const normalizedExpiresAt = parseOptionalU64(
+          expiresAt || undefined,
+          "createSpotlightExpiresAt"
+        )
+        validateDiscountSchedule(normalizedStartsAt, normalizedExpiresAt)
+      } catch (error) {
+        errors.createSpotlightExpiresAt = resolveValidationMessage(
+          error,
+          "Expiry must be after the start time."
+        )
+      }
+    }
+
+    const maxRedemptions = formState.createSpotlightMaxRedemptions.trim()
+    if (maxRedemptions) {
+      try {
+        parseOptionalU64(maxRedemptions, "createSpotlightMaxRedemptions")
+      } catch (error) {
+        errors.createSpotlightMaxRedemptions = resolveValidationMessage(
+          error,
+          "Max redemptions must be a valid u64."
+        )
+      }
+    }
+  }
 
   return errors
 }
@@ -158,16 +263,80 @@ const parseListingInputs = (formState: ListingFormState): ListingInputs => {
 
   const basePriceUsdCents = parseUsdToCents(formState.basePrice)
   const stock = parsePositiveU64(formState.stock, "stock")
-  const spotlightDiscountId = normalizeOptionalId(
-    formState.spotlightDiscountId.trim() || undefined
-  )
+  if (formState.spotlightTemplateMode === "existing") {
+    const spotlightDiscountId = normalizeOptionalId(
+      formState.spotlightDiscountId.trim() || undefined
+    )
+
+    return {
+      itemName,
+      itemType,
+      basePriceUsdCents,
+      stock,
+      spotlightDiscountId
+    }
+  }
+
+  const parsedCreateSpotlightTemplate = parseDiscountRuleScheduleStringInputs({
+    ruleKind: formState.createSpotlightRuleKind,
+    value: formState.createSpotlightValue,
+    startsAt: formState.createSpotlightStartsAt,
+    expiresAt: formState.createSpotlightExpiresAt.trim() || undefined,
+    maxRedemptions: formState.createSpotlightMaxRedemptions.trim() || undefined,
+    startsAtLabel: "createSpotlightStartsAt",
+    expiresAtLabel: "createSpotlightExpiresAt",
+    maxRedemptionsLabel: "createSpotlightMaxRedemptions"
+  })
 
   return {
     itemName,
     itemType,
     basePriceUsdCents,
     stock,
-    spotlightDiscountId
+    createSpotlightDiscountTemplate: parsedCreateSpotlightTemplate
+  }
+}
+
+const getItemListingSummaryWithRetry = async ({
+  shopId,
+  listingId,
+  suiClient,
+  retryDelaysMs = listingSummaryRetryDelaysMs
+}: {
+  shopId: string
+  listingId: string
+  suiClient: SuiClient
+  retryDelaysMs?: number[]
+}): Promise<ItemListingSummaryRetryResult> => {
+  let lastError: Error | undefined
+
+  for (
+    let attemptIndex = 0;
+    attemptIndex <= retryDelaysMs.length;
+    attemptIndex += 1
+  ) {
+    try {
+      return {
+        ok: true,
+        listingSummary: await getItemListingSummary(
+          shopId,
+          listingId,
+          suiClient
+        )
+      }
+    } catch (error) {
+      lastError = toError(error)
+      if (attemptIndex >= retryDelaysMs.length)
+        return { ok: false, error: lastError }
+      await waitMs(retryDelaysMs[attemptIndex])
+    }
+  }
+
+  return {
+    ok: false,
+    error:
+      lastError ??
+      new Error("Failed to fetch item listing summary after all retries.")
   }
 }
 
@@ -401,7 +570,9 @@ export const useAddItemModalState = ({
         itemName: listingInputs.itemName,
         basePriceUsdCents: listingInputs.basePriceUsdCents,
         stock: listingInputs.stock,
-        spotlightDiscountId: listingInputs.spotlightDiscountId
+        spotlightDiscountId: listingInputs.spotlightDiscountId,
+        createSpotlightDiscountTemplate:
+          listingInputs.createSpotlightDiscountTemplate
       })
       addListingTransaction.setSender(walletAddress)
 
@@ -427,43 +598,40 @@ export const useAddItemModalState = ({
         transactionBlock = await waitForTransactionBlock(suiClient, digest)
       }
 
-      const createdObjects = extractCreatedObjects(transactionBlock)
-      const listingId = createdObjects.find((change) =>
-        matchesShopStructType(change.objectType, "ItemListing")
-      )?.objectId
-      const markerObjectId = createdObjects.find((change) =>
-        matchesShopStructType(change.objectType, "ItemListingMarker")
-      )?.objectId
-
-      const optimisticListing = listingId
-        ? {
-            itemListingId: listingId,
-            markerObjectId: markerObjectId ?? listingId,
-            name: listingInputs.itemName,
-            itemType: listingInputs.itemType,
-            basePriceUsdCents: listingInputs.basePriceUsdCents.toString(),
-            stock: listingInputs.stock.toString(),
-            spotlightTemplateId: listingInputs.spotlightDiscountId
-          }
+      const listingId = requireListingIdFromItemListingAddedEvents({
+        events: transactionBlock.events,
+        shopId: resolvedShopId
+      })
+      const listingSummaryResult = await getItemListingSummaryWithRetry({
+        shopId: resolvedShopId,
+        listingId,
+        suiClient
+      })
+      const listingSummary = listingSummaryResult.ok
+        ? listingSummaryResult.listingSummary
         : undefined
+      if (!listingSummaryResult.ok) {
+        console.warn("Failed to fetch listing summary after retries.", {
+          listingId,
+          shopId: resolvedShopId,
+          error: listingSummaryResult.error
+        })
+      }
+      const resolvedSpotlightDiscountId =
+        listingSummary?.spotlightTemplateId ?? listingInputs.spotlightDiscountId
 
       setTransactionState({
         status: "success",
         summary: {
           ...listingInputs,
+          spotlightDiscountId: resolvedSpotlightDiscountId,
           digest,
           transactionBlock,
           listingId
         }
       })
 
-      onListingCreated?.(optimisticListing)
-
-      if (listingId) {
-        void getItemListingSummary(resolvedShopId, listingId, suiClient)
-          .then((summary) => onListingCreated?.(summary))
-          .catch(() => {})
-      }
+      onListingCreated?.(listingSummary)
     } catch (error) {
       const errorDetails = extractErrorDetails(error)
       const localnetSupportNote =

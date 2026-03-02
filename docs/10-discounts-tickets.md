@@ -75,14 +75,10 @@ entry fun create_discount_template(
   starts_at: u64,
   expires_at: Option<u64>,
   max_redemptions: Option<u64>,
-  ctx: &mut tx::TxContext,
+  ctx: &mut TxContext,
 ) {
-  assert_owner_cap(shop, owner_cap);
-  let (
-    discount_template,
-    discount_template_id,
-    discount_rule,
-  ) = shop.create_discount_template_core(
+  assert_owner_cap!(shop, owner_cap);
+  let (discount_template, discount_template_id) = shop.create_discount_template_core(
     applies_to_listing,
     rule_kind,
     rule_value,
@@ -91,12 +87,11 @@ entry fun create_discount_template(
     max_redemptions,
     ctx,
   );
-  txf::share_object(discount_template);
+  transfer::share_object(discount_template);
   let shop_id = shop.id.to_inner();
   event::emit(DiscountTemplateCreatedEvent {
     shop_id,
     discount_template_id,
-    rule: discount_rule,
   });
 }
 ```
@@ -108,16 +103,16 @@ entry fun claim_discount_ticket(
   shop: &Shop,
   discount_template: &mut DiscountTemplate,
   clock: &clock::Clock,
-  ctx: &mut tx::TxContext,
+  ctx: &mut TxContext,
 ): () {
-  assert_shop_active(shop);
-  assert_template_matches_shop(shop, discount_template);
+  assert_shop_active!(shop);
+  assert_template_matches_shop!(shop, discount_template);
   let now_secs = now_secs(clock);
   let (discount_ticket, claimer) = discount_template.claim_discount_ticket_with_event(
     now_secs,
     ctx,
   );
-  txf::public_transfer(discount_ticket, claimer);
+  transfer::public_transfer(discount_ticket, claimer);
 }
 ```
 
@@ -137,7 +132,9 @@ return {
   packageId,
   shopId,
   ownerCapId,
-  appliesToListingId: normalizeOptionalId(cliArguments.listingId),
+  appliesToListingId: cliArguments.listingId
+    ? normalizeListingId(cliArguments.listingId, "listingId")
+    : undefined,
   ruleKind,
   ruleValue: parseDiscountRuleValue(ruleKind, cliArguments.value),
   startsAt,

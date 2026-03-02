@@ -95,7 +95,7 @@ export type CurrencyTransactionSummary = Omit<
 type TransactionState =
   | { status: "idle" }
   | { status: "processing" }
-  | { status: "success"; summary: CurrencyTransactionSummary }
+  | { status: "success"; summary: CurrencyTransactionSummary; warning?: string }
   | { status: "error"; error: string; details?: string }
 
 const emptyFormState = (): CurrencyFormState => ({
@@ -256,6 +256,7 @@ type AddCurrencyModalState = {
   guardrailPreview: GuardrailPreview
   transactionState: TransactionState
   transactionSummary?: CurrencyTransactionSummary
+  transactionWarning?: string
   isSuccessState: boolean
   isErrorState: boolean
   canSubmit: boolean
@@ -569,14 +570,33 @@ export const useAddCurrencyModalState = ({
         transactionBlock = await waitForTransactionBlock(suiClient, digest)
       }
 
-      const acceptedCurrencySummary = await getAcceptedCurrencySummary(
-        resolvedShopId,
-        currencyInputs.coinType,
-        suiClient
-      ).catch(() => undefined)
+      let acceptedCurrencySummary: AcceptedCurrencySummary | undefined
+      let acceptedCurrencySummaryWarning: string | undefined
+      try {
+        acceptedCurrencySummary = await getAcceptedCurrencySummary(
+          resolvedShopId,
+          currencyInputs.coinType,
+          suiClient
+        )
+      } catch (summaryError) {
+        acceptedCurrencySummaryWarning = [
+          "Currency was added, but the accepted-currency summary could not be refreshed.",
+          formatErrorMessage(summaryError)
+        ].join(" ")
+        console.warn(
+          "Failed to refresh accepted currency summary after currency-add transaction.",
+          {
+            shopId: resolvedShopId,
+            coinType: currencyInputs.coinType,
+            digest,
+            summaryError: serializeForJson(summaryError)
+          }
+        )
+      }
 
       setTransactionState({
         status: "success",
+        warning: acceptedCurrencySummaryWarning,
         summary: {
           ...currencyInputs,
           currencyObjectId: resolvedCurrencyObjectId,
@@ -633,6 +653,9 @@ export const useAddCurrencyModalState = ({
   const transactionSummary = isSuccessState
     ? transactionState.summary
     : undefined
+  const transactionWarning = isSuccessState
+    ? transactionState.warning
+    : undefined
 
   return {
     formState,
@@ -645,6 +668,7 @@ export const useAddCurrencyModalState = ({
     guardrailPreview,
     transactionState,
     transactionSummary,
+    transactionWarning,
     isSuccessState,
     isErrorState,
     canSubmit,

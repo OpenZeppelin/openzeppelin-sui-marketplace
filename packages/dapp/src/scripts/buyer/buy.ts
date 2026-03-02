@@ -4,6 +4,7 @@
  * The PTB can update Pyth and then call buy_item/claim_and_buy_item_with_discount in one atomic flow.
  * Oracle freshness and confidence guardrails are enforced on-chain using PriceInfoObject + Clock.
  */
+import type { SuiObjectRef } from "@mysten/sui/client"
 import { normalizeSuiAddress, normalizeSuiObjectId } from "@mysten/sui/utils"
 import yargs from "yargs"
 
@@ -23,10 +24,16 @@ import {
   getDiscountTemplateSummary,
   type DiscountContext
 } from "@sui-oracle-market/domain-core/models/discount"
-import { getItemListingSummary } from "@sui-oracle-market/domain-core/models/item-listing"
+import {
+  getItemListingSummary,
+  normalizeListingId
+} from "@sui-oracle-market/domain-core/models/item-listing"
 import type { PriceUpdatePolicy } from "@sui-oracle-market/domain-core/models/pyth"
 import { findCreatedShopItemIds } from "@sui-oracle-market/domain-core/models/shop-item"
-import { planSuiPaymentSplitTransaction } from "@sui-oracle-market/tooling-core/coin"
+import {
+  pickDedicatedGasPaymentRefFromSplit,
+  planSuiPaymentSplitTransaction
+} from "@sui-oracle-market/tooling-core/coin"
 import {
   DEFAULT_TX_GAS_BUDGET,
   NORMALIZED_SUI_COIN_TYPE,
@@ -81,11 +88,8 @@ runSuiScript(
     const mintTo = inputs.mintTo ?? signerAddress
     const refundTo = inputs.refundTo ?? signerAddress
 
-    const shopShared = await tooling.getImmutableSharedObject({
+    const shopShared = await tooling.getMutableSharedObject({
       objectId: inputs.shopId
-    })
-    const itemListingShared = await tooling.getMutableSharedObject({
-      objectId: inputs.itemListingId
     })
 
     const shopPackageId = deriveRelevantPackageId(shopShared.object.type)
@@ -126,6 +130,7 @@ runSuiScript(
           : "pyth-update"
     let paymentCoinMinimumBalance: bigint | undefined = undefined
     let paymentCoinObjectId: string | undefined = undefined
+    let dedicatedGasPaymentRef: SuiObjectRef | undefined
 
     if (isSuiPayment) {
       const discountedPriceUsdCents =
@@ -193,6 +198,11 @@ runSuiScript(
         })
 
         if (cliArguments.dryRun || !splitExecution.execution) return
+
+        dedicatedGasPaymentRef = pickDedicatedGasPaymentRefFromSplit({
+          splitTransactionBlock: splitExecution.execution.transactionResult,
+          paymentCoinObjectId: splitPlan.paymentCoinObjectId
+        })
       }
 
       paymentCoinObjectId = splitPlan.paymentCoinObjectId
@@ -230,10 +240,11 @@ runSuiScript(
       {
         shopPackageId,
         shopShared,
-        itemListingShared,
+        itemListingId: inputs.itemListingId,
         pythPriceInfoShared,
         pythFeedIdHex: acceptedCurrencySummary.feedIdHex,
         paymentCoinObjectId,
+        dedicatedGasPaymentRef,
         coinType: inputs.coinType,
         itemType: listingSummary.itemType,
         mintTo,
@@ -304,7 +315,7 @@ runSuiScript(
     .option("itemListingId", {
       alias: ["item-listing-id", "listing-id"],
       type: "string",
-      description: "ItemListing object ID to buy.",
+      description: "Item listing ID to buy.",
       demandOption: true
     })
     .option("coinType", {
@@ -342,7 +353,7 @@ runSuiScript(
       alias: ["discount-template-id", "template-id"],
       type: "string",
       description:
-        "Optional DiscountTemplate object ID. Required when using --claim-discount."
+        "Optional discount template ID. Required when using --claim-discount."
     })
     .option("claimDiscount", {
       alias: ["claim-discount", "claim-and-buy"],
@@ -460,7 +471,7 @@ const normalizeInputs = async (
 
   return {
     shopId,
-    itemListingId: normalizeSuiObjectId(cliArguments.itemListingId),
+    itemListingId: normalizeListingId(cliArguments.itemListingId),
     coinType,
     paymentCoinObjectId: cliArguments.paymentCoinObjectId
       ? normalizeSuiObjectId(cliArguments.paymentCoinObjectId)

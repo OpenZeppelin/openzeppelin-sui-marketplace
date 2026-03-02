@@ -13,8 +13,10 @@ import type { IdentifierString } from "@mysten/wallet-standard"
 import {
   defaultStartTimestampSeconds,
   deriveTemplateStatus,
-  DISCOUNT_TEMPLATE_TYPE_FRAGMENT,
+  extractDiscountTemplateIdFromCreatedEvents,
+  extractDiscountTemplateTableEntryFieldIdFromCreatedObjects,
   getDiscountTemplateSummary,
+  parseDiscountRuleScheduleStringInputs,
   parseDiscountRuleKind,
   parseDiscountRuleValue,
   validateDiscountSchedule,
@@ -22,11 +24,9 @@ import {
   type DiscountTemplateSummary,
   type NormalizedRuleKind
 } from "@sui-oracle-market/domain-core/models/discount"
+import { normalizeListingId } from "@sui-oracle-market/domain-core/models/item-listing"
 import { buildCreateDiscountTemplateTransaction } from "@sui-oracle-market/domain-core/ptb/discount-template"
-import {
-  deriveRelevantPackageId,
-  normalizeOptionalId
-} from "@sui-oracle-market/tooling-core/object"
+import { deriveRelevantPackageId } from "@sui-oracle-market/tooling-core/object"
 import { getSuiSharedObject } from "@sui-oracle-market/tooling-core/shared-object"
 import { ENetwork } from "@sui-oracle-market/tooling-core/types"
 import {
@@ -36,10 +36,7 @@ import {
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { EXPLORER_URL_VARIABLE_NAME } from "../config/network"
 import { formatDiscountRulePreview } from "../helpers/discountPreview"
-import {
-  resolveValidationMessage,
-  validateOptionalSuiObjectId
-} from "../helpers/inputValidation"
+import { resolveValidationMessage } from "../helpers/inputValidation"
 import {
   getLocalnetClient,
   makeLocalnetExecutor,
@@ -180,39 +177,39 @@ const buildDiscountFieldErrors = (
     }
   }
 
-  const listingError = validateOptionalSuiObjectId(
-    formState.appliesToListingId,
-    "Listing id"
-  )
-  if (listingError) errors.appliesToListingId = listingError
+  const normalizedListingId = formState.appliesToListingId.trim()
+  if (normalizedListingId) {
+    try {
+      normalizeListingId(normalizedListingId, "Listing id")
+    } catch (error) {
+      errors.appliesToListingId = resolveValidationMessage(
+        error,
+        "Listing id must be a valid u64."
+      )
+    }
+  }
 
   return errors
 }
 
 const parseDiscountInputs = (formState: DiscountFormState): DiscountInputs => {
-  const ruleKind = parseDiscountRuleKind(formState.ruleKind)
-  const ruleValue = parseDiscountRuleValue(ruleKind, formState.ruleValue)
-  const startsAt = parseNonNegativeU64(formState.startsAt, "startsAt")
-  const expiresAt = parseOptionalU64(
-    formState.expiresAt.trim() || undefined,
-    "expiresAt"
-  )
-  const maxRedemptions = parseOptionalU64(
-    formState.maxRedemptions.trim() || undefined,
-    "maxRedemptions"
-  )
-
-  validateDiscountSchedule(startsAt, expiresAt)
+  const parsedRuleScheduleInputs = parseDiscountRuleScheduleStringInputs({
+    ruleKind: formState.ruleKind,
+    value: formState.ruleValue,
+    startsAt: formState.startsAt,
+    expiresAt: formState.expiresAt.trim() || undefined,
+    maxRedemptions: formState.maxRedemptions.trim() || undefined,
+    startsAtLabel: "startsAt",
+    expiresAtLabel: "expiresAt",
+    maxRedemptionsLabel: "maxRedemptions"
+  })
+  const trimmedListingId = formState.appliesToListingId.trim()
 
   return {
-    ruleKind,
-    ruleValue,
-    startsAt,
-    expiresAt,
-    maxRedemptions,
-    appliesToListingId: normalizeOptionalId(
-      formState.appliesToListingId.trim() || undefined
-    )
+    ...parsedRuleScheduleInputs,
+    appliesToListingId: trimmedListingId
+      ? normalizeListingId(trimmedListingId, "listingId")
+      : undefined
   }
 }
 
@@ -448,14 +445,20 @@ export const useAddDiscountModalState = ({
         transactionBlock = await waitForTransactionBlock(suiClient, digest)
       }
 
-      const discountTemplateId = extractCreatedObjects(transactionBlock).find(
-        (change) => change.objectType.endsWith(DISCOUNT_TEMPLATE_TYPE_FRAGMENT)
-      )?.objectId
+      const discountTemplateId = extractDiscountTemplateIdFromCreatedEvents({
+        events: transactionBlock.events,
+        shopId: resolvedShopId
+      })
+      const discountTemplateTableEntryFieldId =
+        extractDiscountTemplateTableEntryFieldIdFromCreatedObjects({
+          createdObjects: extractCreatedObjects(transactionBlock)
+        })
 
       const optimisticTemplate = discountTemplateId
         ? {
             discountTemplateId,
-            markerObjectId: discountTemplateId,
+            tableEntryFieldId:
+              discountTemplateTableEntryFieldId ?? discountTemplateId,
             shopId: resolvedShopId,
             appliesToListingId: discountInputs.appliesToListingId,
             ruleDescription: formatDiscountRulePreview({

@@ -194,7 +194,7 @@ export const useRemoveDiscountModalState = ({
 
     try {
       const shopShared = await getSuiSharedObject(
-        { objectId: shopId, mutable: false },
+        { objectId: shopId, mutable: true },
         { suiClient }
       )
       const shopPackageId = deriveRelevantPackageId(shopShared.object.type)
@@ -204,16 +204,12 @@ export const useRemoveDiscountModalState = ({
         ownerAddress: walletAddress,
         suiClient
       })
-      const discountShared = await getSuiSharedObject(
-        { objectId: template.discountTemplateId, mutable: true },
-        { suiClient }
-      )
 
       const disableDiscountTransaction = buildToggleDiscountTemplateTransaction(
         {
           packageId: shopPackageId,
           shop: shopShared,
-          discountTemplate: discountShared,
+          discountTemplateId: template.discountTemplateId,
           active: false,
           ownerCapId: ownerCapabilityId
         }

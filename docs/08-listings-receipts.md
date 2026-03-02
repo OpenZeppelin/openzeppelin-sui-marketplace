@@ -2,7 +2,7 @@
 
 **Path:** [Learning Path](./) > 08 Listings + Typed Receipts
 
-Listings are separate shared objects, and purchases mint typed receipts (`ShopItem<TItem>`).
+Listings are stored inside the shared `Shop` via `Table<ID, ItemListing>`, and purchases mint typed receipts (`ShopItem<TItem>`).
 
 ## 1. Learning goals
 1. Publish example item types.
@@ -26,81 +26,81 @@ pnpm script buyer:item-listing:list --shop-id <shopId>
 ```
 
 ## 4. EVM -> Sui translation
-1. **Mapping entries -> shared objects**: listings are standalone shared objects indexed by dynamic-field markers under the Shop. See `ItemListing` and `ItemListingMarker` in `packages/dapp/contracts/oracle-market/sources/shop.move`.
+1. **Mapping entries -> table entries under a shared object**: listings are rows in `Shop.listings: Table<ID, ItemListing>`, keyed by object `ID` listing IDs.
 2. **ERC-721 receipt -> typed resource**: the receipt is a `ShopItem<TItem>` whose type must match the listing. See `ShopItem` in `packages/dapp/contracts/oracle-market/sources/shop.move`.
 
-## 5. Concept deep dive: dynamic fields and type tags
-- **Dynamic fields as a membership index**: a dynamic field is a key-value table attached to an
-  object. This module stores lightweight marker objects under the shared Shop, keyed by listing ID.
-  The marker proves membership without storing the full listing under the Shop, so listing updates
-  do not contend on a single shared map. Membership checks use `dynamic_field::exists_with_type`;
-  `dynamic_field::borrow` is only needed when you actually read the stored value.
-  Code: `packages/dapp/contracts/oracle-market/sources/shop.move` (`ItemListingMarker`, `add_listing_marker`,
-  `assert_listing_registered`)
-- **Object-owned children**: dynamic-field children are owned by their parent object, not a wallet.
-  That is why you can list/verify membership without relying on address ownership.
-  Code: `packages/dapp/contracts/oracle-market/sources/shop.move` (marker structs + dynamic_field usage)
-- **TypeName and type tags**: listing types are stored as `TypeName` for runtime checks, events,
-  and UI metadata. Compile-time safety still comes from generics (`ShopItem<TItem>`), not from the
-  stored value.
+## 5. Concept deep dive: tables and type tags
+- **Table-backed listings**: listing create/update/remove paths mutate `Shop.listings` directly with `add`, `borrow_mut`, and `remove`.
+  Code: `packages/dapp/contracts/oracle-market/sources/shop.move` (`add_item_listing_core`, `borrow_listing_mut`, `remove_item_listing`)
+- **Listing IDs are object `ID`s**: IDs are allocated from `TxContext`, emitted in events, and reused by scripts/UI as stable primary keys.
+  Code: `packages/dapp/contracts/oracle-market/sources/shop.move` (`new_object_id`, `ItemListingAddedEvent`)
+- **Off-chain enumeration still reads dynamic-field table entries**: `Table` is backed by dynamic fields, so the SDK discovers rows by reading table entry objects.
+  Code: `packages/domain/core/src/models/item-listing.ts` (`getItemListingSummaries`)
+- **TypeName and type tags**: listing types are stored as `TypeName` for runtime checks, events, and UI metadata. Compile-time safety still comes from generics (`ShopItem<TItem>`), not from the stored value.
   Code: `packages/dapp/contracts/oracle-market/sources/shop.move` (`ItemListing.item_type`, `ShopItem`)
-- **Phantom types for receipts**: `ShopItem<phantom TItem>` records the item type without storing
-  the item value. The receipt is a typed proof, not a generic blob, and it guarantees that any
-  downstream redemption code can pattern match on `TItem`.
+- **Phantom types for receipts**: `ShopItem<phantom TItem>` records the item type without storing the item value.
   Code: `packages/dapp/contracts/oracle-market/sources/shop.move` (`ShopItem`)
-- **Receipts are transferable, not the asset**: `ShopItem<TItem>` is an owned receipt. It can be
-  transferred like any owned object, but it is a proof of purchase, not the actual item itself.
+- **Receipts are transferable, not the asset**: `ShopItem<TItem>` is an owned receipt object proving purchase.
   Code: `packages/dapp/contracts/oracle-market/sources/shop.move` (`ShopItem`, `mint_shop_item`)
-- **Object IDs vs addresses**: on Sui, object IDs are addresses (but not every address is an object ID).
-  Prefer storing `ID` on-chain and convert from `UID` with `obj::uid_to_inner` (and only convert to
-  addresses when needed for off-chain tooling).
-  Code: `packages/dapp/contracts/oracle-market/sources/shop.move` (`listing_id`, events)
 
 ## 6. Code references
 1. `packages/dapp/contracts/item-examples/sources/items.move` (Car, Bike, ConcertTicket)
-2. `packages/dapp/contracts/oracle-market/sources/shop.move` (add_item_listing, ShopItem)
-3. `packages/domain/core/src/ptb/item-listing.ts` (buildAddItemListingTransaction)
-4. `packages/dapp/src/scripts/owner/item-listing-add.ts` (script)
-5. PTB builder definition: `packages/domain/core/src/ptb/item-listing.ts`
+2. `packages/dapp/contracts/oracle-market/sources/shop.move` (add_item_listing, buy_item, ShopItem)
+3. `packages/domain/core/src/models/item-listing.ts` (table entry discovery)
+4. `packages/domain/core/src/ptb/item-listing.ts` (listing PTB builders)
+5. `packages/dapp/src/scripts/owner/item-listing-add.ts` (owner script)
 
-**Code spotlight: listing creation + marker index**
+**Code spotlight: listing creation in `Shop.listings`**
 `packages/dapp/contracts/oracle-market/sources/shop.move`
 ```move
-entry fun add_item_listing<T: store>(
+fun add_item_listing_core<T: store>(
   shop: &mut Shop,
   owner_cap: &ShopOwnerCap,
-  name: string::String,
+  name: String,
   base_price_usd_cents: u64,
   stock: u64,
   spotlight_discount_template_id: Option<ID>,
-  ctx: &mut tx::TxContext,
-) {
-  let (listing, _listing_id) = shop.add_item_listing_core<T>(
-    owner_cap,
+  ctx: &mut TxContext,
+): ID {
+  assert_owner_cap!(shop, owner_cap);
+  validate_listing_inputs!(
+    shop,
+    &name,
+    base_price_usd_cents,
+    stock,
+    spotlight_discount_template_id,
+  );
+
+  let shop_id = shop.id.to_inner();
+  let listing_id = new_object_id(ctx);
+  let listing = new_item_listing<T>(
+    listing_id,
     name,
     base_price_usd_cents,
     stock,
     spotlight_discount_template_id,
-    ctx,
   );
-  txf::share_object(listing);
+  shop.listings.add(listing_id, listing);
+  event::emit(ItemListingAddedEvent { shop_id, listing_id });
+  listing_id
 }
 ```
 
-**Code spotlight: typed receipt minting**
+**Code spotlight: typed receipt minting uses object listing ID**
 `packages/dapp/contracts/oracle-market/sources/shop.move`
 ```move
 fun mint_shop_item<TItem: store>(
   item_listing: &ItemListing,
+  shop_id: ID,
   clock: &clock::Clock,
-  ctx: &mut tx::TxContext,
+  ctx: &mut TxContext,
 ): ShopItem<TItem> {
   assert_listing_type_matches<TItem>(item_listing);
 
   ShopItem {
-    id: obj::new(ctx),
-    shop_id: item_listing.shop_id,
-    item_listing_id: item_listing.id.to_inner(),
+    id: object::new(ctx),
+    shop_id,
+    item_listing_id: item_listing.listing_id,
     item_type: item_listing.item_type,
     name: item_listing.name,
     acquired_at: now_secs(clock),
@@ -108,23 +108,19 @@ fun mint_shop_item<TItem: store>(
 }
 ```
 
-**Code spotlight: owner script wires type + listing**
+**Code spotlight: owner script parses listing ID from events**
 `packages/dapp/src/scripts/owner/item-listing-add.ts`
 ```ts
-const itemType = cliArguments.itemType.trim()
-if (!itemType)
-  throw new Error("itemType must be a fully qualified Move type.")
+const listingId = requireListingIdFromItemListingAddedEvents({
+  events: transactionResult.events,
+  shopId: inputs.shopId
+})
 
-return {
-  packageId,
-  shopId,
-  ownerCapId,
-  spotlightDiscountId,
-  itemType,
-  name: cliArguments.name,
-  priceCents: parseUsdToCents(cliArguments.price),
-  stock: parsePositiveU64(cliArguments.stock, "stock")
-}
+const listingSummary = await getItemListingSummary(
+  inputs.shopId,
+  listingId,
+  tooling.suiClient
+)
 ```
 
 ## 6.1 Read this next (deep dive)
@@ -132,14 +128,13 @@ return {
 
 ## 7. Exercises
 1. Update stock with `pnpm script owner:item-listing:update-stock --item-listing-id <id> --stock 1`. Expected outcome: stock changes on-chain.
-2. Remove a listing with `pnpm script owner:item-listing:remove --item-listing-id <id>`. Expected outcome: it disappears from list output, but the object remains addressable by ID.
+2. Remove a listing with `pnpm script owner:item-listing:remove --item-listing-id <id>`. Expected outcome: it disappears from list output and cannot be fetched by that listing ID.
 
-## 8. Diagram: dynamic-field markers
+## 8. Diagram: table-backed listings
 ```
 Shop (shared)
-  df: listing_id -> ItemListingMarker
-ItemListing (shared)
-  fields: shop_id, item_type, price, stock
+  table listings: listing_id (ID) -> ItemListing
+  table accepted_currencies: coin_type (TypeName) -> AcceptedCurrency
 ```
 
 ## 9. Further reading (Sui docs)

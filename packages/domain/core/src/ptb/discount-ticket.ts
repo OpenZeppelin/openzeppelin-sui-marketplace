@@ -1,24 +1,34 @@
 import type { WrappedSuiSharedObject } from "@sui-oracle-market/tooling-core/shared-object"
 import { newTransaction } from "@sui-oracle-market/tooling-core/transactions"
+import { buildObjectIdArgument } from "./id-arguments.ts"
+import { buildShopSharedArgument } from "./shop-owner-arguments.ts"
 
 export const buildClaimDiscountTicketTransaction = ({
   packageId,
   shopShared,
-  discountTemplateShared,
+  discountTemplateId,
   sharedClockObject
 }: {
   packageId: string
   shopShared: WrappedSuiSharedObject
-  discountTemplateShared: WrappedSuiSharedObject
+  discountTemplateId: string
   sharedClockObject: WrappedSuiSharedObject
 }) => {
   const transaction = newTransaction()
+  const shopArgument = buildShopSharedArgument({
+    transaction,
+    shop: shopShared
+  })
 
   transaction.moveCall({
     target: `${packageId}::shop::claim_discount_ticket`,
     arguments: [
-      transaction.sharedObjectRef(shopShared.sharedRef),
-      transaction.sharedObjectRef(discountTemplateShared.sharedRef),
+      shopArgument,
+      buildObjectIdArgument(
+        transaction,
+        discountTemplateId,
+        "discountTemplateId"
+      ),
       transaction.sharedObjectRef(sharedClockObject.sharedRef)
     ]
   })

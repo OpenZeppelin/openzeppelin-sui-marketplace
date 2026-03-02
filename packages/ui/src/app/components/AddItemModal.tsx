@@ -3,7 +3,7 @@
 import type { DiscountTemplateSummary } from "@sui-oracle-market/domain-core/models/discount"
 import type { ItemListingSummary } from "@sui-oracle-market/domain-core/models/item-listing"
 import clsx from "clsx"
-import { useCallback, useMemo } from "react"
+import { useCallback, useEffect, useMemo } from "react"
 import {
   formatUsdFromCents,
   getStructLabel,
@@ -116,13 +116,11 @@ const SpotlightTemplateSelector = ({
   templates,
   selectedTemplateId,
   onSelectTemplate,
-  onClearSelection,
   explorerUrl
 }: {
   templates: DiscountTemplateSummary[]
   selectedTemplateId?: string
   onSelectTemplate: (templateId: string) => void
-  onClearSelection: () => void
   explorerUrl?: string
 }) => {
   if (templates.length === 0)
@@ -133,36 +131,32 @@ const SpotlightTemplateSelector = ({
       </div>
     )
 
-  const noSelection = !selectedTemplateId
-
   return (
-    <div className="space-y-3">
-      <button
-        type="button"
-        onClick={onClearSelection}
-        className={clsx(
-          "inline-flex items-center rounded-full border px-3 py-1 text-[0.65rem] font-semibold uppercase tracking-[0.18em] transition",
-          noSelection
-            ? "border-sds-primary bg-sds-primary/10 text-sds-primary"
-            : "hover:border-sds-primary/60 border-slate-200/70 text-slate-500 dark:border-slate-50/15 dark:text-slate-200/70"
-        )}
-      >
-        No spotlight discount
-      </button>
-      <div className="grid gap-3 sm:grid-cols-2">
-        {templates.map((template) => (
-          <SpotlightTemplateCard
-            key={template.discountTemplateId}
-            template={template}
-            selected={template.discountTemplateId === selectedTemplateId}
-            onSelect={onSelectTemplate}
-            explorerUrl={explorerUrl}
-          />
-        ))}
-      </div>
+    <div className="grid gap-3 sm:grid-cols-2">
+      {templates.map((template) => (
+        <SpotlightTemplateCard
+          key={template.discountTemplateId}
+          template={template}
+          selected={template.discountTemplateId === selectedTemplateId}
+          onSelect={onSelectTemplate}
+          explorerUrl={explorerUrl}
+        />
+      ))}
     </div>
   )
 }
+
+const hasSpotlightTemplateId = ({
+  templates,
+  templateId
+}: {
+  templates: DiscountTemplateSummary[]
+  templateId?: string
+}): boolean =>
+  Boolean(
+    templateId &&
+    templates.some((template) => template.discountTemplateId === templateId)
+  )
 
 const ListingSummarySection = ({
   summary,
@@ -235,7 +229,7 @@ const ListingSummarySection = ({
         <CopyableId
           value={summary.listingId}
           label="Listing ID"
-          explorerUrl={explorerUrl}
+          showExplorer={false}
         />
       ) : undefined}
       {shopId ? (
@@ -358,13 +352,27 @@ const AddItemModal = ({
     formState.spotlightDiscountId.trim() || undefined
   const handleSpotlightTemplateCardSelect = useCallback(
     (templateId: string) => {
-      handleInputChange("spotlightDiscountId", templateId)
+      const nextTemplateId =
+        selectedSpotlightTemplateId === templateId ? "" : templateId
+      handleInputChange("spotlightDiscountId", nextTemplateId)
     },
-    [handleInputChange]
+    [handleInputChange, selectedSpotlightTemplateId]
   )
-  const clearSpotlightTemplateSelection = useCallback(() => {
+  useEffect(() => {
+    if (!selectedSpotlightTemplateId) return
+    if (
+      hasSpotlightTemplateId({
+        templates: availableSpotlightTemplates,
+        templateId: selectedSpotlightTemplateId
+      })
+    )
+      return
     handleInputChange("spotlightDiscountId", "")
-  }, [handleInputChange])
+  }, [
+    availableSpotlightTemplates,
+    handleInputChange,
+    selectedSpotlightTemplateId
+  ])
   const errorState =
     transactionState.status === "error" ? transactionState : undefined
 
@@ -535,7 +543,8 @@ const AddItemModal = ({
                       Spotlight discount template (optional)
                     </span>
                     <span className={modalFieldDescriptionClassName}>
-                      DiscountTemplate object ID to highlight on the listing.
+                      Click a template to highlight it. Leave all templates
+                      unselected to skip spotlighting.
                     </span>
                   </div>
                   <div className="mt-3">
@@ -543,43 +552,9 @@ const AddItemModal = ({
                       templates={availableSpotlightTemplates}
                       selectedTemplateId={selectedSpotlightTemplateId}
                       onSelectTemplate={handleSpotlightTemplateCardSelect}
-                      onClearSelection={clearSpotlightTemplateSelection}
                       explorerUrl={explorerUrl}
                     />
                   </div>
-                  <label className="mt-4 block">
-                    <span className={modalFieldDescriptionClassName}>
-                      Custom template ID
-                    </span>
-                    <br />
-                    <input
-                      type="text"
-                      value={formState.spotlightDiscountId}
-                      onChange={(event) =>
-                        handleInputChange(
-                          "spotlightDiscountId",
-                          event.target.value
-                        )
-                      }
-                      onBlur={() => markFieldBlur("spotlightDiscountId")}
-                      placeholder="0x... discount template id"
-                      className={clsx(
-                        modalFieldInputClassName,
-                        shouldShowFieldError(
-                          "spotlightDiscountId",
-                          fieldErrors.spotlightDiscountId
-                        ) && modalFieldInputErrorClassName
-                      )}
-                    />
-                  </label>
-                  {shouldShowFieldError(
-                    "spotlightDiscountId",
-                    fieldErrors.spotlightDiscountId
-                  ) ? (
-                    <span className={modalFieldErrorTextClassName}>
-                      {fieldErrors.spotlightDiscountId}
-                    </span>
-                  ) : undefined}
                 </div>
               </div>
             </ModalSection>

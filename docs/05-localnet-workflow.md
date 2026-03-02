@@ -214,7 +214,7 @@ pnpm script owner:currency:add \
   --price-info-object-id <PRICE_INFO_OBJECT_ID>
 ```
 What it does:
-- Creates an `AcceptedCurrency` object and registers it on the Shop.
+- Registers an `AcceptedCurrency` entry in `Shop.accepted_currencies`.
 - Links your coin type to a Pyth `PriceInfoObject` for oracle pricing.
 
 Where to find values:
@@ -222,7 +222,7 @@ Where to find values:
 - `FEED_ID_HEX`: `mock.localnet.json` -> `priceFeeds[].feedIdHex`
 - `PRICE_INFO_OBJECT_ID`: `mock.localnet.json` -> `priceFeeds[].priceInfoObjectId`
 - Optional `--currency-object-id`: `mock.localnet.json` -> `coins[].currencyObjectId` (otherwise derived automatically)
-- The resulting `AcceptedCurrency` ID is stored in `packages/dapp/deployments/objects.localnet.json` with `objectType` ending in `::shop::AcceptedCurrency`
+- Verify registration with `pnpm script buyer:currency:list --shop-id <SHOP_ID>`.
 
 ### 6) Create a listing
 ```bash
@@ -233,13 +233,12 @@ pnpm script owner:item-listing:add \
   --item-type <ITEM_TYPE>
 ```
 What it does:
-- Creates a new `ItemListing` object with price (USD cents), stock, and item type metadata.
-- Records the listing in `packages/dapp/deployments/objects.localnet.json`.
+- Creates a new table-backed `ItemListing` entry (`Shop.listings`) with price (USD cents), stock, and item type metadata.
 
 Where to find values:
 - `ITEM_TYPE`: `packages/dapp/deployments/mock.localnet.json` -> `itemTypes[].itemType`
-- `itemListingId`: `objects.localnet.json` entry with `objectType` ending in `::shop::ItemListing`
-- The script logs the listing ID and its marker (dynamic field) ID.
+- `itemListingId`: emitted in `ItemListingAddedEvent` and printed by the script.
+- You can list all current IDs with `pnpm script buyer:item-listing:list --shop-id <SHOP_ID>`.
 
 ### 7) Create a discount template
 ```bash
@@ -249,7 +248,7 @@ pnpm script owner:discount-template:create \
 ```
 What it does:
 - Creates a reusable `DiscountTemplate` object with schedule and rule settings.
-- Optionally scope it to a listing with `--listing-id <ITEM_LISTING_ID>`.
+- Optionally scope it to a listing with `--listing-id <ITEM_LISTING_ID_U64>`.
 
 Where to find values:
 - `discountTemplateId`: `objects.localnet.json` entry with `objectType` ending in `::shop::DiscountTemplate`
@@ -258,14 +257,14 @@ Where to find values:
 ### 8) Attach the discount template to a listing (spotlight)
 ```bash
 pnpm script owner:item-listing:attach-discount-template \
-  --item-listing-id <ITEM_LISTING_ID> \
+  --item-listing-id <ITEM_LISTING_ID_U64> \
   --discount-template-id <DISCOUNT_TEMPLATE_ID>
 ```
 What it does:
 - Updates the listing to reference the discount template so it is spotlighted.
 
 Where to find values:
-- `ITEM_LISTING_ID`: from step 6 (`objects.localnet.json` or script output)
+- `ITEM_LISTING_ID`: from step 6 (script output or `buyer:item-listing:list`)
 - `DISCOUNT_TEMPLATE_ID`: from step 7 (`objects.localnet.json` or script output)
 
 ### 9) Transfer mock coins from owner to buyer
@@ -290,7 +289,7 @@ What it does:
 - Updates the mock Pyth `PriceInfoObject` timestamps so oracle freshness checks pass.
 - Uses `packages/dapp/deployments/mock.localnet.json` to locate feeds.
 
-### 5) View the full shop snapshot
+### 11) View the full shop snapshot
 ```bash
 pnpm script buyer:shop:view
 ```

@@ -47,10 +47,10 @@ The important part is not “who signed” but “does this capability bind to t
 Two recurring “Sui-native” checks show up throughout the module:
 
 ### 3.1 Cross-object linkage checks
-Shared objects in this design carry a `shop_id` field (e.g., `ItemListing.shop_id`,
-`AcceptedCurrency.shop_id`). Before any mutation, the module asserts that:
-- the shop matches the object, and
-- the object is registered (via dynamic-field marker membership).
+Listings/templates are stored in shop-owned tables and looked up by ID under the active `Shop`.
+Before any mutation, the module asserts that:
+- the object ID is registered under the current shop table, and
+- optional cross-links (template-to-listing / ticket-to-shop / ticket-to-listing) match the active context.
 
 This prevents a caller from mixing objects from different shops.
 

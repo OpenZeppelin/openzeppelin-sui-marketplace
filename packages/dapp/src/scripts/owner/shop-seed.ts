@@ -18,9 +18,9 @@ import {
 } from "@sui-oracle-market/domain-core/models/currency"
 import {
   defaultStartTimestampSeconds,
-  DISCOUNT_TEMPLATE_TYPE_FRAGMENT,
   getDiscountTemplateSummaries,
   getDiscountTemplateSummary,
+  requireDiscountTemplateIdFromCreatedEvents,
   parseDiscountRuleKind,
   parseDiscountRuleValue,
   validateDiscountSchedule,
@@ -30,6 +30,7 @@ import {
 import {
   getItemListingSummaries,
   getItemListingSummary,
+  requireListingIdFromItemListingAddedEvents,
   type ItemListingSummary
 } from "@sui-oracle-market/domain-core/models/item-listing"
 import {
@@ -68,7 +69,6 @@ import {
   assertBytesLength,
   hexToBytes
 } from "@sui-oracle-market/tooling-core/hex"
-import { normalizeIdOrThrow } from "@sui-oracle-market/tooling-core/object"
 import { isStaleObjectVersionError } from "@sui-oracle-market/tooling-core/transactions"
 import { readMoveString } from "@sui-oracle-market/tooling-core/utils/formatters"
 import { retryWithDelay } from "@sui-oracle-market/tooling-core/utils/retry"
@@ -97,10 +97,7 @@ import {
   logWarning
 } from "@sui-oracle-market/tooling-node/log"
 import { runSuiScript } from "@sui-oracle-market/tooling-node/process"
-import {
-  ensureCreatedObject,
-  requireCreatedArtifactIdBySuffix
-} from "@sui-oracle-market/tooling-node/transactions"
+import { requireCreatedArtifactIdBySuffix } from "@sui-oracle-market/tooling-node/transactions"
 import { ensureNativeSuiCurrencyRegistration } from "../../utils/coin-registry.ts"
 import {
   logAcceptedCurrencySummary,
@@ -1235,15 +1232,10 @@ const ensureItemListing = async ({
       })
   })
 
-  const createdListingChange = ensureCreatedObject(
-    "::shop::ItemListing",
-    transactionResult
-  )
-
-  const listingId = normalizeIdOrThrow(
-    createdListingChange.objectId,
-    "Expected an ItemListing to be created."
-  )
+  const listingId = requireListingIdFromItemListingAddedEvents({
+    events: transactionResult.events,
+    shopId: shopIdentifiers.shopId
+  })
   const listingSummary = await getItemListingSummary(
     shopIdentifiers.shopId,
     listingId,
@@ -1344,9 +1336,7 @@ const ensureDiscountTemplate = async ({
 
   validateDiscountSchedule(startsAt, expiresAt)
 
-  const {
-    objectArtifacts: { created: createdObjects }
-  } = await signAndExecuteWithRetry({
+  const { transactionResult } = await signAndExecuteWithRetry({
     tooling,
     buildTransaction: () =>
       buildCreateDiscountTemplateTransaction({
@@ -1362,10 +1352,9 @@ const ensureDiscountTemplate = async ({
       })
   })
 
-  const createdTemplateId = requireCreatedArtifactIdBySuffix({
-    createdArtifacts: createdObjects,
-    suffix: DISCOUNT_TEMPLATE_TYPE_FRAGMENT,
-    label: "DiscountTemplate"
+  const createdTemplateId = requireDiscountTemplateIdFromCreatedEvents({
+    events: transactionResult.events,
+    shopId: shopIdentifiers.shopId
   })
 
   const discountTemplateSummary = await getDiscountTemplateSummary(
@@ -1428,14 +1417,8 @@ const ensureFixedDiscountSpotlight = async ({
     suiClient
   })
 
-  const shopSharedObject = await tooling.getImmutableSharedObject({
+  const shopSharedObject = await tooling.getMutableSharedObject({
     objectId: shopIdentifiers.shopId
-  })
-  const itemListingSharedObject = await tooling.getMutableSharedObject({
-    objectId: resolvedIds.itemListingId
-  })
-  const discountTemplateSharedObject = await tooling.getImmutableSharedObject({
-    objectId: resolvedIds.discountTemplateId
   })
 
   await signAndExecuteWithRetry({
@@ -1444,8 +1427,8 @@ const ensureFixedDiscountSpotlight = async ({
       buildAttachDiscountTemplateTransaction({
         packageId: shopIdentifiers.packageId,
         shop: shopSharedObject,
-        itemListing: itemListingSharedObject,
-        discountTemplate: discountTemplateSharedObject,
+        itemListingId: resolvedIds.itemListingId,
+        discountTemplateId: resolvedIds.discountTemplateId,
         ownerCapId: shopIdentifiers.ownerCapId
       })
   })

@@ -1,6 +1,6 @@
 /**
- * Lists ItemListing objects for a Shop by enumerating dynamic-field markers.
- * Listings are shared objects with their own IDs and versions.
+ * Lists table-backed ItemListings for a Shop by enumerating Shop.listings table entries.
+ * Listing identifiers are object IDs, sorted lexicographically for deterministic output.
  * Read-only: no transaction is executed.
  */
 import yargs from "yargs"

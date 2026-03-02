@@ -133,7 +133,7 @@ Expected outcome: `buyer:currency:list` shows the registered currency for your s
 2. Run `pnpm script mock:update-prices` and retry. Expected outcome: buy succeeds with fresh price data.
 
 ## 10. Diagram: accepted currency storage
-```
+```text
 Shop (shared)
   accepted_currencies: Table<TypeName, AcceptedCurrency>
     key: coin type (TypeName)

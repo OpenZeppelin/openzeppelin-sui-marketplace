@@ -22,7 +22,7 @@ rev = "d46324849b1ba5a45b20f77630fc958466830324"
 # Not yet published.
 
 [environments]
-test-publish = "53417c5d"
+test-publish = "9b5ba647"
 testnet_beta = "4c78adac"
 
 [dep-replacements.test-publish]
