@@ -78,7 +78,7 @@ entry fun add_accepted_currency<T>(
   assert_owner_cap!(shop, owner_cap);
 
   let coin_type = currency_type<T>();
-  validate_accepted_currency_inputs!(
+  assert_accepted_currency_inputs!(
     shop,
     &coin_type,
     &feed_id,
