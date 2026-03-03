@@ -2612,33 +2612,9 @@ public fun test_create_discount_template_local(
 }
 
 #[test_only]
-/// Returns `DEFAULT_MAX_PRICE_STATUS_LAG_SECS` for assertions.
-public fun test_default_max_price_status_lag_secs(): u64 {
-    DEFAULT_MAX_PRICE_STATUS_LAG_SECS
-}
-
-#[test_only]
 /// Asserts that a price status is trading using the module default lag cap.
 public fun test_assert_price_status_trading(price_info_object: &price_info::PriceInfoObject) {
     assert_price_status_trading!(price_info_object, DEFAULT_MAX_PRICE_STATUS_LAG_SECS);
-}
-
-#[test_only]
-/// Returns `DEFAULT_MAX_PRICE_AGE_SECS` for assertions.
-public fun test_default_max_price_age_secs(): u64 {
-    DEFAULT_MAX_PRICE_AGE_SECS
-}
-
-#[test_only]
-/// Returns `DEFAULT_MAX_CONFIDENCE_RATIO_BPS` for assertions.
-public fun test_default_max_confidence_ratio_bps(): u16 {
-    DEFAULT_MAX_CONFIDENCE_RATIO_BPS
-}
-
-#[test_only]
-/// Returns `MAX_DECIMAL_POWER` for overflow-bound assertions.
-public fun test_max_decimal_power(): u64 {
-    MAX_DECIMAL_POWER
 }
 
 #[test_only]

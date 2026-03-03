@@ -53,6 +53,10 @@ const PRIMARY_FEED_ID: vector<u8> =
 const SECONDARY_FEED_ID: vector<u8> =
     x"101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f";
 const SHORT_FEED_ID: vector<u8> = b"SHORT";
+const TEST_DEFAULT_MAX_PRICE_AGE_SECS: u64 = 300;
+const TEST_DEFAULT_MAX_CONFIDENCE_RATIO_BPS: u16 = 1_000;
+const TEST_DEFAULT_MAX_PRICE_STATUS_LAG_SECS: u64 = 5;
+const TEST_MAX_DECIMAL_POWER: u64 = 24;
 
 // === Test Helpers ===
 public struct ShopCreationTxEffects {
@@ -165,7 +169,7 @@ fun add_test_coin_accepted_currency_for_scenario(
     max_price_age_secs_cap: Option<u64>,
     max_confidence_ratio_bps_cap: Option<u16>,
     max_price_status_lag_secs_cap: Option<u64>,
-) : ID {
+): ID {
     let (price_info_object, accepted_currency_id) = create_price_info_object_for_feed(
         feed_id,
         test_scenario::ctx(scn),
@@ -440,25 +444,6 @@ fun close_buyer_checkout_context(
     test_scenario::return_shared(shared_shop);
     test_scenario::return_shared(price_info_object);
     std::unit_test::destroy(clock_object);
-}
-
-fun return_shop_and_owner_cap_to_sender(
-    scn: &test_scenario::Scenario,
-    shop: shop::Shop,
-    owner_cap: shop::ShopOwnerCap,
-) {
-    test_scenario::return_to_sender(scn, owner_cap);
-    test_scenario::return_shared(shop);
-}
-
-fun return_shop_owner_cap_and_share_price_info(
-    scn: &test_scenario::Scenario,
-    shop: shop::Shop,
-    owner_cap: shop::ShopOwnerCap,
-    price_info_object: price_info::PriceInfoObject,
-) {
-    return_shop_and_owner_cap_to_sender(scn, shop, owner_cap);
-    transfer::public_share_object(price_info_object);
 }
 
 fun two_shop_and_owner_cap_pairs_from_tx_ids(
@@ -827,13 +812,13 @@ fun add_accepted_currency_records_currency_and_event() {
     let (shop_id, owner_cap_id) = create_default_shop_and_owner_cap_ids_for_sender(&mut scn);
 
     let expected_feed_id = PRIMARY_FEED_ID;
-    let currency = prepare_test_currency_for_owner(&mut scn, TEST_OWNER);
     let mut shop_obj = take_shared_shop(&scn, shop_id);
     let owner_cap_obj = test_scenario::take_from_sender_by_id(
         &scn,
         owner_cap_id,
     );
     let events_before = event::events_by_type<shop::AcceptedCoinAddedEvent>().length();
+    let currency = prepare_test_currency_for_owner(&mut scn, TEST_OWNER);
     let accepted_currency_id = add_test_coin_accepted_currency_for_scenario(
         &mut scn,
         &mut shop_obj,
@@ -852,7 +837,8 @@ fun add_accepted_currency_records_currency_and_event() {
         ),
     );
 
-    return_shop_and_owner_cap_to_sender(&scn, shop_obj, owner_cap_obj);
+    test_scenario::return_to_sender(&scn, owner_cap_obj);
+    test_scenario::return_shared(shop_obj);
 
     let _ = test_scenario::next_tx(&mut scn, TEST_OWNER);
 
@@ -932,9 +918,9 @@ fun add_accepted_currency_clamps_guardrail_caps_to_defaults() {
     let mut scn = test_scenario::begin(TEST_OWNER);
     let (shop_id, owner_cap_id) = create_default_shop_and_owner_cap_ids_for_sender(&mut scn);
 
-    let over_age_cap = shop::test_default_max_price_age_secs() + 100;
-    let over_conf_cap = shop::test_default_max_confidence_ratio_bps() + 500;
-    let over_status_cap = shop::test_default_max_price_status_lag_secs() + 10;
+    let over_age_cap = TEST_DEFAULT_MAX_PRICE_AGE_SECS + 100;
+    let over_conf_cap = TEST_DEFAULT_MAX_CONFIDENCE_RATIO_BPS + 500;
+    let over_status_cap = TEST_DEFAULT_MAX_PRICE_STATUS_LAG_SECS + 10;
     let currency = prepare_test_currency_for_owner(&mut scn, TEST_OWNER);
 
     let mut shop_obj = take_shared_shop(&scn, shop_id);
@@ -952,7 +938,8 @@ fun add_accepted_currency_clamps_guardrail_caps_to_defaults() {
         option::some(over_conf_cap),
         option::some(over_status_cap),
     );
-    return_shop_and_owner_cap_to_sender(&scn, shop_obj, owner_cap_obj);
+    test_scenario::return_to_sender(&scn, owner_cap_obj);
+    test_scenario::return_shared(shop_obj);
 
     let _ = test_scenario::next_tx(&mut scn, TEST_OWNER);
     let shared_shop = take_shared_shop(&scn, shop_id);
@@ -966,9 +953,9 @@ fun add_accepted_currency_clamps_guardrail_caps_to_defaults() {
     let status_cap = shop::accepted_currency_values_max_price_status_lag_secs_cap(
         &accepted_currency_values,
     );
-    assert_eq!(max_age_cap, shop::test_default_max_price_age_secs());
-    assert_eq!(conf_cap, shop::test_default_max_confidence_ratio_bps());
-    assert_eq!(status_cap, shop::test_default_max_price_status_lag_secs());
+    assert_eq!(max_age_cap, TEST_DEFAULT_MAX_PRICE_AGE_SECS);
+    assert_eq!(conf_cap, TEST_DEFAULT_MAX_CONFIDENCE_RATIO_BPS);
+    assert_eq!(status_cap, TEST_DEFAULT_MAX_PRICE_STATUS_LAG_SECS);
 
     test_scenario::return_shared(shared_shop);
     std::unit_test::destroy(currency);
@@ -1080,7 +1067,7 @@ fun add_accepted_currency_rejects_short_feed_id() {
 fun attestation_time_within_lag_is_allowed() {
     let mut ctx = tx_context::new_from_hint(@0x0, 16, 0, 0, 0);
     let publish_time = 100;
-    let attestation_time = publish_time + shop::test_default_max_price_status_lag_secs();
+    let attestation_time = publish_time + TEST_DEFAULT_MAX_PRICE_STATUS_LAG_SECS;
     let price = price::new(
         i64::new(1_000, false),
         10,
@@ -1103,7 +1090,7 @@ fun attestation_time_within_lag_is_allowed() {
 fun attestation_time_lag_over_limit_is_rejected() {
     let mut ctx = tx_context::new_from_hint(@0x0, 18, 0, 0, 0);
     let publish_time = 200;
-    let attestation_time = publish_time + shop::test_default_max_price_status_lag_secs() + 1;
+    let attestation_time = publish_time + TEST_DEFAULT_MAX_PRICE_STATUS_LAG_SECS + 1;
     let price = price::new(
         i64::new(1_000, false),
         10,
@@ -1235,7 +1222,9 @@ fun quote_rejects_attestation_lag_above_currency_cap() {
         option::none(),
         option::some(2),
     );
-    return_shop_owner_cap_and_share_price_info(&scn, shop_obj, owner_cap_obj, price_info_object);
+    test_scenario::return_to_sender(&scn, owner_cap_obj);
+    test_scenario::return_shared(shop_obj);
+    transfer::public_share_object(price_info_object);
 
     let _ = test_scenario::next_tx(&mut scn, TEST_OWNER);
 
@@ -1294,7 +1283,9 @@ fun quote_rejects_price_timestamp_older_than_max_age() {
         option::none(),
         option::none(),
     );
-    return_shop_owner_cap_and_share_price_info(&scn, shop_obj, owner_cap_obj, price_info_object);
+    test_scenario::return_to_sender(&scn, owner_cap_obj);
+    test_scenario::return_shared(shop_obj);
+    transfer::public_share_object(price_info_object);
 
     let _ = test_scenario::next_tx(&mut scn, TEST_OWNER);
 
@@ -1367,7 +1358,8 @@ fun remove_accepted_currency_removes_state_and_emits_event() {
     );
     let _second_currency_id = tx_context::last_created_object_id(test_scenario::ctx(&mut scn)).to_id();
     transfer::public_share_object(second_price_object);
-    return_shop_and_owner_cap_to_sender(&scn, shop_obj, owner_cap_obj);
+    test_scenario::return_to_sender(&scn, owner_cap_obj);
+    test_scenario::return_shared(shop_obj);
     std::unit_test::destroy(primary_currency);
     std::unit_test::destroy(secondary_currency);
     let _ = test_scenario::end(scn);
@@ -1404,7 +1396,9 @@ fun remove_accepted_currency_rejects_foreign_owner_cap() {
         option::none(),
         option::none(),
     );
-    return_shop_owner_cap_and_share_price_info(&scn, shop_obj, owner_cap_obj, price_info_object);
+    test_scenario::return_to_sender(&scn, owner_cap_obj);
+    test_scenario::return_shared(shop_obj);
+    transfer::public_share_object(price_info_object);
 
     let _ = test_scenario::next_tx(&mut scn, OTHER_OWNER);
 
@@ -1454,7 +1448,9 @@ fun remove_accepted_currency_rejects_missing_id() {
         option::none(),
     );
     let _foreign_currency_id = tx_context::last_created_object_id(test_scenario::ctx(&mut scn)).to_id();
-    return_shop_owner_cap_and_share_price_info(&scn, other_shop_obj, other_owner_cap_obj, price_info_object);
+    test_scenario::return_to_sender(&scn, other_owner_cap_obj);
+    test_scenario::return_shared(other_shop_obj);
+    transfer::public_share_object(price_info_object);
 
     let _ = test_scenario::next_tx(&mut scn, TEST_OWNER);
     let owner_cap_obj = test_scenario::take_from_sender_by_id(
@@ -1501,7 +1497,8 @@ fun remove_accepted_currency_handles_missing_type_mapping() {
 
     remove_currency_if_exists<TestCoin>(&mut shop_obj, &owner_cap);
 
-    return_shop_and_owner_cap_to_sender(&scn, shop_obj, owner_cap);
+    test_scenario::return_to_sender(&scn, owner_cap);
+    test_scenario::return_shared(shop_obj);
 
     let _ = test_scenario::next_tx(&mut scn, TEST_OWNER);
 
@@ -1564,7 +1561,8 @@ fun remove_accepted_currency_rejects_mismatched_type_mapping() {
     std::unit_test::destroy(replacement_currency);
     std::unit_test::destroy(price_info_object);
 
-    return_shop_and_owner_cap_to_sender(&scn, shop_obj, owner_cap);
+    test_scenario::return_to_sender(&scn, owner_cap);
+    test_scenario::return_shared(shop_obj);
 
     let _ = test_scenario::next_tx(&mut scn, TEST_OWNER);
 
@@ -1612,7 +1610,9 @@ fun quote_view_matches_internal_math() {
         option::none(),
         option::none(),
     );
-    return_shop_owner_cap_and_share_price_info(&scn, shop_obj, owner_cap_obj, price_info_object);
+    test_scenario::return_to_sender(&scn, owner_cap_obj);
+    test_scenario::return_shared(shop_obj);
+    transfer::public_share_object(price_info_object);
 
     let _ = test_scenario::next_tx(&mut scn, TEST_OWNER);
 
@@ -1638,13 +1638,13 @@ fun quote_view_matches_internal_math() {
     let price = pyth::get_price_no_older_than(
         &price_info_obj,
         &clock_obj,
-        shop::test_default_max_price_age_secs(),
+        TEST_DEFAULT_MAX_PRICE_AGE_SECS,
     );
     let derived_quote = shop::quote_amount_from_usd_cents(
         price_usd_cents,
         decimals,
         price,
-        shop::test_default_max_confidence_ratio_bps(),
+        TEST_DEFAULT_MAX_CONFIDENCE_RATIO_BPS,
     );
 
     assert_eq!(derived_quote, 10_101_010_102);
@@ -1671,7 +1671,7 @@ fun quote_amount_rejects_overflow_before_runtime_abort() {
         max_usd_cents,
         24, // MAX_DECIMAL_POWER; forces usd_cents * 10^24 to overflow u128.
         price,
-        shop::test_default_max_confidence_ratio_bps(),
+        TEST_DEFAULT_MAX_CONFIDENCE_RATIO_BPS,
     );
 
     abort
@@ -1705,7 +1705,9 @@ fun quote_view_rejects_mismatched_price_info_object() {
         option::none(),
         option::none(),
     );
-    return_shop_owner_cap_and_share_price_info(&scn, shop_obj, owner_cap_obj, price_info_object);
+    test_scenario::return_to_sender(&scn, owner_cap_obj);
+    test_scenario::return_shared(shop_obj);
+    transfer::public_share_object(price_info_object);
 
     let _ = test_scenario::next_tx(&mut scn, TEST_OWNER);
 
@@ -3886,7 +3888,8 @@ fun claim_discount_ticket_mints_transfers_and_records_claim() {
     );
     let template_id = tx_context::last_created_object_id(test_scenario::ctx(&mut scn)).to_id();
 
-    return_shop_and_owner_cap_to_sender(&scn, shop_obj, owner_cap);
+    test_scenario::return_to_sender(&scn, owner_cap);
+    test_scenario::return_shared(shop_obj);
 
     let _ = test_scenario::next_tx(&mut scn, OTHER_OWNER);
 
@@ -4258,7 +4261,8 @@ fun claim_and_buy_rejects_second_claim_after_redeem() {
 
     transfer::public_share_object(price_info_object);
 
-    return_shop_and_owner_cap_to_sender(&scn, shop_obj, owner_cap);
+    test_scenario::return_to_sender(&scn, owner_cap);
+    test_scenario::return_shared(shop_obj);
 
     let _ = test_scenario::next_tx(&mut scn, OTHER_OWNER);
 
@@ -4371,7 +4375,8 @@ fun claim_and_buy_item_with_discount_emits_events_and_covers_helpers() {
 
     transfer::public_share_object(price_info_object);
 
-    return_shop_and_owner_cap_to_sender(&scn, shop_obj, owner_cap);
+    test_scenario::return_to_sender(&scn, owner_cap);
+    test_scenario::return_shared(shop_obj);
 
     let (mut shared_shop, price_info_obj, clock_obj) = begin_buyer_checkout_context(
         &mut scn,
@@ -4549,7 +4554,7 @@ fun quote_amount_with_positive_exponent() {
         100,
         9,
         price,
-        shop::test_default_max_confidence_ratio_bps(),
+        TEST_DEFAULT_MAX_CONFIDENCE_RATIO_BPS,
     );
     assert!(amount > 0);
 }
@@ -4561,7 +4566,7 @@ fun quote_amount_rejects_large_exponent() {
         100,
         39,
         price,
-        shop::test_default_max_confidence_ratio_bps(),
+        TEST_DEFAULT_MAX_CONFIDENCE_RATIO_BPS,
     );
     abort
 }
@@ -4641,7 +4646,8 @@ fun discount_redemption_without_listing_restriction_allows_zero_price() {
 
     transfer::public_share_object(price_info_object);
 
-    return_shop_and_owner_cap_to_sender(&scn, shop_obj, owner_cap);
+    test_scenario::return_to_sender(&scn, owner_cap);
+    test_scenario::return_shared(shop_obj);
 
     let _ = test_scenario::next_tx(&mut scn, OTHER_OWNER);
 
@@ -4750,7 +4756,8 @@ fun discount_redemption_rejects_listing_mismatch() {
 
     transfer::public_share_object(price_info_object);
 
-    return_shop_and_owner_cap_to_sender(&scn, shop_obj, owner_cap);
+    test_scenario::return_to_sender(&scn, owner_cap);
+    test_scenario::return_shared(shop_obj);
 
     let _ = test_scenario::next_tx(&mut scn, OTHER_OWNER);
 
@@ -4844,7 +4851,8 @@ fun discount_template_maxed_out_by_redemption() {
 
     transfer::public_share_object(price_info_object);
 
-    return_shop_and_owner_cap_to_sender(&scn, shop_obj, owner_cap);
+    test_scenario::return_to_sender(&scn, owner_cap);
+    test_scenario::return_shared(shop_obj);
 
     let _ = test_scenario::next_tx(&mut scn, OTHER_OWNER);
 
@@ -5047,7 +5055,8 @@ fun price_status_rejects_attestation_before_publish() {
     std::unit_test::destroy(currency);
 
     transfer::public_share_object(price_info_object);
-    return_shop_and_owner_cap_to_sender(&scn, shop_obj, owner_cap_obj);
+    test_scenario::return_to_sender(&scn, owner_cap_obj);
+    test_scenario::return_shared(shop_obj);
 
     let _ = test_scenario::next_tx(&mut scn, TEST_OWNER);
 
@@ -5168,7 +5177,8 @@ fun accepted_currency_values_rejects_foreign_shop() {
         option::none(),
     );
 
-    return_shop_and_owner_cap_to_sender(&scn, shop_obj, owner_cap_obj);
+    test_scenario::return_to_sender(&scn, owner_cap_obj);
+    test_scenario::return_shared(shop_obj);
     std::unit_test::destroy(currency);
 
     let _ = test_scenario::next_tx(&mut scn, TEST_OWNER);
@@ -5204,7 +5214,8 @@ fun remove_currency_field_clears_mapping() {
     remove_currency_if_exists<TestCoin>(&mut shop_obj, &owner_cap_obj);
     assert!(!shop::accepted_currency_exists(&shop_obj, test_coin_type()));
 
-    return_shop_and_owner_cap_to_sender(&scn, shop_obj, owner_cap_obj);
+    test_scenario::return_to_sender(&scn, owner_cap_obj);
+    test_scenario::return_shared(shop_obj);
     std::unit_test::destroy(currency);
     let _ = test_scenario::end(scn);
 }
@@ -5231,7 +5242,8 @@ fun remove_accepted_currency_emits_removed_event_fields() {
         option::none(),
     );
 
-    return_shop_and_owner_cap_to_sender(&scn, shop_obj, owner_cap_obj);
+    test_scenario::return_to_sender(&scn, owner_cap_obj);
+    test_scenario::return_shared(shop_obj);
 
     let _ = test_scenario::next_tx(&mut scn, TEST_OWNER);
 
@@ -5822,7 +5834,8 @@ fun buy_item_with_discount_emits_discount_redeemed_and_records_template_id() {
     let template_id = tx_context::last_created_object_id(test_scenario::ctx(&mut scn)).to_id();
 
     transfer::public_share_object(price_info_object);
-    return_shop_and_owner_cap_to_sender(&scn, shop_obj, owner_cap_obj);
+    test_scenario::return_to_sender(&scn, owner_cap_obj);
+    test_scenario::return_shared(shop_obj);
 
     let _ = test_scenario::next_tx(&mut scn, OTHER_OWNER);
 
@@ -5964,7 +5977,8 @@ fun buy_item_with_discount_rejects_ticket_owner_mismatch() {
     let template_id = tx_context::last_created_object_id(test_scenario::ctx(&mut scn)).to_id();
 
     transfer::public_share_object(price_info_object);
-    return_shop_and_owner_cap_to_sender(&scn, shop_obj, owner_cap_obj);
+    test_scenario::return_to_sender(&scn, owner_cap_obj);
+    test_scenario::return_shared(shop_obj);
 
     let _ = test_scenario::next_tx(&mut scn, OTHER_OWNER);
 
@@ -6189,7 +6203,7 @@ fun quote_amount_from_usd_cents_rejects_negative_price() {
         100,
         9,
         price,
-        shop::test_default_max_confidence_ratio_bps(),
+        TEST_DEFAULT_MAX_CONFIDENCE_RATIO_BPS,
     );
     abort
 }
@@ -6248,7 +6262,8 @@ fun buy_item_with_discount_rejects_inactive_template() {
     let template_id = tx_context::last_created_object_id(test_scenario::ctx(&mut scn)).to_id();
 
     transfer::public_share_object(price_info_object);
-    return_shop_and_owner_cap_to_sender(&scn, shop_obj, owner_cap_obj);
+    test_scenario::return_to_sender(&scn, owner_cap_obj);
+    test_scenario::return_shared(shop_obj);
 
     let _ = test_scenario::next_tx(&mut scn, OTHER_OWNER);
 
@@ -6280,7 +6295,8 @@ fun buy_item_with_discount_rejects_inactive_template() {
         template_id,
         false,
     );
-    return_shop_and_owner_cap_to_sender(&scn, shared_shop, owner_cap_obj);
+    test_scenario::return_to_sender(&scn, owner_cap_obj);
+    test_scenario::return_shared(shared_shop);
 
     let _ = test_scenario::next_tx(&mut scn, OTHER_OWNER);
 
@@ -6392,7 +6408,8 @@ fun buy_item_with_discount_rejects_ticket_template_mismatch() {
     let template_b_id = tx_context::last_created_object_id(test_scenario::ctx(&mut scn)).to_id();
 
     transfer::public_share_object(price_info_object);
-    return_shop_and_owner_cap_to_sender(&scn, shop_obj, owner_cap_obj);
+    test_scenario::return_to_sender(&scn, owner_cap_obj);
+    test_scenario::return_shared(shop_obj);
 
     let _ = test_scenario::next_tx(&mut scn, OTHER_OWNER);
 
@@ -6528,8 +6545,10 @@ fun buy_item_with_discount_rejects_ticket_shop_mismatch() {
     let template_b_id = tx_context::last_created_object_id(test_scenario::ctx(&mut scn)).to_id();
 
     transfer::public_share_object(price_info_object);
-    return_shop_and_owner_cap_to_sender(&scn, shop_a, owner_cap_a);
-    return_shop_and_owner_cap_to_sender(&scn, shop_b, owner_cap_b);
+    test_scenario::return_to_sender(&scn, owner_cap_a);
+    test_scenario::return_to_sender(&scn, owner_cap_b);
+    test_scenario::return_shared(shop_a);
+    test_scenario::return_shared(shop_b);
 
     let _ = test_scenario::next_tx(&mut scn, OTHER_OWNER);
 
@@ -6595,7 +6614,7 @@ fun quote_amount_from_usd_cents_rejects_confidence_exceeds_price() {
         100,
         9,
         price,
-        shop::test_default_max_confidence_ratio_bps(),
+        TEST_DEFAULT_MAX_CONFIDENCE_RATIO_BPS,
     );
     abort
 }
@@ -6609,7 +6628,7 @@ fun quote_amount_from_usd_cents_rejects_confidence_interval_too_wide() {
         100,
         9,
         price,
-        shop::test_default_max_confidence_ratio_bps(),
+        TEST_DEFAULT_MAX_CONFIDENCE_RATIO_BPS,
     );
     abort
 }
@@ -6654,7 +6673,7 @@ fun create_high_decimal_currency(
     ctx: &mut tx_context::TxContext,
 ): coin_registry::Currency<HighDecimalCoin> {
     let mut registry_obj = coin_registry::create_coin_data_registry_for_testing(ctx);
-    let over_max_decimals = (shop::test_max_decimal_power() + 1) as u8;
+    let over_max_decimals = (TEST_MAX_DECIMAL_POWER + 1) as u8;
     let (init, treasury_cap) = coin_registry::new_currency<HighDecimalCoin>(
         &mut registry_obj,
         over_max_decimals,
