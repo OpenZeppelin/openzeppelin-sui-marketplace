@@ -1109,6 +1109,19 @@ public fun toggle_discount_template(
     event::emit(new_discount_template_toggled_event(shop.id.to_inner(), discount_template_id));
 }
 
+/// Removes a template from shop storage.
+///
+/// Package visibility keeps this API available for local tests and package scripts while avoiding
+/// extra `#[test_only]` wrapper surface.
+public(package) fun remove_discount_template(
+    shop: &mut Shop,
+    owner_cap: &ShopOwnerCap,
+    discount_template_id: ID,
+) {
+    assert_owner_cap!(shop, owner_cap);
+    shop.remove_discount_template_if_exists(discount_template_id);
+}
+
 /// Surface a template alongside a listing so UIs can highlight the promotion.
 public fun attach_template_to_listing(
     shop: &mut Shop,
@@ -1581,6 +1594,57 @@ fun adjust_active_template_count(
     });
 }
 
+fun remove_discount_template_if_exists(shop: &mut Shop, template_id: ID) {
+    if (!shop.discount_templates.contains(template_id)) return;
+
+    let (applies_to_listing, was_active) = {
+        let template = shop.borrow_discount_template(template_id);
+        (template.applies_to_listing, template.active)
+    };
+
+    if (was_active) {
+        applies_to_listing.do_ref!(|listing_id| {
+            assert!(shop.listings.contains(*listing_id), EListingNotFound);
+        });
+    };
+    shop.adjust_active_template_count(applies_to_listing, was_active, false);
+    shop.clear_listing_spotlight_if_matches_template(applies_to_listing, template_id);
+
+    let template = shop.discount_templates.remove(template_id);
+    destroy_discount_template(template);
+}
+
+fun clear_listing_spotlight_if_matches_template(
+    shop: &mut Shop,
+    applies_to_listing: Option<ID>,
+    template_id: ID,
+) {
+    applies_to_listing.do_ref!(|listing_id| {
+        if (shop.listings.contains(*listing_id)) {
+            let listing = shop.borrow_listing_mut(*listing_id);
+            if (listing.spotlight_discount_template_id == option::some(template_id)) {
+                listing.spotlight_discount_template_id = option::none();
+            };
+        };
+    });
+}
+
+fun destroy_discount_template(template: DiscountTemplate) {
+    let DiscountTemplate {
+        id: _id,
+        applies_to_listing: _applies_to_listing,
+        rule: _rule,
+        starts_at: _starts_at,
+        expires_at: _expires_at,
+        max_redemptions: _max_redemptions,
+        claims_issued: _claims_issued,
+        redemptions: _redemptions,
+        active: _active,
+        claims_by_claimer,
+    } = template;
+    claims_by_claimer.drop();
+}
+
 fun increment_active_listing_template_count(shop: &mut Shop, listing_id: ID) {
     let listing = shop.borrow_listing_mut(listing_id);
     listing.active_bound_template_count = listing.active_bound_template_count + 1;
@@ -1966,6 +2030,7 @@ fun apply_discount(rule: DiscountRule, base_price_usd_cents: u64): u64 {
 
 /// Applies a percent discount rule to `base_price_usd_cents`.
 public(package) fun apply_percent_discount(base_price_usd_cents: u64, bps: u16): u64 {
+    assert!((bps as u64) <= BASIS_POINT_DENOMINATOR, EInvalidRuleValue);
     apply_discount(DiscountRule::Percent { bps }, base_price_usd_cents)
 }
 
@@ -2669,37 +2734,4 @@ public fun test_create_discount_template_local(
     );
 
     template_id
-}
-
-#[test_only]
-/// Removes a discount template from test-owned local state for teardown only.
-/// Production intentionally omits template deletion to preserve historical references and to use
-/// toggle/expiry lifecycle controls instead of destructive state removal.
-public fun test_cleanup_discount_template(shop: &mut Shop, template_id: ID) {
-    if (!shop.discount_templates.contains(template_id)) return;
-
-    let template = shop.borrow_discount_template(template_id);
-    // Guard test teardown from hiding inconsistent states: an active listing-scoped template must
-    // still point to a present listing before we decrement active counters.
-    if (template.active) {
-        template.applies_to_listing.do_ref!(|listing_id| {
-            assert!(shop.listings.contains(*listing_id), EListingNotFound);
-        });
-    };
-    shop.adjust_active_template_count(template.applies_to_listing, template.active, false);
-
-    let template = shop.discount_templates.remove(template_id);
-    let DiscountTemplate {
-        id: _id,
-        applies_to_listing: _applies_to_listing,
-        rule: _rule,
-        starts_at: _starts_at,
-        expires_at: _expires_at,
-        max_redemptions: _max_redemptions,
-        claims_issued: _claims_issued,
-        redemptions: _redemptions,
-        active: _active,
-        claims_by_claimer,
-    } = template;
-    claims_by_claimer.drop();
 }

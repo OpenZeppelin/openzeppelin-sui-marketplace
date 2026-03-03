@@ -1848,7 +1848,7 @@ fun add_item_listing_links_spotlight_template() {
         listing_id,
     ));
 
-    shop::test_cleanup_discount_template(&mut shop, template_id);
+    shop::remove_discount_template(&mut shop, &owner_cap, template_id);
     remove_listing_if_exists(&mut shop, &owner_cap, listing_id);
     std::unit_test::destroy(owner_cap);
     std::unit_test::destroy(shop);
@@ -1897,7 +1897,7 @@ fun add_item_listing_with_discount_template_creates_listing_and_pinned_template(
         template_id,
     ));
 
-    shop::test_cleanup_discount_template(&mut shop, template_id);
+    shop::remove_discount_template(&mut shop, &owner_cap, template_id);
     remove_listing_if_exists(&mut shop, &owner_cap, listing_id);
     std::unit_test::destroy(owner_cap);
     std::unit_test::destroy(shop);
@@ -2445,7 +2445,7 @@ fun create_discount_template_persists_fields_and_emits_event() {
         shop::new_discount_template_created_event(shop::shop_id(&shop), template_id),
     );
 
-    shop::test_cleanup_discount_template(&mut shop, template_id);
+    shop::remove_discount_template(&mut shop, &owner_cap, template_id);
     std::unit_test::destroy(owner_cap);
     std::unit_test::destroy(shop);
 }
@@ -2510,7 +2510,7 @@ fun create_discount_template_links_listing_and_percent_rule() {
         shop::new_discount_template_created_event(shop::shop_id(&shop), template_id),
     );
 
-    shop::test_cleanup_discount_template(&mut shop, template_id);
+    shop::remove_discount_template(&mut shop, &owner_cap, template_id);
     remove_listing_if_exists(&mut shop, &owner_cap, listing_id);
     std::unit_test::destroy(owner_cap);
     std::unit_test::destroy(shop);
@@ -2587,6 +2587,12 @@ fun percent_discount_rounds_up_instead_of_zeroing_low_prices() {
 fun percent_discount_allows_full_discount_to_reach_zero() {
     let discounted = shop::apply_percent_discount(1, 10_000);
     assert_eq!(discounted, 0);
+}
+
+#[test, expected_failure(abort_code = ::sui_oracle_market::shop::EInvalidRuleValue)]
+fun percent_discount_rejects_basis_points_above_denominator() {
+    let _ = shop::apply_percent_discount(1, 10_001);
+    abort
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::ETemplateWindow)]
@@ -2722,7 +2728,7 @@ fun update_discount_template_updates_fields_and_emits_event() {
         shop::new_discount_template_updated_event(shop::shop_id(&shop), template),
     );
 
-    shop::test_cleanup_discount_template(&mut shop, template);
+    shop::remove_discount_template(&mut shop, &owner_cap, template);
     remove_listing_if_exists(&mut shop, &owner_cap, listing_id);
     std::unit_test::destroy(owner_cap);
     std::unit_test::destroy(shop);
@@ -3137,7 +3143,7 @@ fun toggle_discount_template_updates_active_and_emits_events() {
         shop::new_discount_template_toggled_event(shop_id, template),
     );
 
-    shop::test_cleanup_discount_template(&mut shop, template);
+    shop::remove_discount_template(&mut shop, &owner_cap, template);
     std::unit_test::destroy(owner_cap);
     std::unit_test::destroy(shop);
 }
@@ -3211,7 +3217,7 @@ fun toggle_discount_template_rejects_unknown_template() {
         option::none(),
         &mut ctx,
     );
-    shop::test_cleanup_discount_template(&mut shop, stray_template);
+    shop::remove_discount_template(&mut shop, &owner_cap, stray_template);
 
     shop::toggle_discount_template(
         &mut shop,
@@ -3288,7 +3294,7 @@ fun toggle_template_on_listing_sets_and_clears_spotlight() {
     assert_eq!(tx_context::get_ids_created(&ctx), ids_before_toggle);
     assert_eq!(event::events_by_type<shop::DiscountTemplateToggledEvent>().length(), 0);
 
-    shop::test_cleanup_discount_template(&mut shop, template);
+    shop::remove_discount_template(&mut shop, &owner_cap, template);
     remove_listing_if_exists(&mut shop, &owner_cap, listing_id);
     std::unit_test::destroy(owner_cap);
     std::unit_test::destroy(shop);
@@ -3432,7 +3438,7 @@ fun toggle_template_on_listing_rejects_unknown_template() {
         option::none(),
         &mut ctx,
     );
-    shop::test_cleanup_discount_template(&mut shop, stray_template);
+    shop::remove_discount_template(&mut shop, &owner_cap, stray_template);
 
     shop::attach_template_to_listing(
         &mut shop,
@@ -3488,7 +3494,7 @@ fun attach_template_to_listing_sets_spotlight_without_emitting_events() {
     );
     assert!(shop::discount_template_exists(&shop, template));
 
-    shop::test_cleanup_discount_template(&mut shop, template);
+    shop::remove_discount_template(&mut shop, &owner_cap, template);
     remove_listing_if_exists(&mut shop, &owner_cap, listing_id);
     std::unit_test::destroy(owner_cap);
     std::unit_test::destroy(shop);
@@ -3549,8 +3555,8 @@ fun attach_template_to_listing_overwrites_existing_spotlight() {
     assert!(shop::discount_template_exists(&shop, second_template));
     assert_eq!(event::events_by_type<shop::DiscountTemplateToggledEvent>().length(), 0);
 
-    shop::test_cleanup_discount_template(&mut shop, second_template);
-    shop::test_cleanup_discount_template(&mut shop, first_template);
+    shop::remove_discount_template(&mut shop, &owner_cap, second_template);
+    shop::remove_discount_template(&mut shop, &owner_cap, first_template);
     remove_listing_if_exists(&mut shop, &owner_cap, listing_id);
     std::unit_test::destroy(owner_cap);
     std::unit_test::destroy(shop);
@@ -3721,7 +3727,7 @@ fun attach_template_to_listing_rejects_unknown_template() {
         option::none(),
         &mut ctx,
     );
-    shop::test_cleanup_discount_template(&mut shop, stray_template);
+    shop::remove_discount_template(&mut shop, &owner_cap, stray_template);
 
     shop::attach_template_to_listing(
         &mut shop,
@@ -3788,7 +3794,7 @@ fun clear_template_from_listing_removes_spotlight_without_side_effects() {
     );
     assert!(shop::discount_template_exists(&shop, template));
 
-    shop::test_cleanup_discount_template(&mut shop, template);
+    shop::remove_discount_template(&mut shop, &owner_cap, template);
     remove_listing_if_exists(&mut shop, &owner_cap, listing_id);
     std::unit_test::destroy(owner_cap);
     std::unit_test::destroy(shop);
@@ -4032,7 +4038,7 @@ fun prune_discount_claims_removes_marker_when_expired() {
     assert!(!shop::discount_claim_exists(&shop, template, claimer));
 
     std::unit_test::destroy(clock_obj);
-    shop::test_cleanup_discount_template(&mut shop, template);
+    shop::remove_discount_template(&mut shop, &owner_cap, template);
     std::unit_test::destroy(owner_cap);
     std::unit_test::destroy(shop);
 }
@@ -4586,10 +4592,72 @@ fun remove_listing_and_template_noop_when_missing() {
     let missing_listing_identifier = missing_listing_id();
 
     remove_listing_if_exists(&mut shop_obj, &owner_cap, missing_listing_identifier);
-    shop::test_cleanup_discount_template(&mut shop_obj, dummy_id);
+    shop::remove_discount_template(&mut shop_obj, &owner_cap, dummy_id);
 
     std::unit_test::destroy(shop_obj);
     std::unit_test::destroy(owner_cap);
+}
+
+#[test]
+fun remove_discount_template_drops_template_and_clears_spotlight() {
+    let mut ctx = tx_context::new_from_hint(TEST_OWNER, 100041, 0, 0, 0);
+    let (mut shop_obj, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
+    let listing_id = add_item_listing_local<TestItem>(
+        &mut shop_obj,
+        &owner_cap,
+        b"Template Listing".to_string(),
+        100,
+        1,
+        option::none(),
+        &mut ctx,
+    );
+    let template_id = shop::test_create_discount_template_local(
+        &mut shop_obj,
+        option::some(listing_id),
+        0,
+        10,
+        0,
+        option::none(),
+        option::none(),
+        &mut ctx,
+    );
+
+    shop::attach_template_to_listing(
+        &mut shop_obj,
+        &owner_cap,
+        template_id,
+        listing_id,
+    );
+    shop::remove_discount_template(&mut shop_obj, &owner_cap, template_id);
+
+    assert!(!shop::discount_template_exists(&shop_obj, template_id));
+    let listing_values = shop::listing_values(&shop_obj, listing_id);
+    let spotlight_after = shop::listing_values_spotlight_discount_template_id(&listing_values);
+    assert!(option::is_none(&spotlight_after));
+
+    remove_listing_if_exists(&mut shop_obj, &owner_cap, listing_id);
+    std::unit_test::destroy(shop_obj);
+    std::unit_test::destroy(owner_cap);
+}
+
+#[test, expected_failure(abort_code = ::sui_oracle_market::shop::EInvalidOwnerCap)]
+fun remove_discount_template_rejects_foreign_owner_cap() {
+    let mut ctx = tx_context::new_from_hint(TEST_OWNER, 100042, 0, 0, 0);
+    let (mut shop_obj, _owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
+    let (_other_shop, other_cap) = shop::test_setup_shop(OTHER_OWNER, &mut ctx);
+    let template_id = shop::test_create_discount_template_local(
+        &mut shop_obj,
+        option::none(),
+        0,
+        10,
+        0,
+        option::none(),
+        option::none(),
+        &mut ctx,
+    );
+
+    shop::remove_discount_template(&mut shop_obj, &other_cap, template_id);
+    abort
 }
 
 #[test]
