@@ -22,7 +22,6 @@ const TEST_OWNER: address = @0xBEEF;
 const OTHER_OWNER: address = @0xCAFE;
 const THIRD_OWNER: address = @0xD00D;
 const MISSING_LISTING_ID_ADDRESS: address = @0xBAD1;
-const EAssertFailure: u64 = 0;
 const DEFAULT_SHOP_NAME: vector<u8> = b"Shop";
 
 // === Test Types ===
@@ -369,7 +368,7 @@ fun two_shop_and_owner_cap_pairs_from_tx_ids(
         second_owner_cap_shop_id == first_shop_id) {
         (first_shop_id, second_owner_cap_id, second_shop_id, first_owner_cap_id)
     } else {
-        abort EAssertFailure
+        abort
     }
 }
 
@@ -897,7 +896,7 @@ fun add_accepted_currency_rejects_foreign_owner_cap() {
         option::none(),
     );
 
-    abort EAssertFailure
+    abort
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::EAcceptedCurrencyExists)]
@@ -922,7 +921,7 @@ fun add_accepted_currency_rejects_duplicate_coin_type() {
         &mut ctx,
     );
 
-    abort EAssertFailure
+    abort
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::EEmptyFeedId)]
@@ -947,7 +946,7 @@ fun add_accepted_currency_rejects_empty_feed_id() {
         option::none(),
     );
 
-    abort EAssertFailure
+    abort
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::EInvalidFeedIdLength)]
@@ -972,7 +971,7 @@ fun add_accepted_currency_rejects_short_feed_id() {
         option::none(),
     );
 
-    abort EAssertFailure
+    abort
 }
 
 #[test]
@@ -1018,7 +1017,7 @@ fun attestation_time_lag_over_limit_is_rejected() {
     );
 
     shop::test_assert_price_status_trading(&price_info_object);
-    abort EAssertFailure
+    abort
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::EUnsupportedCurrencyDecimals)]
@@ -1043,7 +1042,7 @@ fun add_accepted_currency_rejects_excessive_decimals() {
         option::none(),
     );
 
-    abort EAssertFailure
+    abort
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::EFeedIdentifierMismatch)]
@@ -1068,7 +1067,7 @@ fun add_accepted_currency_rejects_identifier_mismatch() {
         option::none(),
     );
 
-    abort EAssertFailure
+    abort
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::EPythObjectMismatch)]
@@ -1093,7 +1092,7 @@ fun add_accepted_currency_rejects_missing_price_object() {
         option::none(),
     );
 
-    abort EAssertFailure
+    abort
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::EPriceStatusNotTrading)]
@@ -1158,7 +1157,7 @@ fun quote_rejects_attestation_lag_above_currency_cap() {
         option::none(),
         &clock_obj,
     );
-    abort EAssertFailure
+    abort
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::EPriceTooStale)]
@@ -1223,7 +1222,7 @@ fun quote_rejects_price_timestamp_older_than_max_age() {
         option::none(),
         &clock_obj,
     );
-    abort EAssertFailure
+    abort
 }
 
 #[test]
@@ -1335,7 +1334,7 @@ fun remove_accepted_currency_rejects_foreign_owner_cap() {
         &mut shared_shop,
         &wrong_cap,
     );
-    abort EAssertFailure
+    abort
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::EAcceptedCurrencyMissing)]
@@ -1387,7 +1386,7 @@ fun remove_accepted_currency_rejects_missing_id() {
         &mut shared_shop,
         &owner_cap_obj,
     );
-    abort EAssertFailure
+    abort
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::EAcceptedCurrencyMissing)]
@@ -1439,7 +1438,7 @@ fun remove_accepted_currency_handles_missing_type_mapping() {
         &mut shared_shop,
         &owner_cap,
     );
-    abort EAssertFailure
+    abort
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::EAcceptedCurrencyMissing)]
@@ -1509,7 +1508,7 @@ fun remove_accepted_currency_rejects_mismatched_type_mapping() {
         &mut shared_shop,
         &owner_cap,
     );
-    abort EAssertFailure
+    abort
 }
 
 #[test]
@@ -1608,7 +1607,7 @@ fun quote_amount_rejects_overflow_before_runtime_abort() {
         shop::test_default_max_confidence_ratio_bps(),
     );
 
-    abort EAssertFailure
+    abort
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::EPythObjectMismatch)]
@@ -1666,7 +1665,7 @@ fun quote_view_rejects_mismatched_price_info_object() {
         &clock_obj,
     );
 
-    abort EAssertFailure
+    abort
 }
 
 #[test]
@@ -1806,7 +1805,7 @@ fun add_item_listing_with_discount_template_rejects_foreign_owner_cap() {
         &mut ctx,
     );
 
-    abort EAssertFailure
+    abort
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::EEmptyItemName)]
@@ -1824,7 +1823,7 @@ fun add_item_listing_rejects_empty_name() {
         &mut ctx,
     );
 
-    abort EAssertFailure
+    abort
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::EInvalidOwnerCap)]
@@ -1843,7 +1842,7 @@ fun add_item_listing_rejects_foreign_owner_cap() {
         &mut ctx,
     );
 
-    abort EAssertFailure
+    abort
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::EInvalidPrice)]
@@ -1861,7 +1860,7 @@ fun add_item_listing_rejects_zero_price() {
         &mut ctx,
     );
 
-    abort EAssertFailure
+    abort
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::EZeroStock)]
@@ -1879,7 +1878,7 @@ fun add_item_listing_rejects_zero_stock() {
         &mut ctx,
     );
 
-    abort EAssertFailure
+    abort
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::ETemplateNotFound)]
@@ -1903,7 +1902,7 @@ fun add_item_listing_rejects_foreign_template() {
         &mut ctx,
     );
 
-    abort EAssertFailure
+    abort
 }
 
 #[test]
@@ -1976,7 +1975,7 @@ fun update_item_listing_stock_rejects_foreign_owner_cap() {
         7,
     );
 
-    abort EAssertFailure
+    abort
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::EListingNotFound)]
@@ -2005,7 +2004,7 @@ fun update_item_listing_stock_rejects_unknown_listing() {
         3,
     );
 
-    abort EAssertFailure
+    abort
 }
 
 #[test]
@@ -2142,7 +2141,7 @@ fun remove_item_listing_rejects_foreign_owner_cap() {
         listing_id,
     );
 
-    abort EAssertFailure
+    abort
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::EListingNotFound)]
@@ -2170,7 +2169,7 @@ fun remove_item_listing_rejects_unknown_listing() {
         foreign_listing_id,
     );
 
-    abort EAssertFailure
+    abort
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::EListingHasActiveTemplates)]
@@ -2203,7 +2202,7 @@ fun remove_item_listing_rejects_listing_with_active_bound_template() {
         listing_id,
     );
 
-    abort EAssertFailure
+    abort
 }
 
 #[test]
@@ -2415,7 +2414,7 @@ fun create_discount_template_rejects_foreign_owner_cap() {
         &mut ctx,
     );
 
-    abort EAssertFailure
+    abort
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::EInvalidRuleKind)]
@@ -2435,7 +2434,7 @@ fun create_discount_template_rejects_invalid_rule_kind() {
         &mut ctx,
     );
 
-    abort EAssertFailure
+    abort
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::EInvalidRuleValue)]
@@ -2455,7 +2454,7 @@ fun create_discount_template_rejects_percent_above_limit() {
         &mut ctx,
     );
 
-    abort EAssertFailure
+    abort
 }
 
 #[test]
@@ -2487,7 +2486,7 @@ fun create_discount_template_rejects_invalid_schedule() {
         &mut ctx,
     );
 
-    abort EAssertFailure
+    abort
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::EListingNotFound)]
@@ -2521,7 +2520,7 @@ fun create_discount_template_rejects_foreign_listing_reference() {
         &mut ctx,
     );
 
-    abort EAssertFailure
+    abort
 }
 
 #[test]
@@ -2639,7 +2638,7 @@ fun update_discount_template_rejects_foreign_owner_cap() {
         &clock_obj,
     );
 
-    abort EAssertFailure
+    abort
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::ETemplateNotFound)]
@@ -2674,7 +2673,7 @@ fun update_discount_template_rejects_foreign_template() {
         &clock_obj,
     );
 
-    abort EAssertFailure
+    abort
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::ETemplateWindow)]
@@ -2706,7 +2705,7 @@ fun update_discount_template_rejects_invalid_schedule() {
         &clock_obj,
     );
 
-    abort EAssertFailure
+    abort
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::EInvalidRuleKind)]
@@ -2738,7 +2737,7 @@ fun update_discount_template_rejects_invalid_rule_kind() {
         &clock_obj,
     );
 
-    abort EAssertFailure
+    abort
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::EInvalidRuleValue)]
@@ -2770,7 +2769,7 @@ fun update_discount_template_rejects_percent_above_limit() {
         &clock_obj,
     );
 
-    abort EAssertFailure
+    abort
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::ETemplateFinalized)]
@@ -2813,7 +2812,7 @@ fun update_discount_template_rejects_after_claims_issued() {
         vector[TEST_OWNER],
         &clock_obj,
     );
-    abort EAssertFailure
+    abort
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::ETemplateFinalized)]
@@ -2846,7 +2845,7 @@ fun update_discount_template_rejects_after_expiry() {
         &clock_obj,
     );
 
-    abort EAssertFailure
+    abort
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::ETemplateFinalized)]
@@ -2887,7 +2886,7 @@ fun update_discount_template_rejects_after_maxed_out() {
         vector[TEST_OWNER],
         &clock_obj,
     );
-    abort EAssertFailure
+    abort
 }
 
 #[test]
@@ -3050,7 +3049,7 @@ fun toggle_discount_template_rejects_foreign_owner_cap() {
         false,
     );
 
-    abort EAssertFailure
+    abort
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::ETemplateNotFound)]
@@ -3079,7 +3078,7 @@ fun toggle_discount_template_rejects_foreign_template() {
         false,
     );
 
-    abort EAssertFailure
+    abort
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::ETemplateNotFound)]
@@ -3105,7 +3104,7 @@ fun toggle_discount_template_rejects_unknown_template() {
         false,
     );
 
-    abort EAssertFailure
+    abort
 }
 
 #[test]
@@ -3212,7 +3211,7 @@ fun toggle_template_on_listing_rejects_foreign_owner_cap() {
         listing_id,
     );
 
-    abort EAssertFailure
+    abort
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::EListingNotFound)]
@@ -3251,7 +3250,7 @@ fun toggle_template_on_listing_rejects_foreign_listing() {
         foreign_listing_id,
     );
 
-    abort EAssertFailure
+    abort
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::ETemplateNotFound)]
@@ -3290,7 +3289,7 @@ fun toggle_template_on_listing_rejects_foreign_template() {
         listing_id,
     );
 
-    abort EAssertFailure
+    abort
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::ETemplateNotFound)]
@@ -3326,7 +3325,7 @@ fun toggle_template_on_listing_rejects_unknown_template() {
         listing_id,
     );
 
-    abort EAssertFailure
+    abort
 }
 
 #[test]
@@ -3511,7 +3510,7 @@ fun attach_template_to_listing_rejects_foreign_owner_cap() {
         listing_id,
     );
 
-    abort EAssertFailure
+    abort
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::EListingNotFound)]
@@ -3545,7 +3544,7 @@ fun attach_template_to_listing_rejects_foreign_listing() {
         foreign_listing_id,
     );
 
-    abort EAssertFailure
+    abort
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::ETemplateNotFound)]
@@ -3579,7 +3578,7 @@ fun attach_template_to_listing_rejects_foreign_template() {
         listing_id,
     );
 
-    abort EAssertFailure
+    abort
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::ETemplateNotFound)]
@@ -3615,7 +3614,7 @@ fun attach_template_to_listing_rejects_unknown_template() {
         listing_id,
     );
 
-    abort EAssertFailure
+    abort
 }
 
 #[test]
@@ -3740,7 +3739,7 @@ fun clear_template_from_listing_rejects_foreign_owner_cap() {
         listing_id,
     );
 
-    abort EAssertFailure
+    abort
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::EListingNotFound)]
@@ -3768,7 +3767,7 @@ fun clear_template_from_listing_rejects_foreign_listing() {
         foreign_listing_id,
     );
 
-    abort EAssertFailure
+    abort
 }
 
 #[test]
@@ -3962,7 +3961,7 @@ fun prune_discount_claims_rejects_unexpired_template_even_if_paused() {
         &clock_obj,
     );
 
-    abort EAssertFailure
+    abort
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::ETemplateTooEarly)]
@@ -3985,7 +3984,7 @@ fun claim_discount_ticket_rejects_before_start_time() {
 
     shop::test_claim_discount_ticket(&mut shop, template, &clock_obj, &mut ctx);
 
-    abort EAssertFailure
+    abort
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::ETemplateExpired)]
@@ -4008,7 +4007,7 @@ fun claim_discount_ticket_rejects_after_expiry() {
 
     shop::test_claim_discount_ticket(&mut shop, template, &clock_obj, &mut ctx);
 
-    abort EAssertFailure
+    abort
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::ETemplateInactive)]
@@ -4036,7 +4035,7 @@ fun claim_discount_ticket_rejects_inactive_template() {
 
     shop::test_claim_discount_ticket(&mut shop, template, &clock_obj, &mut ctx);
 
-    abort EAssertFailure
+    abort
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::ETemplateMaxedOut)]
@@ -4058,7 +4057,7 @@ fun claim_discount_ticket_rejects_when_maxed() {
     clock::set_for_testing(&mut clock_obj, 2_000);
     shop::test_claim_discount_ticket(&mut shop, template, &clock_obj, &mut ctx);
 
-    abort EAssertFailure
+    abort
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::EDiscountAlreadyClaimed)]
@@ -4088,7 +4087,7 @@ fun claim_discount_ticket_rejects_duplicate_claim() {
 
     shop::test_claim_discount_ticket(&mut shop, template, &clock_obj, &mut ctx);
 
-    abort EAssertFailure
+    abort
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::EListingNotFound)]
@@ -4122,7 +4121,7 @@ fun claim_discount_ticket_rejects_removed_listing_scope() {
     clock::set_for_testing(&mut clock_obj, 1_000);
     shop::test_claim_discount_ticket(&mut shop, template, &clock_obj, &mut ctx);
 
-    abort EAssertFailure
+    abort
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::EDiscountAlreadyClaimed)]
@@ -4248,7 +4247,7 @@ fun claim_and_buy_rejects_second_claim_after_redeem() {
         test_scenario::ctx(&mut scn),
     );
 
-    abort EAssertFailure
+    abort
 }
 
 #[test]
@@ -4436,7 +4435,7 @@ fun listing_and_template_id_for_address_return_none_when_missing() {
 fun create_shop_rejects_empty_name() {
     let mut ctx = tx_context::new_from_hint(TEST_OWNER, 10001, 0, 0, 0);
     shop::create_shop(b"".to_string(), &mut ctx);
-    abort EAssertFailure
+    abort
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::EListingNotFound)]
@@ -4456,7 +4455,7 @@ fun listing_values_rejects_foreign_shop() {
     );
 
     shop::listing_values(&shop_b, listing_id);
-    abort EAssertFailure
+    abort
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::ETemplateNotFound)]
@@ -4476,7 +4475,7 @@ fun discount_template_values_rejects_foreign_shop() {
     );
 
     shop::discount_template_values(&shop_b, template);
-    abort EAssertFailure
+    abort
 }
 
 #[test]
@@ -4518,7 +4517,7 @@ fun quote_amount_rejects_large_exponent() {
         price,
         shop::test_default_max_confidence_ratio_bps(),
     );
-    abort EAssertFailure
+    abort
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::EShopDisabled)]
@@ -4539,7 +4538,7 @@ fun claim_discount_ticket_rejects_when_shop_disabled() {
     let clock_obj = clock::create_for_testing(&mut ctx);
 
     shop::claim_discount_ticket(&mut shop_obj, template, &clock_obj, &mut ctx);
-    abort EAssertFailure
+    abort
 }
 
 #[test]
@@ -4751,7 +4750,7 @@ fun discount_redemption_rejects_listing_mismatch() {
         test_scenario::ctx(&mut scn),
     );
 
-    abort EAssertFailure
+    abort
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::ETemplateMaxedOut)]
@@ -4856,7 +4855,7 @@ fun discount_template_maxed_out_by_redemption() {
         test_scenario::ctx(&mut scn),
     );
 
-    abort EAssertFailure
+    abort
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::EPythObjectMismatch)]
@@ -4899,7 +4898,7 @@ fun checkout_rejects_price_info_object_from_other_shop() {
         test_scenario::ctx(&mut scn),
     );
 
-    abort EAssertFailure
+    abort
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::EListingNotFound)]
@@ -4936,7 +4935,7 @@ fun checkout_rejects_listing_not_registered_in_shop() {
         test_scenario::ctx(&mut scn),
     );
 
-    abort EAssertFailure
+    abort
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::EPythObjectMismatch)]
@@ -4979,7 +4978,7 @@ fun checkout_rejects_currency_from_other_shop() {
         test_scenario::ctx(&mut scn),
     );
 
-    abort EAssertFailure
+    abort
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::EPriceStatusNotTrading)]
@@ -5041,7 +5040,7 @@ fun price_status_rejects_attestation_before_publish() {
         &clock_obj,
     );
 
-    abort EAssertFailure
+    abort
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::ESpotlightTemplateListingMismatch)]
@@ -5079,7 +5078,7 @@ fun add_item_listing_rejects_spotlight_template_listing_mismatch() {
         &mut ctx,
     );
 
-    abort EAssertFailure
+    abort
 }
 
 #[test]
@@ -5161,7 +5160,7 @@ fun accepted_currency_values_rejects_foreign_shop() {
     let shared_shop_b = take_shared_shop(&scn, shop_b_id);
 
     shop::accepted_currency_values<TestCoin>(&shared_shop_b);
-    abort EAssertFailure
+    abort
 }
 
 #[test]
@@ -5682,7 +5681,7 @@ fun buy_item_rejects_out_of_stock_after_depletion() {
         test_scenario::ctx(&mut scn),
     );
 
-    abort EAssertFailure
+    abort
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::EPythObjectMismatch)]
@@ -5761,7 +5760,7 @@ fun buy_item_rejects_price_info_object_id_mismatch() {
         test_scenario::ctx(&mut scn),
     );
 
-    abort EAssertFailure
+    abort
 }
 
 #[test]
@@ -6032,7 +6031,7 @@ fun buy_item_with_discount_rejects_ticket_owner_mismatch() {
         test_scenario::ctx(&mut scn),
     );
 
-    abort EAssertFailure
+    abort
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::EInsufficientPayment)]
@@ -6082,7 +6081,7 @@ fun buy_item_rejects_insufficient_payment() {
         test_scenario::ctx(&mut scn),
     );
 
-    abort EAssertFailure
+    abort
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::EAcceptedCurrencyMissing)]
@@ -6122,7 +6121,7 @@ fun buy_item_rejects_wrong_coin_type() {
         test_scenario::ctx(&mut scn),
     );
 
-    abort EAssertFailure
+    abort
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::EItemTypeMismatch)]
@@ -6159,7 +6158,7 @@ fun buy_item_rejects_item_type_mismatch() {
         test_scenario::ctx(&mut scn),
     );
 
-    abort EAssertFailure
+    abort
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::EInvalidGuardrailCap)]
@@ -6192,7 +6191,7 @@ fun buy_item_rejects_guardrail_override_above_cap() {
         option::some(0),
     );
 
-    abort EAssertFailure
+    abort
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::EPriceNonPositive)]
@@ -6206,7 +6205,7 @@ fun quote_amount_from_usd_cents_rejects_negative_price() {
         price,
         shop::test_default_max_confidence_ratio_bps(),
     );
-    abort EAssertFailure
+    abort
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::ETemplateInactive)]
@@ -6345,7 +6344,7 @@ fun buy_item_with_discount_rejects_inactive_template() {
         test_scenario::ctx(&mut scn),
     );
 
-    abort EAssertFailure
+    abort
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::EDiscountTicketMismatch)]
@@ -6474,7 +6473,7 @@ fun buy_item_with_discount_rejects_ticket_template_mismatch() {
         test_scenario::ctx(&mut scn),
     );
 
-    abort EAssertFailure
+    abort
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::EDiscountTicketShopMismatch)]
@@ -6621,7 +6620,7 @@ fun buy_item_with_discount_rejects_ticket_shop_mismatch() {
         test_scenario::ctx(&mut scn),
     );
 
-    abort EAssertFailure
+    abort
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::EConfidenceExceedsPrice)]
@@ -6635,7 +6634,7 @@ fun quote_amount_from_usd_cents_rejects_confidence_exceeds_price() {
         price,
         shop::test_default_max_confidence_ratio_bps(),
     );
-    abort EAssertFailure
+    abort
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::EConfidenceIntervalTooWide)]
@@ -6649,7 +6648,7 @@ fun quote_amount_from_usd_cents_rejects_confidence_interval_too_wide() {
         price,
         shop::test_default_max_confidence_ratio_bps(),
     );
-    abort EAssertFailure
+    abort
 }
 
 fun create_test_currency(ctx: &mut tx_context::TxContext): coin_registry::Currency<TestCoin> {
