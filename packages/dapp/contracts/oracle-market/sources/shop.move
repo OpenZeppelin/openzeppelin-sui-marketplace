@@ -2611,16 +2611,6 @@ public fun test_discount_claim_exists(shop: &Shop, template_id: ID, claimer: add
 }
 
 #[test_only]
-public fun test_claim_discount_ticket_inline(
-    shop: &mut Shop,
-    template_id: ID,
-    now_secs: u64,
-    ctx: &mut TxContext,
-): DiscountTicket {
-    shop.claim_discount_ticket_inline(template_id, now_secs, ctx)
-}
-
-#[test_only]
 public fun test_claim_and_buy_with_ids<TItem: store, TCoin>(
     shop: &mut Shop,
     discount_template_id: ID,
