@@ -51,7 +51,8 @@ use sui::table::{Self, Table};
 // - Option types: Option makes optional IDs and optional limits/expiry explicit instead of
 //   sentinel values. Docs: docs/08-listings-receipts.md, docs/10-discounts-tickets.md
 // - Entry vs public functions: PTBs can call `entry` and `public`, while other Move modules can only call
-//   `public`. Prefer `public` for composable helpers and `entry` for PTB-only calls.
+//   `public`. Most state-changing transaction APIs in this module are `public` to maximize package
+//   composition, while quote-oriented endpoints stay `entry` when they are intended for dev-inspect/clients.
 // - Events: event::emit writes typed events for indexers and UIs. Docs: docs/08-advanced.md,
 //   docs/18-data-access.md
 // - TxContext and sender: TxContext is required for object creation and coin splits; ctx.sender()
@@ -66,7 +67,7 @@ use sui::table::{Self, Table};
 //   coin::split and coin::destroy_zero manage payment/change. Docs: docs/05-currencies-oracles.md,
 //   docs/09-currencies-oracles.md, docs/17-ptb-gas.md
 // - Clock and time: clock::Clock is a shared, read-only object with a consensus-set timestamp_ms.
-//   It can only be read via immutable reference in entry functions. This module converts it to
+//   It can only be read via immutable reference in transaction-invoked functions. This module converts it to
 //   seconds for discount windows and oracle freshness; it is not a wall-clock guarantee. Docs:
 //   docs/09-currencies-oracles.md, docs/10-discounts-tickets.md
 // - Oracle objects (Pyth): price feeds are objects (PriceInfoObject) validated by feed_id and object
@@ -660,13 +661,14 @@ public(package) fun new_purchase_completed_event(
 ///
 /// Any address can spin up a shop and receive the corresponding owner capability.
 /// Sui mindset:
-/// - Capability > `msg.sender`: ownership lives in a first-class `ShopOwnerCap`. Entry functions
+/// - Capability > `msg.sender`: ownership lives in a first-class `ShopOwnerCap`. Admin functions
 ///   require the cap, so authority follows the object holder rather than whichever address signs
 ///   the PTB. Solidity relies on `msg.sender` and modifiers; here, capabilities are explicit inputs.
 /// - Shared object composition: the shop is shared, with listings/currencies stored in typed
 ///   table storage and discount templates stored directly in a typed `Table`.
 /// - State stays sharded so PTBs only touch the listing slot/template object they mutate.
-entry fun create_shop(name: String, ctx: &mut TxContext): ID {
+#[allow(lint(self_transfer))]
+public fun create_shop(name: String, ctx: &mut TxContext): ID {
     let owner = ctx.sender();
     let shop = new_shop(name, owner, ctx);
     let shop_id = shop.id.to_inner();
@@ -684,7 +686,7 @@ entry fun create_shop(name: String, ctx: &mut TxContext): ID {
 }
 
 /// Disable a shop permanently (buyer flows will reject new checkouts).
-entry fun disable_shop(shop: &mut Shop, owner_cap: &ShopOwnerCap) {
+public fun disable_shop(shop: &mut Shop, owner_cap: &ShopOwnerCap) {
     assert_owner_cap!(shop, owner_cap);
     shop.disabled = true;
 
@@ -698,7 +700,7 @@ entry fun disable_shop(shop: &mut Shop, owner_cap: &ShopOwnerCap) {
 /// - Access control is explicit: the operator must show the `ShopOwnerCap` rather than relying on
 ///   `ctx.sender()`. Rotating the cap keeps payouts aligned to the current operator.
 /// - Buyers never handle capabilities--checkout remains permissionless against the shared `Shop`.
-entry fun update_shop_owner(shop: &mut Shop, owner_cap: &ShopOwnerCap, new_owner: address) {
+public fun update_shop_owner(shop: &mut Shop, owner_cap: &ShopOwnerCap, new_owner: address) {
     assert_owner_cap!(shop, owner_cap);
 
     shop.owner = new_owner;
@@ -797,7 +799,7 @@ fun add_item_listing_with_discount_template_core<T: store>(
 }
 
 /// Adds a listing and returns the created listing ID.
-entry fun add_item_listing<T: store>(
+public fun add_item_listing<T: store>(
     shop: &mut Shop,
     owner_cap: &ShopOwnerCap,
     name: String,
@@ -820,7 +822,7 @@ entry fun add_item_listing<T: store>(
 ///
 /// This is useful when callers want a listing-specific template without requiring a pre-existing
 /// listing ID. The new template is automatically attached as the listing's spotlight template.
-entry fun add_item_listing_with_discount_template<T: store>(
+public fun add_item_listing_with_discount_template<T: store>(
     shop: &mut Shop,
     owner_cap: &ShopOwnerCap,
     name: String,
@@ -856,7 +858,7 @@ entry fun add_item_listing_with_discount_template<T: store>(
 }
 
 /// Update the inventory count for a listing (0 inventory to pause selling).
-entry fun update_item_listing_stock(
+public fun update_item_listing_stock(
     shop: &mut Shop,
     owner_cap: &ShopOwnerCap,
     listing_id: ID,
@@ -874,7 +876,7 @@ entry fun update_item_listing_stock(
 ///
 /// This delists by removing the listing entry from `Shop.listings`.
 /// Listings with any active listing-bound templates must pause those templates first.
-entry fun remove_item_listing(shop: &mut Shop, owner_cap: &ShopOwnerCap, listing_id: ID) {
+public fun remove_item_listing(shop: &mut Shop, owner_cap: &ShopOwnerCap, listing_id: ID) {
     assert_owner_cap!(shop, owner_cap);
     assert!(!shop.has_active_listing_bound_templates(listing_id), EListingHasActiveTemplates);
     let _listing = shop.listings.remove(listing_id);
@@ -902,7 +904,7 @@ entry fun remove_item_listing(shop: &mut Shop, owner_cap: &ShopOwnerCap, listing
 /// - Sellers can optionally tighten oracle guardrails per currency (`max_price_age_secs_cap`,
 ///   `max_confidence_ratio_bps_cap`, `max_price_status_lag_secs_cap`). Buyers may only tighten
 ///   `max_price_age_secs`/`max_confidence_ratio_bps` further--never loosen.
-entry fun add_accepted_currency<TCoin>(
+public fun add_accepted_currency<TCoin>(
     shop: &mut Shop,
     owner_cap: &ShopOwnerCap,
     currency: &coin_registry::Currency<TCoin>,
@@ -950,7 +952,7 @@ entry fun add_accepted_currency<TCoin>(
 }
 
 /// Deregister an accepted coin type.
-entry fun remove_accepted_currency<TCoin>(shop: &mut Shop, owner_cap: &ShopOwnerCap) {
+public fun remove_accepted_currency<TCoin>(shop: &mut Shop, owner_cap: &ShopOwnerCap) {
     assert_owner_cap!(shop, owner_cap);
     let coin_type = currency_type<TCoin>();
     let accepted_currency = shop.remove_registered_accepted_currency(coin_type);
@@ -998,7 +1000,7 @@ fun create_discount_template_core(
 /// Create a discount template anchored under the shop.
 ///
 /// Templates are stored in the shop's `discount_templates: Table<ID, DiscountTemplate>` collection.
-/// Admin entry points enforce `ShopOwnerCap` checks when creating/updating/toggling templates, and
+/// Admin functions enforce `ShopOwnerCap` checks when creating/updating/toggling templates, and
 /// templates remain addressable by `ID` for UIs. Claims are tracked in each template's
 /// `claims_by_claimer: Table<address, bool>` map to enforce one-claim-per-address. Callers send primitive args
 /// (`rule_kind` of `0 = fixed` or `1 = percent`), but we immediately convert them into the strongly
@@ -1013,7 +1015,7 @@ fun create_discount_template_core(
 /// - Time windows and limits are stored on-chain and later checked against the shared `Clock`
 ///   (timestamp_ms -> seconds). On Sui, time is an explicit input object; on EVM, `block.timestamp`
 ///   is global state available to view/read-only calls but can drift within protocol bounds.
-entry fun create_discount_template(
+public fun create_discount_template(
     shop: &mut Shop,
     owner_cap: &ShopOwnerCap,
     applies_to_listing: Option<ID>,
@@ -1047,7 +1049,7 @@ entry fun create_discount_template(
 /// For `Fixed` discounts the `rule_value` remains in USD cents.
 /// Updates are only allowed before any tickets are issued or redeemed and before the template is
 /// finished (expired or capped), so claim accounting cannot be retroactively changed.
-entry fun update_discount_template(
+public fun update_discount_template(
     shop: &mut Shop,
     owner_cap: &ShopOwnerCap,
     discount_template_id: ID,
@@ -1082,7 +1084,7 @@ entry fun update_discount_template(
 
 /// Quickly enable/disable a coupon without deleting it.
 /// Listing-scoped templates also update shop-level active counters used by delist checks.
-entry fun toggle_discount_template(
+public fun toggle_discount_template(
     shop: &mut Shop,
     owner_cap: &ShopOwnerCap,
     discount_template_id: ID,
@@ -1108,7 +1110,7 @@ entry fun toggle_discount_template(
 }
 
 /// Surface a template alongside a listing so UIs can highlight the promotion.
-entry fun attach_template_to_listing(
+public fun attach_template_to_listing(
     shop: &mut Shop,
     owner_cap: &ShopOwnerCap,
     discount_template_id: ID,
@@ -1127,7 +1129,7 @@ entry fun attach_template_to_listing(
 }
 
 /// Remove the promotion banner from a listing.
-entry fun clear_template_from_listing(shop: &mut Shop, owner_cap: &ShopOwnerCap, listing_id: ID) {
+public fun clear_template_from_listing(shop: &mut Shop, owner_cap: &ShopOwnerCap, listing_id: ID) {
     assert_owner_cap!(shop, owner_cap);
     let item_listing = shop.borrow_listing_mut(listing_id);
     item_listing.spotlight_discount_template_id = option::none();
@@ -1138,7 +1140,7 @@ entry fun clear_template_from_listing(shop: &mut Shop, owner_cap: &ShopOwnerCap,
 /// Sui mindset:
 /// - Discount tickets are owned objects rather than balances in contract storage, so callers can
 ///   compose claim + checkout. Use `claim_and_buy_item_with_discount` to mint and spend in one
-///   transaction, or call this entry to mint a ticket that the wallet can redeem later.
+///   transaction, or call this function to mint a ticket that the wallet can redeem later.
 /// - Per-wallet claim limits are enforced by writing the claimer address into the template's
 ///   `claims_by_claimer` table entry stored under `Shop.discount_templates`. Each claim increments
 ///   template counters and writes a claim marker, so it mutates the shared `Shop` path for that
@@ -1152,7 +1154,8 @@ entry fun clear_template_from_listing(shop: &mut Shop, owner_cap: &ShopOwnerCap,
 ///   ticket is moved to another address, it cannot be redeemed by the recipient. In EVM you might
 ///   airdrop ERC-1155 coupons; here the object identity plus `ctx.sender()` check guarantee
 ///   single-claimer semantics without extra storage.
-entry fun claim_discount_ticket(
+#[allow(lint(self_transfer))]
+public fun claim_discount_ticket(
     shop: &mut Shop,
     discount_template_id: ID,
     clock: &clock::Clock,
@@ -1224,7 +1227,7 @@ fun claim_discount_ticket_with_event(
 /// Remove recorded claim markers for a template that is no longer serving new tickets.
 /// Pruning is only allowed once the template is irrevocably finished (expired or maxed out)
 /// so that a pause cannot be used to bypass the one-claim-per-address guarantee.
-entry fun prune_discount_claims(
+public fun prune_discount_claims(
     shop: &mut Shop,
     owner_cap: &ShopOwnerCap,
     discount_template_id: ID,
@@ -1257,7 +1260,7 @@ entry fun prune_discount_claims(
 /// - Compared to EVM: no `approve/transferFrom` race windows, no reliance on global stateful
 ///   oracles, and refunds happen in-line without reentrancy hooks because coin transfers are moves
 ///   of owned resources, not external calls.
-entry fun buy_item<TItem: store, TCoin>(
+public fun buy_item<TItem: store, TCoin>(
     shop: &mut Shop,
     price_info_object: &price_info::PriceInfoObject,
     payment: coin::Coin<TCoin>,
@@ -1306,7 +1309,7 @@ entry fun buy_item<TItem: store, TCoin>(
 /// - Oracle guardrails remain caller-tunable; pass `none` to use defaults.
 /// - In EVM you might check a Merkle root or signature each time; here the coupon object plus
 ///   template counters provide the proof and rate-limiting without bespoke off-chain infra.
-entry fun buy_item_with_discount<TItem: store, TCoin>(
+public fun buy_item_with_discount<TItem: store, TCoin>(
     shop: &mut Shop,
     discount_template_id: ID,
     discount_ticket: DiscountTicket,
@@ -1380,7 +1383,7 @@ entry fun buy_item_with_discount<TItem: store, TCoin>(
 /// - This pattern highlights Sui's composability: objects can be created, used, and destroyed in a
 ///   single PTB without extra approvals or intermediate transactions--something Solidity flows often
 ///   approximate with meta-transactions or batching routers.
-entry fun claim_and_buy_item_with_discount<TItem: store, TCoin>(
+public fun claim_and_buy_item_with_discount<TItem: store, TCoin>(
     shop: &mut Shop,
     discount_template_id: ID,
     price_info_object: &price_info::PriceInfoObject,
@@ -2536,6 +2539,8 @@ public(package) fun discount_claim_exists(shop: &Shop, template_id: ID, claimer:
 }
 
 /// Quotes the coin amount for a price info object with guardrails.
+/// This remains `entry` (not `public`) so callers use dev-inspect/client quote flows
+/// instead of coupling on-chain package logic to a quote helper.
 entry fun quote_amount_for_price_info_object<TCoin>(
     shop: &Shop,
     price_info_object: &price_info::PriceInfoObject,

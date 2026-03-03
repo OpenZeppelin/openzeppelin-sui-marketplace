@@ -510,12 +510,20 @@ fun two_shop_and_owner_cap_pairs_from_tx_ids(
     }
 }
 
-/// Asserts the latest event of type `T` matches `expected_event`.
+/// Asserts that `expected_event` of type `T` was emitted.
 macro fun assert_emitted<$T>($expected_event: $T) {
     let events = event::events_by_type<$T>();
-    assert!(events.length() > 0);
-    let expected_event = $expected_event;
-    assert!(events.any!(|event| event == expected_event));
+    if (events.length() == 0) {
+        std::debug::print(&b"Assertion failed. No events emitted.".to_string());
+        abort
+    };
+    let emitted = events.any!(|event| event == $expected_event);
+    if (!emitted) {
+        std::debug::print(&b"Assertion failed. Different events emitted:".to_string());
+        std::debug::print(&events);
+        std::debug::print(&b"No matching events".to_string());
+        abort
+    };
 }
 
 /// Asserts that one event of type `T` was emitted and matches `expected_event`.

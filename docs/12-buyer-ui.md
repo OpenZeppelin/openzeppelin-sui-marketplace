@@ -76,10 +76,10 @@ pnpm ui dev
 5. `packages/ui/src/app/hooks/useShopDashboardData.tsx` (shared vs owned reads)
 6. PTB builder definition: `packages/domain/core/src/flows/buy.ts` (buildBuyTransaction)
 
-**Code spotlight: buy entry points infer currency from `TCoin`**
+**Code spotlight: buy public functions infer currency from `TCoin`**
 `packages/dapp/contracts/oracle-market/sources/shop.move`
 ```move
-entry fun buy_item<TItem: store, TCoin>(
+public fun buy_item<TItem: store, TCoin>(
   shop: &mut Shop,
   price_info_object: &price_info::PriceInfoObject,
   payment: coin::Coin<TCoin>,

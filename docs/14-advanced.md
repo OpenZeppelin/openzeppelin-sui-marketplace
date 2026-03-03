@@ -31,15 +31,16 @@ pnpm script buyer:buy --help
 ```
 
 ## 4. EVM -> Sui translation
-1. **Single-threaded storage -> object-level parallelism**: shared objects lock independently. Listings and accepted currencies are table entries under the shared `Shop`, while discount templates remain standalone shared objects. See `Shop`, `ItemListing`, and `DiscountTemplate` in `packages/dapp/contracts/oracle-market/sources/shop.move`.
+1. **Single-threaded storage -> object-level parallelism**: shared objects lock independently. Listings, accepted currencies, and discount templates are table entries under the shared `Shop`. See `Shop`, `ItemListing`, and `DiscountTemplate` in `packages/dapp/contracts/oracle-market/sources/shop.move`.
 2. **Proxy upgrades -> new package IDs**: upgrades publish a new package; callers opt into new IDs. See `packages/dapp/contracts/oracle-market/Move.toml` and `packages/dapp/src/scripts/contracts/publish.ts` for artifacts.
 3. **Blocks -> object DAG**: each object records the last transaction digest that mutated it, giving you causal history per object instead of global block history.
 
 ## 5. Concept deep dive: Move execution surface
 - **Entry vs public functions**: PTBs can call `entry` functions; other Move modules can call
-  `public` functions. Keep `entry` as the transaction surface and route into `public` or private
-  helpers for reuse.
-  Code: `packages/dapp/contracts/oracle-market/sources/shop.move` (`create_shop`, `quote_amount_for_price_info_object`)
+  `public` functions. Most mutating APIs in this module are plain `public` for maximum
+  composability, and `quote_amount_for_price_info_object` remains `entry` for dev-inspect/client
+  quote flows.
+  Code: `packages/dapp/contracts/oracle-market/sources/shop.move` (`create_shop`, `buy_item`, `quote_amount_for_price_info_object`)
 - **PTB limits**: a PTB can include up to 1,024 commands, which shapes how much work you can bundle
   into a single transaction. This matters most when you try to batch “admin seeding” or enumerate
   many dynamic-field children in one go.
@@ -107,7 +108,7 @@ function buy(uint256 listingId, address payToken) external {
 ```
 ```move
 // Move (actual shape)
-entry fun buy_item<TItem: store, TCoin>(
+public fun buy_item<TItem: store, TCoin>(
   shop: &mut Shop,
   price_info: &price_info::PriceInfoObject,
   payment_coin: coin::Coin<TCoin>,

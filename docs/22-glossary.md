@@ -5,7 +5,7 @@
 1. **Object**: On-chain data with an ID. Objects can be owned or shared. See `packages/dapp/contracts/oracle-market/sources/shop.move`.
 2. **Owned object**: An object tied to an address; transfers are explicit. Example: `ShopOwnerCap`.
 3. **Shared object**: Mutable through consensus by anyone who includes it in a transaction, but
-   module checks still decide what can change. Example: `Shop` and `DiscountTemplate`.
+   module checks still decide what can change. Example: `Shop`.
 4. **Capability**: An owned object that proves authority. Example: `ShopOwnerCap`.
 5. **Dynamic field**: A key-value table attached to an object. Used directly for claim markers, and indirectly under `Table` for listing/currency entries under `Shop`.
 6. **PTB (Programmable Transaction Block)**: A multi-call transaction that sequences Move calls. See `packages/domain/core/src/flows/buy.ts`.
@@ -15,7 +15,7 @@
 10. **TypeName / type tag**: On-chain representation of a Move type used for typed listings and coin types.
 11. **Ability**: A keyword that describes how a type can be stored and moved (`key`, `store`, `copy`, `drop`).
 12. **TxContext**: Transaction context passed to entry functions for object creation and coin splits.
-13. **Entry function**: A Move function callable by a transaction (PTB). It can be read-only or mutating.
+13. **Entry function**: A Move function callable by a transaction (PTB).
 14. **Publisher**: A publish-time object created by `init` that identifies the package publisher.
 15. **Address-owned object**: An object owned by a specific address; only that address can use it in a transaction.
 16. **Object-owned object**: An object owned by another object (common for dynamic-field children).

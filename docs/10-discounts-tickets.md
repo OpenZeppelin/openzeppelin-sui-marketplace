@@ -30,8 +30,8 @@ pnpm script buyer:discount-ticket:list
 ```
 
 ## 4. EVM -> Sui translation
-1. **Coupon codes -> template objects**: templates are shared objects attached to the shop via markers. See `DiscountTemplate` and `create_discount_template` in `packages/dapp/contracts/oracle-market/sources/shop.move`.
-2. **Allowlist of claimed addresses -> dynamic fields**: per-claimer `DiscountClaim` objects live under each template. See `DiscountClaim` and `claim_discount_ticket` in `packages/dapp/contracts/oracle-market/sources/shop.move`.
+1. **Coupon codes -> template records in shop storage**: templates are stored under the shared `Shop` in `discount_templates: Table<ID, DiscountTemplate>`. See `DiscountTemplate` and `create_discount_template` in `packages/dapp/contracts/oracle-market/sources/shop.move`.
+2. **Allowlist of claimed addresses -> claim-marker table**: each template tracks claimed addresses in `claims_by_claimer: Table<address, bool>`. See `DiscountTemplate` and `claim_discount_ticket` in `packages/dapp/contracts/oracle-market/sources/shop.move`.
 3. **Redeem with a receipt -> redeem with an owned ticket**: a `DiscountTicket` is an owned object that is burned on redemption. See `buy_item_with_discount` in `packages/dapp/contracts/oracle-market/sources/shop.move`.
 
 ## 5. Concept deep dive: discount lifecycle mechanics
@@ -39,10 +39,10 @@ pnpm script buyer:discount-ticket:list
   to `buy_item_with_discount` consumes it, which enforces single-use redemption without extra
   storage or signatures. This is the Move-native way to model a coupon that cannot be reused.
   Code: `packages/dapp/contracts/oracle-market/sources/shop.move` (`DiscountTicket`, `buy_item_with_discount`)
-- **Dynamic field claims**: each claimer gets a `DiscountClaim` child under the template. This
-  prevents multiple claims per wallet without locking the whole shop, and it keeps the one-claim
-  rule entirely on-chain.
-  Code: `packages/dapp/contracts/oracle-market/sources/shop.move` (`claim_discount_ticket`, `DiscountClaim`)
+- **Claim-marker table**: each claimer address is tracked in `claims_by_claimer` under the
+  template. This prevents multiple claims per wallet without locking the whole shop, and it keeps
+  the one-claim rule entirely on-chain.
+  Code: `packages/dapp/contracts/oracle-market/sources/shop.move` (`claim_discount_ticket`, `claims_by_claimer`)
 - **Schedules and scoping**: `starts_at` is required, while `expires_at` and `max_redemptions` are
   optional. Templates can also be scoped to a specific listing via `applies_to_listing`.
   Code: `packages/dapp/contracts/oracle-market/sources/shop.move` (`DiscountTemplate` fields)
@@ -63,10 +63,10 @@ pnpm script buyer:discount-ticket:list
 4. `packages/dapp/src/scripts/buyer/discount-ticket-claim.ts` (script)
 5. PTB builder definition: `packages/domain/core/src/ptb/discount-template.ts` (buildCreateDiscountTemplateTransaction)
 
-**Code spotlight: create a shared DiscountTemplate**
+**Code spotlight: create a DiscountTemplate under a Shop**
 `packages/dapp/contracts/oracle-market/sources/shop.move`
 ```move
-entry fun create_discount_template(
+public fun create_discount_template(
   shop: &mut Shop,
   owner_cap: &ShopOwnerCap,
   applies_to_listing: Option<ID>,
@@ -78,7 +78,7 @@ entry fun create_discount_template(
   ctx: &mut TxContext,
 ) {
   assert_owner_cap!(shop, owner_cap);
-  let (discount_template, discount_template_id) = shop.create_discount_template_core(
+  let discount_template_id = shop.create_discount_template_core(
     applies_to_listing,
     rule_kind,
     rule_value,
@@ -87,28 +87,29 @@ entry fun create_discount_template(
     max_redemptions,
     ctx,
   );
-  transfer::share_object(discount_template);
-  let shop_id = shop.id.to_inner();
-  event::emit(DiscountTemplateCreatedEvent {
-    shop_id,
-    discount_template_id,
-  });
+  event::emit(
+    new_discount_template_created_event(
+      shop.id.to_inner(),
+      discount_template_id,
+    ),
+  );
 }
 ```
 
 **Code spotlight: claim a single-use ticket**
 `packages/dapp/contracts/oracle-market/sources/shop.move`
 ```move
-entry fun claim_discount_ticket(
-  shop: &Shop,
-  discount_template: &mut DiscountTemplate,
+public fun claim_discount_ticket(
+  shop: &mut Shop,
+  discount_template_id: ID,
   clock: &clock::Clock,
   ctx: &mut TxContext,
-): () {
+) {
   assert_shop_active!(shop);
-  assert_template_matches_shop!(shop, discount_template);
   let now_secs = now_secs(clock);
-  let (discount_ticket, claimer) = discount_template.claim_discount_ticket_with_event(
+  let claimer = ctx.sender();
+  let discount_ticket = shop.claim_discount_ticket_with_event(
+    discount_template_id,
     now_secs,
     ctx,
   );
