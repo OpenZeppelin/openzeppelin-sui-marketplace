@@ -38,8 +38,7 @@ pnpm script buyer:buy --help
 ## 5. Concept deep dive: Move execution surface
 - **Entry vs public functions**: PTBs can call `entry` functions; other Move modules can call
   `public` functions. Most mutating APIs in this module are plain `public` for maximum
-  composability, and `quote_amount_for_price_info_object` remains `entry` for dev-inspect/client
-  quote flows.
+  composability, and `quote_amount_for_price_info_object`.
   Code: `packages/dapp/contracts/oracle-market/sources/shop.move` (`create_shop`, `buy_item`, `quote_amount_for_price_info_object`)
 - **PTB limits**: a PTB can include up to 1,024 commands, which shapes how much work you can bundle
   into a single transaction. This matters most when you try to batch “admin seeding” or enumerate
