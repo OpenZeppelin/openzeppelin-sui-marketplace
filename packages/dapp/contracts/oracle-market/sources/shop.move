@@ -2717,11 +2717,6 @@ public fun test_add_item_listing_with_discount_template_local<T: store>(
 }
 
 #[test_only]
-public fun test_listing_values_local(shop: &Shop, listing_id: ID): ListingValues {
-    shop.listing_values(listing_id)
-}
-
-#[test_only]
 public fun test_remove_listing(shop: &mut Shop, listing_id: ID) {
     if (shop.listing_exists(listing_id)) {
         let _listing = shop.listings.remove(listing_id);
