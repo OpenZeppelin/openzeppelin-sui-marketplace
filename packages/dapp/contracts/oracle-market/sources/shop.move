@@ -1128,7 +1128,7 @@ entry fun claim_discount_ticket(
     discount_template_id: ID,
     clock: &clock::Clock,
     ctx: &mut TxContext,
-): () {
+) {
     assert_shop_active!(shop);
 
     let now_secs = now_secs(clock);
@@ -2616,8 +2616,8 @@ public fun test_claim_discount_ticket(
     template_id: ID,
     clock: &clock::Clock,
     ctx: &mut TxContext,
-): () {
-    shop.claim_discount_ticket(template_id, clock, ctx)
+) {
+    shop.claim_discount_ticket(template_id, clock, ctx);
 }
 
 #[test_only]
