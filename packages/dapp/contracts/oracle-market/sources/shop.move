@@ -347,6 +347,9 @@ public struct AcceptedCurrencyValues has copy, drop {
 }
 
 /// Discount template fields returned for read-only clients.
+/// This view struct intentionally excludes internal claim-marker storage
+/// (`DiscountTemplate.claims_by_claimer: Table<address, bool>`), which is non-copyable and
+/// should not be exposed through read APIs.
 public struct DiscountTemplateValues has copy, drop {
     shop_id: ID,
     applies_to_listing: Option<ID>,
@@ -843,10 +846,12 @@ entry fun add_item_listing_with_discount_template<T: store>(
         ctx,
     );
 
-    event::emit(new_discount_template_created_event(
-        shop.id.to_inner(),
-        discount_template_id,
-    ));
+    event::emit(
+        new_discount_template_created_event(
+            shop.id.to_inner(),
+            discount_template_id,
+        ),
+    );
     (listing_id, discount_template_id)
 }
 
@@ -1030,10 +1035,12 @@ entry fun create_discount_template(
         ctx,
     );
 
-    event::emit(new_discount_template_created_event(
-        shop.id.to_inner(),
-        discount_template_id,
-    ));
+    event::emit(
+        new_discount_template_created_event(
+            shop.id.to_inner(),
+            discount_template_id,
+        ),
+    );
 }
 
 /// Update mutable fields on a template (schedule, rule, limits).
@@ -1775,6 +1782,22 @@ fun build_discount_rule(rule_kind: DiscountRuleKind, rule_value: u64): DiscountR
     }
 }
 
+/// Returns the encoded rule kind (`0 = fixed`, `1 = percent`) for a `DiscountRule`.
+public(package) fun discount_rule_kind(rule: DiscountRule): u8 {
+    match (rule) {
+        DiscountRule::Fixed { amount_cents: _ } => 0,
+        DiscountRule::Percent { bps: _ } => 1,
+    }
+}
+
+/// Returns the numeric payload (`amount_cents` or `bps`) for a `DiscountRule`.
+public(package) fun discount_rule_value(rule: DiscountRule): u64 {
+    match (rule) {
+        DiscountRule::Fixed { amount_cents } => amount_cents,
+        DiscountRule::Percent { bps } => bps as u64,
+    }
+}
+
 /// Normalize consensus clock milliseconds to seconds once at the boundary.
 /// Pyth stale checks and price timestamps are second-based (`max_age_secs` vs `price::get_timestamp`),
 /// so keeping module guardrails in seconds avoids mixed-unit errors.
@@ -2400,11 +2423,12 @@ public fun accepted_currency_values_max_price_status_lag_secs_cap(
     currency_values.max_price_status_lag_secs_cap
 }
 
-/// Returns discount template fields after validating shop membership.
-public fun discount_template_values(shop: &Shop, template_id: ID): DiscountTemplateValues {
-    let template = shop.borrow_discount_template(template_id);
+fun build_discount_template_values(
+    shop_id: ID,
+    template: &DiscountTemplate,
+): DiscountTemplateValues {
     DiscountTemplateValues {
-        shop_id: shop.id.to_inner(),
+        shop_id,
         applies_to_listing: template.applies_to_listing,
         rule: template.rule,
         starts_at: template.starts_at,
@@ -2414,6 +2438,14 @@ public fun discount_template_values(shop: &Shop, template_id: ID): DiscountTempl
         redemptions: template.redemptions,
         active: template.active,
     }
+}
+
+/// Returns discount template fields after validating shop membership.
+/// The returned value is a copyable projection, not the full `DiscountTemplate`, because the
+/// template stores internal `Table` state used for one-claim-per-address enforcement.
+public fun discount_template_values(shop: &Shop, template_id: ID): DiscountTemplateValues {
+    let template = shop.borrow_discount_template(template_id);
+    build_discount_template_values(shop.id.to_inner(), template)
 }
 
 /// Returns `DiscountTemplateValues.shop_id`.
@@ -2495,6 +2527,12 @@ public fun discount_ticket_values_listing_id(ticket_values: &DiscountTicketValue
 /// Returns `DiscountTicketValues.claimer`.
 public fun discount_ticket_values_claimer(ticket_values: &DiscountTicketValues): address {
     ticket_values.claimer
+}
+
+/// Returns whether `claimer` has an active claim marker for `template_id`.
+public(package) fun discount_claim_exists(shop: &Shop, template_id: ID, claimer: address): bool {
+    let template = shop.borrow_discount_template(template_id);
+    template.claims_by_claimer.contains(claimer)
 }
 
 /// Quotes the coin amount for a price info object with guardrails.
@@ -2580,15 +2618,6 @@ public fun shop_owner_cap_shop_id(owner_cap: &ShopOwnerCap): ID {
 // === #[test_only] API ===
 
 #[test_only]
-public struct TestPublisherOTW has drop {}
-
-#[test_only]
-/// Claims a `package::Publisher` for this module in tests.
-public fun test_claim_publisher(ctx: &mut TxContext): package::Publisher {
-    package::test_claim<TestPublisherOTW>(TestPublisherOTW {}, ctx)
-}
-
-#[test_only]
 /// Runs module initialization in tests.
 public fun test_init(ctx: &mut TxContext) {
     init(SHOP {}, ctx)
@@ -2627,62 +2656,14 @@ public fun test_create_discount_template_local(
         ctx,
     );
 
-    event::emit(new_discount_template_created_event(
-        shop.id.to_inner(),
-        template_id,
-    ));
+    event::emit(
+        new_discount_template_created_event(
+            shop.id.to_inner(),
+            template_id,
+        ),
+    );
 
     template_id
-}
-
-#[test_only]
-/// Returns whether `claimer` has an active claim marker for `template_id`.
-public fun test_discount_claim_exists(shop: &Shop, template_id: ID, claimer: address): bool {
-    let template = shop.borrow_discount_template(template_id);
-    template.claims_by_claimer.contains(claimer)
-}
-
-#[test_only]
-/// Claims and redeems a discount in one local call, returning the consumed ticket ID.
-public fun test_claim_and_buy_with_ids<TItem: store, TCoin>(
-    shop: &mut Shop,
-    discount_template_id: ID,
-    price_info_object: &price_info::PriceInfoObject,
-    payment: coin::Coin<TCoin>,
-    listing_id: ID,
-    mint_to: address,
-    refund_extra_to: address,
-    max_price_age_secs: Option<u64>,
-    max_confidence_ratio_bps: Option<u16>,
-    clock: &clock::Clock,
-    ctx: &mut TxContext,
-): ID {
-    let now = now_secs(clock);
-    let discount_ticket = shop.claim_discount_ticket_with_event(discount_template_id, now, ctx);
-    let discount_id = discount_ticket.id.to_inner();
-    shop.buy_item_with_discount<TItem, TCoin>(
-        discount_template_id,
-        discount_ticket,
-        price_info_object,
-        payment,
-        listing_id,
-        mint_to,
-        refund_extra_to,
-        max_price_age_secs,
-        max_confidence_ratio_bps,
-        clock,
-        ctx,
-    );
-    discount_id
-}
-
-#[test_only]
-/// Converts a `DiscountRule` into a `(rule_kind, rule_value)` tuple for assertions.
-public fun test_discount_rule_values(rule: DiscountRule): (u8, u64) {
-    match (rule) {
-        DiscountRule::Fixed { amount_cents } => (0, amount_cents),
-        DiscountRule::Percent { bps } => (1, bps as u64),
-    }
 }
 
 #[test_only]
