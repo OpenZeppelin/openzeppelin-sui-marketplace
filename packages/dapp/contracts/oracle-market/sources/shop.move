@@ -89,11 +89,15 @@ const EZeroStock: vector<u8> = b"zero stock";
 #[error]
 const ETemplateWindow: vector<u8> = b"invalid template window";
 #[error]
+const ETestCleanupInvalidState: vector<u8> = b"invalid test cleanup state";
+#[error]
 const ETemplateNotFound: vector<u8> = b"template not found";
 #[error]
 const EListingNotFound: vector<u8> = b"listing not found";
 #[error]
 const EListingHasActiveTemplates: vector<u8> = b"listing has active templates";
+#[error]
+const EListingTemplateCountUnderflow: vector<u8> = b"listing template count underflow";
 #[error]
 const EInvalidRuleKind: vector<u8> = b"invalid rule kind";
 #[error]
@@ -490,6 +494,7 @@ public struct PurchaseCompletedEvent has copy, drop {
     discounted_price_usd_cents: u64,
 }
 
+/// Builds a `ShopCreatedEvent` payload.
 public(package) fun new_shop_created_event(shop_id: ID, shop_owner_cap_id: ID): ShopCreatedEvent {
     ShopCreatedEvent {
         shop_id,
@@ -497,6 +502,7 @@ public(package) fun new_shop_created_event(shop_id: ID, shop_owner_cap_id: ID): 
     }
 }
 
+/// Builds a `ShopOwnerUpdatedEvent` payload.
 public(package) fun new_shop_owner_updated_event(
     shop_id: ID,
     shop_owner_cap_id: ID,
@@ -507,6 +513,7 @@ public(package) fun new_shop_owner_updated_event(
     }
 }
 
+/// Builds a `ShopDisabledEvent` payload.
 public(package) fun new_shop_disabled_event(shop_id: ID, shop_owner_cap_id: ID): ShopDisabledEvent {
     ShopDisabledEvent {
         shop_id,
@@ -514,6 +521,7 @@ public(package) fun new_shop_disabled_event(shop_id: ID, shop_owner_cap_id: ID):
     }
 }
 
+/// Builds an `ItemListingAddedEvent` payload.
 public(package) fun new_item_listing_added_event(
     shop_id: ID,
     listing_id: ID,
@@ -524,6 +532,7 @@ public(package) fun new_item_listing_added_event(
     }
 }
 
+/// Builds an `ItemListingStockUpdatedEvent` payload.
 public(package) fun new_item_listing_stock_updated_event(
     shop_id: ID,
     listing_id: ID,
@@ -534,6 +543,7 @@ public(package) fun new_item_listing_stock_updated_event(
     }
 }
 
+/// Builds an `ItemListingRemovedEvent` payload.
 public(package) fun new_item_listing_removed_event(
     shop_id: ID,
     listing_id: ID,
@@ -544,6 +554,7 @@ public(package) fun new_item_listing_removed_event(
     }
 }
 
+/// Builds a `DiscountTemplateCreatedEvent` payload.
 public(package) fun new_discount_template_created_event(
     shop_id: ID,
     discount_template_id: ID,
@@ -554,6 +565,7 @@ public(package) fun new_discount_template_created_event(
     }
 }
 
+/// Builds a `DiscountTemplateUpdatedEvent` payload.
 public(package) fun new_discount_template_updated_event(
     shop_id: ID,
     discount_template_id: ID,
@@ -564,6 +576,7 @@ public(package) fun new_discount_template_updated_event(
     }
 }
 
+/// Builds a `DiscountTemplateToggledEvent` payload.
 public(package) fun new_discount_template_toggled_event(
     shop_id: ID,
     discount_template_id: ID,
@@ -574,6 +587,7 @@ public(package) fun new_discount_template_toggled_event(
     }
 }
 
+/// Builds an `AcceptedCoinAddedEvent` payload.
 public(package) fun new_accepted_coin_added_event(
     shop_id: ID,
     accepted_currency_id: ID,
@@ -584,6 +598,7 @@ public(package) fun new_accepted_coin_added_event(
     }
 }
 
+/// Builds an `AcceptedCoinRemovedEvent` payload.
 public(package) fun new_accepted_coin_removed_event(
     shop_id: ID,
     accepted_currency_id: ID,
@@ -594,6 +609,7 @@ public(package) fun new_accepted_coin_removed_event(
     }
 }
 
+/// Builds a `DiscountClaimedEvent` payload.
 public(package) fun new_discount_claimed_event(shop_id: ID, discount_id: ID): DiscountClaimedEvent {
     DiscountClaimedEvent {
         shop_id,
@@ -601,6 +617,7 @@ public(package) fun new_discount_claimed_event(shop_id: ID, discount_id: ID): Di
     }
 }
 
+/// Builds a `DiscountRedeemedEvent` payload.
 public(package) fun new_discount_redeemed_event(
     shop_id: ID,
     discount_template_id: ID,
@@ -613,6 +630,7 @@ public(package) fun new_discount_redeemed_event(
     }
 }
 
+/// Builds a `PurchaseCompletedEvent` payload.
 public(package) fun new_purchase_completed_event(
     shop_id: ID,
     listing_id: ID,
@@ -647,19 +665,21 @@ public(package) fun new_purchase_completed_event(
 /// - Shared object composition: the shop is shared, with listings/currencies stored in typed
 ///   table storage and discount templates stored directly in a typed `Table`.
 /// - State stays sharded so PTBs only touch the listing slot/template object they mutate.
-entry fun create_shop(name: String, ctx: &mut TxContext) {
+entry fun create_shop(name: String, ctx: &mut TxContext): ID {
     let owner = ctx.sender();
     let shop = new_shop(name, owner, ctx);
+    let shop_id = shop.id.to_inner();
 
     let owner_cap = ShopOwnerCap {
         id: object::new(ctx),
-        shop_id: shop.id.to_inner(),
+        shop_id,
     };
 
-    event::emit(new_shop_created_event(shop.id.to_inner(), owner_cap.id.to_inner()));
+    event::emit(new_shop_created_event(shop_id, owner_cap.id.to_inner()));
 
     transfer::share_object(shop);
     transfer::public_transfer(owner_cap, owner);
+    shop_id
 }
 
 /// Disable a shop permanently (buyer flows will reject new checkouts).
@@ -739,10 +759,6 @@ fun link_listing_spotlight_template(shop: &mut Shop, listing_id: ID, discount_te
     listing.spotlight_discount_template_id = option::some(discount_template_id);
 }
 
-fun emit_discount_template_created_event(shop_id: ID, discount_template_id: ID) {
-    event::emit(new_discount_template_created_event(shop_id, discount_template_id));
-}
-
 fun add_item_listing_with_discount_template_core<T: store>(
     shop: &mut Shop,
     owner_cap: &ShopOwnerCap,
@@ -779,6 +795,7 @@ fun add_item_listing_with_discount_template_core<T: store>(
     (listing_id, discount_template_id)
 }
 
+/// Adds a listing and returns the created listing ID.
 entry fun add_item_listing<T: store>(
     shop: &mut Shop,
     owner_cap: &ShopOwnerCap,
@@ -787,7 +804,7 @@ entry fun add_item_listing<T: store>(
     stock: u64,
     spotlight_discount_template_id: Option<ID>,
     ctx: &mut TxContext,
-) {
+): ID {
     shop.add_item_listing_core<T>(
         owner_cap,
         name,
@@ -795,7 +812,7 @@ entry fun add_item_listing<T: store>(
         stock,
         spotlight_discount_template_id,
         ctx,
-    );
+    )
 }
 
 /// Add an item listing and atomically create a listing-scoped discount template in one transaction.
@@ -814,8 +831,8 @@ entry fun add_item_listing_with_discount_template<T: store>(
     expires_at: Option<u64>,
     max_redemptions: Option<u64>,
     ctx: &mut TxContext,
-) {
-    let (_listing_id, discount_template_id) = shop.add_item_listing_with_discount_template_core<T>(
+): (ID, ID) {
+    let (listing_id, discount_template_id) = shop.add_item_listing_with_discount_template_core<T>(
         owner_cap,
         name,
         base_price_usd_cents,
@@ -828,7 +845,11 @@ entry fun add_item_listing_with_discount_template<T: store>(
         ctx,
     );
 
-    emit_discount_template_created_event(shop.id.to_inner(), discount_template_id);
+    event::emit(new_discount_template_created_event(
+        shop.id.to_inner(),
+        discount_template_id,
+    ));
+    (listing_id, discount_template_id)
 }
 
 /// Update the inventory count for a listing (0 inventory to pause selling).
@@ -1011,7 +1032,10 @@ entry fun create_discount_template(
         ctx,
     );
 
-    emit_discount_template_created_event(shop.id.to_inner(), discount_template_id);
+    event::emit(new_discount_template_created_event(
+        shop.id.to_inner(),
+        discount_template_id,
+    ));
 }
 
 /// Update mutable fields on a template (schedule, rule, limits).
@@ -1557,7 +1581,7 @@ fun increment_active_listing_template_count(shop: &mut Shop, listing_id: ID) {
 
 fun decrement_active_listing_template_count(shop: &mut Shop, listing_id: ID) {
     let listing = shop.borrow_listing_mut(listing_id);
-    assert!(listing.active_bound_template_count > 0, EListingHasActiveTemplates);
+    assert!(listing.active_bound_template_count > 0, EListingTemplateCountUnderflow);
     listing.active_bound_template_count = listing.active_bound_template_count - 1;
 }
 
@@ -1761,7 +1785,8 @@ fun now_secs(clock: &clock::Clock): u64 {
     clock::timestamp_ms(clock) / 1000
 }
 
-fun quote_amount_from_usd_cents(
+/// Converts a USD-cent amount into a quoted coin amount.
+public(package) fun quote_amount_from_usd_cents(
     usd_cents: u64,
     coin_decimals: u8,
     price: price::Price,
@@ -2278,22 +2303,27 @@ public fun listing_values(shop: &Shop, listing_id: ID): ListingValues {
     }
 }
 
+/// Returns `ListingValues.name`.
 public fun listing_values_name(listing_values: &ListingValues): String {
     listing_values.name
 }
 
+/// Returns `ListingValues.base_price_usd_cents`.
 public fun listing_values_base_price_usd_cents(listing_values: &ListingValues): u64 {
     listing_values.base_price_usd_cents
 }
 
+/// Returns `ListingValues.stock`.
 public fun listing_values_stock(listing_values: &ListingValues): u64 {
     listing_values.stock
 }
 
+/// Returns `ListingValues.shop_id`.
 public fun listing_values_shop_id(listing_values: &ListingValues): ID {
     listing_values.shop_id
 }
 
+/// Returns `ListingValues.spotlight_discount_template_id`.
 public fun listing_values_spotlight_discount_template_id(
     listing_values: &ListingValues,
 ): Option<ID> {
@@ -2317,42 +2347,51 @@ public fun accepted_currency_values<TCoin>(shop: &Shop): AcceptedCurrencyValues 
     }
 }
 
+/// Returns `AcceptedCurrencyValues.shop_id`.
 public fun accepted_currency_values_shop_id(currency_values: &AcceptedCurrencyValues): ID {
     currency_values.shop_id
 }
 
+/// Returns `AcceptedCurrencyValues.coin_type`.
 public fun accepted_currency_values_coin_type(currency_values: &AcceptedCurrencyValues): TypeName {
     currency_values.coin_type
 }
 
+/// Returns `AcceptedCurrencyValues.feed_id`.
 public fun accepted_currency_values_feed_id(currency_values: &AcceptedCurrencyValues): vector<u8> {
     currency_values.feed_id
 }
 
+/// Returns `AcceptedCurrencyValues.pyth_object_id`.
 public fun accepted_currency_values_pyth_object_id(currency_values: &AcceptedCurrencyValues): ID {
     currency_values.pyth_object_id
 }
 
+/// Returns `AcceptedCurrencyValues.decimals`.
 public fun accepted_currency_values_decimals(currency_values: &AcceptedCurrencyValues): u8 {
     currency_values.decimals
 }
 
+/// Returns `AcceptedCurrencyValues.symbol`.
 public fun accepted_currency_values_symbol(currency_values: &AcceptedCurrencyValues): String {
     currency_values.symbol
 }
 
+/// Returns `AcceptedCurrencyValues.max_price_age_secs_cap`.
 public fun accepted_currency_values_max_price_age_secs_cap(
     currency_values: &AcceptedCurrencyValues,
 ): u64 {
     currency_values.max_price_age_secs_cap
 }
 
+/// Returns `AcceptedCurrencyValues.max_confidence_ratio_bps_cap`.
 public fun accepted_currency_values_max_confidence_ratio_bps_cap(
     currency_values: &AcceptedCurrencyValues,
 ): u16 {
     currency_values.max_confidence_ratio_bps_cap
 }
 
+/// Returns `AcceptedCurrencyValues.max_price_status_lag_secs_cap`.
 public fun accepted_currency_values_max_price_status_lag_secs_cap(
     currency_values: &AcceptedCurrencyValues,
 ): u64 {
@@ -2375,48 +2414,58 @@ public fun discount_template_values(shop: &Shop, template_id: ID): DiscountTempl
     }
 }
 
+/// Returns `DiscountTemplateValues.shop_id`.
 public fun discount_template_values_shop_id(template_values: &DiscountTemplateValues): ID {
     template_values.shop_id
 }
 
+/// Returns `DiscountTemplateValues.applies_to_listing`.
 public fun discount_template_values_applies_to_listing(
     template_values: &DiscountTemplateValues,
 ): Option<ID> {
     template_values.applies_to_listing
 }
 
+/// Returns `DiscountTemplateValues.rule`.
 public fun discount_template_values_rule(template_values: &DiscountTemplateValues): DiscountRule {
     template_values.rule
 }
 
+/// Returns `DiscountTemplateValues.starts_at`.
 public fun discount_template_values_starts_at(template_values: &DiscountTemplateValues): u64 {
     template_values.starts_at
 }
 
+/// Returns `DiscountTemplateValues.expires_at`.
 public fun discount_template_values_expires_at(
     template_values: &DiscountTemplateValues,
 ): Option<u64> {
     template_values.expires_at
 }
 
+/// Returns `DiscountTemplateValues.max_redemptions`.
 public fun discount_template_values_max_redemptions(
     template_values: &DiscountTemplateValues,
 ): Option<u64> {
     template_values.max_redemptions
 }
 
+/// Returns `DiscountTemplateValues.claims_issued`.
 public fun discount_template_values_claims_issued(template_values: &DiscountTemplateValues): u64 {
     template_values.claims_issued
 }
 
+/// Returns `DiscountTemplateValues.redemptions`.
 public fun discount_template_values_redemptions(template_values: &DiscountTemplateValues): u64 {
     template_values.redemptions
 }
 
+/// Returns `DiscountTemplateValues.active`.
 public fun discount_template_values_active(template_values: &DiscountTemplateValues): bool {
     template_values.active
 }
 
+/// Helper for `discount_ticket_values`.
 public fun discount_ticket_values(ticket: &DiscountTicket): DiscountTicketValues {
     DiscountTicketValues {
         discount_template_id: ticket.discount_template_id,
@@ -2426,18 +2475,22 @@ public fun discount_ticket_values(ticket: &DiscountTicket): DiscountTicketValues
     }
 }
 
+/// Returns `DiscountTicketValues.discount_template_id`.
 public fun discount_ticket_values_discount_template_id(ticket_values: &DiscountTicketValues): ID {
     ticket_values.discount_template_id
 }
 
+/// Returns `DiscountTicketValues.shop_id`.
 public fun discount_ticket_values_shop_id(ticket_values: &DiscountTicketValues): ID {
     ticket_values.shop_id
 }
 
+/// Returns `DiscountTicketValues.listing_id`.
 public fun discount_ticket_values_listing_id(ticket_values: &DiscountTicketValues): Option<ID> {
     ticket_values.listing_id
 }
 
+/// Returns `DiscountTicketValues.claimer`.
 public fun discount_ticket_values_claimer(ticket_values: &DiscountTicketValues): address {
     ticket_values.claimer
 }
@@ -2468,30 +2521,37 @@ entry fun quote_amount_for_price_info_object<TCoin>(
     )
 }
 
+/// Returns `listing_id` from the provided value.
 public fun listing_id(listing: &ItemListing): ID {
     listing.listing_id
 }
 
+/// Returns `shop_id` from the provided value.
 public fun shop_id(shop: &Shop): ID {
     shop.id.to_inner()
 }
 
+/// Returns `shop_owner` from the provided value.
 public fun shop_owner(shop: &Shop): address {
     shop.owner
 }
 
+/// Returns `shop_name` from the provided value.
 public fun shop_name(shop: &Shop): String {
     shop.name
 }
 
+/// Returns `shop_disabled` from the provided value.
 public fun shop_disabled(shop: &Shop): bool {
     shop.disabled
 }
 
+/// Returns `shop_owner_cap_id` from the provided value.
 public fun shop_owner_cap_id(owner_cap: &ShopOwnerCap): ID {
     owner_cap.id.to_inner()
 }
 
+/// Returns `shop_owner_cap_shop_id` from the provided value.
 public fun shop_owner_cap_shop_id(owner_cap: &ShopOwnerCap): ID {
     owner_cap.shop_id
 }
@@ -2502,16 +2562,19 @@ public fun shop_owner_cap_shop_id(owner_cap: &ShopOwnerCap): ID {
 public struct TestPublisherOTW has drop {}
 
 #[test_only]
+/// Claims a `package::Publisher` for this module in tests.
 public fun test_claim_publisher(ctx: &mut TxContext): package::Publisher {
     package::test_claim<TestPublisherOTW>(TestPublisherOTW {}, ctx)
 }
 
 #[test_only]
+/// Runs module initialization in tests.
 public fun test_init(ctx: &mut TxContext) {
     init(SHOP {}, ctx)
 }
 
 #[test_only]
+/// Creates an unshared shop and owner capability pair for local tests.
 public fun test_setup_shop(owner: address, ctx: &mut TxContext): (Shop, ShopOwnerCap) {
     let shop = new_shop(b"Shop".to_string(), owner, ctx);
     let owner_cap = ShopOwnerCap {
@@ -2522,6 +2585,7 @@ public fun test_setup_shop(owner: address, ctx: &mut TxContext): (Shop, ShopOwne
 }
 
 #[test_only]
+/// Creates a discount template in local test state and emits the created event.
 public fun test_create_discount_template_local(
     shop: &mut Shop,
     applies_to_listing: Option<ID>,
@@ -2542,76 +2606,53 @@ public fun test_create_discount_template_local(
         ctx,
     );
 
-    emit_discount_template_created_event(shop.id.to_inner(), template_id);
+    event::emit(new_discount_template_created_event(
+        shop.id.to_inner(),
+        template_id,
+    ));
 
     template_id
 }
 
 #[test_only]
-public fun test_quote_amount_from_usd_cents(
-    usd_cents: u64,
-    coin_decimals: u8,
-    price: price::Price,
-    max_confidence_ratio_bps: u16,
-): u64 {
-    quote_amount_from_usd_cents(
-        usd_cents,
-        coin_decimals,
-        price,
-        max_confidence_ratio_bps,
-    )
-}
-
-#[test_only]
-public fun test_quote_amount_for_price_info_object<TCoin>(
-    shop: &Shop,
-    price_info_object: &price_info::PriceInfoObject,
-    price_usd_cents: u64,
-    max_price_age_secs: Option<u64>,
-    max_confidence_ratio_bps: Option<u16>,
-    clock: &clock::Clock,
-): u64 {
-    shop.quote_amount_for_price_info_object<TCoin>(
-        price_info_object,
-        price_usd_cents,
-        max_price_age_secs,
-        max_confidence_ratio_bps,
-        clock,
-    )
-}
-
-#[test_only]
+/// Returns `DEFAULT_MAX_PRICE_STATUS_LAG_SECS` for assertions.
 public fun test_default_max_price_status_lag_secs(): u64 {
     DEFAULT_MAX_PRICE_STATUS_LAG_SECS
 }
 
 #[test_only]
+/// Asserts that a price status is trading using the module default lag cap.
 public fun test_assert_price_status_trading(price_info_object: &price_info::PriceInfoObject) {
     assert_price_status_trading!(price_info_object, DEFAULT_MAX_PRICE_STATUS_LAG_SECS);
 }
 
 #[test_only]
+/// Returns `DEFAULT_MAX_PRICE_AGE_SECS` for assertions.
 public fun test_default_max_price_age_secs(): u64 {
     DEFAULT_MAX_PRICE_AGE_SECS
 }
 
 #[test_only]
+/// Returns `DEFAULT_MAX_CONFIDENCE_RATIO_BPS` for assertions.
 public fun test_default_max_confidence_ratio_bps(): u16 {
     DEFAULT_MAX_CONFIDENCE_RATIO_BPS
 }
 
 #[test_only]
+/// Returns `MAX_DECIMAL_POWER` for overflow-bound assertions.
 public fun test_max_decimal_power(): u64 {
     MAX_DECIMAL_POWER
 }
 
 #[test_only]
+/// Returns whether `claimer` has an active claim marker for `template_id`.
 public fun test_discount_claim_exists(shop: &Shop, template_id: ID, claimer: address): bool {
     let template = shop.borrow_discount_template(template_id);
     template.claims_by_claimer.contains(claimer)
 }
 
 #[test_only]
+/// Claims and redeems a discount in one local call, returning the consumed ticket ID.
 public fun test_claim_and_buy_with_ids<TItem: store, TCoin>(
     shop: &mut Shop,
     discount_template_id: ID,
@@ -2645,6 +2686,7 @@ public fun test_claim_and_buy_with_ids<TItem: store, TCoin>(
 }
 
 #[test_only]
+/// Converts a `DiscountRule` into a `(rule_kind, rule_value)` tuple for assertions.
 public fun test_discount_rule_values(rule: DiscountRule): (u8, u64) {
     match (rule) {
         DiscountRule::Fixed { amount_cents } => (0, amount_cents),
@@ -2653,86 +2695,28 @@ public fun test_discount_rule_values(rule: DiscountRule): (u8, u64) {
 }
 
 #[test_only]
+/// Applies a percent discount rule to `base_price_usd_cents`.
 public fun test_apply_percent_discount(base_price_usd_cents: u64, bps: u16): u64 {
     let rule = DiscountRule::Percent { bps };
     rule.apply_discount(base_price_usd_cents)
 }
 
 #[test_only]
-public fun test_last_created_id(ctx: &TxContext): ID {
-    tx_context::last_created_object_id(ctx).to_id()
-}
-
-#[test_only]
-public fun test_add_item_listing_local<T: store>(
-    shop: &mut Shop,
-    owner_cap: &ShopOwnerCap,
-    name: String,
-    base_price_usd_cents: u64,
-    stock: u64,
-    spotlight_discount_template_id: Option<ID>,
-    ctx: &mut TxContext,
-): ID {
-    shop.add_item_listing_core<T>(
-        owner_cap,
-        name,
-        base_price_usd_cents,
-        stock,
-        spotlight_discount_template_id,
-        ctx,
-    )
-}
-
-#[test_only]
-public fun test_add_item_listing_with_discount_template_local<T: store>(
-    shop: &mut Shop,
-    owner_cap: &ShopOwnerCap,
-    name: String,
-    base_price_usd_cents: u64,
-    stock: u64,
-    rule_kind: u8,
-    rule_value: u64,
-    starts_at: u64,
-    expires_at: Option<u64>,
-    max_redemptions: Option<u64>,
-    ctx: &mut TxContext,
-): (ID, ID) {
-    let (listing_id, template_id) = shop.add_item_listing_with_discount_template_core<T>(
-        owner_cap,
-        name,
-        base_price_usd_cents,
-        stock,
-        rule_kind,
-        rule_value,
-        starts_at,
-        expires_at,
-        max_redemptions,
-        ctx,
-    );
-
-    emit_discount_template_created_event(shop.id.to_inner(), template_id);
-
-    (listing_id, template_id)
-}
-
-#[test_only]
-public fun test_remove_listing(shop: &mut Shop, listing_id: ID) {
-    if (shop.listing_exists(listing_id)) {
-        let _listing = shop.listings.remove(listing_id);
-    };
-}
-
-#[test_only]
-public fun test_remove_currency_field<TCoin>(shop: &mut Shop) {
-    let coin_type = currency_type<TCoin>();
-    if (shop.accepted_currency_exists(coin_type)) {
-        let _accepted_currency = shop.remove_registered_accepted_currency(coin_type);
-    };
-}
-
-#[test_only]
-public fun test_remove_template(shop: &mut Shop, template_id: ID) {
+/// Removes a discount template from test-owned local state for teardown only.
+/// Production intentionally omits template deletion to preserve historical references and to use
+/// toggle/expiry lifecycle controls instead of destructive state removal.
+public fun test_cleanup_discount_template(shop: &mut Shop, template_id: ID) {
     if (!shop.discount_templates.contains(template_id)) return;
+
+    let template = shop.borrow_discount_template(template_id);
+    // Guard test teardown from hiding inconsistent states: an active listing-scoped template must
+    // still point to a present listing before we decrement active counters.
+    if (template.active) {
+        template.applies_to_listing.do_ref!(|listing_id| {
+            assert!(shop.listings.contains(*listing_id), ETestCleanupInvalidState);
+        });
+    };
+    shop.adjust_active_template_count(template.applies_to_listing, template.active, false);
 
     let template = shop.discount_templates.remove(template_id);
     let DiscountTemplate {
