@@ -2660,11 +2660,6 @@ public fun test_apply_percent_discount(base_price_usd_cents: u64, bps: u16): u64
 }
 
 #[test_only]
-public fun test_discount_ticket_values(ticket: &DiscountTicket): DiscountTicketValues {
-    discount_ticket_values(ticket)
-}
-
-#[test_only]
 public fun test_last_created_id(ctx: &TxContext): ID {
     tx_context::last_created_object_id(ctx).to_id()
 }
