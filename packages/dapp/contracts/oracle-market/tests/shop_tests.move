@@ -53,7 +53,7 @@ const PRIMARY_FEED_ID: vector<u8> =
 const SECONDARY_FEED_ID: vector<u8> =
     x"101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f";
 const SHORT_FEED_ID: vector<u8> = b"SHORT";
-const TEST_DEFAULT_MAX_PRICE_AGE_SECS: u64 = 300;
+const TEST_DEFAULT_MAX_PRICE_AGE_SECS: u64 = 60;
 const TEST_DEFAULT_MAX_CONFIDENCE_RATIO_BPS: u16 = 1_000;
 const TEST_DEFAULT_MAX_PRICE_STATUS_LAG_SECS: u64 = 5;
 const TEST_MAX_DECIMAL_POWER: u64 = 24;
@@ -812,13 +812,13 @@ fun add_accepted_currency_records_currency_and_event() {
     let (shop_id, owner_cap_id) = create_default_shop_and_owner_cap_ids_for_sender(&mut scn);
 
     let expected_feed_id = PRIMARY_FEED_ID;
+    let currency = prepare_test_currency_for_owner(&mut scn, TEST_OWNER);
     let mut shop_obj = take_shared_shop(&scn, shop_id);
     let owner_cap_obj = test_scenario::take_from_sender_by_id(
         &scn,
         owner_cap_id,
     );
     let events_before = event::events_by_type<shop::AcceptedCoinAddedEvent>().length();
-    let currency = prepare_test_currency_for_owner(&mut scn, TEST_OWNER);
     let accepted_currency_id = add_test_coin_accepted_currency_for_scenario(
         &mut scn,
         &mut shop_obj,
@@ -1082,7 +1082,10 @@ fun attestation_time_within_lag_is_allowed() {
         &mut ctx,
     );
 
-    shop::test_assert_price_status_trading(&price_info_object);
+    shop::assert_price_status_trading_for_max_lag!(
+        &price_info_object,
+        TEST_DEFAULT_MAX_PRICE_STATUS_LAG_SECS,
+    );
     std::unit_test::destroy(price_info_object);
 }
 
@@ -1105,7 +1108,10 @@ fun attestation_time_lag_over_limit_is_rejected() {
         &mut ctx,
     );
 
-    shop::test_assert_price_status_trading(&price_info_object);
+    shop::assert_price_status_trading_for_max_lag!(
+        &price_info_object,
+        TEST_DEFAULT_MAX_PRICE_STATUS_LAG_SECS,
+    );
     abort
 }
 
@@ -2533,13 +2539,13 @@ fun create_discount_template_rejects_percent_above_limit() {
 
 #[test]
 fun percent_discount_rounds_up_instead_of_zeroing_low_prices() {
-    let discounted = shop::test_apply_percent_discount(1, 100);
+    let discounted = shop::apply_percent_discount(1, 100);
     assert_eq!(discounted, 1);
 }
 
 #[test]
 fun percent_discount_allows_full_discount_to_reach_zero() {
-    let discounted = shop::test_apply_percent_discount(1, 10_000);
+    let discounted = shop::apply_percent_discount(1, 10_000);
     assert_eq!(discounted, 0);
 }
 

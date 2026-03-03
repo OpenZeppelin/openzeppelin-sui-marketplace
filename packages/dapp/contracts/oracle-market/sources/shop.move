@@ -1691,7 +1691,7 @@ fun process_purchase<TItem: store, TCoin>(
 
     let accepted_currency = shop.borrow_registered_accepted_currency(coin_type);
     assert_price_info_matches_currency!(accepted_currency, price_info_object);
-    assert_price_status_trading!(
+    assert_price_status_trading_for_max_lag!(
         price_info_object,
         accepted_currency.max_price_status_lag_secs_cap,
     );
@@ -1936,6 +1936,11 @@ fun apply_discount(rule: DiscountRule, base_price_usd_cents: u64): u64 {
             maybe_discounted.destroy_or!(abort EPriceOverflow)
         },
     }
+}
+
+/// Applies a percent discount rule to `base_price_usd_cents`.
+public(package) fun apply_percent_discount(base_price_usd_cents: u64, bps: u16): u64 {
+    apply_discount(DiscountRule::Percent { bps }, base_price_usd_cents)
 }
 
 fun burn_discount_ticket(discount_ticket: DiscountTicket) {
@@ -2504,7 +2509,7 @@ entry fun quote_amount_for_price_info_object<TCoin>(
     let coin_type = currency_type<TCoin>();
     let accepted_currency = shop.borrow_registered_accepted_currency(coin_type);
     assert_price_info_matches_currency!(accepted_currency, price_info_object);
-    assert_price_status_trading!(
+    assert_price_status_trading_for_max_lag!(
         price_info_object,
         accepted_currency.max_price_status_lag_secs_cap,
     );
@@ -2516,6 +2521,25 @@ entry fun quote_amount_for_price_info_object<TCoin>(
         max_confidence_ratio_bps,
         clock,
     )
+}
+
+/// Asserts that the feed attestation lag is within `max_price_status_lag_secs`.
+public(package) fun assert_price_status_trading_for_max_lag_impl(
+    price_info_object: &price_info::PriceInfoObject,
+    max_price_status_lag_secs: u64,
+) {
+    assert_price_status_trading!(price_info_object, max_price_status_lag_secs);
+}
+
+/// Asserts that the feed attestation lag is within `max_price_status_lag_secs`.
+public(package) macro fun assert_price_status_trading_for_max_lag(
+    $price_info_object: &price_info::PriceInfoObject,
+    $max_price_status_lag_secs: u64,
+) {
+    assert_price_status_trading_for_max_lag_impl(
+        $price_info_object,
+        $max_price_status_lag_secs,
+    );
 }
 
 /// Returns `listing_id` from the provided value.
@@ -2612,12 +2636,6 @@ public fun test_create_discount_template_local(
 }
 
 #[test_only]
-/// Asserts that a price status is trading using the module default lag cap.
-public fun test_assert_price_status_trading(price_info_object: &price_info::PriceInfoObject) {
-    assert_price_status_trading!(price_info_object, DEFAULT_MAX_PRICE_STATUS_LAG_SECS);
-}
-
-#[test_only]
 /// Returns whether `claimer` has an active claim marker for `template_id`.
 public fun test_discount_claim_exists(shop: &Shop, template_id: ID, claimer: address): bool {
     let template = shop.borrow_discount_template(template_id);
@@ -2665,13 +2683,6 @@ public fun test_discount_rule_values(rule: DiscountRule): (u8, u64) {
         DiscountRule::Fixed { amount_cents } => (0, amount_cents),
         DiscountRule::Percent { bps } => (1, bps as u64),
     }
-}
-
-#[test_only]
-/// Applies a percent discount rule to `base_price_usd_cents`.
-public fun test_apply_percent_discount(base_price_usd_cents: u64, bps: u16): u64 {
-    let rule = DiscountRule::Percent { bps };
-    rule.apply_discount(base_price_usd_cents)
 }
 
 #[test_only]
