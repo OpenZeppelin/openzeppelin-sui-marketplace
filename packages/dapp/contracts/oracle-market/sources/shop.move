@@ -1302,10 +1302,11 @@ entry fun buy_item_with_discount<TItem: store, TCoin>(
     assert_discount_redemption_allowed!(discount_template, listing_id, now);
     assert_ticket_matches_context!(&discount_ticket, discount_template, shop_id, listing_id, buyer);
     discount_template.redemptions = discount_template.redemptions + 1;
-    let discounted_price_usd_cents = apply_discount(
-        listing_price_usd_cents,
-        discount_template.rule,
-    );
+    let discounted_price_usd_cents = discount_template
+        .rule
+        .apply_discount(
+            listing_price_usd_cents,
+        );
 
     let event = new_discount_redeemed_event(
         shop_id,
@@ -1893,7 +1894,7 @@ fun mint_shop_item<TItem: store>(
     }
 }
 
-fun apply_discount(base_price_usd_cents: u64, rule: DiscountRule): u64 {
+fun apply_discount(rule: DiscountRule, base_price_usd_cents: u64): u64 {
     match (rule) {
         DiscountRule::Fixed { amount_cents } => {
             if (amount_cents >= base_price_usd_cents) {
@@ -2653,10 +2654,8 @@ public fun test_discount_rule_values(rule: DiscountRule): (u8, u64) {
 
 #[test_only]
 public fun test_apply_percent_discount(base_price_usd_cents: u64, bps: u16): u64 {
-    apply_discount(
-        base_price_usd_cents,
-        DiscountRule::Percent { bps },
-    )
+    let rule = DiscountRule::Percent { bps };
+    rule.apply_discount(base_price_usd_cents)
 }
 
 #[test_only]
