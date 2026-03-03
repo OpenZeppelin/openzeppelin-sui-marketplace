@@ -89,8 +89,6 @@ const EZeroStock: vector<u8> = b"zero stock";
 #[error]
 const ETemplateWindow: vector<u8> = b"invalid template window";
 #[error]
-const ETestCleanupInvalidState: vector<u8> = b"invalid test cleanup state";
-#[error]
 const ETemplateNotFound: vector<u8> = b"template not found";
 #[error]
 const EListingNotFound: vector<u8> = b"listing not found";
@@ -1265,7 +1263,6 @@ entry fun buy_item<TItem: store, TCoin>(
     ctx: &mut TxContext,
 ) {
     assert_shop_active!(shop);
-    let shop_owner = shop.owner;
     let base_price_usd_cents = shop.borrow_listing(listing_id).base_price_usd_cents;
     // Payment is a Coin<T> object; process_purchase splits the payment and returns change.
     let (owed_coin_opt, change_coin, minted_item) = shop.process_purchase<TItem, TCoin>(
@@ -1280,7 +1277,7 @@ entry fun buy_item<TItem: store, TCoin>(
         ctx,
     );
     owed_coin_opt.do!(|owed_coin| {
-        transfer::public_transfer(owed_coin, shop_owner);
+        transfer::public_transfer(owed_coin, shop.owner);
     });
     if (change_coin.value() == 0) {
         change_coin.destroy_zero();
@@ -2713,7 +2710,7 @@ public fun test_cleanup_discount_template(shop: &mut Shop, template_id: ID) {
     // still point to a present listing before we decrement active counters.
     if (template.active) {
         template.applies_to_listing.do_ref!(|listing_id| {
-            assert!(shop.listings.contains(*listing_id), ETestCleanupInvalidState);
+            assert!(shop.listings.contains(*listing_id), EListingNotFound);
         });
     };
     shop.adjust_active_template_count(template.applies_to_listing, template.active, false);
