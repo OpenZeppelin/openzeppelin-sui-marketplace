@@ -2604,8 +2604,6 @@ public(package) fun discount_claim_exists(shop: &Shop, template_id: ID, claimer:
 }
 
 /// Quotes the coin amount for a price info object with guardrails.
-/// This remains `entry` (not `public`) so callers use dev-inspect/client quote flows
-/// instead of coupling on-chain package logic to a quote helper.
 entry fun quote_amount_for_price_info_object<TCoin>(
     shop: &Shop,
     price_info_object: &price_info::PriceInfoObject,

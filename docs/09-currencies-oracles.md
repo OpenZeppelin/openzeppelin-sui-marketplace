@@ -32,7 +32,7 @@ pnpm script buyer:currency:list --shop-id <shopId>
 ## 4. EVM -> Sui translation
 1. **ERC-20 metadata -> coin registry + typed storage**: metadata comes from `coin_registry::Currency<T>`, and registration writes `AcceptedCurrency` into `shop.accepted_currencies: Table<TypeName, AcceptedCurrency>`.
 2. **Oracle address -> PriceInfoObject ID**: feeds are objects, not addresses. `AcceptedCurrency` stores `pyth_object_id` + `feed_id` and checks both on-chain.
-3. **Off-chain checks -> on-chain guardrails**: `quote_amount_for_price_info_object` enforces age/confidence/status-lag in Move and stays `entry`-only for dev-inspect/client quote flows.
+3. **Off-chain checks -> on-chain guardrails**: `quote_amount_for_price_info_object` enforces age/confidence/status-lag.
 
 ## 5. Why `Table` over `Bag` / `TableVec`
 The shop now stores accepted currencies in `Table<TypeName, AcceptedCurrency>` instead of raw dynamic fields or a separate currency object graph.
