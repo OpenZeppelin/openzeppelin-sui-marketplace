@@ -2790,7 +2790,7 @@ fun update_discount_template_rejects_after_claims_issued() {
 
     let mut clock_obj = clock::create_for_testing(&mut ctx);
     clock::set_for_testing(&mut clock_obj, 1);
-    shop::test_claim_discount_ticket(&mut shop, template, &clock_obj, &mut ctx);
+    shop::claim_discount_ticket(&mut shop, template, &clock_obj, &mut ctx);
 
     shop::update_discount_template(
         &mut shop,
@@ -2865,7 +2865,7 @@ fun update_discount_template_rejects_after_maxed_out() {
     );
     let mut clock_obj = clock::create_for_testing(&mut ctx);
     clock::set_for_testing(&mut clock_obj, 1_000);
-    shop::test_claim_discount_ticket(&mut shop, template, &clock_obj, &mut ctx);
+    shop::claim_discount_ticket(&mut shop, template, &clock_obj, &mut ctx);
 
     shop::update_discount_template(
         &mut shop,
@@ -3833,7 +3833,7 @@ fun claim_discount_ticket_mints_transfers_and_records_claim() {
     );
     let claim_event_count_before = event::events_by_type<shop::DiscountClaimedEvent>().length();
 
-    shop::test_claim_discount_ticket(
+    shop::claim_discount_ticket(
         &mut shared_shop,
         template_id,
         &clock_obj,
@@ -3901,7 +3901,7 @@ fun prune_discount_claims_removes_marker_when_expired() {
     let mut clock_obj = clock::create_for_testing(&mut ctx);
     clock::set_for_testing(&mut clock_obj, 1_000);
 
-    shop::test_claim_discount_ticket(&mut shop, template, &clock_obj, &mut ctx);
+    shop::claim_discount_ticket(&mut shop, template, &clock_obj, &mut ctx);
     let claimer = tx_context::sender(&ctx);
     assert!(shop::test_discount_claim_exists(&shop, template, claimer));
 
@@ -3942,7 +3942,7 @@ fun prune_discount_claims_rejects_unexpired_template_even_if_paused() {
     let mut clock_obj = clock::create_for_testing(&mut ctx);
     clock::set_for_testing(&mut clock_obj, 1_000);
 
-    shop::test_claim_discount_ticket(&mut shop, template, &clock_obj, &mut ctx);
+    shop::claim_discount_ticket(&mut shop, template, &clock_obj, &mut ctx);
     let claimer = tx_context::sender(&ctx);
     let mut claimers = vector[];
     claimers.push_back(claimer);
@@ -3982,7 +3982,7 @@ fun claim_discount_ticket_rejects_before_start_time() {
     let mut clock_obj = clock::create_for_testing(&mut ctx);
     clock::set_for_testing(&mut clock_obj, 5_000);
 
-    shop::test_claim_discount_ticket(&mut shop, template, &clock_obj, &mut ctx);
+    shop::claim_discount_ticket(&mut shop, template, &clock_obj, &mut ctx);
 
     abort
 }
@@ -4005,7 +4005,7 @@ fun claim_discount_ticket_rejects_after_expiry() {
     let mut clock_obj = clock::create_for_testing(&mut ctx);
     clock::set_for_testing(&mut clock_obj, 4_000);
 
-    shop::test_claim_discount_ticket(&mut shop, template, &clock_obj, &mut ctx);
+    shop::claim_discount_ticket(&mut shop, template, &clock_obj, &mut ctx);
 
     abort
 }
@@ -4033,7 +4033,7 @@ fun claim_discount_ticket_rejects_inactive_template() {
     );
     let clock_obj = clock::create_for_testing(&mut ctx);
 
-    shop::test_claim_discount_ticket(&mut shop, template, &clock_obj, &mut ctx);
+    shop::claim_discount_ticket(&mut shop, template, &clock_obj, &mut ctx);
 
     abort
 }
@@ -4055,7 +4055,7 @@ fun claim_discount_ticket_rejects_when_maxed() {
     );
     let mut clock_obj = clock::create_for_testing(&mut ctx);
     clock::set_for_testing(&mut clock_obj, 2_000);
-    shop::test_claim_discount_ticket(&mut shop, template, &clock_obj, &mut ctx);
+    shop::claim_discount_ticket(&mut shop, template, &clock_obj, &mut ctx);
 
     abort
 }
@@ -4077,7 +4077,7 @@ fun claim_discount_ticket_rejects_duplicate_claim() {
     );
     let mut clock_obj = clock::create_for_testing(&mut ctx);
     clock::set_for_testing(&mut clock_obj, 1_000);
-    let ticket = shop::test_claim_discount_ticket_inline(
+    let ticket = shop::claim_discount_ticket_inline(
         &mut shop,
         template,
         1,
@@ -4085,7 +4085,7 @@ fun claim_discount_ticket_rejects_duplicate_claim() {
     );
     std::unit_test::destroy(ticket);
 
-    shop::test_claim_discount_ticket(&mut shop, template, &clock_obj, &mut ctx);
+    shop::claim_discount_ticket(&mut shop, template, &clock_obj, &mut ctx);
 
     abort
 }
@@ -4119,7 +4119,7 @@ fun claim_discount_ticket_rejects_removed_listing_scope() {
 
     let mut clock_obj = clock::create_for_testing(&mut ctx);
     clock::set_for_testing(&mut clock_obj, 1_000);
-    shop::test_claim_discount_ticket(&mut shop, template, &clock_obj, &mut ctx);
+    shop::claim_discount_ticket(&mut shop, template, &clock_obj, &mut ctx);
 
     abort
 }
@@ -4240,7 +4240,7 @@ fun claim_and_buy_rejects_second_claim_after_redeem() {
         ),
     );
 
-    shop::test_claim_discount_ticket(
+    shop::claim_discount_ticket(
         &mut shared_shop,
         template_id,
         &clock_obj,
@@ -5836,7 +5836,7 @@ fun buy_item_with_discount_emits_discount_redeemed_and_records_template_id() {
     clock::set_for_testing(&mut clock_obj, 10);
 
     let now_secs = clock::timestamp_ms(&clock_obj) / 1000;
-    let ticket = shop::test_claim_discount_ticket_inline(
+    let ticket = shop::claim_discount_ticket_inline(
         &mut shared_shop,
         template_id,
         now_secs,
@@ -5984,7 +5984,7 @@ fun buy_item_with_discount_rejects_ticket_owner_mismatch() {
     clock::set_for_testing(&mut clock_obj, 10);
 
     let now_secs = clock::timestamp_ms(&clock_obj) / 1000;
-    let ticket = shop::test_claim_discount_ticket_inline(
+    let ticket = shop::claim_discount_ticket_inline(
         &mut shared_shop,
         template_id,
         now_secs,
@@ -6275,7 +6275,7 @@ fun buy_item_with_discount_rejects_inactive_template() {
     let mut clock_obj = clock::create_for_testing(test_scenario::ctx(&mut scn));
     clock::set_for_testing(&mut clock_obj, 10);
     let now_secs = clock::timestamp_ms(&clock_obj) / 1000;
-    let ticket = shop::test_claim_discount_ticket_inline(
+    let ticket = shop::claim_discount_ticket_inline(
         &mut shared_shop,
         template_id,
         now_secs,
@@ -6432,13 +6432,13 @@ fun buy_item_with_discount_rejects_ticket_template_mismatch() {
     let mut clock_obj = clock::create_for_testing(test_scenario::ctx(&mut scn));
     clock::set_for_testing(&mut clock_obj, 10);
     let now_secs = clock::timestamp_ms(&clock_obj) / 1000;
-    let ticket = shop::test_claim_discount_ticket_inline(
+    let ticket = shop::claim_discount_ticket_inline(
         &mut shared_shop,
         template_a_id,
         now_secs,
         test_scenario::ctx(&mut scn),
     );
-    let extra_ticket = shop::test_claim_discount_ticket_inline(
+    let extra_ticket = shop::claim_discount_ticket_inline(
         &mut shared_shop,
         template_b_id,
         now_secs,
@@ -6579,14 +6579,14 @@ fun buy_item_with_discount_rejects_ticket_shop_mismatch() {
     let mut clock_obj = clock::create_for_testing(test_scenario::ctx(&mut scn));
     clock::set_for_testing(&mut clock_obj, 10);
     let now_secs = clock::timestamp_ms(&clock_obj) / 1000;
-    let ticket_a = shop::test_claim_discount_ticket_inline(
+    let ticket_a = shop::claim_discount_ticket_inline(
         &mut shared_shop_a,
         template_a_id,
         now_secs,
         test_scenario::ctx(&mut scn),
     );
     transfer::public_transfer(ticket_a, OTHER_OWNER);
-    let ticket_b = shop::test_claim_discount_ticket_inline(
+    let ticket_b = shop::claim_discount_ticket_inline(
         &mut shared_shop_b,
         template_b_id,
         now_secs,

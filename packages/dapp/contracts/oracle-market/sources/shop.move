@@ -2611,16 +2611,6 @@ public fun test_discount_claim_exists(shop: &Shop, template_id: ID, claimer: add
 }
 
 #[test_only]
-public fun test_claim_discount_ticket(
-    shop: &mut Shop,
-    template_id: ID,
-    clock: &clock::Clock,
-    ctx: &mut TxContext,
-) {
-    shop.claim_discount_ticket(template_id, clock, ctx);
-}
-
-#[test_only]
 public fun test_claim_discount_ticket_inline(
     shop: &mut Shop,
     template_id: ID,
