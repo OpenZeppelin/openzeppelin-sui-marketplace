@@ -2605,11 +2605,6 @@ public fun test_max_decimal_power(): u64 {
 }
 
 #[test_only]
-public fun test_pow10_u128(exponent: u64): u128 {
-    pow10_u128(exponent)
-}
-
-#[test_only]
 public fun test_discount_claim_exists(shop: &Shop, template_id: ID, claimer: address): bool {
     let template = shop.borrow_discount_template(template_id);
     template.claims_by_claimer.contains(claimer)
