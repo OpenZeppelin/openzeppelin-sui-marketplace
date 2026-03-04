@@ -15,7 +15,6 @@ use sui::coin;
 use sui::coin_registry;
 use sui::event;
 use sui::test_scenario;
-use sui::vec_map;
 use sui_oracle_market::shop;
 
 // === Constants ===
@@ -59,13 +58,6 @@ const TEST_DEFAULT_MAX_PRICE_STATUS_LAG_SECS: u64 = 5;
 const TEST_MAX_DECIMAL_POWER: u64 = 24;
 
 // === Test Helpers ===
-
-public struct TwoShopCreationEvents {
-    first_shop_id: ID,
-    first_owner_cap_id: ID,
-    second_shop_id: ID,
-    second_owner_cap_id: ID,
-}
 
 fun sample_price(): price::Price {
     let price_value = i64::new(1_000, false);
@@ -226,48 +218,6 @@ fun remove_currency_if_exists<TCoin>(shop: &mut shop::Shop, owner_cap: &shop::Sh
     };
 }
 
-fun next_sender_tx_created_shared_ids_and_transfers(
-    scn: &mut test_scenario::Scenario,
-): (vector<ID>, vector<ID>, vec_map::VecMap<ID, address>) {
-    let sender = test_scenario::sender(scn);
-    let effects = test_scenario::next_tx(scn, sender);
-    (
-        test_scenario::created(&effects),
-        test_scenario::shared(&effects),
-        test_scenario::transferred_to_account(&effects),
-    )
-}
-
-fun id_in_ids(ids: &vector<ID>, target_id: ID): bool {
-    vector::contains(ids, &target_id)
-}
-
-fun assert_id_in_ids(ids: &vector<ID>, target_id: ID) {
-    assert!(id_in_ids(ids, target_id));
-}
-
-fun owner_cap_ids_transferred_to_sender(
-    scn: &test_scenario::Scenario,
-    transferred_to_account: &vec_map::VecMap<ID, address>,
-): vector<ID> {
-    let sender = test_scenario::sender(scn);
-    let sender_shop_owner_cap_ids = test_scenario::ids_for_sender<shop::ShopOwnerCap>(scn);
-    let transferred_ids = vec_map::keys(transferred_to_account);
-    let mut transferred_owner_cap_ids = vector[];
-    let mut index = 0;
-    while (index < transferred_ids.length()) {
-        let transferred_id = transferred_ids[index];
-        if (
-            transferred_to_account[&transferred_id] == sender &&
-            id_in_ids(&sender_shop_owner_cap_ids, transferred_id)
-        ) {
-            transferred_owner_cap_ids.push_back(transferred_id);
-        };
-        index = index + 1;
-    };
-    transferred_owner_cap_ids
-}
-
 fun create_shop_and_owner_cap_ids_for_sender(
     scn: &mut test_scenario::Scenario,
     shop_name: vector<u8>,
@@ -283,83 +233,6 @@ fun create_shop_and_owner_cap_ids_for_sender(
 
 fun create_default_shop_and_owner_cap_ids_for_sender(scn: &mut test_scenario::Scenario): (ID, ID) {
     create_shop_and_owner_cap_ids_for_sender(scn, DEFAULT_SHOP_NAME)
-}
-
-fun create_two_shops_and_owner_cap_pairs_with_events_for_sender(
-    scn: &mut test_scenario::Scenario,
-    first_shop_name: vector<u8>,
-    second_shop_name: vector<u8>,
-): TwoShopCreationEvents {
-    let (expected_first_shop_id, first_shop_owner_cap_id) = shop::create_shop(
-        first_shop_name.to_string(),
-        test_scenario::ctx(scn),
-    );
-    let (expected_second_shop_id, second_shop_owner_cap_id) = shop::create_shop(
-        second_shop_name.to_string(),
-        test_scenario::ctx(scn),
-    );
-
-    assert_emitted!(shop::new_shop_created_event(expected_first_shop_id, first_shop_owner_cap_id));
-    assert_emitted!(shop::new_shop_created_event(expected_second_shop_id, second_shop_owner_cap_id));
-
-    let (
-        created_ids,
-        shared_ids,
-        transferred_to_account,
-    ) = next_sender_tx_created_shared_ids_and_transfers(scn);
-    let (
-        first_shop_id,
-        first_owner_cap_id,
-        second_shop_id,
-        second_owner_cap_id,
-    ) = two_shop_and_owner_cap_pairs_from_tx_ids(
-        scn,
-        &created_ids,
-        &shared_ids,
-        &transferred_to_account,
-    );
-    assert!(
-        (first_shop_id == expected_first_shop_id && second_shop_id == expected_second_shop_id) ||
-            (first_shop_id == expected_second_shop_id && second_shop_id == expected_first_shop_id),
-    );
-    TwoShopCreationEvents {
-        first_shop_id,
-        first_owner_cap_id,
-        second_shop_id,
-        second_owner_cap_id,
-    }
-}
-
-fun create_two_shops_and_owner_cap_pairs_for_sender(
-    scn: &mut test_scenario::Scenario,
-    first_shop_name: vector<u8>,
-    second_shop_name: vector<u8>,
-): (ID, ID, ID, ID) {
-    let TwoShopCreationEvents {
-        first_shop_id,
-        first_owner_cap_id,
-        second_shop_id,
-        second_owner_cap_id,
-    } = create_two_shops_and_owner_cap_pairs_with_events_for_sender(
-        scn,
-        first_shop_name,
-        second_shop_name,
-    );
-    (first_shop_id, first_owner_cap_id, second_shop_id, second_owner_cap_id)
-}
-
-fun create_two_shops_and_primary_owner_cap_for_sender(
-    scn: &mut test_scenario::Scenario,
-    first_shop_name: vector<u8>,
-    second_shop_name: vector<u8>,
-): (ID, ID, ID) {
-    let (
-        first_shop_id,
-        first_owner_cap_id,
-        second_shop_id,
-        _second_owner_cap_id,
-    ) = create_two_shops_and_owner_cap_pairs_for_sender(scn, first_shop_name, second_shop_name);
-    (first_shop_id, first_owner_cap_id, second_shop_id)
 }
 
 fun create_test_clock_at(ctx: &mut tx_context::TxContext, timestamp_secs: u64): clock::Clock {
@@ -395,49 +268,19 @@ fun close_buyer_checkout_context(
     std::unit_test::destroy(clock_object);
 }
 
-fun two_shop_and_owner_cap_pairs_from_tx_ids(
-    scn: &test_scenario::Scenario,
-    created_ids: &vector<ID>,
-    shared_ids: &vector<ID>,
-    transferred_to_account: &vec_map::VecMap<ID, address>,
-): (ID, ID, ID, ID) {
-    assert_eq!(shared_ids.length(), 2);
-    let first_shop_id = shared_ids[0];
-    let second_shop_id = shared_ids[1];
-    let owner_cap_ids = owner_cap_ids_transferred_to_sender(
-        scn,
-        transferred_to_account,
+fun assert_listing_spotlight_template_id(
+    shop: &shop::Shop,
+    listing_id: ID,
+    expected_template_id: ID,
+) {
+    let listing_values = shop::listing_values(shop, listing_id);
+    let spotlight_template_id = shop::listing_values_spotlight_discount_template_id(
+        &listing_values,
     );
-    assert_eq!(owner_cap_ids.length(), 2);
-    let first_owner_cap_id = owner_cap_ids[0];
-    let second_owner_cap_id = owner_cap_ids[1];
-
-    let first_owner_cap = test_scenario::take_from_sender_by_id<shop::ShopOwnerCap>(
-        scn,
-        first_owner_cap_id,
-    );
-    let second_owner_cap = test_scenario::take_from_sender_by_id<shop::ShopOwnerCap>(
-        scn,
-        second_owner_cap_id,
-    );
-    let first_owner_cap_shop_id = shop::shop_owner_cap_shop_id(&first_owner_cap);
-    let second_owner_cap_shop_id = shop::shop_owner_cap_shop_id(&second_owner_cap);
-    test_scenario::return_to_sender(scn, first_owner_cap);
-    test_scenario::return_to_sender(scn, second_owner_cap);
-    assert_id_in_ids(created_ids, first_shop_id);
-    assert_id_in_ids(created_ids, second_shop_id);
-    assert_id_in_ids(created_ids, first_owner_cap_id);
-    assert_id_in_ids(created_ids, second_owner_cap_id);
-    if (first_owner_cap_shop_id == first_shop_id && second_owner_cap_shop_id == second_shop_id) {
-        (first_shop_id, first_owner_cap_id, second_shop_id, second_owner_cap_id)
-    } else if (
-        first_owner_cap_shop_id == second_shop_id &&
-        second_owner_cap_shop_id == first_shop_id
-    ) {
-        (first_shop_id, second_owner_cap_id, second_shop_id, first_owner_cap_id)
-    } else {
-        abort
-    }
+    assert!(option::is_some(&spotlight_template_id));
+    spotlight_template_id.do_ref!(|value| {
+        assert_eq!(*value, expected_template_id);
+    });
 }
 
 /// Asserts that `expected_event` of type `T` was emitted.
@@ -456,60 +299,8 @@ macro fun assert_emitted<$T>($expected_event: $T) {
     };
 }
 
-fun assert_listing_spotlight_template_id(
-    shop: &shop::Shop,
-    listing_id: ID,
-    expected_template_id: ID,
-) {
-    let listing_values = shop::listing_values(shop, listing_id);
-    let spotlight_template_id = shop::listing_values_spotlight_discount_template_id(
-        &listing_values,
-    );
-    assert!(option::is_some(&spotlight_template_id));
-    spotlight_template_id.do_ref!(|value| {
-        assert_eq!(*value, expected_template_id);
-    });
-}
-
-fun assert_listing_scoped_percent_template(
-    shop: &shop::Shop,
-    template_id: ID,
-    listing_id: ID,
-    expected_rule_value: u64,
-    expected_starts_at: u64,
-    expected_max_redemptions: u64,
-) {
-    let template_values = shop::discount_template_values(shop, template_id);
-    let template_shop_id = shop::discount_template_values_shop_id(&template_values);
-    let applies_to_listing = shop::discount_template_values_applies_to_listing(&template_values);
-    let discount_rule = shop::discount_template_values_rule(&template_values);
-    let starts_at = shop::discount_template_values_starts_at(&template_values);
-    let expires_at = shop::discount_template_values_expires_at(&template_values);
-    let max_redemptions = shop::discount_template_values_max_redemptions(&template_values);
-    let claims_issued = shop::discount_template_values_claims_issued(&template_values);
-    let redemptions = shop::discount_template_values_redemptions(&template_values);
-    let active = shop::discount_template_values_active(&template_values);
-    assert_eq!(template_shop_id, shop::shop_id(shop));
-    assert!(option::is_some(&applies_to_listing));
-    applies_to_listing.do_ref!(|value| {
-        assert_eq!(*value, listing_id);
-    });
-    let rule_kind = shop::discount_rule_kind(discount_rule);
-    let rule_value = shop::discount_rule_value(discount_rule);
-    assert_eq!(rule_kind, 1);
-    assert_eq!(rule_value, expected_rule_value);
-    assert_eq!(starts_at, expected_starts_at);
-    assert!(option::is_none(&expires_at));
-    assert!(option::is_some(&max_redemptions));
-    max_redemptions.do_ref!(|value| {
-        assert_eq!(*value, expected_max_redemptions);
-    });
-    assert_eq!(claims_issued, 0);
-    assert_eq!(redemptions, 0);
-    assert!(active);
-}
-
 // === Tests ===
+
 #[test]
 fun create_shop_emits_event_and_records_ids() {
     let mut scn = test_scenario::begin(TEST_OWNER);
@@ -535,16 +326,17 @@ fun create_shop_allows_multiple_shops_per_sender() {
 #[test]
 fun create_shop_emits_unique_shop_and_cap_ids() {
     let mut scn = test_scenario::begin(TEST_OWNER);
-    let TwoShopCreationEvents {
-        first_shop_id,
-        first_owner_cap_id,
-        second_shop_id,
-        second_owner_cap_id,
-    } = create_two_shops_and_owner_cap_pairs_with_events_for_sender(
+
+    let (first_shop_id, first_owner_cap_id) = create_shop_and_owner_cap_ids_for_sender(
         &mut scn,
         DEFAULT_SHOP_NAME,
+    );
+
+    let (second_shop_id, second_owner_cap_id) = create_shop_and_owner_cap_ids_for_sender(
+        &mut scn,
         DEFAULT_SHOP_NAME,
     );
+
     assert!(first_shop_id != second_shop_id);
     assert!(first_owner_cap_id != second_owner_cap_id);
 
@@ -1779,6 +1571,44 @@ fun add_item_listing_with_discount_template_creates_listing_and_pinned_template(
     remove_listing_if_exists(&mut shop, &owner_cap, listing_id);
     std::unit_test::destroy(owner_cap);
     std::unit_test::destroy(shop);
+}
+
+fun assert_listing_scoped_percent_template(
+    shop: &shop::Shop,
+    template_id: ID,
+    listing_id: ID,
+    expected_rule_value: u64,
+    expected_starts_at: u64,
+    expected_max_redemptions: u64,
+) {
+    let template_values = shop::discount_template_values(shop, template_id);
+    let template_shop_id = shop::discount_template_values_shop_id(&template_values);
+    let applies_to_listing = shop::discount_template_values_applies_to_listing(&template_values);
+    let discount_rule = shop::discount_template_values_rule(&template_values);
+    let starts_at = shop::discount_template_values_starts_at(&template_values);
+    let expires_at = shop::discount_template_values_expires_at(&template_values);
+    let max_redemptions = shop::discount_template_values_max_redemptions(&template_values);
+    let claims_issued = shop::discount_template_values_claims_issued(&template_values);
+    let redemptions = shop::discount_template_values_redemptions(&template_values);
+    let active = shop::discount_template_values_active(&template_values);
+    assert_eq!(template_shop_id, shop::shop_id(shop));
+    assert!(option::is_some(&applies_to_listing));
+    applies_to_listing.do_ref!(|value| {
+        assert_eq!(*value, listing_id);
+    });
+    let rule_kind = shop::discount_rule_kind(discount_rule);
+    let rule_value = shop::discount_rule_value(discount_rule);
+    assert_eq!(rule_kind, 1);
+    assert_eq!(rule_value, expected_rule_value);
+    assert_eq!(starts_at, expected_starts_at);
+    assert!(option::is_none(&expires_at));
+    assert!(option::is_some(&max_redemptions));
+    max_redemptions.do_ref!(|value| {
+        assert_eq!(*value, expected_max_redemptions);
+    });
+    assert_eq!(claims_issued, 0);
+    assert_eq!(redemptions, 0);
+    assert!(active);
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::EInvalidOwnerCap)]
@@ -5059,9 +4889,14 @@ fun prune_discount_claims_noop_for_unclaimed_claimer() {
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::EAcceptedCurrencyMissing)]
 fun accepted_currency_values_rejects_foreign_shop() {
     let mut scn = test_scenario::begin(TEST_OWNER);
-    let (shop_a_id, owner_cap_a_id, shop_b_id) = create_two_shops_and_primary_owner_cap_for_sender(
+
+    let (shop_a_id, owner_cap_a_id) = create_shop_and_owner_cap_ids_for_sender(
         &mut scn,
         DEFAULT_SHOP_NAME,
+    );
+
+    let (shop_b_id, _) = create_shop_and_owner_cap_ids_for_sender(
+        &mut scn,
         DEFAULT_SHOP_NAME,
     );
 
@@ -6353,14 +6188,14 @@ fun buy_item_with_discount_rejects_ticket_template_mismatch() {
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::EDiscountTicketShopMismatch)]
 fun buy_item_with_discount_rejects_ticket_shop_mismatch() {
     let mut scn = test_scenario::begin(TEST_OWNER);
-    let (
-        shop_a_id,
-        owner_cap_a_id,
-        shop_b_id,
-        owner_cap_b_id,
-    ) = create_two_shops_and_owner_cap_pairs_for_sender(
+
+    let (shop_a_id, owner_cap_a_id) = create_shop_and_owner_cap_ids_for_sender(
         &mut scn,
         DEFAULT_SHOP_NAME,
+    );
+
+    let (shop_b_id, owner_cap_b_id) = create_shop_and_owner_cap_ids_for_sender(
+        &mut scn,
         b"Other Shop",
     );
 
