@@ -6,8 +6,6 @@ use openzeppelin_math::u128;
 use openzeppelin_math::u64;
 use pyth::i64;
 use pyth::price;
-use pyth::price_feed;
-use pyth::price_identifier;
 use pyth::price_info;
 use pyth::pyth;
 use std::string::String;
@@ -877,9 +875,9 @@ public fun add_accepted_currency<TCoin>(
     // Bind this currency to a specific PriceInfoObject to prevent oracle feed spoofing.
     assert_accepted_currency_inputs!(shop, coin_type, feed_id, pyth_object_id, price_info_object);
 
-    let decimals = coin_registry::decimals(currency);
+    let decimals = currency.decimals();
     assert_supported_decimals!(decimals);
-    let symbol = coin_registry::symbol(currency);
+    let symbol = currency.symbol();
     let shop_id = shop.id.to_inner();
     let age_cap = resolve_guardrail_cap!(max_price_age_secs_cap, DEFAULT_MAX_PRICE_AGE_SECS);
     let confidence_cap = resolve_guardrail_cap!(
@@ -1686,8 +1684,8 @@ fun quote_amount_with_guardrails(
     let price_info = price_info::get_price_info_from_price_info_object(
         price_info_object,
     );
-    let current_price = price_feed::get_price(price_info::get_price_feed(&price_info));
-    let publish_time = price::get_timestamp(&current_price);
+    let current_price = price_info.get_price_feed().get_price();
+    let publish_time = current_price.get_timestamp();
     let now = now_secs(clock);
     assert!(now >= publish_time, EPriceTooStale);
     assert!(now - publish_time <= effective_guardrails.max_price_age_secs, EPriceTooStale);
@@ -1824,7 +1822,7 @@ public(package) fun discount_rule_value(rule: DiscountRule): u64 {
 /// Pyth stale checks and price timestamps are second-based (`max_age_secs` vs `price::get_timestamp`),
 /// so keeping module guardrails in seconds avoids mixed-unit errors.
 fun now_secs(clock: &clock::Clock): u64 {
-    clock::timestamp_ms(clock) / 1000
+    clock.timestamp_ms() / 1000
 }
 
 /// Converts a USD-cent amount into a quoted coin amount.
@@ -1834,15 +1832,15 @@ public(package) fun quote_amount_from_usd_cents(
     price: price::Price,
     max_confidence_ratio_bps: u16,
 ): u64 {
-    let price_value = price::get_price(&price);
+    let price_value = price.get_price();
     let mantissa = positive_price_to_u128(price_value);
-    let confidence = price::get_conf(&price) as u128;
-    let exponent = price::get_expo(&price);
-    let exponent_is_negative = i64::get_is_negative(&exponent);
+    let confidence = price.get_conf() as u128;
+    let exponent = price.get_expo();
+    let exponent_is_negative = exponent.get_is_negative();
     let exponent_magnitude = if (exponent_is_negative) {
-        i64::get_magnitude_if_negative(&exponent)
+        exponent.get_magnitude_if_negative()
     } else {
-        i64::get_magnitude_if_positive(&exponent)
+        exponent.get_magnitude_if_positive()
     };
     let conservative_mantissa = conservative_price_mantissa(
         mantissa,
@@ -1907,8 +1905,8 @@ fun pow10_u128(exponent: u64): u128 {
 }
 
 fun positive_price_to_u128(value: i64::I64): u128 {
-    assert!(!i64::get_is_negative(&value), EPriceNonPositive);
-    i64::get_magnitude_if_positive(&value) as u128
+    assert!(!value.get_is_negative(), EPriceNonPositive);
+    value.get_magnitude_if_positive() as u128
 }
 
 /// Apply mu-sigma per Pyth best practices to avoid undercharging when prices are uncertain.
@@ -1986,7 +1984,7 @@ fun apply_discount(rule: DiscountRule, base_price_usd_cents: u64): u64 {
 /// Applies a percent discount rule to `base_price_usd_cents`.
 public(package) fun apply_percent_discount(base_price_usd_cents: u64, bps: u16): u64 {
     assert!((bps as u64) <= BASIS_POINT_DENOMINATOR, EInvalidRuleValue);
-    apply_discount(DiscountRule::Percent { bps }, base_price_usd_cents)
+    DiscountRule::Percent { bps }.apply_discount(base_price_usd_cents)
 }
 
 fun burn_discount_ticket(discount_ticket: DiscountTicket) {
@@ -2194,14 +2192,14 @@ macro fun assert_price_info_identity(
     let expected_feed_id = $expected_feed_id;
     let expected_pyth_object_id = $expected_pyth_object_id;
     let price_info_object = $price_info_object;
-    let confirmed_price_object = price_info::uid_to_inner(price_info_object);
+    let confirmed_price_object = price_info_object.uid_to_inner();
     assert!(confirmed_price_object == expected_pyth_object_id, EPythObjectMismatch);
 
     let price_info = price_info::get_price_info_from_price_info_object(
         price_info_object,
     );
-    let identifier = price_info::get_price_identifier(&price_info);
-    let identifier_bytes = price_identifier::get_bytes(&identifier);
+    let identifier = price_info.get_price_identifier();
+    let identifier_bytes = identifier.get_bytes();
     assert!(expected_feed_id == identifier_bytes, EFeedIdentifierMismatch);
 }
 
@@ -2238,9 +2236,9 @@ macro fun assert_price_status_trading(
     let price_info = price_info::get_price_info_from_price_info_object(
         price_info_object,
     );
-    let attestation_time = price_info::get_attestation_time(&price_info);
-    let current_price = price_feed::get_price(price_info::get_price_feed(&price_info));
-    let publish_time = price::get_timestamp(&current_price);
+    let attestation_time = price_info.get_attestation_time();
+    let current_price = price_info.get_price_feed().get_price();
+    let publish_time = current_price.get_timestamp();
     // Treat feeds with stale attestations as unavailable even if Pyth doesn't expose an explicit status.
     assert!(attestation_time >= publish_time, EPriceStatusNotTrading);
     let attestation_lag_secs = attestation_time - publish_time;
