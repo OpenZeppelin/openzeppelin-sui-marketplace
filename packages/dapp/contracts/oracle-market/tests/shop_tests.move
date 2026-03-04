@@ -7,7 +7,6 @@ use pyth::price_feed;
 use pyth::price_identifier;
 use pyth::price_info;
 use pyth::pyth;
-use std::string::String;
 use std::type_name;
 use std::unit_test::assert_eq;
 use sui::clock;
@@ -18,13 +17,24 @@ use sui::test_scenario;
 use sui_oracle_market::shop;
 
 // === Constants ===
+
 const TEST_OWNER: address = @0xBEEF;
 const OTHER_OWNER: address = @0xCAFE;
 const THIRD_OWNER: address = @0xD00D;
 const MISSING_LISTING_ID_ADDRESS: address = @0xBAD1;
 const DEFAULT_SHOP_NAME: vector<u8> = b"Shop";
+const PRIMARY_FEED_ID: vector<u8> =
+    x"000102030405060708090a0b0c0d0e0f000102030405060708090a0b0c0d0e0f";
+const SECONDARY_FEED_ID: vector<u8> =
+    x"101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f";
+const SHORT_FEED_ID: vector<u8> = b"SHORT";
+const TEST_DEFAULT_MAX_PRICE_AGE_SECS: u64 = 60;
+const TEST_DEFAULT_MAX_CONFIDENCE_RATIO_BPS: u16 = 1_000;
+const TEST_DEFAULT_MAX_PRICE_STATUS_LAG_SECS: u64 = 5;
+const TEST_MAX_DECIMAL_POWER: u64 = 24;
 
 // === Test Types ===
+
 /// Test coin used in unit tests.
 public struct TestCoin has key, store { id: UID }
 /// Alternate test coin used in unit tests.
@@ -45,17 +55,6 @@ public struct Car has key, store {
 public struct Bike has key, store {
     id: UID,
 }
-
-// === Test Fixtures ===
-const PRIMARY_FEED_ID: vector<u8> =
-    x"000102030405060708090a0b0c0d0e0f000102030405060708090a0b0c0d0e0f";
-const SECONDARY_FEED_ID: vector<u8> =
-    x"101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f";
-const SHORT_FEED_ID: vector<u8> = b"SHORT";
-const TEST_DEFAULT_MAX_PRICE_AGE_SECS: u64 = 60;
-const TEST_DEFAULT_MAX_CONFIDENCE_RATIO_BPS: u16 = 1_000;
-const TEST_DEFAULT_MAX_PRICE_STATUS_LAG_SECS: u64 = 5;
-const TEST_MAX_DECIMAL_POWER: u64 = 24;
 
 // === Test Helpers ===
 
@@ -168,26 +167,6 @@ fun add_test_coin_accepted_currency_for_scenario(
     );
     transfer::public_share_object(price_info_object);
     accepted_currency_id
-}
-
-fun add_item_listing_local<TItem: store>(
-    shop: &mut shop::Shop,
-    owner_cap: &shop::ShopOwnerCap,
-    name: String,
-    base_price_usd_cents: u64,
-    stock: u64,
-    spotlight_discount_template_id: Option<ID>,
-    ctx: &mut tx_context::TxContext,
-): ID {
-    shop::add_item_listing<TItem>(
-        shop,
-        owner_cap,
-        name,
-        base_price_usd_cents,
-        stock,
-        spotlight_discount_template_id,
-        ctx,
-    )
 }
 
 /// Setup policy:
@@ -1445,7 +1424,7 @@ fun add_item_listing_stores_metadata() {
     let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
     let ids_before = tx_context::get_ids_created(&ctx);
 
-    let listing_id = add_item_listing_local<TestItem>(
+    let listing_id = shop::add_item_listing<TestItem>(
         &mut shop,
         &owner_cap,
         b"Cool Bike".to_string(),
@@ -1493,7 +1472,7 @@ fun add_item_listing_links_spotlight_template() {
         &mut ctx,
     );
 
-    let listing_id = add_item_listing_local<TestItem>(
+    let listing_id = shop::add_item_listing<TestItem>(
         &mut shop,
         &owner_cap,
         b"Limited Tire Set".to_string(),
@@ -1736,7 +1715,7 @@ fun update_item_listing_stock_updates_listing_and_emits_events() {
     let mut ctx = tx_context::dummy();
     let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
 
-    let listing_id = add_item_listing_local<TestItem>(
+    let listing_id = shop::add_item_listing<TestItem>(
         &mut shop,
         &owner_cap,
         b"Helmet".to_string(),
@@ -1779,7 +1758,7 @@ fun update_item_listing_stock_rejects_foreign_owner_cap() {
         &mut ctx,
     );
 
-    let listing_id = add_item_listing_local<TestItem>(
+    let listing_id = shop::add_item_listing<TestItem>(
         &mut shop,
         &owner_cap,
         b"Borrowed Listing".to_string(),
@@ -1808,7 +1787,7 @@ fun update_item_listing_stock_rejects_unknown_listing() {
         &mut ctx,
     );
 
-    let foreign_listing_id = add_item_listing_local<TestItem>(
+    let foreign_listing_id = shop::add_item_listing<TestItem>(
         &mut other_shop,
         &other_cap,
         b"Foreign Listing".to_string(),
@@ -1833,7 +1812,7 @@ fun update_item_listing_stock_handles_multiple_updates_and_events() {
     let mut ctx = tx_context::dummy();
     let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
 
-    let listing_id = add_item_listing_local<TestItem>(
+    let listing_id = shop::add_item_listing<TestItem>(
         &mut shop,
         &owner_cap,
         b"Pads".to_string(),
@@ -1884,7 +1863,7 @@ fun remove_item_listing_removes_listing_and_emits_event() {
     let mut ctx = tx_context::dummy();
     let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
 
-    let removed_listing_id = add_item_listing_local<TestItem>(
+    let removed_listing_id = shop::add_item_listing<TestItem>(
         &mut shop,
         &owner_cap,
         b"Chain Grease".to_string(),
@@ -1894,7 +1873,7 @@ fun remove_item_listing_removes_listing_and_emits_event() {
         &mut ctx,
     );
 
-    let remaining_listing_id = add_item_listing_local<TestItem>(
+    let remaining_listing_id = shop::add_item_listing<TestItem>(
         &mut shop,
         &owner_cap,
         b"Repair Kit".to_string(),
@@ -1942,7 +1921,7 @@ fun remove_item_listing_rejects_foreign_owner_cap() {
         &mut ctx,
     );
 
-    let listing_id = add_item_listing_local<TestItem>(
+    let listing_id = shop::add_item_listing<TestItem>(
         &mut shop,
         &owner_cap,
         b"Borrowed Owner".to_string(),
@@ -1970,7 +1949,7 @@ fun remove_item_listing_rejects_unknown_listing() {
         &mut ctx,
     );
 
-    let foreign_listing_id = add_item_listing_local<TestItem>(
+    let foreign_listing_id = shop::add_item_listing<TestItem>(
         &mut other_shop,
         &other_cap,
         b"Foreign Stock".to_string(),
@@ -1993,7 +1972,7 @@ fun remove_item_listing_rejects_unknown_listing() {
 fun remove_item_listing_rejects_listing_with_active_bound_template() {
     let mut ctx = tx_context::dummy();
     let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
-    let listing_id = add_item_listing_local<TestItem>(
+    let listing_id = shop::add_item_listing<TestItem>(
         &mut shop,
         &owner_cap,
         b"Template Locked Listing".to_string(),
@@ -2026,7 +2005,7 @@ fun remove_item_listing_rejects_listing_with_active_bound_template() {
 fun remove_item_listing_allows_listing_with_inactive_bound_template() {
     let mut ctx = tx_context::dummy();
     let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
-    let listing_id = add_item_listing_local<TestItem>(
+    let listing_id = shop::add_item_listing<TestItem>(
         &mut shop,
         &owner_cap,
         b"Template Paused Listing".to_string(),
@@ -2068,7 +2047,7 @@ fun update_item_listing_stock_accept_zero_stock() {
     let mut ctx = tx_context::dummy();
     let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
 
-    let listing_id = add_item_listing_local<TestItem>(
+    let listing_id = shop::add_item_listing<TestItem>(
         &mut shop,
         &owner_cap,
         b"Maintenance Kit".to_string(),
@@ -2149,7 +2128,7 @@ fun create_discount_template_links_listing_and_percent_rule() {
     let mut ctx = tx_context::dummy();
     let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
 
-    let listing_id = add_item_listing_local<TestItem>(
+    let listing_id = shop::add_item_listing<TestItem>(
         &mut shop,
         &owner_cap,
         b"Wheelset".to_string(),
@@ -2313,7 +2292,7 @@ fun create_discount_template_rejects_foreign_listing_reference() {
         &mut ctx,
     );
 
-    let foreign_listing_id = add_item_listing_local<TestItem>(
+    let foreign_listing_id = shop::add_item_listing<TestItem>(
         &mut other_shop,
         &other_cap,
         b"Foreign Listing".to_string(),
@@ -2343,7 +2322,7 @@ fun update_discount_template_updates_fields_and_emits_event() {
     let mut ctx = tx_context::dummy();
     let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
 
-    let listing_id = add_item_listing_local<TestItem>(
+    let listing_id = shop::add_item_listing<TestItem>(
         &mut shop,
         &owner_cap,
         b"Wheelset".to_string(),
@@ -2907,7 +2886,7 @@ fun toggle_template_on_listing_sets_and_clears_spotlight() {
     let mut ctx = tx_context::dummy();
     let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
 
-    let listing_id = add_item_listing_local<TestItem>(
+    let listing_id = shop::add_item_listing<TestItem>(
         &mut shop,
         &owner_cap,
         b"Promo Jacket".to_string(),
@@ -2979,7 +2958,7 @@ fun toggle_template_on_listing_rejects_foreign_owner_cap() {
     let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
     let (_other_shop, other_cap) = shop::test_setup_shop(OTHER_OWNER, &mut ctx);
 
-    let listing_id = add_item_listing_local<TestItem>(
+    let listing_id = shop::add_item_listing<TestItem>(
         &mut shop,
         &owner_cap,
         b"Chain Lube".to_string(),
@@ -3018,7 +2997,7 @@ fun toggle_template_on_listing_rejects_foreign_listing() {
         &mut ctx,
     );
 
-    let foreign_listing_id = add_item_listing_local<TestItem>(
+    let foreign_listing_id = shop::add_item_listing<TestItem>(
         &mut other_shop,
         &other_cap,
         b"Spare Tube".to_string(),
@@ -3057,7 +3036,7 @@ fun toggle_template_on_listing_rejects_foreign_template() {
         &mut ctx,
     );
 
-    let listing_id = add_item_listing_local<TestItem>(
+    let listing_id = shop::add_item_listing<TestItem>(
         &mut shop,
         &owner_cap,
         b"Bike Pump".to_string(),
@@ -3092,7 +3071,7 @@ fun toggle_template_on_listing_rejects_unknown_template() {
     let mut ctx = tx_context::dummy();
     let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
 
-    let listing_id = add_item_listing_local<TestItem>(
+    let listing_id = shop::add_item_listing<TestItem>(
         &mut shop,
         &owner_cap,
         b"Frame Protector".to_string(),
@@ -3128,7 +3107,7 @@ fun attach_template_to_listing_sets_spotlight_without_emitting_events() {
     let mut ctx = tx_context::dummy();
     let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
 
-    let listing_id = add_item_listing_local<TestItem>(
+    let listing_id = shop::add_item_listing<TestItem>(
         &mut shop,
         &owner_cap,
         b"Promo Bag".to_string(),
@@ -3179,7 +3158,7 @@ fun attach_template_to_listing_overwrites_existing_spotlight() {
         &owner_cap,
         &mut ctx,
     );
-    let listing_id = add_item_listing_local<TestItem>(
+    let listing_id = shop::add_item_listing<TestItem>(
         &mut shop,
         &owner_cap,
         b"Bundle".to_string(),
@@ -3236,7 +3215,7 @@ fun attach_template_to_listing_accepts_matching_listing() {
     let mut ctx = tx_context::dummy();
     let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
 
-    let listing_id = add_item_listing_local<TestItem>(
+    let listing_id = shop::add_item_listing<TestItem>(
         &mut shop,
         &owner_cap,
         b"Bundle".to_string(),
@@ -3279,7 +3258,7 @@ fun attach_template_to_listing_rejects_foreign_owner_cap() {
     let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
     let (_other_shop, other_cap) = shop::test_setup_shop(OTHER_OWNER, &mut ctx);
 
-    let listing_id = add_item_listing_local<TestItem>(
+    let listing_id = shop::add_item_listing<TestItem>(
         &mut shop,
         &owner_cap,
         b"Helmet Stickers".to_string(),
@@ -3313,7 +3292,7 @@ fun attach_template_to_listing_rejects_foreign_listing() {
         &mut ctx,
     );
 
-    let foreign_listing_id = add_item_listing_local<TestItem>(
+    let foreign_listing_id = shop::add_item_listing<TestItem>(
         &mut other_shop,
         &other_cap,
         b"Brake Pads".to_string(),
@@ -3347,7 +3326,7 @@ fun attach_template_to_listing_rejects_foreign_template() {
         &mut ctx,
     );
 
-    let listing_id = add_item_listing_local<TestItem>(
+    let listing_id = shop::add_item_listing<TestItem>(
         &mut shop,
         &owner_cap,
         b"Chain Whip".to_string(),
@@ -3377,7 +3356,7 @@ fun attach_template_to_listing_rejects_unknown_template() {
     let mut ctx = tx_context::dummy();
     let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
 
-    let listing_id = add_item_listing_local<TestItem>(
+    let listing_id = shop::add_item_listing<TestItem>(
         &mut shop,
         &owner_cap,
         b"Pedals".to_string(),
@@ -3413,7 +3392,7 @@ fun clear_template_from_listing_removes_spotlight_without_side_effects() {
     let mut ctx = tx_context::dummy();
     let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
 
-    let listing_id = add_item_listing_local<TestItem>(
+    let listing_id = shop::add_item_listing<TestItem>(
         &mut shop,
         &owner_cap,
         b"Rain Jacket".to_string(),
@@ -3470,7 +3449,7 @@ fun clear_template_from_listing_is_noop_when_no_spotlight_set() {
     let mut ctx = tx_context::dummy();
     let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
 
-    let listing_id = add_item_listing_local<TestItem>(
+    let listing_id = shop::add_item_listing<TestItem>(
         &mut shop,
         &owner_cap,
         b"Bar Tape".to_string(),
@@ -3506,7 +3485,7 @@ fun clear_template_from_listing_rejects_foreign_owner_cap() {
     let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
     let (_other_shop, other_cap) = shop::test_setup_shop(OTHER_OWNER, &mut ctx);
 
-    let listing_id = add_item_listing_local<TestItem>(
+    let listing_id = shop::add_item_listing<TestItem>(
         &mut shop,
         &owner_cap,
         b"Valve Stem".to_string(),
@@ -3534,7 +3513,7 @@ fun clear_template_from_listing_rejects_foreign_listing() {
         &mut ctx,
     );
 
-    let foreign_listing_id = add_item_listing_local<TestItem>(
+    let foreign_listing_id = shop::add_item_listing<TestItem>(
         &mut other_shop,
         &other_cap,
         b"Cassette".to_string(),
@@ -3858,7 +3837,7 @@ fun claim_discount_ticket_rejects_missing_listing_for_listing_scoped_template_af
     let mut ctx = tx_context::new_from_hint(TEST_OWNER, 240, 0, 0, 0);
     let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
 
-    let listing_id = add_item_listing_local<TestItem>(
+    let listing_id = shop::add_item_listing<TestItem>(
         &mut shop,
         &owner_cap,
         b"Scoped Listing".to_string(),
@@ -4175,7 +4154,7 @@ fun listing_values_rejects_foreign_shop() {
     let (mut shop_a, owner_cap_a) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
     let (shop_b, _owner_cap_b) = shop::test_setup_shop(OTHER_OWNER, &mut ctx);
 
-    let listing_id = add_item_listing_local<TestItem>(
+    let listing_id = shop::add_item_listing<TestItem>(
         &mut shop_a,
         &owner_cap_a,
         b"Item".to_string(),
@@ -4229,7 +4208,7 @@ fun remove_listing_and_template_noop_when_missing() {
 fun remove_discount_template_drops_template_and_clears_spotlight() {
     let mut ctx = tx_context::new_from_hint(TEST_OWNER, 100041, 0, 0, 0);
     let (mut shop_obj, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
-    let listing_id = add_item_listing_local<TestItem>(
+    let listing_id = shop::add_item_listing<TestItem>(
         &mut shop_obj,
         &owner_cap,
         b"Template Listing".to_string(),
@@ -4823,7 +4802,7 @@ fun price_status_rejects_attestation_before_publish() {
 fun add_item_listing_rejects_spotlight_template_listing_mismatch() {
     let mut ctx = tx_context::new_from_hint(TEST_OWNER, 10006, 0, 0, 0);
     let (mut shop_obj, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
-    let listing_id = add_item_listing_local<TestItem>(
+    let listing_id = shop::add_item_listing<TestItem>(
         &mut shop_obj,
         &owner_cap,
         b"Listing A".to_string(),
