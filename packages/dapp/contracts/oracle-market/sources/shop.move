@@ -347,22 +347,6 @@ public struct AcceptedCurrencyValues has copy, drop {
     max_price_status_lag_secs_cap: u64,
 }
 
-/// Discount template fields returned for read-only clients.
-/// This view struct intentionally excludes internal claim-marker storage
-/// (`DiscountTemplate.claims_by_claimer: Table<address, bool>`), which is non-copyable and
-/// should not be exposed through read APIs.
-public struct DiscountTemplateValues has copy, drop {
-    shop_id: ID,
-    applies_to_listing: Option<ID>,
-    rule: DiscountRule,
-    starts_at: u64,
-    expires_at: Option<u64>,
-    max_redemptions: Option<u64>,
-    claims_issued: u64,
-    redemptions: u64,
-    active: bool,
-}
-
 /// Discount ticket fields returned for read-only clients.
 public struct DiscountTicketValues has copy, drop {
     discount_template_id: ID,
@@ -2390,109 +2374,177 @@ public fun discount_template_id_for_address(shop: &Shop, template_address: addre
 
 /// Returns `ItemListing.name` from an immutable listing reference.
 /// Package-scoped to keep reference-based reads internal to this package.
-public(package) fun item_listing_name(listing: &ItemListing): String {
+public(package) fun item_listing_ref_name(listing: &ItemListing): String {
     listing.name
 }
 
 /// Returns `ItemListing.base_price_usd_cents` from an immutable listing reference.
 /// Package-scoped to keep reference-based reads internal to this package.
-public(package) fun item_listing_base_price_usd_cents(listing: &ItemListing): u64 {
+public(package) fun item_listing_ref_base_price_usd_cents(listing: &ItemListing): u64 {
     listing.base_price_usd_cents
 }
 
 /// Returns `ItemListing.stock` from an immutable listing reference.
 /// Package-scoped to keep reference-based reads internal to this package.
-public(package) fun item_listing_stock(listing: &ItemListing): u64 {
+public(package) fun item_listing_ref_stock(listing: &ItemListing): u64 {
     listing.stock
 }
 
 /// Returns `ItemListing.spotlight_discount_template_id` from an immutable listing reference.
 /// Package-scoped to keep reference-based reads internal to this package.
-public(package) fun item_listing_spotlight_discount_template_id(listing: &ItemListing): Option<ID> {
+public(package) fun item_listing_ref_spotlight_discount_template_id(listing: &ItemListing): Option<ID> {
     listing.spotlight_discount_template_id
 }
 
 /// Returns `ItemListing.item_type` from an immutable listing reference.
 /// Package-scoped to keep reference-based reads internal to this package.
-public(package) fun item_listing_item_type(listing: &ItemListing): TypeName {
+public(package) fun item_listing_ref_item_type(listing: &ItemListing): TypeName {
     listing.item_type
 }
 
 /// Returns `ItemListing.active_bound_template_count` from an immutable listing reference.
 /// Package-scoped to keep reference-based reads internal to this package.
-public(package) fun item_listing_active_bound_template_count(listing: &ItemListing): u64 {
+public(package) fun item_listing_ref_active_bound_template_count(listing: &ItemListing): u64 {
     listing.active_bound_template_count
 }
 
 /// Returns `DiscountTemplate.applies_to_listing` from an immutable template reference.
-/// Package-scoped to keep reference-based reads internal to this package.
-public(package) fun discount_template_applies_to_listing(template: &DiscountTemplate): Option<ID> {
+/// Package-scoped to support borrow-once internal reads.
+public(package) fun discount_template_ref_applies_to_listing(template: &DiscountTemplate): Option<ID> {
     template.applies_to_listing
 }
 
 /// Returns `DiscountTemplate.rule` from an immutable template reference.
-/// Package-scoped to keep reference-based reads internal to this package.
-public(package) fun discount_template_rule(template: &DiscountTemplate): DiscountRule {
+/// Package-scoped to support borrow-once internal reads.
+public(package) fun discount_template_ref_rule(template: &DiscountTemplate): DiscountRule {
     template.rule
 }
 
 /// Returns `DiscountTemplate.starts_at` from an immutable template reference.
-/// Package-scoped to keep reference-based reads internal to this package.
-public(package) fun discount_template_starts_at(template: &DiscountTemplate): u64 {
+/// Package-scoped to support borrow-once internal reads.
+public(package) fun discount_template_ref_starts_at(template: &DiscountTemplate): u64 {
     template.starts_at
 }
 
 /// Returns `DiscountTemplate.expires_at` from an immutable template reference.
-/// Package-scoped to keep reference-based reads internal to this package.
-public(package) fun discount_template_expires_at(template: &DiscountTemplate): Option<u64> {
+/// Package-scoped to support borrow-once internal reads.
+public(package) fun discount_template_ref_expires_at(template: &DiscountTemplate): Option<u64> {
     template.expires_at
 }
 
 /// Returns `DiscountTemplate.max_redemptions` from an immutable template reference.
-/// Package-scoped to keep reference-based reads internal to this package.
-public(package) fun discount_template_max_redemptions(template: &DiscountTemplate): Option<u64> {
+/// Package-scoped to support borrow-once internal reads.
+public(package) fun discount_template_ref_max_redemptions(template: &DiscountTemplate): Option<u64> {
     template.max_redemptions
 }
 
 /// Returns `DiscountTemplate.claims_issued` from an immutable template reference.
-/// Package-scoped to keep reference-based reads internal to this package.
-public(package) fun discount_template_claims_issued(template: &DiscountTemplate): u64 {
+/// Package-scoped to support borrow-once internal reads.
+public(package) fun discount_template_ref_claims_issued(template: &DiscountTemplate): u64 {
     template.claims_issued
 }
 
 /// Returns `DiscountTemplate.redemptions` from an immutable template reference.
-/// Package-scoped to keep reference-based reads internal to this package.
-public(package) fun discount_template_redemptions(template: &DiscountTemplate): u64 {
+/// Package-scoped to support borrow-once internal reads.
+public(package) fun discount_template_ref_redemptions(template: &DiscountTemplate): u64 {
     template.redemptions
 }
 
 /// Returns `DiscountTemplate.active` from an immutable template reference.
-/// Package-scoped to keep reference-based reads internal to this package.
-public(package) fun discount_template_active(template: &DiscountTemplate): bool {
+/// Package-scoped to support borrow-once internal reads.
+public(package) fun discount_template_ref_active(template: &DiscountTemplate): bool {
     template.active
 }
 
-/// Returns encoded rule kind from a template (`0 = fixed`, `1 = percent`).
-/// Package-scoped to keep reference-based reads internal to this package.
-public(package) fun discount_template_rule_kind(template: &DiscountTemplate): u8 {
+/// Returns encoded rule kind from an immutable template reference (`0 = fixed`, `1 = percent`).
+/// Package-scoped to support borrow-once internal reads.
+public(package) fun discount_template_ref_rule_kind(template: &DiscountTemplate): u8 {
     discount_rule_kind(template.rule)
 }
 
-/// Returns encoded rule value from a template (`amount_cents` or `bps`).
-/// Package-scoped to keep reference-based reads internal to this package.
-public(package) fun discount_template_rule_value(template: &DiscountTemplate): u64 {
+/// Returns encoded rule value from an immutable template reference (`amount_cents` or `bps`).
+/// Package-scoped to support borrow-once internal reads.
+public(package) fun discount_template_ref_rule_value(template: &DiscountTemplate): u64 {
     discount_rule_value(template.rule)
+}
+
+/// Returns `DiscountTemplate.applies_to_listing` after validating shop membership.
+public fun discount_template_shop_id(shop: &Shop, template_id: ID): ID {
+    let _template = shop.borrow_discount_template(template_id);
+    shop.id.to_inner()
+}
+
+/// Returns `DiscountTemplate.applies_to_listing` after validating shop membership.
+public fun discount_template_applies_to_listing(shop: &Shop, template_id: ID): Option<ID> {
+    let template = shop.borrow_discount_template(template_id);
+    discount_template_ref_applies_to_listing(template)
+}
+
+/// Returns `DiscountTemplate.rule` after validating shop membership.
+public fun discount_template_rule(shop: &Shop, template_id: ID): DiscountRule {
+    let template = shop.borrow_discount_template(template_id);
+    discount_template_ref_rule(template)
+}
+
+/// Returns `DiscountTemplate.starts_at` after validating shop membership.
+public fun discount_template_starts_at(shop: &Shop, template_id: ID): u64 {
+    let template = shop.borrow_discount_template(template_id);
+    discount_template_ref_starts_at(template)
+}
+
+/// Returns `DiscountTemplate.expires_at` after validating shop membership.
+public fun discount_template_expires_at(shop: &Shop, template_id: ID): Option<u64> {
+    let template = shop.borrow_discount_template(template_id);
+    discount_template_ref_expires_at(template)
+}
+
+/// Returns `DiscountTemplate.max_redemptions` after validating shop membership.
+public fun discount_template_max_redemptions(shop: &Shop, template_id: ID): Option<u64> {
+    let template = shop.borrow_discount_template(template_id);
+    discount_template_ref_max_redemptions(template)
+}
+
+/// Returns `DiscountTemplate.claims_issued` after validating shop membership.
+public fun discount_template_claims_issued(shop: &Shop, template_id: ID): u64 {
+    let template = shop.borrow_discount_template(template_id);
+    discount_template_ref_claims_issued(template)
+}
+
+/// Returns `DiscountTemplate.redemptions` after validating shop membership.
+public fun discount_template_redemptions(shop: &Shop, template_id: ID): u64 {
+    let template = shop.borrow_discount_template(template_id);
+    discount_template_ref_redemptions(template)
+}
+
+/// Returns `DiscountTemplate.active` after validating shop membership.
+public fun discount_template_active(shop: &Shop, template_id: ID): bool {
+    let template = shop.borrow_discount_template(template_id);
+    discount_template_ref_active(template)
+}
+
+/// Returns encoded rule kind from a template (`0 = fixed`, `1 = percent`).
+/// Validates shop membership before reading the template.
+public fun discount_template_rule_kind(shop: &Shop, template_id: ID): u8 {
+    let template = shop.borrow_discount_template(template_id);
+    discount_template_ref_rule_kind(template)
+}
+
+/// Returns encoded rule value from a template (`amount_cents` or `bps`).
+/// Validates shop membership before reading the template.
+public fun discount_template_rule_value(shop: &Shop, template_id: ID): u64 {
+    let template = shop.borrow_discount_template(template_id);
+    discount_template_ref_rule_value(template)
 }
 
 /// Returns listing fields after validating shop membership.
 public fun listing_values(shop: &Shop, listing_id: ID): ListingValues {
     let listing = shop.borrow_listing(listing_id);
     ListingValues {
-        name: item_listing_name(listing),
-        base_price_usd_cents: item_listing_base_price_usd_cents(listing),
-        stock: item_listing_stock(listing),
+        name: item_listing_ref_name(listing),
+        base_price_usd_cents: item_listing_ref_base_price_usd_cents(listing),
+        stock: item_listing_ref_stock(listing),
         shop_id: shop.id.to_inner(),
-        spotlight_discount_template_id: item_listing_spotlight_discount_template_id(listing),
+        spotlight_discount_template_id: item_listing_ref_spotlight_discount_template_id(listing),
     }
 }
 
@@ -2589,82 +2641,6 @@ public fun accepted_currency_values_max_price_status_lag_secs_cap(
     currency_values: &AcceptedCurrencyValues,
 ): u64 {
     currency_values.max_price_status_lag_secs_cap
-}
-
-fun build_discount_template_values(
-    shop_id: ID,
-    template: &DiscountTemplate,
-): DiscountTemplateValues {
-    DiscountTemplateValues {
-        shop_id,
-        applies_to_listing: discount_template_applies_to_listing(template),
-        rule: discount_template_rule(template),
-        starts_at: discount_template_starts_at(template),
-        expires_at: discount_template_expires_at(template),
-        max_redemptions: discount_template_max_redemptions(template),
-        claims_issued: discount_template_claims_issued(template),
-        redemptions: discount_template_redemptions(template),
-        active: discount_template_active(template),
-    }
-}
-
-/// Returns discount template fields after validating shop membership.
-/// The returned value is a copyable projection, not the full `DiscountTemplate`, because the
-/// template stores internal `Table` state used for one-claim-per-address enforcement.
-public fun discount_template_values(shop: &Shop, template_id: ID): DiscountTemplateValues {
-    let template = shop.borrow_discount_template(template_id);
-    build_discount_template_values(shop.id.to_inner(), template)
-}
-
-/// Returns `DiscountTemplateValues.shop_id`.
-public fun discount_template_values_shop_id(template_values: &DiscountTemplateValues): ID {
-    template_values.shop_id
-}
-
-/// Returns `DiscountTemplateValues.applies_to_listing`.
-public fun discount_template_values_applies_to_listing(
-    template_values: &DiscountTemplateValues,
-): Option<ID> {
-    template_values.applies_to_listing
-}
-
-/// Returns `DiscountTemplateValues.rule`.
-public fun discount_template_values_rule(template_values: &DiscountTemplateValues): DiscountRule {
-    template_values.rule
-}
-
-/// Returns `DiscountTemplateValues.starts_at`.
-public fun discount_template_values_starts_at(template_values: &DiscountTemplateValues): u64 {
-    template_values.starts_at
-}
-
-/// Returns `DiscountTemplateValues.expires_at`.
-public fun discount_template_values_expires_at(
-    template_values: &DiscountTemplateValues,
-): Option<u64> {
-    template_values.expires_at
-}
-
-/// Returns `DiscountTemplateValues.max_redemptions`.
-public fun discount_template_values_max_redemptions(
-    template_values: &DiscountTemplateValues,
-): Option<u64> {
-    template_values.max_redemptions
-}
-
-/// Returns `DiscountTemplateValues.claims_issued`.
-public fun discount_template_values_claims_issued(template_values: &DiscountTemplateValues): u64 {
-    template_values.claims_issued
-}
-
-/// Returns `DiscountTemplateValues.redemptions`.
-public fun discount_template_values_redemptions(template_values: &DiscountTemplateValues): u64 {
-    template_values.redemptions
-}
-
-/// Returns `DiscountTemplateValues.active`.
-public fun discount_template_values_active(template_values: &DiscountTemplateValues): bool {
-    template_values.active
 }
 
 /// Helper for `discount_ticket_values`.
