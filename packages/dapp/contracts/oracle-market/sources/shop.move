@@ -2358,6 +2358,25 @@ macro fun assert_template_claimable(
     assert!(!template.claims_by_claimer.contains(claimer), EDiscountAlreadyClaimed);
 }
 
+/// Asserts that the feed attestation lag is within `max_price_status_lag_secs`.
+public(package) fun assert_price_status_trading_for_max_lag_impl(
+    price_info_object: &price_info::PriceInfoObject,
+    max_price_status_lag_secs: u64,
+) {
+    assert_price_status_trading!(price_info_object, max_price_status_lag_secs);
+}
+
+/// Asserts that the feed attestation lag is within `max_price_status_lag_secs`.
+public(package) macro fun assert_price_status_trading_for_max_lag(
+    $price_info_object: &price_info::PriceInfoObject,
+    $max_price_status_lag_secs: u64,
+) {
+    assert_price_status_trading_for_max_lag_impl(
+        $price_info_object,
+        $max_price_status_lag_secs,
+    );
+}
+
 // === View helpers ===
 
 /// Returns true if the listing is registered under the shop.
@@ -2628,25 +2647,6 @@ public fun quote_amount_for_price_info_object<TCoin>(
         max_confidence_ratio_bps,
         clock,
     )
-}
-
-/// Asserts that the feed attestation lag is within `max_price_status_lag_secs`.
-public(package) fun assert_price_status_trading_for_max_lag_impl(
-    price_info_object: &price_info::PriceInfoObject,
-    max_price_status_lag_secs: u64,
-) {
-    assert_price_status_trading!(price_info_object, max_price_status_lag_secs);
-}
-
-/// Asserts that the feed attestation lag is within `max_price_status_lag_secs`.
-public(package) macro fun assert_price_status_trading_for_max_lag(
-    $price_info_object: &price_info::PriceInfoObject,
-    $max_price_status_lag_secs: u64,
-) {
-    assert_price_status_trading_for_max_lag_impl(
-        $price_info_object,
-        $max_price_status_lag_secs,
-    );
 }
 
 /// Returns `listing_id` from the provided value.
