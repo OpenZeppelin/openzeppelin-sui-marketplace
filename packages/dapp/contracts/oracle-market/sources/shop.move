@@ -2604,7 +2604,7 @@ public(package) fun discount_claim_exists(shop: &Shop, template_id: ID, claimer:
 }
 
 /// Quotes the coin amount for a price info object with guardrails.
-entry fun quote_amount_for_price_info_object<TCoin>(
+public fun quote_amount_for_price_info_object<TCoin>(
     shop: &Shop,
     price_info_object: &price_info::PriceInfoObject,
     price_usd_cents: u64,
