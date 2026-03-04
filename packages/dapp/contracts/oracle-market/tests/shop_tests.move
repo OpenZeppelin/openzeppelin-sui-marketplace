@@ -455,6 +455,34 @@ fun create_two_shops_and_primary_owner_cap_for_sender(
     (first_shop_id, first_owner_cap_id, second_shop_id)
 }
 
+fun setup_foreign_shop_without_test_coin_registration(
+    scn: &mut test_scenario::Scenario,
+): shop::Shop {
+    let (shop_a_id, owner_cap_a_id, shop_b_id) = create_two_shops_and_primary_owner_cap_for_sender(
+        scn,
+        DEFAULT_SHOP_NAME,
+        DEFAULT_SHOP_NAME,
+    );
+    let currency = prepare_test_currency_for_owner(scn, TEST_OWNER);
+    let mut shop_a = take_shared_shop(scn, shop_a_id);
+    let owner_cap_a = test_scenario::take_from_sender_by_id(scn, owner_cap_a_id);
+    add_test_coin_accepted_currency_for_scenario(
+        scn,
+        &mut shop_a,
+        &owner_cap_a,
+        &currency,
+        PRIMARY_FEED_ID,
+        option::none(),
+        option::none(),
+        option::none(),
+    );
+    test_scenario::return_to_sender(scn, owner_cap_a);
+    test_scenario::return_shared(shop_a);
+    std::unit_test::destroy(currency);
+    let _ = test_scenario::next_tx(scn, TEST_OWNER);
+    take_shared_shop(scn, shop_b_id)
+}
+
 fun create_test_clock_at(ctx: &mut tx_context::TxContext, timestamp_secs: u64): clock::Clock {
     let mut clock_object = clock::create_for_testing(ctx);
     clock::set_for_testing(&mut clock_object, timestamp_secs);
@@ -909,13 +937,12 @@ fun add_accepted_currency_records_currency_and_event() {
 
     let shared_shop = take_shared_shop(&scn, shop_id);
 
-    let accepted_currency_values = shop::accepted_currency_values<TestCoin>(&shared_shop);
-    let shop_id = shop::accepted_currency_values_shop_id(&accepted_currency_values);
-    let coin_type = shop::accepted_currency_values_coin_type(&accepted_currency_values);
-    let feed_id = shop::accepted_currency_values_feed_id(&accepted_currency_values);
-    let pyth_id = shop::accepted_currency_values_pyth_object_id(&accepted_currency_values);
-    let decimals = shop::accepted_currency_values_decimals(&accepted_currency_values);
-    let symbol = shop::accepted_currency_values_symbol(&accepted_currency_values);
+    let shop_id = shop::accepted_currency_shop_id<TestCoin>(&shared_shop);
+    let coin_type = shop::accepted_currency_coin_type<TestCoin>(&shared_shop);
+    let feed_id = shop::accepted_currency_feed_id<TestCoin>(&shared_shop);
+    let pyth_id = shop::accepted_currency_pyth_object_id<TestCoin>(&shared_shop);
+    let decimals = shop::accepted_currency_decimals<TestCoin>(&shared_shop);
+    let symbol = shop::accepted_currency_symbol<TestCoin>(&shared_shop);
     assert_eq!(shop_id, shop::shop_id(&shared_shop));
     assert_eq!(coin_type, test_coin_type());
     assert_eq!(feed_id, expected_feed_id);
@@ -959,17 +986,10 @@ fun add_accepted_currency_stores_custom_guardrail_caps() {
 
     let _ = test_scenario::next_tx(&mut scn, TEST_OWNER);
     let shared_shop = take_shared_shop(&scn, shop_id);
-    let accepted_currency_values = shop::accepted_currency_values<TestCoin>(&shared_shop);
-    let max_age_cap = shop::accepted_currency_values_max_price_age_secs_cap(
-        &accepted_currency_values,
-    );
-    let conf_cap = shop::accepted_currency_values_max_confidence_ratio_bps_cap(
-        &accepted_currency_values,
-    );
-    let status_cap = shop::accepted_currency_values_max_price_status_lag_secs_cap(
-        &accepted_currency_values,
-    );
-    let pyth_object_id = shop::accepted_currency_values_pyth_object_id(&accepted_currency_values);
+    let max_age_cap = shop::accepted_currency_max_price_age_secs_cap<TestCoin>(&shared_shop);
+    let conf_cap = shop::accepted_currency_max_confidence_ratio_bps_cap<TestCoin>(&shared_shop);
+    let status_cap = shop::accepted_currency_max_price_status_lag_secs_cap<TestCoin>(&shared_shop);
+    let pyth_object_id = shop::accepted_currency_pyth_object_id<TestCoin>(&shared_shop);
     assert_eq!(max_age_cap, custom_age_cap);
     assert_eq!(conf_cap, custom_conf_cap);
     assert_eq!(status_cap, custom_status_cap);
@@ -1010,17 +1030,10 @@ fun add_accepted_currency_clamps_guardrail_caps_to_defaults() {
 
     let _ = test_scenario::next_tx(&mut scn, TEST_OWNER);
     let shared_shop = take_shared_shop(&scn, shop_id);
-    let accepted_currency_values = shop::accepted_currency_values<TestCoin>(&shared_shop);
-    let max_age_cap = shop::accepted_currency_values_max_price_age_secs_cap(
-        &accepted_currency_values,
-    );
-    let conf_cap = shop::accepted_currency_values_max_confidence_ratio_bps_cap(
-        &accepted_currency_values,
-    );
-    let status_cap = shop::accepted_currency_values_max_price_status_lag_secs_cap(
-        &accepted_currency_values,
-    );
-    let pyth_object_id = shop::accepted_currency_values_pyth_object_id(&accepted_currency_values);
+    let max_age_cap = shop::accepted_currency_max_price_age_secs_cap<TestCoin>(&shared_shop);
+    let conf_cap = shop::accepted_currency_max_confidence_ratio_bps_cap<TestCoin>(&shared_shop);
+    let status_cap = shop::accepted_currency_max_price_status_lag_secs_cap<TestCoin>(&shared_shop);
+    let pyth_object_id = shop::accepted_currency_pyth_object_id<TestCoin>(&shared_shop);
     assert_eq!(max_age_cap, TEST_DEFAULT_MAX_PRICE_AGE_SECS);
     assert_eq!(conf_cap, TEST_DEFAULT_MAX_CONFIDENCE_RATIO_BPS);
     assert_eq!(status_cap, TEST_DEFAULT_MAX_PRICE_STATUS_LAG_SECS);
@@ -1711,8 +1724,7 @@ fun quote_view_matches_internal_math() {
     );
     let clock_obj = create_test_clock_at(test_scenario::ctx(&mut scn), 1);
     let price_usd_cents = 10_000;
-    let accepted_currency_values = shop::accepted_currency_values<TestCoin>(&shared_shop);
-    let decimals = shop::accepted_currency_values_decimals(&accepted_currency_values);
+    let decimals = shop::accepted_currency_decimals<TestCoin>(&shared_shop);
 
     let view_quote = shop::quote_amount_for_price_info_object<TestCoin>(
         &shared_shop,
@@ -4147,11 +4159,10 @@ fun claim_discount_ticket_mints_transfers_and_records_claim() {
         &scn,
         ticket_id,
     );
-    let ticket_values = shop::discount_ticket_values(&ticket);
-    let ticket_template = shop::discount_ticket_values_discount_template_id(&ticket_values);
-    let ticket_shop = shop::discount_ticket_values_shop_id(&ticket_values);
-    let ticket_listing = shop::discount_ticket_values_listing_id(&ticket_values);
-    let ticket_owner = shop::discount_ticket_values_claimer(&ticket_values);
+    let ticket_template = shop::discount_ticket_discount_template_id(&ticket);
+    let ticket_shop = shop::discount_ticket_shop_id(&ticket);
+    let ticket_listing = shop::discount_ticket_listing_id(&ticket);
+    let ticket_owner = shop::discount_ticket_claimer(&ticket);
     assert_eq!(ticket_template, template_id);
     assert_eq!(ticket_shop, shop_id);
     assert!(option::is_some(&ticket_listing));
@@ -5657,40 +5668,83 @@ fun prune_discount_claims_noop_for_unclaimed_claimer() {
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::EAcceptedCurrencyMissing)]
-fun accepted_currency_values_rejects_foreign_shop() {
+fun accepted_currency_getters_reject_foreign_shop() {
     let mut scn = test_scenario::begin(TEST_OWNER);
-    let (shop_a_id, owner_cap_a_id, shop_b_id) = create_two_shops_and_primary_owner_cap_for_sender(
-        &mut scn,
-        DEFAULT_SHOP_NAME,
-        DEFAULT_SHOP_NAME,
-    );
+    let shared_shop_b = setup_foreign_shop_without_test_coin_registration(&mut scn);
+    let _ = shop::accepted_currency_shop_id<TestCoin>(&shared_shop_b);
+    abort
+}
 
-    let currency = prepare_test_currency_for_owner(&mut scn, TEST_OWNER);
-    let mut shop_obj = take_shared_shop(&scn, shop_a_id);
-    let owner_cap_obj = test_scenario::take_from_sender_by_id(
-        &scn,
-        owner_cap_a_id,
-    );
-    add_test_coin_accepted_currency_for_scenario(
-        &mut scn,
-        &mut shop_obj,
-        &owner_cap_obj,
-        &currency,
-        PRIMARY_FEED_ID,
-        option::none(),
-        option::none(),
-        option::none(),
-    );
+#[test, expected_failure(abort_code = ::sui_oracle_market::shop::EAcceptedCurrencyMissing)]
+fun accepted_currency_coin_type_rejects_foreign_shop() {
+    let mut scn = test_scenario::begin(TEST_OWNER);
+    let shared_shop_b = setup_foreign_shop_without_test_coin_registration(&mut scn);
+    let _ = shop::accepted_currency_coin_type<TestCoin>(&shared_shop_b);
+    abort
+}
 
-    test_scenario::return_to_sender(&scn, owner_cap_obj);
-    test_scenario::return_shared(shop_obj);
-    std::unit_test::destroy(currency);
+#[test, expected_failure(abort_code = ::sui_oracle_market::shop::EAcceptedCurrencyMissing)]
+fun accepted_currency_feed_id_rejects_foreign_shop() {
+    let mut scn = test_scenario::begin(TEST_OWNER);
+    let shared_shop_b = setup_foreign_shop_without_test_coin_registration(&mut scn);
+    let _ = shop::accepted_currency_feed_id<TestCoin>(&shared_shop_b);
+    abort
+}
 
-    let _ = test_scenario::next_tx(&mut scn, TEST_OWNER);
+#[test, expected_failure(abort_code = ::sui_oracle_market::shop::EAcceptedCurrencyMissing)]
+fun accepted_currency_pyth_object_id_rejects_foreign_shop() {
+    let mut scn = test_scenario::begin(TEST_OWNER);
+    let shared_shop_b = setup_foreign_shop_without_test_coin_registration(&mut scn);
+    let _ = shop::accepted_currency_pyth_object_id<TestCoin>(&shared_shop_b);
+    abort
+}
 
-    let shared_shop_b = take_shared_shop(&scn, shop_b_id);
+#[test, expected_failure(abort_code = ::sui_oracle_market::shop::EAcceptedCurrencyMissing)]
+fun accepted_currency_decimals_rejects_foreign_shop() {
+    let mut scn = test_scenario::begin(TEST_OWNER);
+    let shared_shop_b = setup_foreign_shop_without_test_coin_registration(&mut scn);
+    let _ = shop::accepted_currency_decimals<TestCoin>(&shared_shop_b);
+    abort
+}
 
-    shop::accepted_currency_values<TestCoin>(&shared_shop_b);
+#[test, expected_failure(abort_code = ::sui_oracle_market::shop::EAcceptedCurrencyMissing)]
+fun accepted_currency_symbol_rejects_foreign_shop() {
+    let mut scn = test_scenario::begin(TEST_OWNER);
+    let shared_shop_b = setup_foreign_shop_without_test_coin_registration(&mut scn);
+    let _ = shop::accepted_currency_symbol<TestCoin>(&shared_shop_b);
+    abort
+}
+
+#[test, expected_failure(abort_code = ::sui_oracle_market::shop::EAcceptedCurrencyMissing)]
+fun accepted_currency_max_price_age_secs_cap_rejects_foreign_shop() {
+    let mut scn = test_scenario::begin(TEST_OWNER);
+    let shared_shop_b = setup_foreign_shop_without_test_coin_registration(&mut scn);
+    let _ = shop::accepted_currency_max_price_age_secs_cap<TestCoin>(&shared_shop_b);
+    abort
+}
+
+#[test, expected_failure(abort_code = ::sui_oracle_market::shop::EAcceptedCurrencyMissing)]
+fun accepted_currency_max_confidence_ratio_bps_cap_rejects_foreign_shop() {
+    let mut scn = test_scenario::begin(TEST_OWNER);
+    let shared_shop_b = setup_foreign_shop_without_test_coin_registration(&mut scn);
+    let _ = shop::accepted_currency_max_confidence_ratio_bps_cap<TestCoin>(&shared_shop_b);
+    abort
+}
+
+#[test, expected_failure(abort_code = ::sui_oracle_market::shop::EAcceptedCurrencyMissing)]
+fun accepted_currency_max_price_status_lag_secs_cap_rejects_foreign_shop() {
+    let mut scn = test_scenario::begin(TEST_OWNER);
+    let shared_shop_b = setup_foreign_shop_without_test_coin_registration(&mut scn);
+    let _ = shop::accepted_currency_max_price_status_lag_secs_cap<TestCoin>(&shared_shop_b);
+    abort
+}
+
+#[test, expected_failure(abort_code = ::sui_oracle_market::shop::EAcceptedCurrencyMissing)]
+fun accepted_currency_getters_reject_missing_registration() {
+    let mut ctx = tx_context::new_from_hint(TEST_OWNER, 10016, 0, 0, 0);
+    let (shop_obj, _owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
+
+    let _ = shop::accepted_currency_shop_id<TestCoin>(&shop_obj);
     abort
 }
 

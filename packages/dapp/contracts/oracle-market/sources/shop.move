@@ -334,27 +334,6 @@ public struct ListingValues has copy, drop {
     spotlight_discount_template_id: Option<ID>,
 }
 
-/// Accepted-currency fields returned for read-only clients.
-public struct AcceptedCurrencyValues has copy, drop {
-    shop_id: ID,
-    coin_type: TypeName,
-    feed_id: vector<u8>,
-    pyth_object_id: ID,
-    decimals: u8,
-    symbol: String,
-    max_price_age_secs_cap: u64,
-    max_confidence_ratio_bps_cap: u16,
-    max_price_status_lag_secs_cap: u64,
-}
-
-/// Discount ticket fields returned for read-only clients.
-public struct DiscountTicketValues has copy, drop {
-    discount_template_id: ID,
-    shop_id: ID,
-    listing_id: Option<ID>,
-    claimer: address,
-}
-
 // === Event Definitions ===
 /// Event emitted when a shop is created.
 public struct ShopCreatedEvent has copy, drop {
@@ -2468,6 +2447,60 @@ public(package) fun discount_template_ref_rule_value(template: &DiscountTemplate
     discount_rule_value(template.rule)
 }
 
+/// Returns `AcceptedCurrency.feed_id` from an immutable accepted-currency reference.
+/// Package-scoped to support borrow-once internal reads.
+public(package) fun accepted_currency_ref_feed_id(
+    accepted_currency: &AcceptedCurrency,
+): vector<u8> {
+    accepted_currency.feed_id
+}
+
+/// Returns `AcceptedCurrency.pyth_object_id` from an immutable accepted-currency reference.
+/// Package-scoped to support borrow-once internal reads.
+public(package) fun accepted_currency_ref_pyth_object_id(
+    accepted_currency: &AcceptedCurrency,
+): ID {
+    accepted_currency.pyth_object_id
+}
+
+/// Returns `AcceptedCurrency.decimals` from an immutable accepted-currency reference.
+/// Package-scoped to support borrow-once internal reads.
+public(package) fun accepted_currency_ref_decimals(accepted_currency: &AcceptedCurrency): u8 {
+    accepted_currency.decimals
+}
+
+/// Returns `AcceptedCurrency.symbol` from an immutable accepted-currency reference.
+/// Package-scoped to support borrow-once internal reads.
+public(package) fun accepted_currency_ref_symbol(accepted_currency: &AcceptedCurrency): String {
+    accepted_currency.symbol
+}
+
+/// Returns `AcceptedCurrency.max_price_age_secs_cap` from an immutable accepted-currency reference.
+/// Package-scoped to support borrow-once internal reads.
+public(package) fun accepted_currency_ref_max_price_age_secs_cap(
+    accepted_currency: &AcceptedCurrency,
+): u64 {
+    accepted_currency.max_price_age_secs_cap
+}
+
+/// Returns `AcceptedCurrency.max_confidence_ratio_bps_cap` from an immutable accepted-currency
+/// reference.
+/// Package-scoped to support borrow-once internal reads.
+public(package) fun accepted_currency_ref_max_confidence_ratio_bps_cap(
+    accepted_currency: &AcceptedCurrency,
+): u16 {
+    accepted_currency.max_confidence_ratio_bps_cap
+}
+
+/// Returns `AcceptedCurrency.max_price_status_lag_secs_cap` from an immutable accepted-currency
+/// reference.
+/// Package-scoped to support borrow-once internal reads.
+public(package) fun accepted_currency_ref_max_price_status_lag_secs_cap(
+    accepted_currency: &AcceptedCurrency,
+): u64 {
+    accepted_currency.max_price_status_lag_secs_cap
+}
+
 /// Returns the owning shop id after validating template membership.
 public fun discount_template_shop_id(shop: &Shop, template_id: ID): ID {
     let _template = shop.borrow_discount_template(template_id);
@@ -2565,102 +2598,91 @@ public fun listing_values_spotlight_discount_template_id(
     listing_values.spotlight_discount_template_id
 }
 
-/// Returns accepted currency fields for a registered coin type.
-public fun accepted_currency_values<TCoin>(shop: &Shop): AcceptedCurrencyValues {
+/// Returns the owning shop id after validating accepted-currency registration.
+public fun accepted_currency_shop_id<TCoin>(shop: &Shop): ID {
     let coin_type = currency_type<TCoin>();
-    let accepted_currency = shop.borrow_registered_accepted_currency(coin_type);
-    AcceptedCurrencyValues {
-        shop_id: shop.id.to_inner(),
-        coin_type,
-        feed_id: accepted_currency.feed_id,
-        pyth_object_id: accepted_currency.pyth_object_id,
-        decimals: accepted_currency.decimals,
-        symbol: accepted_currency.symbol,
-        max_price_age_secs_cap: accepted_currency.max_price_age_secs_cap,
-        max_confidence_ratio_bps_cap: accepted_currency.max_confidence_ratio_bps_cap,
-        max_price_status_lag_secs_cap: accepted_currency.max_price_status_lag_secs_cap,
-    }
+    let _accepted_currency = shop.borrow_registered_accepted_currency(coin_type);
+    shop.id.to_inner()
 }
 
-/// Returns `AcceptedCurrencyValues.shop_id`.
-public fun accepted_currency_values_shop_id(currency_values: &AcceptedCurrencyValues): ID {
-    currency_values.shop_id
+/// Returns the registered coin type after validating accepted-currency registration.
+public fun accepted_currency_coin_type<TCoin>(shop: &Shop): TypeName {
+    let coin_type = currency_type<TCoin>();
+    let _accepted_currency = shop.borrow_registered_accepted_currency(coin_type);
+    coin_type
 }
 
-/// Returns `AcceptedCurrencyValues.coin_type`.
-public fun accepted_currency_values_coin_type(currency_values: &AcceptedCurrencyValues): TypeName {
-    currency_values.coin_type
+/// Returns `AcceptedCurrency.feed_id` after validating accepted-currency registration.
+public fun accepted_currency_feed_id<TCoin>(shop: &Shop): vector<u8> {
+    let coin_type = currency_type<TCoin>();
+    accepted_currency_ref_feed_id(shop.borrow_registered_accepted_currency(coin_type))
 }
 
-/// Returns `AcceptedCurrencyValues.feed_id`.
-public fun accepted_currency_values_feed_id(currency_values: &AcceptedCurrencyValues): vector<u8> {
-    currency_values.feed_id
+/// Returns `AcceptedCurrency.pyth_object_id` after validating accepted-currency registration.
+public fun accepted_currency_pyth_object_id<TCoin>(shop: &Shop): ID {
+    let coin_type = currency_type<TCoin>();
+    accepted_currency_ref_pyth_object_id(
+        shop.borrow_registered_accepted_currency(coin_type),
+    )
 }
 
-/// Returns `AcceptedCurrencyValues.pyth_object_id`.
-public fun accepted_currency_values_pyth_object_id(currency_values: &AcceptedCurrencyValues): ID {
-    currency_values.pyth_object_id
+/// Returns `AcceptedCurrency.decimals` after validating accepted-currency registration.
+public fun accepted_currency_decimals<TCoin>(shop: &Shop): u8 {
+    let coin_type = currency_type<TCoin>();
+    accepted_currency_ref_decimals(shop.borrow_registered_accepted_currency(coin_type))
 }
 
-/// Returns `AcceptedCurrencyValues.decimals`.
-public fun accepted_currency_values_decimals(currency_values: &AcceptedCurrencyValues): u8 {
-    currency_values.decimals
+/// Returns `AcceptedCurrency.symbol` after validating accepted-currency registration.
+public fun accepted_currency_symbol<TCoin>(shop: &Shop): String {
+    let coin_type = currency_type<TCoin>();
+    accepted_currency_ref_symbol(shop.borrow_registered_accepted_currency(coin_type))
 }
 
-/// Returns `AcceptedCurrencyValues.symbol`.
-public fun accepted_currency_values_symbol(currency_values: &AcceptedCurrencyValues): String {
-    currency_values.symbol
+/// Returns `AcceptedCurrency.max_price_age_secs_cap` after validating accepted-currency
+/// registration.
+public fun accepted_currency_max_price_age_secs_cap<TCoin>(shop: &Shop): u64 {
+    let coin_type = currency_type<TCoin>();
+    accepted_currency_ref_max_price_age_secs_cap(
+        shop.borrow_registered_accepted_currency(coin_type),
+    )
 }
 
-/// Returns `AcceptedCurrencyValues.max_price_age_secs_cap`.
-public fun accepted_currency_values_max_price_age_secs_cap(
-    currency_values: &AcceptedCurrencyValues,
-): u64 {
-    currency_values.max_price_age_secs_cap
+/// Returns `AcceptedCurrency.max_confidence_ratio_bps_cap` after validating accepted-currency
+/// registration.
+public fun accepted_currency_max_confidence_ratio_bps_cap<TCoin>(shop: &Shop): u16 {
+    let coin_type = currency_type<TCoin>();
+    accepted_currency_ref_max_confidence_ratio_bps_cap(
+        shop.borrow_registered_accepted_currency(coin_type),
+    )
 }
 
-/// Returns `AcceptedCurrencyValues.max_confidence_ratio_bps_cap`.
-public fun accepted_currency_values_max_confidence_ratio_bps_cap(
-    currency_values: &AcceptedCurrencyValues,
-): u16 {
-    currency_values.max_confidence_ratio_bps_cap
+/// Returns `AcceptedCurrency.max_price_status_lag_secs_cap` after validating accepted-currency
+/// registration.
+public fun accepted_currency_max_price_status_lag_secs_cap<TCoin>(shop: &Shop): u64 {
+    let coin_type = currency_type<TCoin>();
+    accepted_currency_ref_max_price_status_lag_secs_cap(
+        shop.borrow_registered_accepted_currency(coin_type),
+    )
 }
 
-/// Returns `AcceptedCurrencyValues.max_price_status_lag_secs_cap`.
-public fun accepted_currency_values_max_price_status_lag_secs_cap(
-    currency_values: &AcceptedCurrencyValues,
-): u64 {
-    currency_values.max_price_status_lag_secs_cap
+/// Returns `DiscountTicket.discount_template_id`.
+public fun discount_ticket_discount_template_id(ticket: &DiscountTicket): ID {
+    ticket.discount_template_id
 }
 
-/// Helper for `discount_ticket_values`.
-public fun discount_ticket_values(ticket: &DiscountTicket): DiscountTicketValues {
-    DiscountTicketValues {
-        discount_template_id: ticket.discount_template_id,
-        shop_id: ticket.shop_id,
-        listing_id: ticket.listing_id,
-        claimer: ticket.claimer,
-    }
+/// Returns `DiscountTicket.shop_id`.
+public fun discount_ticket_shop_id(ticket: &DiscountTicket): ID {
+    ticket.shop_id
 }
 
-/// Returns `DiscountTicketValues.discount_template_id`.
-public fun discount_ticket_values_discount_template_id(ticket_values: &DiscountTicketValues): ID {
-    ticket_values.discount_template_id
+/// Returns `DiscountTicket.listing_id`.
+public fun discount_ticket_listing_id(ticket: &DiscountTicket): Option<ID> {
+    ticket.listing_id
 }
 
-/// Returns `DiscountTicketValues.shop_id`.
-public fun discount_ticket_values_shop_id(ticket_values: &DiscountTicketValues): ID {
-    ticket_values.shop_id
-}
-
-/// Returns `DiscountTicketValues.listing_id`.
-public fun discount_ticket_values_listing_id(ticket_values: &DiscountTicketValues): Option<ID> {
-    ticket_values.listing_id
-}
-
-/// Returns `DiscountTicketValues.claimer`.
-public fun discount_ticket_values_claimer(ticket_values: &DiscountTicketValues): address {
-    ticket_values.claimer
+/// Returns `DiscountTicket.claimer`.
+public fun discount_ticket_claimer(ticket: &DiscountTicket): address {
+    ticket.claimer
 }
 
 /// Returns whether `claimer` has an active claim marker for `template_id`.
