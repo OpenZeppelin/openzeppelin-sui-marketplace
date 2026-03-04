@@ -1643,6 +1643,13 @@ fun borrow_discount_template_mut(shop: &mut Shop, template_id: ID): &mut Discoun
     shop.discount_templates.borrow_mut(template_id)
 }
 
+/// Borrows an immutable accepted-currency reference for `TCoin` after validating registration.
+/// Package-scoped to support Move-internal read assertions.
+public(package) fun borrow_accepted_currency<TCoin>(shop: &Shop): &AcceptedCurrency {
+    let coin_type = currency_type<TCoin>();
+    shop.borrow_registered_accepted_currency(coin_type)
+}
+
 /// Normalize a seller-provided guardrail cap, enforcing module-level ceilings and non-zero.
 macro fun resolve_guardrail_cap<$T>($proposed_cap: Option<$T>, $module_cap: $T): $T {
     let proposed_cap = $proposed_cap;
@@ -2325,6 +2332,10 @@ macro fun assert_template_claimable(
 }
 
 // === View helpers ===
+/// Naming convention:
+/// - `borrow_*` validates membership/registration and returns immutable references.
+/// - `*_ref_*` reads fields from immutable references for borrow-once internal reads.
+/// - public getters (by id/type) validate membership and return copied values.
 
 /// Returns true if the listing is registered under the shop.
 public fun listing_exists(shop: &Shop, listing_id: ID): bool {
@@ -2600,69 +2611,53 @@ public fun listing_values_spotlight_discount_template_id(
 
 /// Returns the owning shop id after validating accepted-currency registration.
 public fun accepted_currency_shop_id<TCoin>(shop: &Shop): ID {
-    let coin_type = currency_type<TCoin>();
-    let _accepted_currency = shop.borrow_registered_accepted_currency(coin_type);
+    let _accepted_currency = shop.borrow_accepted_currency<TCoin>();
     shop.id.to_inner()
 }
 
 /// Returns the registered coin type after validating accepted-currency registration.
 public fun accepted_currency_coin_type<TCoin>(shop: &Shop): TypeName {
     let coin_type = currency_type<TCoin>();
-    let _accepted_currency = shop.borrow_registered_accepted_currency(coin_type);
+    let _accepted_currency = shop.borrow_accepted_currency<TCoin>();
     coin_type
 }
 
 /// Returns `AcceptedCurrency.feed_id` after validating accepted-currency registration.
 public fun accepted_currency_feed_id<TCoin>(shop: &Shop): vector<u8> {
-    let coin_type = currency_type<TCoin>();
-    accepted_currency_ref_feed_id(shop.borrow_registered_accepted_currency(coin_type))
+    accepted_currency_ref_feed_id(shop.borrow_accepted_currency<TCoin>())
 }
 
 /// Returns `AcceptedCurrency.pyth_object_id` after validating accepted-currency registration.
 public fun accepted_currency_pyth_object_id<TCoin>(shop: &Shop): ID {
-    let coin_type = currency_type<TCoin>();
-    accepted_currency_ref_pyth_object_id(
-        shop.borrow_registered_accepted_currency(coin_type),
-    )
+    accepted_currency_ref_pyth_object_id(shop.borrow_accepted_currency<TCoin>())
 }
 
 /// Returns `AcceptedCurrency.decimals` after validating accepted-currency registration.
 public fun accepted_currency_decimals<TCoin>(shop: &Shop): u8 {
-    let coin_type = currency_type<TCoin>();
-    accepted_currency_ref_decimals(shop.borrow_registered_accepted_currency(coin_type))
+    accepted_currency_ref_decimals(shop.borrow_accepted_currency<TCoin>())
 }
 
 /// Returns `AcceptedCurrency.symbol` after validating accepted-currency registration.
 public fun accepted_currency_symbol<TCoin>(shop: &Shop): String {
-    let coin_type = currency_type<TCoin>();
-    accepted_currency_ref_symbol(shop.borrow_registered_accepted_currency(coin_type))
+    accepted_currency_ref_symbol(shop.borrow_accepted_currency<TCoin>())
 }
 
 /// Returns `AcceptedCurrency.max_price_age_secs_cap` after validating accepted-currency
 /// registration.
 public fun accepted_currency_max_price_age_secs_cap<TCoin>(shop: &Shop): u64 {
-    let coin_type = currency_type<TCoin>();
-    accepted_currency_ref_max_price_age_secs_cap(
-        shop.borrow_registered_accepted_currency(coin_type),
-    )
+    accepted_currency_ref_max_price_age_secs_cap(shop.borrow_accepted_currency<TCoin>())
 }
 
 /// Returns `AcceptedCurrency.max_confidence_ratio_bps_cap` after validating accepted-currency
 /// registration.
 public fun accepted_currency_max_confidence_ratio_bps_cap<TCoin>(shop: &Shop): u16 {
-    let coin_type = currency_type<TCoin>();
-    accepted_currency_ref_max_confidence_ratio_bps_cap(
-        shop.borrow_registered_accepted_currency(coin_type),
-    )
+    accepted_currency_ref_max_confidence_ratio_bps_cap(shop.borrow_accepted_currency<TCoin>())
 }
 
 /// Returns `AcceptedCurrency.max_price_status_lag_secs_cap` after validating accepted-currency
 /// registration.
 public fun accepted_currency_max_price_status_lag_secs_cap<TCoin>(shop: &Shop): u64 {
-    let coin_type = currency_type<TCoin>();
-    accepted_currency_ref_max_price_status_lag_secs_cap(
-        shop.borrow_registered_accepted_currency(coin_type),
-    )
+    accepted_currency_ref_max_price_status_lag_secs_cap(shop.borrow_accepted_currency<TCoin>())
 }
 
 /// Returns `DiscountTicket.discount_template_id`.
@@ -2700,8 +2695,7 @@ public fun quote_amount_for_price_info_object<TCoin>(
     max_confidence_ratio_bps: Option<u16>,
     clock: &clock::Clock,
 ): u64 {
-    let coin_type = currency_type<TCoin>();
-    let accepted_currency = shop.borrow_registered_accepted_currency(coin_type);
+    let accepted_currency = shop.borrow_accepted_currency<TCoin>();
     assert_price_info_matches_currency!(accepted_currency, price_info_object);
     assert_price_status_trading_for_max_lag!(
         price_info_object,
