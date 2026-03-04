@@ -325,52 +325,6 @@ public struct EffectiveGuardrails has copy, drop {
     max_confidence_ratio_bps: u16,
 }
 
-/// Listing fields returned for read-only clients.
-public struct ListingValues has copy, drop {
-    name: String,
-    base_price_usd_cents: u64,
-    stock: u64,
-    shop_id: ID,
-    spotlight_discount_template_id: Option<ID>,
-}
-
-/// Accepted-currency fields returned for read-only clients.
-public struct AcceptedCurrencyValues has copy, drop {
-    shop_id: ID,
-    coin_type: TypeName,
-    feed_id: vector<u8>,
-    pyth_object_id: ID,
-    decimals: u8,
-    symbol: String,
-    max_price_age_secs_cap: u64,
-    max_confidence_ratio_bps_cap: u16,
-    max_price_status_lag_secs_cap: u64,
-}
-
-/// Discount template fields returned for read-only clients.
-/// This view struct intentionally excludes internal claim-marker storage
-/// (`DiscountTemplate.claims_by_claimer: Table<address, bool>`), which is non-copyable and
-/// should not be exposed through read APIs.
-public struct DiscountTemplateValues has copy, drop {
-    shop_id: ID,
-    applies_to_listing: Option<ID>,
-    rule: DiscountRule,
-    starts_at: u64,
-    expires_at: Option<u64>,
-    max_redemptions: Option<u64>,
-    claims_issued: u64,
-    redemptions: u64,
-    active: bool,
-}
-
-/// Discount ticket fields returned for read-only clients.
-public struct DiscountTicketValues has copy, drop {
-    discount_template_id: ID,
-    shop_id: ID,
-    listing_id: Option<ID>,
-    claimer: address,
-}
-
 // === Event Definitions ===
 /// Event emitted when a shop is created.
 public struct ShopCreatedEvent has copy, drop {
@@ -2404,217 +2358,135 @@ public fun discount_template_id_for_address(shop: &Shop, template_address: addre
     }
 }
 
-/// Returns listing fields after validating shop membership.
-public fun listing_values(shop: &Shop, listing_id: ID): ListingValues {
-    let listing = shop.borrow_listing(listing_id);
-    ListingValues {
-        name: listing.name,
-        base_price_usd_cents: listing.base_price_usd_cents,
-        stock: listing.stock,
-        shop_id: shop.id.to_inner(),
-        spotlight_discount_template_id: listing.spotlight_discount_template_id,
-    }
+/// Returns the listing for `listing_id`.
+public fun listing(shop: &Shop, listing_id: ID): &ItemListing {
+    shop.borrow_listing(listing_id)
 }
 
-/// Returns `ListingValues.name`.
-public fun listing_values_name(listing_values: &ListingValues): String {
-    listing_values.name
+/// Returns the listing name.
+public fun listing_name(listing: &ItemListing): String {
+    listing.name
 }
 
-/// Returns `ListingValues.base_price_usd_cents`.
-public fun listing_values_base_price_usd_cents(listing_values: &ListingValues): u64 {
-    listing_values.base_price_usd_cents
+/// Returns the listing base price in USD cents.
+public fun listing_base_price_usd_cents(listing: &ItemListing): u64 {
+    listing.base_price_usd_cents
 }
 
-/// Returns `ListingValues.stock`.
-public fun listing_values_stock(listing_values: &ListingValues): u64 {
-    listing_values.stock
+/// Returns the current stock for a listing.
+public fun listing_stock(listing: &ItemListing): u64 {
+    listing.stock
 }
 
-/// Returns `ListingValues.shop_id`.
-public fun listing_values_shop_id(listing_values: &ListingValues): ID {
-    listing_values.shop_id
+/// Returns the spotlight discount template ID attached to the listing, if any.
+public fun listing_spotlight_discount_template_id(listing: &ItemListing): Option<ID> {
+    listing.spotlight_discount_template_id
 }
 
-/// Returns `ListingValues.spotlight_discount_template_id`.
-public fun listing_values_spotlight_discount_template_id(
-    listing_values: &ListingValues,
-): Option<ID> {
-    listing_values.spotlight_discount_template_id
-}
-
-/// Returns accepted currency fields for a registered coin type.
-public fun accepted_currency_values<TCoin>(shop: &Shop): AcceptedCurrencyValues {
+/// Returns the accepted currency config for `TCoin`.
+public fun accepted_currency<TCoin>(shop: &Shop): &AcceptedCurrency {
     let coin_type = currency_type<TCoin>();
-    let accepted_currency = shop.borrow_registered_accepted_currency(coin_type);
-    AcceptedCurrencyValues {
-        shop_id: shop.id.to_inner(),
-        coin_type,
-        feed_id: accepted_currency.feed_id,
-        pyth_object_id: accepted_currency.pyth_object_id,
-        decimals: accepted_currency.decimals,
-        symbol: accepted_currency.symbol,
-        max_price_age_secs_cap: accepted_currency.max_price_age_secs_cap,
-        max_confidence_ratio_bps_cap: accepted_currency.max_confidence_ratio_bps_cap,
-        max_price_status_lag_secs_cap: accepted_currency.max_price_status_lag_secs_cap,
-    }
+    shop.borrow_registered_accepted_currency(coin_type)
 }
 
-/// Returns `AcceptedCurrencyValues.shop_id`.
-public fun accepted_currency_values_shop_id(currency_values: &AcceptedCurrencyValues): ID {
-    currency_values.shop_id
+/// Returns the oracle feed identifier bytes for an accepted currency.
+public fun accepted_currency_feed_id(currency: &AcceptedCurrency): vector<u8> {
+    currency.feed_id
 }
 
-/// Returns `AcceptedCurrencyValues.coin_type`.
-public fun accepted_currency_values_coin_type(currency_values: &AcceptedCurrencyValues): TypeName {
-    currency_values.coin_type
+/// Returns the bound Pyth object ID for an accepted currency.
+public fun accepted_currency_pyth_object_id(currency: &AcceptedCurrency): ID {
+    currency.pyth_object_id
 }
 
-/// Returns `AcceptedCurrencyValues.feed_id`.
-public fun accepted_currency_values_feed_id(currency_values: &AcceptedCurrencyValues): vector<u8> {
-    currency_values.feed_id
+/// Returns the decimals configured for an accepted currency.
+public fun accepted_currency_decimals(currency: &AcceptedCurrency): u8 {
+    currency.decimals
 }
 
-/// Returns `AcceptedCurrencyValues.pyth_object_id`.
-public fun accepted_currency_values_pyth_object_id(currency_values: &AcceptedCurrencyValues): ID {
-    currency_values.pyth_object_id
+/// Returns the ticker symbol configured for an accepted currency.
+public fun accepted_currency_symbol(currency: &AcceptedCurrency): String {
+    currency.symbol
 }
 
-/// Returns `AcceptedCurrencyValues.decimals`.
-public fun accepted_currency_values_decimals(currency_values: &AcceptedCurrencyValues): u8 {
-    currency_values.decimals
+/// Returns the seller cap for `max_price_age_secs` overrides.
+public fun accepted_currency_max_price_age_secs_cap(currency: &AcceptedCurrency): u64 {
+    currency.max_price_age_secs_cap
 }
 
-/// Returns `AcceptedCurrencyValues.symbol`.
-public fun accepted_currency_values_symbol(currency_values: &AcceptedCurrencyValues): String {
-    currency_values.symbol
+/// Returns the seller cap for `max_confidence_ratio_bps` overrides.
+public fun accepted_currency_max_confidence_ratio_bps_cap(currency: &AcceptedCurrency): u16 {
+    currency.max_confidence_ratio_bps_cap
 }
 
-/// Returns `AcceptedCurrencyValues.max_price_age_secs_cap`.
-public fun accepted_currency_values_max_price_age_secs_cap(
-    currency_values: &AcceptedCurrencyValues,
-): u64 {
-    currency_values.max_price_age_secs_cap
+/// Returns the seller cap for maximum attestation lag in seconds.
+public fun accepted_currency_max_price_status_lag_secs_cap(currency: &AcceptedCurrency): u64 {
+    currency.max_price_status_lag_secs_cap
 }
 
-/// Returns `AcceptedCurrencyValues.max_confidence_ratio_bps_cap`.
-public fun accepted_currency_values_max_confidence_ratio_bps_cap(
-    currency_values: &AcceptedCurrencyValues,
-): u16 {
-    currency_values.max_confidence_ratio_bps_cap
+/// Returns the discount template for `template_id`.
+public fun discount_template(shop: &Shop, template_id: ID): &DiscountTemplate {
+    shop.borrow_discount_template(template_id)
 }
 
-/// Returns `AcceptedCurrencyValues.max_price_status_lag_secs_cap`.
-public fun accepted_currency_values_max_price_status_lag_secs_cap(
-    currency_values: &AcceptedCurrencyValues,
-): u64 {
-    currency_values.max_price_status_lag_secs_cap
+/// Returns the optional listing ID this template applies to.
+public fun discount_template_applies_to_listing(template: &DiscountTemplate): Option<ID> {
+    template.applies_to_listing
 }
 
-fun build_discount_template_values(
-    shop_id: ID,
-    template: &DiscountTemplate,
-): DiscountTemplateValues {
-    DiscountTemplateValues {
-        shop_id,
-        applies_to_listing: template.applies_to_listing,
-        rule: template.rule,
-        starts_at: template.starts_at,
-        expires_at: template.expires_at,
-        max_redemptions: template.max_redemptions,
-        claims_issued: template.claims_issued,
-        redemptions: template.redemptions,
-        active: template.active,
-    }
+/// Returns the discount rule configured on a template.
+public fun discount_template_rule(template: &DiscountTemplate): DiscountRule {
+    template.rule
 }
 
-/// Returns discount template fields after validating shop membership.
-/// The returned value is a copyable projection, not the full `DiscountTemplate`, because the
-/// template stores internal `Table` state used for one-claim-per-address enforcement.
-public fun discount_template_values(shop: &Shop, template_id: ID): DiscountTemplateValues {
-    let template = shop.borrow_discount_template(template_id);
-    build_discount_template_values(shop.id.to_inner(), template)
+/// Returns the template start time in seconds.
+public fun discount_template_starts_at(template: &DiscountTemplate): u64 {
+    template.starts_at
 }
 
-/// Returns `DiscountTemplateValues.shop_id`.
-public fun discount_template_values_shop_id(template_values: &DiscountTemplateValues): ID {
-    template_values.shop_id
+/// Returns the optional template expiration time in seconds.
+public fun discount_template_expires_at(template: &DiscountTemplate): Option<u64> {
+    template.expires_at
 }
 
-/// Returns `DiscountTemplateValues.applies_to_listing`.
-public fun discount_template_values_applies_to_listing(
-    template_values: &DiscountTemplateValues,
-): Option<ID> {
-    template_values.applies_to_listing
+/// Returns the optional maximum redemptions for a template.
+public fun discount_template_max_redemptions(template: &DiscountTemplate): Option<u64> {
+    template.max_redemptions
 }
 
-/// Returns `DiscountTemplateValues.rule`.
-public fun discount_template_values_rule(template_values: &DiscountTemplateValues): DiscountRule {
-    template_values.rule
+/// Returns how many discount tickets have been issued for a template.
+public fun discount_template_claims_issued(template: &DiscountTemplate): u64 {
+    template.claims_issued
 }
 
-/// Returns `DiscountTemplateValues.starts_at`.
-public fun discount_template_values_starts_at(template_values: &DiscountTemplateValues): u64 {
-    template_values.starts_at
+/// Returns how many times a template has been redeemed.
+public fun discount_template_redemptions(template: &DiscountTemplate): u64 {
+    template.redemptions
 }
 
-/// Returns `DiscountTemplateValues.expires_at`.
-public fun discount_template_values_expires_at(
-    template_values: &DiscountTemplateValues,
-): Option<u64> {
-    template_values.expires_at
+/// Returns whether a template is currently active.
+public fun discount_template_active(template: &DiscountTemplate): bool {
+    template.active
 }
 
-/// Returns `DiscountTemplateValues.max_redemptions`.
-public fun discount_template_values_max_redemptions(
-    template_values: &DiscountTemplateValues,
-): Option<u64> {
-    template_values.max_redemptions
+/// Returns the template ID encoded in a discount ticket.
+public fun discount_ticket_discount_template_id(ticket: &DiscountTicket): ID {
+    ticket.discount_template_id
 }
 
-/// Returns `DiscountTemplateValues.claims_issued`.
-public fun discount_template_values_claims_issued(template_values: &DiscountTemplateValues): u64 {
-    template_values.claims_issued
+/// Returns the shop ID encoded in a discount ticket.
+public fun discount_ticket_shop_id(ticket: &DiscountTicket): ID {
+    ticket.shop_id
 }
 
-/// Returns `DiscountTemplateValues.redemptions`.
-public fun discount_template_values_redemptions(template_values: &DiscountTemplateValues): u64 {
-    template_values.redemptions
+/// Returns the optional listing ID encoded in a discount ticket.
+public fun discount_ticket_listing_id(ticket: &DiscountTicket): Option<ID> {
+    ticket.listing_id
 }
 
-/// Returns `DiscountTemplateValues.active`.
-public fun discount_template_values_active(template_values: &DiscountTemplateValues): bool {
-    template_values.active
-}
-
-/// Helper for `discount_ticket_values`.
-public fun discount_ticket_values(ticket: &DiscountTicket): DiscountTicketValues {
-    DiscountTicketValues {
-        discount_template_id: ticket.discount_template_id,
-        shop_id: ticket.shop_id,
-        listing_id: ticket.listing_id,
-        claimer: ticket.claimer,
-    }
-}
-
-/// Returns `DiscountTicketValues.discount_template_id`.
-public fun discount_ticket_values_discount_template_id(ticket_values: &DiscountTicketValues): ID {
-    ticket_values.discount_template_id
-}
-
-/// Returns `DiscountTicketValues.shop_id`.
-public fun discount_ticket_values_shop_id(ticket_values: &DiscountTicketValues): ID {
-    ticket_values.shop_id
-}
-
-/// Returns `DiscountTicketValues.listing_id`.
-public fun discount_ticket_values_listing_id(ticket_values: &DiscountTicketValues): Option<ID> {
-    ticket_values.listing_id
-}
-
-/// Returns `DiscountTicketValues.claimer`.
-public fun discount_ticket_values_claimer(ticket_values: &DiscountTicketValues): address {
-    ticket_values.claimer
+/// Returns the claimer address encoded in a discount ticket.
+public fun discount_ticket_claimer(ticket: &DiscountTicket): address {
+    ticket.claimer
 }
 
 /// Returns whether `claimer` has an active claim marker for `template_id`.
