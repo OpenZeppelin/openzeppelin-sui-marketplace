@@ -70,7 +70,7 @@ fun missing_listing_id(): ID {
 fun create_price_info_object_for_feed(
     feed_id: vector<u8>,
     ctx: &mut tx_context::TxContext,
-): (price_info::PriceInfoObject, ID) {
+): price_info::PriceInfoObject {
     create_price_info_object_for_feed_with_price(feed_id, sample_price(), ctx)
 }
 
@@ -78,7 +78,7 @@ fun create_price_info_object_for_feed_with_price(
     feed_id: vector<u8>,
     price: price::Price,
     ctx: &mut tx_context::TxContext,
-): (price_info::PriceInfoObject, ID) {
+): price_info::PriceInfoObject {
     create_price_info_object_for_feed_with_price_and_times(
         feed_id,
         price,
@@ -94,20 +94,14 @@ fun create_price_info_object_for_feed_with_price_and_times(
     attestation_time: u64,
     arrival_time: u64,
     ctx: &mut tx_context::TxContext,
-): (price_info::PriceInfoObject, ID) {
+): price_info::PriceInfoObject {
     let price_identifier = price_identifier::from_byte_vec(feed_id);
     let price_feed = price_feed::new(price_identifier, price, price);
-    let price_info = price_info::new_price_info(
+    price_info::new_price_info(
         attestation_time,
         arrival_time,
         price_feed,
-    );
-    let price_info_object = price_info::new_price_info_object_for_test(
-        price_info,
-        ctx,
-    );
-    let price_info_id = price_info::uid_to_inner(&price_info_object);
-    (price_info_object, price_info_id)
+    ).new_price_info_object_for_test(ctx)
 }
 
 fun take_shared_shop(scn: &test_scenario::Scenario, shop_id: ID): shop::Shop {
@@ -121,10 +115,11 @@ fun add_currency_with_feed<T>(
     owner_cap: &shop::ShopOwnerCap,
     ctx: &mut tx_context::TxContext,
 ): ID {
-    let (price_info_object, price_info_id) = create_price_info_object_for_feed(
+    let price_info_object = create_price_info_object_for_feed(
         feed_id,
         ctx,
     );
+    let price_info_id = price_info_object.uid_to_inner();
     shop.add_accepted_currency<T>(
         owner_cap,
         currency,
@@ -149,10 +144,11 @@ fun add_test_coin_accepted_currency_for_scenario(
     max_confidence_ratio_bps_cap: Option<u16>,
     max_price_status_lag_secs_cap: Option<u64>,
 ): ID {
-    let (price_info_object, accepted_currency_id) = create_price_info_object_for_feed(
+    let price_info_object = create_price_info_object_for_feed(
         feed_id,
         test_scenario::ctx(scn),
     );
+    let accepted_currency_id = price_info_object.uid_to_inner();
     shop.add_accepted_currency<TestCoin>(
         owner_cap,
         currency,
@@ -617,10 +613,11 @@ fun add_accepted_currency_rejects_foreign_owner_cap() {
     let (mut shop, _owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
     let (_other_shop, other_cap) = shop::test_setup_shop(OTHER_OWNER, &mut ctx);
     let currency = create_test_currency(&mut ctx);
-    let (price_info_object, price_info_id) = create_price_info_object_for_feed(
+    let price_info_object = create_price_info_object_for_feed(
         PRIMARY_FEED_ID,
         &mut ctx,
     );
+    let price_info_id = price_info_object.uid_to_inner();
 
     shop.add_accepted_currency<TestCoin>(
         &other_cap,
@@ -666,10 +663,11 @@ fun add_accepted_currency_rejects_empty_feed_id() {
     let mut ctx = tx_context::new_from_hint(@0x0, 10, 0, 0, 0);
     let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
     let currency = create_test_currency(&mut ctx);
-    let (price_info_object, price_info_id) = create_price_info_object_for_feed(
+    let price_info_object = create_price_info_object_for_feed(
         PRIMARY_FEED_ID,
         &mut ctx,
     );
+    let price_info_id = price_info_object.uid_to_inner();
 
     shop.add_accepted_currency<TestCoin>(
         &owner_cap,
@@ -690,10 +688,11 @@ fun add_accepted_currency_rejects_short_feed_id() {
     let mut ctx = tx_context::new_from_hint(@0x0, 14, 0, 0, 0);
     let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
     let currency = create_test_currency(&mut ctx);
-    let (price_info_object, price_info_id) = create_price_info_object_for_feed(
+    let price_info_object = create_price_info_object_for_feed(
         PRIMARY_FEED_ID,
         &mut ctx,
     );
+    let price_info_id = price_info_object.uid_to_inner();
 
     shop.add_accepted_currency<TestCoin>(
         &owner_cap,
@@ -720,7 +719,7 @@ fun attestation_time_within_lag_is_allowed() {
         i64::new(2, true),
         publish_time,
     );
-    let (price_info_object, _) = create_price_info_object_for_feed_with_price_and_times(
+    let price_info_object = create_price_info_object_for_feed_with_price_and_times(
         PRIMARY_FEED_ID,
         price,
         attestation_time,
@@ -746,7 +745,7 @@ fun attestation_time_lag_over_limit_is_rejected() {
         i64::new(2, true),
         publish_time,
     );
-    let (price_info_object, _) = create_price_info_object_for_feed_with_price_and_times(
+    let price_info_object = create_price_info_object_for_feed_with_price_and_times(
         PRIMARY_FEED_ID,
         price,
         attestation_time,
@@ -766,10 +765,11 @@ fun add_accepted_currency_rejects_excessive_decimals() {
     let mut ctx = tx_context::new_from_hint(@0x0, 11, 0, 0, 0);
     let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
     let currency = create_high_decimal_currency(&mut ctx);
-    let (price_info_object, price_info_id) = create_price_info_object_for_feed(
+    let price_info_object = create_price_info_object_for_feed(
         PRIMARY_FEED_ID,
         &mut ctx,
     );
+    let price_info_id = price_info_object.uid_to_inner();
 
     shop.add_accepted_currency<HighDecimalCoin>(
         &owner_cap,
@@ -790,10 +790,11 @@ fun add_accepted_currency_rejects_identifier_mismatch() {
     let mut ctx = tx_context::new_from_hint(@0x0, 15, 0, 0, 0);
     let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
     let currency = create_test_currency(&mut ctx);
-    let (price_info_object, price_info_id) = create_price_info_object_for_feed(
+    let price_info_object = create_price_info_object_for_feed(
         PRIMARY_FEED_ID,
         &mut ctx,
     );
+    let price_info_id = price_info_object.uid_to_inner();
 
     shop.add_accepted_currency<TestCoin>(
         &owner_cap,
@@ -814,7 +815,7 @@ fun add_accepted_currency_rejects_missing_price_object() {
     let mut ctx = tx_context::new_from_hint(@0x0, 17, 0, 0, 0);
     let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
     let currency = create_test_currency(&mut ctx);
-    let (price_info_object, _) = create_price_info_object_for_feed(
+    let price_info_object = create_price_info_object_for_feed(
         PRIMARY_FEED_ID,
         &mut ctx,
     );
@@ -847,13 +848,14 @@ fun quote_rejects_attestation_lag_above_currency_cap() {
         i64::new(2, true),
         publish_time,
     );
-    let (price_info_object, price_info_id) = create_price_info_object_for_feed_with_price_and_times(
+    let price_info_object = create_price_info_object_for_feed_with_price_and_times(
         PRIMARY_FEED_ID,
         price,
         attestation_time,
         attestation_time,
         test_scenario::ctx(&mut scn),
     );
+    let price_info_id = price_info_object.uid_to_inner();
 
     let mut shop_obj = take_shared_shop(&scn, shop_id);
     let owner_cap_obj = test_scenario::take_from_sender_by_id(
@@ -909,13 +911,14 @@ fun quote_rejects_price_timestamp_older_than_max_age() {
         i64::new(2, true),
         publish_time,
     );
-    let (price_info_object, price_info_id) = create_price_info_object_for_feed_with_price_and_times(
+    let price_info_object = create_price_info_object_for_feed_with_price_and_times(
         PRIMARY_FEED_ID,
         price,
         publish_time,
         publish_time,
         test_scenario::ctx(&mut scn),
     );
+    let price_info_id = price_info_object.uid_to_inner();
 
     let mut shop_obj = take_shared_shop(&scn, shop_id);
     let owner_cap_obj = test_scenario::take_from_sender_by_id(
@@ -970,10 +973,12 @@ fun remove_accepted_currency_removes_state_and_emits_event() {
         &scn,
         owner_cap_id,
     );
-    let (first_price_object, first_price_id) = create_price_info_object_for_feed(
+    let first_price_object = create_price_info_object_for_feed(
         PRIMARY_FEED_ID,
         test_scenario::ctx(&mut scn),
     );
+    let first_price_id = first_price_object.uid_to_inner();
+
     shop_obj.add_accepted_currency<TestCoin>(
         &owner_cap_obj,
         &primary_currency,
@@ -989,10 +994,12 @@ fun remove_accepted_currency_removes_state_and_emits_event() {
     ).to_id();
     transfer::public_share_object(first_price_object);
 
-    let (second_price_object, second_price_id) = create_price_info_object_for_feed(
+    let second_price_object = create_price_info_object_for_feed(
         SECONDARY_FEED_ID,
         test_scenario::ctx(&mut scn),
     );
+    let second_price_id = second_price_object.uid_to_inner();
+
     shop_obj.add_accepted_currency<AltTestCoin>(
         &owner_cap_obj,
         &secondary_currency,
@@ -1028,10 +1035,11 @@ fun remove_accepted_currency_rejects_foreign_owner_cap() {
         owner_cap_id,
     );
     let currency = prepare_test_currency_for_owner(&mut scn, TEST_OWNER);
-    let (price_info_object, price_info_id) = create_price_info_object_for_feed(
+    let price_info_object = create_price_info_object_for_feed(
         PRIMARY_FEED_ID,
         test_scenario::ctx(&mut scn),
     );
+    let price_info_id = price_info_object.uid_to_inner();
 
     let mut shop_obj = take_shared_shop(&scn, shop_id);
     shop_obj.add_accepted_currency<TestCoin>(
@@ -1073,10 +1081,12 @@ fun remove_accepted_currency_rejects_missing_id() {
     );
 
     let currency = prepare_test_currency_for_owner(&mut scn, OTHER_OWNER);
-    let (price_info_object, price_info_id) = create_price_info_object_for_feed(
+    let price_info_object = create_price_info_object_for_feed(
         PRIMARY_FEED_ID,
         test_scenario::ctx(&mut scn),
     );
+    let price_info_id = price_info_object.uid_to_inner();
+
     let mut other_shop_obj = test_scenario::take_shared_by_id<shop::Shop>(
         &scn,
         other_shop_id,
@@ -1120,10 +1130,11 @@ fun remove_accepted_currency_handles_missing_type_mapping() {
     let (shop_id, owner_cap_id) = create_default_shop_and_owner_cap_ids_for_sender(&mut scn);
 
     let currency = prepare_test_currency_for_owner(&mut scn, TEST_OWNER);
-    let (price_info_object, price_info_id) = create_price_info_object_for_feed(
+    let price_info_object = create_price_info_object_for_feed(
         PRIMARY_FEED_ID,
         test_scenario::ctx(&mut scn),
     );
+    let price_info_id = price_info_object.uid_to_inner();
 
     let mut shop_obj = take_shared_shop(&scn, shop_id);
     let owner_cap = test_scenario::take_from_sender_by_id(
@@ -1167,10 +1178,11 @@ fun remove_accepted_currency_rejects_mismatched_type_mapping() {
     let (shop_id, owner_cap_id) = create_default_shop_and_owner_cap_ids_for_sender(&mut scn);
 
     let currency = prepare_test_currency_for_owner(&mut scn, TEST_OWNER);
-    let (price_info_object, price_info_id) = create_price_info_object_for_feed(
+    let price_info_object = create_price_info_object_for_feed(
         PRIMARY_FEED_ID,
         test_scenario::ctx(&mut scn),
     );
+    let price_info_id = price_info_object.uid_to_inner();
 
     let mut shop_obj = take_shared_shop(&scn, shop_id);
     let owner_cap = test_scenario::take_from_sender_by_id(
@@ -1233,11 +1245,12 @@ fun quote_view_matches_internal_math() {
     let (shop_id, owner_cap_id) = create_default_shop_and_owner_cap_ids_for_sender(&mut scn);
 
     let currency = prepare_test_currency_for_owner(&mut scn, TEST_OWNER);
-    let (price_info_object, price_info_id) = create_price_info_object_for_feed_with_price(
+    let price_info_object = create_price_info_object_for_feed_with_price(
         PRIMARY_FEED_ID,
         sample_price(),
         test_scenario::ctx(&mut scn),
     );
+    let price_info_id = price_info_object.uid_to_inner();
 
     let mut shop_obj = take_shared_shop(&scn, shop_id);
     let owner_cap_obj = test_scenario::take_from_sender_by_id(
@@ -1326,11 +1339,12 @@ fun quote_view_rejects_mismatched_price_info_object() {
     let (shop_id, owner_cap_id) = create_default_shop_and_owner_cap_ids_for_sender(&mut scn);
 
     let currency = prepare_test_currency_for_owner(&mut scn, TEST_OWNER);
-    let (price_info_object, price_info_id) = create_price_info_object_for_feed_with_price(
+    let price_info_object = create_price_info_object_for_feed_with_price(
         PRIMARY_FEED_ID,
         sample_price(),
         test_scenario::ctx(&mut scn),
     );
+    let price_info_id = price_info_object.uid_to_inner();
 
     let mut shop_obj = take_shared_shop(&scn, shop_id);
     let owner_cap_obj = test_scenario::take_from_sender_by_id(
@@ -1355,7 +1369,7 @@ fun quote_view_rejects_mismatched_price_info_object() {
 
     let shared_shop = take_shared_shop(&scn, shop_id);
     let clock_obj = create_test_clock_at(test_scenario::ctx(&mut scn), 1);
-    let (mismatched_price_info_object, _) = create_price_info_object_for_feed_with_price(
+    let mismatched_price_info_object = create_price_info_object_for_feed_with_price(
         SECONDARY_FEED_ID,
         sample_price(),
         test_scenario::ctx(&mut scn),
@@ -3645,10 +3659,11 @@ fun claim_and_buy_rejects_second_claim_after_redeem() {
         owner_cap_id,
     );
     let currency = create_test_currency(test_scenario::ctx(&mut scn));
-    let (price_info_object, price_info_id) = create_price_info_object_for_feed(
+    let price_info_object = create_price_info_object_for_feed(
         PRIMARY_FEED_ID,
         test_scenario::ctx(&mut scn),
     );
+    let price_info_id = price_info_object.uid_to_inner();
 
     shop_obj.add_accepted_currency<TestCoin>(
         &owner_cap,
@@ -3736,10 +3751,11 @@ fun claim_and_buy_item_with_discount_emits_events_and_covers_helpers() {
     );
 
     let currency = prepare_test_currency_for_owner(&mut scn, TEST_OWNER);
-    let (price_info_object, price_info_id) = create_price_info_object_for_feed(
+    let price_info_object = create_price_info_object_for_feed(
         PRIMARY_FEED_ID,
         test_scenario::ctx(&mut scn),
     );
+    let price_info_id = price_info_object.uid_to_inner();
 
     let mut shop_obj = take_shared_shop(&scn, shop_id);
     let owner_cap = test_scenario::take_from_sender_by_id(
@@ -4052,10 +4068,11 @@ fun discount_redemption_without_listing_restriction_allows_zero_price() {
     let (shop_id, owner_cap_id) = create_default_shop_and_owner_cap_ids_for_sender(&mut scn);
 
     let currency = prepare_test_currency_for_owner(&mut scn, TEST_OWNER);
-    let (price_info_object, price_info_id) = create_price_info_object_for_feed(
+    let price_info_object = create_price_info_object_for_feed(
         PRIMARY_FEED_ID,
         test_scenario::ctx(&mut scn),
     );
+    let price_info_id = price_info_object.uid_to_inner();
 
     let mut shop_obj = take_shared_shop(&scn, shop_id);
     let owner_cap = test_scenario::take_from_sender_by_id(
@@ -4147,10 +4164,11 @@ fun discount_redemption_rejects_listing_mismatch() {
     let (shop_id, owner_cap_id) = create_default_shop_and_owner_cap_ids_for_sender(&mut scn);
 
     let currency = prepare_test_currency_for_owner(&mut scn, TEST_OWNER);
-    let (price_info_object, price_info_id) = create_price_info_object_for_feed(
+    let price_info_object = create_price_info_object_for_feed(
         PRIMARY_FEED_ID,
         test_scenario::ctx(&mut scn),
     );
+    let price_info_id = price_info_object.uid_to_inner();
 
     let mut shop_obj = take_shared_shop(&scn, shop_id);
     let owner_cap = test_scenario::take_from_sender_by_id(
@@ -4245,10 +4263,11 @@ fun discount_template_maxed_out_by_redemption() {
     let (shop_id, owner_cap_id) = create_default_shop_and_owner_cap_ids_for_sender(&mut scn);
 
     let currency = prepare_test_currency_for_owner(&mut scn, TEST_OWNER);
-    let (price_info_object, price_info_id) = create_price_info_object_for_feed(
+    let price_info_object = create_price_info_object_for_feed(
         PRIMARY_FEED_ID,
         test_scenario::ctx(&mut scn),
     );
+    let price_info_id = price_info_object.uid_to_inner();
 
     let mut shop_obj = take_shared_shop(&scn, shop_id);
     let owner_cap = test_scenario::take_from_sender_by_id(
@@ -4466,13 +4485,14 @@ fun price_status_rejects_attestation_before_publish() {
     let price_value = i64::new(1_000, false);
     let expo = i64::new(0, false);
     let price = price::new(price_value, 10, expo, 100);
-    let (price_info_object, price_info_id) = create_price_info_object_for_feed_with_price_and_times(
+    let price_info_object = create_price_info_object_for_feed_with_price_and_times(
         PRIMARY_FEED_ID,
         price,
         50,
         0,
         test_scenario::ctx(&mut scn),
     );
+    let price_info_id = price_info_object.uid_to_inner();
 
     shop_obj.add_accepted_currency<TestCoin>(
         &owner_cap_obj,
@@ -4739,10 +4759,11 @@ fun setup_shop_with_currency_listing_and_price_info_for_item<TItem: store>(
         test_scenario::ctx(scn),
     );
     let shop_id = object::id(&shop_obj);
-    let (price_info_object, price_info_id) = create_price_info_object_for_feed(
+    let price_info_object = create_price_info_object_for_feed(
         PRIMARY_FEED_ID,
         test_scenario::ctx(scn),
     );
+    let price_info_id = price_info_object.uid_to_inner();
 
     shop_obj.add_accepted_currency<TestCoin>(
         &owner_cap,
@@ -5115,14 +5136,16 @@ fun buy_item_rejects_price_info_object_id_mismatch() {
         test_scenario::ctx(&mut scn),
     );
     let shop_id = object::id(&shop_obj);
-    let (price_info_object, price_info_id) = create_price_info_object_for_feed(
+    let price_info_object = create_price_info_object_for_feed(
         PRIMARY_FEED_ID,
         test_scenario::ctx(&mut scn),
     );
-    let (other_price_info_object, other_price_info_id) = create_price_info_object_for_feed(
+    let price_info_id = price_info_object.uid_to_inner();
+    let other_price_info_object = create_price_info_object_for_feed(
         PRIMARY_FEED_ID,
         test_scenario::ctx(&mut scn),
     );
+    let other_price_info_id = other_price_info_object.uid_to_inner();
 
     shop_obj.add_accepted_currency<TestCoin>(
         &owner_cap,
@@ -5182,10 +5205,11 @@ fun buy_item_with_discount_emits_discount_redeemed_and_records_template_id() {
     let (shop_id, owner_cap_id) = create_default_shop_and_owner_cap_ids_for_sender(&mut scn);
 
     let currency = prepare_test_currency_for_owner(&mut scn, TEST_OWNER);
-    let (price_info_object, price_info_id) = create_price_info_object_for_feed(
+    let price_info_object = create_price_info_object_for_feed(
         PRIMARY_FEED_ID,
         test_scenario::ctx(&mut scn),
     );
+    let price_info_id = price_info_object.uid_to_inner();
 
     let mut shop_obj = take_shared_shop(&scn, shop_id);
     let owner_cap_obj = test_scenario::take_from_sender_by_id(
@@ -5312,10 +5336,11 @@ fun buy_item_with_discount_rejects_ticket_owner_mismatch() {
     let (shop_id, owner_cap_id) = create_default_shop_and_owner_cap_ids_for_sender(&mut scn);
 
     let currency = prepare_test_currency_for_owner(&mut scn, TEST_OWNER);
-    let (price_info_object, price_info_id) = create_price_info_object_for_feed(
+    let price_info_object = create_price_info_object_for_feed(
         PRIMARY_FEED_ID,
         test_scenario::ctx(&mut scn),
     );
+    let price_info_id = price_info_object.uid_to_inner();
 
     let mut shop_obj = take_shared_shop(&scn, shop_id);
     let owner_cap_obj = test_scenario::take_from_sender_by_id(
@@ -5541,10 +5566,11 @@ fun buy_item_rejects_guardrail_override_above_cap() {
     let (shop_id, owner_cap_id) = create_default_shop_and_owner_cap_ids_for_sender(&mut scn);
 
     let currency = prepare_test_currency_for_owner(&mut scn, TEST_OWNER);
-    let (price_info_object, pyth_object_id) = create_price_info_object_for_feed(
+    let price_info_object = create_price_info_object_for_feed(
         PRIMARY_FEED_ID,
         test_scenario::ctx(&mut scn),
     );
+    let pyth_object_id = price_info_object.uid_to_inner();
 
     let mut shop_obj = take_shared_shop(&scn, shop_id);
     let owner_cap_obj = test_scenario::take_from_sender_by_id(
@@ -5587,10 +5613,11 @@ fun buy_item_with_discount_rejects_inactive_template() {
     let (shop_id, owner_cap_id) = create_default_shop_and_owner_cap_ids_for_sender(&mut scn);
 
     let currency = prepare_test_currency_for_owner(&mut scn, TEST_OWNER);
-    let (price_info_object, price_info_id) = create_price_info_object_for_feed(
+    let price_info_object = create_price_info_object_for_feed(
         PRIMARY_FEED_ID,
         test_scenario::ctx(&mut scn),
     );
+    let price_info_id = price_info_object.uid_to_inner();
 
     let mut shop_obj = take_shared_shop(&scn, shop_id);
     let owner_cap_obj = test_scenario::take_from_sender_by_id(
@@ -5713,10 +5740,11 @@ fun buy_item_with_discount_rejects_ticket_template_mismatch() {
     let (shop_id, owner_cap_id) = create_default_shop_and_owner_cap_ids_for_sender(&mut scn);
 
     let currency = prepare_test_currency_for_owner(&mut scn, TEST_OWNER);
-    let (price_info_object, price_info_id) = create_price_info_object_for_feed(
+    let price_info_object = create_price_info_object_for_feed(
         PRIMARY_FEED_ID,
         test_scenario::ctx(&mut scn),
     );
+    let price_info_id = price_info_object.uid_to_inner();
 
     let mut shop_obj = take_shared_shop(&scn, shop_id);
     let owner_cap_obj = test_scenario::take_from_sender_by_id(
@@ -5838,10 +5866,11 @@ fun buy_item_with_discount_rejects_ticket_shop_mismatch() {
     );
 
     let currency = prepare_test_currency_for_owner(&mut scn, TEST_OWNER);
-    let (price_info_object, price_info_id) = create_price_info_object_for_feed(
+    let price_info_object = create_price_info_object_for_feed(
         PRIMARY_FEED_ID,
         test_scenario::ctx(&mut scn),
     );
+    let price_info_id = price_info_object.uid_to_inner();
 
     let mut shop_a = take_shared_shop(&scn, shop_a_id);
     let owner_cap_a = test_scenario::take_from_sender_by_id(
