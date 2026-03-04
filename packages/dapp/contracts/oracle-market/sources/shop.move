@@ -619,7 +619,6 @@ public(package) fun new_purchase_completed_event(
 /// - Shared object composition: the shop is shared, with listings/currencies stored in typed
 ///   table storage and discount templates stored directly in a typed `Table`.
 /// - State stays sharded so PTBs only touch the listing slot/template object they mutate.
-#[allow(lint(self_transfer))]
 public fun create_shop(name: String, ctx: &mut TxContext): (ID, ID) {
     let owner = ctx.sender();
     let shop = new_shop(name, owner, ctx);
@@ -634,7 +633,7 @@ public fun create_shop(name: String, ctx: &mut TxContext): (ID, ID) {
     event::emit(new_shop_created_event(shop_id, owner_cap_id));
 
     transfer::share_object(shop);
-    transfer::public_transfer(owner_cap, owner);
+    transfer_shop_owner_cap(owner_cap, owner);
     (shop_id, owner_cap_id)
 }
 
@@ -1120,7 +1119,6 @@ public fun clear_template_from_listing(shop: &mut Shop, owner_cap: &ShopOwnerCap
 ///   ticket is moved to another address, it cannot be redeemed by the recipient. In EVM you might
 ///   airdrop ERC-1155 coupons; here the object identity plus `ctx.sender()` check guarantee
 ///   single-claimer semantics without extra storage.
-#[allow(lint(self_transfer))]
 public fun claim_discount_ticket(
     shop: &mut Shop,
     discount_template_id: ID,
@@ -1137,7 +1135,7 @@ public fun claim_discount_ticket(
         ctx,
     );
 
-    transfer::public_transfer(discount_ticket, claimer);
+    transfer_discount_ticket_to_recipient(discount_ticket, claimer);
 }
 
 /// Non-entry helper that returns the owned ticket so callers can inline claim + buy in one PTB.
@@ -1383,6 +1381,17 @@ public fun claim_and_buy_item_with_discount<TItem: store, TCoin>(
         clock,
         ctx,
     );
+}
+
+fun transfer_shop_owner_cap(owner_cap: ShopOwnerCap, recipient: address) {
+    transfer::public_transfer(owner_cap, recipient);
+}
+
+fun transfer_discount_ticket_to_recipient(
+    discount_ticket: DiscountTicket,
+    recipient: address,
+) {
+    transfer::public_transfer(discount_ticket, recipient);
 }
 
 // === Data ===
