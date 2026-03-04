@@ -78,7 +78,7 @@ public struct TwoShopCreationEvents {
     second_emitted_event: shop::ShopCreatedEvent,
 }
 
-struct DiscountTemplateSnapshot has copy, drop {
+public struct DiscountTemplateSnapshot has copy, drop {
     shop_id: ID,
     applies_to_listing: Option<ID>,
     rule_kind: u8,
@@ -2608,34 +2608,23 @@ fun discount_template_getters_expose_expected_fields() {
         &mut ctx,
     );
 
-    let applies_to_listing = shop::discount_template_applies_to_listing(&shop_obj, template_id);
-    let starts_at = shop::discount_template_starts_at(&shop_obj, template_id);
-    let expires_at = shop::discount_template_expires_at(&shop_obj, template_id);
-    let max_redemptions = shop::discount_template_max_redemptions(&shop_obj, template_id);
-    let claims_issued = shop::discount_template_claims_issued(&shop_obj, template_id);
-    let redemptions = shop::discount_template_redemptions(&shop_obj, template_id);
-    let active = shop::discount_template_active(&shop_obj, template_id);
-    let rule_kind = shop::discount_template_rule_kind(&shop_obj, template_id);
-    let rule_value = shop::discount_template_rule_value(&shop_obj, template_id);
+    let template_snapshot = read_discount_template_snapshot(&shop_obj, template_id);
 
-    assert!(option::is_some(&applies_to_listing));
-    applies_to_listing.do_ref!(|value| {
+    assert!(option::is_some(&template_snapshot.applies_to_listing));
+    template_snapshot.applies_to_listing.do_ref!(|value| {
         assert_eq!(*value, listing_id);
     });
-    assert_eq!(starts_at, 5);
-    assert!(option::is_some(&expires_at));
-    expires_at.do_ref!(|value| {
+    assert_eq!(template_snapshot.starts_at, 5);
+    assert!(option::is_some(&template_snapshot.expires_at));
+    template_snapshot.expires_at.do_ref!(|value| {
         assert_eq!(*value, 100);
     });
-    assert!(option::is_some(&max_redemptions));
-    max_redemptions.do_ref!(|value| {
+    assert!(option::is_some(&template_snapshot.max_redemptions));
+    template_snapshot.max_redemptions.do_ref!(|value| {
         assert_eq!(*value, 6);
     });
-    assert_eq!(claims_issued, 0);
-    assert_eq!(redemptions, 0);
-    assert!(active);
-    assert_eq!(rule_kind, 1);
-    assert_eq!(rule_value, 2_500);
+    assert_template_snapshot_counters_and_active(&template_snapshot, 0, 0, true);
+    assert_template_snapshot_rule(&template_snapshot, 1, 2_500);
 
     shop::remove_discount_template(&mut shop_obj, &owner_cap, template_id);
     remove_listing_if_exists(&mut shop_obj, &owner_cap, listing_id);
@@ -2923,33 +2912,22 @@ fun update_discount_template_updates_fields_and_emits_event() {
     );
     std::unit_test::destroy(clock_obj);
 
-    let applies_to_listing = shop::discount_template_applies_to_listing(&shop, template);
-    let rule_kind = shop::discount_template_rule_kind(&shop, template);
-    let rule_value = shop::discount_template_rule_value(&shop, template);
-    let starts_at = shop::discount_template_starts_at(&shop, template);
-    let expires_at = shop::discount_template_expires_at(&shop, template);
-    let max_redemptions = shop::discount_template_max_redemptions(&shop, template);
-    let claims_issued = shop::discount_template_claims_issued(&shop, template);
-    let redemptions = shop::discount_template_redemptions(&shop, template);
-    let active = shop::discount_template_active(&shop, template);
-    assert!(option::is_some(&applies_to_listing));
-    applies_to_listing.do_ref!(|value| {
+    let template_snapshot = read_discount_template_snapshot(&shop, template);
+    assert!(option::is_some(&template_snapshot.applies_to_listing));
+    template_snapshot.applies_to_listing.do_ref!(|value| {
         assert_eq!(*value, listing_id);
     });
-    assert_eq!(rule_kind, 1);
-    assert_eq!(rule_value, 750);
-    assert_eq!(starts_at, 50);
-    assert!(option::is_some(&expires_at));
-    expires_at.do_ref!(|value| {
+    assert_template_snapshot_rule(&template_snapshot, 1, 750);
+    assert_eq!(template_snapshot.starts_at, 50);
+    assert!(option::is_some(&template_snapshot.expires_at));
+    template_snapshot.expires_at.do_ref!(|value| {
         assert_eq!(*value, 200);
     });
-    assert!(option::is_some(&max_redemptions));
-    max_redemptions.do_ref!(|value| {
+    assert!(option::is_some(&template_snapshot.max_redemptions));
+    template_snapshot.max_redemptions.do_ref!(|value| {
         assert_eq!(*value, 10);
     });
-    assert_eq!(claims_issued, 0);
-    assert_eq!(redemptions, 0);
-    assert!(active);
+    assert_template_snapshot_counters_and_active(&template_snapshot, 0, 0, true);
 
     let updated_events = event::events_by_type<shop::DiscountTemplateUpdatedEvent>();
     assert_eq!(updated_events.length(), 1);
@@ -3258,18 +3236,9 @@ fun toggle_discount_template_updates_active_and_emits_events() {
         &mut ctx,
     );
 
-    let shop_id = shop::shop_id(&shop);
-    let applies_to_listing = shop::discount_template_applies_to_listing(&shop, template);
-    let rule_kind = shop::discount_template_rule_kind(&shop, template);
-    let rule_value = shop::discount_template_rule_value(&shop, template);
-    let starts_at = shop::discount_template_starts_at(&shop, template);
-    let expires_at = shop::discount_template_expires_at(&shop, template);
-    let max_redemptions = shop::discount_template_max_redemptions(&shop, template);
-    let claims_issued = shop::discount_template_claims_issued(&shop, template);
-    let redemptions = shop::discount_template_redemptions(&shop, template);
-    let active = shop::discount_template_active(&shop, template);
-
-    assert!(active);
+    let initial_snapshot = read_discount_template_snapshot(&shop, template);
+    let shop_id = initial_snapshot.shop_id;
+    assert_template_snapshot_counters_and_active(&initial_snapshot, 0, 0, true);
     shop::toggle_discount_template(
         &mut shop,
         &owner_cap,
@@ -3277,27 +3246,29 @@ fun toggle_discount_template_updates_active_and_emits_events() {
         false,
     );
 
-    let shop_id_after_first = shop::shop_id(&shop);
-    let applies_to_listing_after_first = shop::discount_template_applies_to_listing(&shop, template);
-    let rule_after_first_kind = shop::discount_template_rule_kind(&shop, template);
-    let rule_after_first_value = shop::discount_template_rule_value(&shop, template);
-    let starts_at_after_first = shop::discount_template_starts_at(&shop, template);
-    let expires_at_after_first = shop::discount_template_expires_at(&shop, template);
-    let max_redemptions_after_first = shop::discount_template_max_redemptions(&shop, template);
-    let claims_issued_after_first = shop::discount_template_claims_issued(&shop, template);
-    let redemptions_after_first = shop::discount_template_redemptions(&shop, template);
-    let active_after_first = shop::discount_template_active(&shop, template);
-
-    assert_eq!(shop_id_after_first, shop_id);
-    assert_eq!(applies_to_listing_after_first, applies_to_listing);
-    assert_eq!(rule_after_first_kind, rule_kind);
-    assert_eq!(rule_after_first_value, rule_value);
-    assert_eq!(starts_at_after_first, starts_at);
-    assert_eq!(expires_at_after_first, expires_at);
-    assert_eq!(max_redemptions_after_first, max_redemptions);
-    assert_eq!(claims_issued_after_first, claims_issued);
-    assert_eq!(redemptions_after_first, redemptions);
-    assert!(!active_after_first);
+    let first_toggle_snapshot = read_discount_template_snapshot(&shop, template);
+    assert_eq!(first_toggle_snapshot.shop_id, shop_id);
+    assert_eq!(
+        first_toggle_snapshot.applies_to_listing,
+        initial_snapshot.applies_to_listing,
+    );
+    assert_template_snapshot_rule(
+        &first_toggle_snapshot,
+        initial_snapshot.rule_kind,
+        initial_snapshot.rule_value,
+    );
+    assert_eq!(first_toggle_snapshot.starts_at, initial_snapshot.starts_at);
+    assert_eq!(first_toggle_snapshot.expires_at, initial_snapshot.expires_at);
+    assert_eq!(
+        first_toggle_snapshot.max_redemptions,
+        initial_snapshot.max_redemptions,
+    );
+    assert_template_snapshot_counters_and_active(
+        &first_toggle_snapshot,
+        initial_snapshot.claims_issued,
+        initial_snapshot.redemptions,
+        false,
+    );
 
     shop::toggle_discount_template(
         &mut shop,
@@ -3306,26 +3277,29 @@ fun toggle_discount_template_updates_active_and_emits_events() {
         true,
     );
 
-    let shop_id_after_second = shop::shop_id(&shop);
-    let applies_to_listing_after_second = shop::discount_template_applies_to_listing(&shop, template);
-    let rule_after_second_kind = shop::discount_template_rule_kind(&shop, template);
-    let rule_after_second_value = shop::discount_template_rule_value(&shop, template);
-    let starts_at_after_second = shop::discount_template_starts_at(&shop, template);
-    let expires_at_after_second = shop::discount_template_expires_at(&shop, template);
-    let max_redemptions_after_second = shop::discount_template_max_redemptions(&shop, template);
-    let claims_issued_after_second = shop::discount_template_claims_issued(&shop, template);
-    let redemptions_after_second = shop::discount_template_redemptions(&shop, template);
-    let active_after_second = shop::discount_template_active(&shop, template);
-    assert_eq!(shop_id_after_second, shop_id);
-    assert_eq!(applies_to_listing_after_second, applies_to_listing);
-    assert_eq!(rule_after_second_kind, rule_kind);
-    assert_eq!(rule_after_second_value, rule_value);
-    assert_eq!(starts_at_after_second, starts_at);
-    assert_eq!(expires_at_after_second, expires_at);
-    assert_eq!(max_redemptions_after_second, max_redemptions);
-    assert_eq!(claims_issued_after_second, claims_issued);
-    assert_eq!(redemptions_after_second, redemptions);
-    assert!(active_after_second);
+    let second_toggle_snapshot = read_discount_template_snapshot(&shop, template);
+    assert_eq!(second_toggle_snapshot.shop_id, shop_id);
+    assert_eq!(
+        second_toggle_snapshot.applies_to_listing,
+        initial_snapshot.applies_to_listing,
+    );
+    assert_template_snapshot_rule(
+        &second_toggle_snapshot,
+        initial_snapshot.rule_kind,
+        initial_snapshot.rule_value,
+    );
+    assert_eq!(second_toggle_snapshot.starts_at, initial_snapshot.starts_at);
+    assert_eq!(second_toggle_snapshot.expires_at, initial_snapshot.expires_at);
+    assert_eq!(
+        second_toggle_snapshot.max_redemptions,
+        initial_snapshot.max_redemptions,
+    );
+    assert_template_snapshot_counters_and_active(
+        &second_toggle_snapshot,
+        initial_snapshot.claims_issued,
+        initial_snapshot.redemptions,
+        true,
+    );
 
     let toggled_events = event::events_by_type<shop::DiscountTemplateToggledEvent>();
     assert_eq!(toggled_events.length(), 2);

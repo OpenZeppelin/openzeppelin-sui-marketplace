@@ -2468,7 +2468,7 @@ public(package) fun discount_template_ref_rule_value(template: &DiscountTemplate
     discount_rule_value(template.rule)
 }
 
-/// Returns `DiscountTemplate.applies_to_listing` after validating shop membership.
+/// Returns the owning shop id after validating template membership.
 public fun discount_template_shop_id(shop: &Shop, template_id: ID): ID {
     let _template = shop.borrow_discount_template(template_id);
     shop.id.to_inner()
@@ -2476,64 +2476,54 @@ public fun discount_template_shop_id(shop: &Shop, template_id: ID): ID {
 
 /// Returns `DiscountTemplate.applies_to_listing` after validating shop membership.
 public fun discount_template_applies_to_listing(shop: &Shop, template_id: ID): Option<ID> {
-    let template = shop.borrow_discount_template(template_id);
-    discount_template_ref_applies_to_listing(template)
+    discount_template_ref_applies_to_listing(shop.borrow_discount_template(template_id))
 }
 
 /// Returns `DiscountTemplate.rule` after validating shop membership.
 public fun discount_template_rule(shop: &Shop, template_id: ID): DiscountRule {
-    let template = shop.borrow_discount_template(template_id);
-    discount_template_ref_rule(template)
+    discount_template_ref_rule(shop.borrow_discount_template(template_id))
 }
 
 /// Returns `DiscountTemplate.starts_at` after validating shop membership.
 public fun discount_template_starts_at(shop: &Shop, template_id: ID): u64 {
-    let template = shop.borrow_discount_template(template_id);
-    discount_template_ref_starts_at(template)
+    discount_template_ref_starts_at(shop.borrow_discount_template(template_id))
 }
 
 /// Returns `DiscountTemplate.expires_at` after validating shop membership.
 public fun discount_template_expires_at(shop: &Shop, template_id: ID): Option<u64> {
-    let template = shop.borrow_discount_template(template_id);
-    discount_template_ref_expires_at(template)
+    discount_template_ref_expires_at(shop.borrow_discount_template(template_id))
 }
 
 /// Returns `DiscountTemplate.max_redemptions` after validating shop membership.
 public fun discount_template_max_redemptions(shop: &Shop, template_id: ID): Option<u64> {
-    let template = shop.borrow_discount_template(template_id);
-    discount_template_ref_max_redemptions(template)
+    discount_template_ref_max_redemptions(shop.borrow_discount_template(template_id))
 }
 
 /// Returns `DiscountTemplate.claims_issued` after validating shop membership.
 public fun discount_template_claims_issued(shop: &Shop, template_id: ID): u64 {
-    let template = shop.borrow_discount_template(template_id);
-    discount_template_ref_claims_issued(template)
+    discount_template_ref_claims_issued(shop.borrow_discount_template(template_id))
 }
 
 /// Returns `DiscountTemplate.redemptions` after validating shop membership.
 public fun discount_template_redemptions(shop: &Shop, template_id: ID): u64 {
-    let template = shop.borrow_discount_template(template_id);
-    discount_template_ref_redemptions(template)
+    discount_template_ref_redemptions(shop.borrow_discount_template(template_id))
 }
 
 /// Returns `DiscountTemplate.active` after validating shop membership.
 public fun discount_template_active(shop: &Shop, template_id: ID): bool {
-    let template = shop.borrow_discount_template(template_id);
-    discount_template_ref_active(template)
+    discount_template_ref_active(shop.borrow_discount_template(template_id))
 }
 
 /// Returns encoded rule kind from a template (`0 = fixed`, `1 = percent`).
 /// Validates shop membership before reading the template.
 public fun discount_template_rule_kind(shop: &Shop, template_id: ID): u8 {
-    let template = shop.borrow_discount_template(template_id);
-    discount_template_ref_rule_kind(template)
+    discount_template_ref_rule_kind(shop.borrow_discount_template(template_id))
 }
 
 /// Returns encoded rule value from a template (`amount_cents` or `bps`).
 /// Validates shop membership before reading the template.
 public fun discount_template_rule_value(shop: &Shop, template_id: ID): u64 {
-    let template = shop.borrow_discount_template(template_id);
-    discount_template_ref_rule_value(template)
+    discount_template_ref_rule_value(shop.borrow_discount_template(template_id))
 }
 
 /// Returns listing fields after validating shop membership.
