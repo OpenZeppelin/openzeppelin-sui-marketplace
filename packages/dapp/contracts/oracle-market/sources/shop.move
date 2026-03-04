@@ -668,7 +668,7 @@ public(package) fun new_purchase_completed_event(
 ///   table storage and discount templates stored directly in a typed `Table`.
 /// - State stays sharded so PTBs only touch the listing slot/template object they mutate.
 #[allow(lint(self_transfer))]
-public fun create_shop(name: String, ctx: &mut TxContext): ID {
+public fun create_shop(name: String, ctx: &mut TxContext): (ID, ID) {
     let owner = ctx.sender();
     let shop = new_shop(name, owner, ctx);
     let shop_id = shop.id.to_inner();
@@ -677,12 +677,13 @@ public fun create_shop(name: String, ctx: &mut TxContext): ID {
         id: object::new(ctx),
         shop_id,
     };
+    let owner_cap_id = owner_cap.id.to_inner();
 
-    event::emit(new_shop_created_event(shop_id, owner_cap.id.to_inner()));
+    event::emit(new_shop_created_event(shop_id, owner_cap_id));
 
     transfer::share_object(shop);
     transfer::public_transfer(owner_cap, owner);
-    shop_id
+    (shop_id, owner_cap_id)
 }
 
 /// Disable a shop permanently (buyer flows will reject new checkouts).

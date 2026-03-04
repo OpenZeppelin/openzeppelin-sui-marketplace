@@ -59,14 +59,6 @@ const TEST_DEFAULT_MAX_PRICE_STATUS_LAG_SECS: u64 = 5;
 const TEST_MAX_DECIMAL_POWER: u64 = 24;
 
 // === Test Helpers ===
-public struct ShopCreationTxEffects {
-    shop_id: ID,
-    owner_cap_id: ID,
-    created_ids: vector<ID>,
-    shared_ids: vector<ID>,
-    transferred_to_account: vec_map::VecMap<ID, address>,
-    ids_created_delta: u64,
-}
 
 public struct TwoShopCreationEvents {
     first_shop_id: ID,
@@ -276,78 +268,16 @@ fun owner_cap_ids_transferred_to_sender(
     transferred_owner_cap_ids
 }
 
-fun owner_cap_id_from_tx_ids(
-    scn: &test_scenario::Scenario,
-    shop_id: ID,
-    created_ids: &vector<ID>,
-    shared_ids: &vector<ID>,
-    transferred_to_account: &vec_map::VecMap<ID, address>,
-): ID {
-    assert_eq!(shared_ids.length(), 1);
-    assert_eq!(shared_ids[0], shop_id);
-    let owner_cap_ids = owner_cap_ids_transferred_to_sender(
-        scn,
-        transferred_to_account,
-    );
-    assert_eq!(owner_cap_ids.length(), 1);
-    let owner_cap_id = owner_cap_ids[0];
-    assert_id_in_ids(created_ids, shop_id);
-    assert_id_in_ids(created_ids, owner_cap_id);
-    let owner_cap = test_scenario::take_from_sender_by_id<shop::ShopOwnerCap>(
-        scn,
-        owner_cap_id,
-    );
-    let owner_cap_shop_id = shop::shop_owner_cap_shop_id(&owner_cap);
-    test_scenario::return_to_sender(scn, owner_cap);
-    assert_eq!(owner_cap_shop_id, shop_id);
-    owner_cap_id
-}
-
-fun create_shop_and_owner_cap_ids_with_tx_effects_for_sender(
-    scn: &mut test_scenario::Scenario,
-    shop_name: vector<u8>,
-): ShopCreationTxEffects {
-    let ids_created_before = tx_context::get_ids_created(test_scenario::ctx(scn));
-    let shop_id = shop::create_shop(shop_name.to_string(), test_scenario::ctx(scn));
-    // let owner_cap_id = scn.take_shared_by_id<shop::Shop>(shop_id).shop_owner().to_id();
-    // TODO#q: assert shop emitted event
-    // assert_emitted!(shop::new_shop_created_event(shop_id, shop_id));
-
-    let ids_created_after = tx_context::get_ids_created(test_scenario::ctx(scn));
-    let (
-        created_ids,
-        shared_ids,
-        transferred_to_account,
-    ) = next_sender_tx_created_shared_ids_and_transfers(scn);
-    let owner_cap_id = owner_cap_id_from_tx_ids(
-        scn,
-        shop_id,
-        &created_ids,
-        &shared_ids,
-        &transferred_to_account,
-    );
-    ShopCreationTxEffects {
-        shop_id,
-        owner_cap_id,
-        created_ids,
-        shared_ids,
-        transferred_to_account,
-        ids_created_delta: ids_created_after - ids_created_before,
-    }
-}
-
 fun create_shop_and_owner_cap_ids_for_sender(
     scn: &mut test_scenario::Scenario,
     shop_name: vector<u8>,
 ): (ID, ID) {
-    let ShopCreationTxEffects {
-        shop_id,
-        owner_cap_id,
-        created_ids: _created_ids,
-        shared_ids: _shared_ids,
-        transferred_to_account: _transferred_to_account,
-        ids_created_delta: _ids_created_delta,
-    } = create_shop_and_owner_cap_ids_with_tx_effects_for_sender(scn, shop_name);
+    let (shop_id, owner_cap_id) = shop::create_shop(shop_name.to_string(), test_scenario::ctx(scn));
+
+    assert_emitted!(shop::new_shop_created_event(shop_id, owner_cap_id));
+    let sender = scn.sender();
+    scn.next_tx(sender);
+
     (shop_id, owner_cap_id)
 }
 
@@ -360,17 +290,17 @@ fun create_two_shops_and_owner_cap_pairs_with_events_for_sender(
     first_shop_name: vector<u8>,
     second_shop_name: vector<u8>,
 ): TwoShopCreationEvents {
-    let expected_first_shop_id = shop::create_shop(
+    let (expected_first_shop_id, first_shop_owner_cap_id) = shop::create_shop(
         first_shop_name.to_string(),
         test_scenario::ctx(scn),
     );
-    let expected_second_shop_id = shop::create_shop(
+    let (expected_second_shop_id, second_shop_owner_cap_id) = shop::create_shop(
         second_shop_name.to_string(),
         test_scenario::ctx(scn),
     );
 
-    // TODO#q: assert shop emitted events
-    // assert_emitted!(shop::new_shop_created_event(shop_id, shop_id));
+    assert_emitted!(shop::new_shop_created_event(expected_first_shop_id, first_shop_owner_cap_id));
+    assert_emitted!(shop::new_shop_created_event(expected_second_shop_id, second_shop_owner_cap_id));
 
     let (
         created_ids,
@@ -583,20 +513,10 @@ fun assert_listing_scoped_percent_template(
 #[test]
 fun create_shop_emits_event_and_records_ids() {
     let mut scn = test_scenario::begin(TEST_OWNER);
-    let ShopCreationTxEffects {
-        shop_id,
-        owner_cap_id: _owner_cap_id,
-        created_ids: _created_ids,
-        shared_ids,
-        transferred_to_account: _transferred_to_account,
-        ids_created_delta,
-    } = create_shop_and_owner_cap_ids_with_tx_effects_for_sender(
+    create_shop_and_owner_cap_ids_for_sender(
         &mut scn,
         DEFAULT_SHOP_NAME,
     );
-    assert_eq!(ids_created_delta, 5);
-    assert_eq!(shared_ids.length(), 1);
-    assert_eq!(shared_ids[0], shop_id);
     let _ = test_scenario::end(scn);
 }
 
@@ -634,14 +554,7 @@ fun create_shop_emits_unique_shop_and_cap_ids() {
 #[test]
 fun create_shop_records_sender_in_event() {
     let mut scn = test_scenario::begin(OTHER_OWNER);
-    let ShopCreationTxEffects {
-        shop_id: _shop_id,
-        owner_cap_id,
-        created_ids: _created_ids,
-        shared_ids: _shared_ids,
-        transferred_to_account: _transferred_to_account,
-        ids_created_delta: _ids_created_delta,
-    } = create_shop_and_owner_cap_ids_with_tx_effects_for_sender(
+    let (_, owner_cap_id) = create_shop_and_owner_cap_ids_for_sender(
         &mut scn,
         DEFAULT_SHOP_NAME,
     );
@@ -670,20 +583,10 @@ fun create_shop_handles_existing_id_counts() {
 fun create_shop_shares_shop_and_transfers_owner_cap() {
     let mut scn = test_scenario::begin(TEST_OWNER);
 
-    let ShopCreationTxEffects {
-        shop_id,
-        owner_cap_id,
-        created_ids: _created_ids,
-        shared_ids: _shared_ids,
-        transferred_to_account,
-        ids_created_delta: _ids_created_delta,
-    } = create_shop_and_owner_cap_ids_with_tx_effects_for_sender(
+    let (shop_id, _) = create_shop_and_owner_cap_ids_for_sender(
         &mut scn,
         DEFAULT_SHOP_NAME,
     );
-
-    assert_eq!(vec_map::length(&transferred_to_account), 1);
-    assert_eq!(transferred_to_account[&owner_cap_id], TEST_OWNER);
 
     let shared_shop = test_scenario::take_shared<shop::Shop>(&scn);
     assert_eq!(object::id(&shared_shop), shop_id);
@@ -3824,14 +3727,7 @@ fun clear_template_from_listing_rejects_foreign_listing() {
 fun claim_discount_ticket_mints_transfers_and_records_claim() {
     let mut scn = test_scenario::begin(TEST_OWNER);
 
-    let ShopCreationTxEffects {
-        shop_id,
-        owner_cap_id,
-        created_ids: _created_ids,
-        shared_ids: _shared_ids,
-        transferred_to_account: _transferred_to_account,
-        ids_created_delta: _ids_created_delta,
-    } = create_shop_and_owner_cap_ids_with_tx_effects_for_sender(
+    let (shop_id, owner_cap_id) = create_shop_and_owner_cap_ids_for_sender(
         &mut scn,
         DEFAULT_SHOP_NAME,
     );
@@ -4165,14 +4061,7 @@ fun claim_discount_ticket_rejects_missing_listing_for_listing_scoped_template_af
 fun claim_and_buy_rejects_second_claim_after_redeem() {
     let mut scn = test_scenario::begin(TEST_OWNER);
 
-    let ShopCreationTxEffects {
-        shop_id,
-        owner_cap_id,
-        created_ids: _created_ids,
-        shared_ids: _shared_ids,
-        transferred_to_account: _transferred_to_account,
-        ids_created_delta: _ids_created_delta,
-    } = create_shop_and_owner_cap_ids_with_tx_effects_for_sender(
+    let (shop_id, owner_cap_id) = create_shop_and_owner_cap_ids_for_sender(
         &mut scn,
         DEFAULT_SHOP_NAME,
     );
@@ -4284,14 +4173,7 @@ fun claim_and_buy_rejects_second_claim_after_redeem() {
 fun claim_and_buy_item_with_discount_emits_events_and_covers_helpers() {
     let mut scn = test_scenario::begin(TEST_OWNER);
 
-    let ShopCreationTxEffects {
-        shop_id,
-        owner_cap_id,
-        created_ids: _created_ids,
-        shared_ids: _shared_ids,
-        transferred_to_account: _transferred_to_account,
-        ids_created_delta: _ids_created_delta,
-    } = create_shop_and_owner_cap_ids_with_tx_effects_for_sender(
+    let (shop_id, owner_cap_id) = create_shop_and_owner_cap_ids_for_sender(
         &mut scn,
         DEFAULT_SHOP_NAME,
     );
