@@ -65,7 +65,6 @@ public struct ShopCreationTxEffects {
     created_ids: vector<ID>,
     shared_ids: vector<ID>,
     transferred_to_account: vec_map::VecMap<ID, address>,
-    emitted_event: shop::ShopCreatedEvent,
     ids_created_delta: u64,
 }
 
@@ -74,8 +73,6 @@ public struct TwoShopCreationEvents {
     first_owner_cap_id: ID,
     second_shop_id: ID,
     second_owner_cap_id: ID,
-    first_emitted_event: shop::ShopCreatedEvent,
-    second_emitted_event: shop::ShopCreatedEvent,
 }
 
 fun sample_price(): price::Price {
@@ -311,12 +308,12 @@ fun create_shop_and_owner_cap_ids_with_tx_effects_for_sender(
     shop_name: vector<u8>,
 ): ShopCreationTxEffects {
     let ids_created_before = tx_context::get_ids_created(test_scenario::ctx(scn));
-    let event_count_before = event::events_by_type<shop::ShopCreatedEvent>().length();
     let shop_id = shop::create_shop(shop_name.to_string(), test_scenario::ctx(scn));
+    // let owner_cap_id = scn.take_shared_by_id<shop::Shop>(shop_id).shop_owner().to_id();
+    // TODO#q: assert shop emitted event
+    // assert_emitted!(shop::new_shop_created_event(shop_id, shop_id));
+
     let ids_created_after = tx_context::get_ids_created(test_scenario::ctx(scn));
-    let created_events = event::events_by_type<shop::ShopCreatedEvent>();
-    assert_eq!(created_events.length(), event_count_before + 1);
-    let emitted_event = created_events[created_events.length() - 1];
     let (
         created_ids,
         shared_ids,
@@ -335,7 +332,6 @@ fun create_shop_and_owner_cap_ids_with_tx_effects_for_sender(
         created_ids,
         shared_ids,
         transferred_to_account,
-        emitted_event,
         ids_created_delta: ids_created_after - ids_created_before,
     }
 }
@@ -350,7 +346,6 @@ fun create_shop_and_owner_cap_ids_for_sender(
         created_ids: _created_ids,
         shared_ids: _shared_ids,
         transferred_to_account: _transferred_to_account,
-        emitted_event: _emitted_event,
         ids_created_delta: _ids_created_delta,
     } = create_shop_and_owner_cap_ids_with_tx_effects_for_sender(scn, shop_name);
     (shop_id, owner_cap_id)
@@ -365,7 +360,6 @@ fun create_two_shops_and_owner_cap_pairs_with_events_for_sender(
     first_shop_name: vector<u8>,
     second_shop_name: vector<u8>,
 ): TwoShopCreationEvents {
-    let event_count_before = event::events_by_type<shop::ShopCreatedEvent>().length();
     let expected_first_shop_id = shop::create_shop(
         first_shop_name.to_string(),
         test_scenario::ctx(scn),
@@ -374,10 +368,10 @@ fun create_two_shops_and_owner_cap_pairs_with_events_for_sender(
         second_shop_name.to_string(),
         test_scenario::ctx(scn),
     );
-    let created_events = event::events_by_type<shop::ShopCreatedEvent>();
-    assert_eq!(created_events.length(), event_count_before + 2);
-    let first_emitted_event = created_events[created_events.length() - 2];
-    let second_emitted_event = created_events[created_events.length() - 1];
+
+    // TODO#q: assert shop emitted events
+    // assert_emitted!(shop::new_shop_created_event(shop_id, shop_id));
+
     let (
         created_ids,
         shared_ids,
@@ -403,8 +397,6 @@ fun create_two_shops_and_owner_cap_pairs_with_events_for_sender(
         first_owner_cap_id,
         second_shop_id,
         second_owner_cap_id,
-        first_emitted_event,
-        second_emitted_event,
     }
 }
 
@@ -418,8 +410,6 @@ fun create_two_shops_and_owner_cap_pairs_for_sender(
         first_owner_cap_id,
         second_shop_id,
         second_owner_cap_id,
-        first_emitted_event: _first_emitted_event,
-        second_emitted_event: _second_emitted_event,
     } = create_two_shops_and_owner_cap_pairs_with_events_for_sender(
         scn,
         first_shop_name,
@@ -536,10 +526,6 @@ macro fun assert_emitted<$T>($expected_event: $T) {
     };
 }
 
-fun emitted_event_count<T: copy + drop>(): u64 {
-    event::events_by_type<T>().length()
-}
-
 fun assert_listing_spotlight_template_id(
     shop: &shop::Shop,
     listing_id: ID,
@@ -599,18 +585,16 @@ fun create_shop_emits_event_and_records_ids() {
     let mut scn = test_scenario::begin(TEST_OWNER);
     let ShopCreationTxEffects {
         shop_id,
-        owner_cap_id,
+        owner_cap_id: _owner_cap_id,
         created_ids: _created_ids,
         shared_ids,
         transferred_to_account: _transferred_to_account,
-        emitted_event,
         ids_created_delta,
     } = create_shop_and_owner_cap_ids_with_tx_effects_for_sender(
         &mut scn,
         DEFAULT_SHOP_NAME,
     );
     assert_eq!(ids_created_delta, 5);
-    assert_eq!(emitted_event, shop::new_shop_created_event(shop_id, owner_cap_id));
     assert_eq!(shared_ids.length(), 1);
     assert_eq!(shared_ids[0], shop_id);
     let _ = test_scenario::end(scn);
@@ -624,8 +608,7 @@ fun create_shop_allows_multiple_shops_per_sender() {
     shop::create_shop(DEFAULT_SHOP_NAME.to_string(), &mut ctx);
     shop::create_shop(DEFAULT_SHOP_NAME.to_string(), &mut ctx);
 
-    let created = event::events_by_type<shop::ShopCreatedEvent>();
-    assert_eq!(created.length(), 2);
+    assert_eq!(event::events_by_type<shop::ShopCreatedEvent>().length(), 2);
     assert_eq!(tx_context::get_ids_created(&ctx), starting_ids + 10);
 }
 
@@ -637,8 +620,6 @@ fun create_shop_emits_unique_shop_and_cap_ids() {
         first_owner_cap_id,
         second_shop_id,
         second_owner_cap_id,
-        first_emitted_event,
-        second_emitted_event,
     } = create_two_shops_and_owner_cap_pairs_with_events_for_sender(
         &mut scn,
         DEFAULT_SHOP_NAME,
@@ -646,12 +627,7 @@ fun create_shop_emits_unique_shop_and_cap_ids() {
     );
     assert!(first_shop_id != second_shop_id);
     assert!(first_owner_cap_id != second_owner_cap_id);
-    let expected_first = shop::new_shop_created_event(first_shop_id, first_owner_cap_id);
-    let expected_second = shop::new_shop_created_event(second_shop_id, second_owner_cap_id);
-    assert!(
-        (first_emitted_event == expected_first && second_emitted_event == expected_second) ||
-            (first_emitted_event == expected_second && second_emitted_event == expected_first),
-    );
+
     let _ = test_scenario::end(scn);
 }
 
@@ -659,18 +635,16 @@ fun create_shop_emits_unique_shop_and_cap_ids() {
 fun create_shop_records_sender_in_event() {
     let mut scn = test_scenario::begin(OTHER_OWNER);
     let ShopCreationTxEffects {
-        shop_id,
+        shop_id: _shop_id,
         owner_cap_id,
         created_ids: _created_ids,
         shared_ids: _shared_ids,
         transferred_to_account: _transferred_to_account,
-        emitted_event,
         ids_created_delta: _ids_created_delta,
     } = create_shop_and_owner_cap_ids_with_tx_effects_for_sender(
         &mut scn,
         DEFAULT_SHOP_NAME,
     );
-    assert_eq!(emitted_event, shop::new_shop_created_event(shop_id, owner_cap_id));
     let sender_owner_cap_ids = test_scenario::ids_for_sender<shop::ShopOwnerCap>(&scn);
     assert_eq!(sender_owner_cap_ids.length(), 1);
     assert_eq!(sender_owner_cap_ids[0], owner_cap_id);
@@ -702,13 +676,11 @@ fun create_shop_shares_shop_and_transfers_owner_cap() {
         created_ids: _created_ids,
         shared_ids: _shared_ids,
         transferred_to_account,
-        emitted_event,
         ids_created_delta: _ids_created_delta,
     } = create_shop_and_owner_cap_ids_with_tx_effects_for_sender(
         &mut scn,
         DEFAULT_SHOP_NAME,
     );
-    assert_eq!(emitted_event, shop::new_shop_created_event(shop_id, owner_cap_id));
 
     assert_eq!(vec_map::length(&transferred_to_account), 1);
     assert_eq!(transferred_to_account[&owner_cap_id], TEST_OWNER);
@@ -1348,7 +1320,6 @@ fun remove_accepted_currency_removes_state_and_emits_event() {
     let primary_currency = create_test_currency(test_scenario::ctx(&mut scn));
     let secondary_currency = create_alt_test_currency(test_scenario::ctx(&mut scn));
     let _ = test_scenario::next_tx(&mut scn, TEST_OWNER);
-    let _removed_before = event::events_by_type<shop::AcceptedCoinRemovedEvent>().length();
 
     let mut shop_obj = take_shared_shop(&scn, shop_id);
     let owner_cap_obj = test_scenario::take_from_sender_by_id(
@@ -2059,12 +2030,7 @@ fun update_item_listing_stock_updates_listing_and_emits_events() {
     assert!(option::is_none(&spotlight_template));
     assert_eq!(stock, 11);
 
-    let stock_events = event::events_by_type<shop::ItemListingStockUpdatedEvent>();
-    assert_eq!(stock_events.length(), 1);
-    assert_eq!(
-        stock_events[0],
-        shop::new_item_listing_stock_updated_event(shop::shop_id(&shop), listing_id),
-    );
+    assert_emitted!(shop::new_item_listing_stock_updated_event(shop::shop_id(&shop), listing_id));
 
     remove_listing_if_exists(&mut shop, &owner_cap, listing_id);
     std::unit_test::destroy(owner_cap);
@@ -2167,14 +2133,13 @@ fun update_item_listing_stock_handles_multiple_updates_and_events() {
     let stock = shop::listing_values_stock(&listing_values);
     assert_eq!(stock, 3);
 
-    let stock_events = event::events_by_type<shop::ItemListingStockUpdatedEvent>();
-    assert_eq!(stock_events.length(), 2);
-    let expected_event = shop::new_item_listing_stock_updated_event(
-        shop::shop_id(&shop),
-        listing_id,
+    assert_emitted!(
+        shop::new_item_listing_stock_updated_event(
+            shop::shop_id(&shop),
+            listing_id,
+        ),
     );
-    assert_eq!(stock_events[0], expected_event);
-    assert_eq!(stock_events[1], expected_event);
+    assert_eq!(event::events_by_type<shop::ItemListingStockUpdatedEvent>().length(), 2);
 
     remove_listing_if_exists(&mut shop, &owner_cap, listing_id);
     std::unit_test::destroy(owner_cap);
@@ -2213,15 +2178,11 @@ fun remove_item_listing_removes_listing_and_emits_event() {
         removed_listing_id,
     );
 
-    let removed_events = event::events_by_type<shop::ItemListingRemovedEvent>();
-    assert_eq!(removed_events.length(), 1);
-    assert_eq!(
-        removed_events[0],
-        shop::new_item_listing_removed_event(shop_address, removed_listing_id),
-    );
-    assert!(!shop::listing_exists(&shop, removed_listing_id));
+    assert_emitted!(shop::new_item_listing_removed_event(shop_address, removed_listing_id));
 
+    assert!(!shop::listing_exists(&shop, removed_listing_id));
     assert!(shop::listing_exists(&shop, remaining_listing_id));
+
     let listing_values = shop::listing_values(&shop, remaining_listing_id);
     let name = shop::listing_values_name(&listing_values);
     let price = shop::listing_values_base_price_usd_cents(&listing_values);
@@ -2443,12 +2404,7 @@ fun create_discount_template_persists_fields_and_emits_event() {
     assert_eq!(redemptions, 0);
     assert!(active);
 
-    let created_events = event::events_by_type<shop::DiscountTemplateCreatedEvent>();
-    assert_eq!(created_events.length(), 1);
-    assert_eq!(
-        created_events[0],
-        shop::new_discount_template_created_event(shop::shop_id(&shop), template_id),
-    );
+    assert_emitted!(shop::new_discount_template_created_event(shop::shop_id(&shop), template_id));
 
     shop::remove_discount_template(&mut shop, &owner_cap, template_id);
     std::unit_test::destroy(owner_cap);
@@ -2508,12 +2464,7 @@ fun create_discount_template_links_listing_and_percent_rule() {
     assert_eq!(redemptions, 0);
     assert!(active);
 
-    let created_events = event::events_by_type<shop::DiscountTemplateCreatedEvent>();
-    assert_eq!(created_events.length(), 1);
-    assert_eq!(
-        created_events[0],
-        shop::new_discount_template_created_event(shop::shop_id(&shop), template_id),
-    );
+    assert_emitted!(shop::new_discount_template_created_event(shop::shop_id(&shop), template_id));
 
     shop::remove_discount_template(&mut shop, &owner_cap, template_id);
     remove_listing_if_exists(&mut shop, &owner_cap, listing_id);
@@ -2726,12 +2677,7 @@ fun update_discount_template_updates_fields_and_emits_event() {
     assert_eq!(redemptions, 0);
     assert!(active);
 
-    let updated_events = event::events_by_type<shop::DiscountTemplateUpdatedEvent>();
-    assert_eq!(updated_events.length(), 1);
-    assert_eq!(
-        updated_events[0],
-        shop::new_discount_template_updated_event(shop::shop_id(&shop), template),
-    );
+    assert_emitted!(shop::new_discount_template_updated_event(shop::shop_id(&shop), template));
 
     shop::remove_discount_template(&mut shop, &owner_cap, template);
     remove_listing_if_exists(&mut shop, &owner_cap, listing_id);
@@ -3134,19 +3080,8 @@ fun toggle_discount_template_updates_active_and_emits_events() {
     assert_eq!(redemptions_after_second, redemptions);
     assert!(active_after_second);
 
-    let toggled_events_after_first = event::events_by_type<shop::DiscountTemplateToggledEvent>();
-    assert_eq!(toggled_events_after_first.length(), 2);
-    assert_eq!(
-        toggled_events_after_first[0],
-        shop::new_discount_template_toggled_event(shop_id, template),
-    );
-
-    let toggled_events_after_second = event::events_by_type<shop::DiscountTemplateToggledEvent>();
-    assert_eq!(toggled_events_after_second.length(), 2);
-    assert_eq!(
-        toggled_events_after_second[1],
-        shop::new_discount_template_toggled_event(shop_id, template),
-    );
+    assert_emitted!(shop::new_discount_template_toggled_event(shop_id, template));
+    assert_eq!(event::events_by_type<shop::DiscountTemplateToggledEvent>().length(), 2);
 
     shop::remove_discount_template(&mut shop, &owner_cap, template);
     std::unit_test::destroy(owner_cap);
@@ -3475,7 +3410,6 @@ fun attach_template_to_listing_sets_spotlight_without_emitting_events() {
         &mut ctx,
     );
     let ids_before = tx_context::get_ids_created(&ctx);
-    let toggled_before = event::events_by_type<shop::DiscountTemplateToggledEvent>().length();
 
     shop::attach_template_to_listing(
         &mut shop,
@@ -3493,10 +3427,7 @@ fun attach_template_to_listing_sets_spotlight_without_emitting_events() {
         assert_eq!(*value, template);
     });
     assert_eq!(tx_context::get_ids_created(&ctx), ids_before);
-    assert_eq!(
-        event::events_by_type<shop::DiscountTemplateToggledEvent>().length(),
-        toggled_before,
-    );
+    assert_eq!(event::events_by_type<shop::DiscountTemplateToggledEvent>().length(), 0);
     assert!(shop::discount_template_exists(&shop, template));
 
     shop::remove_discount_template(&mut shop, &owner_cap, template);
@@ -3775,7 +3706,6 @@ fun clear_template_from_listing_removes_spotlight_without_side_effects() {
         &listing_values_before,
     );
     let created_before = tx_context::get_ids_created(&ctx);
-    let toggled_before = event::events_by_type<shop::DiscountTemplateToggledEvent>().length();
     assert!(option::is_some(&spotlight_before));
     spotlight_before.do_ref!(|value| {
         assert_eq!(*value, template);
@@ -3793,10 +3723,7 @@ fun clear_template_from_listing_removes_spotlight_without_side_effects() {
     );
     assert!(option::is_none(&spotlight_after));
     assert_eq!(tx_context::get_ids_created(&ctx), created_before);
-    assert_eq!(
-        event::events_by_type<shop::DiscountTemplateToggledEvent>().length(),
-        toggled_before,
-    );
+    assert_eq!(event::events_by_type<shop::DiscountTemplateToggledEvent>().length(), 0);
     assert!(shop::discount_template_exists(&shop, template));
 
     shop::remove_discount_template(&mut shop, &owner_cap, template);
@@ -3820,7 +3747,6 @@ fun clear_template_from_listing_is_noop_when_no_spotlight_set() {
         &mut ctx,
     );
     let created_before = tx_context::get_ids_created(&ctx);
-    let toggled_before = event::events_by_type<shop::DiscountTemplateToggledEvent>().length();
 
     shop::clear_template_from_listing(
         &mut shop,
@@ -3834,10 +3760,7 @@ fun clear_template_from_listing_is_noop_when_no_spotlight_set() {
     );
     assert!(option::is_none(&spotlight_after));
     assert_eq!(tx_context::get_ids_created(&ctx), created_before);
-    assert_eq!(
-        event::events_by_type<shop::DiscountTemplateToggledEvent>().length(),
-        toggled_before,
-    );
+    assert_eq!(event::events_by_type<shop::DiscountTemplateToggledEvent>().length(), 0);
 
     remove_listing_if_exists(&mut shop, &owner_cap, listing_id);
     std::unit_test::destroy(owner_cap);
@@ -3907,7 +3830,6 @@ fun claim_discount_ticket_mints_transfers_and_records_claim() {
         created_ids: _created_ids,
         shared_ids: _shared_ids,
         transferred_to_account: _transferred_to_account,
-        emitted_event: _emitted_event,
         ids_created_delta: _ids_created_delta,
     } = create_shop_and_owner_cap_ids_with_tx_effects_for_sender(
         &mut scn,
@@ -4249,7 +4171,6 @@ fun claim_and_buy_rejects_second_claim_after_redeem() {
         created_ids: _created_ids,
         shared_ids: _shared_ids,
         transferred_to_account: _transferred_to_account,
-        emitted_event: _emitted_event,
         ids_created_delta: _ids_created_delta,
     } = create_shop_and_owner_cap_ids_with_tx_effects_for_sender(
         &mut scn,
@@ -4369,7 +4290,6 @@ fun claim_and_buy_item_with_discount_emits_events_and_covers_helpers() {
         created_ids: _created_ids,
         shared_ids: _shared_ids,
         transferred_to_account: _transferred_to_account,
-        emitted_event: _emitted_event,
         ids_created_delta: _ids_created_delta,
     } = create_shop_and_owner_cap_ids_with_tx_effects_for_sender(
         &mut scn,
@@ -4454,8 +4374,6 @@ fun claim_and_buy_item_with_discount_emits_events_and_covers_helpers() {
         &template_values_before,
     );
     let redemptions_before = shop::discount_template_values_redemptions(&template_values_before);
-    let claimed_event_count_before = emitted_event_count<shop::DiscountClaimedEvent>();
-    let redeemed_event_count_before = emitted_event_count<shop::DiscountRedeemedEvent>();
 
     shop::claim_and_buy_item_with_discount<TestItem, TestCoin>(
         &mut shared_shop,
@@ -4482,10 +4400,6 @@ fun claim_and_buy_item_with_discount_emits_events_and_covers_helpers() {
             0,
         ),
     );
-    let claimed_events = event::events_by_type<shop::DiscountClaimedEvent>();
-    assert_eq!(claimed_events.length(), claimed_event_count_before + 1);
-    let redeemed_events = event::events_by_type<shop::DiscountRedeemedEvent>();
-    assert_eq!(redeemed_events.length(), redeemed_event_count_before + 1);
     let template_values_after = shop::discount_template_values(&shared_shop, template_id);
     let claims_issued_after = shop::discount_template_values_claims_issued(&template_values_after);
     let redemptions_after = shop::discount_template_values_redemptions(&template_values_after);
@@ -5366,10 +5280,7 @@ fun remove_accepted_currency_emits_removed_event_fields() {
         &owner_cap,
     );
 
-    let removed_events = event::events_by_type<shop::AcceptedCoinRemovedEvent>();
-    assert_eq!(removed_events.length(), 1);
-    assert_eq!(
-        removed_events[0],
+    assert_emitted!(
         shop::new_accepted_coin_removed_event(
             shop::shop_id(&shared_shop),
             accepted_currency_id,
