@@ -14,18 +14,27 @@ use sui::coin;
 use sui::coin_registry;
 use sui::event;
 use sui::test_scenario;
-use sui::vec_map;
 use sui_oracle_market::shop;
 
 // === Constants ===
+
 const TEST_OWNER: address = @0xBEEF;
 const OTHER_OWNER: address = @0xCAFE;
 const THIRD_OWNER: address = @0xD00D;
 const MISSING_LISTING_ID_ADDRESS: address = @0xBAD1;
-const EAssertFailure: u64 = 0;
 const DEFAULT_SHOP_NAME: vector<u8> = b"Shop";
+const PRIMARY_FEED_ID: vector<u8> =
+    x"000102030405060708090a0b0c0d0e0f000102030405060708090a0b0c0d0e0f";
+const SECONDARY_FEED_ID: vector<u8> =
+    x"101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f";
+const SHORT_FEED_ID: vector<u8> = b"SHORT";
+const TEST_DEFAULT_MAX_PRICE_AGE_SECS: u64 = 60;
+const TEST_DEFAULT_MAX_CONFIDENCE_RATIO_BPS: u16 = 1_000;
+const TEST_DEFAULT_MAX_PRICE_STATUS_LAG_SECS: u64 = 5;
+const TEST_MAX_DECIMAL_POWER: u64 = 24;
 
 // === Test Types ===
+
 /// Test coin used in unit tests.
 public struct TestCoin has key, store { id: UID }
 /// Alternate test coin used in unit tests.
@@ -47,14 +56,8 @@ public struct Bike has key, store {
     id: UID,
 }
 
-// === Test Fixtures ===
-const PRIMARY_FEED_ID: vector<u8> =
-    x"000102030405060708090a0b0c0d0e0f000102030405060708090a0b0c0d0e0f";
-const SECONDARY_FEED_ID: vector<u8> =
-    x"101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f";
-const SHORT_FEED_ID: vector<u8> = b"SHORT";
-
 // === Test Helpers ===
+
 fun sample_price(): price::Price {
     let price_value = i64::new(1_000, false);
     price::new(price_value, 10, i64::new(2, true), 0)
@@ -67,7 +70,7 @@ fun missing_listing_id(): ID {
 fun create_price_info_object_for_feed(
     feed_id: vector<u8>,
     ctx: &mut tx_context::TxContext,
-): (price_info::PriceInfoObject, ID) {
+): price_info::PriceInfoObject {
     create_price_info_object_for_feed_with_price(feed_id, sample_price(), ctx)
 }
 
@@ -75,7 +78,7 @@ fun create_price_info_object_for_feed_with_price(
     feed_id: vector<u8>,
     price: price::Price,
     ctx: &mut tx_context::TxContext,
-): (price_info::PriceInfoObject, ID) {
+): price_info::PriceInfoObject {
     create_price_info_object_for_feed_with_price_and_times(
         feed_id,
         price,
@@ -91,20 +94,14 @@ fun create_price_info_object_for_feed_with_price_and_times(
     attestation_time: u64,
     arrival_time: u64,
     ctx: &mut tx_context::TxContext,
-): (price_info::PriceInfoObject, ID) {
+): price_info::PriceInfoObject {
     let price_identifier = price_identifier::from_byte_vec(feed_id);
     let price_feed = price_feed::new(price_identifier, price, price);
-    let price_info = price_info::new_price_info(
+    price_info::new_price_info(
         attestation_time,
         arrival_time,
         price_feed,
-    );
-    let price_info_object = price_info::new_price_info_object_for_test(
-        price_info,
-        ctx,
-    );
-    let price_info_id = price_info::uid_to_inner(&price_info_object);
-    (price_info_object, price_info_id)
+    ).new_price_info_object_for_test(ctx)
 }
 
 fun take_shared_shop(scn: &test_scenario::Scenario, shop_id: ID): shop::Shop {
@@ -118,12 +115,12 @@ fun add_currency_with_feed<T>(
     owner_cap: &shop::ShopOwnerCap,
     ctx: &mut tx_context::TxContext,
 ): ID {
-    let (price_info_object, price_info_id) = create_price_info_object_for_feed(
+    let price_info_object = create_price_info_object_for_feed(
         feed_id,
         ctx,
     );
-    shop::add_accepted_currency<T>(
-        shop,
+    let price_info_id = price_info_object.uid_to_inner();
+    shop.add_accepted_currency<T>(
         owner_cap,
         currency,
         &price_info_object,
@@ -137,92 +134,152 @@ fun add_currency_with_feed<T>(
     price_info_id
 }
 
+fun add_test_coin_accepted_currency_for_scenario(
+    scn: &mut test_scenario::Scenario,
+    shop: &mut shop::Shop,
+    owner_cap: &shop::ShopOwnerCap,
+    currency: &coin_registry::Currency<TestCoin>,
+    feed_id: vector<u8>,
+    max_price_age_secs_cap: Option<u64>,
+    max_confidence_ratio_bps_cap: Option<u16>,
+    max_price_status_lag_secs_cap: Option<u64>,
+): ID {
+    let price_info_object = create_price_info_object_for_feed(
+        feed_id,
+        test_scenario::ctx(scn),
+    );
+    let accepted_currency_id = price_info_object.uid_to_inner();
+    shop.add_accepted_currency<TestCoin>(
+        owner_cap,
+        currency,
+        &price_info_object,
+        feed_id,
+        accepted_currency_id,
+        max_price_age_secs_cap,
+        max_confidence_ratio_bps_cap,
+        max_price_status_lag_secs_cap,
+    );
+    transfer::public_share_object(price_info_object);
+    accepted_currency_id
+}
+
+/// Setup policy:
+/// - `test_scenario` helpers are used for shared-object lifecycle and entry-path behavior.
+/// - `tx_context` + this helper are used for deterministic local tests where shared lifecycle is
+///   not part of the behavior under test.
+fun setup_local_shop_and_owner_cap(
+    owner: address,
+    ctx: &mut tx_context::TxContext,
+): (shop::Shop, shop::ShopOwnerCap) {
+    shop::test_setup_shop(owner, ctx)
+}
+
+fun remove_listing_if_exists(
+    shop: &mut shop::Shop,
+    owner_cap: &shop::ShopOwnerCap,
+    listing_id: ID,
+) {
+    if (shop.listing_exists(listing_id)) {
+        shop.remove_item_listing(owner_cap, listing_id);
+    };
+}
+
+fun remove_currency_if_exists<TCoin>(shop: &mut shop::Shop, owner_cap: &shop::ShopOwnerCap) {
+    let coin_type = type_name::with_defining_ids<TCoin>();
+    if (shop.accepted_currency_exists(coin_type)) {
+        shop.remove_accepted_currency<TCoin>(owner_cap);
+    };
+}
+
+fun create_shop_and_owner_cap_ids_for_sender(
+    scn: &mut test_scenario::Scenario,
+    shop_name: vector<u8>,
+): (ID, ID) {
+    let (shop_id, owner_cap_id) = shop::create_shop(shop_name.to_string(), test_scenario::ctx(scn));
+
+    assert_emitted!(shop::new_shop_created_event(shop_id, owner_cap_id));
+    let sender = scn.sender();
+    scn.next_tx(sender);
+
+    (shop_id, owner_cap_id)
+}
+
+fun create_default_shop_and_owner_cap_ids_for_sender(scn: &mut test_scenario::Scenario): (ID, ID) {
+    create_shop_and_owner_cap_ids_for_sender(scn, DEFAULT_SHOP_NAME)
+}
+
+fun create_test_clock_at(ctx: &mut tx_context::TxContext, timestamp_secs: u64): clock::Clock {
+    let mut clock_object = clock::create_for_testing(ctx);
+    clock::set_for_testing(&mut clock_object, timestamp_secs);
+    clock_object
+}
+
+fun begin_buyer_checkout_context(
+    scn: &mut test_scenario::Scenario,
+    buyer: address,
+    shop_id: ID,
+    price_info_id: ID,
+    timestamp_secs: u64,
+): (shop::Shop, price_info::PriceInfoObject, clock::Clock) {
+    let _ = test_scenario::next_tx(scn, buyer);
+    let shared_shop = take_shared_shop(scn, shop_id);
+    let price_info_object = test_scenario::take_shared_by_id(
+        scn,
+        price_info_id,
+    );
+    let clock_object = create_test_clock_at(test_scenario::ctx(scn), timestamp_secs);
+    (shared_shop, price_info_object, clock_object)
+}
+
+fun close_buyer_checkout_context(
+    shared_shop: shop::Shop,
+    price_info_object: price_info::PriceInfoObject,
+    clock_object: clock::Clock,
+) {
+    test_scenario::return_shared(shared_shop);
+    test_scenario::return_shared(price_info_object);
+    std::unit_test::destroy(clock_object);
+}
+
 fun assert_listing_spotlight_template_id(
     shop: &shop::Shop,
     listing_id: ID,
     expected_template_id: ID,
 ) {
-    let (_, _, _, _, spotlight_template_id) = shop::test_listing_values_local(
-        shop,
-        listing_id,
-    );
+    let listing = shop.listing(listing_id);
+    let spotlight_template_id = listing.listing_spotlight_discount_template_id();
     assert!(option::is_some(&spotlight_template_id));
     spotlight_template_id.do_ref!(|value| {
         assert_eq!(*value, expected_template_id);
     });
 }
 
-fun assert_listing_scoped_percent_template(
-    shop: &shop::Shop,
-    template_id: ID,
-    listing_id: ID,
-    expected_rule_value: u64,
-    expected_starts_at: u64,
-    expected_max_redemptions: u64,
-) {
-    let (
-        template_shop_id,
-        applies_to_listing,
-        discount_rule,
-        starts_at,
-        expires_at,
-        max_redemptions,
-        claims_issued,
-        redemptions,
-        active,
-    ) = shop::test_discount_template_values(shop, template_id);
-    assert_eq!(template_shop_id, shop::test_shop_id(shop));
-    assert!(option::is_some(&applies_to_listing));
-    applies_to_listing.do_ref!(|value| {
-        assert_eq!(*value, listing_id);
-    });
-    assert_eq!(shop::test_discount_rule_kind(discount_rule), 1);
-    assert_eq!(shop::test_discount_rule_value(discount_rule), expected_rule_value);
-    assert_eq!(starts_at, expected_starts_at);
-    assert!(option::is_none(&expires_at));
-    assert!(option::is_some(&max_redemptions));
-    max_redemptions.do_ref!(|value| {
-        assert_eq!(*value, expected_max_redemptions);
-    });
-    assert_eq!(claims_issued, 0);
-    assert_eq!(redemptions, 0);
-    assert!(active);
-}
-
-fun assert_single_listing_added_event(shop: &shop::Shop, listing_id: ID) {
-    let listing_added_events = event::events_by_type<shop::ItemListingAddedEvent>();
-    assert_eq!(listing_added_events.length(), 1);
-    let listing_added_event = &listing_added_events[0];
-    assert_eq!(shop::test_item_listing_added_shop(listing_added_event), shop::test_shop_id(shop));
-    assert_eq!(shop::test_item_listing_added_listing(listing_added_event), listing_id);
-}
-
-fun assert_single_discount_template_created_event(shop: &shop::Shop, template_id: ID) {
-    let template_created_events = event::events_by_type<shop::DiscountTemplateCreatedEvent>();
-    assert_eq!(template_created_events.length(), 1);
-    let template_created_event = &template_created_events[0];
-    assert_eq!(
-        shop::test_discount_template_created_shop(template_created_event),
-        shop::test_shop_id(shop),
-    );
-    assert_eq!(shop::test_discount_template_created_id(template_created_event), template_id);
+/// Asserts that `expected_event` of type `T` was emitted.
+macro fun assert_emitted<$T>($expected_event: $T) {
+    let events = event::events_by_type<$T>();
+    if (events.length() == 0) {
+        std::debug::print(&b"Assertion failed. No events emitted.".to_string());
+        abort
+    };
+    let emitted = events.any!(|event| event == $expected_event);
+    if (!emitted) {
+        std::debug::print(&b"Assertion failed. Different events emitted:".to_string());
+        std::debug::print(&events);
+        std::debug::print(&b"No matching events".to_string());
+        abort
+    };
 }
 
 // === Tests ===
+
 #[test]
 fun create_shop_emits_event_and_records_ids() {
-    let mut ctx = tx_context::new_from_hint(TEST_OWNER, 1, 0, 0, 0);
-    let starting_ids = tx_context::get_ids_created(&ctx);
-
-    shop::create_shop(DEFAULT_SHOP_NAME.to_string(), &mut ctx);
-
-    let created = event::events_by_type<shop::ShopCreatedEvent>();
-    assert_eq!(created.length(), 1);
-    let shop_created = &created[0];
-    let owner_cap_id = shop::test_last_created_id(&ctx);
-
-    assert_eq!(shop::test_shop_created_owner_cap_id(shop_created), owner_cap_id);
-    assert_eq!(tx_context::get_ids_created(&ctx), starting_ids + 5);
+    let mut scn = test_scenario::begin(TEST_OWNER);
+    create_shop_and_owner_cap_ids_for_sender(
+        &mut scn,
+        DEFAULT_SHOP_NAME,
+    );
+    let _ = test_scenario::end(scn);
 }
 
 #[test]
@@ -233,42 +290,41 @@ fun create_shop_allows_multiple_shops_per_sender() {
     shop::create_shop(DEFAULT_SHOP_NAME.to_string(), &mut ctx);
     shop::create_shop(DEFAULT_SHOP_NAME.to_string(), &mut ctx);
 
-    let created = event::events_by_type<shop::ShopCreatedEvent>();
-    assert_eq!(created.length(), 2);
+    assert_eq!(event::events_by_type<shop::ShopCreatedEvent>().length(), 2);
     assert_eq!(tx_context::get_ids_created(&ctx), starting_ids + 10);
 }
 
 #[test]
 fun create_shop_emits_unique_shop_and_cap_ids() {
-    let mut ctx = tx_context::new_from_hint(TEST_OWNER, 4, 0, 0, 0);
+    let mut scn = test_scenario::begin(TEST_OWNER);
 
-    shop::create_shop(DEFAULT_SHOP_NAME.to_string(), &mut ctx);
-    shop::create_shop(DEFAULT_SHOP_NAME.to_string(), &mut ctx);
-
-    let created = event::events_by_type<shop::ShopCreatedEvent>();
-    assert_eq!(created.length(), 2);
-    let first = &created[0];
-    let second = &created[1];
-    assert!(shop::test_shop_created_shop_id(first) != shop::test_shop_created_shop_id(second));
-    assert!(
-        shop::test_shop_created_owner_cap_id(first)
-            != shop::test_shop_created_owner_cap_id(second),
+    let (first_shop_id, first_owner_cap_id) = create_shop_and_owner_cap_ids_for_sender(
+        &mut scn,
+        DEFAULT_SHOP_NAME,
     );
+
+    let (second_shop_id, second_owner_cap_id) = create_shop_and_owner_cap_ids_for_sender(
+        &mut scn,
+        DEFAULT_SHOP_NAME,
+    );
+
+    assert!(first_shop_id != second_shop_id);
+    assert!(first_owner_cap_id != second_owner_cap_id);
+
+    let _ = test_scenario::end(scn);
 }
 
 #[test]
 fun create_shop_records_sender_in_event() {
-    let mut ctx = tx_context::new_from_hint(OTHER_OWNER, 5, 0, 0, 0);
-
-    shop::create_shop(DEFAULT_SHOP_NAME.to_string(), &mut ctx);
-
-    let created = event::events_by_type<shop::ShopCreatedEvent>();
-    assert_eq!(created.length(), 1);
-    let shop_created = &created[0];
-    assert_eq!(
-        shop::test_shop_created_owner_cap_id(shop_created),
-        shop::test_last_created_id(&ctx),
+    let mut scn = test_scenario::begin(OTHER_OWNER);
+    let (_, owner_cap_id) = create_shop_and_owner_cap_ids_for_sender(
+        &mut scn,
+        DEFAULT_SHOP_NAME,
     );
+    let sender_owner_cap_ids = test_scenario::ids_for_sender<shop::ShopOwnerCap>(&scn);
+    assert_eq!(sender_owner_cap_ids.length(), 1);
+    assert_eq!(sender_owner_cap_ids[0], owner_cap_id);
+    let _ = test_scenario::end(scn);
 }
 
 #[test]
@@ -290,59 +346,36 @@ fun create_shop_handles_existing_id_counts() {
 fun create_shop_shares_shop_and_transfers_owner_cap() {
     let mut scn = test_scenario::begin(TEST_OWNER);
 
-    shop::create_shop(DEFAULT_SHOP_NAME.to_string(), test_scenario::ctx(&mut scn));
-    let created_events = event::events_by_type<shop::ShopCreatedEvent>();
-    assert_eq!(created_events.length(), 1);
-    let shop_created = &created_events[0];
-    let shop_id = shop::test_shop_created_shop_id(shop_created);
-    let owner_cap_id = shop::test_shop_created_owner_cap_id(shop_created);
-
-    let effects = test_scenario::next_tx(&mut scn, TEST_OWNER);
-    let created_ids = test_scenario::created(&effects);
-    assert_eq!(created_ids.length(), 2);
-    assert_eq!(created_ids[0], shop_id);
-    assert_eq!(created_ids[1], owner_cap_id);
-
-    let shared_ids = test_scenario::shared(&effects);
-    assert_eq!(shared_ids.length(), 1);
-    assert_eq!(shared_ids[0], shop_id);
-
-    let transferred = test_scenario::transferred_to_account(&effects);
-    assert_eq!(vec_map::length(&transferred), 1);
-    assert_eq!(transferred[&owner_cap_id], TEST_OWNER);
-    assert_eq!(test_scenario::num_user_events(&effects), 1);
-
-    let shared_shop = take_shared_shop(&scn, shop_id);
-    let owner_cap = test_scenario::take_from_sender_by_id(
-        &scn,
-        owner_cap_id,
+    let (shop_id, _) = create_shop_and_owner_cap_ids_for_sender(
+        &mut scn,
+        DEFAULT_SHOP_NAME,
     );
-    assert_eq!(shop::test_shop_owner(&shared_shop), TEST_OWNER);
-    assert_eq!(shop::test_shop_name(&shared_shop), DEFAULT_SHOP_NAME.to_string());
-    assert!(!shop::test_shop_disabled(&shared_shop));
-    assert_eq!(shop::test_shop_owner_cap_shop_id(&owner_cap), shop::test_shop_id(&shared_shop));
+
+    let shared_shop = test_scenario::take_shared<shop::Shop>(&scn);
+    assert_eq!(object::id(&shared_shop), shop_id);
+    assert_eq!(shared_shop.shop_owner(), TEST_OWNER);
+    assert_eq!(shared_shop.shop_name(), DEFAULT_SHOP_NAME.to_string());
+    assert!(!shared_shop.shop_disabled());
 
     test_scenario::return_shared(shared_shop);
-    test_scenario::return_to_sender(&scn, owner_cap);
     let _ = test_scenario::end(scn);
 }
 
 #[test]
 fun update_shop_owner_rotates_payout_and_emits_event() {
     let mut ctx = tx_context::new_from_hint(TEST_OWNER, 40, 0, 0, 0);
-    let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
+    let (mut shop, owner_cap) = setup_local_shop_and_owner_cap(TEST_OWNER, &mut ctx);
 
-    shop::update_shop_owner(&mut shop, &owner_cap, OTHER_OWNER);
+    shop.update_shop_owner(&owner_cap, OTHER_OWNER);
 
-    assert_eq!(shop::test_shop_owner(&shop), OTHER_OWNER);
-
-    let events = event::events_by_type<shop::ShopOwnerUpdatedEvent>();
-    assert_eq!(events.length(), 1);
-    let rotated = &events[0];
-    let cap_id = shop::test_shop_owner_cap_id(&owner_cap);
-
-    assert_eq!(shop::test_shop_owner_updated_shop(rotated), shop::test_shop_id(&shop));
-    assert_eq!(shop::test_shop_owner_updated_cap_id(rotated), cap_id);
+    assert_eq!(shop.shop_owner(), OTHER_OWNER);
+    let cap_id = owner_cap.shop_owner_cap_id();
+    assert_emitted!(
+        shop::new_shop_owner_updated_event(
+            shop.shop_id(),
+            cap_id,
+        ),
+    );
 
     std::unit_test::destroy(owner_cap);
     std::unit_test::destroy(shop);
@@ -351,20 +384,14 @@ fun update_shop_owner_rotates_payout_and_emits_event() {
 #[test]
 fun update_shop_owner_emits_event_even_when_unchanged() {
     let mut ctx = tx_context::new_from_hint(TEST_OWNER, 42, 0, 0, 0);
-    let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
+    let (mut shop, owner_cap) = setup_local_shop_and_owner_cap(TEST_OWNER, &mut ctx);
 
-    shop::update_shop_owner(&mut shop, &owner_cap, TEST_OWNER);
+    shop.update_shop_owner(&owner_cap, TEST_OWNER);
 
-    assert_eq!(shop::test_shop_owner(&shop), TEST_OWNER);
-
-    let events = event::events_by_type<shop::ShopOwnerUpdatedEvent>();
-    assert_eq!(events.length(), 1);
-    let rotated = &events[0];
-    let cap_id = shop::test_shop_owner_cap_id(&owner_cap);
-    let shop_id = shop::test_shop_id(&shop);
-
-    assert_eq!(shop::test_shop_owner_updated_shop(rotated), shop_id);
-    assert_eq!(shop::test_shop_owner_updated_cap_id(rotated), cap_id);
+    assert_eq!(shop.shop_owner(), TEST_OWNER);
+    let cap_id = owner_cap.shop_owner_cap_id();
+    let shop_id = shop.shop_id();
+    assert_emitted!(shop::new_shop_owner_updated_event(shop_id, cap_id));
 
     std::unit_test::destroy(owner_cap);
     std::unit_test::destroy(shop);
@@ -373,18 +400,18 @@ fun update_shop_owner_emits_event_even_when_unchanged() {
 #[test]
 fun update_shop_owner_records_rotated_by_sender() {
     let mut ctx = tx_context::new_from_hint(THIRD_OWNER, 43, 0, 0, 0);
-    let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
+    let (mut shop, owner_cap) = setup_local_shop_and_owner_cap(TEST_OWNER, &mut ctx);
 
-    shop::update_shop_owner(&mut shop, &owner_cap, OTHER_OWNER);
+    shop.update_shop_owner(&owner_cap, OTHER_OWNER);
+    let cap_id = owner_cap.shop_owner_cap_id();
 
-    let events = event::events_by_type<shop::ShopOwnerUpdatedEvent>();
-    assert_eq!(events.length(), 1);
-    let rotated = &events[0];
-    let cap_id = shop::test_shop_owner_cap_id(&owner_cap);
-
-    assert_eq!(shop::test_shop_owner(&shop), OTHER_OWNER);
-    assert_eq!(shop::test_shop_owner_updated_shop(rotated), shop::test_shop_id(&shop));
-    assert_eq!(shop::test_shop_owner_updated_cap_id(rotated), cap_id);
+    assert_eq!(shop.shop_owner(), OTHER_OWNER);
+    assert_emitted!(
+        shop::new_shop_owner_updated_event(
+            shop.shop_id(),
+            cap_id,
+        ),
+    );
 
     std::unit_test::destroy(owner_cap);
     std::unit_test::destroy(shop);
@@ -395,18 +422,13 @@ fun disable_shop_sets_flag_and_emits_event() {
     let mut ctx = tx_context::new_from_hint(TEST_OWNER, 44, 0, 0, 0);
     let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
 
-    shop::disable_shop(&mut shop, &owner_cap);
+    shop.disable_shop(&owner_cap);
 
-    assert!(shop::test_shop_disabled(&shop));
+    assert!(shop.shop_disabled());
 
-    let events = event::events_by_type<shop::ShopDisabledEvent>();
-    assert_eq!(events.length(), 1);
-    let disabled_event = &events[0];
-    let shop_id = shop::test_shop_id(&shop);
-    let cap_id = shop::test_shop_owner_cap_id(&owner_cap);
-
-    assert_eq!(shop::test_shop_disabled_shop(disabled_event), shop_id);
-    assert_eq!(shop::test_shop_disabled_cap_id(disabled_event), cap_id);
+    let shop_id = shop.shop_id();
+    let cap_id = owner_cap.shop_owner_cap_id();
+    assert_emitted!(shop::new_shop_disabled_event(shop_id, cap_id));
 
     std::unit_test::destroy(owner_cap);
     std::unit_test::destroy(shop);
@@ -415,97 +437,80 @@ fun disable_shop_sets_flag_and_emits_event() {
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::EInvalidOwnerCap)]
 fun disable_shop_rejects_foreign_cap() {
     let mut ctx = tx_context::new_from_hint(TEST_OWNER, 45, 0, 0, 0);
-    let (mut shop, _owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
-    let (_other_shop, other_cap) = shop::test_setup_shop(OTHER_OWNER, &mut ctx);
+    let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
+    let (other_shop, other_cap) = shop::test_setup_shop(OTHER_OWNER, &mut ctx);
 
-    shop::disable_shop(&mut shop, &other_cap);
+    shop.disable_shop(&other_cap);
 
-    shop::test_abort_invalid_owner_cap();
-    abort EAssertFailure
+    std::unit_test::destroy(other_cap);
+    std::unit_test::destroy(other_shop);
+    std::unit_test::destroy(owner_cap);
+    std::unit_test::destroy(shop);
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::EInvalidOwnerCap)]
 fun update_shop_owner_rejects_foreign_cap() {
     let mut ctx = tx_context::new_from_hint(TEST_OWNER, 41, 0, 0, 0);
-    let (mut shop, _owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
-    let (_other_shop, other_cap) = shop::test_setup_shop(
+    let (mut shop, owner_cap) = setup_local_shop_and_owner_cap(TEST_OWNER, &mut ctx);
+    let (other_shop, other_cap) = setup_local_shop_and_owner_cap(
         OTHER_OWNER,
         &mut ctx,
     );
 
-    shop::update_shop_owner(&mut shop, &other_cap, OTHER_OWNER);
+    shop.update_shop_owner(&other_cap, OTHER_OWNER);
 
-    shop::test_abort_accepted_currency_missing();
-    abort EAssertFailure
+    std::unit_test::destroy(other_cap);
+    std::unit_test::destroy(other_shop);
+    std::unit_test::destroy(owner_cap);
+    std::unit_test::destroy(shop);
 }
 
 #[test]
 fun add_accepted_currency_records_currency_and_event() {
     let mut scn = test_scenario::begin(TEST_OWNER);
-    shop::create_shop(DEFAULT_SHOP_NAME.to_string(), test_scenario::ctx(&mut scn));
-    let created_events = event::events_by_type<shop::ShopCreatedEvent>();
-    let shop_created = &created_events[0];
-    let shop_id = shop::test_shop_created_shop_id(shop_created);
-    let owner_cap_id = shop::test_shop_created_owner_cap_id(shop_created);
+    let (shop_id, owner_cap_id) = create_default_shop_and_owner_cap_ids_for_sender(&mut scn);
 
-    let currency = prepare_test_currency_for_owner(&mut scn, TEST_OWNER);
     let expected_feed_id = PRIMARY_FEED_ID;
-    let (price_info_object, pyth_object_id) = create_price_info_object_for_feed(
-        expected_feed_id,
-        test_scenario::ctx(&mut scn),
-    );
-    let events_before = event::events_by_type<shop::AcceptedCoinAddedEvent>().length();
-
+    let currency = prepare_test_currency_for_owner(&mut scn, TEST_OWNER);
     let mut shop_obj = take_shared_shop(&scn, shop_id);
     let owner_cap_obj = test_scenario::take_from_sender_by_id(
         &scn,
         owner_cap_id,
     );
-    shop::add_accepted_currency<TestCoin>(
+    let accepted_currency_id = add_test_coin_accepted_currency_for_scenario(
+        &mut scn,
         &mut shop_obj,
         &owner_cap_obj,
         &currency,
-        &price_info_object,
         expected_feed_id,
-        pyth_object_id,
         option::none(),
         option::none(),
         option::none(),
     );
-    let accepted_currency_id = pyth_object_id;
-    let added_events = event::events_by_type<shop::AcceptedCoinAddedEvent>();
-    let added_len = added_events.length();
-    assert!(added_len > events_before);
-    let added_event = &added_events[added_len - 1];
-    assert_eq!(shop::test_accepted_coin_added_shop(added_event), shop::test_shop_id(&shop_obj));
-    assert_eq!(shop::test_accepted_coin_added_id(added_event), accepted_currency_id);
+    assert_emitted!(
+        shop::new_accepted_coin_added_event(
+            shop_obj.shop_id(),
+            accepted_currency_id,
+        ),
+    );
 
     test_scenario::return_to_sender(&scn, owner_cap_obj);
     test_scenario::return_shared(shop_obj);
-    transfer::public_share_object(price_info_object);
 
     let _ = test_scenario::next_tx(&mut scn, TEST_OWNER);
 
     let shared_shop = take_shared_shop(&scn, shop_id);
 
-    let (
-        shop_id,
-        coin_type,
-        feed_id,
-        pyth_id,
-        decimals,
-        symbol,
-        _,
-        _,
-        _,
-    ) = shop::accepted_currency_values<TestCoin>(&shared_shop);
-    assert_eq!(shop_id, shop::test_shop_id(&shared_shop));
-    assert_eq!(coin_type, test_coin_type());
+    let accepted_currency = shared_shop.accepted_currency<TestCoin>();
+    let feed_id = accepted_currency.accepted_currency_feed_id();
+    let pyth_id = accepted_currency.accepted_currency_pyth_object_id();
+    let decimals = accepted_currency.accepted_currency_decimals();
+    let symbol = accepted_currency.accepted_currency_symbol();
     assert_eq!(feed_id, expected_feed_id);
-    assert_eq!(pyth_id, pyth_object_id);
+    assert_eq!(pyth_id, accepted_currency_id);
     assert_eq!(decimals, 9);
     assert_eq!(symbol, b"TCO".to_string());
-    assert!(shop::test_accepted_currency_exists(&shared_shop, test_coin_type()));
+    assert!(shared_shop.accepted_currency_exists(test_coin_type()));
 
     test_scenario::return_shared(shared_shop);
     std::unit_test::destroy(currency);
@@ -515,54 +520,42 @@ fun add_accepted_currency_records_currency_and_event() {
 #[test]
 fun add_accepted_currency_stores_custom_guardrail_caps() {
     let mut scn = test_scenario::begin(TEST_OWNER);
-    shop::create_shop(DEFAULT_SHOP_NAME.to_string(), test_scenario::ctx(&mut scn));
-    let created_events = event::events_by_type<shop::ShopCreatedEvent>();
-    let shop_created = &created_events[0];
-    let shop_id = shop::test_shop_created_shop_id(shop_created);
-    let owner_cap_id = shop::test_shop_created_owner_cap_id(shop_created);
+    let (shop_id, owner_cap_id) = create_default_shop_and_owner_cap_ids_for_sender(&mut scn);
 
-    let currency = prepare_test_currency_for_owner(&mut scn, TEST_OWNER);
-    let (price_info_object, pyth_object_id) = create_price_info_object_for_feed(
-        PRIMARY_FEED_ID,
-        test_scenario::ctx(&mut scn),
-    );
     let custom_age_cap = 30;
     let custom_conf_cap = 500;
     let custom_status_cap = 3;
+    let currency = prepare_test_currency_for_owner(&mut scn, TEST_OWNER);
 
     let mut shop_obj = take_shared_shop(&scn, shop_id);
     let owner_cap_obj = test_scenario::take_from_sender_by_id(
         &scn,
         owner_cap_id,
     );
-    shop::add_accepted_currency<TestCoin>(
+    let accepted_currency_id = add_test_coin_accepted_currency_for_scenario(
+        &mut scn,
         &mut shop_obj,
         &owner_cap_obj,
         &currency,
-        &price_info_object,
         PRIMARY_FEED_ID,
-        pyth_object_id,
         option::some(custom_age_cap),
         option::some(custom_conf_cap),
         option::some(custom_status_cap),
     );
-    let _accepted_currency_id = shop::test_last_created_id(
-        test_scenario::ctx(&mut scn),
-    );
     std::unit_test::destroy(owner_cap_obj);
     test_scenario::return_shared(shop_obj);
-    transfer::public_share_object(price_info_object);
 
     let _ = test_scenario::next_tx(&mut scn, TEST_OWNER);
     let shared_shop = take_shared_shop(&scn, shop_id);
-    let (_, _, _, _, _, _, max_age_cap, conf_cap, status_cap) = shop::accepted_currency_values<
-        TestCoin,
-    >(
-        &shared_shop,
-    );
+    let accepted_currency = shared_shop.accepted_currency<TestCoin>();
+    let max_age_cap = accepted_currency.accepted_currency_max_price_age_secs_cap();
+    let conf_cap = accepted_currency.accepted_currency_max_confidence_ratio_bps_cap();
+    let status_cap = accepted_currency.accepted_currency_max_price_status_lag_secs_cap();
+    let pyth_object_id = accepted_currency.accepted_currency_pyth_object_id();
     assert_eq!(max_age_cap, custom_age_cap);
     assert_eq!(conf_cap, custom_conf_cap);
     assert_eq!(status_cap, custom_status_cap);
+    assert_eq!(pyth_object_id, accepted_currency_id);
 
     test_scenario::return_shared(shared_shop);
     std::unit_test::destroy(currency);
@@ -572,54 +565,42 @@ fun add_accepted_currency_stores_custom_guardrail_caps() {
 #[test]
 fun add_accepted_currency_clamps_guardrail_caps_to_defaults() {
     let mut scn = test_scenario::begin(TEST_OWNER);
-    shop::create_shop(DEFAULT_SHOP_NAME.to_string(), test_scenario::ctx(&mut scn));
-    let created_events = event::events_by_type<shop::ShopCreatedEvent>();
-    let shop_created = &created_events[0];
-    let shop_id = shop::test_shop_created_shop_id(shop_created);
-    let owner_cap_id = shop::test_shop_created_owner_cap_id(shop_created);
+    let (shop_id, owner_cap_id) = create_default_shop_and_owner_cap_ids_for_sender(&mut scn);
 
+    let over_age_cap = TEST_DEFAULT_MAX_PRICE_AGE_SECS + 100;
+    let over_conf_cap = TEST_DEFAULT_MAX_CONFIDENCE_RATIO_BPS + 500;
+    let over_status_cap = TEST_DEFAULT_MAX_PRICE_STATUS_LAG_SECS + 10;
     let currency = prepare_test_currency_for_owner(&mut scn, TEST_OWNER);
-    let (price_info_object, pyth_object_id) = create_price_info_object_for_feed(
-        PRIMARY_FEED_ID,
-        test_scenario::ctx(&mut scn),
-    );
-    let over_age_cap = shop::test_default_max_price_age_secs() + 100;
-    let over_conf_cap = shop::test_default_max_confidence_ratio_bps() + 500;
-    let over_status_cap = shop::test_default_max_price_status_lag_secs() + 10;
 
     let mut shop_obj = take_shared_shop(&scn, shop_id);
     let owner_cap_obj = test_scenario::take_from_sender_by_id(
         &scn,
         owner_cap_id,
     );
-    shop::add_accepted_currency<TestCoin>(
+    let accepted_currency_id = add_test_coin_accepted_currency_for_scenario(
+        &mut scn,
         &mut shop_obj,
         &owner_cap_obj,
         &currency,
-        &price_info_object,
         PRIMARY_FEED_ID,
-        pyth_object_id,
         option::some(over_age_cap),
         option::some(over_conf_cap),
         option::some(over_status_cap),
     );
-    let _accepted_currency_id = shop::test_last_created_id(
-        test_scenario::ctx(&mut scn),
-    );
     test_scenario::return_to_sender(&scn, owner_cap_obj);
     test_scenario::return_shared(shop_obj);
-    transfer::public_share_object(price_info_object);
 
     let _ = test_scenario::next_tx(&mut scn, TEST_OWNER);
     let shared_shop = take_shared_shop(&scn, shop_id);
-    let (_, _, _, _, _, _, max_age_cap, conf_cap, status_cap) = shop::accepted_currency_values<
-        TestCoin,
-    >(
-        &shared_shop,
-    );
-    assert_eq!(max_age_cap, shop::test_default_max_price_age_secs());
-    assert_eq!(conf_cap, shop::test_default_max_confidence_ratio_bps());
-    assert_eq!(status_cap, shop::test_default_max_price_status_lag_secs());
+    let accepted_currency = shared_shop.accepted_currency<TestCoin>();
+    let max_age_cap = accepted_currency.accepted_currency_max_price_age_secs_cap();
+    let conf_cap = accepted_currency.accepted_currency_max_confidence_ratio_bps_cap();
+    let status_cap = accepted_currency.accepted_currency_max_price_status_lag_secs_cap();
+    let pyth_object_id = accepted_currency.accepted_currency_pyth_object_id();
+    assert_eq!(max_age_cap, TEST_DEFAULT_MAX_PRICE_AGE_SECS);
+    assert_eq!(conf_cap, TEST_DEFAULT_MAX_CONFIDENCE_RATIO_BPS);
+    assert_eq!(status_cap, TEST_DEFAULT_MAX_PRICE_STATUS_LAG_SECS);
+    assert_eq!(pyth_object_id, accepted_currency_id);
 
     test_scenario::return_shared(shared_shop);
     std::unit_test::destroy(currency);
@@ -632,13 +613,13 @@ fun add_accepted_currency_rejects_foreign_owner_cap() {
     let (mut shop, _owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
     let (_other_shop, other_cap) = shop::test_setup_shop(OTHER_OWNER, &mut ctx);
     let currency = create_test_currency(&mut ctx);
-    let (price_info_object, price_info_id) = create_price_info_object_for_feed(
+    let price_info_object = create_price_info_object_for_feed(
         PRIMARY_FEED_ID,
         &mut ctx,
     );
+    let price_info_id = price_info_object.uid_to_inner();
 
-    shop::add_accepted_currency<TestCoin>(
-        &mut shop,
+    shop.add_accepted_currency<TestCoin>(
         &other_cap,
         &currency,
         &price_info_object,
@@ -649,7 +630,7 @@ fun add_accepted_currency_rejects_foreign_owner_cap() {
         option::none(),
     );
 
-    abort EAssertFailure
+    abort
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::EAcceptedCurrencyExists)]
@@ -674,7 +655,7 @@ fun add_accepted_currency_rejects_duplicate_coin_type() {
         &mut ctx,
     );
 
-    abort EAssertFailure
+    abort
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::EEmptyFeedId)]
@@ -682,13 +663,13 @@ fun add_accepted_currency_rejects_empty_feed_id() {
     let mut ctx = tx_context::new_from_hint(@0x0, 10, 0, 0, 0);
     let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
     let currency = create_test_currency(&mut ctx);
-    let (price_info_object, price_info_id) = create_price_info_object_for_feed(
+    let price_info_object = create_price_info_object_for_feed(
         PRIMARY_FEED_ID,
         &mut ctx,
     );
+    let price_info_id = price_info_object.uid_to_inner();
 
-    shop::add_accepted_currency<TestCoin>(
-        &mut shop,
+    shop.add_accepted_currency<TestCoin>(
         &owner_cap,
         &currency,
         &price_info_object,
@@ -699,7 +680,7 @@ fun add_accepted_currency_rejects_empty_feed_id() {
         option::none(),
     );
 
-    abort EAssertFailure
+    abort
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::EInvalidFeedIdLength)]
@@ -707,13 +688,13 @@ fun add_accepted_currency_rejects_short_feed_id() {
     let mut ctx = tx_context::new_from_hint(@0x0, 14, 0, 0, 0);
     let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
     let currency = create_test_currency(&mut ctx);
-    let (price_info_object, price_info_id) = create_price_info_object_for_feed(
+    let price_info_object = create_price_info_object_for_feed(
         PRIMARY_FEED_ID,
         &mut ctx,
     );
+    let price_info_id = price_info_object.uid_to_inner();
 
-    shop::add_accepted_currency<TestCoin>(
-        &mut shop,
+    shop.add_accepted_currency<TestCoin>(
         &owner_cap,
         &currency,
         &price_info_object,
@@ -724,21 +705,21 @@ fun add_accepted_currency_rejects_short_feed_id() {
         option::none(),
     );
 
-    abort EAssertFailure
+    abort
 }
 
 #[test]
 fun attestation_time_within_lag_is_allowed() {
     let mut ctx = tx_context::new_from_hint(@0x0, 16, 0, 0, 0);
     let publish_time = 100;
-    let attestation_time = publish_time + shop::test_max_price_status_lag_secs();
+    let attestation_time = publish_time + TEST_DEFAULT_MAX_PRICE_STATUS_LAG_SECS;
     let price = price::new(
         i64::new(1_000, false),
         10,
         i64::new(2, true),
         publish_time,
     );
-    let (price_info_object, _) = create_price_info_object_for_feed_with_price_and_times(
+    let price_info_object = create_price_info_object_for_feed_with_price_and_times(
         PRIMARY_FEED_ID,
         price,
         attestation_time,
@@ -746,7 +727,10 @@ fun attestation_time_within_lag_is_allowed() {
         &mut ctx,
     );
 
-    shop::test_assert_price_status_trading(&price_info_object);
+    shop::assert_price_status_trading_for_max_lag!(
+        &price_info_object,
+        TEST_DEFAULT_MAX_PRICE_STATUS_LAG_SECS,
+    );
     std::unit_test::destroy(price_info_object);
 }
 
@@ -754,14 +738,14 @@ fun attestation_time_within_lag_is_allowed() {
 fun attestation_time_lag_over_limit_is_rejected() {
     let mut ctx = tx_context::new_from_hint(@0x0, 18, 0, 0, 0);
     let publish_time = 200;
-    let attestation_time = publish_time + shop::test_max_price_status_lag_secs() + 1;
+    let attestation_time = publish_time + TEST_DEFAULT_MAX_PRICE_STATUS_LAG_SECS + 1;
     let price = price::new(
         i64::new(1_000, false),
         10,
         i64::new(2, true),
         publish_time,
     );
-    let (price_info_object, _) = create_price_info_object_for_feed_with_price_and_times(
+    let price_info_object = create_price_info_object_for_feed_with_price_and_times(
         PRIMARY_FEED_ID,
         price,
         attestation_time,
@@ -769,8 +753,11 @@ fun attestation_time_lag_over_limit_is_rejected() {
         &mut ctx,
     );
 
-    shop::test_assert_price_status_trading(&price_info_object);
-    abort EAssertFailure
+    shop::assert_price_status_trading_for_max_lag!(
+        &price_info_object,
+        TEST_DEFAULT_MAX_PRICE_STATUS_LAG_SECS,
+    );
+    abort
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::EUnsupportedCurrencyDecimals)]
@@ -778,13 +765,13 @@ fun add_accepted_currency_rejects_excessive_decimals() {
     let mut ctx = tx_context::new_from_hint(@0x0, 11, 0, 0, 0);
     let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
     let currency = create_high_decimal_currency(&mut ctx);
-    let (price_info_object, price_info_id) = create_price_info_object_for_feed(
+    let price_info_object = create_price_info_object_for_feed(
         PRIMARY_FEED_ID,
         &mut ctx,
     );
+    let price_info_id = price_info_object.uid_to_inner();
 
-    shop::add_accepted_currency<HighDecimalCoin>(
-        &mut shop,
+    shop.add_accepted_currency<HighDecimalCoin>(
         &owner_cap,
         &currency,
         &price_info_object,
@@ -795,7 +782,7 @@ fun add_accepted_currency_rejects_excessive_decimals() {
         option::none(),
     );
 
-    abort EAssertFailure
+    abort
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::EFeedIdentifierMismatch)]
@@ -803,13 +790,13 @@ fun add_accepted_currency_rejects_identifier_mismatch() {
     let mut ctx = tx_context::new_from_hint(@0x0, 15, 0, 0, 0);
     let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
     let currency = create_test_currency(&mut ctx);
-    let (price_info_object, price_info_id) = create_price_info_object_for_feed(
+    let price_info_object = create_price_info_object_for_feed(
         PRIMARY_FEED_ID,
         &mut ctx,
     );
+    let price_info_id = price_info_object.uid_to_inner();
 
-    shop::add_accepted_currency<TestCoin>(
-        &mut shop,
+    shop.add_accepted_currency<TestCoin>(
         &owner_cap,
         &currency,
         &price_info_object,
@@ -820,7 +807,7 @@ fun add_accepted_currency_rejects_identifier_mismatch() {
         option::none(),
     );
 
-    abort EAssertFailure
+    abort
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::EPythObjectMismatch)]
@@ -828,13 +815,12 @@ fun add_accepted_currency_rejects_missing_price_object() {
     let mut ctx = tx_context::new_from_hint(@0x0, 17, 0, 0, 0);
     let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
     let currency = create_test_currency(&mut ctx);
-    let (price_info_object, _) = create_price_info_object_for_feed(
+    let price_info_object = create_price_info_object_for_feed(
         PRIMARY_FEED_ID,
         &mut ctx,
     );
 
-    shop::add_accepted_currency<TestCoin>(
-        &mut shop,
+    shop.add_accepted_currency<TestCoin>(
         &owner_cap,
         &currency,
         &price_info_object,
@@ -845,17 +831,13 @@ fun add_accepted_currency_rejects_missing_price_object() {
         option::none(),
     );
 
-    abort EAssertFailure
+    abort
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::EPriceStatusNotTrading)]
 fun quote_rejects_attestation_lag_above_currency_cap() {
     let mut scn = test_scenario::begin(TEST_OWNER);
-    shop::create_shop(DEFAULT_SHOP_NAME.to_string(), test_scenario::ctx(&mut scn));
-    let created_events = event::events_by_type<shop::ShopCreatedEvent>();
-    let shop_created = &created_events[0];
-    let shop_id = shop::test_shop_created_shop_id(shop_created);
-    let owner_cap_id = shop::test_shop_created_owner_cap_id(shop_created);
+    let (shop_id, owner_cap_id) = create_default_shop_and_owner_cap_ids_for_sender(&mut scn);
 
     let currency = prepare_test_currency_for_owner(&mut scn, TEST_OWNER);
     let publish_time = 300;
@@ -866,21 +848,21 @@ fun quote_rejects_attestation_lag_above_currency_cap() {
         i64::new(2, true),
         publish_time,
     );
-    let (price_info_object, price_info_id) = create_price_info_object_for_feed_with_price_and_times(
+    let price_info_object = create_price_info_object_for_feed_with_price_and_times(
         PRIMARY_FEED_ID,
         price,
         attestation_time,
         attestation_time,
         test_scenario::ctx(&mut scn),
     );
+    let price_info_id = price_info_object.uid_to_inner();
 
     let mut shop_obj = take_shared_shop(&scn, shop_id);
     let owner_cap_obj = test_scenario::take_from_sender_by_id(
         &scn,
         owner_cap_id,
     );
-    shop::add_accepted_currency<TestCoin>(
-        &mut shop_obj,
+    shop_obj.add_accepted_currency<TestCoin>(
         &owner_cap_obj,
         &currency,
         &price_info_object,
@@ -890,9 +872,6 @@ fun quote_rejects_attestation_lag_above_currency_cap() {
         option::none(),
         option::some(2),
     );
-    let _accepted_currency_id = shop::test_last_created_id(
-        test_scenario::ctx(&mut scn),
-    );
     test_scenario::return_to_sender(&scn, owner_cap_obj);
     test_scenario::return_shared(shop_obj);
     transfer::public_share_object(price_info_object);
@@ -900,11 +879,12 @@ fun quote_rejects_attestation_lag_above_currency_cap() {
     let _ = test_scenario::next_tx(&mut scn, TEST_OWNER);
 
     let shared_shop = take_shared_shop(&scn, shop_id);
-    let mut clock_obj = clock::create_for_testing(test_scenario::ctx(&mut scn));
-    clock::set_for_testing(&mut clock_obj, (attestation_time + 1) * 1000);
+    let clock_obj = create_test_clock_at(
+        test_scenario::ctx(&mut scn),
+        (attestation_time + 1) * 1000,
+    );
 
-    shop::test_quote_amount_for_price_info_object<TestCoin>(
-        &shared_shop,
+    shared_shop.quote_amount_for_price_info_object<TestCoin>(
         &test_scenario::take_shared_by_id<price_info::PriceInfoObject>(
             &scn,
             price_info_id,
@@ -914,17 +894,13 @@ fun quote_rejects_attestation_lag_above_currency_cap() {
         option::none(),
         &clock_obj,
     );
-    abort EAssertFailure
+    abort
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::EPriceTooStale)]
 fun quote_rejects_price_timestamp_older_than_max_age() {
     let mut scn = test_scenario::begin(TEST_OWNER);
-    shop::create_shop(DEFAULT_SHOP_NAME.to_string(), test_scenario::ctx(&mut scn));
-    let created_events = event::events_by_type<shop::ShopCreatedEvent>();
-    let shop_created = &created_events[0];
-    let shop_id = shop::test_shop_created_shop_id(shop_created);
-    let owner_cap_id = shop::test_shop_created_owner_cap_id(shop_created);
+    let (shop_id, owner_cap_id) = create_default_shop_and_owner_cap_ids_for_sender(&mut scn);
 
     let currency = prepare_test_currency_for_owner(&mut scn, TEST_OWNER);
     // Timestamp = 0 keeps the Price stale once we advance the on-chain clock.
@@ -935,21 +911,21 @@ fun quote_rejects_price_timestamp_older_than_max_age() {
         i64::new(2, true),
         publish_time,
     );
-    let (price_info_object, price_info_id) = create_price_info_object_for_feed_with_price_and_times(
+    let price_info_object = create_price_info_object_for_feed_with_price_and_times(
         PRIMARY_FEED_ID,
         price,
         publish_time,
         publish_time,
         test_scenario::ctx(&mut scn),
     );
+    let price_info_id = price_info_object.uid_to_inner();
 
     let mut shop_obj = take_shared_shop(&scn, shop_id);
     let owner_cap_obj = test_scenario::take_from_sender_by_id(
         &scn,
         owner_cap_id,
     );
-    shop::add_accepted_currency<TestCoin>(
-        &mut shop_obj,
+    shop_obj.add_accepted_currency<TestCoin>(
         &owner_cap_obj,
         &currency,
         &price_info_object,
@@ -959,9 +935,6 @@ fun quote_rejects_price_timestamp_older_than_max_age() {
         option::none(),
         option::none(),
     );
-    let _accepted_currency_id = shop::test_last_created_id(
-        test_scenario::ctx(&mut scn),
-    );
     test_scenario::return_to_sender(&scn, owner_cap_obj);
     test_scenario::return_shared(shop_obj);
     transfer::public_share_object(price_info_object);
@@ -969,11 +942,9 @@ fun quote_rejects_price_timestamp_older_than_max_age() {
     let _ = test_scenario::next_tx(&mut scn, TEST_OWNER);
 
     let shared_shop = take_shared_shop(&scn, shop_id);
-    let mut clock_obj = clock::create_for_testing(test_scenario::ctx(&mut scn));
-    clock::set_for_testing(&mut clock_obj, 200_000);
+    let clock_obj = create_test_clock_at(test_scenario::ctx(&mut scn), 200_000);
 
-    shop::test_quote_amount_for_price_info_object<TestCoin>(
-        &shared_shop,
+    shared_shop.quote_amount_for_price_info_object<TestCoin>(
         &test_scenario::take_shared_by_id<price_info::PriceInfoObject>(
             &scn,
             price_info_id,
@@ -983,36 +954,32 @@ fun quote_rejects_price_timestamp_older_than_max_age() {
         option::none(),
         &clock_obj,
     );
-    abort EAssertFailure
+    abort
 }
 
 #[test]
 fun remove_accepted_currency_removes_state_and_emits_event() {
     let mut scn = test_scenario::begin(TEST_OWNER);
-    shop::create_shop(DEFAULT_SHOP_NAME.to_string(), test_scenario::ctx(&mut scn));
-    let created_events = event::events_by_type<shop::ShopCreatedEvent>();
-    let shop_created = &created_events[0];
-    let shop_id = shop::test_shop_created_shop_id(shop_created);
-    let owner_cap_id = shop::test_shop_created_owner_cap_id(shop_created);
+    let (shop_id, owner_cap_id) = create_default_shop_and_owner_cap_ids_for_sender(&mut scn);
 
     let _ = test_scenario::next_tx(&mut scn, TEST_OWNER);
     let _ = test_scenario::next_tx(&mut scn, @0x0);
     let primary_currency = create_test_currency(test_scenario::ctx(&mut scn));
     let secondary_currency = create_alt_test_currency(test_scenario::ctx(&mut scn));
     let _ = test_scenario::next_tx(&mut scn, TEST_OWNER);
-    let _removed_before = event::events_by_type<shop::AcceptedCoinRemovedEvent>().length();
 
     let mut shop_obj = take_shared_shop(&scn, shop_id);
     let owner_cap_obj = test_scenario::take_from_sender_by_id(
         &scn,
         owner_cap_id,
     );
-    let (first_price_object, first_price_id) = create_price_info_object_for_feed(
+    let first_price_object = create_price_info_object_for_feed(
         PRIMARY_FEED_ID,
         test_scenario::ctx(&mut scn),
     );
-    shop::add_accepted_currency<TestCoin>(
-        &mut shop_obj,
+    let first_price_id = first_price_object.uid_to_inner();
+
+    shop_obj.add_accepted_currency<TestCoin>(
         &owner_cap_obj,
         &primary_currency,
         &first_price_object,
@@ -1022,15 +989,18 @@ fun remove_accepted_currency_removes_state_and_emits_event() {
         option::none(),
         option::none(),
     );
-    let _first_currency_id = shop::test_last_created_id(test_scenario::ctx(&mut scn));
+    let _first_currency_id = tx_context::last_created_object_id(
+        test_scenario::ctx(&mut scn),
+    ).to_id();
     transfer::public_share_object(first_price_object);
 
-    let (second_price_object, second_price_id) = create_price_info_object_for_feed(
+    let second_price_object = create_price_info_object_for_feed(
         SECONDARY_FEED_ID,
         test_scenario::ctx(&mut scn),
     );
-    shop::add_accepted_currency<AltTestCoin>(
-        &mut shop_obj,
+    let second_price_id = second_price_object.uid_to_inner();
+
+    shop_obj.add_accepted_currency<AltTestCoin>(
         &owner_cap_obj,
         &secondary_currency,
         &second_price_object,
@@ -1040,7 +1010,9 @@ fun remove_accepted_currency_removes_state_and_emits_event() {
         option::none(),
         option::none(),
     );
-    let _second_currency_id = shop::test_last_created_id(test_scenario::ctx(&mut scn));
+    let _second_currency_id = tx_context::last_created_object_id(
+        test_scenario::ctx(&mut scn),
+    ).to_id();
     transfer::public_share_object(second_price_object);
     test_scenario::return_to_sender(&scn, owner_cap_obj);
     test_scenario::return_shared(shop_obj);
@@ -1052,17 +1024,10 @@ fun remove_accepted_currency_removes_state_and_emits_event() {
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::EInvalidOwnerCap)]
 fun remove_accepted_currency_rejects_foreign_owner_cap() {
     let mut scn = test_scenario::begin(TEST_OWNER);
-    shop::create_shop(DEFAULT_SHOP_NAME.to_string(), test_scenario::ctx(&mut scn));
-    let created_events = event::events_by_type<shop::ShopCreatedEvent>();
-    let shop_created = &created_events[0];
-    let shop_id = shop::test_shop_created_shop_id(shop_created);
-    let owner_cap_id = shop::test_shop_created_owner_cap_id(shop_created);
+    let (shop_id, owner_cap_id) = create_default_shop_and_owner_cap_ids_for_sender(&mut scn);
 
     let _ = test_scenario::next_tx(&mut scn, OTHER_OWNER);
-    shop::create_shop(DEFAULT_SHOP_NAME.to_string(), test_scenario::ctx(&mut scn));
-    let other_created_events = event::events_by_type<shop::ShopCreatedEvent>();
-    let other_created = &other_created_events[other_created_events.length() - 1];
-    let wrong_cap_id = shop::test_shop_created_owner_cap_id(other_created);
+    let (_, wrong_cap_id) = create_default_shop_and_owner_cap_ids_for_sender(&mut scn);
 
     let _ = test_scenario::next_tx(&mut scn, TEST_OWNER);
     let owner_cap_obj = test_scenario::take_from_sender_by_id(
@@ -1070,14 +1035,14 @@ fun remove_accepted_currency_rejects_foreign_owner_cap() {
         owner_cap_id,
     );
     let currency = prepare_test_currency_for_owner(&mut scn, TEST_OWNER);
-    let (price_info_object, price_info_id) = create_price_info_object_for_feed(
+    let price_info_object = create_price_info_object_for_feed(
         PRIMARY_FEED_ID,
         test_scenario::ctx(&mut scn),
     );
+    let price_info_id = price_info_object.uid_to_inner();
 
     let mut shop_obj = take_shared_shop(&scn, shop_id);
-    shop::add_accepted_currency<TestCoin>(
-        &mut shop_obj,
+    shop_obj.add_accepted_currency<TestCoin>(
         &owner_cap_obj,
         &currency,
         &price_info_object,
@@ -1086,9 +1051,6 @@ fun remove_accepted_currency_rejects_foreign_owner_cap() {
         option::none(),
         option::none(),
         option::none(),
-    );
-    let _accepted_currency_id = shop::test_last_created_id(
-        test_scenario::ctx(&mut scn),
     );
     test_scenario::return_to_sender(&scn, owner_cap_obj);
     test_scenario::return_shared(shop_obj);
@@ -1102,44 +1064,38 @@ fun remove_accepted_currency_rejects_foreign_owner_cap() {
     );
     let mut shared_shop = take_shared_shop(&scn, shop_id);
 
-    shop::remove_accepted_currency<TestCoin>(
-        &mut shared_shop,
+    shared_shop.remove_accepted_currency<TestCoin>(
         &wrong_cap,
     );
-    abort EAssertFailure
+    abort
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::EAcceptedCurrencyMissing)]
 fun remove_accepted_currency_rejects_missing_id() {
     let mut scn = test_scenario::begin(TEST_OWNER);
-    shop::create_shop(DEFAULT_SHOP_NAME.to_string(), test_scenario::ctx(&mut scn));
-    let created_events = event::events_by_type<shop::ShopCreatedEvent>();
-    let shop_created = &created_events[0];
-    let shop_id = shop::test_shop_created_shop_id(shop_created);
-    let owner_cap_id = shop::test_shop_created_owner_cap_id(shop_created);
+    let (shop_id, owner_cap_id) = create_default_shop_and_owner_cap_ids_for_sender(&mut scn);
 
     let _ = test_scenario::next_tx(&mut scn, OTHER_OWNER);
-    shop::create_shop(DEFAULT_SHOP_NAME.to_string(), test_scenario::ctx(&mut scn));
-    let other_created_events = event::events_by_type<shop::ShopCreatedEvent>();
-    let other_created = &other_created_events[other_created_events.length() - 1];
-    let other_shop_id = shop::test_shop_created_shop_id(other_created);
-    let other_owner_cap_id = shop::test_shop_created_owner_cap_id(other_created);
+    let (other_shop_id, other_owner_cap_id) = create_default_shop_and_owner_cap_ids_for_sender(
+        &mut scn,
+    );
 
     let currency = prepare_test_currency_for_owner(&mut scn, OTHER_OWNER);
-    let (price_info_object, price_info_id) = create_price_info_object_for_feed(
+    let price_info_object = create_price_info_object_for_feed(
         PRIMARY_FEED_ID,
         test_scenario::ctx(&mut scn),
     );
-    let mut other_shop_obj = test_scenario::take_shared_by_id(
+    let price_info_id = price_info_object.uid_to_inner();
+
+    let mut other_shop_obj = test_scenario::take_shared_by_id<shop::Shop>(
         &scn,
         other_shop_id,
     );
-    let other_owner_cap_obj = test_scenario::take_from_sender_by_id(
+    let other_owner_cap_obj = test_scenario::take_from_sender_by_id<shop::ShopOwnerCap>(
         &scn,
         other_owner_cap_id,
     );
-    shop::add_accepted_currency<TestCoin>(
-        &mut other_shop_obj,
+    other_shop_obj.add_accepted_currency<TestCoin>(
         &other_owner_cap_obj,
         &currency,
         &price_info_object,
@@ -1149,9 +1105,9 @@ fun remove_accepted_currency_rejects_missing_id() {
         option::none(),
         option::none(),
     );
-    let _foreign_currency_id = shop::test_last_created_id(
+    let _foreign_currency_id = tx_context::last_created_object_id(
         test_scenario::ctx(&mut scn),
-    );
+    ).to_id();
     test_scenario::return_to_sender(&scn, other_owner_cap_obj);
     test_scenario::return_shared(other_shop_obj);
     transfer::public_share_object(price_info_object);
@@ -1162,35 +1118,30 @@ fun remove_accepted_currency_rejects_missing_id() {
         owner_cap_id,
     );
     let mut shared_shop = take_shared_shop(&scn, shop_id);
-    shop::remove_accepted_currency<TestCoin>(
-        &mut shared_shop,
+    shared_shop.remove_accepted_currency<TestCoin>(
         &owner_cap_obj,
     );
-    abort EAssertFailure
+    abort
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::EAcceptedCurrencyMissing)]
 fun remove_accepted_currency_handles_missing_type_mapping() {
     let mut scn = test_scenario::begin(TEST_OWNER);
-    shop::create_shop(DEFAULT_SHOP_NAME.to_string(), test_scenario::ctx(&mut scn));
-    let created_events = event::events_by_type<shop::ShopCreatedEvent>();
-    let shop_created = &created_events[0];
-    let shop_id = shop::test_shop_created_shop_id(shop_created);
-    let owner_cap_id = shop::test_shop_created_owner_cap_id(shop_created);
+    let (shop_id, owner_cap_id) = create_default_shop_and_owner_cap_ids_for_sender(&mut scn);
 
     let currency = prepare_test_currency_for_owner(&mut scn, TEST_OWNER);
-    let (price_info_object, price_info_id) = create_price_info_object_for_feed(
+    let price_info_object = create_price_info_object_for_feed(
         PRIMARY_FEED_ID,
         test_scenario::ctx(&mut scn),
     );
+    let price_info_id = price_info_object.uid_to_inner();
 
     let mut shop_obj = take_shared_shop(&scn, shop_id);
     let owner_cap = test_scenario::take_from_sender_by_id(
         &scn,
         owner_cap_id,
     );
-    shop::add_accepted_currency<TestCoin>(
-        &mut shop_obj,
+    shop_obj.add_accepted_currency<TestCoin>(
         &owner_cap,
         &currency,
         &price_info_object,
@@ -1200,13 +1151,10 @@ fun remove_accepted_currency_handles_missing_type_mapping() {
         option::none(),
         option::none(),
     );
-    let _accepted_currency_id = shop::test_last_created_id(
-        test_scenario::ctx(&mut scn),
-    );
     std::unit_test::destroy(currency);
     transfer::public_share_object(price_info_object);
 
-    shop::test_remove_currency_field<TestCoin>(&mut shop_obj);
+    remove_currency_if_exists<TestCoin>(&mut shop_obj, &owner_cap);
 
     test_scenario::return_to_sender(&scn, owner_cap);
     test_scenario::return_shared(shop_obj);
@@ -1218,35 +1166,30 @@ fun remove_accepted_currency_handles_missing_type_mapping() {
         owner_cap_id,
     );
     let mut shared_shop = take_shared_shop(&scn, shop_id);
-    shop::remove_accepted_currency<TestCoin>(
-        &mut shared_shop,
+    shared_shop.remove_accepted_currency<TestCoin>(
         &owner_cap,
     );
-    abort EAssertFailure
+    abort
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::EAcceptedCurrencyMissing)]
 fun remove_accepted_currency_rejects_mismatched_type_mapping() {
     let mut scn = test_scenario::begin(TEST_OWNER);
-    shop::create_shop(DEFAULT_SHOP_NAME.to_string(), test_scenario::ctx(&mut scn));
-    let created_events = event::events_by_type<shop::ShopCreatedEvent>();
-    let shop_created = &created_events[0];
-    let shop_id = shop::test_shop_created_shop_id(shop_created);
-    let owner_cap_id = shop::test_shop_created_owner_cap_id(shop_created);
+    let (shop_id, owner_cap_id) = create_default_shop_and_owner_cap_ids_for_sender(&mut scn);
 
     let currency = prepare_test_currency_for_owner(&mut scn, TEST_OWNER);
-    let (price_info_object, price_info_id) = create_price_info_object_for_feed(
+    let price_info_object = create_price_info_object_for_feed(
         PRIMARY_FEED_ID,
         test_scenario::ctx(&mut scn),
     );
+    let price_info_id = price_info_object.uid_to_inner();
 
     let mut shop_obj = take_shared_shop(&scn, shop_id);
     let owner_cap = test_scenario::take_from_sender_by_id(
         &scn,
         owner_cap_id,
     );
-    shop::add_accepted_currency<TestCoin>(
-        &mut shop_obj,
+    shop_obj.add_accepted_currency<TestCoin>(
         &owner_cap,
         &currency,
         &price_info_object,
@@ -1256,16 +1199,15 @@ fun remove_accepted_currency_rejects_mismatched_type_mapping() {
         option::none(),
         option::none(),
     );
-    let _first_currency_id = shop::test_last_created_id(
+    let _first_currency_id = tx_context::last_created_object_id(
         test_scenario::ctx(&mut scn),
-    );
+    ).to_id();
     std::unit_test::destroy(currency);
 
-    shop::test_remove_currency_field<TestCoin>(&mut shop_obj);
+    remove_currency_if_exists<TestCoin>(&mut shop_obj, &owner_cap);
 
     let replacement_currency = prepare_test_currency_for_owner(&mut scn, TEST_OWNER);
-    shop::add_accepted_currency<TestCoin>(
-        &mut shop_obj,
+    shop_obj.add_accepted_currency<TestCoin>(
         &owner_cap,
         &replacement_currency,
         &price_info_object,
@@ -1288,40 +1230,34 @@ fun remove_accepted_currency_rejects_mismatched_type_mapping() {
         owner_cap_id,
     );
     let mut shared_shop = take_shared_shop(&scn, shop_id);
-    shop::remove_accepted_currency<TestCoin>(
-        &mut shared_shop,
+    shared_shop.remove_accepted_currency<TestCoin>(
         &owner_cap,
     );
-    shop::remove_accepted_currency<TestCoin>(
-        &mut shared_shop,
+    shared_shop.remove_accepted_currency<TestCoin>(
         &owner_cap,
     );
-    abort EAssertFailure
+    abort
 }
 
 #[test]
 fun quote_view_matches_internal_math() {
     let mut scn = test_scenario::begin(TEST_OWNER);
-    shop::create_shop(DEFAULT_SHOP_NAME.to_string(), test_scenario::ctx(&mut scn));
-    let created_events = event::events_by_type<shop::ShopCreatedEvent>();
-    let shop_created = &created_events[0];
-    let shop_id = shop::test_shop_created_shop_id(shop_created);
-    let owner_cap_id = shop::test_shop_created_owner_cap_id(shop_created);
+    let (shop_id, owner_cap_id) = create_default_shop_and_owner_cap_ids_for_sender(&mut scn);
 
     let currency = prepare_test_currency_for_owner(&mut scn, TEST_OWNER);
-    let (price_info_object, price_info_id) = create_price_info_object_for_feed_with_price(
+    let price_info_object = create_price_info_object_for_feed_with_price(
         PRIMARY_FEED_ID,
         sample_price(),
         test_scenario::ctx(&mut scn),
     );
+    let price_info_id = price_info_object.uid_to_inner();
 
     let mut shop_obj = take_shared_shop(&scn, shop_id);
     let owner_cap_obj = test_scenario::take_from_sender_by_id(
         &scn,
         owner_cap_id,
     );
-    shop::add_accepted_currency<TestCoin>(
-        &mut shop_obj,
+    shop_obj.add_accepted_currency<TestCoin>(
         &owner_cap_obj,
         &currency,
         &price_info_object,
@@ -1330,9 +1266,6 @@ fun quote_view_matches_internal_math() {
         option::none(),
         option::none(),
         option::none(),
-    );
-    let _accepted_currency_id = shop::test_last_created_id(
-        test_scenario::ctx(&mut scn),
     );
     test_scenario::return_to_sender(&scn, owner_cap_obj);
     test_scenario::return_shared(shop_obj);
@@ -1345,15 +1278,12 @@ fun quote_view_matches_internal_math() {
         &scn,
         price_info_id,
     );
-    let mut clock_obj = clock::create_for_testing(test_scenario::ctx(&mut scn));
-    clock::set_for_testing(&mut clock_obj, 1);
+    let clock_obj = create_test_clock_at(test_scenario::ctx(&mut scn), 1);
     let price_usd_cents = 10_000;
-    let (_, _, _, _, decimals, _, _, _, _) = shop::test_accepted_currency_values<TestCoin>(
-        &shared_shop,
-    );
+    let accepted_currency = shared_shop.accepted_currency<TestCoin>();
+    let decimals = accepted_currency.accepted_currency_decimals();
 
-    let view_quote = shop::test_quote_amount_for_price_info_object<TestCoin>(
-        &shared_shop,
+    let view_quote = shared_shop.quote_amount_for_price_info_object<TestCoin>(
         &price_info_obj,
         price_usd_cents,
         option::none(),
@@ -1364,13 +1294,13 @@ fun quote_view_matches_internal_math() {
     let price = pyth::get_price_no_older_than(
         &price_info_obj,
         &clock_obj,
-        shop::test_default_max_price_age_secs(),
+        TEST_DEFAULT_MAX_PRICE_AGE_SECS,
     );
-    let derived_quote = shop::test_quote_amount_from_usd_cents(
+    let derived_quote = shop::quote_amount_from_usd_cents(
         price_usd_cents,
         decimals,
         price,
-        shop::test_default_max_confidence_ratio_bps(),
+        TEST_DEFAULT_MAX_CONFIDENCE_RATIO_BPS,
     );
 
     assert_eq!(derived_quote, 10_101_010_102);
@@ -1393,39 +1323,35 @@ fun quote_amount_rejects_overflow_before_runtime_abort() {
     );
     let max_usd_cents = 18_446_744_073_709_551_615;
 
-    shop::test_quote_amount_from_usd_cents(
+    shop::quote_amount_from_usd_cents(
         max_usd_cents,
         24, // MAX_DECIMAL_POWER; forces usd_cents * 10^24 to overflow u128.
         price,
-        shop::test_default_max_confidence_ratio_bps(),
+        TEST_DEFAULT_MAX_CONFIDENCE_RATIO_BPS,
     );
 
-    abort EAssertFailure
+    abort
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::EPythObjectMismatch)]
 fun quote_view_rejects_mismatched_price_info_object() {
     let mut scn = test_scenario::begin(TEST_OWNER);
-    shop::create_shop(DEFAULT_SHOP_NAME.to_string(), test_scenario::ctx(&mut scn));
-    let created_events = event::events_by_type<shop::ShopCreatedEvent>();
-    let shop_created = &created_events[0];
-    let shop_id = shop::test_shop_created_shop_id(shop_created);
-    let owner_cap_id = shop::test_shop_created_owner_cap_id(shop_created);
+    let (shop_id, owner_cap_id) = create_default_shop_and_owner_cap_ids_for_sender(&mut scn);
 
     let currency = prepare_test_currency_for_owner(&mut scn, TEST_OWNER);
-    let (price_info_object, price_info_id) = create_price_info_object_for_feed_with_price(
+    let price_info_object = create_price_info_object_for_feed_with_price(
         PRIMARY_FEED_ID,
         sample_price(),
         test_scenario::ctx(&mut scn),
     );
+    let price_info_id = price_info_object.uid_to_inner();
 
     let mut shop_obj = take_shared_shop(&scn, shop_id);
     let owner_cap_obj = test_scenario::take_from_sender_by_id(
         &scn,
         owner_cap_id,
     );
-    shop::add_accepted_currency<TestCoin>(
-        &mut shop_obj,
+    shop_obj.add_accepted_currency<TestCoin>(
         &owner_cap_obj,
         &currency,
         &price_info_object,
@@ -1437,24 +1363,19 @@ fun quote_view_rejects_mismatched_price_info_object() {
     );
     test_scenario::return_to_sender(&scn, owner_cap_obj);
     test_scenario::return_shared(shop_obj);
-    let _accepted_currency_id = shop::test_last_created_id(
-        test_scenario::ctx(&mut scn),
-    );
     transfer::public_share_object(price_info_object);
 
     let _ = test_scenario::next_tx(&mut scn, TEST_OWNER);
 
     let shared_shop = take_shared_shop(&scn, shop_id);
-    let mut clock_obj = clock::create_for_testing(test_scenario::ctx(&mut scn));
-    clock::set_for_testing(&mut clock_obj, 1);
-    let (mismatched_price_info_object, _) = create_price_info_object_for_feed_with_price(
+    let clock_obj = create_test_clock_at(test_scenario::ctx(&mut scn), 1);
+    let mismatched_price_info_object = create_price_info_object_for_feed_with_price(
         SECONDARY_FEED_ID,
         sample_price(),
         test_scenario::ctx(&mut scn),
     );
 
-    shop::test_quote_amount_for_price_info_object<TestCoin>(
-        &shared_shop,
+    shared_shop.quote_amount_for_price_info_object<TestCoin>(
         &mismatched_price_info_object,
         10_000,
         option::none(),
@@ -1462,16 +1383,16 @@ fun quote_view_rejects_mismatched_price_info_object() {
         &clock_obj,
     );
 
-    abort EAssertFailure
+    abort
 }
 
 #[test]
 fun add_item_listing_stores_metadata() {
     let mut ctx: tx_context::TxContext = tx_context::dummy();
     let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
+    let ids_before = tx_context::get_ids_created(&ctx);
 
-    let listing_id = shop::test_add_item_listing_local<TestItem>(
-        &mut shop,
+    let listing_id = shop.add_item_listing<TestItem>(
         &owner_cap,
         b"Cool Bike".to_string(),
         125_00,
@@ -1479,28 +1400,27 @@ fun add_item_listing_stores_metadata() {
         option::none(),
         &mut ctx,
     );
-    assert!(shop::test_listing_exists(&shop, listing_id));
-    let (
-        name,
-        base_price_usd_cents,
-        stock,
-        shop_id,
-        spotlight_template_id,
-    ) = shop::test_listing_values_local(&shop, listing_id);
-    let added_events = event::events_by_type<shop::ItemListingAddedEvent>();
-    assert_eq!(added_events.length(), 1);
-    let added_event = &added_events[0];
+    assert_eq!(tx_context::get_ids_created(&ctx), ids_before + 1);
+    assert_eq!(tx_context::last_created_object_id(&ctx).to_id(), listing_id);
+    assert!(shop.listing_exists(listing_id));
+    let listing = shop.listing(listing_id);
+    let name = listing.listing_name();
+    let base_price_usd_cents = listing.listing_base_price_usd_cents();
+    let stock = listing.listing_stock();
+    let spotlight_template_id = listing.listing_spotlight_discount_template_id();
 
     assert_eq!(name, b"Cool Bike".to_string());
     assert_eq!(base_price_usd_cents, 125_00);
     assert_eq!(stock, 25);
-    assert_eq!(shop_id, shop::test_shop_id(&shop));
     assert!(option::is_none(&spotlight_template_id));
-    let shop_address = shop::test_shop_id(&shop);
-    assert_eq!(shop::test_item_listing_added_shop(added_event), shop_address);
-    assert_eq!(shop::test_item_listing_added_listing(added_event), listing_id);
+    assert_emitted!(
+        shop::new_item_listing_added_event(
+            shop.shop_id(),
+            listing_id,
+        ),
+    );
 
-    shop::test_remove_listing(&mut shop, listing_id);
+    remove_listing_if_exists(&mut shop, &owner_cap, listing_id);
     std::unit_test::destroy(owner_cap);
     std::unit_test::destroy(shop);
 }
@@ -1515,8 +1435,7 @@ fun add_item_listing_links_spotlight_template() {
         &mut ctx,
     );
 
-    let listing_id = shop::test_add_item_listing_local<TestItem>(
-        &mut shop,
+    let listing_id = shop.add_item_listing<TestItem>(
         &owner_cap,
         b"Limited Tire Set".to_string(),
         200_00,
@@ -1524,24 +1443,22 @@ fun add_item_listing_links_spotlight_template() {
         option::some(template_id),
         &mut ctx,
     );
-    let (_, _, _, _, spotlight_template_id) = shop::test_listing_values_local(
-        &shop,
-        listing_id,
-    );
-    let added_events = event::events_by_type<shop::ItemListingAddedEvent>();
-    assert_eq!(added_events.length(), 1);
-    let added_event = &added_events[0];
-    let shop_address = shop::test_shop_id(&shop);
+    let listing = shop.listing(listing_id);
+    let spotlight_template_id = listing.listing_spotlight_discount_template_id();
 
     assert!(option::is_some(&spotlight_template_id));
     spotlight_template_id.do_ref!(|value| {
         assert_eq!(*value, template_id);
     });
-    assert_eq!(shop::test_item_listing_added_shop(added_event), shop_address);
-    assert_eq!(shop::test_item_listing_added_listing(added_event), listing_id);
+    assert_emitted!(
+        shop::new_item_listing_added_event(
+            shop.shop_id(),
+            listing_id,
+        ),
+    );
 
-    shop::test_remove_listing(&mut shop, listing_id);
-    shop::test_remove_template(&mut shop, template_id);
+    shop.remove_discount_template(&owner_cap, template_id);
+    remove_listing_if_exists(&mut shop, &owner_cap, listing_id);
     std::unit_test::destroy(owner_cap);
     std::unit_test::destroy(shop);
 }
@@ -1550,11 +1467,9 @@ fun add_item_listing_links_spotlight_template() {
 fun add_item_listing_with_discount_template_creates_listing_and_pinned_template() {
     let mut ctx = tx_context::new_from_hint(TEST_OWNER, 404, 0, 0, 0);
     let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
+    let ids_before = tx_context::get_ids_created(&ctx);
 
-    let (listing_id, template_id) = shop::test_add_item_listing_with_discount_template_local<
-        TestItem,
-    >(
-        &mut shop,
+    let (listing_id, template_id) = shop.add_item_listing_with_discount_template<TestItem>(
         &owner_cap,
         b"Atomic Promo Bundle".to_string(),
         240_00,
@@ -1566,9 +1481,12 @@ fun add_item_listing_with_discount_template_creates_listing_and_pinned_template(
         option::some(20),
         &mut ctx,
     );
+    assert_eq!(tx_context::get_ids_created(&ctx), ids_before + 3);
+    assert!(listing_id != template_id);
+    assert_eq!(tx_context::last_created_object_id(&ctx).to_id(), template_id);
 
-    assert!(shop::test_listing_exists(&shop, listing_id));
-    assert!(shop::test_discount_template_exists(&shop, template_id));
+    assert!(shop.listing_exists(listing_id));
+    assert!(shop.discount_template_exists(template_id));
     assert_listing_spotlight_template_id(&shop, listing_id, template_id);
     assert_listing_scoped_percent_template(
         &shop,
@@ -1578,13 +1496,55 @@ fun add_item_listing_with_discount_template_creates_listing_and_pinned_template(
         0,
         20,
     );
-    assert_single_listing_added_event(&shop, listing_id);
-    assert_single_discount_template_created_event(&shop, template_id);
+    let shop_id = shop.shop_id();
+    assert_emitted!(shop::new_item_listing_added_event(shop_id, listing_id));
+    assert_emitted!(
+        shop::new_discount_template_created_event(
+            shop_id,
+            template_id,
+        ),
+    );
 
-    shop::test_remove_listing(&mut shop, listing_id);
-    shop::test_remove_template(&mut shop, template_id);
+    shop.remove_discount_template(&owner_cap, template_id);
+    remove_listing_if_exists(&mut shop, &owner_cap, listing_id);
     std::unit_test::destroy(owner_cap);
     std::unit_test::destroy(shop);
+}
+
+fun assert_listing_scoped_percent_template(
+    shop: &shop::Shop,
+    template_id: ID,
+    listing_id: ID,
+    expected_rule_value: u64,
+    expected_starts_at: u64,
+    expected_max_redemptions: u64,
+) {
+    let template_values = shop.discount_template(template_id);
+    let applies_to_listing = template_values.discount_template_applies_to_listing();
+    let discount_rule = template_values.discount_template_rule();
+    let starts_at = template_values.discount_template_starts_at();
+    let expires_at = template_values.discount_template_expires_at();
+    let max_redemptions = template_values.discount_template_max_redemptions();
+    let claims_issued = template_values.discount_template_claims_issued();
+    let redemptions = template_values.discount_template_redemptions();
+    let active = template_values.discount_template_active();
+    assert!(option::is_some(&applies_to_listing));
+    applies_to_listing.do_ref!(|value| {
+        assert_eq!(*value, listing_id);
+    });
+    let rule_kind = discount_rule.discount_rule_kind();
+    let rule_value = discount_rule.discount_rule_value();
+    assert_eq!(rule_kind, 1);
+    assert_eq!(rule_value, expected_rule_value);
+    assert_eq!(starts_at, expected_starts_at);
+    assert!(option::is_none(&expires_at));
+    assert!(option::is_some(&max_redemptions));
+    max_redemptions.do_ref!(|value| {
+        assert_eq!(*value, expected_max_redemptions);
+    });
+    assert_eq!(claims_issued, 0);
+    assert_eq!(redemptions, 0);
+    assert!(active);
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::EInvalidOwnerCap)]
@@ -1593,8 +1553,7 @@ fun add_item_listing_with_discount_template_rejects_foreign_owner_cap() {
     let (mut shop, _owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
     let (_other_shop, other_cap) = shop::test_setup_shop(OTHER_OWNER, &mut ctx);
 
-    shop::add_item_listing_with_discount_template<TestItem>(
-        &mut shop,
+    shop.add_item_listing_with_discount_template<TestItem>(
         &other_cap,
         b"Wrong Owner Cap".to_string(),
         125_00,
@@ -1607,7 +1566,7 @@ fun add_item_listing_with_discount_template_rejects_foreign_owner_cap() {
         &mut ctx,
     );
 
-    abort EAssertFailure
+    abort
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::EEmptyItemName)]
@@ -1615,8 +1574,7 @@ fun add_item_listing_rejects_empty_name() {
     let mut ctx = tx_context::new_from_hint(TEST_OWNER, 45, 0, 0, 0);
     let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
 
-    shop::add_item_listing<TestItem>(
-        &mut shop,
+    shop.add_item_listing<TestItem>(
         &owner_cap,
         b"".to_string(),
         100_00,
@@ -1625,7 +1583,7 @@ fun add_item_listing_rejects_empty_name() {
         &mut ctx,
     );
 
-    abort EAssertFailure
+    abort
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::EInvalidOwnerCap)]
@@ -1634,8 +1592,7 @@ fun add_item_listing_rejects_foreign_owner_cap() {
     let (mut shop, _owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
     let (_other_shop, other_cap) = shop::test_setup_shop(OTHER_OWNER, &mut ctx);
 
-    shop::add_item_listing<TestItem>(
-        &mut shop,
+    shop.add_item_listing<TestItem>(
         &other_cap,
         b"Wrong Owner Cap".to_string(),
         15_00,
@@ -1644,7 +1601,7 @@ fun add_item_listing_rejects_foreign_owner_cap() {
         &mut ctx,
     );
 
-    abort EAssertFailure
+    abort
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::EInvalidPrice)]
@@ -1652,8 +1609,7 @@ fun add_item_listing_rejects_zero_price() {
     let mut ctx = tx_context::dummy();
     let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
 
-    shop::add_item_listing<TestItem>(
-        &mut shop,
+    shop.add_item_listing<TestItem>(
         &owner_cap,
         b"Zero Price".to_string(),
         0,
@@ -1662,7 +1618,7 @@ fun add_item_listing_rejects_zero_price() {
         &mut ctx,
     );
 
-    abort EAssertFailure
+    abort
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::EZeroStock)]
@@ -1670,8 +1626,7 @@ fun add_item_listing_rejects_zero_stock() {
     let mut ctx = tx_context::dummy();
     let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
 
-    shop::add_item_listing<TestItem>(
-        &mut shop,
+    shop.add_item_listing<TestItem>(
         &owner_cap,
         b"No Stock".to_string(),
         10_00,
@@ -1680,7 +1635,7 @@ fun add_item_listing_rejects_zero_stock() {
         &mut ctx,
     );
 
-    abort EAssertFailure
+    abort
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::ETemplateNotFound)]
@@ -1694,8 +1649,7 @@ fun add_item_listing_rejects_foreign_template() {
         &mut ctx,
     );
 
-    shop::add_item_listing<TestItem>(
-        &mut shop,
+    shop.add_item_listing<TestItem>(
         &owner_cap,
         b"Bad Template".to_string(),
         15_00,
@@ -1704,7 +1658,7 @@ fun add_item_listing_rejects_foreign_template() {
         &mut ctx,
     );
 
-    abort EAssertFailure
+    abort
 }
 
 #[test]
@@ -1712,8 +1666,7 @@ fun update_item_listing_stock_updates_listing_and_emits_events() {
     let mut ctx = tx_context::dummy();
     let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
 
-    let listing_id = shop::test_add_item_listing_local<TestItem>(
-        &mut shop,
+    let listing_id = shop.add_item_listing<TestItem>(
         &owner_cap,
         b"Helmet".to_string(),
         48_00,
@@ -1722,32 +1675,25 @@ fun update_item_listing_stock_updates_listing_and_emits_events() {
         &mut ctx,
     );
 
-    shop::update_item_listing_stock(
-        &mut shop,
+    shop.update_item_listing_stock(
         &owner_cap,
         listing_id,
         11,
     );
 
-    let (
-        name,
-        base_price_usd_cents,
-        stock,
-        shop_id,
-        spotlight_template,
-    ) = shop::test_listing_values_local(&shop, listing_id);
+    let listing = shop.listing(listing_id);
+    let name = listing.listing_name();
+    let base_price_usd_cents = listing.listing_base_price_usd_cents();
+    let stock = listing.listing_stock();
+    let spotlight_template = listing.listing_spotlight_discount_template_id();
     assert_eq!(name, b"Helmet".to_string());
     assert_eq!(base_price_usd_cents, 48_00);
     assert!(option::is_none(&spotlight_template));
     assert_eq!(stock, 11);
 
-    let stock_events = event::events_by_type<shop::ItemListingStockUpdatedEvent>();
-    assert_eq!(stock_events.length(), 1);
-    let stock_event = &stock_events[0];
-    assert_eq!(shop::test_item_listing_stock_updated_shop(stock_event), shop_id);
-    assert_eq!(shop::test_item_listing_stock_updated_listing(stock_event), listing_id);
+    assert_emitted!(shop::new_item_listing_stock_updated_event(shop.shop_id(), listing_id));
 
-    shop::test_remove_listing(&mut shop, listing_id);
+    remove_listing_if_exists(&mut shop, &owner_cap, listing_id);
     std::unit_test::destroy(owner_cap);
     std::unit_test::destroy(shop);
 }
@@ -1761,8 +1707,7 @@ fun update_item_listing_stock_rejects_foreign_owner_cap() {
         &mut ctx,
     );
 
-    let listing_id = shop::test_add_item_listing_local<TestItem>(
-        &mut shop,
+    let listing_id = shop.add_item_listing<TestItem>(
         &owner_cap,
         b"Borrowed Listing".to_string(),
         18_00,
@@ -1771,14 +1716,13 @@ fun update_item_listing_stock_rejects_foreign_owner_cap() {
         &mut ctx,
     );
 
-    shop::update_item_listing_stock(
-        &mut shop,
+    shop.update_item_listing_stock(
         &foreign_cap,
         listing_id,
         7,
     );
 
-    abort EAssertFailure
+    abort
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::EListingNotFound)]
@@ -1790,8 +1734,7 @@ fun update_item_listing_stock_rejects_unknown_listing() {
         &mut ctx,
     );
 
-    let foreign_listing_id = shop::test_add_item_listing_local<TestItem>(
-        &mut other_shop,
+    let foreign_listing_id = other_shop.add_item_listing<TestItem>(
         &other_cap,
         b"Foreign Listing".to_string(),
         10_00,
@@ -1800,14 +1743,13 @@ fun update_item_listing_stock_rejects_unknown_listing() {
         &mut ctx,
     );
 
-    shop::update_item_listing_stock(
-        &mut shop,
+    shop.update_item_listing_stock(
         &owner_cap,
         foreign_listing_id,
         3,
     );
 
-    abort EAssertFailure
+    abort
 }
 
 #[test]
@@ -1815,8 +1757,7 @@ fun update_item_listing_stock_handles_multiple_updates_and_events() {
     let mut ctx = tx_context::dummy();
     let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
 
-    let listing_id = shop::test_add_item_listing_local<TestItem>(
-        &mut shop,
+    let listing_id = shop.add_item_listing<TestItem>(
         &owner_cap,
         b"Pads".to_string(),
         22_00,
@@ -1825,30 +1766,36 @@ fun update_item_listing_stock_handles_multiple_updates_and_events() {
         &mut ctx,
     );
 
-    shop::update_item_listing_stock(
-        &mut shop,
+    let expected_stock_updated_event = shop::new_item_listing_stock_updated_event(
+        shop.shop_id(),
+        listing_id,
+    );
+    shop.update_item_listing_stock(
         &owner_cap,
         listing_id,
         8,
     );
-    shop::update_item_listing_stock(
-        &mut shop,
+    assert_emitted!(expected_stock_updated_event);
+    shop.update_item_listing_stock(
         &owner_cap,
         listing_id,
         3,
     );
+    assert_emitted!(expected_stock_updated_event);
 
-    let (_, _, stock, _, _) = shop::test_listing_values_local(&shop, listing_id);
+    let listing = shop.listing(listing_id);
+    let stock = listing.listing_stock();
     assert_eq!(stock, 3);
 
-    let stock_events = event::events_by_type<shop::ItemListingStockUpdatedEvent>();
-    assert_eq!(stock_events.length(), 2);
-    let first = &stock_events[0];
-    let second = &stock_events[1];
-    assert_eq!(shop::test_item_listing_stock_updated_listing(first), listing_id);
-    assert_eq!(shop::test_item_listing_stock_updated_listing(second), listing_id);
+    assert_emitted!(
+        shop::new_item_listing_stock_updated_event(
+            shop.shop_id(),
+            listing_id,
+        ),
+    );
+    assert_eq!(event::events_by_type<shop::ItemListingStockUpdatedEvent>().length(), 2);
 
-    shop::test_remove_listing(&mut shop, listing_id);
+    remove_listing_if_exists(&mut shop, &owner_cap, listing_id);
     std::unit_test::destroy(owner_cap);
     std::unit_test::destroy(shop);
 }
@@ -1858,8 +1805,7 @@ fun remove_item_listing_removes_listing_and_emits_event() {
     let mut ctx = tx_context::dummy();
     let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
 
-    let removed_listing_id = shop::test_add_item_listing_local<TestItem>(
-        &mut shop,
+    let removed_listing_id = shop.add_item_listing<TestItem>(
         &owner_cap,
         b"Chain Grease".to_string(),
         12_00,
@@ -1868,8 +1814,7 @@ fun remove_item_listing_removes_listing_and_emits_event() {
         &mut ctx,
     );
 
-    let remaining_listing_id = shop::test_add_item_listing_local<TestItem>(
-        &mut shop,
+    let remaining_listing_id = shop.add_item_listing<TestItem>(
         &owner_cap,
         b"Repair Kit".to_string(),
         42_00,
@@ -1877,33 +1822,29 @@ fun remove_item_listing_removes_listing_and_emits_event() {
         option::none(),
         &mut ctx,
     );
-    let shop_address = shop::test_shop_id(&shop);
+    let shop_address = shop.shop_id();
 
-    shop::remove_item_listing(
-        &mut shop,
+    shop.remove_item_listing(
         &owner_cap,
         removed_listing_id,
     );
 
-    let removed_events = event::events_by_type<shop::ItemListingRemovedEvent>();
-    assert_eq!(removed_events.length(), 1);
-    let removed = &removed_events[0];
-    assert_eq!(shop::test_item_listing_removed_shop(removed), shop_address);
-    assert_eq!(shop::test_item_listing_removed_listing(removed), removed_listing_id);
-    assert!(!shop::test_listing_exists(&shop, removed_listing_id));
+    assert_emitted!(shop::new_item_listing_removed_event(shop_address, removed_listing_id));
 
-    assert!(shop::test_listing_exists(&shop, remaining_listing_id));
-    let (name, price, stock, listing_shop_address, spotlight) = shop::test_listing_values_local(
-        &shop,
-        remaining_listing_id,
-    );
+    assert!(!shop.listing_exists(removed_listing_id));
+    assert!(shop.listing_exists(remaining_listing_id));
+
+    let listing = shop.listing(remaining_listing_id);
+    let name = listing.listing_name();
+    let price = listing.listing_base_price_usd_cents();
+    let stock = listing.listing_stock();
+    let spotlight = listing.listing_spotlight_discount_template_id();
     assert_eq!(name, b"Repair Kit".to_string());
     assert_eq!(price, 42_00);
     assert_eq!(stock, 2);
     assert_eq!(spotlight, option::none());
-    assert_eq!(listing_shop_address, shop_address);
 
-    shop::test_remove_listing(&mut shop, remaining_listing_id);
+    remove_listing_if_exists(&mut shop, &owner_cap, remaining_listing_id);
     std::unit_test::destroy(owner_cap);
     std::unit_test::destroy(shop);
 }
@@ -1917,8 +1858,7 @@ fun remove_item_listing_rejects_foreign_owner_cap() {
         &mut ctx,
     );
 
-    let listing_id = shop::test_add_item_listing_local<TestItem>(
-        &mut shop,
+    let listing_id = shop.add_item_listing<TestItem>(
         &owner_cap,
         b"Borrowed Owner".to_string(),
         30_00,
@@ -1927,13 +1867,12 @@ fun remove_item_listing_rejects_foreign_owner_cap() {
         &mut ctx,
     );
 
-    shop::remove_item_listing(
-        &mut shop,
+    shop.remove_item_listing(
         &foreign_cap,
         listing_id,
     );
 
-    abort EAssertFailure
+    abort
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::EListingNotFound)]
@@ -1945,8 +1884,7 @@ fun remove_item_listing_rejects_unknown_listing() {
         &mut ctx,
     );
 
-    let foreign_listing_id = shop::test_add_item_listing_local<TestItem>(
-        &mut other_shop,
+    let foreign_listing_id = other_shop.add_item_listing<TestItem>(
         &other_cap,
         b"Foreign Stock".to_string(),
         55_00,
@@ -1955,21 +1893,19 @@ fun remove_item_listing_rejects_unknown_listing() {
         &mut ctx,
     );
 
-    shop::remove_item_listing(
-        &mut shop,
+    shop.remove_item_listing(
         &owner_cap,
         foreign_listing_id,
     );
 
-    abort EAssertFailure
+    abort
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::EListingHasActiveTemplates)]
 fun remove_item_listing_rejects_listing_with_active_bound_template() {
     let mut ctx = tx_context::dummy();
     let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
-    let listing_id = shop::test_add_item_listing_local<TestItem>(
-        &mut shop,
+    let listing_id = shop.add_item_listing<TestItem>(
         &owner_cap,
         b"Template Locked Listing".to_string(),
         45_00,
@@ -1977,8 +1913,7 @@ fun remove_item_listing_rejects_listing_with_active_bound_template() {
         option::none(),
         &mut ctx,
     );
-    let _template_id = shop::test_create_discount_template_local(
-        &mut shop,
+    let _template_id = shop.test_create_discount_template_local(
         option::some(listing_id),
         0,
         500,
@@ -1988,21 +1923,19 @@ fun remove_item_listing_rejects_listing_with_active_bound_template() {
         &mut ctx,
     );
 
-    shop::remove_item_listing(
-        &mut shop,
+    shop.remove_item_listing(
         &owner_cap,
         listing_id,
     );
 
-    abort EAssertFailure
+    abort
 }
 
 #[test]
 fun remove_item_listing_allows_listing_with_inactive_bound_template() {
     let mut ctx = tx_context::dummy();
     let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
-    let listing_id = shop::test_add_item_listing_local<TestItem>(
-        &mut shop,
+    let listing_id = shop.add_item_listing<TestItem>(
         &owner_cap,
         b"Template Paused Listing".to_string(),
         45_00,
@@ -2010,8 +1943,7 @@ fun remove_item_listing_allows_listing_with_inactive_bound_template() {
         option::none(),
         &mut ctx,
     );
-    let template = shop::test_create_discount_template_local(
-        &mut shop,
+    let template = shop.test_create_discount_template_local(
         option::some(listing_id),
         0,
         500,
@@ -2021,19 +1953,17 @@ fun remove_item_listing_allows_listing_with_inactive_bound_template() {
         &mut ctx,
     );
 
-    shop::toggle_discount_template(
-        &mut shop,
+    shop.toggle_discount_template(
         &owner_cap,
         template,
         false,
     );
-    shop::remove_item_listing(
-        &mut shop,
+    shop.remove_item_listing(
         &owner_cap,
         listing_id,
     );
 
-    assert!(!shop::test_listing_exists(&shop, listing_id));
+    assert!(!shop.listing_exists(listing_id));
     std::unit_test::destroy(owner_cap);
     std::unit_test::destroy(shop);
 }
@@ -2043,8 +1973,7 @@ fun update_item_listing_stock_accept_zero_stock() {
     let mut ctx = tx_context::dummy();
     let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
 
-    let listing_id = shop::test_add_item_listing_local<TestItem>(
-        &mut shop,
+    let listing_id = shop.add_item_listing<TestItem>(
         &owner_cap,
         b"Maintenance Kit".to_string(),
         32_00,
@@ -2053,14 +1982,13 @@ fun update_item_listing_stock_accept_zero_stock() {
         &mut ctx,
     );
 
-    shop::update_item_listing_stock(
-        &mut shop,
+    shop.update_item_listing_stock(
         &owner_cap,
         listing_id,
         0,
     );
 
-    shop::test_remove_listing(&mut shop, listing_id);
+    remove_listing_if_exists(&mut shop, &owner_cap, listing_id);
     std::unit_test::destroy(owner_cap);
     std::unit_test::destroy(shop);
 }
@@ -2070,8 +1998,7 @@ fun create_discount_template_persists_fields_and_emits_event() {
     let mut ctx = tx_context::dummy();
     let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
 
-    let template_id = shop::test_create_discount_template_local(
-        &mut shop,
+    let template_id = shop.test_create_discount_template_local(
         option::none(),
         0,
         1_250,
@@ -2080,27 +2007,23 @@ fun create_discount_template_persists_fields_and_emits_event() {
         option::some(5),
         &mut ctx,
     );
-    assert!(shop::test_discount_template_exists(&shop, template_id));
+    assert!(shop.discount_template_exists(template_id));
 
-    let (
-        shop_id,
-        applies_to_listing,
-        rule,
-        starts_at,
-        expires_at,
-        max_redemptions,
-        claims_issued,
-        redemptions,
-        active,
-    ) = shop::test_discount_template_values(
-        &shop,
-        template_id,
-    );
+    let template_values = shop.discount_template(template_id);
+    let applies_to_listing = template_values.discount_template_applies_to_listing();
+    let rule = template_values.discount_template_rule();
+    let starts_at = template_values.discount_template_starts_at();
+    let expires_at = template_values.discount_template_expires_at();
+    let max_redemptions = template_values.discount_template_max_redemptions();
+    let claims_issued = template_values.discount_template_claims_issued();
+    let redemptions = template_values.discount_template_redemptions();
+    let active = template_values.discount_template_active();
 
-    assert_eq!(shop_id, shop::test_shop_id(&shop));
     assert!(option::is_none(&applies_to_listing));
-    assert_eq!(shop::test_discount_rule_kind(rule), 0);
-    assert_eq!(shop::test_discount_rule_value(rule), 1_250);
+    let rule_kind = rule.discount_rule_kind();
+    let rule_value = rule.discount_rule_value();
+    assert_eq!(rule_kind, 0);
+    assert_eq!(rule_value, 1_250);
     assert_eq!(starts_at, 10);
     assert!(option::is_some(&expires_at));
     expires_at.do_ref!(|value| {
@@ -2114,13 +2037,9 @@ fun create_discount_template_persists_fields_and_emits_event() {
     assert_eq!(redemptions, 0);
     assert!(active);
 
-    let created_events = event::events_by_type<shop::DiscountTemplateCreatedEvent>();
-    assert_eq!(created_events.length(), 1);
-    let created = &created_events[0];
-    assert_eq!(shop::test_discount_template_created_shop(created), shop::test_shop_id(&shop));
-    assert_eq!(shop::test_discount_template_created_id(created), template_id);
+    assert_emitted!(shop::new_discount_template_created_event(shop.shop_id(), template_id));
 
-    shop::test_remove_template(&mut shop, template_id);
+    shop.remove_discount_template(&owner_cap, template_id);
     std::unit_test::destroy(owner_cap);
     std::unit_test::destroy(shop);
 }
@@ -2130,8 +2049,7 @@ fun create_discount_template_links_listing_and_percent_rule() {
     let mut ctx = tx_context::dummy();
     let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
 
-    let listing_id = shop::test_add_item_listing_local<TestItem>(
-        &mut shop,
+    let listing_id = shop.add_item_listing<TestItem>(
         &owner_cap,
         b"Wheelset".to_string(),
         600_00,
@@ -2140,8 +2058,7 @@ fun create_discount_template_links_listing_and_percent_rule() {
         &mut ctx,
     );
 
-    let template_id = shop::test_create_discount_template_local(
-        &mut shop,
+    let template_id = shop.test_create_discount_template_local(
         option::some(listing_id),
         1,
         2_500,
@@ -2150,29 +2067,25 @@ fun create_discount_template_links_listing_and_percent_rule() {
         option::none(),
         &mut ctx,
     );
-    assert!(shop::test_discount_template_exists(&shop, template_id));
-    let (
-        shop_id,
-        applies_to_listing,
-        rule,
-        starts_at,
-        expires_at,
-        max_redemptions,
-        claims_issued,
-        redemptions,
-        active,
-    ) = shop::test_discount_template_values(
-        &shop,
-        template_id,
-    );
+    assert!(shop.discount_template_exists(template_id));
+    let template_values = shop.discount_template(template_id);
+    let applies_to_listing = template_values.discount_template_applies_to_listing();
+    let rule = template_values.discount_template_rule();
+    let starts_at = template_values.discount_template_starts_at();
+    let expires_at = template_values.discount_template_expires_at();
+    let max_redemptions = template_values.discount_template_max_redemptions();
+    let claims_issued = template_values.discount_template_claims_issued();
+    let redemptions = template_values.discount_template_redemptions();
+    let active = template_values.discount_template_active();
 
-    assert_eq!(shop_id, shop::test_shop_id(&shop));
     assert!(option::is_some(&applies_to_listing));
     applies_to_listing.do_ref!(|value| {
         assert_eq!(*value, listing_id);
     });
-    assert_eq!(shop::test_discount_rule_kind(rule), 1);
-    assert_eq!(shop::test_discount_rule_value(rule), 2_500);
+    let rule_kind = rule.discount_rule_kind();
+    let rule_value = rule.discount_rule_value();
+    assert_eq!(rule_kind, 1);
+    assert_eq!(rule_value, 2_500);
     assert_eq!(starts_at, 0);
     assert!(option::is_none(&expires_at));
     assert!(option::is_none(&max_redemptions));
@@ -2180,14 +2093,10 @@ fun create_discount_template_links_listing_and_percent_rule() {
     assert_eq!(redemptions, 0);
     assert!(active);
 
-    let created_events = event::events_by_type<shop::DiscountTemplateCreatedEvent>();
-    assert_eq!(created_events.length(), 1);
-    let created = &created_events[0];
-    assert_eq!(shop::test_discount_template_created_shop(created), shop::test_shop_id(&shop));
-    assert_eq!(shop::test_discount_template_created_id(created), template_id);
+    assert_emitted!(shop::new_discount_template_created_event(shop.shop_id(), template_id));
 
-    shop::test_remove_template(&mut shop, template_id);
-    shop::test_remove_listing(&mut shop, listing_id);
+    shop.remove_discount_template(&owner_cap, template_id);
+    remove_listing_if_exists(&mut shop, &owner_cap, listing_id);
     std::unit_test::destroy(owner_cap);
     std::unit_test::destroy(shop);
 }
@@ -2198,8 +2107,7 @@ fun create_discount_template_rejects_foreign_owner_cap() {
     let (mut shop, _owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
     let (_other_shop, other_cap) = shop::test_setup_shop(OTHER_OWNER, &mut ctx);
 
-    shop::create_discount_template(
-        &mut shop,
+    shop.create_discount_template(
         &other_cap,
         option::none(),
         0,
@@ -2210,7 +2118,7 @@ fun create_discount_template_rejects_foreign_owner_cap() {
         &mut ctx,
     );
 
-    abort EAssertFailure
+    abort
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::EInvalidRuleKind)]
@@ -2218,8 +2126,7 @@ fun create_discount_template_rejects_invalid_rule_kind() {
     let mut ctx = tx_context::dummy();
     let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
 
-    shop::create_discount_template(
-        &mut shop,
+    shop.create_discount_template(
         &owner_cap,
         option::none(),
         2,
@@ -2230,7 +2137,7 @@ fun create_discount_template_rejects_invalid_rule_kind() {
         &mut ctx,
     );
 
-    abort EAssertFailure
+    abort
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::EInvalidRuleValue)]
@@ -2238,8 +2145,7 @@ fun create_discount_template_rejects_percent_above_limit() {
     let mut ctx = tx_context::dummy();
     let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
 
-    shop::create_discount_template(
-        &mut shop,
+    shop.create_discount_template(
         &owner_cap,
         option::none(),
         1,
@@ -2250,19 +2156,25 @@ fun create_discount_template_rejects_percent_above_limit() {
         &mut ctx,
     );
 
-    abort EAssertFailure
+    abort
 }
 
 #[test]
 fun percent_discount_rounds_up_instead_of_zeroing_low_prices() {
-    let discounted = shop::test_apply_percent_discount(1, 100);
+    let discounted = shop::apply_percent_discount(1, 100);
     assert_eq!(discounted, 1);
 }
 
 #[test]
 fun percent_discount_allows_full_discount_to_reach_zero() {
-    let discounted = shop::test_apply_percent_discount(1, 10_000);
+    let discounted = shop::apply_percent_discount(1, 10_000);
     assert_eq!(discounted, 0);
+}
+
+#[test, expected_failure(abort_code = ::sui_oracle_market::shop::EInvalidRuleValue)]
+fun percent_discount_rejects_basis_points_above_denominator() {
+    let _ = shop::apply_percent_discount(1, 10_001);
+    abort
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::ETemplateWindow)]
@@ -2270,8 +2182,7 @@ fun create_discount_template_rejects_invalid_schedule() {
     let mut ctx = tx_context::dummy();
     let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
 
-    shop::create_discount_template(
-        &mut shop,
+    shop.create_discount_template(
         &owner_cap,
         option::none(),
         0,
@@ -2282,7 +2193,7 @@ fun create_discount_template_rejects_invalid_schedule() {
         &mut ctx,
     );
 
-    abort EAssertFailure
+    abort
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::EListingNotFound)]
@@ -2294,8 +2205,7 @@ fun create_discount_template_rejects_foreign_listing_reference() {
         &mut ctx,
     );
 
-    let foreign_listing_id = shop::test_add_item_listing_local<TestItem>(
-        &mut other_shop,
+    let foreign_listing_id = other_shop.add_item_listing<TestItem>(
         &other_cap,
         b"Foreign Listing".to_string(),
         7_500,
@@ -2304,8 +2214,7 @@ fun create_discount_template_rejects_foreign_listing_reference() {
         &mut ctx,
     );
 
-    shop::create_discount_template(
-        &mut shop,
+    shop.create_discount_template(
         &owner_cap,
         option::some(foreign_listing_id),
         0,
@@ -2316,7 +2225,7 @@ fun create_discount_template_rejects_foreign_listing_reference() {
         &mut ctx,
     );
 
-    abort EAssertFailure
+    abort
 }
 
 #[test]
@@ -2324,8 +2233,7 @@ fun update_discount_template_updates_fields_and_emits_event() {
     let mut ctx = tx_context::dummy();
     let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
 
-    let listing_id = shop::test_add_item_listing_local<TestItem>(
-        &mut shop,
+    let listing_id = shop.add_item_listing<TestItem>(
         &owner_cap,
         b"Wheelset".to_string(),
         600_00,
@@ -2334,8 +2242,7 @@ fun update_discount_template_updates_fields_and_emits_event() {
         &mut ctx,
     );
 
-    let template = shop::test_create_discount_template_local(
-        &mut shop,
+    let template = shop.test_create_discount_template_local(
         option::some(listing_id),
         0,
         1_000,
@@ -2345,10 +2252,8 @@ fun update_discount_template_updates_fields_and_emits_event() {
         &mut ctx,
     );
 
-    let mut clock_obj = clock::create_for_testing(&mut ctx);
-    clock::set_for_testing(&mut clock_obj, 1);
-    shop::update_discount_template(
-        &mut shop,
+    let clock_obj = create_test_clock_at(&mut ctx, 1);
+    shop.update_discount_template(
         &owner_cap,
         template,
         1,
@@ -2360,24 +2265,23 @@ fun update_discount_template_updates_fields_and_emits_event() {
     );
     std::unit_test::destroy(clock_obj);
 
-    let (
-        shop_id,
-        applies_to_listing,
-        rule,
-        starts_at,
-        expires_at,
-        max_redemptions,
-        claims_issued,
-        redemptions,
-        active,
-    ) = shop::test_discount_template_values(&shop, template);
-    assert_eq!(shop_id, shop::test_shop_id(&shop));
+    let template_values = shop.discount_template(template);
+    let applies_to_listing = template_values.discount_template_applies_to_listing();
+    let rule = template_values.discount_template_rule();
+    let starts_at = template_values.discount_template_starts_at();
+    let expires_at = template_values.discount_template_expires_at();
+    let max_redemptions = template_values.discount_template_max_redemptions();
+    let claims_issued = template_values.discount_template_claims_issued();
+    let redemptions = template_values.discount_template_redemptions();
+    let active = template_values.discount_template_active();
     assert!(option::is_some(&applies_to_listing));
     applies_to_listing.do_ref!(|value| {
         assert_eq!(*value, listing_id);
     });
-    assert_eq!(shop::test_discount_rule_kind(rule), 1);
-    assert_eq!(shop::test_discount_rule_value(rule), 750);
+    let rule_kind = rule.discount_rule_kind();
+    let rule_value = rule.discount_rule_value();
+    assert_eq!(rule_kind, 1);
+    assert_eq!(rule_value, 750);
     assert_eq!(starts_at, 50);
     assert!(option::is_some(&expires_at));
     expires_at.do_ref!(|value| {
@@ -2391,14 +2295,10 @@ fun update_discount_template_updates_fields_and_emits_event() {
     assert_eq!(redemptions, 0);
     assert!(active);
 
-    let updated_events = event::events_by_type<shop::DiscountTemplateUpdatedEvent>();
-    assert_eq!(updated_events.length(), 1);
-    let updated = &updated_events[0];
-    assert_eq!(shop::test_discount_template_updated_shop(updated), shop::test_shop_id(&shop));
-    assert_eq!(shop::test_discount_template_updated_id(updated), template);
+    assert_emitted!(shop::new_discount_template_updated_event(shop.shop_id(), template));
 
-    shop::test_remove_template(&mut shop, template);
-    shop::test_remove_listing(&mut shop, listing_id);
+    shop.remove_discount_template(&owner_cap, template);
+    remove_listing_if_exists(&mut shop, &owner_cap, listing_id);
     std::unit_test::destroy(owner_cap);
     std::unit_test::destroy(shop);
 }
@@ -2409,8 +2309,7 @@ fun update_discount_template_rejects_foreign_owner_cap() {
     let (mut shop, _shop_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
     let (_other_shop, other_cap) = shop::test_setup_shop(OTHER_OWNER, &mut ctx);
 
-    let template = shop::test_create_discount_template_local(
-        &mut shop,
+    let template = shop.test_create_discount_template_local(
         option::none(),
         0,
         500,
@@ -2421,8 +2320,7 @@ fun update_discount_template_rejects_foreign_owner_cap() {
     );
 
     let clock_obj = clock::create_for_testing(&mut ctx);
-    shop::update_discount_template(
-        &mut shop,
+    shop.update_discount_template(
         &other_cap,
         template,
         0,
@@ -2433,7 +2331,7 @@ fun update_discount_template_rejects_foreign_owner_cap() {
         &clock_obj,
     );
 
-    abort EAssertFailure
+    abort
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::ETemplateNotFound)]
@@ -2444,8 +2342,7 @@ fun update_discount_template_rejects_foreign_template() {
         OTHER_OWNER,
         &mut ctx,
     );
-    let foreign_template = shop::test_create_discount_template_local(
-        &mut other_shop,
+    let foreign_template = other_shop.test_create_discount_template_local(
         option::none(),
         0,
         500,
@@ -2456,8 +2353,7 @@ fun update_discount_template_rejects_foreign_template() {
     );
 
     let clock_obj = clock::create_for_testing(&mut ctx);
-    shop::update_discount_template(
-        &mut shop,
+    shop.update_discount_template(
         &owner_cap,
         foreign_template,
         0,
@@ -2468,7 +2364,7 @@ fun update_discount_template_rejects_foreign_template() {
         &clock_obj,
     );
 
-    abort EAssertFailure
+    abort
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::ETemplateWindow)]
@@ -2476,8 +2372,7 @@ fun update_discount_template_rejects_invalid_schedule() {
     let mut ctx = tx_context::dummy();
     let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
 
-    let template = shop::test_create_discount_template_local(
-        &mut shop,
+    let template = shop.test_create_discount_template_local(
         option::none(),
         0,
         500,
@@ -2488,8 +2383,7 @@ fun update_discount_template_rejects_invalid_schedule() {
     );
 
     let clock_obj = clock::create_for_testing(&mut ctx);
-    shop::update_discount_template(
-        &mut shop,
+    shop.update_discount_template(
         &owner_cap,
         template,
         0,
@@ -2500,7 +2394,7 @@ fun update_discount_template_rejects_invalid_schedule() {
         &clock_obj,
     );
 
-    abort EAssertFailure
+    abort
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::EInvalidRuleKind)]
@@ -2508,8 +2402,7 @@ fun update_discount_template_rejects_invalid_rule_kind() {
     let mut ctx = tx_context::dummy();
     let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
 
-    let template = shop::test_create_discount_template_local(
-        &mut shop,
+    let template = shop.test_create_discount_template_local(
         option::none(),
         0,
         500,
@@ -2520,8 +2413,7 @@ fun update_discount_template_rejects_invalid_rule_kind() {
     );
 
     let clock_obj = clock::create_for_testing(&mut ctx);
-    shop::update_discount_template(
-        &mut shop,
+    shop.update_discount_template(
         &owner_cap,
         template,
         2,
@@ -2532,7 +2424,7 @@ fun update_discount_template_rejects_invalid_rule_kind() {
         &clock_obj,
     );
 
-    abort EAssertFailure
+    abort
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::EInvalidRuleValue)]
@@ -2540,8 +2432,7 @@ fun update_discount_template_rejects_percent_above_limit() {
     let mut ctx = tx_context::dummy();
     let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
 
-    let template = shop::test_create_discount_template_local(
-        &mut shop,
+    let template = shop.test_create_discount_template_local(
         option::none(),
         0,
         500,
@@ -2552,8 +2443,7 @@ fun update_discount_template_rejects_percent_above_limit() {
     );
 
     let clock_obj = clock::create_for_testing(&mut ctx);
-    shop::update_discount_template(
-        &mut shop,
+    shop.update_discount_template(
         &owner_cap,
         template,
         1,
@@ -2564,7 +2454,7 @@ fun update_discount_template_rejects_percent_above_limit() {
         &clock_obj,
     );
 
-    abort EAssertFailure
+    abort
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::ETemplateFinalized)]
@@ -2572,8 +2462,7 @@ fun update_discount_template_rejects_after_claims_issued() {
     let mut ctx = tx_context::dummy();
     let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
 
-    let template = shop::test_create_discount_template_local(
-        &mut shop,
+    let template = shop.test_create_discount_template_local(
         option::none(),
         0,
         500,
@@ -2583,12 +2472,10 @@ fun update_discount_template_rejects_after_claims_issued() {
         &mut ctx,
     );
 
-    let mut clock_obj = clock::create_for_testing(&mut ctx);
-    clock::set_for_testing(&mut clock_obj, 1);
-    shop::test_claim_discount_ticket(&mut shop, template, &clock_obj, &mut ctx);
+    let mut clock_obj = create_test_clock_at(&mut ctx, 1);
+    shop.claim_discount_ticket(template, &clock_obj, &mut ctx);
 
-    shop::update_discount_template(
-        &mut shop,
+    shop.update_discount_template(
         &owner_cap,
         template,
         0,
@@ -2600,14 +2487,13 @@ fun update_discount_template_rejects_after_claims_issued() {
     );
 
     clock::set_for_testing(&mut clock_obj, 10_000);
-    shop::prune_discount_claims(
-        &mut shop,
+    shop.prune_discount_claims(
         &owner_cap,
         template,
         vector[TEST_OWNER],
         &clock_obj,
     );
-    abort EAssertFailure
+    abort
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::ETemplateFinalized)]
@@ -2615,8 +2501,7 @@ fun update_discount_template_rejects_after_expiry() {
     let mut ctx = tx_context::dummy();
     let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
 
-    let template = shop::test_create_discount_template_local(
-        &mut shop,
+    let template = shop.test_create_discount_template_local(
         option::none(),
         0,
         500,
@@ -2625,11 +2510,9 @@ fun update_discount_template_rejects_after_expiry() {
         option::some(5),
         &mut ctx,
     );
-    let mut clock_obj = clock::create_for_testing(&mut ctx);
-    clock::set_for_testing(&mut clock_obj, 200_000);
+    let clock_obj = create_test_clock_at(&mut ctx, 200_000);
 
-    shop::update_discount_template(
-        &mut shop,
+    shop.update_discount_template(
         &owner_cap,
         template,
         1,
@@ -2640,7 +2523,7 @@ fun update_discount_template_rejects_after_expiry() {
         &clock_obj,
     );
 
-    abort EAssertFailure
+    abort
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::ETemplateFinalized)]
@@ -2648,8 +2531,7 @@ fun update_discount_template_rejects_after_maxed_out() {
     let mut ctx = tx_context::dummy();
     let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
 
-    let template = shop::test_create_discount_template_local(
-        &mut shop,
+    let template = shop.test_create_discount_template_local(
         option::none(),
         0,
         450,
@@ -2658,12 +2540,10 @@ fun update_discount_template_rejects_after_maxed_out() {
         option::some(1),
         &mut ctx,
     );
-    let mut clock_obj = clock::create_for_testing(&mut ctx);
-    clock::set_for_testing(&mut clock_obj, 1_000);
-    shop::test_claim_discount_ticket(&mut shop, template, &clock_obj, &mut ctx);
+    let clock_obj = create_test_clock_at(&mut ctx, 1_000);
+    shop.claim_discount_ticket(template, &clock_obj, &mut ctx);
 
-    shop::update_discount_template(
-        &mut shop,
+    shop.update_discount_template(
         &owner_cap,
         template,
         0,
@@ -2674,14 +2554,13 @@ fun update_discount_template_rejects_after_maxed_out() {
         &clock_obj,
     );
 
-    shop::prune_discount_claims(
-        &mut shop,
+    shop.prune_discount_claims(
         &owner_cap,
         template,
         vector[TEST_OWNER],
         &clock_obj,
     );
-    abort EAssertFailure
+    abort
 }
 
 #[test]
@@ -2689,8 +2568,7 @@ fun toggle_discount_template_updates_active_and_emits_events() {
     let mut ctx = tx_context::dummy();
     let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
 
-    let template = shop::test_create_discount_template_local(
-        &mut shop,
+    let template = shop.test_create_discount_template_local(
         option::none(),
         0,
         2_000,
@@ -2700,48 +2578,40 @@ fun toggle_discount_template_updates_active_and_emits_events() {
         &mut ctx,
     );
 
-    let (
-        shop_id,
-        applies_to_listing,
-        rule,
-        starts_at,
-        expires_at,
-        max_redemptions,
-        claims_issued,
-        redemptions,
-        active,
-    ) = shop::test_discount_template_values(&shop, template);
+    let template_values = shop.discount_template(template);
+    let applies_to_listing = template_values.discount_template_applies_to_listing();
+    let rule = template_values.discount_template_rule();
+    let starts_at = template_values.discount_template_starts_at();
+    let expires_at = template_values.discount_template_expires_at();
+    let max_redemptions = template_values.discount_template_max_redemptions();
+    let claims_issued = template_values.discount_template_claims_issued();
+    let redemptions = template_values.discount_template_redemptions();
+    let active = template_values.discount_template_active();
 
     assert!(active);
-    shop::toggle_discount_template(
-        &mut shop,
+    shop.toggle_discount_template(
         &owner_cap,
         template,
         false,
     );
 
-    let (
-        shop_id_after_first,
-        applies_to_listing_after_first,
-        rule_after_first,
-        starts_at_after_first,
-        expires_at_after_first,
-        max_redemptions_after_first,
-        claims_issued_after_first,
-        redemptions_after_first,
-        active_after_first,
-    ) = shop::test_discount_template_values(&shop, template);
+    let template_values_after_first = shop.discount_template(template);
+    let applies_to_listing_after_first = template_values_after_first.discount_template_applies_to_listing();
+    let rule_after_first = template_values_after_first.discount_template_rule();
+    let starts_at_after_first = template_values_after_first.discount_template_starts_at();
+    let expires_at_after_first = template_values_after_first.discount_template_expires_at();
+    let max_redemptions_after_first = template_values_after_first.discount_template_max_redemptions();
+    let claims_issued_after_first = template_values_after_first.discount_template_claims_issued();
+    let redemptions_after_first = template_values_after_first.discount_template_redemptions();
+    let active_after_first = template_values_after_first.discount_template_active();
 
-    assert_eq!(shop_id_after_first, shop_id);
     assert_eq!(applies_to_listing_after_first, applies_to_listing);
-    assert_eq!(
-        shop::test_discount_rule_kind(rule_after_first),
-        shop::test_discount_rule_kind(rule),
-    );
-    assert_eq!(
-        shop::test_discount_rule_value(rule_after_first),
-        shop::test_discount_rule_value(rule),
-    );
+    let rule_kind = rule.discount_rule_kind();
+    let rule_value = rule.discount_rule_value();
+    let rule_after_first_kind = rule_after_first.discount_rule_kind();
+    let rule_after_first_value = rule_after_first.discount_rule_value();
+    assert_eq!(rule_after_first_kind, rule_kind);
+    assert_eq!(rule_after_first_value, rule_value);
     assert_eq!(starts_at_after_first, starts_at);
     assert_eq!(expires_at_after_first, expires_at);
     assert_eq!(max_redemptions_after_first, max_redemptions);
@@ -2749,34 +2619,26 @@ fun toggle_discount_template_updates_active_and_emits_events() {
     assert_eq!(redemptions_after_first, redemptions);
     assert!(!active_after_first);
 
-    shop::toggle_discount_template(
-        &mut shop,
+    shop.toggle_discount_template(
         &owner_cap,
         template,
         true,
     );
 
-    let (
-        shop_id_after_second,
-        applies_to_listing_after_second,
-        rule_after_second,
-        starts_at_after_second,
-        expires_at_after_second,
-        max_redemptions_after_second,
-        claims_issued_after_second,
-        redemptions_after_second,
-        active_after_second,
-    ) = shop::test_discount_template_values(&shop, template);
-    assert_eq!(shop_id_after_second, shop_id);
+    let template_values_after_second = shop.discount_template(template);
+    let applies_to_listing_after_second = template_values_after_second.discount_template_applies_to_listing();
+    let rule_after_second = template_values_after_second.discount_template_rule();
+    let starts_at_after_second = template_values_after_second.discount_template_starts_at();
+    let expires_at_after_second = template_values_after_second.discount_template_expires_at();
+    let max_redemptions_after_second = template_values_after_second.discount_template_max_redemptions();
+    let claims_issued_after_second = template_values_after_second.discount_template_claims_issued();
+    let redemptions_after_second = template_values_after_second.discount_template_redemptions();
+    let active_after_second = template_values_after_second.discount_template_active();
     assert_eq!(applies_to_listing_after_second, applies_to_listing);
-    assert_eq!(
-        shop::test_discount_rule_kind(rule_after_second),
-        shop::test_discount_rule_kind(rule),
-    );
-    assert_eq!(
-        shop::test_discount_rule_value(rule_after_second),
-        shop::test_discount_rule_value(rule),
-    );
+    let rule_after_second_kind = rule_after_second.discount_rule_kind();
+    let rule_after_second_value = rule_after_second.discount_rule_value();
+    assert_eq!(rule_after_second_kind, rule_kind);
+    assert_eq!(rule_after_second_value, rule_value);
     assert_eq!(starts_at_after_second, starts_at);
     assert_eq!(expires_at_after_second, expires_at);
     assert_eq!(max_redemptions_after_second, max_redemptions);
@@ -2784,19 +2646,10 @@ fun toggle_discount_template_updates_active_and_emits_events() {
     assert_eq!(redemptions_after_second, redemptions);
     assert!(active_after_second);
 
-    let toggled_events_after_first = event::events_by_type<shop::DiscountTemplateToggledEvent>();
-    assert_eq!(toggled_events_after_first.length(), 2);
-    let first = &toggled_events_after_first[0];
-    assert_eq!(shop::test_discount_template_toggled_shop(first), shop_id);
-    assert_eq!(shop::test_discount_template_toggled_id(first), template);
+    assert_emitted!(shop::new_discount_template_toggled_event(shop.shop_id(), template));
+    assert_eq!(event::events_by_type<shop::DiscountTemplateToggledEvent>().length(), 2);
 
-    let toggled_events_after_second = event::events_by_type<shop::DiscountTemplateToggledEvent>();
-    assert_eq!(toggled_events_after_second.length(), 2);
-    let second = &toggled_events_after_second[1];
-    assert_eq!(shop::test_discount_template_toggled_shop(second), shop_id);
-    assert_eq!(shop::test_discount_template_toggled_id(second), template);
-
-    shop::test_remove_template(&mut shop, template);
+    shop.remove_discount_template(&owner_cap, template);
     std::unit_test::destroy(owner_cap);
     std::unit_test::destroy(shop);
 }
@@ -2806,8 +2659,7 @@ fun toggle_discount_template_rejects_foreign_owner_cap() {
     let mut ctx = tx_context::dummy();
     let (mut shop, _owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
     let (_other_shop, other_cap) = shop::test_setup_shop(OTHER_OWNER, &mut ctx);
-    let template = shop::test_create_discount_template_local(
-        &mut shop,
+    let template = shop.test_create_discount_template_local(
         option::none(),
         0,
         500,
@@ -2817,14 +2669,13 @@ fun toggle_discount_template_rejects_foreign_owner_cap() {
         &mut ctx,
     );
 
-    shop::toggle_discount_template(
-        &mut shop,
+    shop.toggle_discount_template(
         &other_cap,
         template,
         false,
     );
 
-    abort EAssertFailure
+    abort
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::ETemplateNotFound)]
@@ -2835,8 +2686,7 @@ fun toggle_discount_template_rejects_foreign_template() {
         OTHER_OWNER,
         &mut ctx,
     );
-    let foreign_template = shop::test_create_discount_template_local(
-        &mut other_shop,
+    let foreign_template = other_shop.test_create_discount_template_local(
         option::none(),
         0,
         500,
@@ -2846,22 +2696,20 @@ fun toggle_discount_template_rejects_foreign_template() {
         &mut ctx,
     );
 
-    shop::toggle_discount_template(
-        &mut shop,
+    shop.toggle_discount_template(
         &owner_cap,
         foreign_template,
         false,
     );
 
-    abort EAssertFailure
+    abort
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::ETemplateNotFound)]
 fun toggle_discount_template_rejects_unknown_template() {
     let mut ctx = tx_context::dummy();
     let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
-    let stray_template = shop::test_create_discount_template_local(
-        &mut shop,
+    let stray_template = shop.test_create_discount_template_local(
         option::none(),
         0,
         100,
@@ -2870,16 +2718,15 @@ fun toggle_discount_template_rejects_unknown_template() {
         option::none(),
         &mut ctx,
     );
-    shop::test_remove_template(&mut shop, stray_template);
+    shop.remove_discount_template(&owner_cap, stray_template);
 
-    shop::toggle_discount_template(
-        &mut shop,
+    shop.toggle_discount_template(
         &owner_cap,
         stray_template,
         false,
     );
 
-    abort EAssertFailure
+    abort
 }
 
 #[test]
@@ -2887,8 +2734,7 @@ fun toggle_template_on_listing_sets_and_clears_spotlight() {
     let mut ctx = tx_context::dummy();
     let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
 
-    let listing_id = shop::test_add_item_listing_local<TestItem>(
-        &mut shop,
+    let listing_id = shop.add_item_listing<TestItem>(
         &owner_cap,
         b"Promo Jacket".to_string(),
         180_00,
@@ -2896,8 +2742,7 @@ fun toggle_template_on_listing_sets_and_clears_spotlight() {
         option::none(),
         &mut ctx,
     );
-    let template = shop::test_create_discount_template_local(
-        &mut shop,
+    let template = shop.test_create_discount_template_local(
         option::none(),
         0,
         500,
@@ -2908,18 +2753,19 @@ fun toggle_template_on_listing_sets_and_clears_spotlight() {
     );
     let ids_before_toggle = tx_context::get_ids_created(&ctx);
 
-    let (_, _, _, _, spotlight_before) = shop::test_listing_values_local(&shop, listing_id);
+    let listing_before = shop.listing(listing_id);
+    let spotlight_before = listing_before.listing_spotlight_discount_template_id();
     assert!(option::is_none(&spotlight_before));
     assert_eq!(event::events_by_type<shop::DiscountTemplateToggledEvent>().length(), 0);
 
-    shop::attach_template_to_listing(
-        &mut shop,
+    shop.attach_template_to_listing(
         &owner_cap,
         template,
         listing_id,
     );
 
-    let (_, _, _, _, spotlight_after_set) = shop::test_listing_values_local(&shop, listing_id);
+    let listing_after_set = shop.listing(listing_id);
+    let spotlight_after_set = listing_after_set.listing_spotlight_discount_template_id();
     assert!(option::is_some(&spotlight_after_set));
     spotlight_after_set.do_ref!(|value| {
         assert_eq!(*value, template);
@@ -2927,19 +2773,19 @@ fun toggle_template_on_listing_sets_and_clears_spotlight() {
     assert_eq!(tx_context::get_ids_created(&ctx), ids_before_toggle);
     assert_eq!(event::events_by_type<shop::DiscountTemplateToggledEvent>().length(), 0);
 
-    shop::clear_template_from_listing(
-        &mut shop,
+    shop.clear_template_from_listing(
         &owner_cap,
         listing_id,
     );
 
-    let (_, _, _, _, spotlight_after_clear) = shop::test_listing_values_local(&shop, listing_id);
+    let listing_after_clear = shop.listing(listing_id);
+    let spotlight_after_clear = listing_after_clear.listing_spotlight_discount_template_id();
     assert!(option::is_none(&spotlight_after_clear));
     assert_eq!(tx_context::get_ids_created(&ctx), ids_before_toggle);
     assert_eq!(event::events_by_type<shop::DiscountTemplateToggledEvent>().length(), 0);
 
-    shop::test_remove_template(&mut shop, template);
-    shop::test_remove_listing(&mut shop, listing_id);
+    shop.remove_discount_template(&owner_cap, template);
+    remove_listing_if_exists(&mut shop, &owner_cap, listing_id);
     std::unit_test::destroy(owner_cap);
     std::unit_test::destroy(shop);
 }
@@ -2950,8 +2796,7 @@ fun toggle_template_on_listing_rejects_foreign_owner_cap() {
     let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
     let (_other_shop, other_cap) = shop::test_setup_shop(OTHER_OWNER, &mut ctx);
 
-    let listing_id = shop::test_add_item_listing_local<TestItem>(
-        &mut shop,
+    let listing_id = shop.add_item_listing<TestItem>(
         &owner_cap,
         b"Chain Lube".to_string(),
         12_00,
@@ -2959,8 +2804,7 @@ fun toggle_template_on_listing_rejects_foreign_owner_cap() {
         option::none(),
         &mut ctx,
     );
-    let template = shop::test_create_discount_template_local(
-        &mut shop,
+    let template = shop.test_create_discount_template_local(
         option::none(),
         0,
         500,
@@ -2970,14 +2814,13 @@ fun toggle_template_on_listing_rejects_foreign_owner_cap() {
         &mut ctx,
     );
 
-    shop::attach_template_to_listing(
-        &mut shop,
+    shop.attach_template_to_listing(
         &other_cap,
         template,
         listing_id,
     );
 
-    abort EAssertFailure
+    abort
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::EListingNotFound)]
@@ -2989,8 +2832,7 @@ fun toggle_template_on_listing_rejects_foreign_listing() {
         &mut ctx,
     );
 
-    let foreign_listing_id = shop::test_add_item_listing_local<TestItem>(
-        &mut other_shop,
+    let foreign_listing_id = other_shop.add_item_listing<TestItem>(
         &other_cap,
         b"Spare Tube".to_string(),
         8_00,
@@ -2998,8 +2840,7 @@ fun toggle_template_on_listing_rejects_foreign_listing() {
         option::none(),
         &mut ctx,
     );
-    let template = shop::test_create_discount_template_local(
-        &mut shop,
+    let template = shop.test_create_discount_template_local(
         option::none(),
         0,
         500,
@@ -3009,14 +2850,13 @@ fun toggle_template_on_listing_rejects_foreign_listing() {
         &mut ctx,
     );
 
-    shop::attach_template_to_listing(
-        &mut shop,
+    shop.attach_template_to_listing(
         &owner_cap,
         template,
         foreign_listing_id,
     );
 
-    abort EAssertFailure
+    abort
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::ETemplateNotFound)]
@@ -3028,8 +2868,7 @@ fun toggle_template_on_listing_rejects_foreign_template() {
         &mut ctx,
     );
 
-    let listing_id = shop::test_add_item_listing_local<TestItem>(
-        &mut shop,
+    let listing_id = shop.add_item_listing<TestItem>(
         &owner_cap,
         b"Bike Pump".to_string(),
         35_00,
@@ -3037,8 +2876,7 @@ fun toggle_template_on_listing_rejects_foreign_template() {
         option::none(),
         &mut ctx,
     );
-    let foreign_template = shop::test_create_discount_template_local(
-        &mut other_shop,
+    let foreign_template = other_shop.test_create_discount_template_local(
         option::none(),
         0,
         500,
@@ -3048,14 +2886,13 @@ fun toggle_template_on_listing_rejects_foreign_template() {
         &mut ctx,
     );
 
-    shop::attach_template_to_listing(
-        &mut shop,
+    shop.attach_template_to_listing(
         &owner_cap,
         foreign_template,
         listing_id,
     );
 
-    abort EAssertFailure
+    abort
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::ETemplateNotFound)]
@@ -3063,8 +2900,7 @@ fun toggle_template_on_listing_rejects_unknown_template() {
     let mut ctx = tx_context::dummy();
     let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
 
-    let listing_id = shop::test_add_item_listing_local<TestItem>(
-        &mut shop,
+    let listing_id = shop.add_item_listing<TestItem>(
         &owner_cap,
         b"Frame Protector".to_string(),
         22_00,
@@ -3072,8 +2908,7 @@ fun toggle_template_on_listing_rejects_unknown_template() {
         option::none(),
         &mut ctx,
     );
-    let stray_template = shop::test_create_discount_template_local(
-        &mut shop,
+    let stray_template = shop.test_create_discount_template_local(
         option::none(),
         0,
         100,
@@ -3082,16 +2917,15 @@ fun toggle_template_on_listing_rejects_unknown_template() {
         option::none(),
         &mut ctx,
     );
-    shop::test_remove_template(&mut shop, stray_template);
+    shop.remove_discount_template(&owner_cap, stray_template);
 
-    shop::attach_template_to_listing(
-        &mut shop,
+    shop.attach_template_to_listing(
         &owner_cap,
         stray_template,
         listing_id,
     );
 
-    abort EAssertFailure
+    abort
 }
 
 #[test]
@@ -3099,8 +2933,7 @@ fun attach_template_to_listing_sets_spotlight_without_emitting_events() {
     let mut ctx = tx_context::dummy();
     let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
 
-    let listing_id = shop::test_add_item_listing_local<TestItem>(
-        &mut shop,
+    let listing_id = shop.add_item_listing<TestItem>(
         &owner_cap,
         b"Promo Bag".to_string(),
         95_00,
@@ -3114,30 +2947,25 @@ fun attach_template_to_listing_sets_spotlight_without_emitting_events() {
         &mut ctx,
     );
     let ids_before = tx_context::get_ids_created(&ctx);
-    let toggled_before = event::events_by_type<shop::DiscountTemplateToggledEvent>().length();
 
-    shop::attach_template_to_listing(
-        &mut shop,
+    shop.attach_template_to_listing(
         &owner_cap,
         template,
         listing_id,
     );
 
-    let (_, _, _, shop_id, spotlight) = shop::test_listing_values_local(&shop, listing_id);
-    assert_eq!(shop_id, shop::test_shop_id(&shop));
+    let listing = shop.listing(listing_id);
+    let spotlight = listing.listing_spotlight_discount_template_id();
     assert!(option::is_some(&spotlight));
     spotlight.do_ref!(|value| {
         assert_eq!(*value, template);
     });
     assert_eq!(tx_context::get_ids_created(&ctx), ids_before);
-    assert_eq!(
-        event::events_by_type<shop::DiscountTemplateToggledEvent>().length(),
-        toggled_before,
-    );
-    assert!(shop::test_discount_template_exists(&shop, template));
+    assert_eq!(event::events_by_type<shop::DiscountTemplateToggledEvent>().length(), 0);
+    assert!(shop.discount_template_exists(template));
 
-    shop::test_remove_template(&mut shop, template);
-    shop::test_remove_listing(&mut shop, listing_id);
+    shop.remove_discount_template(&owner_cap, template);
+    remove_listing_if_exists(&mut shop, &owner_cap, listing_id);
     std::unit_test::destroy(owner_cap);
     std::unit_test::destroy(shop);
 }
@@ -3152,8 +2980,7 @@ fun attach_template_to_listing_overwrites_existing_spotlight() {
         &owner_cap,
         &mut ctx,
     );
-    let listing_id = shop::test_add_item_listing_local<TestItem>(
-        &mut shop,
+    let listing_id = shop.add_item_listing<TestItem>(
         &owner_cap,
         b"Bundle".to_string(),
         140_00,
@@ -3168,32 +2995,33 @@ fun attach_template_to_listing_overwrites_existing_spotlight() {
     );
     let ids_before = tx_context::get_ids_created(&ctx);
 
-    let (_, _, _, _, spotlight_before) = shop::test_listing_values_local(&shop, listing_id);
+    let listing_before = shop.listing(listing_id);
+    let spotlight_before = listing_before.listing_spotlight_discount_template_id();
     assert!(option::is_some(&spotlight_before));
     spotlight_before.do_ref!(|value| {
         assert_eq!(*value, first_template);
     });
 
-    shop::attach_template_to_listing(
-        &mut shop,
+    shop.attach_template_to_listing(
         &owner_cap,
         second_template,
         listing_id,
     );
 
-    let (_, _, _, _, spotlight_after) = shop::test_listing_values_local(&shop, listing_id);
+    let listing_after = shop.listing(listing_id);
+    let spotlight_after = listing_after.listing_spotlight_discount_template_id();
     assert!(option::is_some(&spotlight_after));
     spotlight_after.do_ref!(|value| {
         assert_eq!(*value, second_template);
     });
     assert_eq!(tx_context::get_ids_created(&ctx), ids_before);
-    assert!(shop::test_discount_template_exists(&shop, first_template));
-    assert!(shop::test_discount_template_exists(&shop, second_template));
+    assert!(shop.discount_template_exists(first_template));
+    assert!(shop.discount_template_exists(second_template));
     assert_eq!(event::events_by_type<shop::DiscountTemplateToggledEvent>().length(), 0);
 
-    shop::test_remove_template(&mut shop, second_template);
-    shop::test_remove_template(&mut shop, first_template);
-    shop::test_remove_listing(&mut shop, listing_id);
+    shop.remove_discount_template(&owner_cap, second_template);
+    shop.remove_discount_template(&owner_cap, first_template);
+    remove_listing_if_exists(&mut shop, &owner_cap, listing_id);
     std::unit_test::destroy(owner_cap);
     std::unit_test::destroy(shop);
 }
@@ -3203,8 +3031,7 @@ fun attach_template_to_listing_accepts_matching_listing() {
     let mut ctx = tx_context::dummy();
     let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
 
-    let listing_id = shop::test_add_item_listing_local<TestItem>(
-        &mut shop,
+    let listing_id = shop.add_item_listing<TestItem>(
         &owner_cap,
         b"Bundle".to_string(),
         140_00,
@@ -3212,8 +3039,7 @@ fun attach_template_to_listing_accepts_matching_listing() {
         option::none(),
         &mut ctx,
     );
-    let template = shop::test_create_discount_template_local(
-        &mut shop,
+    let template = shop.test_create_discount_template_local(
         option::some(listing_id),
         0,
         50,
@@ -3223,14 +3049,14 @@ fun attach_template_to_listing_accepts_matching_listing() {
         &mut ctx,
     );
 
-    shop::attach_template_to_listing(
-        &mut shop,
+    shop.attach_template_to_listing(
         &owner_cap,
         template,
         listing_id,
     );
 
-    let (_, _, _, _, spotlight) = shop::test_listing_values_local(&shop, listing_id);
+    let listing = shop.listing(listing_id);
+    let spotlight = listing.listing_spotlight_discount_template_id();
     assert!(option::is_some(&spotlight));
     spotlight.do_ref!(|value| {
         assert_eq!(*value, template);
@@ -3245,8 +3071,7 @@ fun attach_template_to_listing_rejects_foreign_owner_cap() {
     let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
     let (_other_shop, other_cap) = shop::test_setup_shop(OTHER_OWNER, &mut ctx);
 
-    let listing_id = shop::test_add_item_listing_local<TestItem>(
-        &mut shop,
+    let listing_id = shop.add_item_listing<TestItem>(
         &owner_cap,
         b"Helmet Stickers".to_string(),
         9_00,
@@ -3260,14 +3085,13 @@ fun attach_template_to_listing_rejects_foreign_owner_cap() {
         &mut ctx,
     );
 
-    shop::attach_template_to_listing(
-        &mut shop,
+    shop.attach_template_to_listing(
         &other_cap,
         template,
         listing_id,
     );
 
-    abort EAssertFailure
+    abort
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::EListingNotFound)]
@@ -3279,8 +3103,7 @@ fun attach_template_to_listing_rejects_foreign_listing() {
         &mut ctx,
     );
 
-    let foreign_listing_id = shop::test_add_item_listing_local<TestItem>(
-        &mut other_shop,
+    let foreign_listing_id = other_shop.add_item_listing<TestItem>(
         &other_cap,
         b"Brake Pads".to_string(),
         18_00,
@@ -3294,14 +3117,13 @@ fun attach_template_to_listing_rejects_foreign_listing() {
         &mut ctx,
     );
 
-    shop::attach_template_to_listing(
-        &mut shop,
+    shop.attach_template_to_listing(
         &owner_cap,
         template,
         foreign_listing_id,
     );
 
-    abort EAssertFailure
+    abort
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::ETemplateNotFound)]
@@ -3313,8 +3135,7 @@ fun attach_template_to_listing_rejects_foreign_template() {
         &mut ctx,
     );
 
-    let listing_id = shop::test_add_item_listing_local<TestItem>(
-        &mut shop,
+    let listing_id = shop.add_item_listing<TestItem>(
         &owner_cap,
         b"Chain Whip".to_string(),
         27_00,
@@ -3328,14 +3149,13 @@ fun attach_template_to_listing_rejects_foreign_template() {
         &mut ctx,
     );
 
-    shop::attach_template_to_listing(
-        &mut shop,
+    shop.attach_template_to_listing(
         &owner_cap,
         foreign_template,
         listing_id,
     );
 
-    abort EAssertFailure
+    abort
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::ETemplateNotFound)]
@@ -3343,8 +3163,7 @@ fun attach_template_to_listing_rejects_unknown_template() {
     let mut ctx = tx_context::dummy();
     let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
 
-    let listing_id = shop::test_add_item_listing_local<TestItem>(
-        &mut shop,
+    let listing_id = shop.add_item_listing<TestItem>(
         &owner_cap,
         b"Pedals".to_string(),
         51_00,
@@ -3352,8 +3171,7 @@ fun attach_template_to_listing_rejects_unknown_template() {
         option::none(),
         &mut ctx,
     );
-    let stray_template = shop::test_create_discount_template_local(
-        &mut shop,
+    let stray_template = shop.test_create_discount_template_local(
         option::none(),
         0,
         100,
@@ -3362,16 +3180,15 @@ fun attach_template_to_listing_rejects_unknown_template() {
         option::none(),
         &mut ctx,
     );
-    shop::test_remove_template(&mut shop, stray_template);
+    shop.remove_discount_template(&owner_cap, stray_template);
 
-    shop::attach_template_to_listing(
-        &mut shop,
+    shop.attach_template_to_listing(
         &owner_cap,
         stray_template,
         listing_id,
     );
 
-    abort EAssertFailure
+    abort
 }
 
 #[test]
@@ -3379,8 +3196,7 @@ fun clear_template_from_listing_removes_spotlight_without_side_effects() {
     let mut ctx = tx_context::dummy();
     let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
 
-    let listing_id = shop::test_add_item_listing_local<TestItem>(
-        &mut shop,
+    let listing_id = shop.add_item_listing<TestItem>(
         &owner_cap,
         b"Rain Jacket".to_string(),
         120_00,
@@ -3393,38 +3209,34 @@ fun clear_template_from_listing_removes_spotlight_without_side_effects() {
         &owner_cap,
         &mut ctx,
     );
-    shop::attach_template_to_listing(
-        &mut shop,
+    shop.attach_template_to_listing(
         &owner_cap,
         template,
         listing_id,
     );
 
-    let (_, _, _, _, spotlight_before) = shop::test_listing_values_local(&shop, listing_id);
+    let listing_before = shop.listing(listing_id);
+    let spotlight_before = listing_before.listing_spotlight_discount_template_id();
     let created_before = tx_context::get_ids_created(&ctx);
-    let toggled_before = event::events_by_type<shop::DiscountTemplateToggledEvent>().length();
     assert!(option::is_some(&spotlight_before));
     spotlight_before.do_ref!(|value| {
         assert_eq!(*value, template);
     });
 
-    shop::clear_template_from_listing(
-        &mut shop,
+    shop.clear_template_from_listing(
         &owner_cap,
         listing_id,
     );
 
-    let (_, _, _, _, spotlight_after) = shop::test_listing_values_local(&shop, listing_id);
+    let listing_after = shop.listing(listing_id);
+    let spotlight_after = listing_after.listing_spotlight_discount_template_id();
     assert!(option::is_none(&spotlight_after));
     assert_eq!(tx_context::get_ids_created(&ctx), created_before);
-    assert_eq!(
-        event::events_by_type<shop::DiscountTemplateToggledEvent>().length(),
-        toggled_before,
-    );
-    assert!(shop::test_discount_template_exists(&shop, template));
+    assert_eq!(event::events_by_type<shop::DiscountTemplateToggledEvent>().length(), 0);
+    assert!(shop.discount_template_exists(template));
 
-    shop::test_remove_template(&mut shop, template);
-    shop::test_remove_listing(&mut shop, listing_id);
+    shop.remove_discount_template(&owner_cap, template);
+    remove_listing_if_exists(&mut shop, &owner_cap, listing_id);
     std::unit_test::destroy(owner_cap);
     std::unit_test::destroy(shop);
 }
@@ -3434,8 +3246,7 @@ fun clear_template_from_listing_is_noop_when_no_spotlight_set() {
     let mut ctx = tx_context::dummy();
     let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
 
-    let listing_id = shop::test_add_item_listing_local<TestItem>(
-        &mut shop,
+    let listing_id = shop.add_item_listing<TestItem>(
         &owner_cap,
         b"Bar Tape".to_string(),
         19_00,
@@ -3444,23 +3255,19 @@ fun clear_template_from_listing_is_noop_when_no_spotlight_set() {
         &mut ctx,
     );
     let created_before = tx_context::get_ids_created(&ctx);
-    let toggled_before = event::events_by_type<shop::DiscountTemplateToggledEvent>().length();
 
-    shop::clear_template_from_listing(
-        &mut shop,
+    shop.clear_template_from_listing(
         &owner_cap,
         listing_id,
     );
 
-    let (_, _, _, _, spotlight_after) = shop::test_listing_values_local(&shop, listing_id);
+    let listing_after = shop.listing(listing_id);
+    let spotlight_after = listing_after.listing_spotlight_discount_template_id();
     assert!(option::is_none(&spotlight_after));
     assert_eq!(tx_context::get_ids_created(&ctx), created_before);
-    assert_eq!(
-        event::events_by_type<shop::DiscountTemplateToggledEvent>().length(),
-        toggled_before,
-    );
+    assert_eq!(event::events_by_type<shop::DiscountTemplateToggledEvent>().length(), 0);
 
-    shop::test_remove_listing(&mut shop, listing_id);
+    remove_listing_if_exists(&mut shop, &owner_cap, listing_id);
     std::unit_test::destroy(owner_cap);
     std::unit_test::destroy(shop);
 }
@@ -3471,8 +3278,7 @@ fun clear_template_from_listing_rejects_foreign_owner_cap() {
     let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
     let (_other_shop, other_cap) = shop::test_setup_shop(OTHER_OWNER, &mut ctx);
 
-    let listing_id = shop::test_add_item_listing_local<TestItem>(
-        &mut shop,
+    let listing_id = shop.add_item_listing<TestItem>(
         &owner_cap,
         b"Valve Stem".to_string(),
         11_00,
@@ -3481,13 +3287,12 @@ fun clear_template_from_listing_rejects_foreign_owner_cap() {
         &mut ctx,
     );
 
-    shop::clear_template_from_listing(
-        &mut shop,
+    shop.clear_template_from_listing(
         &other_cap,
         listing_id,
     );
 
-    abort EAssertFailure
+    abort
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::EListingNotFound)]
@@ -3499,8 +3304,7 @@ fun clear_template_from_listing_rejects_foreign_listing() {
         &mut ctx,
     );
 
-    let foreign_listing_id = shop::test_add_item_listing_local<TestItem>(
-        &mut other_shop,
+    let foreign_listing_id = other_shop.add_item_listing<TestItem>(
         &other_cap,
         b"Cassette".to_string(),
         85_00,
@@ -3509,25 +3313,22 @@ fun clear_template_from_listing_rejects_foreign_listing() {
         &mut ctx,
     );
 
-    shop::clear_template_from_listing(
-        &mut shop,
+    shop.clear_template_from_listing(
         &owner_cap,
         foreign_listing_id,
     );
 
-    abort EAssertFailure
+    abort
 }
 
 #[test]
 fun claim_discount_ticket_mints_transfers_and_records_claim() {
     let mut scn = test_scenario::begin(TEST_OWNER);
 
-    shop::create_shop(DEFAULT_SHOP_NAME.to_string(), test_scenario::ctx(&mut scn));
-    let created_events = event::events_by_type<shop::ShopCreatedEvent>();
-    assert_eq!(created_events.length(), 1);
-    let created = &created_events[0];
-    let shop_id = shop::test_shop_created_shop_id(created);
-    let owner_cap_id = shop::test_shop_created_owner_cap_id(created);
+    let (shop_id, owner_cap_id) = create_shop_and_owner_cap_ids_for_sender(
+        &mut scn,
+        DEFAULT_SHOP_NAME,
+    );
 
     let _ = test_scenario::next_tx(&mut scn, TEST_OWNER);
 
@@ -3537,8 +3338,7 @@ fun claim_discount_ticket_mints_transfers_and_records_claim() {
         owner_cap_id,
     );
 
-    shop::add_item_listing<TestItem>(
-        &mut shop_obj,
+    let listing_id = shop_obj.add_item_listing<TestItem>(
         &owner_cap,
         b"Limited Helmet".to_string(),
         120_00,
@@ -3546,10 +3346,8 @@ fun claim_discount_ticket_mints_transfers_and_records_claim() {
         option::none(),
         test_scenario::ctx(&mut scn),
     );
-    let listing_id = last_created_listing_id();
 
-    shop::create_discount_template(
-        &mut shop_obj,
+    shop_obj.create_discount_template(
         &owner_cap,
         option::some(listing_id),
         0,
@@ -3559,7 +3357,7 @@ fun claim_discount_ticket_mints_transfers_and_records_claim() {
         option::some(10),
         test_scenario::ctx(&mut scn),
     );
-    let template_id = shop::test_last_created_id(test_scenario::ctx(&mut scn));
+    let template_id = tx_context::last_created_object_id(test_scenario::ctx(&mut scn)).to_id();
 
     test_scenario::return_to_sender(&scn, owner_cap);
     test_scenario::return_shared(shop_obj);
@@ -3567,40 +3365,28 @@ fun claim_discount_ticket_mints_transfers_and_records_claim() {
     let _ = test_scenario::next_tx(&mut scn, OTHER_OWNER);
 
     let mut shared_shop = take_shared_shop(&scn, shop_id);
-    let mut clock_obj = clock::create_for_testing(test_scenario::ctx(&mut scn));
-    clock::set_for_testing(&mut clock_obj, 10_000);
-    let (_, _, _, _, _, _, claims_issued_before, _, _) = shop::test_discount_template_values(
-        &shared_shop,
-        template_id,
-    );
+    let clock_obj = create_test_clock_at(test_scenario::ctx(&mut scn), 10_000);
+    let template_values_before = shared_shop.discount_template(template_id);
+    let claims_issued_before = template_values_before.discount_template_claims_issued();
 
-    shop::test_claim_discount_ticket(
-        &mut shared_shop,
+    shared_shop.claim_discount_ticket(
         template_id,
         &clock_obj,
         test_scenario::ctx(&mut scn),
     );
+    let ticket_id = tx_context::last_created_object_id(test_scenario::ctx(&mut scn)).to_id();
 
-    let (_, _, _, _, _, _, claims_issued_after, _, _) = shop::test_discount_template_values(
-        &shared_shop,
-        template_id,
-    );
+    let template_values_after = shared_shop.discount_template(template_id);
+    let claims_issued_after = template_values_after.discount_template_claims_issued();
     assert_eq!(claims_issued_after, claims_issued_before + 1);
     assert!(
-        shop::test_discount_claim_exists(
-            &shared_shop,
+        shared_shop.discount_claim_exists(
             template_id,
             OTHER_OWNER,
         ),
     );
 
-    let claim_events = event::events_by_type<shop::DiscountClaimedEvent>();
-    let claim_events_len = claim_events.length();
-    assert!(claim_events_len > 0);
-    let claimed = &claim_events[claim_events_len - 1];
-    let shop_id = shop_id;
-    assert_eq!(shop::test_discount_claimed_shop(claimed), shop_id);
-    let ticket_id = shop::test_discount_claimed_discount_id(claimed);
+    assert_emitted!(shop::new_discount_claimed_event(shop_id, ticket_id));
 
     test_scenario::return_shared(shared_shop);
     std::unit_test::destroy(clock_obj);
@@ -3611,12 +3397,10 @@ fun claim_discount_ticket_mints_transfers_and_records_claim() {
         &scn,
         ticket_id,
     );
-    let (
-        ticket_template,
-        ticket_shop,
-        ticket_listing,
-        ticket_owner,
-    ) = shop::test_discount_ticket_values(&ticket);
+    let ticket_template = ticket.discount_ticket_discount_template_id();
+    let ticket_shop = ticket.discount_ticket_shop_id();
+    let ticket_listing = ticket.discount_ticket_listing_id();
+    let ticket_owner = ticket.discount_ticket_claimer();
     assert_eq!(ticket_template, template_id);
     assert_eq!(ticket_shop, shop_id);
     assert!(option::is_some(&ticket_listing));
@@ -3634,8 +3418,7 @@ fun prune_discount_claims_removes_marker_when_expired() {
     let mut ctx = tx_context::dummy();
     let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
 
-    let template = shop::test_create_discount_template_local(
-        &mut shop,
+    let template = shop.test_create_discount_template_local(
         option::none(),
         0,
         1_000,
@@ -3644,28 +3427,26 @@ fun prune_discount_claims_removes_marker_when_expired() {
         option::none(),
         &mut ctx,
     );
-    let mut clock_obj = clock::create_for_testing(&mut ctx);
-    clock::set_for_testing(&mut clock_obj, 1_000);
+    let mut clock_obj = create_test_clock_at(&mut ctx, 1_000);
 
-    shop::test_claim_discount_ticket(&mut shop, template, &clock_obj, &mut ctx);
+    shop.claim_discount_ticket(template, &clock_obj, &mut ctx);
     let claimer = tx_context::sender(&ctx);
-    assert!(shop::test_discount_claim_exists(&shop, template, claimer));
+    assert!(shop.discount_claim_exists(template, claimer));
 
     clock::set_for_testing(&mut clock_obj, 1_001_000);
     let mut claimers = vector[];
     claimers.push_back(claimer);
-    shop::prune_discount_claims(
-        &mut shop,
+    shop.prune_discount_claims(
         &owner_cap,
         template,
         claimers,
         &clock_obj,
     );
 
-    assert!(!shop::test_discount_claim_exists(&shop, template, claimer));
+    assert!(!shop.discount_claim_exists(template, claimer));
 
     std::unit_test::destroy(clock_obj);
-    shop::test_remove_template(&mut shop, template);
+    shop.remove_discount_template(&owner_cap, template);
     std::unit_test::destroy(owner_cap);
     std::unit_test::destroy(shop);
 }
@@ -3675,8 +3456,7 @@ fun prune_discount_claims_rejects_unexpired_template_even_if_paused() {
     let mut ctx = tx_context::dummy();
     let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
 
-    let template = shop::test_create_discount_template_local(
-        &mut shop,
+    let template = shop.test_create_discount_template_local(
         option::none(),
         0,
         1_000,
@@ -3685,29 +3465,26 @@ fun prune_discount_claims_rejects_unexpired_template_even_if_paused() {
         option::none(),
         &mut ctx,
     );
-    let mut clock_obj = clock::create_for_testing(&mut ctx);
-    clock::set_for_testing(&mut clock_obj, 1_000);
+    let clock_obj = create_test_clock_at(&mut ctx, 1_000);
 
-    shop::test_claim_discount_ticket(&mut shop, template, &clock_obj, &mut ctx);
+    shop.claim_discount_ticket(template, &clock_obj, &mut ctx);
     let claimer = tx_context::sender(&ctx);
     let mut claimers = vector[];
     claimers.push_back(claimer);
 
-    shop::toggle_discount_template(
-        &mut shop,
+    shop.toggle_discount_template(
         &owner_cap,
         template,
         false,
     );
-    shop::prune_discount_claims(
-        &mut shop,
+    shop.prune_discount_claims(
         &owner_cap,
         template,
         claimers,
         &clock_obj,
     );
 
-    abort EAssertFailure
+    abort
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::ETemplateTooEarly)]
@@ -3715,8 +3492,7 @@ fun claim_discount_ticket_rejects_before_start_time() {
     let mut ctx = tx_context::new_from_hint(TEST_OWNER, 20, 0, 0, 0);
     let (mut shop, _owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
 
-    let template = shop::test_create_discount_template_local(
-        &mut shop,
+    let template = shop.test_create_discount_template_local(
         option::none(),
         0,
         500,
@@ -3725,12 +3501,11 @@ fun claim_discount_ticket_rejects_before_start_time() {
         option::none(),
         &mut ctx,
     );
-    let mut clock_obj = clock::create_for_testing(&mut ctx);
-    clock::set_for_testing(&mut clock_obj, 5_000);
+    let clock_obj = create_test_clock_at(&mut ctx, 5_000);
 
-    shop::test_claim_discount_ticket(&mut shop, template, &clock_obj, &mut ctx);
+    shop.claim_discount_ticket(template, &clock_obj, &mut ctx);
 
-    abort EAssertFailure
+    abort
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::ETemplateExpired)]
@@ -3738,8 +3513,7 @@ fun claim_discount_ticket_rejects_after_expiry() {
     let mut ctx = tx_context::new_from_hint(TEST_OWNER, 21, 0, 0, 0);
     let (mut shop, _owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
 
-    let template = shop::test_create_discount_template_local(
-        &mut shop,
+    let template = shop.test_create_discount_template_local(
         option::none(),
         0,
         700,
@@ -3748,12 +3522,11 @@ fun claim_discount_ticket_rejects_after_expiry() {
         option::some(5),
         &mut ctx,
     );
-    let mut clock_obj = clock::create_for_testing(&mut ctx);
-    clock::set_for_testing(&mut clock_obj, 4_000);
+    let clock_obj = create_test_clock_at(&mut ctx, 4_000);
 
-    shop::test_claim_discount_ticket(&mut shop, template, &clock_obj, &mut ctx);
+    shop.claim_discount_ticket(template, &clock_obj, &mut ctx);
 
-    abort EAssertFailure
+    abort
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::ETemplateInactive)]
@@ -3761,8 +3534,7 @@ fun claim_discount_ticket_rejects_inactive_template() {
     let mut ctx = tx_context::new_from_hint(TEST_OWNER, 22, 0, 0, 0);
     let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
 
-    let template = shop::test_create_discount_template_local(
-        &mut shop,
+    let template = shop.test_create_discount_template_local(
         option::none(),
         0,
         1_000,
@@ -3771,17 +3543,16 @@ fun claim_discount_ticket_rejects_inactive_template() {
         option::none(),
         &mut ctx,
     );
-    shop::toggle_discount_template(
-        &mut shop,
+    shop.toggle_discount_template(
         &owner_cap,
         template,
         false,
     );
     let clock_obj = clock::create_for_testing(&mut ctx);
 
-    shop::test_claim_discount_ticket(&mut shop, template, &clock_obj, &mut ctx);
+    shop.claim_discount_ticket(template, &clock_obj, &mut ctx);
 
-    abort EAssertFailure
+    abort
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::ETemplateMaxedOut)]
@@ -3789,8 +3560,7 @@ fun claim_discount_ticket_rejects_when_maxed() {
     let mut ctx = tx_context::new_from_hint(TEST_OWNER, 23, 0, 0, 0);
     let (mut shop, _owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
 
-    let template = shop::test_create_discount_template_local(
-        &mut shop,
+    let template = shop.test_create_discount_template_local(
         option::none(),
         0,
         450,
@@ -3799,11 +3569,10 @@ fun claim_discount_ticket_rejects_when_maxed() {
         option::some(0),
         &mut ctx,
     );
-    let mut clock_obj = clock::create_for_testing(&mut ctx);
-    clock::set_for_testing(&mut clock_obj, 2_000);
-    shop::test_claim_discount_ticket(&mut shop, template, &clock_obj, &mut ctx);
+    let clock_obj = create_test_clock_at(&mut ctx, 2_000);
+    shop.claim_discount_ticket(template, &clock_obj, &mut ctx);
 
-    abort EAssertFailure
+    abort
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::EDiscountAlreadyClaimed)]
@@ -3811,8 +3580,7 @@ fun claim_discount_ticket_rejects_duplicate_claim() {
     let mut ctx = tx_context::new_from_hint(TEST_OWNER, 24, 0, 0, 0);
     let (mut shop, _owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
 
-    let template = shop::test_create_discount_template_local(
-        &mut shop,
+    let template = shop.test_create_discount_template_local(
         option::none(),
         0,
         1_250,
@@ -3821,28 +3589,25 @@ fun claim_discount_ticket_rejects_duplicate_claim() {
         option::none(),
         &mut ctx,
     );
-    let mut clock_obj = clock::create_for_testing(&mut ctx);
-    clock::set_for_testing(&mut clock_obj, 1_000);
-    let ticket = shop::test_claim_discount_ticket_inline(
-        &mut shop,
+    let clock_obj = create_test_clock_at(&mut ctx, 1_000);
+    let ticket = shop.claim_discount_ticket_inline(
         template,
         1,
         &mut ctx,
     );
     std::unit_test::destroy(ticket);
 
-    shop::test_claim_discount_ticket(&mut shop, template, &clock_obj, &mut ctx);
+    shop.claim_discount_ticket(template, &clock_obj, &mut ctx);
 
-    abort EAssertFailure
+    abort
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::EListingNotFound)]
-fun claim_discount_ticket_rejects_removed_listing_scope() {
+fun claim_discount_ticket_rejects_missing_listing_for_listing_scoped_template_after_listing_removal() {
     let mut ctx = tx_context::new_from_hint(TEST_OWNER, 240, 0, 0, 0);
     let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
 
-    let listing_id = shop::test_add_item_listing_local<TestItem>(
-        &mut shop,
+    let listing_id = shop.add_item_listing<TestItem>(
         &owner_cap,
         b"Scoped Listing".to_string(),
         1_250,
@@ -3851,8 +3616,7 @@ fun claim_discount_ticket_rejects_removed_listing_scope() {
         &mut ctx,
     );
 
-    let template = shop::test_create_discount_template_local(
-        &mut shop,
+    let template = shop.test_create_discount_template_local(
         option::some(listing_id),
         0,
         250,
@@ -3861,26 +3625,23 @@ fun claim_discount_ticket_rejects_removed_listing_scope() {
         option::none(),
         &mut ctx,
     );
-    shop::test_remove_listing(&mut shop, listing_id);
+    shop.toggle_discount_template(&owner_cap, template, false);
+    remove_listing_if_exists(&mut shop, &owner_cap, listing_id);
 
-    let mut clock_obj = clock::create_for_testing(&mut ctx);
-    clock::set_for_testing(&mut clock_obj, 1_000);
-    shop::test_claim_discount_ticket(&mut shop, template, &clock_obj, &mut ctx);
+    let clock_obj = create_test_clock_at(&mut ctx, 1_000);
+    shop.claim_discount_ticket(template, &clock_obj, &mut ctx);
 
-    abort EAssertFailure
+    abort
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::EDiscountAlreadyClaimed)]
 fun claim_and_buy_rejects_second_claim_after_redeem() {
     let mut scn = test_scenario::begin(TEST_OWNER);
 
-    shop::create_shop(DEFAULT_SHOP_NAME.to_string(), test_scenario::ctx(&mut scn));
-    let created = event::events_by_type<shop::ShopCreatedEvent>();
-    let created_len = created.length();
-    assert!(created_len > 0);
-    let shop_created = &created[created_len - 1];
-    let shop_id = shop::test_shop_created_shop_id(shop_created);
-    let owner_cap_id = shop::test_shop_created_owner_cap_id(shop_created);
+    let (shop_id, owner_cap_id) = create_shop_and_owner_cap_ids_for_sender(
+        &mut scn,
+        DEFAULT_SHOP_NAME,
+    );
 
     let _ = test_scenario::next_tx(&mut scn, TEST_OWNER);
 
@@ -3898,13 +3659,13 @@ fun claim_and_buy_rejects_second_claim_after_redeem() {
         owner_cap_id,
     );
     let currency = create_test_currency(test_scenario::ctx(&mut scn));
-    let (price_info_object, price_info_id) = create_price_info_object_for_feed(
+    let price_info_object = create_price_info_object_for_feed(
         PRIMARY_FEED_ID,
         test_scenario::ctx(&mut scn),
     );
+    let price_info_id = price_info_object.uid_to_inner();
 
-    shop::add_accepted_currency<TestCoin>(
-        &mut shop_obj,
+    shop_obj.add_accepted_currency<TestCoin>(
         &owner_cap,
         &currency,
         &price_info_object,
@@ -3914,12 +3675,8 @@ fun claim_and_buy_rejects_second_claim_after_redeem() {
         option::none(),
         option::none(),
     );
-    let _accepted_currency_id = shop::test_last_created_id(
-        test_scenario::ctx(&mut scn),
-    );
 
-    shop::add_item_listing<TestItem>(
-        &mut shop_obj,
+    let listing_id = shop_obj.add_item_listing<TestItem>(
         &owner_cap,
         b"Promo Sock".to_string(),
         100,
@@ -3927,10 +3684,8 @@ fun claim_and_buy_rejects_second_claim_after_redeem() {
         option::none(),
         test_scenario::ctx(&mut scn),
     );
-    let listing_id = last_created_listing_id();
 
-    shop::create_discount_template(
-        &mut shop_obj,
+    shop_obj.create_discount_template(
         &owner_cap,
         option::some(listing_id),
         1,
@@ -3940,7 +3695,7 @@ fun claim_and_buy_rejects_second_claim_after_redeem() {
         option::some(5),
         test_scenario::ctx(&mut scn),
     );
-    let template_id = shop::test_last_created_id(test_scenario::ctx(&mut scn));
+    let template_id = tx_context::last_created_object_id(test_scenario::ctx(&mut scn)).to_id();
 
     transfer::public_share_object(price_info_object);
 
@@ -3950,17 +3705,14 @@ fun claim_and_buy_rejects_second_claim_after_redeem() {
     let _ = test_scenario::next_tx(&mut scn, OTHER_OWNER);
 
     let mut shared_shop = take_shared_shop(&scn, shop_id);
-    let price_info_obj = test_scenario::take_shared_by_id(
+    let price_info_obj: price_info::PriceInfoObject = test_scenario::take_shared_by_id(
         &scn,
         price_info_id,
     );
-    let mut clock_obj = clock::create_for_testing(test_scenario::ctx(&mut scn));
-    clock::set_for_testing(&mut clock_obj, 10);
+    let clock_obj = create_test_clock_at(test_scenario::ctx(&mut scn), 10);
 
     let payment = coin::mint_for_testing<TestCoin>(1, test_scenario::ctx(&mut scn));
-
-    shop::test_claim_and_buy_with_ids<TestItem, TestCoin>(
-        &mut shared_shop,
+    shared_shop.claim_and_buy_item_with_discount<TestItem, TestCoin>(
         template_id,
         &price_info_obj,
         payment,
@@ -3974,40 +3726,36 @@ fun claim_and_buy_rejects_second_claim_after_redeem() {
     );
 
     assert!(
-        shop::test_discount_claim_exists(
-            &shared_shop,
+        shared_shop.discount_claim_exists(
             template_id,
             OTHER_OWNER,
         ),
     );
 
-    shop::test_claim_discount_ticket(
-        &mut shared_shop,
+    shared_shop.claim_discount_ticket(
         template_id,
         &clock_obj,
         test_scenario::ctx(&mut scn),
     );
 
-    abort EAssertFailure
+    abort
 }
 
 #[test]
 fun claim_and_buy_item_with_discount_emits_events_and_covers_helpers() {
     let mut scn = test_scenario::begin(TEST_OWNER);
 
-    shop::create_shop(DEFAULT_SHOP_NAME.to_string(), test_scenario::ctx(&mut scn));
-    let created = event::events_by_type<shop::ShopCreatedEvent>();
-    let created_len = created.length();
-    assert!(created_len > 0);
-    let shop_created = &created[created_len - 1];
-    let shop_id = shop::test_shop_created_shop_id(shop_created);
-    let owner_cap_id = shop::test_shop_created_owner_cap_id(shop_created);
+    let (shop_id, owner_cap_id) = create_shop_and_owner_cap_ids_for_sender(
+        &mut scn,
+        DEFAULT_SHOP_NAME,
+    );
 
     let currency = prepare_test_currency_for_owner(&mut scn, TEST_OWNER);
-    let (price_info_object, price_info_id) = create_price_info_object_for_feed(
+    let price_info_object = create_price_info_object_for_feed(
         PRIMARY_FEED_ID,
         test_scenario::ctx(&mut scn),
     );
+    let price_info_id = price_info_object.uid_to_inner();
 
     let mut shop_obj = take_shared_shop(&scn, shop_id);
     let owner_cap = test_scenario::take_from_sender_by_id(
@@ -4015,8 +3763,7 @@ fun claim_and_buy_item_with_discount_emits_events_and_covers_helpers() {
         owner_cap_id,
     );
 
-    shop::add_accepted_currency<TestCoin>(
-        &mut shop_obj,
+    shop_obj.add_accepted_currency<TestCoin>(
         &owner_cap,
         &currency,
         &price_info_object,
@@ -4029,8 +3776,7 @@ fun claim_and_buy_item_with_discount_emits_events_and_covers_helpers() {
     let accepted_currency_id = price_info_id;
     std::unit_test::destroy(currency);
 
-    shop::add_item_listing<TestItem>(
-        &mut shop_obj,
+    let listing_id = shop_obj.add_item_listing<TestItem>(
         &owner_cap,
         b"Promo Item".to_string(),
         100,
@@ -4038,10 +3784,8 @@ fun claim_and_buy_item_with_discount_emits_events_and_covers_helpers() {
         option::none(),
         test_scenario::ctx(&mut scn),
     );
-    let listing_id = last_created_listing_id();
 
-    shop::create_discount_template(
-        &mut shop_obj,
+    shop_obj.create_discount_template(
         &owner_cap,
         option::some(listing_id),
         1,
@@ -4051,25 +3795,21 @@ fun claim_and_buy_item_with_discount_emits_events_and_covers_helpers() {
         option::none(),
         test_scenario::ctx(&mut scn),
     );
-    let template_id = shop::test_last_created_id(test_scenario::ctx(&mut scn));
+    let template_id = tx_context::last_created_object_id(test_scenario::ctx(&mut scn)).to_id();
 
     transfer::public_share_object(price_info_object);
 
     test_scenario::return_to_sender(&scn, owner_cap);
     test_scenario::return_shared(shop_obj);
 
-    let _ = test_scenario::next_tx(&mut scn, OTHER_OWNER);
-
-    let mut shared_shop = take_shared_shop(&scn, shop_id);
-    let price_info_obj = test_scenario::take_shared_by_id(
-        &scn,
+    let (mut shared_shop, price_info_obj, clock_obj) = begin_buyer_checkout_context(
+        &mut scn,
+        OTHER_OWNER,
+        shop_id,
         price_info_id,
+        10,
     );
-
-    let mut clock_obj = clock::create_for_testing(test_scenario::ctx(&mut scn));
-    clock::set_for_testing(&mut clock_obj, 10);
-    let quote_amount = shop::test_quote_amount_for_price_info_object<TestCoin>(
-        &shared_shop,
+    let quote_amount = shared_shop.quote_amount_for_price_info_object<TestCoin>(
         &price_info_obj,
         100,
         option::none(),
@@ -4080,9 +3820,11 @@ fun claim_and_buy_item_with_discount_emits_events_and_covers_helpers() {
         quote_amount,
         test_scenario::ctx(&mut scn),
     );
+    let template_values_before = shared_shop.discount_template(template_id);
+    let claims_issued_before = template_values_before.discount_template_claims_issued();
+    let redemptions_before = template_values_before.discount_template_redemptions();
 
-    shop::claim_and_buy_item_with_discount<TestItem, TestCoin>(
-        &mut shared_shop,
+    shared_shop.claim_and_buy_item_with_discount<TestItem, TestCoin>(
         template_id,
         &price_info_obj,
         payment,
@@ -4094,44 +3836,43 @@ fun claim_and_buy_item_with_discount_emits_events_and_covers_helpers() {
         &clock_obj,
         test_scenario::ctx(&mut scn),
     );
-
-    let purchase_events = event::events_by_type<shop::PurchaseCompletedEvent>();
-    let purchase_event = &purchase_events[purchase_events.length() - 1];
-    assert_eq!(shop::test_purchase_completed_shop(purchase_event), shop_id);
-    assert_eq!(shop::test_purchase_completed_listing(purchase_event), listing_id);
-    assert_eq!(
-        shop::test_purchase_completed_accepted_currency_id(purchase_event),
-        accepted_currency_id,
+    let minted_item_id = tx_context::last_created_object_id(test_scenario::ctx(&mut scn)).to_id();
+    assert_emitted!(
+        shop::new_purchase_completed_event(
+            shop_id,
+            listing_id,
+            accepted_currency_id,
+            option::some(template_id),
+            minted_item_id,
+            0,
+            0,
+        ),
     );
-    let _ = shop::test_purchase_completed_minted_item_id(purchase_event);
+    let template_values_after = shared_shop.discount_template(template_id);
+    let claims_issued_after = template_values_after.discount_template_claims_issued();
+    let redemptions_after = template_values_after.discount_template_redemptions();
+    assert_eq!(claims_issued_after, claims_issued_before + 1);
+    assert_eq!(redemptions_after, redemptions_before + 1);
+    assert!(shared_shop.discount_claim_exists(template_id, OTHER_OWNER));
 
-    let redeemed_events = event::events_by_type<shop::DiscountRedeemedEvent>();
-    let redeemed_event = &redeemed_events[redeemed_events.length() - 1];
-    assert_eq!(shop::test_discount_redeemed_shop(redeemed_event), shop_id);
-    assert_eq!(shop::test_discount_redeemed_template_id(redeemed_event), template_id);
-    let _ = shop::test_discount_redeemed_discount_id(redeemed_event);
-
-    assert!(shop::test_listing_exists(&shared_shop, listing_id));
+    assert!(shared_shop.listing_exists(listing_id));
     let template_address = template_id.to_address();
-    let template_id_opt = shop::discount_template_id_for_address(&shared_shop, template_address);
+    let template_id_opt = shared_shop.discount_template_id_for_address(template_address);
     assert!(option::is_some(&template_id_opt));
 
-    let (_name, _price, _stock, _shop_id, _spotlight) = shop::test_listing_values(
-        &shared_shop,
-        listing_id,
-    );
-    let _listing_id_from_value = listing_id;
-    let _template_id = shop::test_template_id(template_id);
     assert!(
-        shop::test_accepted_currency_exists(
-            &shared_shop,
+        shared_shop.accepted_currency_exists(
             test_coin_type(),
         ),
     );
 
-    test_scenario::return_shared(shared_shop);
-    test_scenario::return_shared(price_info_obj);
-    std::unit_test::destroy(clock_obj);
+    close_buyer_checkout_context(shared_shop, price_info_obj, clock_obj);
+    let effects = test_scenario::next_tx(&mut scn, OTHER_OWNER);
+    let user_event_count = test_scenario::num_user_events(&effects);
+    assert!(user_event_count >= 3);
+    let discount_ticket_ids = test_scenario::ids_for_sender<shop::DiscountTicket>(&scn);
+    assert_eq!(discount_ticket_ids.length(), 0);
+
     let _ = test_scenario::end(scn);
 }
 
@@ -4142,33 +3883,14 @@ fun test_init_claims_publisher() {
 }
 
 #[test]
-fun test_claim_publisher_works() {
-    let mut ctx = tx_context::new_from_hint(TEST_OWNER, 9992, 0, 0, 0);
-    let publisher = shop::test_claim_publisher(&mut ctx);
-    std::unit_test::destroy(publisher);
-}
-
-#[test, expected_failure(abort_code = ::sui_oracle_market::shop::EInvalidOwnerCap)]
-fun test_abort_invalid_owner_cap_is_reachable() {
-    shop::test_abort_invalid_owner_cap();
-    abort EAssertFailure
-}
-
-#[test, expected_failure(abort_code = ::sui_oracle_market::shop::EAcceptedCurrencyMissing)]
-fun test_abort_accepted_currency_missing_is_reachable() {
-    shop::test_abort_accepted_currency_missing();
-    abort EAssertFailure
-}
-
-#[test]
 fun listing_and_template_id_for_address_return_none_when_missing() {
     let mut ctx = tx_context::new_from_hint(TEST_OWNER, 9993, 0, 0, 0);
     let (shop_obj, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
     let missing_listing_identifier = missing_listing_id();
 
-    assert!(!shop::test_listing_exists(&shop_obj, missing_listing_identifier));
+    assert!(!shop_obj.listing_exists(missing_listing_identifier));
     let missing_address = @0x1234;
-    let template_id_opt = shop::discount_template_id_for_address(&shop_obj, missing_address);
+    let template_id_opt = shop_obj.discount_template_id_for_address(missing_address);
     assert!(option::is_none(&template_id_opt));
 
     std::unit_test::destroy(shop_obj);
@@ -4179,17 +3901,16 @@ fun listing_and_template_id_for_address_return_none_when_missing() {
 fun create_shop_rejects_empty_name() {
     let mut ctx = tx_context::new_from_hint(TEST_OWNER, 10001, 0, 0, 0);
     shop::create_shop(b"".to_string(), &mut ctx);
-    abort EAssertFailure
+    abort
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::EListingNotFound)]
-fun listing_values_rejects_foreign_shop() {
+fun listing_rejects_foreign_shop() {
     let mut ctx = tx_context::new_from_hint(TEST_OWNER, 10002, 0, 0, 0);
     let (mut shop_a, owner_cap_a) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
     let (shop_b, _owner_cap_b) = shop::test_setup_shop(OTHER_OWNER, &mut ctx);
 
-    let listing_id = shop::test_add_item_listing_local<TestItem>(
-        &mut shop_a,
+    let listing_id = shop_a.add_item_listing<TestItem>(
         &owner_cap_a,
         b"Item".to_string(),
         100,
@@ -4198,17 +3919,16 @@ fun listing_values_rejects_foreign_shop() {
         &mut ctx,
     );
 
-    shop::test_listing_values(&shop_b, listing_id);
-    abort EAssertFailure
+    shop_b.listing(listing_id);
+    abort
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::ETemplateNotFound)]
-fun discount_template_values_rejects_foreign_shop() {
+fun discount_template_rejects_foreign_shop() {
     let mut ctx = tx_context::new_from_hint(TEST_OWNER, 10003, 0, 0, 0);
     let (mut shop_a, _owner_cap_a) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
     let (shop_b, _owner_cap_b) = shop::test_setup_shop(OTHER_OWNER, &mut ctx);
-    let template = shop::test_create_discount_template_local(
-        &mut shop_a,
+    let template = shop_a.test_create_discount_template_local(
         option::none(),
         0,
         100,
@@ -4218,8 +3938,8 @@ fun discount_template_values_rejects_foreign_shop() {
         &mut ctx,
     );
 
-    shop::test_discount_template_values(&shop_b, template);
-    abort EAssertFailure
+    shop_b.discount_template(template);
+    abort
 }
 
 #[test]
@@ -4231,11 +3951,69 @@ fun remove_listing_and_template_noop_when_missing() {
     dummy_uid.delete();
     let missing_listing_identifier = missing_listing_id();
 
-    shop::test_remove_listing(&mut shop_obj, missing_listing_identifier);
-    shop::test_remove_template(&mut shop_obj, dummy_id);
+    remove_listing_if_exists(&mut shop_obj, &owner_cap, missing_listing_identifier);
+    shop_obj.remove_discount_template(&owner_cap, dummy_id);
 
     std::unit_test::destroy(shop_obj);
     std::unit_test::destroy(owner_cap);
+}
+
+#[test]
+fun remove_discount_template_drops_template_and_clears_spotlight() {
+    let mut ctx = tx_context::new_from_hint(TEST_OWNER, 100041, 0, 0, 0);
+    let (mut shop_obj, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
+    let listing_id = shop_obj.add_item_listing<TestItem>(
+        &owner_cap,
+        b"Template Listing".to_string(),
+        100,
+        1,
+        option::none(),
+        &mut ctx,
+    );
+    let template_id = shop_obj.test_create_discount_template_local(
+        option::some(listing_id),
+        0,
+        10,
+        0,
+        option::none(),
+        option::none(),
+        &mut ctx,
+    );
+
+    shop_obj.attach_template_to_listing(
+        &owner_cap,
+        template_id,
+        listing_id,
+    );
+    shop_obj.remove_discount_template(&owner_cap, template_id);
+
+    assert!(!shop_obj.discount_template_exists(template_id));
+    let listing = shop_obj.listing(listing_id);
+    let spotlight_after = listing.listing_spotlight_discount_template_id();
+    assert!(option::is_none(&spotlight_after));
+
+    remove_listing_if_exists(&mut shop_obj, &owner_cap, listing_id);
+    std::unit_test::destroy(shop_obj);
+    std::unit_test::destroy(owner_cap);
+}
+
+#[test, expected_failure(abort_code = ::sui_oracle_market::shop::EInvalidOwnerCap)]
+fun remove_discount_template_rejects_foreign_owner_cap() {
+    let mut ctx = tx_context::new_from_hint(TEST_OWNER, 100042, 0, 0, 0);
+    let (mut shop_obj, _owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
+    let (_other_shop, other_cap) = shop::test_setup_shop(OTHER_OWNER, &mut ctx);
+    let template_id = shop_obj.test_create_discount_template_local(
+        option::none(),
+        0,
+        10,
+        0,
+        option::none(),
+        option::none(),
+        &mut ctx,
+    );
+
+    shop_obj.remove_discount_template(&other_cap, template_id);
+    abort
 }
 
 #[test]
@@ -4243,11 +4021,11 @@ fun quote_amount_with_positive_exponent() {
     let price_value = i64::new(1_000, false);
     let expo = i64::new(2, false);
     let price = price::new(price_value, 10, expo, 0);
-    let amount = shop::test_quote_amount_from_usd_cents(
+    let amount = shop::quote_amount_from_usd_cents(
         100,
         9,
         price,
-        shop::test_default_max_confidence_ratio_bps(),
+        TEST_DEFAULT_MAX_CONFIDENCE_RATIO_BPS,
     );
     assert!(amount > 0);
 }
@@ -4255,21 +4033,20 @@ fun quote_amount_with_positive_exponent() {
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::EUnsupportedCurrencyDecimals)]
 fun quote_amount_rejects_large_exponent() {
     let price = sample_price();
-    let _ = shop::test_quote_amount_from_usd_cents(
+    let _ = shop::quote_amount_from_usd_cents(
         100,
         39,
         price,
-        shop::test_default_max_confidence_ratio_bps(),
+        TEST_DEFAULT_MAX_CONFIDENCE_RATIO_BPS,
     );
-    abort EAssertFailure
+    abort
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::EShopDisabled)]
 fun claim_discount_ticket_rejects_when_shop_disabled() {
     let mut ctx = tx_context::new_from_hint(TEST_OWNER, 10005, 0, 0, 0);
     let (mut shop_obj, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
-    let template = shop::test_create_discount_template_local(
-        &mut shop_obj,
+    let template = shop_obj.test_create_discount_template_local(
         option::none(),
         0,
         100,
@@ -4278,35 +4055,31 @@ fun claim_discount_ticket_rejects_when_shop_disabled() {
         option::none(),
         &mut ctx,
     );
-    shop::disable_shop(&mut shop_obj, &owner_cap);
+    shop_obj.disable_shop(&owner_cap);
     let clock_obj = clock::create_for_testing(&mut ctx);
 
-    shop::claim_discount_ticket(&mut shop_obj, template, &clock_obj, &mut ctx);
-    abort EAssertFailure
+    shop_obj.claim_discount_ticket(template, &clock_obj, &mut ctx);
+    abort
 }
 
 #[test]
 fun discount_redemption_without_listing_restriction_allows_zero_price() {
     let mut scn = test_scenario::begin(TEST_OWNER);
-    shop::create_shop(DEFAULT_SHOP_NAME.to_string(), test_scenario::ctx(&mut scn));
-    let created_events = event::events_by_type<shop::ShopCreatedEvent>();
-    let shop_created = &created_events[0];
-    let shop_id = shop::test_shop_created_shop_id(shop_created);
-    let owner_cap_id = shop::test_shop_created_owner_cap_id(shop_created);
+    let (shop_id, owner_cap_id) = create_default_shop_and_owner_cap_ids_for_sender(&mut scn);
 
     let currency = prepare_test_currency_for_owner(&mut scn, TEST_OWNER);
-    let (price_info_object, price_info_id) = create_price_info_object_for_feed(
+    let price_info_object = create_price_info_object_for_feed(
         PRIMARY_FEED_ID,
         test_scenario::ctx(&mut scn),
     );
+    let price_info_id = price_info_object.uid_to_inner();
 
     let mut shop_obj = take_shared_shop(&scn, shop_id);
     let owner_cap = test_scenario::take_from_sender_by_id(
         &scn,
         owner_cap_id,
     );
-    shop::add_accepted_currency<TestCoin>(
-        &mut shop_obj,
+    shop_obj.add_accepted_currency<TestCoin>(
         &owner_cap,
         &currency,
         &price_info_object,
@@ -4316,11 +4089,9 @@ fun discount_redemption_without_listing_restriction_allows_zero_price() {
         option::none(),
         option::none(),
     );
-    let _accepted_currency_id = shop::test_last_created_id(test_scenario::ctx(&mut scn));
     std::unit_test::destroy(currency);
 
-    shop::add_item_listing<TestItem>(
-        &mut shop_obj,
+    let listing_id = shop_obj.add_item_listing<TestItem>(
         &owner_cap,
         b"Freebie".to_string(),
         100,
@@ -4328,10 +4099,8 @@ fun discount_redemption_without_listing_restriction_allows_zero_price() {
         option::none(),
         test_scenario::ctx(&mut scn),
     );
-    let listing_id = last_created_listing_id();
 
-    shop::create_discount_template(
-        &mut shop_obj,
+    shop_obj.create_discount_template(
         &owner_cap,
         option::none(),
         0,
@@ -4341,7 +4110,7 @@ fun discount_redemption_without_listing_restriction_allows_zero_price() {
         option::none(),
         test_scenario::ctx(&mut scn),
     );
-    let template_id = shop::test_last_created_id(test_scenario::ctx(&mut scn));
+    let template_id = tx_context::last_created_object_id(test_scenario::ctx(&mut scn)).to_id();
 
     transfer::public_share_object(price_info_object);
 
@@ -4355,12 +4124,10 @@ fun discount_redemption_without_listing_restriction_allows_zero_price() {
         &scn,
         price_info_id,
     );
-    let mut clock_obj = clock::create_for_testing(test_scenario::ctx(&mut scn));
-    clock::set_for_testing(&mut clock_obj, 10);
+    let clock_obj = create_test_clock_at(test_scenario::ctx(&mut scn), 10);
 
     let payment = coin::mint_for_testing<TestCoin>(1, test_scenario::ctx(&mut scn));
-    shop::claim_and_buy_item_with_discount<TestItem, TestCoin>(
-        &mut shared_shop,
+    shared_shop.claim_and_buy_item_with_discount<TestItem, TestCoin>(
         template_id,
         &price_info_obj,
         payment,
@@ -4372,10 +4139,18 @@ fun discount_redemption_without_listing_restriction_allows_zero_price() {
         &clock_obj,
         test_scenario::ctx(&mut scn),
     );
-
-    let purchase_events = event::events_by_type<shop::PurchaseCompletedEvent>();
-    let purchase_event = &purchase_events[purchase_events.length() - 1];
-    assert_eq!(shop::test_purchase_completed_discounted_price(purchase_event), 0);
+    let minted_item_id = tx_context::last_created_object_id(test_scenario::ctx(&mut scn)).to_id();
+    assert_emitted!(
+        shop::new_purchase_completed_event(
+            shop_id,
+            listing_id,
+            price_info_id,
+            option::some(template_id),
+            minted_item_id,
+            0,
+            0,
+        ),
+    );
 
     test_scenario::return_shared(shared_shop);
     test_scenario::return_shared(price_info_obj);
@@ -4386,25 +4161,21 @@ fun discount_redemption_without_listing_restriction_allows_zero_price() {
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::EDiscountTicketListingMismatch)]
 fun discount_redemption_rejects_listing_mismatch() {
     let mut scn = test_scenario::begin(TEST_OWNER);
-    shop::create_shop(DEFAULT_SHOP_NAME.to_string(), test_scenario::ctx(&mut scn));
-    let created_events = event::events_by_type<shop::ShopCreatedEvent>();
-    let shop_created = &created_events[0];
-    let shop_id = shop::test_shop_created_shop_id(shop_created);
-    let owner_cap_id = shop::test_shop_created_owner_cap_id(shop_created);
+    let (shop_id, owner_cap_id) = create_default_shop_and_owner_cap_ids_for_sender(&mut scn);
 
     let currency = prepare_test_currency_for_owner(&mut scn, TEST_OWNER);
-    let (price_info_object, price_info_id) = create_price_info_object_for_feed(
+    let price_info_object = create_price_info_object_for_feed(
         PRIMARY_FEED_ID,
         test_scenario::ctx(&mut scn),
     );
+    let price_info_id = price_info_object.uid_to_inner();
 
     let mut shop_obj = take_shared_shop(&scn, shop_id);
     let owner_cap = test_scenario::take_from_sender_by_id(
         &scn,
         owner_cap_id,
     );
-    shop::add_accepted_currency<TestCoin>(
-        &mut shop_obj,
+    shop_obj.add_accepted_currency<TestCoin>(
         &owner_cap,
         &currency,
         &price_info_object,
@@ -4414,11 +4185,9 @@ fun discount_redemption_rejects_listing_mismatch() {
         option::none(),
         option::none(),
     );
-    let _accepted_currency_id = shop::test_last_created_id(test_scenario::ctx(&mut scn));
     std::unit_test::destroy(currency);
 
-    shop::add_item_listing<TestItem>(
-        &mut shop_obj,
+    let listing_a_id = shop_obj.add_item_listing<TestItem>(
         &owner_cap,
         b"Listing A".to_string(),
         100,
@@ -4426,9 +4195,7 @@ fun discount_redemption_rejects_listing_mismatch() {
         option::none(),
         test_scenario::ctx(&mut scn),
     );
-    let listing_a_id = last_created_listing_id();
-    shop::add_item_listing<TestItem>(
-        &mut shop_obj,
+    let listing_b_id = shop_obj.add_item_listing<TestItem>(
         &owner_cap,
         b"Listing B".to_string(),
         100,
@@ -4436,10 +4203,8 @@ fun discount_redemption_rejects_listing_mismatch() {
         option::none(),
         test_scenario::ctx(&mut scn),
     );
-    let listing_b_id = last_created_listing_id();
 
-    shop::create_discount_template(
-        &mut shop_obj,
+    shop_obj.create_discount_template(
         &owner_cap,
         option::some(listing_a_id),
         1,
@@ -4449,7 +4214,7 @@ fun discount_redemption_rejects_listing_mismatch() {
         option::none(),
         test_scenario::ctx(&mut scn),
     );
-    let template_id = shop::test_last_created_id(test_scenario::ctx(&mut scn));
+    let template_id = tx_context::last_created_object_id(test_scenario::ctx(&mut scn)).to_id();
 
     transfer::public_share_object(price_info_object);
 
@@ -4463,10 +4228,8 @@ fun discount_redemption_rejects_listing_mismatch() {
         &scn,
         price_info_id,
     );
-    let mut clock_obj = clock::create_for_testing(test_scenario::ctx(&mut scn));
-    clock::set_for_testing(&mut clock_obj, 10);
-    let quote_amount = shop::test_quote_amount_for_price_info_object<TestCoin>(
-        &shared_shop,
+    let clock_obj = create_test_clock_at(test_scenario::ctx(&mut scn), 10);
+    let quote_amount = shared_shop.quote_amount_for_price_info_object<TestCoin>(
         &price_info_obj,
         100,
         option::none(),
@@ -4478,8 +4241,7 @@ fun discount_redemption_rejects_listing_mismatch() {
         test_scenario::ctx(&mut scn),
     );
 
-    shop::claim_and_buy_item_with_discount<TestItem, TestCoin>(
-        &mut shared_shop,
+    shared_shop.claim_and_buy_item_with_discount<TestItem, TestCoin>(
         template_id,
         &price_info_obj,
         payment,
@@ -4492,31 +4254,27 @@ fun discount_redemption_rejects_listing_mismatch() {
         test_scenario::ctx(&mut scn),
     );
 
-    abort EAssertFailure
+    abort
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::ETemplateMaxedOut)]
 fun discount_template_maxed_out_by_redemption() {
     let mut scn = test_scenario::begin(TEST_OWNER);
-    shop::create_shop(DEFAULT_SHOP_NAME.to_string(), test_scenario::ctx(&mut scn));
-    let created_events = event::events_by_type<shop::ShopCreatedEvent>();
-    let shop_created = &created_events[0];
-    let shop_id = shop::test_shop_created_shop_id(shop_created);
-    let owner_cap_id = shop::test_shop_created_owner_cap_id(shop_created);
+    let (shop_id, owner_cap_id) = create_default_shop_and_owner_cap_ids_for_sender(&mut scn);
 
     let currency = prepare_test_currency_for_owner(&mut scn, TEST_OWNER);
-    let (price_info_object, price_info_id) = create_price_info_object_for_feed(
+    let price_info_object = create_price_info_object_for_feed(
         PRIMARY_FEED_ID,
         test_scenario::ctx(&mut scn),
     );
+    let price_info_id = price_info_object.uid_to_inner();
 
     let mut shop_obj = take_shared_shop(&scn, shop_id);
     let owner_cap = test_scenario::take_from_sender_by_id(
         &scn,
         owner_cap_id,
     );
-    shop::add_accepted_currency<TestCoin>(
-        &mut shop_obj,
+    shop_obj.add_accepted_currency<TestCoin>(
         &owner_cap,
         &currency,
         &price_info_object,
@@ -4526,11 +4284,9 @@ fun discount_template_maxed_out_by_redemption() {
         option::none(),
         option::none(),
     );
-    let _accepted_currency_id = shop::test_last_created_id(test_scenario::ctx(&mut scn));
     std::unit_test::destroy(currency);
 
-    shop::add_item_listing<TestItem>(
-        &mut shop_obj,
+    let listing_id = shop_obj.add_item_listing<TestItem>(
         &owner_cap,
         b"Promo".to_string(),
         100,
@@ -4538,10 +4294,8 @@ fun discount_template_maxed_out_by_redemption() {
         option::none(),
         test_scenario::ctx(&mut scn),
     );
-    let listing_id = last_created_listing_id();
 
-    shop::create_discount_template(
-        &mut shop_obj,
+    shop_obj.create_discount_template(
         &owner_cap,
         option::some(listing_id),
         1,
@@ -4551,7 +4305,7 @@ fun discount_template_maxed_out_by_redemption() {
         option::some(1),
         test_scenario::ctx(&mut scn),
     );
-    let template_id = shop::test_last_created_id(test_scenario::ctx(&mut scn));
+    let template_id = tx_context::last_created_object_id(test_scenario::ctx(&mut scn)).to_id();
 
     transfer::public_share_object(price_info_object);
 
@@ -4565,10 +4319,8 @@ fun discount_template_maxed_out_by_redemption() {
         &scn,
         price_info_id,
     );
-    let mut clock_obj = clock::create_for_testing(test_scenario::ctx(&mut scn));
-    clock::set_for_testing(&mut clock_obj, 10);
-    let quote_amount = shop::test_quote_amount_for_price_info_object<TestCoin>(
-        &shared_shop,
+    let clock_obj = create_test_clock_at(test_scenario::ctx(&mut scn), 10);
+    let quote_amount = shared_shop.quote_amount_for_price_info_object<TestCoin>(
         &price_info_obj,
         100,
         option::none(),
@@ -4580,8 +4332,7 @@ fun discount_template_maxed_out_by_redemption() {
         test_scenario::ctx(&mut scn),
     );
 
-    shop::claim_and_buy_item_with_discount<TestItem, TestCoin>(
-        &mut shared_shop,
+    shared_shop.claim_and_buy_item_with_discount<TestItem, TestCoin>(
         template_id,
         &price_info_obj,
         payment,
@@ -4594,14 +4345,13 @@ fun discount_template_maxed_out_by_redemption() {
         test_scenario::ctx(&mut scn),
     );
 
-    shop::claim_discount_ticket(
-        &mut shared_shop,
+    shared_shop.claim_discount_ticket(
         template_id,
         &clock_obj,
         test_scenario::ctx(&mut scn),
     );
 
-    abort EAssertFailure
+    abort
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::EPythObjectMismatch)]
@@ -4627,12 +4377,10 @@ fun checkout_rejects_price_info_object_from_other_shop() {
         &scn,
         price_info_a_id,
     );
-    let mut clock_obj = clock::create_for_testing(test_scenario::ctx(&mut scn));
-    clock::set_for_testing(&mut clock_obj, 10);
+    let clock_obj = create_test_clock_at(test_scenario::ctx(&mut scn), 10);
     let payment = coin::mint_for_testing<TestCoin>(1, test_scenario::ctx(&mut scn));
 
-    shop::buy_item<TestItem, TestCoin>(
-        &mut shared_shop_b,
+    shared_shop_b.buy_item<TestItem, TestCoin>(
         &price_info_a,
         payment,
         listing_b_id,
@@ -4644,7 +4392,7 @@ fun checkout_rejects_price_info_object_from_other_shop() {
         test_scenario::ctx(&mut scn),
     );
 
-    abort EAssertFailure
+    abort
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::EListingNotFound)]
@@ -4664,12 +4412,10 @@ fun checkout_rejects_listing_not_registered_in_shop() {
         &scn,
         price_info_id,
     );
-    let mut clock_obj = clock::create_for_testing(test_scenario::ctx(&mut scn));
-    clock::set_for_testing(&mut clock_obj, 10);
+    let clock_obj = create_test_clock_at(test_scenario::ctx(&mut scn), 10);
     let payment = coin::mint_for_testing<TestCoin>(1, test_scenario::ctx(&mut scn));
 
-    shop::buy_item<TestItem, TestCoin>(
-        &mut shared_shop,
+    shared_shop.buy_item<TestItem, TestCoin>(
         &price_info,
         payment,
         missing_listing_id(),
@@ -4681,7 +4427,7 @@ fun checkout_rejects_listing_not_registered_in_shop() {
         test_scenario::ctx(&mut scn),
     );
 
-    abort EAssertFailure
+    abort
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::EPythObjectMismatch)]
@@ -4707,12 +4453,10 @@ fun checkout_rejects_currency_from_other_shop() {
         &scn,
         price_info_b_id,
     );
-    let mut clock_obj = clock::create_for_testing(test_scenario::ctx(&mut scn));
-    clock::set_for_testing(&mut clock_obj, 10);
+    let clock_obj = create_test_clock_at(test_scenario::ctx(&mut scn), 10);
     let payment = coin::mint_for_testing<TestCoin>(1, test_scenario::ctx(&mut scn));
 
-    shop::buy_item<TestItem, TestCoin>(
-        &mut shared_shop_a,
+    shared_shop_a.buy_item<TestItem, TestCoin>(
         &price_info_b,
         payment,
         listing_a_id,
@@ -4724,17 +4468,13 @@ fun checkout_rejects_currency_from_other_shop() {
         test_scenario::ctx(&mut scn),
     );
 
-    abort EAssertFailure
+    abort
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::EPriceStatusNotTrading)]
 fun price_status_rejects_attestation_before_publish() {
     let mut scn = test_scenario::begin(TEST_OWNER);
-    shop::create_shop(DEFAULT_SHOP_NAME.to_string(), test_scenario::ctx(&mut scn));
-    let created_events = event::events_by_type<shop::ShopCreatedEvent>();
-    let shop_created = &created_events[0];
-    let shop_id = shop::test_shop_created_shop_id(shop_created);
-    let owner_cap_id = shop::test_shop_created_owner_cap_id(shop_created);
+    let (shop_id, owner_cap_id) = create_default_shop_and_owner_cap_ids_for_sender(&mut scn);
 
     let currency = prepare_test_currency_for_owner(&mut scn, TEST_OWNER);
     let mut shop_obj = take_shared_shop(&scn, shop_id);
@@ -4745,16 +4485,16 @@ fun price_status_rejects_attestation_before_publish() {
     let price_value = i64::new(1_000, false);
     let expo = i64::new(0, false);
     let price = price::new(price_value, 10, expo, 100);
-    let (price_info_object, price_info_id) = create_price_info_object_for_feed_with_price_and_times(
+    let price_info_object = create_price_info_object_for_feed_with_price_and_times(
         PRIMARY_FEED_ID,
         price,
         50,
         0,
         test_scenario::ctx(&mut scn),
     );
+    let price_info_id = price_info_object.uid_to_inner();
 
-    shop::add_accepted_currency<TestCoin>(
-        &mut shop_obj,
+    shop_obj.add_accepted_currency<TestCoin>(
         &owner_cap_obj,
         &currency,
         &price_info_object,
@@ -4764,7 +4504,6 @@ fun price_status_rejects_attestation_before_publish() {
         option::none(),
         option::none(),
     );
-    let _accepted_currency_id = shop::test_last_created_id(test_scenario::ctx(&mut scn));
     std::unit_test::destroy(currency);
 
     transfer::public_share_object(price_info_object);
@@ -4778,11 +4517,9 @@ fun price_status_rejects_attestation_before_publish() {
         &scn,
         price_info_id,
     );
-    let mut clock_obj = clock::create_for_testing(test_scenario::ctx(&mut scn));
-    clock::set_for_testing(&mut clock_obj, 1000);
+    let clock_obj = create_test_clock_at(test_scenario::ctx(&mut scn), 1000);
 
-    shop::test_quote_amount_for_price_info_object<TestCoin>(
-        &shared_shop,
+    shared_shop.quote_amount_for_price_info_object<TestCoin>(
         &price_info_obj,
         100,
         option::none(),
@@ -4790,15 +4527,14 @@ fun price_status_rejects_attestation_before_publish() {
         &clock_obj,
     );
 
-    abort EAssertFailure
+    abort
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::ESpotlightTemplateListingMismatch)]
 fun add_item_listing_rejects_spotlight_template_listing_mismatch() {
     let mut ctx = tx_context::new_from_hint(TEST_OWNER, 10006, 0, 0, 0);
     let (mut shop_obj, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
-    let listing_id = shop::test_add_item_listing_local<TestItem>(
-        &mut shop_obj,
+    let listing_id = shop_obj.add_item_listing<TestItem>(
         &owner_cap,
         b"Listing A".to_string(),
         100,
@@ -4807,8 +4543,7 @@ fun add_item_listing_rejects_spotlight_template_listing_mismatch() {
         &mut ctx,
     );
 
-    let template_id = shop::test_create_discount_template_local(
-        &mut shop_obj,
+    let template_id = shop_obj.test_create_discount_template_local(
         option::some(listing_id),
         0,
         50,
@@ -4818,8 +4553,7 @@ fun add_item_listing_rejects_spotlight_template_listing_mismatch() {
         &mut ctx,
     );
 
-    shop::add_item_listing<TestItem>(
-        &mut shop_obj,
+    shop_obj.add_item_listing<TestItem>(
         &owner_cap,
         b"Listing B".to_string(),
         100,
@@ -4828,15 +4562,14 @@ fun add_item_listing_rejects_spotlight_template_listing_mismatch() {
         &mut ctx,
     );
 
-    abort EAssertFailure
+    abort
 }
 
 #[test]
 fun prune_discount_claims_noop_for_unclaimed_claimer() {
     let mut ctx = tx_context::new_from_hint(TEST_OWNER, 10007, 0, 0, 0);
     let (mut shop_obj, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
-    let template = shop::test_create_discount_template_local(
-        &mut shop_obj,
+    let template = shop_obj.test_create_discount_template_local(
         option::none(),
         0,
         50,
@@ -4845,11 +4578,9 @@ fun prune_discount_claims_noop_for_unclaimed_claimer() {
         option::none(),
         &mut ctx,
     );
-    let mut clock_obj = clock::create_for_testing(&mut ctx);
-    clock::set_for_testing(&mut clock_obj, 2_000);
+    let clock_obj = create_test_clock_at(&mut ctx, 2_000);
 
-    shop::prune_discount_claims(
-        &mut shop_obj,
+    shop_obj.prune_discount_claims(
         &owner_cap,
         template,
         vector[OTHER_OWNER],
@@ -4862,91 +4593,75 @@ fun prune_discount_claims_noop_for_unclaimed_claimer() {
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::EAcceptedCurrencyMissing)]
-fun accepted_currency_values_rejects_foreign_shop() {
+fun accepted_currency_rejects_foreign_shop() {
     let mut scn = test_scenario::begin(TEST_OWNER);
-    shop::create_shop(DEFAULT_SHOP_NAME.to_string(), test_scenario::ctx(&mut scn));
-    shop::create_shop(DEFAULT_SHOP_NAME.to_string(), test_scenario::ctx(&mut scn));
-    let created = event::events_by_type<shop::ShopCreatedEvent>();
-    let shop_a = &created[0];
-    let shop_b = &created[1];
-    let shop_a_id = shop::test_shop_created_shop_id(shop_a);
-    let shop_b_id = shop::test_shop_created_shop_id(shop_b);
-    let owner_cap_a_id = shop::test_shop_created_owner_cap_id(shop_a);
+
+    let (shop_a_id, owner_cap_a_id) = create_shop_and_owner_cap_ids_for_sender(
+        &mut scn,
+        DEFAULT_SHOP_NAME,
+    );
+
+    let (shop_b_id, _) = create_shop_and_owner_cap_ids_for_sender(
+        &mut scn,
+        DEFAULT_SHOP_NAME,
+    );
 
     let currency = prepare_test_currency_for_owner(&mut scn, TEST_OWNER);
-    let (price_info_object, pyth_object_id) = create_price_info_object_for_feed(
-        PRIMARY_FEED_ID,
-        test_scenario::ctx(&mut scn),
-    );
     let mut shop_obj = take_shared_shop(&scn, shop_a_id);
     let owner_cap_obj = test_scenario::take_from_sender_by_id(
         &scn,
         owner_cap_a_id,
     );
-    shop::add_accepted_currency<TestCoin>(
+    add_test_coin_accepted_currency_for_scenario(
+        &mut scn,
         &mut shop_obj,
         &owner_cap_obj,
         &currency,
-        &price_info_object,
         PRIMARY_FEED_ID,
-        pyth_object_id,
         option::none(),
         option::none(),
         option::none(),
     );
-    let _accepted_currency_id = shop::test_last_created_id(test_scenario::ctx(&mut scn));
 
     test_scenario::return_to_sender(&scn, owner_cap_obj);
     test_scenario::return_shared(shop_obj);
-    transfer::public_share_object(price_info_object);
     std::unit_test::destroy(currency);
 
     let _ = test_scenario::next_tx(&mut scn, TEST_OWNER);
 
     let shared_shop_b = take_shared_shop(&scn, shop_b_id);
 
-    shop::test_accepted_currency_values<TestCoin>(&shared_shop_b);
-    abort EAssertFailure
+    shared_shop_b.accepted_currency<TestCoin>();
+    abort
 }
 
 #[test]
 fun remove_currency_field_clears_mapping() {
     let mut scn = test_scenario::begin(TEST_OWNER);
-    shop::create_shop(DEFAULT_SHOP_NAME.to_string(), test_scenario::ctx(&mut scn));
-    let created_events = event::events_by_type<shop::ShopCreatedEvent>();
-    let shop_created = &created_events[0];
-    let shop_id = shop::test_shop_created_shop_id(shop_created);
-    let owner_cap_id = shop::test_shop_created_owner_cap_id(shop_created);
+    let (shop_id, owner_cap_id) = create_default_shop_and_owner_cap_ids_for_sender(&mut scn);
 
     let currency = prepare_test_currency_for_owner(&mut scn, TEST_OWNER);
-    let (price_info_object, pyth_object_id) = create_price_info_object_for_feed(
-        PRIMARY_FEED_ID,
-        test_scenario::ctx(&mut scn),
-    );
-
     let mut shop_obj = take_shared_shop(&scn, shop_id);
     let owner_cap_obj = test_scenario::take_from_sender_by_id(
         &scn,
         owner_cap_id,
     );
-    shop::add_accepted_currency<TestCoin>(
+    add_test_coin_accepted_currency_for_scenario(
+        &mut scn,
         &mut shop_obj,
         &owner_cap_obj,
         &currency,
-        &price_info_object,
         PRIMARY_FEED_ID,
-        pyth_object_id,
         option::none(),
         option::none(),
         option::none(),
     );
 
-    shop::test_remove_currency_field<TestCoin>(&mut shop_obj);
-    assert!(!shop::test_accepted_currency_exists(&shop_obj, test_coin_type()));
+    remove_currency_if_exists<TestCoin>(&mut shop_obj, &owner_cap_obj);
+    assert!(!shop_obj.accepted_currency_exists(test_coin_type()));
 
     test_scenario::return_to_sender(&scn, owner_cap_obj);
     test_scenario::return_shared(shop_obj);
-    transfer::public_share_object(price_info_object);
     std::unit_test::destroy(currency);
     let _ = test_scenario::end(scn);
 }
@@ -4954,39 +4669,27 @@ fun remove_currency_field_clears_mapping() {
 #[test]
 fun remove_accepted_currency_emits_removed_event_fields() {
     let mut scn = test_scenario::begin(TEST_OWNER);
-    shop::create_shop(DEFAULT_SHOP_NAME.to_string(), test_scenario::ctx(&mut scn));
-    let created_events = event::events_by_type<shop::ShopCreatedEvent>();
-    let shop_created = &created_events[0];
-    let shop_id = shop::test_shop_created_shop_id(shop_created);
-    let owner_cap_id = shop::test_shop_created_owner_cap_id(shop_created);
+    let (shop_id, owner_cap_id) = create_default_shop_and_owner_cap_ids_for_sender(&mut scn);
 
     let currency = prepare_test_currency_for_owner(&mut scn, TEST_OWNER);
-    let (price_info_object, pyth_object_id) = create_price_info_object_for_feed(
-        PRIMARY_FEED_ID,
-        test_scenario::ctx(&mut scn),
-    );
-
     let mut shop_obj = take_shared_shop(&scn, shop_id);
     let owner_cap_obj = test_scenario::take_from_sender_by_id(
         &scn,
         owner_cap_id,
     );
-    shop::add_accepted_currency<TestCoin>(
+    let accepted_currency_id = add_test_coin_accepted_currency_for_scenario(
+        &mut scn,
         &mut shop_obj,
         &owner_cap_obj,
         &currency,
-        &price_info_object,
         PRIMARY_FEED_ID,
-        pyth_object_id,
         option::none(),
         option::none(),
         option::none(),
     );
-    let accepted_currency_id = pyth_object_id;
 
     test_scenario::return_to_sender(&scn, owner_cap_obj);
     test_scenario::return_shared(shop_obj);
-    transfer::public_share_object(price_info_object);
 
     let _ = test_scenario::next_tx(&mut scn, TEST_OWNER);
 
@@ -4995,18 +4698,16 @@ fun remove_accepted_currency_emits_removed_event_fields() {
         &scn,
         owner_cap_id,
     );
-    shop::remove_accepted_currency<TestCoin>(
-        &mut shared_shop,
+    shared_shop.remove_accepted_currency<TestCoin>(
         &owner_cap,
     );
 
-    let removed_events = event::events_by_type<shop::AcceptedCoinRemovedEvent>();
-    let removed_event = &removed_events[removed_events.length() - 1];
-    assert_eq!(
-        shop::test_accepted_coin_removed_shop(removed_event),
-        shop::test_shop_id(&shared_shop),
+    assert_emitted!(
+        shop::new_accepted_coin_removed_event(
+            shared_shop.shop_id(),
+            accepted_currency_id,
+        ),
     );
-    assert_eq!(shop::test_accepted_coin_removed_id(removed_event), accepted_currency_id);
 
     test_scenario::return_shared(shared_shop);
     test_scenario::return_to_sender(&scn, owner_cap);
@@ -5027,6 +4728,24 @@ fun setup_shop_with_currency_listing_and_price_info(
     )
 }
 
+fun setup_shop_with_listing_and_price_info(
+    scn: &mut test_scenario::Scenario,
+    base_price_usd_cents: u64,
+    stock: u64,
+): (ID, ID, ID) {
+    let (
+        shop_id,
+        _accepted_currency_id,
+        listing_id,
+        price_info_id,
+    ) = setup_shop_with_currency_listing_and_price_info(
+        scn,
+        base_price_usd_cents,
+        stock,
+    );
+    (shop_id, listing_id, price_info_id)
+}
+
 fun setup_shop_with_currency_listing_and_price_info_for_item<TItem: store>(
     scn: &mut test_scenario::Scenario,
     item_name: vector<u8>,
@@ -5040,13 +4759,13 @@ fun setup_shop_with_currency_listing_and_price_info_for_item<TItem: store>(
         test_scenario::ctx(scn),
     );
     let shop_id = object::id(&shop_obj);
-    let (price_info_object, price_info_id) = create_price_info_object_for_feed(
+    let price_info_object = create_price_info_object_for_feed(
         PRIMARY_FEED_ID,
         test_scenario::ctx(scn),
     );
+    let price_info_id = price_info_object.uid_to_inner();
 
-    shop::add_accepted_currency<TestCoin>(
-        &mut shop_obj,
+    shop_obj.add_accepted_currency<TestCoin>(
         &owner_cap,
         &currency,
         &price_info_object,
@@ -5059,8 +4778,7 @@ fun setup_shop_with_currency_listing_and_price_info_for_item<TItem: store>(
     let accepted_currency_id = price_info_id;
     std::unit_test::destroy(currency);
 
-    shop::add_item_listing<TItem>(
-        &mut shop_obj,
+    let listing_id = shop_obj.add_item_listing<TItem>(
         &owner_cap,
         item_name.to_string(),
         base_price_usd_cents,
@@ -5068,7 +4786,6 @@ fun setup_shop_with_currency_listing_and_price_info_for_item<TItem: store>(
         option::none(),
         test_scenario::ctx(scn),
     );
-    let listing_id = last_created_listing_id();
 
     transfer::public_share_object(price_info_object);
     transfer::public_share_object(shop_obj);
@@ -5087,19 +4804,15 @@ fun buy_item_emits_events_decrements_stock_and_refunds_change() {
         price_info_id,
     ) = setup_shop_with_currency_listing_and_price_info(&mut scn, 100, 2);
 
-    let _ = test_scenario::next_tx(&mut scn, OTHER_OWNER);
-
-    let mut shared_shop = take_shared_shop(&scn, shop_id);
-    let price_info_obj = test_scenario::take_shared_by_id(
-        &scn,
+    let (mut shared_shop, price_info_obj, clock_obj) = begin_buyer_checkout_context(
+        &mut scn,
+        OTHER_OWNER,
+        shop_id,
         price_info_id,
+        10,
     );
 
-    let mut clock_obj = clock::create_for_testing(test_scenario::ctx(&mut scn));
-    clock::set_for_testing(&mut clock_obj, 10);
-
-    let quote_amount = shop::test_quote_amount_for_price_info_object<TestCoin>(
-        &shared_shop,
+    let quote_amount = shared_shop.quote_amount_for_price_info_object<TestCoin>(
         &price_info_obj,
         100,
         option::none(),
@@ -5107,17 +4820,13 @@ fun buy_item_emits_events_decrements_stock_and_refunds_change() {
         &clock_obj,
     );
 
-    let purchase_before = event::events_by_type<shop::PurchaseCompletedEvent>().length();
-    let stock_before = event::events_by_type<shop::ItemListingStockUpdatedEvent>().length();
-
     let extra = 7;
     let payment = coin::mint_for_testing<TestCoin>(
         quote_amount + extra,
         test_scenario::ctx(&mut scn),
     );
 
-    shop::buy_item<TestItem, TestCoin>(
-        &mut shared_shop,
+    shared_shop.buy_item<TestItem, TestCoin>(
         &price_info_obj,
         payment,
         listing_id,
@@ -5129,25 +4838,27 @@ fun buy_item_emits_events_decrements_stock_and_refunds_change() {
         test_scenario::ctx(&mut scn),
     );
 
-    let purchases = event::events_by_type<shop::PurchaseCompletedEvent>();
-    assert_eq!(purchases.length(), purchase_before + 1);
-    let purchase = &purchases[purchases.length() - 1];
-    assert_eq!(shop::test_purchase_completed_shop(purchase), shop::test_shop_id(&shared_shop));
-    assert_eq!(shop::test_purchase_completed_listing(purchase), listing_id);
-    assert_eq!(shop::test_purchase_completed_amount_paid(purchase), quote_amount);
-    assert_eq!(shop::test_purchase_completed_discounted_price(purchase), 100);
-    assert_eq!(shop::test_purchase_completed_accepted_currency_id(purchase), accepted_currency_id);
-    assert!(option::is_none(&shop::test_purchase_completed_discount_template_id(purchase)));
-    let _ = shop::test_purchase_completed_minted_item_id(purchase);
+    let minted_item_id = tx_context::last_created_object_id(test_scenario::ctx(&mut scn)).to_id();
+    assert_emitted!(
+        shop::new_purchase_completed_event(
+            shared_shop.shop_id(),
+            listing_id,
+            accepted_currency_id,
+            option::none(),
+            minted_item_id,
+            quote_amount,
+            100,
+        ),
+    );
 
-    let stock_events = event::events_by_type<shop::ItemListingStockUpdatedEvent>();
-    assert_eq!(stock_events.length(), stock_before + 1);
-    let stock_event = &stock_events[stock_events.length() - 1];
-    assert_eq!(shop::test_item_listing_stock_updated_listing(stock_event), listing_id);
+    assert_emitted!(
+        shop::new_item_listing_stock_updated_event(
+            shared_shop.shop_id(),
+            listing_id,
+        ),
+    );
 
-    test_scenario::return_shared(shared_shop);
-    test_scenario::return_shared(price_info_obj);
-    std::unit_test::destroy(clock_obj);
+    close_buyer_checkout_context(shared_shop, price_info_obj, clock_obj);
     let _ = test_scenario::end(scn);
 }
 
@@ -5156,7 +4867,7 @@ fun buy_item_supports_example_car_receipts() {
     let mut scn = test_scenario::begin(TEST_OWNER);
     let (
         shop_id,
-        _accepted_currency_id,
+        accepted_currency_id,
         listing_id,
         price_info_id,
     ) = setup_shop_with_currency_listing_and_price_info_for_item<Car>(
@@ -5166,19 +4877,15 @@ fun buy_item_supports_example_car_receipts() {
         2,
     );
 
-    let _ = test_scenario::next_tx(&mut scn, OTHER_OWNER);
-
-    let mut shared_shop = take_shared_shop(&scn, shop_id);
-    let price_info_obj = test_scenario::take_shared_by_id(
-        &scn,
+    let (mut shared_shop, price_info_obj, clock_obj) = begin_buyer_checkout_context(
+        &mut scn,
+        OTHER_OWNER,
+        shop_id,
         price_info_id,
+        10,
     );
 
-    let mut clock_obj = clock::create_for_testing(test_scenario::ctx(&mut scn));
-    clock::set_for_testing(&mut clock_obj, 10);
-
-    let quote_amount = shop::test_quote_amount_for_price_info_object<TestCoin>(
-        &shared_shop,
+    let quote_amount = shared_shop.quote_amount_for_price_info_object<TestCoin>(
         &price_info_obj,
         175_00,
         option::none(),
@@ -5186,14 +4893,12 @@ fun buy_item_supports_example_car_receipts() {
         &clock_obj,
     );
 
-    let purchase_before = event::events_by_type<shop::PurchaseCompletedEvent>().length();
     let payment = coin::mint_for_testing<TestCoin>(
         quote_amount,
         test_scenario::ctx(&mut scn),
     );
 
-    shop::buy_item<Car, TestCoin>(
-        &mut shared_shop,
+    shared_shop.buy_item<Car, TestCoin>(
         &price_info_obj,
         payment,
         listing_id,
@@ -5205,14 +4910,20 @@ fun buy_item_supports_example_car_receipts() {
         test_scenario::ctx(&mut scn),
     );
 
-    let purchases = event::events_by_type<shop::PurchaseCompletedEvent>();
-    assert_eq!(purchases.length(), purchase_before + 1);
-    let purchase = &purchases[purchases.length() - 1];
-    let _ = shop::test_purchase_completed_minted_item_id(purchase);
+    let minted_item_id = tx_context::last_created_object_id(test_scenario::ctx(&mut scn)).to_id();
+    assert_emitted!(
+        shop::new_purchase_completed_event(
+            shared_shop.shop_id(),
+            listing_id,
+            accepted_currency_id,
+            option::none(),
+            minted_item_id,
+            quote_amount,
+            175_00,
+        ),
+    );
 
-    test_scenario::return_shared(shared_shop);
-    test_scenario::return_shared(price_info_obj);
-    std::unit_test::destroy(clock_obj);
+    close_buyer_checkout_context(shared_shop, price_info_obj, clock_obj);
     let _ = test_scenario::end(scn);
 }
 
@@ -5221,7 +4932,7 @@ fun buy_item_supports_example_bike_receipts() {
     let mut scn = test_scenario::begin(TEST_OWNER);
     let (
         shop_id,
-        _accepted_currency_id,
+        accepted_currency_id,
         listing_id,
         price_info_id,
     ) = setup_shop_with_currency_listing_and_price_info_for_item<Bike>(
@@ -5231,19 +4942,15 @@ fun buy_item_supports_example_bike_receipts() {
         1,
     );
 
-    let _ = test_scenario::next_tx(&mut scn, OTHER_OWNER);
-
-    let mut shared_shop = take_shared_shop(&scn, shop_id);
-    let price_info_obj = test_scenario::take_shared_by_id(
-        &scn,
+    let (mut shared_shop, price_info_obj, clock_obj) = begin_buyer_checkout_context(
+        &mut scn,
+        OTHER_OWNER,
+        shop_id,
         price_info_id,
+        10,
     );
 
-    let mut clock_obj = clock::create_for_testing(test_scenario::ctx(&mut scn));
-    clock::set_for_testing(&mut clock_obj, 10);
-
-    let quote_amount = shop::test_quote_amount_for_price_info_object<TestCoin>(
-        &shared_shop,
+    let quote_amount = shared_shop.quote_amount_for_price_info_object<TestCoin>(
         &price_info_obj,
         95_00,
         option::none(),
@@ -5251,14 +4958,12 @@ fun buy_item_supports_example_bike_receipts() {
         &clock_obj,
     );
 
-    let purchase_before = event::events_by_type<shop::PurchaseCompletedEvent>().length();
     let payment = coin::mint_for_testing<TestCoin>(
         quote_amount,
         test_scenario::ctx(&mut scn),
     );
 
-    shop::buy_item<Bike, TestCoin>(
-        &mut shared_shop,
+    shared_shop.buy_item<Bike, TestCoin>(
         &price_info_obj,
         payment,
         listing_id,
@@ -5270,14 +4975,20 @@ fun buy_item_supports_example_bike_receipts() {
         test_scenario::ctx(&mut scn),
     );
 
-    let purchases = event::events_by_type<shop::PurchaseCompletedEvent>();
-    assert_eq!(purchases.length(), purchase_before + 1);
-    let purchase = &purchases[purchases.length() - 1];
-    let _ = shop::test_purchase_completed_minted_item_id(purchase);
+    let minted_item_id = tx_context::last_created_object_id(test_scenario::ctx(&mut scn)).to_id();
+    assert_emitted!(
+        shop::new_purchase_completed_event(
+            shared_shop.shop_id(),
+            listing_id,
+            accepted_currency_id,
+            option::none(),
+            minted_item_id,
+            quote_amount,
+            95_00,
+        ),
+    );
 
-    test_scenario::return_shared(shared_shop);
-    test_scenario::return_shared(price_info_obj);
-    std::unit_test::destroy(clock_obj);
+    close_buyer_checkout_context(shared_shop, price_info_obj, clock_obj);
     let _ = test_scenario::end(scn);
 }
 
@@ -5286,24 +4997,20 @@ fun buy_item_emits_events_with_exact_payment_and_zero_change() {
     let mut scn = test_scenario::begin(TEST_OWNER);
     let (
         shop_id,
-        _accepted_currency_id,
+        accepted_currency_id,
         listing_id,
         price_info_id,
     ) = setup_shop_with_currency_listing_and_price_info(&mut scn, 100, 2);
 
-    let _ = test_scenario::next_tx(&mut scn, OTHER_OWNER);
-
-    let mut shared_shop = take_shared_shop(&scn, shop_id);
-    let price_info_obj = test_scenario::take_shared_by_id(
-        &scn,
+    let (mut shared_shop, price_info_obj, clock_obj) = begin_buyer_checkout_context(
+        &mut scn,
+        OTHER_OWNER,
+        shop_id,
         price_info_id,
+        10,
     );
 
-    let mut clock_obj = clock::create_for_testing(test_scenario::ctx(&mut scn));
-    clock::set_for_testing(&mut clock_obj, 10);
-
-    let quote_amount = shop::test_quote_amount_for_price_info_object<TestCoin>(
-        &shared_shop,
+    let quote_amount = shared_shop.quote_amount_for_price_info_object<TestCoin>(
         &price_info_obj,
         100,
         option::none(),
@@ -5311,15 +5018,12 @@ fun buy_item_emits_events_with_exact_payment_and_zero_change() {
         &clock_obj,
     );
 
-    let purchase_before = event::events_by_type<shop::PurchaseCompletedEvent>().length();
-
     let payment = coin::mint_for_testing<TestCoin>(
         quote_amount,
         test_scenario::ctx(&mut scn),
     );
 
-    shop::buy_item<TestItem, TestCoin>(
-        &mut shared_shop,
+    shared_shop.buy_item<TestItem, TestCoin>(
         &price_info_obj,
         payment,
         listing_id,
@@ -5331,40 +5035,41 @@ fun buy_item_emits_events_with_exact_payment_and_zero_change() {
         test_scenario::ctx(&mut scn),
     );
 
-    let purchases = event::events_by_type<shop::PurchaseCompletedEvent>();
-    assert_eq!(purchases.length(), purchase_before + 1);
-    let purchase = &purchases[purchases.length() - 1];
-    let _ = shop::test_purchase_completed_minted_item_id(purchase);
+    let minted_item_id = tx_context::last_created_object_id(test_scenario::ctx(&mut scn)).to_id();
+    assert_emitted!(
+        shop::new_purchase_completed_event(
+            shared_shop.shop_id(),
+            listing_id,
+            accepted_currency_id,
+            option::none(),
+            minted_item_id,
+            quote_amount,
+            100,
+        ),
+    );
 
-    test_scenario::return_shared(shared_shop);
-    test_scenario::return_shared(price_info_obj);
-    std::unit_test::destroy(clock_obj);
+    close_buyer_checkout_context(shared_shop, price_info_obj, clock_obj);
     let _ = test_scenario::end(scn);
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::EOutOfStock)]
 fun buy_item_rejects_out_of_stock_after_depletion() {
     let mut scn = test_scenario::begin(TEST_OWNER);
-    let (
-        shop_id,
-        _accepted_currency_id,
-        listing_id,
-        price_info_id,
-    ) = setup_shop_with_currency_listing_and_price_info(&mut scn, 100, 1);
-
-    let _ = test_scenario::next_tx(&mut scn, OTHER_OWNER);
-
-    let mut shared_shop = take_shared_shop(&scn, shop_id);
-    let price_info_obj = test_scenario::take_shared_by_id(
-        &scn,
-        price_info_id,
+    let (shop_id, listing_id, price_info_id) = setup_shop_with_listing_and_price_info(
+        &mut scn,
+        100,
+        1,
     );
 
-    let mut clock_obj = clock::create_for_testing(test_scenario::ctx(&mut scn));
-    clock::set_for_testing(&mut clock_obj, 10);
+    let (mut shared_shop, price_info_obj, clock_obj) = begin_buyer_checkout_context(
+        &mut scn,
+        OTHER_OWNER,
+        shop_id,
+        price_info_id,
+        10,
+    );
 
-    let quote_amount = shop::test_quote_amount_for_price_info_object<TestCoin>(
-        &shared_shop,
+    let quote_amount = shared_shop.quote_amount_for_price_info_object<TestCoin>(
         &price_info_obj,
         100,
         option::none(),
@@ -5376,8 +5081,7 @@ fun buy_item_rejects_out_of_stock_after_depletion() {
         quote_amount,
         test_scenario::ctx(&mut scn),
     );
-    shop::buy_item<TestItem, TestCoin>(
-        &mut shared_shop,
+    shared_shop.buy_item<TestItem, TestCoin>(
         &price_info_obj,
         payment,
         listing_id,
@@ -5401,15 +5105,13 @@ fun buy_item_rejects_out_of_stock_after_depletion() {
         price_info_id,
     );
 
-    let mut clock_obj = clock::create_for_testing(test_scenario::ctx(&mut scn));
-    clock::set_for_testing(&mut clock_obj, 11);
+    let clock_obj = create_test_clock_at(test_scenario::ctx(&mut scn), 11);
     let payment = coin::mint_for_testing<TestCoin>(
         quote_amount,
         test_scenario::ctx(&mut scn),
     );
 
-    shop::buy_item<TestItem, TestCoin>(
-        &mut shared_shop,
+    shared_shop.buy_item<TestItem, TestCoin>(
         &price_info_obj,
         payment,
         listing_id,
@@ -5421,7 +5123,7 @@ fun buy_item_rejects_out_of_stock_after_depletion() {
         test_scenario::ctx(&mut scn),
     );
 
-    abort EAssertFailure
+    abort
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::EPythObjectMismatch)]
@@ -5434,17 +5136,18 @@ fun buy_item_rejects_price_info_object_id_mismatch() {
         test_scenario::ctx(&mut scn),
     );
     let shop_id = object::id(&shop_obj);
-    let (price_info_object, price_info_id) = create_price_info_object_for_feed(
+    let price_info_object = create_price_info_object_for_feed(
         PRIMARY_FEED_ID,
         test_scenario::ctx(&mut scn),
     );
-    let (other_price_info_object, other_price_info_id) = create_price_info_object_for_feed(
+    let price_info_id = price_info_object.uid_to_inner();
+    let other_price_info_object = create_price_info_object_for_feed(
         PRIMARY_FEED_ID,
         test_scenario::ctx(&mut scn),
     );
+    let other_price_info_id = other_price_info_object.uid_to_inner();
 
-    shop::add_accepted_currency<TestCoin>(
-        &mut shop_obj,
+    shop_obj.add_accepted_currency<TestCoin>(
         &owner_cap,
         &currency,
         &price_info_object,
@@ -5454,13 +5157,9 @@ fun buy_item_rejects_price_info_object_id_mismatch() {
         option::none(),
         option::none(),
     );
-    let _accepted_currency_id = shop::test_last_created_id(
-        test_scenario::ctx(&mut scn),
-    );
     std::unit_test::destroy(currency);
 
-    shop::add_item_listing<TestItem>(
-        &mut shop_obj,
+    let listing_id = shop_obj.add_item_listing<TestItem>(
         &owner_cap,
         b"Mismatch Item".to_string(),
         100,
@@ -5468,7 +5167,6 @@ fun buy_item_rejects_price_info_object_id_mismatch() {
         option::none(),
         test_scenario::ctx(&mut scn),
     );
-    let listing_id = last_created_listing_id();
 
     transfer::public_share_object(price_info_object);
     transfer::public_share_object(other_price_info_object);
@@ -5483,12 +5181,10 @@ fun buy_item_rejects_price_info_object_id_mismatch() {
         other_price_info_id,
     );
 
-    let mut clock_obj = clock::create_for_testing(test_scenario::ctx(&mut scn));
-    clock::set_for_testing(&mut clock_obj, 10);
+    let clock_obj = create_test_clock_at(test_scenario::ctx(&mut scn), 10);
     let payment = coin::mint_for_testing<TestCoin>(1, test_scenario::ctx(&mut scn));
 
-    shop::buy_item<TestItem, TestCoin>(
-        &mut shared_shop,
+    shared_shop.buy_item<TestItem, TestCoin>(
         &other_price_info_obj,
         payment,
         listing_id,
@@ -5500,23 +5196,20 @@ fun buy_item_rejects_price_info_object_id_mismatch() {
         test_scenario::ctx(&mut scn),
     );
 
-    abort EAssertFailure
+    abort
 }
 
 #[test]
 fun buy_item_with_discount_emits_discount_redeemed_and_records_template_id() {
     let mut scn = test_scenario::begin(TEST_OWNER);
-    shop::create_shop(DEFAULT_SHOP_NAME.to_string(), test_scenario::ctx(&mut scn));
-    let created_events = event::events_by_type<shop::ShopCreatedEvent>();
-    let shop_created = &created_events[0];
-    let shop_id = shop::test_shop_created_shop_id(shop_created);
-    let owner_cap_id = shop::test_shop_created_owner_cap_id(shop_created);
+    let (shop_id, owner_cap_id) = create_default_shop_and_owner_cap_ids_for_sender(&mut scn);
 
     let currency = prepare_test_currency_for_owner(&mut scn, TEST_OWNER);
-    let (price_info_object, price_info_id) = create_price_info_object_for_feed(
+    let price_info_object = create_price_info_object_for_feed(
         PRIMARY_FEED_ID,
         test_scenario::ctx(&mut scn),
     );
+    let price_info_id = price_info_object.uid_to_inner();
 
     let mut shop_obj = take_shared_shop(&scn, shop_id);
     let owner_cap_obj = test_scenario::take_from_sender_by_id(
@@ -5524,8 +5217,7 @@ fun buy_item_with_discount_emits_discount_redeemed_and_records_template_id() {
         owner_cap_id,
     );
 
-    shop::add_accepted_currency<TestCoin>(
-        &mut shop_obj,
+    shop_obj.add_accepted_currency<TestCoin>(
         &owner_cap_obj,
         &currency,
         &price_info_object,
@@ -5535,13 +5227,9 @@ fun buy_item_with_discount_emits_discount_redeemed_and_records_template_id() {
         option::none(),
         option::none(),
     );
-    let _accepted_currency_id = shop::test_last_created_id(
-        test_scenario::ctx(&mut scn),
-    );
     std::unit_test::destroy(currency);
 
-    shop::add_item_listing<TestItem>(
-        &mut shop_obj,
+    let listing_id = shop_obj.add_item_listing<TestItem>(
         &owner_cap_obj,
         b"Discounted Item".to_string(),
         1_000,
@@ -5549,10 +5237,8 @@ fun buy_item_with_discount_emits_discount_redeemed_and_records_template_id() {
         option::none(),
         test_scenario::ctx(&mut scn),
     );
-    let listing_id = last_created_listing_id();
 
-    shop::create_discount_template(
-        &mut shop_obj,
+    shop_obj.create_discount_template(
         &owner_cap_obj,
         option::some(listing_id),
         0,
@@ -5562,7 +5248,7 @@ fun buy_item_with_discount_emits_discount_redeemed_and_records_template_id() {
         option::some(10),
         test_scenario::ctx(&mut scn),
     );
-    let template_id = shop::test_last_created_id(test_scenario::ctx(&mut scn));
+    let template_id = tx_context::last_created_object_id(test_scenario::ctx(&mut scn)).to_id();
 
     transfer::public_share_object(price_info_object);
     test_scenario::return_to_sender(&scn, owner_cap_obj);
@@ -5576,20 +5262,18 @@ fun buy_item_with_discount_emits_discount_redeemed_and_records_template_id() {
         price_info_id,
     );
 
-    let mut clock_obj = clock::create_for_testing(test_scenario::ctx(&mut scn));
-    clock::set_for_testing(&mut clock_obj, 10);
+    let clock_obj = create_test_clock_at(test_scenario::ctx(&mut scn), 10);
 
     let now_secs = clock::timestamp_ms(&clock_obj) / 1000;
-    let ticket = shop::test_claim_discount_ticket_inline(
-        &mut shared_shop,
+    let ticket = shared_shop.claim_discount_ticket_inline(
         template_id,
         now_secs,
         test_scenario::ctx(&mut scn),
     );
+    let ticket_id = object::id(&ticket);
 
     let discounted_price_usd_cents = 1_000 - 250;
-    let quote_amount = shop::test_quote_amount_for_price_info_object<TestCoin>(
-        &shared_shop,
+    let quote_amount = shared_shop.quote_amount_for_price_info_object<TestCoin>(
         &price_info_obj,
         discounted_price_usd_cents,
         option::none(),
@@ -5597,15 +5281,11 @@ fun buy_item_with_discount_emits_discount_redeemed_and_records_template_id() {
         &clock_obj,
     );
 
-    let purchase_before = event::events_by_type<shop::PurchaseCompletedEvent>().length();
-    let redeem_before = event::events_by_type<shop::DiscountRedeemedEvent>().length();
-
     let payment = coin::mint_for_testing<TestCoin>(
         quote_amount,
         test_scenario::ctx(&mut scn),
     );
-    shop::buy_item_with_discount<TestItem, TestCoin>(
-        &mut shared_shop,
+    shared_shop.buy_item_with_discount<TestItem, TestCoin>(
         template_id,
         ticket,
         &price_info_obj,
@@ -5619,62 +5299,48 @@ fun buy_item_with_discount_emits_discount_redeemed_and_records_template_id() {
         test_scenario::ctx(&mut scn),
     );
 
-    let purchases = event::events_by_type<shop::PurchaseCompletedEvent>();
-    assert_eq!(purchases.length(), purchase_before + 1);
-    let purchase = &purchases[purchases.length() - 1];
-    assert_eq!(
-        shop::test_purchase_completed_discounted_price(purchase),
-        discounted_price_usd_cents,
+    let minted_item_id = tx_context::last_created_object_id(test_scenario::ctx(&mut scn)).to_id();
+    assert_emitted!(
+        shop::new_purchase_completed_event(
+            shared_shop.shop_id(),
+            listing_id,
+            price_info_id,
+            option::some(template_id),
+            minted_item_id,
+            quote_amount,
+            discounted_price_usd_cents,
+        ),
     );
-    let template_id_opt = shop::test_purchase_completed_discount_template_id(
-        purchase,
+
+    assert_emitted!(
+        shop::new_discount_redeemed_event(
+            shared_shop.shop_id(),
+            template_id,
+            ticket_id,
+        ),
     );
-    assert!(option::is_some(&template_id_opt));
-    template_id_opt.do_ref!(|value| {
-        assert_eq!(*value, template_id);
-    });
 
-    let redeems = event::events_by_type<shop::DiscountRedeemedEvent>();
-    assert_eq!(redeems.length(), redeem_before + 1);
-    let redeem = &redeems[redeems.length() - 1];
-    assert_eq!(shop::test_discount_redeemed_shop(redeem), shop::test_shop_id(&shared_shop));
-    assert_eq!(shop::test_discount_redeemed_template_id(redeem), template_id);
-    let _ = shop::test_discount_redeemed_discount_id(redeem);
-
-    let (
-        _shop_id,
-        _applies_to,
-        _rule,
-        _starts_at,
-        _expires_at,
-        _max_redemptions,
-        claims_issued,
-        redemptions,
-        _active,
-    ) = shop::test_discount_template_values(&shared_shop, template_id);
+    let template_values = shared_shop.discount_template(template_id);
+    let claims_issued = template_values.discount_template_claims_issued();
+    let redemptions = template_values.discount_template_redemptions();
     assert_eq!(claims_issued, 1);
     assert_eq!(redemptions, 1);
 
-    test_scenario::return_shared(shared_shop);
-    test_scenario::return_shared(price_info_obj);
-    std::unit_test::destroy(clock_obj);
+    close_buyer_checkout_context(shared_shop, price_info_obj, clock_obj);
     let _ = test_scenario::end(scn);
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::EDiscountTicketOwnerMismatch)]
 fun buy_item_with_discount_rejects_ticket_owner_mismatch() {
     let mut scn = test_scenario::begin(TEST_OWNER);
-    shop::create_shop(DEFAULT_SHOP_NAME.to_string(), test_scenario::ctx(&mut scn));
-    let created_events = event::events_by_type<shop::ShopCreatedEvent>();
-    let shop_created = &created_events[0];
-    let shop_id = shop::test_shop_created_shop_id(shop_created);
-    let owner_cap_id = shop::test_shop_created_owner_cap_id(shop_created);
+    let (shop_id, owner_cap_id) = create_default_shop_and_owner_cap_ids_for_sender(&mut scn);
 
     let currency = prepare_test_currency_for_owner(&mut scn, TEST_OWNER);
-    let (price_info_object, price_info_id) = create_price_info_object_for_feed(
+    let price_info_object = create_price_info_object_for_feed(
         PRIMARY_FEED_ID,
         test_scenario::ctx(&mut scn),
     );
+    let price_info_id = price_info_object.uid_to_inner();
 
     let mut shop_obj = take_shared_shop(&scn, shop_id);
     let owner_cap_obj = test_scenario::take_from_sender_by_id(
@@ -5682,8 +5348,7 @@ fun buy_item_with_discount_rejects_ticket_owner_mismatch() {
         owner_cap_id,
     );
 
-    shop::add_accepted_currency<TestCoin>(
-        &mut shop_obj,
+    shop_obj.add_accepted_currency<TestCoin>(
         &owner_cap_obj,
         &currency,
         &price_info_object,
@@ -5693,13 +5358,9 @@ fun buy_item_with_discount_rejects_ticket_owner_mismatch() {
         option::none(),
         option::none(),
     );
-    let _accepted_currency_id = shop::test_last_created_id(
-        test_scenario::ctx(&mut scn),
-    );
     std::unit_test::destroy(currency);
 
-    shop::add_item_listing<TestItem>(
-        &mut shop_obj,
+    let listing_id = shop_obj.add_item_listing<TestItem>(
         &owner_cap_obj,
         b"Owner Mismatch Item".to_string(),
         1_000,
@@ -5707,10 +5368,8 @@ fun buy_item_with_discount_rejects_ticket_owner_mismatch() {
         option::none(),
         test_scenario::ctx(&mut scn),
     );
-    let listing_id = last_created_listing_id();
 
-    shop::create_discount_template(
-        &mut shop_obj,
+    shop_obj.create_discount_template(
         &owner_cap_obj,
         option::some(listing_id),
         0,
@@ -5720,7 +5379,7 @@ fun buy_item_with_discount_rejects_ticket_owner_mismatch() {
         option::some(10),
         test_scenario::ctx(&mut scn),
     );
-    let template_id = shop::test_last_created_id(test_scenario::ctx(&mut scn));
+    let template_id = tx_context::last_created_object_id(test_scenario::ctx(&mut scn)).to_id();
 
     transfer::public_share_object(price_info_object);
     test_scenario::return_to_sender(&scn, owner_cap_obj);
@@ -5734,12 +5393,10 @@ fun buy_item_with_discount_rejects_ticket_owner_mismatch() {
         price_info_id,
     );
 
-    let mut clock_obj = clock::create_for_testing(test_scenario::ctx(&mut scn));
-    clock::set_for_testing(&mut clock_obj, 10);
+    let clock_obj = create_test_clock_at(test_scenario::ctx(&mut scn), 10);
 
     let now_secs = clock::timestamp_ms(&clock_obj) / 1000;
-    let ticket = shop::test_claim_discount_ticket_inline(
-        &mut shared_shop,
+    let ticket = shared_shop.claim_discount_ticket_inline(
         template_id,
         now_secs,
         test_scenario::ctx(&mut scn),
@@ -5763,15 +5420,13 @@ fun buy_item_with_discount_rejects_ticket_owner_mismatch() {
         ticket_id,
     );
 
-    let mut clock_obj = clock::create_for_testing(test_scenario::ctx(&mut scn));
-    clock::set_for_testing(&mut clock_obj, 11);
+    let clock_obj = create_test_clock_at(test_scenario::ctx(&mut scn), 11);
 
     let payment = coin::mint_for_testing<TestCoin>(
         1_000_000,
         test_scenario::ctx(&mut scn),
     );
-    shop::buy_item_with_discount<TestItem, TestCoin>(
-        &mut shared_shop,
+    shared_shop.buy_item_with_discount<TestItem, TestCoin>(
         template_id,
         ticket,
         &price_info_obj,
@@ -5785,18 +5440,17 @@ fun buy_item_with_discount_rejects_ticket_owner_mismatch() {
         test_scenario::ctx(&mut scn),
     );
 
-    abort EAssertFailure
+    abort
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::EInsufficientPayment)]
 fun buy_item_rejects_insufficient_payment() {
     let mut scn = test_scenario::begin(TEST_OWNER);
-    let (
-        shop_id,
-        _accepted_currency_id,
-        listing_id,
-        price_info_id,
-    ) = setup_shop_with_currency_listing_and_price_info(&mut scn, 10_000, 2);
+    let (shop_id, listing_id, price_info_id) = setup_shop_with_listing_and_price_info(
+        &mut scn,
+        10_000,
+        2,
+    );
 
     let _ = test_scenario::next_tx(&mut scn, OTHER_OWNER);
 
@@ -5806,11 +5460,9 @@ fun buy_item_rejects_insufficient_payment() {
         price_info_id,
     );
 
-    let mut clock_obj = clock::create_for_testing(test_scenario::ctx(&mut scn));
-    clock::set_for_testing(&mut clock_obj, 10);
+    let clock_obj = create_test_clock_at(test_scenario::ctx(&mut scn), 10);
 
-    let quote_amount = shop::test_quote_amount_for_price_info_object<TestCoin>(
-        &shared_shop,
+    let quote_amount = shared_shop.quote_amount_for_price_info_object<TestCoin>(
         &price_info_obj,
         10_000,
         option::none(),
@@ -5822,8 +5474,7 @@ fun buy_item_rejects_insufficient_payment() {
         test_scenario::ctx(&mut scn),
     );
 
-    shop::buy_item<TestItem, TestCoin>(
-        &mut shared_shop,
+    shared_shop.buy_item<TestItem, TestCoin>(
         &price_info_obj,
         payment,
         listing_id,
@@ -5835,18 +5486,17 @@ fun buy_item_rejects_insufficient_payment() {
         test_scenario::ctx(&mut scn),
     );
 
-    abort EAssertFailure
+    abort
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::EAcceptedCurrencyMissing)]
 fun buy_item_rejects_wrong_coin_type() {
     let mut scn = test_scenario::begin(TEST_OWNER);
-    let (
-        shop_id,
-        _accepted_currency_id,
-        listing_id,
-        price_info_id,
-    ) = setup_shop_with_currency_listing_and_price_info(&mut scn, 100, 1);
+    let (shop_id, listing_id, price_info_id) = setup_shop_with_listing_and_price_info(
+        &mut scn,
+        100,
+        1,
+    );
 
     let _ = test_scenario::next_tx(&mut scn, OTHER_OWNER);
 
@@ -5855,15 +5505,13 @@ fun buy_item_rejects_wrong_coin_type() {
         &scn,
         price_info_id,
     );
-    let mut clock_obj = clock::create_for_testing(test_scenario::ctx(&mut scn));
-    clock::set_for_testing(&mut clock_obj, 10);
+    let clock_obj = create_test_clock_at(test_scenario::ctx(&mut scn), 10);
 
     let payment = coin::mint_for_testing<AltTestCoin>(
         1,
         test_scenario::ctx(&mut scn),
     );
-    shop::buy_item<TestItem, AltTestCoin>(
-        &mut shared_shop,
+    shared_shop.buy_item<TestItem, AltTestCoin>(
         &price_info_obj,
         payment,
         listing_id,
@@ -5875,18 +5523,17 @@ fun buy_item_rejects_wrong_coin_type() {
         test_scenario::ctx(&mut scn),
     );
 
-    abort EAssertFailure
+    abort
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::EItemTypeMismatch)]
 fun buy_item_rejects_item_type_mismatch() {
     let mut scn = test_scenario::begin(TEST_OWNER);
-    let (
-        shop_id,
-        _accepted_currency_id,
-        listing_id,
-        price_info_id,
-    ) = setup_shop_with_currency_listing_and_price_info(&mut scn, 100, 1);
+    let (shop_id, listing_id, price_info_id) = setup_shop_with_listing_and_price_info(
+        &mut scn,
+        100,
+        1,
+    );
 
     let _ = test_scenario::next_tx(&mut scn, OTHER_OWNER);
 
@@ -5895,12 +5542,10 @@ fun buy_item_rejects_item_type_mismatch() {
         &scn,
         price_info_id,
     );
-    let mut clock_obj = clock::create_for_testing(test_scenario::ctx(&mut scn));
-    clock::set_for_testing(&mut clock_obj, 10);
+    let clock_obj = create_test_clock_at(test_scenario::ctx(&mut scn), 10);
 
     let payment = coin::mint_for_testing<TestCoin>(1, test_scenario::ctx(&mut scn));
-    shop::buy_item<OtherItem, TestCoin>(
-        &mut shared_shop,
+    shared_shop.buy_item<OtherItem, TestCoin>(
         &price_info_obj,
         payment,
         listing_id,
@@ -5912,23 +5557,20 @@ fun buy_item_rejects_item_type_mismatch() {
         test_scenario::ctx(&mut scn),
     );
 
-    abort EAssertFailure
+    abort
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::EInvalidGuardrailCap)]
 fun buy_item_rejects_guardrail_override_above_cap() {
     let mut scn = test_scenario::begin(TEST_OWNER);
-    shop::create_shop(DEFAULT_SHOP_NAME.to_string(), test_scenario::ctx(&mut scn));
-    let created_events = event::events_by_type<shop::ShopCreatedEvent>();
-    let shop_created = &created_events[0];
-    let shop_id = shop::test_shop_created_shop_id(shop_created);
-    let owner_cap_id = shop::test_shop_created_owner_cap_id(shop_created);
+    let (shop_id, owner_cap_id) = create_default_shop_and_owner_cap_ids_for_sender(&mut scn);
 
     let currency = prepare_test_currency_for_owner(&mut scn, TEST_OWNER);
-    let (price_info_object, pyth_object_id) = create_price_info_object_for_feed(
+    let price_info_object = create_price_info_object_for_feed(
         PRIMARY_FEED_ID,
         test_scenario::ctx(&mut scn),
     );
+    let pyth_object_id = price_info_object.uid_to_inner();
 
     let mut shop_obj = take_shared_shop(&scn, shop_id);
     let owner_cap_obj = test_scenario::take_from_sender_by_id(
@@ -5937,8 +5579,7 @@ fun buy_item_rejects_guardrail_override_above_cap() {
     );
 
     // Seller caps must be non-zero; zero should abort with EInvalidGuardrailCap.
-    shop::add_accepted_currency<TestCoin>(
-        &mut shop_obj,
+    shop_obj.add_accepted_currency<TestCoin>(
         &owner_cap_obj,
         &currency,
         &price_info_object,
@@ -5949,7 +5590,7 @@ fun buy_item_rejects_guardrail_override_above_cap() {
         option::some(0),
     );
 
-    abort EAssertFailure
+    abort
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::EPriceNonPositive)]
@@ -5957,29 +5598,26 @@ fun quote_amount_from_usd_cents_rejects_negative_price() {
     let price_value = i64::new(1, true);
     let expo = i64::new(0, false);
     let price = price::new(price_value, 0, expo, 0);
-    let _ = shop::test_quote_amount_from_usd_cents(
+    let _ = shop::quote_amount_from_usd_cents(
         100,
         9,
         price,
-        shop::test_default_max_confidence_ratio_bps(),
+        TEST_DEFAULT_MAX_CONFIDENCE_RATIO_BPS,
     );
-    abort EAssertFailure
+    abort
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::ETemplateInactive)]
 fun buy_item_with_discount_rejects_inactive_template() {
     let mut scn = test_scenario::begin(TEST_OWNER);
-    shop::create_shop(DEFAULT_SHOP_NAME.to_string(), test_scenario::ctx(&mut scn));
-    let created_events = event::events_by_type<shop::ShopCreatedEvent>();
-    let shop_created = &created_events[0];
-    let shop_id = shop::test_shop_created_shop_id(shop_created);
-    let owner_cap_id = shop::test_shop_created_owner_cap_id(shop_created);
+    let (shop_id, owner_cap_id) = create_default_shop_and_owner_cap_ids_for_sender(&mut scn);
 
     let currency = prepare_test_currency_for_owner(&mut scn, TEST_OWNER);
-    let (price_info_object, price_info_id) = create_price_info_object_for_feed(
+    let price_info_object = create_price_info_object_for_feed(
         PRIMARY_FEED_ID,
         test_scenario::ctx(&mut scn),
     );
+    let price_info_id = price_info_object.uid_to_inner();
 
     let mut shop_obj = take_shared_shop(&scn, shop_id);
     let owner_cap_obj = test_scenario::take_from_sender_by_id(
@@ -5987,8 +5625,7 @@ fun buy_item_with_discount_rejects_inactive_template() {
         owner_cap_id,
     );
 
-    shop::add_accepted_currency<TestCoin>(
-        &mut shop_obj,
+    shop_obj.add_accepted_currency<TestCoin>(
         &owner_cap_obj,
         &currency,
         &price_info_object,
@@ -5998,13 +5635,9 @@ fun buy_item_with_discount_rejects_inactive_template() {
         option::none(),
         option::none(),
     );
-    let _accepted_currency_id = shop::test_last_created_id(
-        test_scenario::ctx(&mut scn),
-    );
     std::unit_test::destroy(currency);
 
-    shop::add_item_listing<TestItem>(
-        &mut shop_obj,
+    let listing_id = shop_obj.add_item_listing<TestItem>(
         &owner_cap_obj,
         b"Inactive Template Item".to_string(),
         100,
@@ -6012,10 +5645,8 @@ fun buy_item_with_discount_rejects_inactive_template() {
         option::none(),
         test_scenario::ctx(&mut scn),
     );
-    let listing_id = last_created_listing_id();
 
-    shop::create_discount_template(
-        &mut shop_obj,
+    shop_obj.create_discount_template(
         &owner_cap_obj,
         option::some(listing_id),
         0,
@@ -6025,7 +5656,7 @@ fun buy_item_with_discount_rejects_inactive_template() {
         option::none(),
         test_scenario::ctx(&mut scn),
     );
-    let template_id = shop::test_last_created_id(test_scenario::ctx(&mut scn));
+    let template_id = tx_context::last_created_object_id(test_scenario::ctx(&mut scn)).to_id();
 
     transfer::public_share_object(price_info_object);
     test_scenario::return_to_sender(&scn, owner_cap_obj);
@@ -6034,11 +5665,9 @@ fun buy_item_with_discount_rejects_inactive_template() {
     let _ = test_scenario::next_tx(&mut scn, OTHER_OWNER);
 
     let mut shared_shop = take_shared_shop(&scn, shop_id);
-    let mut clock_obj = clock::create_for_testing(test_scenario::ctx(&mut scn));
-    clock::set_for_testing(&mut clock_obj, 10);
+    let clock_obj = create_test_clock_at(test_scenario::ctx(&mut scn), 10);
     let now_secs = clock::timestamp_ms(&clock_obj) / 1000;
-    let ticket = shop::test_claim_discount_ticket_inline(
-        &mut shared_shop,
+    let ticket = shared_shop.claim_discount_ticket_inline(
         template_id,
         now_secs,
         test_scenario::ctx(&mut scn),
@@ -6056,8 +5685,7 @@ fun buy_item_with_discount_rejects_inactive_template() {
         owner_cap_id,
     );
     let mut shared_shop = take_shared_shop(&scn, shop_id);
-    shop::toggle_discount_template(
-        &mut shared_shop,
+    shared_shop.toggle_discount_template(
         &owner_cap_obj,
         template_id,
         false,
@@ -6072,10 +5700,8 @@ fun buy_item_with_discount_rejects_inactive_template() {
         &scn,
         price_info_id,
     );
-    let mut clock_obj = clock::create_for_testing(test_scenario::ctx(&mut scn));
-    clock::set_for_testing(&mut clock_obj, 10);
-    let quote_amount = shop::test_quote_amount_for_price_info_object<TestCoin>(
-        &shared_shop,
+    let clock_obj = create_test_clock_at(test_scenario::ctx(&mut scn), 10);
+    let quote_amount = shared_shop.quote_amount_for_price_info_object<TestCoin>(
         &price_info_obj,
         100,
         option::none(),
@@ -6091,8 +5717,7 @@ fun buy_item_with_discount_rejects_inactive_template() {
         ticket_id,
     );
 
-    shop::buy_item_with_discount<TestItem, TestCoin>(
-        &mut shared_shop,
+    shared_shop.buy_item_with_discount<TestItem, TestCoin>(
         template_id,
         ticket,
         &price_info_obj,
@@ -6106,23 +5731,20 @@ fun buy_item_with_discount_rejects_inactive_template() {
         test_scenario::ctx(&mut scn),
     );
 
-    abort EAssertFailure
+    abort
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::EDiscountTicketMismatch)]
 fun buy_item_with_discount_rejects_ticket_template_mismatch() {
     let mut scn = test_scenario::begin(TEST_OWNER);
-    shop::create_shop(DEFAULT_SHOP_NAME.to_string(), test_scenario::ctx(&mut scn));
-    let created_events = event::events_by_type<shop::ShopCreatedEvent>();
-    let shop_created = &created_events[0];
-    let shop_id = shop::test_shop_created_shop_id(shop_created);
-    let owner_cap_id = shop::test_shop_created_owner_cap_id(shop_created);
+    let (shop_id, owner_cap_id) = create_default_shop_and_owner_cap_ids_for_sender(&mut scn);
 
     let currency = prepare_test_currency_for_owner(&mut scn, TEST_OWNER);
-    let (price_info_object, price_info_id) = create_price_info_object_for_feed(
+    let price_info_object = create_price_info_object_for_feed(
         PRIMARY_FEED_ID,
         test_scenario::ctx(&mut scn),
     );
+    let price_info_id = price_info_object.uid_to_inner();
 
     let mut shop_obj = take_shared_shop(&scn, shop_id);
     let owner_cap_obj = test_scenario::take_from_sender_by_id(
@@ -6130,8 +5752,7 @@ fun buy_item_with_discount_rejects_ticket_template_mismatch() {
         owner_cap_id,
     );
 
-    shop::add_accepted_currency<TestCoin>(
-        &mut shop_obj,
+    shop_obj.add_accepted_currency<TestCoin>(
         &owner_cap_obj,
         &currency,
         &price_info_object,
@@ -6141,13 +5762,9 @@ fun buy_item_with_discount_rejects_ticket_template_mismatch() {
         option::none(),
         option::none(),
     );
-    let _accepted_currency_id = shop::test_last_created_id(
-        test_scenario::ctx(&mut scn),
-    );
     std::unit_test::destroy(currency);
 
-    shop::add_item_listing<TestItem>(
-        &mut shop_obj,
+    let listing_id = shop_obj.add_item_listing<TestItem>(
         &owner_cap_obj,
         b"Template Mismatch Item".to_string(),
         100,
@@ -6155,10 +5772,8 @@ fun buy_item_with_discount_rejects_ticket_template_mismatch() {
         option::none(),
         test_scenario::ctx(&mut scn),
     );
-    let listing_id = last_created_listing_id();
 
-    shop::create_discount_template(
-        &mut shop_obj,
+    shop_obj.create_discount_template(
         &owner_cap_obj,
         option::some(listing_id),
         0,
@@ -6168,10 +5783,9 @@ fun buy_item_with_discount_rejects_ticket_template_mismatch() {
         option::none(),
         test_scenario::ctx(&mut scn),
     );
-    let template_a_id = shop::test_last_created_id(test_scenario::ctx(&mut scn));
+    let template_a_id = tx_context::last_created_object_id(test_scenario::ctx(&mut scn)).to_id();
 
-    shop::create_discount_template(
-        &mut shop_obj,
+    shop_obj.create_discount_template(
         &owner_cap_obj,
         option::some(listing_id),
         0,
@@ -6181,7 +5795,7 @@ fun buy_item_with_discount_rejects_ticket_template_mismatch() {
         option::none(),
         test_scenario::ctx(&mut scn),
     );
-    let template_b_id = shop::test_last_created_id(test_scenario::ctx(&mut scn));
+    let template_b_id = tx_context::last_created_object_id(test_scenario::ctx(&mut scn)).to_id();
 
     transfer::public_share_object(price_info_object);
     test_scenario::return_to_sender(&scn, owner_cap_obj);
@@ -6195,24 +5809,20 @@ fun buy_item_with_discount_rejects_ticket_template_mismatch() {
         price_info_id,
     );
 
-    let mut clock_obj = clock::create_for_testing(test_scenario::ctx(&mut scn));
-    clock::set_for_testing(&mut clock_obj, 10);
+    let clock_obj = create_test_clock_at(test_scenario::ctx(&mut scn), 10);
     let now_secs = clock::timestamp_ms(&clock_obj) / 1000;
-    let ticket = shop::test_claim_discount_ticket_inline(
-        &mut shared_shop,
+    let ticket = shared_shop.claim_discount_ticket_inline(
         template_a_id,
         now_secs,
         test_scenario::ctx(&mut scn),
     );
-    let extra_ticket = shop::test_claim_discount_ticket_inline(
-        &mut shared_shop,
+    let extra_ticket = shared_shop.claim_discount_ticket_inline(
         template_b_id,
         now_secs,
         test_scenario::ctx(&mut scn),
     );
     transfer::public_transfer(extra_ticket, OTHER_OWNER);
-    let quote_amount = shop::test_quote_amount_for_price_info_object<TestCoin>(
-        &shared_shop,
+    let quote_amount = shared_shop.quote_amount_for_price_info_object<TestCoin>(
         &price_info_obj,
         100,
         option::none(),
@@ -6224,8 +5834,7 @@ fun buy_item_with_discount_rejects_ticket_template_mismatch() {
         test_scenario::ctx(&mut scn),
     );
 
-    shop::buy_item_with_discount<TestItem, TestCoin>(
-        &mut shared_shop,
+    shared_shop.buy_item_with_discount<TestItem, TestCoin>(
         template_b_id,
         ticket,
         &price_info_obj,
@@ -6239,35 +5848,36 @@ fun buy_item_with_discount_rejects_ticket_template_mismatch() {
         test_scenario::ctx(&mut scn),
     );
 
-    abort EAssertFailure
+    abort
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::EDiscountTicketShopMismatch)]
 fun buy_item_with_discount_rejects_ticket_shop_mismatch() {
     let mut scn = test_scenario::begin(TEST_OWNER);
-    shop::create_shop(DEFAULT_SHOP_NAME.to_string(), test_scenario::ctx(&mut scn));
-    shop::create_shop(b"Other Shop".to_string(), test_scenario::ctx(&mut scn));
-    let created_events = event::events_by_type<shop::ShopCreatedEvent>();
-    let shop_a_created = &created_events[created_events.length() - 2];
-    let shop_b_created = &created_events[created_events.length() - 1];
-    let shop_a_id = shop::test_shop_created_shop_id(shop_a_created);
-    let owner_cap_a_id = shop::test_shop_created_owner_cap_id(shop_a_created);
-    let shop_b_id = shop::test_shop_created_shop_id(shop_b_created);
-    let owner_cap_b_id = shop::test_shop_created_owner_cap_id(shop_b_created);
+
+    let (shop_a_id, owner_cap_a_id) = create_shop_and_owner_cap_ids_for_sender(
+        &mut scn,
+        DEFAULT_SHOP_NAME,
+    );
+
+    let (shop_b_id, owner_cap_b_id) = create_shop_and_owner_cap_ids_for_sender(
+        &mut scn,
+        b"Other Shop",
+    );
 
     let currency = prepare_test_currency_for_owner(&mut scn, TEST_OWNER);
-    let (price_info_object, price_info_id) = create_price_info_object_for_feed(
+    let price_info_object = create_price_info_object_for_feed(
         PRIMARY_FEED_ID,
         test_scenario::ctx(&mut scn),
     );
+    let price_info_id = price_info_object.uid_to_inner();
 
     let mut shop_a = take_shared_shop(&scn, shop_a_id);
     let owner_cap_a = test_scenario::take_from_sender_by_id(
         &scn,
         owner_cap_a_id,
     );
-    shop::add_accepted_currency<TestCoin>(
-        &mut shop_a,
+    shop_a.add_accepted_currency<TestCoin>(
         &owner_cap_a,
         &currency,
         &price_info_object,
@@ -6277,13 +5887,9 @@ fun buy_item_with_discount_rejects_ticket_shop_mismatch() {
         option::none(),
         option::none(),
     );
-    let _accepted_currency_id = shop::test_last_created_id(
-        test_scenario::ctx(&mut scn),
-    );
     std::unit_test::destroy(currency);
 
-    shop::add_item_listing<TestItem>(
-        &mut shop_a,
+    let listing_id = shop_a.add_item_listing<TestItem>(
         &owner_cap_a,
         b"Shop A Item".to_string(),
         100,
@@ -6291,10 +5897,8 @@ fun buy_item_with_discount_rejects_ticket_shop_mismatch() {
         option::none(),
         test_scenario::ctx(&mut scn),
     );
-    let listing_id = last_created_listing_id();
 
-    shop::create_discount_template(
-        &mut shop_a,
+    shop_a.create_discount_template(
         &owner_cap_a,
         option::some(listing_id),
         0,
@@ -6304,15 +5908,14 @@ fun buy_item_with_discount_rejects_ticket_shop_mismatch() {
         option::none(),
         test_scenario::ctx(&mut scn),
     );
-    let template_a_id = shop::test_last_created_id(test_scenario::ctx(&mut scn));
+    let template_a_id = tx_context::last_created_object_id(test_scenario::ctx(&mut scn)).to_id();
 
     let mut shop_b = take_shared_shop(&scn, shop_b_id);
     let owner_cap_b = test_scenario::take_from_sender_by_id(
         &scn,
         owner_cap_b_id,
     );
-    shop::create_discount_template(
-        &mut shop_b,
+    shop_b.create_discount_template(
         &owner_cap_b,
         option::none(),
         0,
@@ -6322,7 +5925,7 @@ fun buy_item_with_discount_rejects_ticket_shop_mismatch() {
         option::none(),
         test_scenario::ctx(&mut scn),
     );
-    let template_b_id = shop::test_last_created_id(test_scenario::ctx(&mut scn));
+    let template_b_id = tx_context::last_created_object_id(test_scenario::ctx(&mut scn)).to_id();
 
     transfer::public_share_object(price_info_object);
     test_scenario::return_to_sender(&scn, owner_cap_a);
@@ -6339,24 +5942,20 @@ fun buy_item_with_discount_rejects_ticket_shop_mismatch() {
         price_info_id,
     );
 
-    let mut clock_obj = clock::create_for_testing(test_scenario::ctx(&mut scn));
-    clock::set_for_testing(&mut clock_obj, 10);
+    let clock_obj = create_test_clock_at(test_scenario::ctx(&mut scn), 10);
     let now_secs = clock::timestamp_ms(&clock_obj) / 1000;
-    let ticket_a = shop::test_claim_discount_ticket_inline(
-        &mut shared_shop_a,
+    let ticket_a = shared_shop_a.claim_discount_ticket_inline(
         template_a_id,
         now_secs,
         test_scenario::ctx(&mut scn),
     );
     transfer::public_transfer(ticket_a, OTHER_OWNER);
-    let ticket_b = shop::test_claim_discount_ticket_inline(
-        &mut shared_shop_b,
+    let ticket_b = shared_shop_b.claim_discount_ticket_inline(
         template_b_id,
         now_secs,
         test_scenario::ctx(&mut scn),
     );
-    let quote_amount = shop::test_quote_amount_for_price_info_object<TestCoin>(
-        &shared_shop_a,
+    let quote_amount = shared_shop_a.quote_amount_for_price_info_object<TestCoin>(
         &price_info_obj,
         100,
         option::none(),
@@ -6368,8 +5967,7 @@ fun buy_item_with_discount_rejects_ticket_shop_mismatch() {
         test_scenario::ctx(&mut scn),
     );
 
-    shop::buy_item_with_discount<TestItem, TestCoin>(
-        &mut shared_shop_a,
+    shared_shop_a.buy_item_with_discount<TestItem, TestCoin>(
         template_a_id,
         ticket_b,
         &price_info_obj,
@@ -6383,7 +5981,7 @@ fun buy_item_with_discount_rejects_ticket_shop_mismatch() {
         test_scenario::ctx(&mut scn),
     );
 
-    abort EAssertFailure
+    abort
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::EConfidenceExceedsPrice)]
@@ -6391,13 +5989,13 @@ fun quote_amount_from_usd_cents_rejects_confidence_exceeds_price() {
     let price_value = i64::new(10, false);
     let expo = i64::new(0, false);
     let price = price::new(price_value, 10, expo, 0);
-    let _ = shop::test_quote_amount_from_usd_cents(
+    let _ = shop::quote_amount_from_usd_cents(
         100,
         9,
         price,
-        shop::test_default_max_confidence_ratio_bps(),
+        TEST_DEFAULT_MAX_CONFIDENCE_RATIO_BPS,
     );
-    abort EAssertFailure
+    abort
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::EConfidenceIntervalTooWide)]
@@ -6405,13 +6003,13 @@ fun quote_amount_from_usd_cents_rejects_confidence_interval_too_wide() {
     let price_value = i64::new(100, false);
     let expo = i64::new(0, false);
     let price = price::new(price_value, 50, expo, 0);
-    let _ = shop::test_quote_amount_from_usd_cents(
+    let _ = shop::quote_amount_from_usd_cents(
         100,
         9,
         price,
-        shop::test_default_max_confidence_ratio_bps(),
+        TEST_DEFAULT_MAX_CONFIDENCE_RATIO_BPS,
     );
-    abort EAssertFailure
+    abort
 }
 
 fun create_test_currency(ctx: &mut tx_context::TxContext): coin_registry::Currency<TestCoin> {
@@ -6454,7 +6052,7 @@ fun create_high_decimal_currency(
     ctx: &mut tx_context::TxContext,
 ): coin_registry::Currency<HighDecimalCoin> {
     let mut registry_obj = coin_registry::create_coin_data_registry_for_testing(ctx);
-    let over_max_decimals = (shop::test_max_decimal_power() + 1) as u8;
+    let over_max_decimals = (TEST_MAX_DECIMAL_POWER + 1) as u8;
     let (init, treasury_cap) = coin_registry::new_currency<HighDecimalCoin>(
         &mut registry_obj,
         over_max_decimals,
@@ -6484,21 +6082,12 @@ fun test_coin_type(): type_name::TypeName {
     type_name::with_defining_ids<TestCoin>()
 }
 
-fun last_created_listing_id(): ID {
-    let listing_added_events = event::events_by_type<shop::ItemListingAddedEvent>();
-    let listing_added_count = listing_added_events.length();
-    assert!(listing_added_count > 0);
-    let listing_added_event = &listing_added_events[listing_added_count - 1];
-    shop::test_item_listing_added_listing(listing_added_event)
-}
-
 fun create_discount_template(
     shop: &mut shop::Shop,
     _owner_cap: &shop::ShopOwnerCap,
     ctx: &mut tx_context::TxContext,
 ): ID {
-    shop::test_create_discount_template_local(
-        shop,
+    shop.test_create_discount_template_local(
         option::none(),
         0,
         500,

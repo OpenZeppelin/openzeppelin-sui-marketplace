@@ -94,7 +94,7 @@ await publishPackageToNetwork(
 **Code spotlight: instantiate a Shop after publish**
 `packages/dapp/contracts/oracle-market/sources/shop.move`
 ```move
-fun create_shop(name: string::String, ctx: &mut tx::TxContext) {
+public fun create_shop(name: string::String, ctx: &mut tx::TxContext) {
   let owner = ctx.sender();
   let shop = new_shop(name, owner, ctx);
 

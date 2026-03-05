@@ -21,9 +21,7 @@ const ShopDashboardShell = () => {
   const pathname = usePathname()
   const searchParams = useSearchParams()
   const urlShopId = searchParams.get("shopId") ?? undefined
-  const urlNetwork = normalizeNetworkKey(
-    searchParams.get("network") ?? searchParams.get("networ")
-  )
+  const urlNetwork = normalizeNetworkKey(searchParams.get("network"))
   const packageId = useResolvedPackageId()
   const currentAccount = useCurrentAccount()
   const { network: currentNetwork } = useSuiClientContext()
@@ -107,7 +105,7 @@ const ShopDashboardShell = () => {
     {
       const params = new URLSearchParams(searchParams.toString())
       params.delete("shopId")
-      params.delete("networ")
+      params.delete("network")
       if (normalizedCurrentNetwork) {
         params.set("network", normalizedCurrentNetwork)
       }

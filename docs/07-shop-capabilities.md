@@ -22,7 +22,7 @@ pnpm script owner:shop:update-owner --new-owner <0x...>
 
 ## 4. EVM -> Sui translation
 1. **onlyOwner -> capability**: authority is proved by owning `ShopOwnerCap`, not by `msg.sender`. See `ShopOwnerCap` and `update_shop_owner` in `packages/dapp/contracts/oracle-market/sources/shop.move`.
-2. **Constructor -> entry function**: `create_shop` mints both the shared Shop and the owner capability. See `create_shop` in `packages/dapp/contracts/oracle-market/sources/shop.move` and the script in `packages/dapp/src/scripts/owner/shop-create.ts`.
+2. **Constructor -> public function**: `create_shop` mints both the shared Shop and the owner capability. See `create_shop` in `packages/dapp/contracts/oracle-market/sources/shop.move` and the script in `packages/dapp/src/scripts/owner/shop-create.ts`.
 
 ## 5. Concept deep dive: shared objects and capabilities
 - **Shared objects**: `Shop` is shared so anyone can read it and anyone can submit a transaction that
@@ -33,8 +33,8 @@ pnpm script owner:shop:update-owner --new-owner <0x...>
   field markers are object-owned under the Shop. Sui enforces access based on ownership and the
   object references you pass into a PTB.
   Code: `packages/dapp/contracts/oracle-market/sources/shop.move` (ShopOwnerCap, markers)
-- **Capability-based auth**: `ShopOwnerCap` is an owned object that proves admin rights. Entry
-  functions take it as a parameter and call `assert_owner_cap`. This keeps access control explicit,
+- **Capability-based auth**: `ShopOwnerCap` is an owned object that proves admin rights. Public
+  admin functions take it as a parameter and call `assert_owner_cap`. This keeps access control explicit,
   and it allows ownership rotation without changing code or global state.
   Code: `packages/dapp/contracts/oracle-market/sources/shop.move` (`ShopOwnerCap`, `assert_owner_cap`)
 - **TxContext and object creation**: `obj::new(ctx)` creates new objects and assigns IDs. The
@@ -53,7 +53,7 @@ pnpm script owner:shop:update-owner --new-owner <0x...>
 **Code spotlight: Shop creation + owner cap mint**
 `packages/dapp/contracts/oracle-market/sources/shop.move`
 ```move
-entry fun create_shop(name: string::String, ctx: &mut tx::TxContext) {
+public fun create_shop(name: string::String, ctx: &mut tx::TxContext) {
   let owner = ctx.sender();
   let shop = new_shop(name, owner, ctx);
 
@@ -70,24 +70,15 @@ entry fun create_shop(name: string::String, ctx: &mut tx::TxContext) {
 **Code spotlight: rotate shop ownership on-chain**
 `packages/dapp/contracts/oracle-market/sources/shop.move`
 ```move
-fun update_shop_owner(
+public fun update_shop_owner(
   shop: &mut Shop,
   owner_cap: &ShopOwnerCap,
-  new_owner: address,
-  ctx: &tx::TxContext,
+  new_owner: address
 ) {
-  assert_owner_cap(shop, owner_cap);
-
-  let previous_owner = shop.owner;
+  assert_owner_cap!(shop, owner_cap);
   shop.owner = new_owner;
 
-  event::emit(ShopOwnerUpdatedEvent {
-    shop_id: shop.id.to_inner(),
-    previous_owner,
-    new_owner,
-    shop_owner_cap_id: owner_cap.id.to_inner(),
-    rotated_by: ctx.sender(),
-  });
+  event::emit(new_shop_owner_updated_event(shop.id.to_inner(), owner_cap.id.to_inner()));
 }
 ```
 

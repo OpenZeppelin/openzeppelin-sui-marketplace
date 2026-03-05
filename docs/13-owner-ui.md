@@ -61,24 +61,15 @@ Code:
 **Code spotlight: Shop owner is stored on-chain**
 `packages/dapp/contracts/oracle-market/sources/shop.move`
 ```move
-entry fun update_shop_owner(
+public fun update_shop_owner(
   shop: &mut Shop,
   owner_cap: &ShopOwnerCap,
-  new_owner: address,
-  ctx: &tx::TxContext,
+  new_owner: address
 ) {
-  assert_owner_cap(shop, owner_cap);
-
-  let previous_owner = shop.owner;
+  assert_owner_cap!(shop, owner_cap);
   shop.owner = new_owner;
 
-  event::emit(ShopOwnerUpdatedEvent {
-    shop_id: shop.id.to_inner(),
-    previous_owner,
-    new_owner,
-    shop_owner_cap_id: owner_cap.id.to_inner(),
-    rotated_by: ctx.sender(),
-  });
+  event::emit(new_shop_owner_updated_event(shop.id.to_inner(), owner_cap.id.to_inner()));
 }
 ```
 
