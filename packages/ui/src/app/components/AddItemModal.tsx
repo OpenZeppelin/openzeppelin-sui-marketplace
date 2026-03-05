@@ -78,18 +78,26 @@ const SpotlightTemplateCard = ({
     className={clsx(
       "rounded-2xl border border-slate-200/80 bg-white/85 p-3 text-left transition dark:border-slate-50/20 dark:bg-slate-900/40",
       selected
-        ? "border-sds-primary shadow-sds-primary/10 dark:border-sds-primary shadow-lg"
+        ? "border-sds-blue/60 bg-sds-blue/10 dark:border-sds-blue/60 dark:bg-sds-blue/20 shadow-lg"
         : "hover:border-slate-300/80 dark:hover:border-slate-50/30"
     )}
   >
     <button
       type="button"
       onClick={() => onSelect(template.discountTemplateId)}
-      className="focus-visible:ring-sds-primary/40 w-full text-left focus-visible:outline-none focus-visible:ring-2"
+      aria-pressed={selected}
+      className="focus-visible:ring-sds-blue/40 w-full text-left focus-visible:outline-none focus-visible:ring-2"
     >
       <div className="flex items-center justify-between text-[0.6rem] uppercase tracking-[0.18em] text-slate-500 dark:text-slate-200/60">
-        <span>Template</span>
-        <SpotlightTemplateStatusBadge status={template.status} />
+        <span>{selected ? "Selected template" : "Template"}</span>
+        <div className="flex items-center gap-2">
+          {selected ? (
+            <span className="border-sds-blue/60 bg-sds-blue/10 rounded-full border px-2 py-0.5 text-[0.6rem] font-semibold uppercase tracking-wide text-sds-dark dark:text-sds-light">
+              Selected
+            </span>
+          ) : undefined}
+          <SpotlightTemplateStatusBadge status={template.status} />
+        </div>
       </div>
       <div className="mt-1 text-sm font-semibold text-sds-dark dark:text-sds-light">
         {template.ruleDescription}
@@ -157,6 +165,17 @@ const hasSpotlightTemplateId = ({
     templateId &&
     templates.some((template) => template.discountTemplateId === templateId)
   )
+
+const getSelectedSpotlightTemplate = ({
+  templates,
+  templateId
+}: {
+  templates: DiscountTemplateSummary[]
+  templateId?: string
+}) =>
+  templateId
+    ? templates.find((template) => template.discountTemplateId === templateId)
+    : undefined
 
 const ListingSummarySection = ({
   summary,
@@ -350,6 +369,14 @@ const AddItemModal = ({
   )
   const selectedSpotlightTemplateId =
     formState.spotlightDiscountId.trim() || undefined
+  const selectedSpotlightTemplate = useMemo(
+    () =>
+      getSelectedSpotlightTemplate({
+        templates: availableSpotlightTemplates,
+        templateId: selectedSpotlightTemplateId
+      }),
+    [availableSpotlightTemplates, selectedSpotlightTemplateId]
+  )
   const handleSpotlightTemplateCardSelect = useCallback(
     (templateId: string) => {
       const nextTemplateId =
@@ -555,6 +582,11 @@ const AddItemModal = ({
                       explorerUrl={explorerUrl}
                     />
                   </div>
+                  <p className="mt-3 text-[0.7rem] text-slate-500 dark:text-slate-200/70">
+                    {selectedSpotlightTemplate
+                      ? `Selected spotlight discount: ${selectedSpotlightTemplate.ruleDescription}`
+                      : "No spotlight discount selected."}
+                  </p>
                 </div>
               </div>
             </ModalSection>
