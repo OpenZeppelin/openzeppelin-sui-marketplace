@@ -736,7 +736,6 @@ const DiscountsPanel = ({
                       ? claimBlockingReason
                       : undefined
                     const isClaimable = !isClaimDisabled
-                    console.log(claimTitle)
                     return (
                       <div
                         key={template.discountTemplateId}
