@@ -36,7 +36,7 @@ pnpm install
 # Create an address (it will be your shop owner address). Note the recovery phrase to import it later in your browser wallet.
 sui client new-address ed25519
 
-# Configure this address in dapp/.env , Sui config file or export
+# Configure this address in ./packages/dapp/.env , Sui config file or export
 export SUI_NETWORK=localnet
 export SUI_ACCOUNT_ADDRESS=<0x...>
 export SUI_ACCOUNT_PRIVATE_KEY=<base64 or hex>
@@ -58,6 +58,12 @@ Load some shop data
 ```bash
 # Publish oracle-market
 pnpm script move:publish --package-path oracle-market
+
+# In the output of the above command, after the success message, you will find the packageId for the shop contract.
+# You can set the value as an environment variable:
+export NEXT_PUBLIC_LOCALNET_CONTRACT_PACKAGE_ID=<0x...>
+
+# or you can make it more permanent by adding it to ./packages/ui/.env file (there's a ./packages/ui/.env.example for reference)
 
 # To continue setting up the shop, listings, discounts, accepted currencies follow appropriate scripts (find the list here docs/06-scripts-reference.md) or run the seed script that will load data for each model
 pnpm script owner:shop:seed
