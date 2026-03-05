@@ -33,16 +33,22 @@ git clone git@github.com:OpenZeppelin/openzeppelin-sui-marketplace.git && cd ope
 # (pnpm workspace install from the repo root)
 pnpm install
 
-# Create an address (it will be your shop owner address). Note the recovery phrase to import it later in your browser wallet.
+# Create owner and buyer addresses (save recovery phrases).
+# Owner
 sui client new-address ed25519
 
-# Configure this address in ./packages/dapp/.env , Sui config file or export
+# Buyer
+sui client new-address ed25519
+sui client addresses
+
+# Configure owner signer in ./packages/dapp/.env, Sui config, or export
 export SUI_NETWORK=localnet
 export SUI_ACCOUNT_ADDRESS=<0x...>
-export SUI_ACCOUNT_PRIVATE_KEY=<base64 or hex>
+export SUI_ACCOUNT_PRIVATE_KEY=<suiprivkey... or base64/hex>
 
-# Optionally create a second address to represent the buyer (the owner address can also buy items) (take note of the recovery phrase)
-sui client new-address ed25519
+# Optional: export keys for browser wallet import (e.g. Slush)
+sui keytool export --key-identity <OWNER_ADDRESS>
+sui keytool export --key-identity <BUYER_ADDRESS>
 
 # Start localnet (new terminal) (--with-faucet is recommended as some script auto fund address if fund is missing, on first start it will fund your configured address)
 pnpm script chain:localnet:start --with-faucet
@@ -57,7 +63,10 @@ Load some shop data
 
 ```bash
 # Publish oracle-market
-pnpm script move:publish --package-path oracle-market
+pnpm script move:publish --network localnet --package-path oracle-market
+
+# If publish fails due stale previous publish metadata, re-run with:
+pnpm script move:publish --network localnet --package-path oracle-market --re-publish
 
 # In the output of the above command, after the success message, you will find the packageId for the shop contract.
 # You can set the value as an environment variable:
@@ -68,8 +77,14 @@ export NEXT_PUBLIC_LOCALNET_CONTRACT_PACKAGE_ID=<0x...>
 # To continue setting up the shop, listings, discounts, accepted currencies follow appropriate scripts (find the list here docs/06-scripts-reference.md) or run the seed script that will load data for each model
 pnpm script owner:shop:seed
 
+# Get latest Shop ID from artifacts in your terminal
+jq -r '.[] | select(.objectType | endswith("::shop::Shop")) | .objectId' packages/dapp/deployments/objects.localnet.json | tail -n 1
+
 # Run the UI
 pnpm ui dev
+
+# Open the UI
+http://localhost:3000
 
 ```
 

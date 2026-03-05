@@ -18,13 +18,15 @@ pnpm --filter learn dev
 ```
 
 ## 3. Configure networks (.env.local)
-Create `packages/ui/.env.local` and set package + shop IDs:
+Create `packages/ui/.env.local` and set package IDs:
 ```bash
 NEXT_PUBLIC_LOCALNET_CONTRACT_PACKAGE_ID=0x...
-NEXT_PUBLIC_LOCALNET_SHOP_ID=0x...
 NEXT_PUBLIC_TESTNET_CONTRACT_PACKAGE_ID=0x...
-NEXT_PUBLIC_TESTNET_SHOP_ID=0x...
 ```
+
+Shop selection is not env-driven. Use:
+- in-app shop picker, or
+- URL query: `/?network=localnet&shopId=0x...`
 
 Optional UI labels:
 ```bash
@@ -45,6 +47,6 @@ On localnet, the UI **signs** with the wallet but **executes** via the app RPC c
 1. Package ID shows as `0xNOTDEFINED` in the UI
    - Set the `NEXT_PUBLIC_*_CONTRACT_PACKAGE_ID` variables.
 2. UI loads but no shop data appears
-   - Set `NEXT_PUBLIC_*_SHOP_ID` or select a shop in the UI.
+   - Select a shop in the UI, or open with `?network=<net>&shopId=<0x...>`.
 3. Localnet buys fail but testnet works
    - Confirm you are running localnet at `http://127.0.0.1:9000`.

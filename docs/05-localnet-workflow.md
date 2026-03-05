@@ -18,16 +18,31 @@ pnpm install
 ```
 
 ### 2) Configure Sui CLI and config file
-- Create or reuse an address (note the recovery phrase to import it later in your browser wallet):
+- Create two addresses (owner + buyer):
   ```bash
+  # Owner
   sui client new-address ed25519
-  sui client active-address   # ensure the desired address is active
+
+  # Buyer
+  sui client new-address ed25519
+
+  sui client active-address
+  sui client addresses
   ```
-- Optional: export keys as env vars (used by scripts):
+- Export owner keys for scripts (localnet walkthrough):
   ```bash
+  export SUI_NETWORK=localnet
   export SUI_ACCOUNT_ADDRESS=<0x...>
-  export SUI_ACCOUNT_PRIVATE_KEY=<base64 or hex>
+  export SUI_ACCOUNT_PRIVATE_KEY=<suiprivkey... or base64/hex>
   ```
+- Import owner + buyer into Slush (browser wallet):
+  1. Copy recovery phrases from `sui client new-address` output, or export keys:
+     ```bash
+     sui keytool export --key-identity <OWNER_ADDRESS>
+     sui keytool export --key-identity <BUYER_ADDRESS>
+     ```
+  2. In Slush: Add account -> Import account -> paste recovery phrase or `suiprivkey...`.
+  3. Import both accounts and select Localnet network in wallet.
 - The script config lives at `packages/dapp/sui.config.ts` (loaded automatically when you run `pnpm script ...`).
   - `defaultNetwork`: default network name used when `--network` is not passed (localnet by default).
   - `networks[networkName]`: per-network settings:
@@ -79,7 +94,7 @@ Quick decision table:
 | Goal | Example command | Resulting network |
 | --- | --- | --- |
 | Local dev (default) | `pnpm script chain:localnet:start --with-faucet` | `localnet` |
-| Local publish | `pnpm script move:publish --package-path oracle-market` | `localnet` |
+| Local publish | `pnpm script move:publish --network localnet --package-path oracle-market` | `localnet` |
 | Testnet publish | `pnpm script move:publish --network testnet --package-path oracle-market` | `testnet` |
 | Testnet scripts | `pnpm script buyer:shop:view --network testnet` | `testnet` |
 
@@ -97,6 +112,17 @@ pnpm script chain:localnet:start --with-faucet
 
 Note: running `sui start` without a stable config dir can regenesis and wipe local state; the script now deletes and recreates the config dir when you pass `--force-regenesis` or when a CLI version change is detected on the default config dir.
 
+`--force-regenesis` use cases:
+- faucet auto-funding is failing and localnet treasury is inconsistent
+- you need a deterministic, fresh chain for clean setup/test
+- your localnet state is stale after toolchain changes
+
+`--force-regenesis` effects:
+- recreates localnet genesis/config state
+- clears `packages/dapp/deployments/*.localnet*`
+- clears `localnet`/`test-publish` sections from `packages/dapp/contracts/**/Published.toml`
+- generates new package/object IDs (you must refresh UI config)
+
 ### 4) Seed mocks (coins + Pyth)
 ```bash
 pnpm script mock:setup --buyer-address <0x...> --network localnet
@@ -109,12 +135,37 @@ What it does:
 
 ### 5) Publish oracle-market (localnet)
 ```bash
-pnpm script move:publish --package-path oracle-market
+pnpm script move:publish --network localnet --package-path oracle-market
 ```
 What it does:
 - Builds against the localnet dependency replacements and unpublished deps.
 - Publishes via the Sui CLI.
 - Writes results to `packages/dapp/deployments/deployment.localnet.json`.
+
+If publish fails due existing `Published.toml` network state (or module-address mismatch), re-run with:
+```bash
+pnpm script move:publish --network localnet --package-path oracle-market --re-publish
+```
+
+`--re-publish` use cases:
+- you want a fresh package ID for localnet after prior publishes
+- publish fails because prior `Published.toml` entries conflict with current state
+- localnet was reset and you need to refresh deployment artifacts
+
+`--re-publish` effects:
+- clears the network entry in `Published.toml` before publish
+- writes a new publish record to `deployment.<network>.json`
+- may change package IDs, requiring downstream env/artifact updates
+
+### Flag quick reference
+- `--force-regenesis`:
+  - command: `pnpm script chain:localnet:start --with-faucet --force-regenesis`
+  - use when chain/faucet state is broken or you need a clean start
+  - destructive for localnet state/artifacts
+- `--re-publish`:
+  - command: `pnpm script move:publish --network localnet --package-path oracle-market --re-publish`
+  - use when publish metadata/state is stale or you need a fresh package ID
+  - refreshes publish metadata and deployment artifacts
 
 ---
 
@@ -136,10 +187,18 @@ sui client new-address ed25519
 
 # Check which one is active (the active address is the signer for scripts).
 sui client active-address
+sui client addresses
 
 # Fund the 2 addresses (ensure your localnet is started with faucet)
 sui client faucet --address <0x...>
 ```
+
+Import into Slush (owner + buyer):
+```bash
+sui keytool export --key-identity <OWNER_ADDRESS>
+sui keytool export --key-identity <BUYER_ADDRESS>
+```
+Then import each account in Slush with recovery phrase or `suiprivkey...`, and select Localnet.
 
 If you want to run buyer scripts as the buyer account, switch your active address or update sui.config file before running buyer scripts.
 
@@ -151,7 +210,7 @@ pnpm script chain:localnet:start --with-faucet
 What it does:
 - Starts `sui start` with a local config directory (default `~/.sui/localnet`) and waits for RPC readiness.
 - The signer will get funded after any regenesis.
-- Use `--force-regenesis` to reset the chain (clears `packages/dapp/deployments/*.localnet*` and recreates the localnet config dir before starting).
+- Use `--force-regenesis` to reset the chain (clears `packages/dapp/deployments/*.localnet*` and recreates the localnet config dir before starting, also clears `localnet`/`test-publish` sections from `packages/dapp/contracts/**/Published.toml`).
 - If the default config dir is used and the Sui CLI version changes, the script warns and recreates localnet state automatically.
 
 ### 2) Seed local mocks (coins, Pyth feeds, example item types)
@@ -172,7 +231,7 @@ Where to find values:
 
 ### 3) Publish the oracle-market package
 ```bash
-pnpm script move:publish --package-path oracle-market
+pnpm script move:publish --network localnet --package-path oracle-market
 ```
 
 What it does:
@@ -288,6 +347,20 @@ pnpm script mock:update-prices
 What it does:
 - Updates the mock Pyth `PriceInfoObject` timestamps so oracle freshness checks pass.
 - Uses `packages/dapp/deployments/mock.localnet.json` to locate feeds.
+
+### Check per-coin balances for localnet addresses
+Use the existing chain inspection script to view each coin type and totals for any address:
+
+```bash
+pnpm script chain:describe-coin-balances --network localnet --address <OWNER_ADDRESS>
+pnpm script chain:describe-coin-balances --network localnet --address <BUYER_ADDRESS>
+```
+
+Notes:
+- This script prints one row per coin type, with coin object count, total balance, and locked balance.
+- If `--address` is omitted, it inspects the configured signer address.
+- For a fuller account summary (coins + SUI + stake + owned object sample), run:
+  `pnpm script chain:describe-address --network localnet --address <0x...>`.
 
 ### 11) View the full shop snapshot
 ```bash

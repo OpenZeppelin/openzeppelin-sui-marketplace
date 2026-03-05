@@ -37,6 +37,7 @@ import {
   logSimpleGreen,
   logWarning
 } from "@sui-oracle-market/tooling-node/log"
+import { clearPublishedEntriesForNetwork } from "@sui-oracle-market/tooling-node/move"
 import { runSuiScript } from "@sui-oracle-market/tooling-node/process"
 import { runSuiCli } from "@sui-oracle-market/tooling-node/suiCli"
 
@@ -134,6 +135,10 @@ runSuiScript<{
 
     if (shouldRegenesis) {
       await deleteLocalnetDeployments(tooling.suiConfig.paths.deployments)
+      await clearMovePublishedMetadataForNetwork({
+        moveRootPath: path.resolve(tooling.suiConfig.paths.move),
+        networkName: tooling.network.networkName
+      })
       await resetLocalnetConfig({ configDir: localnetConfigDir, withFaucet })
     } else {
       await ensureLocalnetConfig({ configDir: localnetConfigDir, withFaucet })
@@ -185,7 +190,7 @@ runSuiScript<{
       alias: "force-regenesis",
       type: "boolean",
       description:
-        "Force localnet regenesis (clears localnet deployments and rebuilds the localnet config dir)",
+        "Force localnet regenesis (clears localnet deployments, localnet/test-publish Published.toml metadata, and rebuilds the localnet config dir)",
       default: false
     })
     .option("configDir", {
@@ -653,6 +658,27 @@ const deleteLocalnetDeployments = async (deploymentsPath: string) => {
       }`
     )
   }
+}
+
+const resolvePublishedMetadataLabel = (networkName: string) =>
+  networkName === "localnet" ? "localnet/test-publish" : networkName
+
+const clearMovePublishedMetadataForNetwork = async ({
+  moveRootPath,
+  networkName
+}: {
+  moveRootPath: string
+  networkName: string
+}) => {
+  const { updatedPublishedTomlPaths } = await clearPublishedEntriesForNetwork({
+    rootPath: moveRootPath,
+    networkName
+  })
+  if (!updatedPublishedTomlPaths.length) return
+
+  logKeyValueYellow("Published.toml")(
+    `Cleared ${resolvePublishedMetadataLabel(networkName)} metadata in ${updatedPublishedTomlPaths.length} file(s) under ${moveRootPath}`
+  )
 }
 
 const getSuiCliVersion = async (): Promise<string | undefined> => {

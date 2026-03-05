@@ -1387,10 +1387,7 @@ fun transfer_shop_owner_cap(owner_cap: ShopOwnerCap, recipient: address) {
     transfer::public_transfer(owner_cap, recipient);
 }
 
-fun transfer_discount_ticket_to_recipient(
-    discount_ticket: DiscountTicket,
-    recipient: address,
-) {
+fun transfer_discount_ticket_to_recipient(discount_ticket: DiscountTicket, recipient: address) {
     transfer::public_transfer(discount_ticket, recipient);
 }
 
