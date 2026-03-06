@@ -26,7 +26,6 @@ import {
   ensureSuiCli,
   getActiveSuiCliEnvironment,
   getSuiCliEnvironmentRpc,
-  getSuiCliVersion,
   listSuiCliEnvironments,
   switchSuiCliEnvironment
 } from "./suiCli.ts"
@@ -583,8 +582,9 @@ const runScriptAndCaptureExitCode = async <TCliArgument>(
         rpcUrl: context.networkConfig.url
       },
       async () => {
-        const suiCliVersion = await getSuiCliVersion()
-        logScriptStart(context, { suiCliVersion })
+        logScriptStart(context, {
+          suiCliVersion: context.suiConfig.suiCliVersion
+        })
 
         const tooling = await createToolingForNetwork(
           context.networkConfig,

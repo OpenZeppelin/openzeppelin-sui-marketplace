@@ -53,12 +53,14 @@ export const hasDeploymentForPackage = (
 
 export type MoveEnvironmentOptions = {
   environmentName?: string
+  suiCliVersion?: string
 }
 
 export type MoveTestFlagOptions = MoveEnvironmentOptions
 
 export type MoveTestPublishOptions = {
   buildEnvironmentName?: string
+  suiCliVersion?: string
   publicationFilePath?: string
   withUnpublishedDependencies?: boolean
 }
@@ -71,16 +73,48 @@ export const resolveMoveCliEnvironmentName = (
 ): string | undefined =>
   environmentName === "localnet" ? "test-publish" : environmentName
 
+const parseSuiCliMajorMinorVersion = (
+  suiCliVersion?: string
+): { major: number; minor: number } | undefined => {
+  if (!suiCliVersion) return
+
+  const match = suiCliVersion.match(/(\d+)\.(\d+)/)
+  if (!match) return
+
+  const major = Number(match[1])
+  const minor = Number(match[2])
+  if (Number.isNaN(major) || Number.isNaN(minor)) return
+
+  return { major, minor }
+}
+
+const shouldUseLegacyMoveEnvironmentFlag = (suiCliVersion?: string) => {
+  const parsedVersion = parseSuiCliMajorMinorVersion(suiCliVersion)
+  if (!parsedVersion) return true
+
+  return (
+    parsedVersion.major < 1 ||
+    (parsedVersion.major === 1 && parsedVersion.minor <= 65)
+  )
+}
+
+const resolveMoveEnvironmentFlag = (suiCliVersion?: string) =>
+  shouldUseLegacyMoveEnvironmentFlag(suiCliVersion)
+    ? "--environment"
+    : "--build-env"
+
 /**
  * Builds CLI flags for Move commands that accept an environment.
  */
 export const buildMoveEnvironmentFlags = ({
-  environmentName
+  environmentName,
+  suiCliVersion
 }: MoveEnvironmentOptions): string[] => {
   const resolvedEnvironmentName = resolveMoveCliEnvironmentName(environmentName)
+  const resolvedEnvironmentFlag = resolveMoveEnvironmentFlag(suiCliVersion)
 
   return resolvedEnvironmentName
-    ? ["--environment", resolvedEnvironmentName]
+    ? [resolvedEnvironmentFlag, resolvedEnvironmentName]
     : []
 }
 
@@ -88,9 +122,10 @@ export const buildMoveEnvironmentFlags = ({
  * Builds CLI flags for `sui move test`.
  */
 export const buildMoveTestFlags = ({
-  environmentName
+  environmentName,
+  suiCliVersion
 }: MoveTestFlagOptions): string[] =>
-  buildMoveEnvironmentFlags({ environmentName })
+  buildMoveEnvironmentFlags({ environmentName, suiCliVersion })
 
 /**
  * Builds full CLI arguments for `sui move test` including the package path.
@@ -106,16 +141,14 @@ export const buildMoveTestArguments = ({
 
 const buildMoveTestPublishFlags = ({
   buildEnvironmentName,
+  suiCliVersion,
   publicationFilePath,
   withUnpublishedDependencies
 }: MoveTestPublishOptions): string[] => {
-  const flags: string[] = []
-
-  const resolvedBuildEnvironmentName =
-    resolveMoveCliEnvironmentName(buildEnvironmentName)
-  if (resolvedBuildEnvironmentName) {
-    flags.push("--build-env", resolvedBuildEnvironmentName)
-  }
+  const flags = buildMoveEnvironmentFlags({
+    environmentName: buildEnvironmentName,
+    suiCliVersion
+  })
   if (publicationFilePath) flags.push("--pubfile-path", publicationFilePath)
   if (withUnpublishedDependencies) flags.push("--with-unpublished-dependencies")
 

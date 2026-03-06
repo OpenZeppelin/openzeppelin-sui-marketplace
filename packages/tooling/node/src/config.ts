@@ -7,6 +7,7 @@ import { existsSync } from "node:fs"
 import path from "node:path"
 import { pathToFileURL } from "node:url"
 import { DEFAULT_KEYSTORE_PATH } from "./constants.ts"
+import { getSuiCliVersion } from "./suiCli.ts"
 
 export type SuiAccountConfig = {
   keystorePath?: string
@@ -57,6 +58,7 @@ export type SuiResolvedConfig = {
   networks: Partial<Record<NetworkName | string, SuiNetworkConfig>>
   paths: Required<SuiPathsUserConfig>
   network: SuiNetworkConfig
+  suiCliVersion?: string
 }
 
 const DEFAULT_CONFIG_FILENAMES = [
@@ -131,7 +133,10 @@ const withDefault = (
 /**
  * Resolves user config into a fully-populated config for a specific network.
  */
-const resolveConfig = (userConfig: SuiUserConfig): SuiResolvedConfig => {
+const resolveConfig = (
+  userConfig: SuiUserConfig,
+  { suiCliVersion }: { suiCliVersion?: string } = {}
+): SuiResolvedConfig => {
   const currentNetwork =
     (process.env.SUI_NETWORK as NetworkName | undefined) ??
     userConfig.defaultNetwork ??
@@ -142,7 +147,11 @@ const resolveConfig = (userConfig: SuiUserConfig): SuiResolvedConfig => {
     defaultNetwork: userConfig.defaultNetwork,
     networks: userConfig.networks || {},
     paths: resolvePaths(userConfig.paths),
-    network: withDefault(currentNetwork, userConfig?.networks?.[currentNetwork])
+    network: withDefault(
+      currentNetwork,
+      userConfig?.networks?.[currentNetwork]
+    ),
+    suiCliVersion
   }
 }
 
@@ -178,9 +187,10 @@ export const defineSuiConfig = (
  * produce a fully resolved object so scripts can run non-interactively across networks.
  */
 export const loadSuiConfig = async (): Promise<SuiResolvedConfig> => {
+  const suiCliVersion = await getSuiCliVersion()
   const configPath = resolveConfigPath()
   if (!configPath) {
-    return resolveConfig({})
+    return resolveConfig({}, { suiCliVersion })
   }
 
   ensureConfigPathExists(configPath)
@@ -191,7 +201,7 @@ export const loadSuiConfig = async (): Promise<SuiResolvedConfig> => {
       importedModule.config ??
       {}) as SuiUserConfig
 
-    return resolveConfig(config)
+    return resolveConfig(config, { suiCliVersion })
   } catch (error) {
     throw new Error(
       `Failed to load Sui config from ${configPath}: ${formatErrorMessage(

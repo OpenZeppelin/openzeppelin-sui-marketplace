@@ -23,9 +23,11 @@ import { runSuiScript } from "@sui-oracle-market/tooling-node/process"
 type ResolvedMoveTestOptions = MoveTestFlagOptions
 
 const deriveMoveTestOptions = (
-  networkName: string
+  networkName: string,
+  suiCliVersion?: string
 ): ResolvedMoveTestOptions => ({
-  environmentName: networkName
+  environmentName: networkName,
+  suiCliVersion
 })
 
 const logMoveTestPlan = (
@@ -86,7 +88,8 @@ runSuiScript(
       cliArguments.packagePath
     )
     const resolvedOptions = deriveMoveTestOptions(
-      tooling.suiConfig.network.networkName
+      tooling.suiConfig.network.networkName,
+      tooling.suiConfig.suiCliVersion
     )
 
     logMoveTestPlan(fullPackagePath, resolvedOptions)

@@ -66,6 +66,7 @@ import {
 import { pickRootNonDependencyArtifact } from "../package.ts"
 import { publishPackageWithLog } from "../publish.ts"
 import { createSuiClient } from "../sui-client.ts"
+import { getSuiCliVersion } from "../suiCli.ts"
 import { signAndExecute } from "../transactions.ts"
 import { getErrnoCode } from "../utils/fs.ts"
 import { parseBooleanEnv } from "./booleans.ts"
@@ -1118,11 +1119,13 @@ const createAccountSeed = (testId: string, label: string) =>
 const buildSuiConfig = ({
   rpcUrl,
   moveRootPath,
-  artifactsDir
+  artifactsDir,
+  suiCliVersion
 }: {
   rpcUrl: string
   moveRootPath: string
   artifactsDir: string
+  suiCliVersion?: string
 }): SuiResolvedConfig => ({
   defaultNetwork: "localnet",
   currentNetwork: "localnet",
@@ -1145,7 +1148,8 @@ const buildSuiConfig = ({
     url: rpcUrl,
     gasBudget: DEFAULT_TX_GAS_BUDGET,
     account: {}
-  }
+  },
+  suiCliVersion
 })
 
 const buildAccountKeystorePath = (artifactsDir: string, account: TestAccount) =>
@@ -1677,13 +1681,16 @@ export const createTestContext = async (
   await ensureDirectory(artifactsDir)
   await copyMoveSources(moveRootPath, options?.moveSourceRootPath)
 
+  const suiCliVersion = await getSuiCliVersion()
   const suiConfig = buildSuiConfig({
     rpcUrl: localnet.rpcUrl,
     moveRootPath,
-    artifactsDir
+    artifactsDir,
+    suiCliVersion
   })
   const buildEnvironmentFlags = buildMoveEnvironmentFlags({
-    environmentName: suiConfig.network.networkName
+    environmentName: suiConfig.network.networkName,
+    suiCliVersion: suiConfig.suiCliVersion
   })
 
   const localnetChainId =
