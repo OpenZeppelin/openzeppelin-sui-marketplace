@@ -33,12 +33,24 @@ cd openzeppelin-sui-marketplace
 pnpm install
 ```
 
-## 5. Create or reuse an address (note the recovery phrase to import it later in your browser wallet)
+## 5. Create owner + buyer addresses (note the recovery phrase to import it later in your browser wallet)
+Create two addresses in your Sui CLI keystore:
+- owner: deploys packages and manages the shop
+- buyer (optional): tests purchase flows
+
 ```bash
+# Owner
+sui client new-address ed25519
+
+# Buyer
 sui client new-address ed25519
 ```
+Review created addresses:
+```bash
+sui client addresses
+```
 
-Validate the active address
+Validate the active address:
 ```bash
 sui client active-address
 ```
@@ -48,29 +60,71 @@ To switch address when you have multiple ones:
 sui client switch --address <0x...>
 ```
 
+### 5.1 Import owner + buyer into Slush (browser wallet)
+You can import by recovery phrase (printed by `sui client new-address`) or by exported private key.
+
+To export private keys in Sui format:
+```bash
+sui keytool export --key-identity <OWNER_ADDRESS>
+sui keytool export --key-identity <BUYER_ADDRESS>
+```
+
+In Slush:
+1. Add account -> Import account.
+2. Paste the recovery phrase or privatekey.
+3. Import both owner and buyer as separate accounts.
+
+Has current EOA don't connect to localnet to the current balance for an address use the provided script 
+
+```bash
+# Owner (or any address)
+pnpm script chain:describe-coin-balances --network localnet --address <ADDRESS>
+```
+
 ## 6. Configure account env
 
-Add address info in either dapp/.env, Sui config file or export
-```bash
-export SUI_ACCOUNT_ADDRESS=<0x...>
-export SUI_ACCOUNT_PRIVATE_KEY=<base64 or hex>
-```
-
-If you do not set these, scripts fall back to the Sui CLI keystore.
-
-You can also configure default network in dapp/.env, Sui config file or export 
+Export in your current shell:
 ```bash
 export SUI_NETWORK=localnet
+export SUI_ACCOUNT_ADDRESS=<owner 0x...>
+export SUI_ACCOUNT_PRIVATE_KEY=<owner suiprivkey... or base64/hex>
 ```
 
+Use `packages/dapp/.env` for persistent setup between terminals.
 
-## 7. Start localnet (localnet only)
+```bash
+cp packages/dapp/.env.example packages/dapp/.env
+```
+
+Set owner account + localnet in `packages/dapp/.env`:
+```dotenv
+SUI_NETWORK=localnet
+SUI_ACCOUNT_ADDRESS=<owner 0x...>
+SUI_ACCOUNT_PRIVATE_KEY=<owner suiprivkey... or base64/hex>
+```
+
+If you do not set these, scripts fall back to Sui CLI keystore + default network configuration.
+
+Once configured `--network localnet` flag can be omitted when running the scripts.
+
+
+## 7. Start localnet
 ```bash
 pnpm script chain:localnet:start --with-faucet
 ```
 The `--with-faucet` flag will run the faucet runs alongside the localnet allowing to automatically fund address if needed. Note that on first start it will fund your configured address.
 
-If you later want to reset the state of your localnet use (this will update the localnet address registered in your `Move` packages in Move.toml)
+Use `--force-regenesis` only when you need a full local reset:
+- faucet/gas state is broken
+- you want a deterministic clean chain for a fresh run
+- your localnet state is stale/corrupted
+
+It will:
+- recreate localnet config/genesis state
+- clear `packages/dapp/deployments/*.localnet*`
+- clear `localnet`/`test-publish` sections from `packages/dapp/contracts/**/Published.toml`
+- produce new object/package IDs
+
 ```bash
 pnpm script chain:localnet:start --with-faucet --force-regenesis
 ```
@@ -82,41 +136,55 @@ This publishes mock coins and Pyth packages, then seeds price feeds. As there ar
 pnpm script mock:setup --buyer-address <0x...> --network localnet
 ```
 
+## Optional: Inspect per-coin balances on localnet (owner + buyer)
+Use the existing inspection script to list each coin type, object count, and total balance.
+
+```bash
+# Owner (or any address)
+pnpm script chain:describe-coin-balances --network localnet --address <OWNER_ADDRESS>
+
+# Buyer
+pnpm script chain:describe-coin-balances --network localnet --address <BUYER_ADDRESS>
+```
+
+If `--address` is omitted, the script inspects the configured signer address.
+
+For a broader account snapshot (SUI + coins + stake + owned objects), use:
+```bash
+pnpm script chain:describe-address --network localnet --address <0x...>
+```
+
 ## 9. Publish the Move package
 ```bash
-pnpm script move:publish --package-path oracle-market
+pnpm script move:publish --network localnet --package-path oracle-market
 ```
+
+If publish fails because a package was already published (can be validated in `Published.toml`), or with an address mismatch error, re-run with:
+```bash
+pnpm script move:publish --network localnet --package-path oracle-market --re-publish
+```
+
+`--re-publish` clears the network's `Published.toml` entry before publishing, then writes a new deployment record.
 
 The published package ID is written to:
 `packages/dapp/deployments/deployment.localnet.json`
 
 ```json
-{
+[
+  {
   "network": "localnet",
   "rpcUrl": "http://127.0.0.1:9000",
-  "packagePath": "../sui-oracle-market/packages/dapp/contracts/oracle-market",
+  "packagePath": "/abs/path/packages/dapp/contracts/oracle-market",
   "packageName": "sui_oracle_market",
-  "packageId": "0x9c7be8c6354e23ec59e8d50c755a5f9ccdb08424e82a72f6991afedaa7ae49ec",
-  "upgradeCap": "0xcd483668f30a9069075d9513222ebd8b76d9f5ee1909c7f758161805ee03ae96",
-  "publisherId": "0x3627f2326fe826b6dc6b8e8f65be066a838f2df18c5fcac204904b0f58adb968",
+  "packageId": "0x...",
+  "upgradeCap": "0x...",
+  "publisherId": "0x...",
   "isDependency": false,
-  "sender": "0x4f5fd198675da3f90a1cf3006d5cd3576dee4804fb8ca87cb9cfb964772125d1",
-  "digest": "54ngfCMuc1n1LrV4F8Y1Bukipuq8HayLBGirTT4LhnYD",
-  "publishedAt": "2026-01-27T03:16:49.889Z",
-  "modules": [
-    "oRzrCwcAAAUPAQA+Aj7...QIAAgEA"
-  ],
-  "dependencies": [
-    "0x0000000000000000000000000000000000000000000000000000000000000001",
-    "0x4fc18b29048e9fe89a104d9b46ba88b7885581484cc5867a3b4374173ce6d3d5",
-    "0x0000000000000000000000000000000000000000000000000000000000000002"
-  ],
-  "dependencyAddresses": {},
-  "withUnpublishedDependencies": true,
-  "unpublishedDependencies": [],
-  "suiCliVersion": "1.63.1-a14d9e8ddadf",
-  "explorerUrl": "https://explorer.sui.io/txblock/54ngfCMuc1n1LrV4F8Y1Bukipuq8HayLBGirTT4LhnYD?network=localnet"
-}
+  "sender": "0x...",
+  "digest": "...",
+  "publishedAt": "2026-03-05T14:50:19.759Z"
+  }
+]
 ```
 
 ## 10. Create a shop (and/or optionally seed data)
@@ -127,7 +195,7 @@ pnpm script owner:shop:seed
 ```
 
 The created objects are saved in:
-`packages/dapp/deployments/object.localnet.json`
+`packages/dapp/deployments/objects.localnet.json`
 
 ```json
 [{
@@ -146,16 +214,28 @@ The created objects are saved in:
 ```
 
 ## 11. Run the UI to see the shop
-Create `packages/ui/.env.local` with IDs from your deployments artifacts (`packageId`):
+Create `packages/ui/.env.local` with contract package ID:
 ```bash
 NEXT_PUBLIC_LOCALNET_CONTRACT_PACKAGE_ID=0x...
-NEXT_PUBLIC_LOCALNET_SHOP_ID=0x...
+```
+
+Resolve IDs from artifacts:
+```bash
+package_id=$(jq -r '.[] | select(.packageName=="sui_oracle_market") | .packageId' packages/dapp/deployments/deployment.localnet.json | tail -n 1)
+shop_id=$(jq -r '.[] | select(.objectType | endswith("::shop::Shop")) | .objectId' packages/dapp/deployments/objects.localnet.json | tail -n 1)
 ```
 
 Start the app:
 ```bash
 pnpm ui dev
 ```
+
+Then open:
+`http://localhost:3000/`
+
+Note:
+- The UI reads `NEXT_PUBLIC_LOCALNET_CONTRACT_PACKAGE_ID` from env.
+- Shop selection is driven by URL/query param (`shopId`) or by choosing from the in-app shop picker.
 
 ## 12. Sanity checks using scripts
 ```bash
