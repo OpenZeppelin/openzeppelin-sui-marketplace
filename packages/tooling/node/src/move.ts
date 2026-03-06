@@ -82,12 +82,28 @@ const parseSuiCliMajorMinorVersion = (
 ): { major: number; minor: number } | undefined => {
   if (!suiCliVersion) return
 
-  const match = suiCliVersion.match(/(\d+)\.(\d+)/)
-  if (!match) return
+  const [majorSegment, minorSegment] = suiCliVersion.split(".")
+  if (!majorSegment || !minorSegment) return
 
-  const major = Number(match[1])
-  const minor = Number(match[2])
-  if (Number.isNaN(major) || Number.isNaN(minor)) return
+  const parseLeadingInteger = (segment: string): number | undefined => {
+    let digitCount = 0
+    for (const character of segment) {
+      if (character < "0" || character > "9") break
+      digitCount += 1
+    }
+
+    if (digitCount === 0) return
+
+    const parsedNumber = Number(segment.slice(0, digitCount))
+    if (!Number.isFinite(parsedNumber)) return
+    if (!Number.isSafeInteger(parsedNumber)) return
+
+    return parsedNumber
+  }
+
+  const major = parseLeadingInteger(majorSegment)
+  const minor = parseLeadingInteger(minorSegment)
+  if (major === undefined || minor === undefined) return
 
   return { major, minor }
 }
