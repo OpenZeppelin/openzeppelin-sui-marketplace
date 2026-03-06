@@ -1724,7 +1724,7 @@ fun process_purchase<TItem: store, TCoin>(
 
     let accepted_currency = shop.borrow_registered_accepted_currency(coin_type);
     assert_price_info_matches_currency!(accepted_currency, price_info_object);
-    assert_price_status_trading_for_max_lag!(
+    assert_price_status_trading_for_max_lag(
         price_info_object,
         accepted_currency.max_price_status_lag_secs_cap,
     );
@@ -2317,22 +2317,11 @@ macro fun assert_template_claimable(
 }
 
 /// Asserts that the feed attestation lag is within `max_price_status_lag_secs`.
-public(package) fun assert_price_status_trading_for_max_lag_impl(
+public(package) fun assert_price_status_trading_for_max_lag(
     price_info_object: &price_info::PriceInfoObject,
     max_price_status_lag_secs: u64,
 ) {
     assert_price_status_trading!(price_info_object, max_price_status_lag_secs);
-}
-
-/// Asserts that the feed attestation lag is within `max_price_status_lag_secs`.
-public(package) macro fun assert_price_status_trading_for_max_lag(
-    $price_info_object: &price_info::PriceInfoObject,
-    $max_price_status_lag_secs: u64,
-) {
-    assert_price_status_trading_for_max_lag_impl(
-        $price_info_object,
-        $max_price_status_lag_secs,
-    );
 }
 
 // === View helpers ===
@@ -2511,7 +2500,7 @@ public fun quote_amount_for_price_info_object<TCoin>(
     let coin_type = currency_type<TCoin>();
     let accepted_currency = shop.borrow_registered_accepted_currency(coin_type);
     assert_price_info_matches_currency!(accepted_currency, price_info_object);
-    assert_price_status_trading_for_max_lag!(
+    assert_price_status_trading_for_max_lag(
         price_info_object,
         accepted_currency.max_price_status_lag_secs_cap,
     );

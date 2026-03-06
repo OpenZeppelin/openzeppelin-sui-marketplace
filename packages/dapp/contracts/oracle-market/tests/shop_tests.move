@@ -727,7 +727,7 @@ fun attestation_time_within_lag_is_allowed() {
         &mut ctx,
     );
 
-    shop::assert_price_status_trading_for_max_lag!(
+    shop::assert_price_status_trading_for_max_lag(
         &price_info_object,
         TEST_DEFAULT_MAX_PRICE_STATUS_LAG_SECS,
     );
@@ -753,7 +753,7 @@ fun attestation_time_lag_over_limit_is_rejected() {
         &mut ctx,
     );
 
-    shop::assert_price_status_trading_for_max_lag!(
+    shop::assert_price_status_trading_for_max_lag(
         &price_info_object,
         TEST_DEFAULT_MAX_PRICE_STATUS_LAG_SECS,
     );
