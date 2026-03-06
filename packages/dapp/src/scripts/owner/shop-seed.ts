@@ -20,9 +20,9 @@ import {
   defaultStartTimestampSeconds,
   getDiscountTemplateSummaries,
   getDiscountTemplateSummary,
-  requireDiscountTemplateIdFromCreatedEvents,
   parseDiscountRuleKind,
   parseDiscountRuleValue,
+  requireDiscountTemplateIdFromCreatedEvents,
   validateDiscountSchedule,
   type DiscountRuleKindLabel,
   type DiscountTemplateSummary
@@ -105,7 +105,11 @@ import {
   logItemListingSummary,
   logShopOverview
 } from "../../utils/log-summaries.ts"
-import type { MockArtifact } from "../../utils/mocks.ts"
+import type {
+  CoinArtifact,
+  MockArtifact,
+  PriceFeedArtifact
+} from "../../utils/mocks.ts"
 import { mockArtifactPath, writeMockArtifact } from "../../utils/mocks.ts"
 
 // NOTE: Testnet coin package IDs can change over time.
@@ -206,8 +210,6 @@ const ACCEPTED_CURRENCY_SEEDS: AcceptedCurrencySeedInput[] = [
   { coinType: DEFAULT_WAL_COIN_TYPE }
 ]
 
-type MockPriceFeedArtifact = NonNullable<MockArtifact["priceFeeds"]>[number]
-type MockCoinArtifact = NonNullable<MockArtifact["coins"]>[number]
 type DiscountTemplateEntry = Awaited<
   ReturnType<typeof getDiscountTemplateSummaries>
 >[number]
@@ -933,10 +935,10 @@ const pickMockFeedByKey = ({
   usedFeedIds,
   key
 }: {
-  priceFeeds: MockPriceFeedArtifact[]
+  priceFeeds: PriceFeedArtifact[]
   usedFeedIds: Set<string>
   key: string
-}): MockPriceFeedArtifact | undefined => {
+}): PriceFeedArtifact | undefined => {
   const normalizedKey = resolveMockLabelKey(key)
   if (!normalizedKey) return undefined
 
@@ -952,8 +954,8 @@ const pickMockFeedForCoin = ({
   priceFeeds,
   usedFeedIds
 }: {
-  coin: MockCoinArtifact
-  priceFeeds: MockPriceFeedArtifact[]
+  coin: CoinArtifact
+  priceFeeds: PriceFeedArtifact[]
   usedFeedIds: Set<string>
 }) => {
   const coinKey = resolveMockLabelKey(coin.label)

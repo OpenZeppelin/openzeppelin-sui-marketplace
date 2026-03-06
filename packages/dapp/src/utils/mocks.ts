@@ -1,6 +1,6 @@
 import {
-  writeArtifact,
-  getArtifactPath
+  getArtifactPath,
+  writeArtifact
 } from "@sui-oracle-market/tooling-node/artifacts"
 
 export type MockArtifact = Partial<{
@@ -43,10 +43,14 @@ export type MockArtifact = Partial<{
   }[]
 }>
 
+export type CoinArtifact = NonNullable<MockArtifact["coins"]>[number]
+export type ItemTypeArtifact = NonNullable<MockArtifact["itemTypes"]>[number]
+export type PriceFeedArtifact = NonNullable<MockArtifact["priceFeeds"]>[number]
+
 /**
  * Persists mock deployment state (mock packages, coins, price feeds, shop objects) to disk.
  * This lets repeated localnet runs reuse published mocks instead of republishing every time.
  */
-export const writeMockArtifact = writeArtifact({})
+export const writeMockArtifact = writeArtifact<MockArtifact>({})
 
 export const mockArtifactPath = getArtifactPath("mock")("localnet")
