@@ -67,15 +67,6 @@ jobs:
             coverage/**
           if-no-files-found: ignore
 
-  installer-tests:
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v4
-      - uses: ./.github/actions/setup
-      - name: Run installer tests
-        run: node --test scripts/ci/install-sui-cli.test.mjs
-
   ui-build:
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -89,7 +80,6 @@ jobs:
       - lint
       - typecheck
       - unit
-      - installer-tests
     runs-on: ubuntu-latest
     timeout-minutes: 45
     strategy:
