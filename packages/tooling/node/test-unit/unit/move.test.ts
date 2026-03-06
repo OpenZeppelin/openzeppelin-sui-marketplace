@@ -8,6 +8,7 @@ import {
   writeFileTree
 } from "../../../tests-integration/helpers/fs.ts"
 import {
+  buildMoveCoverageSummaryArguments,
   buildMoveEnvironmentFlags,
   buildMoveTestArguments,
   buildMoveTestPublishArguments,
@@ -60,6 +61,22 @@ describe("move helpers", () => {
       suiCliVersion: "1.67.1"
     })
     expect(args).toEqual(["--path", "/tmp/pkg", "--build-env", "testnet"])
+  })
+
+  it("builds move coverage summary arguments with environment name", () => {
+    const args = buildMoveCoverageSummaryArguments({
+      packagePath: "/tmp/pkg",
+      environmentName: "localnet",
+      suiCliVersion: "1.67.1",
+      testOnly: true
+    })
+    expect(args).toEqual([
+      "--path",
+      "/tmp/pkg",
+      "--build-env",
+      "test-publish",
+      "--test"
+    ])
   })
 
   it("builds test publish arguments with flags", () => {

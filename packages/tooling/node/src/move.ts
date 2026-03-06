@@ -58,6 +58,10 @@ export type MoveEnvironmentOptions = {
 
 export type MoveTestFlagOptions = MoveEnvironmentOptions
 
+export type MoveCoverageSummaryFlagOptions = MoveEnvironmentOptions & {
+  testOnly?: boolean
+}
+
 export type MoveTestPublishOptions = {
   buildEnvironmentName?: string
   suiCliVersion?: string
@@ -139,6 +143,27 @@ export const buildMoveTestArguments = ({
   ...buildMoveTestFlags(options)
 ]
 
+const buildMoveCoverageSummaryFlags = ({
+  environmentName,
+  suiCliVersion,
+  testOnly = false
+}: MoveCoverageSummaryFlagOptions): string[] => [
+  ...buildMoveEnvironmentFlags({ environmentName, suiCliVersion }),
+  ...(testOnly ? ["--test"] : [])
+]
+
+/**
+ * Builds full CLI arguments for `sui move coverage summary` including the package path.
+ */
+export const buildMoveCoverageSummaryArguments = ({
+  packagePath,
+  ...options
+}: { packagePath: string } & MoveCoverageSummaryFlagOptions): string[] => [
+  "--path",
+  packagePath,
+  ...buildMoveCoverageSummaryFlags(options)
+]
+
 const buildMoveTestPublishFlags = ({
   buildEnvironmentName,
   suiCliVersion,
@@ -170,6 +195,11 @@ export const buildMoveTestPublishArguments = ({
  * Returns a CLI runner for `sui move test`.
  */
 export const runMoveTest = runSuiCli(["move", "test"])
+
+/**
+ * Returns a CLI runner for `sui move coverage summary`.
+ */
+export const runMoveCoverageSummary = runSuiCli(["move", "coverage", "summary"])
 
 /**
  * Returns a CLI runner for `sui client test-publish`.

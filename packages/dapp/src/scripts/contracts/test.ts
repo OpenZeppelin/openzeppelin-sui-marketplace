@@ -13,14 +13,22 @@ import {
   logWarning
 } from "@sui-oracle-market/tooling-node/log"
 import {
+  buildMoveCoverageSummaryArguments,
   buildMoveTestArguments,
   resolveFullPackagePath,
+  runMoveCoverageSummary,
   runMoveTest,
   type MoveTestFlagOptions
 } from "@sui-oracle-market/tooling-node/move"
 import { runSuiScript } from "@sui-oracle-market/tooling-node/process"
 
 type ResolvedMoveTestOptions = MoveTestFlagOptions
+type MoveTestExecutionOptions = {
+  includeCoverage: boolean
+  includeTrace: boolean
+  testOnly: boolean
+  includeCoverageSummary: boolean
+}
 
 const deriveMoveTestOptions = (
   networkName: string,
@@ -62,26 +70,83 @@ const syncMoveEnvironmentForTests = async (
   }
 }
 
-const runMoveTestsForPackage = async (
-  packagePath: string,
-  options: ResolvedMoveTestOptions
-) => {
-  const cliArguments = buildMoveTestArguments({
-    packagePath,
-    ...options
-  })
-  const { stdout, stderr, exitCode } = await runMoveTest(cliArguments)
+const buildMoveTestExecutionFlags = ({
+  includeCoverage,
+  includeTrace,
+  testOnly
+}: Omit<MoveTestExecutionOptions, "includeCoverageSummary">) => [
+  ...(includeCoverage ? ["--coverage"] : []),
+  ...(includeTrace ? ["--trace"] : []),
+  ...(testOnly ? ["--test"] : [])
+]
 
+const writeMoveCommandOutput = ({
+  stdout,
+  stderr
+}: {
+  stdout?: string | Buffer
+  stderr?: string | Buffer
+}) => {
   if (stdout) process.stdout.write(stdout)
   if (stderr) process.stderr.write(stderr)
+}
 
+const assertMoveCommandSucceeded = ({
+  commandName,
+  exitCode
+}: {
+  commandName: string
+  exitCode?: number
+}) => {
   if (exitCode && exitCode !== 0) {
-    throw new Error(`sui move test exited with code ${exitCode}.`)
+    throw new Error(`${commandName} exited with code ${exitCode}.`)
   }
 }
 
+const runMoveTestsForPackage = async (
+  packagePath: string,
+  options: ResolvedMoveTestOptions,
+  executionOptions: MoveTestExecutionOptions
+) => {
+  const cliArguments = [
+    ...buildMoveTestArguments({
+      packagePath,
+      ...options
+    }),
+    ...buildMoveTestExecutionFlags(executionOptions)
+  ]
+  const { stdout, stderr, exitCode } = await runMoveTest(cliArguments)
+  writeMoveCommandOutput({ stdout, stderr })
+  assertMoveCommandSucceeded({ commandName: "sui move test", exitCode })
+
+  if (!executionOptions.includeCoverageSummary) return
+
+  const coverageSummaryArguments = buildMoveCoverageSummaryArguments({
+    packagePath,
+    ...options,
+    testOnly: executionOptions.testOnly
+  })
+  const coverageSummaryResult = await runMoveCoverageSummary(
+    coverageSummaryArguments
+  )
+  writeMoveCommandOutput(coverageSummaryResult)
+  assertMoveCommandSucceeded({
+    commandName: "sui move coverage summary",
+    exitCode: coverageSummaryResult.exitCode
+  })
+}
+
 runSuiScript(
-  async (tooling, cliArguments: { packagePath: string }) => {
+  async (
+    tooling,
+    cliArguments: {
+      packagePath: string
+      coverage: boolean
+      trace: boolean
+      test: boolean
+      coverageSummary: boolean
+    }
+  ) => {
     await syncMoveEnvironmentForTests(tooling)
     const fullPackagePath = resolveFullPackagePath(
       path.resolve(tooling.suiConfig.paths.move),
@@ -91,10 +156,20 @@ runSuiScript(
       tooling.suiConfig.network.networkName,
       tooling.suiConfig.suiCliVersion
     )
+    const executionOptions: MoveTestExecutionOptions = {
+      includeCoverage: cliArguments.coverage,
+      includeTrace: cliArguments.trace,
+      testOnly: cliArguments.test,
+      includeCoverageSummary: cliArguments.coverageSummary
+    }
 
     logMoveTestPlan(fullPackagePath, resolvedOptions)
 
-    await runMoveTestsForPackage(fullPackagePath, resolvedOptions)
+    await runMoveTestsForPackage(
+      fullPackagePath,
+      resolvedOptions,
+      executionOptions
+    )
 
     logSimpleGreen("Move tests completed")
   },
@@ -104,6 +179,27 @@ runSuiScript(
       type: "string",
       description: "The path of the package to test in the move directory",
       demandOption: true
+    })
+    .option("coverage", {
+      type: "boolean",
+      description: "Run move tests with coverage enabled",
+      default: false
+    })
+    .option("trace", {
+      type: "boolean",
+      description: "Run move tests with execution tracing",
+      default: false
+    })
+    .option("test", {
+      type: "boolean",
+      description: "Run test-only coverage mode",
+      default: false
+    })
+    .option("coverageSummary", {
+      alias: "coverage-summary",
+      type: "boolean",
+      description: "Run `sui move coverage summary` after move tests",
+      default: false
     })
     .strict()
 )
