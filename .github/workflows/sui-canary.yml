@@ -1,0 +1,57 @@
+name: Sui Canary
+
+on:
+  schedule:
+    - cron: "0 6 * * *"
+  workflow_dispatch:
+    inputs:
+      sui_cli_version:
+        description: "Optional Sui CLI version override (example: 1.67.1 or sui@testnet)"
+        required: false
+        default: "sui@testnet"
+        type: string
+
+concurrency:
+  group: sui-canary-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: "22.21.1"
+  PNPM_VERSION: "10"
+  SUI_CLI_VERSION: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.sui_cli_version != '' && github.event.inputs.sui_cli_version || 'sui@testnet' }}
+  CI: true
+
+jobs:
+  integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: tooling
+            command: pnpm tooling test:integration
+            report: reports/vitest-tooling-integration.xml
+    env:
+      SUI_IT_WITH_FAUCET: "1"
+      SUI_IT_KEEP_TEMP: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+      - uses: ./.github/actions/setup-sui
+      - uses: ./.github/actions/run-integration-tests
+        with:
+          command: ${{ matrix.command }}
+          report: ${{ matrix.report }}
+      - name: Upload ${{ matrix.name }} integration artifacts on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.name }}-integration-artifacts
+          path: |
+            reports/**
+            /tmp/sui-it-*/logs/**
+          if-no-files-found: ignore

@@ -108,11 +108,13 @@ const buildCliPublishResponse = () => ({
 const buildResolvedConfig = ({
   packageRoot,
   networkName,
-  url
+  url,
+  suiCliVersion = "1.2.3"
 }: {
   packageRoot: string
   networkName: string
   url: string
+  suiCliVersion?: string
 }) => {
   const network = {
     networkName,
@@ -130,7 +132,8 @@ const buildResolvedConfig = ({
       objects: path.join(packageRoot, "deployments"),
       artifacts: path.join(packageRoot, "deployments")
     },
-    network
+    network,
+    suiCliVersion
   }
 }
 

@@ -63,6 +63,39 @@ describe("testing env helpers", () => {
     )
   })
 
+  it("forwards test context options to localnet helpers", async () => {
+    const harness = buildHarness()
+    createLocalnetHarness.mockReturnValueOnce(harness)
+    createTestContext.mockResolvedValue({ testId: "suite--case" })
+    withTestContext.mockImplementation(async (_instance, _id, action) =>
+      action({ testId: "suite--case" })
+    )
+
+    const resolvedContextOptions = {
+      moveSourceRootPath: "/tmp/move",
+      suiCliVersion: "1.67.1"
+    }
+    const env = createSuiLocalnetTestEnv({
+      mode: "suite",
+      ...resolvedContextOptions
+    })
+    await env.startSuite("suite")
+    await env.createTestContext("case")
+    await env.withTestContext("case", async () => "ok")
+
+    expect(createTestContext).toHaveBeenCalledWith(
+      harness.get(),
+      "suite--case",
+      resolvedContextOptions
+    )
+    expect(withTestContext).toHaveBeenCalledWith(
+      harness.get(),
+      "suite--case",
+      expect.any(Function),
+      resolvedContextOptions
+    )
+  })
+
   it("creates isolated test contexts", async () => {
     const harness = buildHarness()
     const cleanup = vi.fn()

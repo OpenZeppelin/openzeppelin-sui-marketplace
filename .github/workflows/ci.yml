@@ -5,6 +5,12 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      sui_cli_version:
+        description: "Optional Sui CLI version override for manual runs (example: 1.67.1 or sui@testnet)"
+        required: false
+        default: ""
+        type: string
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -16,7 +22,7 @@ permissions:
 env:
   NODE_VERSION: "22.21.1"
   PNPM_VERSION: "10"
-  SUI_CLI_VERSION: "1.63.0"
+  SUI_CLI_VERSION: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.sui_cli_version != '' && github.event.inputs.sui_cli_version || '1.67.1' }}
   CI: true
 
 jobs:
@@ -46,15 +52,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup
-      - name: Run unit tests
-        run: |
-          mkdir -p reports
-          pnpm --filter ${{ matrix.suite }} test:unit -- \
-            --reporter=default \
-            --reporter=junit \
-            --outputFile=reports/vitest-unit-${{ matrix.suite }}.xml \
-            --coverage
-
+      - uses: ./.github/actions/run-unit-tests
+        with:
+          suite: ${{ matrix.suite }}
+          report: reports/unit-${{ matrix.suite }}.xml
+          extra-args: --coverage
       - name: Upload unit test artifacts on failure
         if: failure()
         uses: actions/upload-artifact@v4
@@ -97,13 +99,10 @@ jobs:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup
       - uses: ./.github/actions/setup-sui
-      - name: Run ${{ matrix.name }} integration tests
-        run: |
-          mkdir -p reports
-          ${{ matrix.command }} -- \
-            --reporter=default \
-            --reporter=junit \
-            --outputFile=${{ matrix.report }}
+      - uses: ./.github/actions/run-integration-tests
+        with:
+          command: ${{ matrix.command }}
+          report: ${{ matrix.report }}
       - name: Upload ${{ matrix.name }} integration artifacts on failure
         if: failure()
         uses: actions/upload-artifact@v4
@@ -128,8 +127,13 @@ jobs:
       - uses: ./.github/actions/setup-sui
       - name: Run Move tests (${{ matrix.package }})
         run: |
-          sui move test --path ./packages/dapp/contracts/oracle-market --environment test-publish --coverage --trace --test
-          sui move coverage summary --path ./packages/dapp/contracts/oracle-market --environment test-publish --test
+          pnpm script move:test \
+            --package-path ${{ matrix.package }} \
+            --network localnet \
+            --coverage \
+            --trace \
+            --test \
+            --coverage-summary
 
   security-audit:
     runs-on: ubuntu-latest

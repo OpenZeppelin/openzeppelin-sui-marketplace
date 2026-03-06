@@ -18,6 +18,7 @@ export type SuiLocalnetTestEnvOptions = {
   keepTemp?: boolean
   rpcWaitTimeoutMs?: number
   moveSourceRootPath?: string
+  suiCliVersion?: string
 }
 
 export type SuiLocalnetTestEnv = {
@@ -40,8 +41,11 @@ const resolveWithFaucet = (explicit?: boolean) =>
 const resolveTestContextOptions = (
   options?: SuiLocalnetTestEnvOptions
 ): TestContextOptions | undefined => {
-  if (!options?.moveSourceRootPath) return undefined
-  return { moveSourceRootPath: options.moveSourceRootPath }
+  if (!options?.moveSourceRootPath && !options?.suiCliVersion) return undefined
+  return {
+    moveSourceRootPath: options.moveSourceRootPath,
+    suiCliVersion: options.suiCliVersion
+  }
 }
 
 const resolveRpcWaitTimeoutMs = (explicit?: number) => {
