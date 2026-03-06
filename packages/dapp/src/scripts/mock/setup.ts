@@ -42,7 +42,12 @@ import {
   newTransaction
 } from "@sui-oracle-market/tooling-node/transactions"
 import { ensureNativeSuiCurrencyRegistration } from "../../utils/coin-registry.ts"
-import type { MockArtifact } from "../../utils/mocks.ts"
+import type {
+  CoinArtifact,
+  ItemTypeArtifact,
+  MockArtifact,
+  PriceFeedArtifact
+} from "../../utils/mocks.ts"
 import { mockArtifactPath, writeMockArtifact } from "../../utils/mocks.ts"
 
 type SetupLocalCliArgs = {
@@ -86,9 +91,7 @@ const PACKAGE_AVAILABILITY_TIMEOUT_MS = 20_000
 const PACKAGE_AVAILABILITY_INTERVAL_MS = 250
 
 type LabeledPriceFeedConfig = LabeledMockPriceFeedConfig
-type CoinArtifact = NonNullable<MockArtifact["coins"]>[number]
-type ItemTypeArtifact = NonNullable<MockArtifact["itemTypes"]>[number]
-type PriceFeedArtifact = NonNullable<MockArtifact["priceFeeds"]>[number]
+
 type SeededCoin = {
   coin: CoinArtifact
   wasCreated: boolean

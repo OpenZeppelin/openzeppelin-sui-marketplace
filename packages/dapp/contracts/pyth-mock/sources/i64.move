@@ -1,14 +1,22 @@
 module pyth::i64;
 
+// === Constants ===
+
 // As Move does not support signed integers, this module wraps a magnitude with a sign bit.
 const MAX_POSITIVE_MAGNITUDE: u64 = (1 << 63) - 1;
 const MAX_NEGATIVE_MAGNITUDE: u64 = (1 << 63);
 
+// === Structs ===
+
 /// Signed 64-bit integer representation.
 public struct I64 has copy, drop, store {
+    /// Whether the value is negative.
     negative: bool,
+    /// Absolute value magnitude.
     magnitude: u64,
 }
+
+// === Public Functions ===
 
 public fun new(magnitude: u64, negative: bool): I64 {
     let max_magnitude = if (negative) {
