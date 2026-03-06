@@ -86,6 +86,7 @@ const createReleaseAssets = async ({
     releaseTag,
     archiveName,
     archivePath,
+    archiveChecksum,
     checksumName,
     checksumPath,
     binaryPayload
@@ -102,7 +103,9 @@ const createJsonResponseWriter =
 
 const createMockReleaseServer = async ({
   releaseAssetRecords,
-  releasesFeedTags
+  releasesFeedTags,
+  includeChecksumAssets = true,
+  includeAssetDigest = false
 }) => {
   const releaseAssetRecordByTag = new Map(
     releaseAssetRecords.map((record) => [record.releaseTag, record])
@@ -111,7 +114,12 @@ const createMockReleaseServer = async ({
   const downloadPayloadByFileName = new Map()
   for (const record of releaseAssetRecords) {
     downloadPayloadByFileName.set(record.archiveName, await readFile(record.archivePath))
-    downloadPayloadByFileName.set(record.checksumName, await readFile(record.checksumPath))
+    if (includeChecksumAssets) {
+      downloadPayloadByFileName.set(
+        record.checksumName,
+        await readFile(record.checksumPath)
+      )
+    }
   }
 
   let serverBaseUrl = ""
@@ -124,21 +132,27 @@ const createMockReleaseServer = async ({
     const checksumDownloadUrl = `${serverBaseUrl}/downloads/${encodeURIComponent(
       record.checksumName
     )}`
+    const archiveAsset = {
+      name: record.archiveName,
+      browser_download_url: archiveDownloadUrl
+    }
+    if (includeAssetDigest) {
+      archiveAsset.digest = `sha256:${record.archiveChecksum}`
+    }
+
+    const assets = [archiveAsset]
+    if (includeChecksumAssets) {
+      assets.push({
+        name: record.checksumName,
+        browser_download_url: checksumDownloadUrl
+      })
+    }
 
     return {
       tag_name: releaseTag,
       draft: false,
       prerelease: false,
-      assets: [
-        {
-          name: record.archiveName,
-          browser_download_url: archiveDownloadUrl
-        },
-        {
-          name: record.checksumName,
-          browser_download_url: checksumDownloadUrl
-        }
-      ]
+      assets
     }
   }
 
@@ -248,7 +262,9 @@ const runInstallerScript = async ({
 
 const createTestContext = async ({
   releaseTags,
-  releasesFeedTags
+  releasesFeedTags,
+  includeChecksumAssets,
+  includeAssetDigest
 }) => {
   const workspaceDirectoryPath = await mkdtemp(
     path.join(tmpdir(), "install-sui-cli-test-")
@@ -260,7 +276,9 @@ const createTestContext = async ({
   )
   const mockReleaseServer = await createMockReleaseServer({
     releaseAssetRecords,
-    releasesFeedTags
+    releasesFeedTags,
+    includeChecksumAssets,
+    includeAssetDigest
   })
 
   const cleanup = async () => {
@@ -363,6 +381,66 @@ test("defaults to latest mainnet when selector is omitted", async () => {
 
     assert.match(installedBinaryContents, new RegExp(latestMainnetTag))
     assert.match(stdout, new RegExp(`\\(${latestMainnetTag}\\)`))
+  } finally {
+    await testContext.cleanup()
+  }
+})
+
+test("installs when release provides digest metadata without checksum assets", async () => {
+  const releaseTag = "testnet-v1.67.1"
+  const testContext = await createTestContext({
+    releaseTags: [releaseTag],
+    releasesFeedTags: [releaseTag],
+    includeChecksumAssets: false,
+    includeAssetDigest: true
+  })
+
+  try {
+    const installDirectoryPath = path.join(
+      testContext.workspaceDirectoryPath,
+      "digest-only-install"
+    )
+    await mkdir(installDirectoryPath, { recursive: true })
+
+    const { stdout } = await runInstallerScript({
+      releaseApiBaseUrl: testContext.releaseApiBaseUrl,
+      installDirectoryPath,
+      selector: releaseTag
+    })
+    const installedBinaryPath = path.join(installDirectoryPath, "sui")
+    const installedBinaryContents = await readFile(installedBinaryPath, "utf8")
+
+    assert.match(installedBinaryContents, new RegExp(releaseTag))
+    assert.match(stdout, new RegExp(`\\(${releaseTag}\\)`))
+  } finally {
+    await testContext.cleanup()
+  }
+})
+
+test("fails when no checksum asset and no digest metadata is available", async () => {
+  const releaseTag = "testnet-v1.67.2"
+  const testContext = await createTestContext({
+    releaseTags: [releaseTag],
+    releasesFeedTags: [releaseTag],
+    includeChecksumAssets: false,
+    includeAssetDigest: false
+  })
+
+  try {
+    const installDirectoryPath = path.join(
+      testContext.workspaceDirectoryPath,
+      "missing-integrity-install"
+    )
+    await mkdir(installDirectoryPath, { recursive: true })
+
+    await assert.rejects(
+      runInstallerScript({
+        releaseApiBaseUrl: testContext.releaseApiBaseUrl,
+        installDirectoryPath,
+        selector: releaseTag
+      }),
+      /No checksum asset or digest metadata was found/
+    )
   } finally {
     await testContext.cleanup()
   }

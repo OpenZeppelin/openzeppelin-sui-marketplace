@@ -386,6 +386,52 @@ const extractExpectedChecksum = ({ checksumContents, archiveAssetName }) => {
   return null
 }
 
+const parseAssetDigest = (digestValue) => {
+  const normalizedDigestValue = String(digestValue || "").trim()
+  if (!normalizedDigestValue) return null
+
+  const prefixedDigestMatch = normalizedDigestValue.match(
+    /^sha256:([a-fA-F0-9]{64})$/i
+  )
+  if (prefixedDigestMatch?.[1]) {
+    return prefixedDigestMatch[1].toLowerCase()
+  }
+
+  const rawDigestMatch = normalizedDigestValue.match(/^([a-fA-F0-9]{64})$/)
+  if (rawDigestMatch?.[1]) return rawDigestMatch[1].toLowerCase()
+
+  return null
+}
+
+const resolveExpectedChecksum = async ({ releaseAssets, archiveAsset }) => {
+  const checksumFromAssetDigest = parseAssetDigest(archiveAsset?.digest)
+  if (checksumFromAssetDigest) {
+    return {
+      checksum: checksumFromAssetDigest,
+      source: `asset digest metadata on ${archiveAsset.name}`
+    }
+  }
+
+  const checksumAsset = pickChecksumAsset(releaseAssets, archiveAsset.name)
+  if (!checksumAsset) return null
+
+  const checksumContents = await downloadAssetText(checksumAsset)
+  const checksumFromChecksumAsset = extractExpectedChecksum({
+    checksumContents,
+    archiveAssetName: archiveAsset.name
+  })
+  if (!checksumFromChecksumAsset) {
+    throw new Error(
+      `Could not resolve SHA256 checksum for ${archiveAsset.name} from ${checksumAsset.name}; refusing to install.`
+    )
+  }
+
+  return {
+    checksum: checksumFromChecksumAsset,
+    source: checksumAsset.name
+  }
+}
+
 const computeSha256 = async (filePath) => {
   const hash = createHash("sha256")
   const inputStream = createReadStream(filePath)
@@ -402,28 +448,21 @@ const verifyDownloadedArchiveChecksum = async ({
   archiveAsset,
   archivePath
 }) => {
-  const checksumAsset = pickChecksumAsset(releaseAssets, archiveAsset.name)
-  if (!checksumAsset) {
-    throw new Error(
-      `No checksum asset was found for ${archiveAsset.name}; refusing to install without integrity verification.`
-    )
-  }
-
-  const checksumContents = await downloadAssetText(checksumAsset)
-  const expectedChecksum = extractExpectedChecksum({
-    checksumContents,
-    archiveAssetName: archiveAsset.name
+  const expectedChecksumResult = await resolveExpectedChecksum({
+    releaseAssets,
+    archiveAsset
   })
-  if (!expectedChecksum) {
+  if (!expectedChecksumResult) {
     throw new Error(
-      `Could not resolve SHA256 checksum for ${archiveAsset.name} from ${checksumAsset.name}; refusing to install.`
+      `No checksum asset or digest metadata was found for ${archiveAsset.name}; refusing to install without integrity verification.`
     )
   }
 
+  const { checksum: expectedChecksum, source } = expectedChecksumResult
   const actualChecksum = await computeSha256(archivePath)
   if (actualChecksum.toLowerCase() !== expectedChecksum.toLowerCase()) {
     throw new Error(
-      `Checksum mismatch for ${archiveAsset.name}. Expected ${expectedChecksum}, got ${actualChecksum}.`
+      `Checksum mismatch for ${archiveAsset.name} (${source}). Expected ${expectedChecksum}, got ${actualChecksum}.`
     )
   }
 }
