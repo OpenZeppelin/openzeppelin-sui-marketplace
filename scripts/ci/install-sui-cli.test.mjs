@@ -316,8 +316,8 @@ test("installs a specific Sui CLI version selector", async () => {
     const installedBinaryPath = path.join(installDirectoryPath, "sui")
     const installedBinaryContents = await readFile(installedBinaryPath, "utf8")
 
-    assert.match(installedBinaryContents, new RegExp(releaseTag))
-    assert.match(stdout, new RegExp(`\\(${releaseTag}\\)`))
+    assert.ok(installedBinaryContents.includes(releaseTag))
+    assert.ok(stdout.includes(`(${releaseTag})`))
   } finally {
     await testContext.cleanup()
   }
@@ -348,9 +348,9 @@ test("installs the latest mainnet Sui CLI release", async () => {
     const installedBinaryPath = path.join(installDirectoryPath, "sui")
     const installedBinaryContents = await readFile(installedBinaryPath, "utf8")
 
-    assert.match(installedBinaryContents, new RegExp(latestMainnetTag))
-    assert.match(stdout, new RegExp(`\\(${latestMainnetTag}\\)`))
-    assert.doesNotMatch(installedBinaryContents, new RegExp(olderMainnetTag))
+    assert.ok(installedBinaryContents.includes(latestMainnetTag))
+    assert.ok(stdout.includes(`(${latestMainnetTag})`))
+    assert.ok(!installedBinaryContents.includes(olderMainnetTag))
   } finally {
     await testContext.cleanup()
   }
@@ -379,8 +379,8 @@ test("defaults to latest mainnet when selector is omitted", async () => {
     const installedBinaryPath = path.join(installDirectoryPath, "sui")
     const installedBinaryContents = await readFile(installedBinaryPath, "utf8")
 
-    assert.match(installedBinaryContents, new RegExp(latestMainnetTag))
-    assert.match(stdout, new RegExp(`\\(${latestMainnetTag}\\)`))
+    assert.ok(installedBinaryContents.includes(latestMainnetTag))
+    assert.ok(stdout.includes(`(${latestMainnetTag})`))
   } finally {
     await testContext.cleanup()
   }
@@ -410,8 +410,8 @@ test("installs when release provides digest metadata without checksum assets", a
     const installedBinaryPath = path.join(installDirectoryPath, "sui")
     const installedBinaryContents = await readFile(installedBinaryPath, "utf8")
 
-    assert.match(installedBinaryContents, new RegExp(releaseTag))
-    assert.match(stdout, new RegExp(`\\(${releaseTag}\\)`))
+    assert.ok(installedBinaryContents.includes(releaseTag))
+    assert.ok(stdout.includes(`(${releaseTag})`))
   } finally {
     await testContext.cleanup()
   }

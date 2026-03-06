@@ -146,6 +146,7 @@ export type TestContext = {
 
 export type TestContextOptions = {
   moveSourceRootPath?: string
+  suiCliVersion?: string
 }
 
 const DEFAULT_RPC_PORT = 9000
@@ -1681,7 +1682,7 @@ export const createTestContext = async (
   await ensureDirectory(artifactsDir)
   await copyMoveSources(moveRootPath, options?.moveSourceRootPath)
 
-  const suiCliVersion = await getSuiCliVersion()
+  const suiCliVersion = options?.suiCliVersion ?? (await getSuiCliVersion())
   const suiConfig = buildSuiConfig({
     rpcUrl: localnet.rpcUrl,
     moveRootPath,

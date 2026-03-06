@@ -18,10 +18,11 @@ runs:
       shell: bash
       run: |
         set -euo pipefail
-        mkdir -p reports
+        report_path="${{ inputs.report }}"
+        mkdir -p "$(dirname "$report_path")"
         extra_args="${{ inputs.extra-args }}"
         pnpm --filter "${{ inputs.suite }}" test:unit -- \
           --reporter=default \
           --reporter=junit \
-          --outputFile="${{ inputs.report }}" \
+          --outputFile="$report_path" \
           ${extra_args}

@@ -23,7 +23,7 @@ const releaseApiBaseUrl =
   process.env.SUI_CLI_GITHUB_API_BASE_URL ||
   "https://api.github.com/repos/MystenLabs/sui"
 const configuredVersionSelector = (
-  process.env.SUI_CLI_VERSION || "testnet"
+  process.env.SUI_CLI_VERSION || "latest-mainnet"
 ).trim()
 const homeDirectory = process.env.HOME ?? process.cwd()
 const installDir =

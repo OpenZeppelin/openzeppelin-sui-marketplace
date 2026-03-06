@@ -98,8 +98,20 @@ const assertMoveCommandSucceeded = ({
   commandName: string
   exitCode?: number
 }) => {
-  if (exitCode && exitCode !== 0) {
-    throw new Error(`${commandName} exited with code ${exitCode}.`)
+  if (exitCode !== 0) {
+    throw new Error(`${commandName} exited with code ${exitCode ?? "unknown"}.`)
+  }
+}
+
+const assertCoverageSummaryOptions = ({
+  coverage,
+  coverageSummary
+}: {
+  coverage: boolean
+  coverageSummary: boolean
+}) => {
+  if (coverageSummary && !coverage) {
+    throw new Error("Invalid options: --coverage-summary requires --coverage.")
   }
 }
 
@@ -147,6 +159,7 @@ runSuiScript(
       coverageSummary: boolean
     }
   ) => {
+    assertCoverageSummaryOptions(cliArguments)
     await syncMoveEnvironmentForTests(tooling)
     const fullPackagePath = resolveFullPackagePath(
       path.resolve(tooling.suiConfig.paths.move),

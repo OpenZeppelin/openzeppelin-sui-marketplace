@@ -14,8 +14,9 @@ runs:
       shell: bash
       run: |
         set -euo pipefail
-        mkdir -p reports
+        report_path="${{ inputs.report }}"
+        mkdir -p "$(dirname "$report_path")"
         ${{ inputs.command }} -- \
           --reporter=default \
           --reporter=junit \
-          --outputFile="${{ inputs.report }}"
+          --outputFile="$report_path"
