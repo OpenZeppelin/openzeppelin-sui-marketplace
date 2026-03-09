@@ -220,6 +220,8 @@ NEXT_PUBLIC_LOCALNET_CONTRACT_PACKAGE_ID=0x...
 ```
 
 Resolve IDs from artifacts:
+# Get latest Shop ID from artifacts in your terminal or get it from deployments artifacts
+# to run this command jq needs to be installed https://jqlang.org/download/
 ```bash
 package_id=$(jq -r '.[] | select(.packageName=="sui_oracle_market") | .packageId' packages/dapp/deployments/deployment.localnet.json | tail -n 1)
 shop_id=$(jq -r '.[] | select(.objectType | endswith("::shop::Shop")) | .objectId' packages/dapp/deployments/objects.localnet.json | tail -n 1)

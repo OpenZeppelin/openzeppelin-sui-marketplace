@@ -78,7 +78,8 @@ export NEXT_PUBLIC_LOCALNET_CONTRACT_PACKAGE_ID=<0x...>
 # To continue setting up the shop, listings, discounts, accepted currencies follow appropriate scripts (find the list here docs/06-scripts-reference.md) or run the seed script that will load data for each model
 pnpm script owner:shop:seed
 
-# Get latest Shop ID from artifacts in your terminal
+# Get latest Shop ID from artifacts in your terminal or get it from deployments artifacts
+# to run this command jq needs to be installed https://jqlang.org/download/
 jq -r '.[] | select(.objectType | endswith("::shop::Shop")) | .objectId' packages/dapp/deployments/objects.localnet.json | tail -n 1
 
 # Run the UI
