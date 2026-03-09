@@ -6,18 +6,27 @@ use pyth::price_feed::{Self, PriceFeed};
 use pyth::price_identifier::{Self, PriceIdentifier};
 use sui::clock::{Self, Clock};
 
+// === Structs ===
+
 /// Simplified price info object for localnet tests.
 public struct PriceInfoObject has key, store {
+    /// Unique ID for the shared object.
     id: UID,
+    /// Price info snapshot payload.
     price_info: PriceInfo,
 }
 
 /// Snapshot of a price feed and its timestamps.
 public struct PriceInfo has copy, drop, store {
+    /// Attestation timestamp in seconds.
     attestation_time: u64,
+    /// Arrival timestamp in seconds.
     arrival_time: u64,
+    /// Associated price feed data.
     price_feed: PriceFeed,
 }
+
+// === Public Functions ===
 
 public fun new_price_info(
     attestation_time: u64,
@@ -63,7 +72,7 @@ public fun publish_price_feed(
         price_feed,
     );
     let price_info_object = new_price_info_object(price_info, ctx);
-    transfer::share_object(price_info_object);
+    share_price_info_object(price_info_object);
 }
 
 /// Update an existing mock price feed with fresh timestamps and values.
@@ -94,6 +103,14 @@ public fun update_price_feed(
         );
 }
 
+// === Private Functions ===
+
+fun share_price_info_object(price_info_object: PriceInfoObject) {
+    transfer::share_object(price_info_object);
+}
+
+// === Test-Only Helpers ===
+
 #[test_only]
 public fun new_price_info_object_for_test(
     price_info: PriceInfo,
@@ -101,6 +118,8 @@ public fun new_price_info_object_for_test(
 ): PriceInfoObject {
     new_price_info_object(price_info, ctx)
 }
+
+// === Public Getters ===
 
 public fun uid_to_inner(price_info_object: &PriceInfoObject): ID {
     object::uid_to_inner(&price_info_object.id)
