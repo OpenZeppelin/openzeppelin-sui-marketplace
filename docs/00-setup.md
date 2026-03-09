@@ -71,7 +71,7 @@ sui keytool export --key-identity <BUYER_ADDRESS>
 
 In Slush:
 1. Add account -> Import account.
-2. Paste the recovery phrase or privatekey.
+2. Paste the recovery phrase or private key.
 3. Import both owner and buyer as separate accounts.
 
 Has current EOA don't connect to localnet to the current balance for an address use the provided script 
