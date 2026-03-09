@@ -3,12 +3,19 @@ module pyth::price_feed;
 use pyth::price::Price;
 use pyth::price_identifier::PriceIdentifier;
 
+// === Structs ===
+
 /// Simplified price feed container.
 public struct PriceFeed has copy, drop, store {
+    /// Identifier for the price feed.
     price_identifier: PriceIdentifier,
+    /// Latest price.
     price: Price,
+    /// Latest EMA price.
     ema_price: Price,
 }
+
+// === Public Functions ===
 
 public fun new(price_identifier: PriceIdentifier, price: Price, ema_price: Price): PriceFeed {
     PriceFeed {
