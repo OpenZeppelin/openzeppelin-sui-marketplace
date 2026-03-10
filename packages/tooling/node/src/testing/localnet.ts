@@ -60,6 +60,7 @@ import {
 import {
   buildMoveEnvironmentFlags,
   buildMovePackage,
+  clearPublishedEntriesForNetwork,
   clearPublishedEntryForNetwork,
   resolveMoveCliEnvironmentName
 } from "../move.ts"
@@ -1279,30 +1280,6 @@ const removeMoveBuildArtifacts = async (rootDir: string) => {
   )
 }
 
-const clearPublishedMetadataForNetwork = async (
-  rootDir: string,
-  networkName: string
-) => {
-  const entries = await readdir(rootDir, { withFileTypes: true })
-
-  await Promise.all(
-    entries.map(async (entry) => {
-      const entryPath = path.join(rootDir, entry.name)
-      if (entry.isDirectory()) {
-        await clearPublishedMetadataForNetwork(entryPath, networkName)
-        return
-      }
-
-      if (!entry.isFile() || entry.name !== "Published.toml") return
-
-      await clearPublishedEntryForNetwork({
-        packagePath: path.dirname(entryPath),
-        networkName
-      })
-    })
-  )
-}
-
 const resolvePackagePath = (moveRootPath: string, packagePath: string) =>
   path.isAbsolute(packagePath)
     ? packagePath
@@ -1693,10 +1670,10 @@ export const createTestContext = async (
     )) ?? "00000000"
   await ensureLocalnetEnvironmentEntry(moveRootPath, localnetChainId)
 
-  await clearPublishedMetadataForNetwork(
-    moveRootPath,
-    suiConfig.network.networkName
-  )
+  await clearPublishedEntriesForNetwork({
+    rootPath: moveRootPath,
+    networkName: suiConfig.network.networkName
+  })
 
   const createAccount = (label: string): TestAccount => {
     const seed = createAccountSeed(testId, label)

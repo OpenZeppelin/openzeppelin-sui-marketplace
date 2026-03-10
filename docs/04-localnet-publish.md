@@ -17,7 +17,10 @@ This chapter gets a local chain running, seeds mocks, and publishes the Move pac
 ```bash
 pnpm script chain:localnet:start --with-faucet
 pnpm script mock:setup --buyer-address <0x...> --network localnet
-pnpm script move:publish --package-path oracle-market
+pnpm script move:publish --network localnet --package-path oracle-market
+
+# If publish metadata is stale, force refresh:
+pnpm script move:publish --network localnet --package-path oracle-market --re-publish
 ```
 
 ## 4. EVM -> Sui translation
@@ -41,7 +44,8 @@ pnpm script move:publish --package-path oracle-market
   package so localnet runs without real oracles.
   Code: `packages/dapp/contracts/oracle-market/Move.toml`
 - **Localnet regenesis**: localnet state (and object IDs) are tied to its config dir and CLI
-  version. If you regenesis (`--force-regenesis`), all IDs change and artifacts are cleared.
+  version. If you regenesis (`--force-regenesis`), all IDs change, deployment artifacts are cleared,
+  and `localnet`/`test-publish` sections are removed from `packages/dapp/contracts/**/Published.toml`.
   Code: `packages/dapp/src/scripts/chain/localnet-start.ts`
 
 ## 6. Code references

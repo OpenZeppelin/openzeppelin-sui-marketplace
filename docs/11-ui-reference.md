@@ -15,16 +15,39 @@ The UI lives in `packages/ui` and is a static-exported Next.js app (`output: "ex
 - Use `.env.local` inside `packages/ui` (or env vars):
   ```bash
   NEXT_PUBLIC_LOCALNET_CONTRACT_PACKAGE_ID=0x...
-  NEXT_PUBLIC_LOCALNET_SHOP_ID=0x...
   NEXT_PUBLIC_TESTNET_CONTRACT_PACKAGE_ID=0x...
-  NEXT_PUBLIC_TESTNET_SHOP_ID=0x...
   ```
+- Shop selection is URL/app driven (not env-driven):
+  - open with `/?network=localnet&shopId=0x...`, or
+  - pick a shop from the in-app selector.
 
 Optional UI metadata:
 - `NEXT_PUBLIC_APP_NAME`
 - `NEXT_PUBLIC_APP_DESCRIPTION`
 
-## 3. Localnet signing + execution (UI)
+## 3. EOA wallet
+Import owner + buyer into Slush (browser wallet)
+You can import by recovery phrase (printed by `sui client new-address`) or by exported private key.
+
+To export private keys in Sui format:
+```bash
+sui keytool export --key-identity <OWNER_ADDRESS>
+sui keytool export --key-identity <BUYER_ADDRESS>
+```
+
+In Slush:
+1. Add account -> Import account.
+2. Paste the recovery phrase or private key.
+3. Import both owner and buyer as separate accounts.
+
+If your EOA is not connected to localnet, use the script below to view an address balance.
+
+```bash
+# Owner (or any address)
+pnpm script chain:describe-coin-balances --network localnet --address <ADDRESS>
+```
+
+## 4. Localnet signing + execution (UI)
 - On localnet, the UI **signs** in the wallet and **executes** via the app’s local RPC client.
 - Localnet RPC is locked to `http://127.0.0.1:9000` and guarded to only allow localhost.
 - The buy flow refreshes local mock Pyth feeds in the same PTB (so UI buys don’t require manual `mock:update-prices`).
@@ -46,7 +69,7 @@ Where to look in the UI code:
   - Localnet uses `useSignTransaction` + `SuiClient.executeTransactionBlock`.
   - Non-local networks keep `useSignAndExecuteTransaction`.
 
-## 4. UI scripts
+## 5. UI scripts
 Run from the repo root with `pnpm ui ...`:
 
 - `pnpm ui dev`

@@ -34,9 +34,11 @@ pnpm script buyer:buy \
 ```bash
 # packages/ui/.env.local
 # NEXT_PUBLIC_LOCALNET_CONTRACT_PACKAGE_ID=0x...
-# NEXT_PUBLIC_LOCALNET_SHOP_ID=0x...
 
 pnpm ui dev
+
+# Select a shop in the UI, or open with:
+# http://localhost:3000/?network=localnet&shopId=<shopId>
 ```
 
 ## 5. EVM -> Sui translation

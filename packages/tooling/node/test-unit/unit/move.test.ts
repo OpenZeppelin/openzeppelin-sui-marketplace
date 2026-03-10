@@ -11,6 +11,7 @@ import {
   buildMoveEnvironmentFlags,
   buildMoveTestArguments,
   buildMoveTestPublishArguments,
+  clearPublishedEntriesForNetwork,
   canonicalizePackagePath,
   clearPublishedEntryForNetwork,
   hasDeploymentForPackage,
@@ -170,6 +171,63 @@ describe("clearPublishedEntryForNetwork", () => {
 
       const unchanged = await readTextFile(publishedPath)
       expect(unchanged).toBe(published)
+    })
+  })
+})
+
+describe("clearPublishedEntriesForNetwork", () => {
+  it("recursively clears matching network metadata", async () => {
+    const publishedWithLocalnetAndTestPublish = [
+      "[published.localnet]",
+      'package-id = "0x1"',
+      "",
+      "[published.test-publish]",
+      'package-id = "0x2"',
+      "",
+      "[published.testnet]",
+      'package-id = "0x3"',
+      ""
+    ].join("\n")
+    const publishedTestnetOnly = [
+      "[published.testnet]",
+      'package-id = "0x4"',
+      ""
+    ].join("\n")
+
+    await withTempDir(async (dir) => {
+      const packageOnePublishedPath = path.join(dir, "a", "Published.toml")
+      const packageTwoPublishedPath = path.join(dir, "b", "Published.toml")
+      await writeFileTree(dir, {
+        "a/Published.toml": publishedWithLocalnetAndTestPublish,
+        "b/Published.toml": publishedTestnetOnly
+      })
+
+      const result = await clearPublishedEntriesForNetwork({
+        rootPath: dir,
+        networkName: "localnet"
+      })
+
+      expect(result.updatedPublishedTomlPaths.sort()).toEqual([
+        packageOnePublishedPath
+      ])
+
+      const packageOneUpdated = await readTextFile(packageOnePublishedPath)
+      const packageTwoUnchanged = await readTextFile(packageTwoPublishedPath)
+      expect(packageOneUpdated).not.toContain("[published.localnet]")
+      expect(packageOneUpdated).not.toContain("[published.test-publish]")
+      expect(packageOneUpdated).toContain("[published.testnet]")
+      expect(packageTwoUnchanged).toBe(publishedTestnetOnly)
+    })
+  })
+
+  it("returns no updates when the root path is missing", async () => {
+    await withTempDir(async (dir) => {
+      const result = await clearPublishedEntriesForNetwork({
+        rootPath: path.join(dir, "missing"),
+        networkName: "localnet"
+      })
+
+      expect(result.updatedPublishedTomlPaths).toEqual([])
     })
   })
 })

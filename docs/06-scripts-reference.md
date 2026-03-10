@@ -51,7 +51,7 @@ await tooling.executeTransactionWithSummary({
 	- `--check-only`: probe the RPC and exit without starting a node; fails if unreachable.
 	- `--wait-seconds <n>`: readiness timeout while waiting for RPC (default `25`).
 	- `--with-faucet`: start `sui start --with-faucet` (default `true`).
-	- `--force-regenesis`: clears `packages/dapp/deployments/*.localnet*`, deletes the localnet config dir, runs `sui genesis`, then starts `sui start --network.config` (no `--force-regenesis` flag).
+	- `--force-regenesis`: clears `packages/dapp/deployments/*.localnet*`, clears `localnet`/`test-publish` sections from `packages/dapp/contracts/**/Published.toml`, deletes the localnet config dir, runs `sui genesis`, then starts `sui start --network.config` (no `--force-regenesis` flag).
 	- `--config-dir <path>`: localnet config dir passed to `sui start --network.config` (default `~/.sui/localnet`).
 
 ### `pnpm script chain:localnet:stop`

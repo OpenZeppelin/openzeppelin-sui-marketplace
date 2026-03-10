@@ -42,15 +42,23 @@ if (checkOnly) {
 - Fix:
   1. Ensure you are targeting the Move package directory (for localnet: `--package-path oracle-market`).
   2. Re-publish with `--re-publish`:
-     - `pnpm dapp move:publish --package-path oracle-market --network localnet --re-publish`.
+     - `pnpm script move:publish --package-path oracle-market --network localnet --re-publish`.
+
+## "Modules must all have 0x0 as their addresses" on publish
+- Cause: stale `Published.toml` metadata from previous localnet publish.
+- Fix:
+  1. Re-run publish with `--re-publish`:
+     - `pnpm script move:publish --package-path oracle-market --network localnet --re-publish`
+  2. If needed, inspect and clean network entries in:
+     - `packages/dapp/contracts/oracle-market/Published.toml`
 
 ## "Failed to fetch package Pyth" / "Object ... does not exist" on publish (localnet)
 - Cause: localnet regenesis reset on-chain objects, but local artifacts still point at an old mock Pyth package ID.
 - Fix (localnet):
   1. (optional) Delete `packages/dapp/deployments/mock.localnet.json`.
   2. (optional) Delete `packages/dapp/contracts/pyth-mock/Published.toml`.
-  3. Re-publish mocks: `pnpm dapp mock:setup --re-publish`.
-  4. Re-publish the oracle package: `pnpm dapp move:publish --package-path oracle-market --network localnet --re-publish`.
+  3. Re-publish mocks: `pnpm script mock:setup --buyer-address <0x...> --network localnet --re-publish`.
+  4. Re-publish the oracle package: `pnpm script move:publish --package-path oracle-market --network localnet --re-publish`.
 
 ## "No ShopOwnerCap found"
 - Ensure the owner cap is in your wallet. See `packages/domain/core/src/models/shop.ts`.
