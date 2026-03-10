@@ -25,7 +25,7 @@ Optional UI metadata:
 - `NEXT_PUBLIC_APP_NAME`
 - `NEXT_PUBLIC_APP_DESCRIPTION`
 
-## 3. EAO wallet
+## 3. EOA wallet
 Import owner + buyer into Slush (browser wallet)
 You can import by recovery phrase (printed by `sui client new-address`) or by exported private key.
 
@@ -40,7 +40,7 @@ In Slush:
 2. Paste the recovery phrase or private key.
 3. Import both owner and buyer as separate accounts.
 
-Has current EOA don't connect to localnet to the current balance for an address use the provided script 
+If your EOA is not connected to localnet, use the script below to view an address balance.
 
 ```bash
 # Owner (or any address)
