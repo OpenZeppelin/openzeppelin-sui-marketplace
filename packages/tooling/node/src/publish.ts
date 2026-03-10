@@ -43,7 +43,7 @@ import {
   syncLocalnetMoveEnvironmentChainId
 } from "./move.ts"
 import { pickRootNonDependencyArtifact } from "./package.ts"
-import { getSuiCliVersion, runSuiCli } from "./suiCli.ts"
+import { runSuiCli } from "./suiCli.ts"
 
 type PackageNames = { root?: string; dependencies: string[] }
 type DependencyAddressMap = Record<string, string>
@@ -388,6 +388,7 @@ const buildPublishPlan = async (
 
   const buildFlags = buildMoveBuildFlags({
     environmentName: network.networkName,
+    suiCliVersion: toolingContext.suiConfig.suiCliVersion,
     includeUnpublishedDeps: Boolean(shouldUseUnpublishedDependencies)
   })
 
@@ -405,7 +406,7 @@ const buildPublishPlan = async (
     buildFlags,
     useCliPublish: cliPublish,
     keystorePath: network.account?.keystorePath,
-    suiCliVersion: await getSuiCliVersion(),
+    suiCliVersion: toolingContext.suiConfig.suiCliVersion,
     skipDependencyVerification:
       network.networkName === "localnet" &&
       Boolean(shouldUseUnpublishedDependencies),
@@ -431,14 +432,16 @@ const shouldSkipFrameworkConsistency = (
  */
 const buildMoveBuildFlags = ({
   environmentName,
+  suiCliVersion,
   includeUnpublishedDeps
 }: {
   environmentName: string
+  suiCliVersion?: string
   includeUnpublishedDeps: boolean
 }) => {
   const flags = [
     DUMP_BYTECODE_AS_BASE64_FLAG,
-    ...buildMoveEnvironmentFlags({ environmentName })
+    ...buildMoveEnvironmentFlags({ environmentName, suiCliVersion })
   ]
   if (includeUnpublishedDeps) flags.push("--with-unpublished-dependencies")
 
@@ -503,7 +506,8 @@ const buildCliPublishArguments = (plan: PublishPlan): string[] => {
     "--sender",
     plan.keypair.toSuiAddress(),
     ...buildMoveEnvironmentFlags({
-      environmentName: plan.network.networkName
+      environmentName: plan.network.networkName,
+      suiCliVersion: plan.suiCliVersion
     })
   ]
 

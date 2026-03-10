@@ -1,0 +1,22 @@
+name: Run Integration Tests
+description: Run a workspace integration test command with default+junit reporters.
+inputs:
+  command:
+    description: Integration command to execute (for example pnpm tooling test:integration).
+    required: true
+  report:
+    description: Output path for the junit XML file.
+    required: true
+runs:
+  using: composite
+  steps:
+    - name: Run integration tests
+      shell: bash
+      run: |
+        set -euo pipefail
+        report_path="${{ inputs.report }}"
+        mkdir -p "$(dirname "$report_path")"
+        ${{ inputs.command }} -- \
+          --reporter=default \
+          --reporter=junit \
+          --outputFile="$report_path"

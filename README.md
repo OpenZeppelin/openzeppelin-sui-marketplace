@@ -1,6 +1,7 @@
 
 > [!Warning]
 > This is experimental UN-AUDITED code
+> This project has been tested with Sui CLI v1.67.1
 
 # Sui Oracle Market
 
@@ -19,7 +20,7 @@ More detail (workspace layering rules, folder layout): `docs/01-repo-layout.md`.
 ## Prerequisites
 - Node.js 22+ [Install](https://nodejs.org/en/download)
 - pnpm [Install](https://pnpm.io/installation)
-- Sui CLI [Install](https://docs.sui.io/guides/developer/getting-started/sui-install)
+- Sui CLI (v1.67.1) [Install](https://docs.sui.io/guides/developer/getting-started/sui-install)
 
 
 ## Environment Setup

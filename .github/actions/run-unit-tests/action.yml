@@ -1,0 +1,28 @@
+name: Run Vitest with JUnit
+description: Run a workspace unit-test suite with default+junit reporters.
+inputs:
+  suite:
+    description: Workspace filter passed to pnpm --filter.
+    required: true
+  report:
+    description: Output path for the junit XML file.
+    required: true
+  extra-args:
+    description: Optional extra Vitest CLI arguments.
+    required: false
+    default: ""
+runs:
+  using: composite
+  steps:
+    - name: Run Vitest
+      shell: bash
+      run: |
+        set -euo pipefail
+        report_path="${{ inputs.report }}"
+        mkdir -p "$(dirname "$report_path")"
+        extra_args="${{ inputs.extra-args }}"
+        pnpm --filter "${{ inputs.suite }}" test:unit -- \
+          --reporter=default \
+          --reporter=junit \
+          --outputFile="$report_path" \
+          ${extra_args}

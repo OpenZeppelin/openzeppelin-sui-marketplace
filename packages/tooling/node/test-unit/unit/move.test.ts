@@ -8,6 +8,7 @@ import {
   writeFileTree
 } from "../../../tests-integration/helpers/fs.ts"
 import {
+  buildMoveCoverageSummaryArguments,
   buildMoveEnvironmentFlags,
   buildMoveTestArguments,
   buildMoveTestPublishArguments,
@@ -34,26 +35,55 @@ describe("move helpers", () => {
     ...overrides
   })
 
-  it("builds environment flags for move commands", () => {
+  it("uses legacy environment flag for older Sui CLI versions", () => {
     expect(buildMoveEnvironmentFlags({})).toEqual([])
-    expect(buildMoveEnvironmentFlags({ environmentName: "localnet" })).toEqual([
-      "--environment",
-      "test-publish"
-    ])
+    expect(
+      buildMoveEnvironmentFlags({
+        environmentName: "localnet",
+        suiCliVersion: "1.65.9"
+      })
+    ).toEqual(["--environment", "test-publish"])
+  })
+
+  it("uses build-env flag for newer Sui CLI versions", () => {
+    expect(
+      buildMoveEnvironmentFlags({
+        environmentName: "localnet",
+        suiCliVersion: "1.67.1-4e8aa9ee8b30"
+      })
+    ).toEqual(["--build-env", "test-publish"])
   })
 
   it("builds move test arguments with environment name", () => {
     const args = buildMoveTestArguments({
       packagePath: "/tmp/pkg",
-      environmentName: "testnet"
+      environmentName: "testnet",
+      suiCliVersion: "1.67.1"
     })
-    expect(args).toEqual(["--path", "/tmp/pkg", "--environment", "testnet"])
+    expect(args).toEqual(["--path", "/tmp/pkg", "--build-env", "testnet"])
+  })
+
+  it("builds move coverage summary arguments with environment name", () => {
+    const args = buildMoveCoverageSummaryArguments({
+      packagePath: "/tmp/pkg",
+      environmentName: "localnet",
+      suiCliVersion: "1.67.1",
+      testOnly: true
+    })
+    expect(args).toEqual([
+      "--path",
+      "/tmp/pkg",
+      "--build-env",
+      "test-publish",
+      "--test"
+    ])
   })
 
   it("builds test publish arguments with flags", () => {
     const args = buildMoveTestPublishArguments({
       packagePath: "/tmp/pkg",
       buildEnvironmentName: "localnet",
+      suiCliVersion: "1.67.1",
       publicationFilePath: "/tmp/publish.json",
       withUnpublishedDependencies: true
     })
