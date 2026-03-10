@@ -1138,16 +1138,17 @@ public fun claim_discount_ticket(
     transfer_discount_ticket_to_recipient(discount_ticket, claimer);
 }
 
-/// Non-entry helper that returns the owned ticket so callers can inline claim + buy in one PTB.
-/// Intended to be composed inside future `buy_item` logic or higher-level scripts.
+/// Package-only helper that returns the owned ticket so package code can inline claim + buy in one
+/// PTB without exposing caller-supplied time controls to external transactions.
 /// The claimer is always bound to `ctx.sender()` to prevent third parties from minting on behalf of
 /// other addresses and exhausting template quotas.
-public fun claim_discount_ticket_inline(
+public(package) fun claim_discount_ticket_inline(
     shop: &mut Shop,
     discount_template_id: ID,
     now_secs: u64,
     ctx: &mut TxContext,
 ): DiscountTicket {
+    assert_shop_active!(shop);
     let applies_to_listing = {
         let discount_template = shop.borrow_discount_template(discount_template_id);
         discount_template.applies_to_listing

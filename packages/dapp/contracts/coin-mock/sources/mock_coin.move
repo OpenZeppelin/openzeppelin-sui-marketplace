@@ -3,18 +3,28 @@ module mock_coin::mock_coin;
 use sui::coin;
 use sui::coin_registry;
 
+// === Structs ===
+
 /// Dev/local-only mock USD coin. Published for localnet convenience.
 public struct LocalMockUsd has key, store {
+    /// Unique ID for the coin object.
     id: UID,
 }
 
 /// Dev/local-only mock BTC coin. Published for localnet convenience.
 public struct LocalMockBtc has key, store {
+    /// Unique ID for the coin object.
     id: UID,
 }
 
+// === Constants ===
+
+/// Fixed supply minted at initialization and transferred to `recipient`.
 const MOCK_COIN_SUPPLY: u64 = 1_000_000_000_000_000_000;
 
+// === Public Functions ===
+
+/// Initializes the local mock USD currency.
 entry fun init_local_mock_usd(
     registry: &mut coin_registry::CoinRegistry,
     recipient: address,
@@ -32,6 +42,7 @@ entry fun init_local_mock_usd(
     finalize_and_fund_coin(treasury_cap, init, recipient, ctx);
 }
 
+/// Initializes the local mock BTC currency.
 entry fun init_local_mock_btc(
     registry: &mut coin_registry::CoinRegistry,
     recipient: address,
@@ -48,6 +59,8 @@ entry fun init_local_mock_btc(
     );
     finalize_and_fund_coin(treasury_cap, init, recipient, ctx);
 }
+
+// === Private Functions ===
 
 fun finalize_and_fund_coin<T: key + store>(
     mut treasury_cap: coin::TreasuryCap<T>,
