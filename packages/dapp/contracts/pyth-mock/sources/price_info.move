@@ -72,7 +72,7 @@ public fun publish_price_feed(
         price_feed,
     );
     let price_info_object = new_price_info_object(price_info, ctx);
-    share_price_info_object(price_info_object);
+    transfer::share_object(price_info_object);
 }
 
 /// Update an existing mock price feed with fresh timestamps and values.
@@ -104,10 +104,6 @@ public fun update_price_feed(
 }
 
 // === Private Functions ===
-
-fun share_price_info_object(price_info_object: PriceInfoObject) {
-    transfer::share_object(price_info_object);
-}
 
 // === Test-Only Helpers ===
 
