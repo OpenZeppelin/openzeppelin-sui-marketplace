@@ -4062,6 +4062,25 @@ fun claim_discount_ticket_rejects_when_shop_disabled() {
     abort
 }
 
+#[test, expected_failure(abort_code = ::sui_oracle_market::shop::EShopDisabled)]
+fun claim_discount_ticket_inline_rejects_when_shop_disabled() {
+    let mut ctx = tx_context::new_from_hint(TEST_OWNER, 10006, 0, 0, 0);
+    let (mut shop_obj, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
+    let template = shop_obj.test_create_discount_template_local(
+        option::none(),
+        0,
+        100,
+        0,
+        option::none(),
+        option::none(),
+        &mut ctx,
+    );
+    shop_obj.disable_shop(&owner_cap);
+
+    let _ticket = shop_obj.claim_discount_ticket_inline(template, 1, &mut ctx);
+    abort
+}
+
 #[test]
 fun discount_redemption_without_listing_restriction_allows_zero_price() {
     let mut scn = test_scenario::begin(TEST_OWNER);
