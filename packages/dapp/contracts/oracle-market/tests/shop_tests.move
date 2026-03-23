@@ -708,58 +708,6 @@ fun add_accepted_currency_rejects_short_feed_id() {
     abort
 }
 
-#[test]
-fun attestation_time_within_lag_is_allowed() {
-    let mut ctx = tx_context::new_from_hint(@0x0, 16, 0, 0, 0);
-    let publish_time = 100;
-    let attestation_time = publish_time + TEST_DEFAULT_MAX_PRICE_STATUS_LAG_SECS;
-    let price = price::new(
-        i64::new(1_000, false),
-        10,
-        i64::new(2, true),
-        publish_time,
-    );
-    let price_info_object = create_price_info_object_for_feed_with_price_and_times(
-        PRIMARY_FEED_ID,
-        price,
-        attestation_time,
-        attestation_time,
-        &mut ctx,
-    );
-
-    shop::assert_price_status_trading_for_max_lag(
-        &price_info_object,
-        TEST_DEFAULT_MAX_PRICE_STATUS_LAG_SECS,
-    );
-    std::unit_test::destroy(price_info_object);
-}
-
-#[test, expected_failure(abort_code = ::sui_oracle_market::shop::EPriceStatusNotTrading)]
-fun attestation_time_lag_over_limit_is_rejected() {
-    let mut ctx = tx_context::new_from_hint(@0x0, 18, 0, 0, 0);
-    let publish_time = 200;
-    let attestation_time = publish_time + TEST_DEFAULT_MAX_PRICE_STATUS_LAG_SECS + 1;
-    let price = price::new(
-        i64::new(1_000, false),
-        10,
-        i64::new(2, true),
-        publish_time,
-    );
-    let price_info_object = create_price_info_object_for_feed_with_price_and_times(
-        PRIMARY_FEED_ID,
-        price,
-        attestation_time,
-        attestation_time,
-        &mut ctx,
-    );
-
-    shop::assert_price_status_trading_for_max_lag(
-        &price_info_object,
-        TEST_DEFAULT_MAX_PRICE_STATUS_LAG_SECS,
-    );
-    abort
-}
-
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::EUnsupportedCurrencyDecimals)]
 fun add_accepted_currency_rejects_excessive_decimals() {
     let mut ctx = tx_context::new_from_hint(@0x0, 11, 0, 0, 0);
@@ -831,69 +779,6 @@ fun add_accepted_currency_rejects_missing_price_object() {
         option::none(),
     );
 
-    abort
-}
-
-#[test, expected_failure(abort_code = ::sui_oracle_market::shop::EPriceStatusNotTrading)]
-fun quote_rejects_attestation_lag_above_currency_cap() {
-    let mut scn = test_scenario::begin(TEST_OWNER);
-    let (shop_id, owner_cap_id) = create_default_shop_and_owner_cap_ids_for_sender(&mut scn);
-
-    let currency = prepare_test_currency_for_owner(&mut scn, TEST_OWNER);
-    let publish_time = 300;
-    let attestation_time = publish_time + 3;
-    let price = price::new(
-        i64::new(1_000, false),
-        10,
-        i64::new(2, true),
-        publish_time,
-    );
-    let price_info_object = create_price_info_object_for_feed_with_price_and_times(
-        PRIMARY_FEED_ID,
-        price,
-        attestation_time,
-        attestation_time,
-        test_scenario::ctx(&mut scn),
-    );
-    let price_info_id = price_info_object.uid_to_inner();
-
-    let mut shop_obj = take_shared_shop(&scn, shop_id);
-    let owner_cap_obj = test_scenario::take_from_sender_by_id(
-        &scn,
-        owner_cap_id,
-    );
-    shop_obj.add_accepted_currency<TestCoin>(
-        &owner_cap_obj,
-        &currency,
-        &price_info_object,
-        PRIMARY_FEED_ID,
-        price_info_id,
-        option::none(),
-        option::none(),
-        option::some(2),
-    );
-    test_scenario::return_to_sender(&scn, owner_cap_obj);
-    test_scenario::return_shared(shop_obj);
-    transfer::public_share_object(price_info_object);
-
-    let _ = test_scenario::next_tx(&mut scn, TEST_OWNER);
-
-    let shared_shop = take_shared_shop(&scn, shop_id);
-    let clock_obj = create_test_clock_at(
-        test_scenario::ctx(&mut scn),
-        (attestation_time + 1) * 1000,
-    );
-
-    shared_shop.quote_amount_for_price_info_object<TestCoin>(
-        &test_scenario::take_shared_by_id<price_info::PriceInfoObject>(
-            &scn,
-            price_info_id,
-        ),
-        10_000,
-        option::none(),
-        option::none(),
-        &clock_obj,
-    );
     abort
 }
 
@@ -4485,65 +4370,6 @@ fun checkout_rejects_currency_from_other_shop() {
         option::none(),
         &clock_obj,
         test_scenario::ctx(&mut scn),
-    );
-
-    abort
-}
-
-#[test, expected_failure(abort_code = ::sui_oracle_market::shop::EPriceStatusNotTrading)]
-fun price_status_rejects_attestation_before_publish() {
-    let mut scn = test_scenario::begin(TEST_OWNER);
-    let (shop_id, owner_cap_id) = create_default_shop_and_owner_cap_ids_for_sender(&mut scn);
-
-    let currency = prepare_test_currency_for_owner(&mut scn, TEST_OWNER);
-    let mut shop_obj = take_shared_shop(&scn, shop_id);
-    let owner_cap_obj = test_scenario::take_from_sender_by_id(
-        &scn,
-        owner_cap_id,
-    );
-    let price_value = i64::new(1_000, false);
-    let expo = i64::new(0, false);
-    let price = price::new(price_value, 10, expo, 100);
-    let price_info_object = create_price_info_object_for_feed_with_price_and_times(
-        PRIMARY_FEED_ID,
-        price,
-        50,
-        0,
-        test_scenario::ctx(&mut scn),
-    );
-    let price_info_id = price_info_object.uid_to_inner();
-
-    shop_obj.add_accepted_currency<TestCoin>(
-        &owner_cap_obj,
-        &currency,
-        &price_info_object,
-        PRIMARY_FEED_ID,
-        price_info_id,
-        option::none(),
-        option::none(),
-        option::none(),
-    );
-    std::unit_test::destroy(currency);
-
-    transfer::public_share_object(price_info_object);
-    test_scenario::return_to_sender(&scn, owner_cap_obj);
-    test_scenario::return_shared(shop_obj);
-
-    let _ = test_scenario::next_tx(&mut scn, TEST_OWNER);
-
-    let shared_shop = take_shared_shop(&scn, shop_id);
-    let price_info_obj = test_scenario::take_shared_by_id(
-        &scn,
-        price_info_id,
-    );
-    let clock_obj = create_test_clock_at(test_scenario::ctx(&mut scn), 1000);
-
-    shared_shop.quote_amount_for_price_info_object<TestCoin>(
-        &price_info_obj,
-        100,
-        option::none(),
-        option::none(),
-        &clock_obj,
     );
 
     abort

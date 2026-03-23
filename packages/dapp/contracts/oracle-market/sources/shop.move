@@ -150,8 +150,6 @@ const EInvalidGuardrailCap: vector<u8> = b"invalid guardrail cap";
 #[error]
 const ETemplateFinalized: vector<u8> = b"template finalized";
 #[error]
-const EPriceStatusNotTrading: vector<u8> = b"price status not trading";
-#[error]
 const EItemTypeMismatch: vector<u8> = b"item type mismatch";
 #[error]
 const EUnsupportedCurrencyDecimals: vector<u8> = b"unsupported currency decimals";
@@ -1725,10 +1723,6 @@ fun process_purchase<TItem: store, TCoin>(
 
     let accepted_currency = shop.borrow_registered_accepted_currency(coin_type);
     assert_price_info_matches_currency!(accepted_currency, price_info_object);
-    assert_price_status_trading_for_max_lag(
-        price_info_object,
-        accepted_currency.max_price_status_lag_secs_cap,
-    );
     let quote_amount = accepted_currency.quote_amount_with_guardrails(
         price_info_object,
         discounted_price_usd_cents,
@@ -2234,24 +2228,6 @@ macro fun assert_price_info_matches_currency(
     );
 }
 
-macro fun assert_price_status_trading(
-    $price_info_object: &price_info::PriceInfoObject,
-    $max_price_status_lag_secs: u64,
-) {
-    let price_info_object = $price_info_object;
-    let max_price_status_lag_secs = $max_price_status_lag_secs;
-    let price_info = price_info::get_price_info_from_price_info_object(
-        price_info_object,
-    );
-    let attestation_time = price_info.get_attestation_time();
-    let current_price = price_info.get_price_feed().get_price();
-    let publish_time = current_price.get_timestamp();
-    // Treat feeds with stale attestations as unavailable even if Pyth doesn't expose an explicit status.
-    assert!(attestation_time >= publish_time, EPriceStatusNotTrading);
-    let attestation_lag_secs = attestation_time - publish_time;
-    assert!(attestation_lag_secs <= max_price_status_lag_secs, EPriceStatusNotTrading);
-}
-
 macro fun assert_template_belongs_to_shop($shop: &Shop, $discount_template_id: ID) {
     let shop = $shop;
     let discount_template_id = $discount_template_id;
@@ -2315,14 +2291,6 @@ macro fun assert_template_claimable(
     });
 
     assert!(!template.claims_by_claimer.contains(claimer), EDiscountAlreadyClaimed);
-}
-
-/// Asserts that the feed attestation lag is within `max_price_status_lag_secs`.
-public(package) fun assert_price_status_trading_for_max_lag(
-    price_info_object: &price_info::PriceInfoObject,
-    max_price_status_lag_secs: u64,
-) {
-    assert_price_status_trading!(price_info_object, max_price_status_lag_secs);
 }
 
 // === View helpers ===
@@ -2501,10 +2469,6 @@ public fun quote_amount_for_price_info_object<TCoin>(
     let coin_type = currency_type<TCoin>();
     let accepted_currency = shop.borrow_registered_accepted_currency(coin_type);
     assert_price_info_matches_currency!(accepted_currency, price_info_object);
-    assert_price_status_trading_for_max_lag(
-        price_info_object,
-        accepted_currency.max_price_status_lag_secs_cap,
-    );
     // Entry-only quote helper; clients call via dev-inspect instead of storing quotes on-chain.
     accepted_currency.quote_amount_with_guardrails(
         price_info_object,
