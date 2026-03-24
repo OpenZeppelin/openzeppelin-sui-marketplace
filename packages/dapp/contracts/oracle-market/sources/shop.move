@@ -28,7 +28,7 @@ use sui::table::{Self, Table};
 //   transfer::share_object.
 //   Docs: docs/07-shop-capabilities.md, docs/08-listings-receipts.md, docs/09-currencies-oracles.md,
 //   docs/10-discounts-tickets.md, docs/16-object-ownership.md
-// - Owned objects (ShopOwnerCap, DiscountTicket, ShopItem): ownership enforces authority or user
+// - Owned objects (ShopOwnerCap, ShopItem): ownership enforces authority or user
 //   assets. Passing an owned object by value is a single-use guarantee. Docs: docs/07-shop-capabilities.md,
 //   docs/08-listings-receipts.md, docs/10-discounts-tickets.md, docs/16-object-ownership.md
 // - Capability-based auth (ShopOwnerCap): admin entry points require the capability object, not
@@ -116,8 +116,6 @@ const ETemplateExpired: vector<u8> = b"template expired";
 #[error]
 const ETemplateMaxedOut: vector<u8> = b"template maxed out";
 #[error]
-const EDiscountAlreadyClaimed: vector<u8> = b"discount already claimed";
-#[error]
 const EOutOfStock: vector<u8> = b"out of stock";
 #[error]
 const EPythObjectMismatch: vector<u8> = b"pyth object mismatch";
@@ -130,21 +128,11 @@ const EPriceOverflow: vector<u8> = b"price overflow";
 #[error]
 const EInsufficientPayment: vector<u8> = b"insufficient payment";
 #[error]
-const EDiscountTicketMismatch: vector<u8> = b"discount ticket mismatch";
-#[error]
-const EDiscountTicketOwnerMismatch: vector<u8> = b"discount ticket owner mismatch";
-#[error]
-const EDiscountTicketListingMismatch: vector<u8> = b"discount ticket listing mismatch";
-#[error]
-const EDiscountTicketShopMismatch: vector<u8> = b"discount ticket shop mismatch";
-#[error]
 const EConfidenceIntervalTooWide: vector<u8> = b"confidence interval too wide";
 #[error]
 const EConfidenceExceedsPrice: vector<u8> = b"confidence exceeds price";
 #[error]
 const ESpotlightTemplateListingMismatch: vector<u8> = b"spotlight template listing mismatch";
-#[error]
-const EDiscountClaimsNotPrunable: vector<u8> = b"discount claims not prunable";
 #[error]
 const EInvalidGuardrailCap: vector<u8> = b"invalid guardrail cap";
 #[error]
@@ -161,6 +149,12 @@ const EEmptyShopName: vector<u8> = b"empty shop name";
 const EShopDisabled: vector<u8> = b"shop disabled";
 #[error]
 const EPriceTooStale: vector<u8> = b"price too stale";
+#[error]
+const EDiscountListingMismatch: vector<u8> = b"discount listing mismatch";
+#[error]
+const EDiscountClaimsNotPrunable: vector<u8> = b"discount claims not prunable";
+#[error]
+const EDiscountAlreadyClaimed: vector<u8> = b"discount already claimed";
 
 // === Constants ===
 const CENTS_PER_DOLLAR: u64 = 100;
@@ -275,6 +269,7 @@ public enum DiscountRuleKind has copy, drop {
     Percent,
 }
 
+// TODO#q: rename DiscountTemplate -> Discount
 /// Coupon template for creating discounts tracked under the shop.
 public struct DiscountTemplate has store {
     /// Template identifier and key in `Shop.discount_templates`.
@@ -289,30 +284,16 @@ public struct DiscountTemplate has store {
     expires_at: Option<u64>,
     /// Optional global redemption cap.
     max_redemptions: Option<u64>,
+    // TODO#q: remove claims issue (we don't have tickets anyways)
     /// Number of tickets claimed from this template.
     claims_issued: u64,
-    /// Number of tickets redeemed in checkout.
+    /// Number of discounts redeemed in checkout.
     redemptions: u64,
     /// Owner-controlled enable/disable flag.
     active: bool,
+    // TODO#q: remove claims counter
     /// One-claim-per-address marker table used as a hash set (value is always `true`).
     claims_by_claimer: Table<address, bool>,
-}
-
-/// Discount ticket that future buyers will redeem during purchase flow.
-/// Tickets are owned objects. They can be transferred, but redemption enforces the original claimer
-/// so "transferable" does not mean "redeemable."
-public struct DiscountTicket has key, store {
-    /// Ticket object ID.
-    id: UID,
-    /// Template this ticket redeems against.
-    discount_template_id: ID,
-    /// Shop context captured at claim time.
-    shop_id: ID,
-    /// Optional listing scope captured from template.
-    listing_id: Option<ID>,
-    /// Address authorized to redeem this ticket.
-    claimer: address,
 }
 
 /// Resolved pricing guardrails after capping buyer overrides against seller limits.
@@ -424,10 +405,9 @@ public struct DiscountClaimedEvent has copy, drop {
 public struct DiscountRedeemedEvent has copy, drop {
     /// Shop where redemption occurred.
     shop_id: ID,
+    // TODO#q: rename discount_template_id -> discount_id
     /// Template used for redemption.
     discount_template_id: ID,
-    /// Redeemed discount ticket ID.
-    discount_id: ID,
 }
 
 /// Event emitted when a purchase completes.
@@ -575,12 +555,10 @@ public(package) fun new_discount_claimed_event(shop_id: ID, discount_id: ID): Di
 public(package) fun new_discount_redeemed_event(
     shop_id: ID,
     discount_template_id: ID,
-    discount_id: ID,
 ): DiscountRedeemedEvent {
     DiscountRedeemedEvent {
         shop_id,
         discount_template_id,
-        discount_id,
     }
 }
 
@@ -619,9 +597,8 @@ public(package) fun new_purchase_completed_event(
 /// - Shared object composition: the shop is shared, with listings/currencies stored in typed
 ///   table storage and discount templates stored directly in a typed `Table`.
 /// - State stays sharded so PTBs only touch the listing slot/template object they mutate.
-public fun create_shop(name: String, ctx: &mut TxContext): (ID, ID) {
-    let owner = ctx.sender();
-    let shop = new_shop(name, owner, ctx);
+public fun create_shop(name: String, ctx: &mut TxContext): (ID, ShopOwnerCap) {
+    let shop = new_shop(name, ctx.sender(), ctx);
     let shop_id = shop.id.to_inner();
 
     let owner_cap = ShopOwnerCap {
@@ -633,8 +610,7 @@ public fun create_shop(name: String, ctx: &mut TxContext): (ID, ID) {
     event::emit(new_shop_created_event(shop_id, owner_cap_id));
 
     transfer::share_object(shop);
-    transfer_shop_owner_cap(owner_cap, owner);
-    (shop_id, owner_cap_id)
+    (shop_id, owner_cap)
 }
 
 /// Disable a shop permanently (buyer flows will reject new checkouts).
@@ -1100,95 +1076,6 @@ public fun clear_template_from_listing(shop: &mut Shop, owner_cap: &ShopOwnerCap
     item_listing.spotlight_discount_template_id = option::none();
 }
 
-/// Mint a single-use discount ticket to the caller using the template schedule and limits.
-///
-/// Sui mindset:
-/// - Discount tickets are owned objects rather than balances in contract storage, so callers can
-///   compose claim + checkout. Use `claim_and_buy_item_with_discount` to mint and spend in one
-///   transaction, or call this function to mint a ticket that the wallet can redeem later.
-/// - Per-wallet claim limits are enforced by writing the claimer address into the template's
-///   `claims_by_claimer` table entry stored under `Shop.discount_templates`. Each claim increments
-///   template counters and writes a claim marker, so it mutates the shared `Shop` path for that
-///   template.
-/// - Time windows are checked against the shared `Clock` (seconds) to avoid surprises when epochs
-///   are long-lived; passing the clock keeps the function pure from a caller perspective.
-/// - Because templates are stored in the shop's table, claims no longer take a standalone template
-///   shared object input. Callers provide only `discount_template_id`, and the module resolves and
-///   validates the template from `shop`.
-/// - Tickets are transferable as objects, but redemption is bound to the original claimer. If a
-///   ticket is moved to another address, it cannot be redeemed by the recipient. In EVM you might
-///   airdrop ERC-1155 coupons; here the object identity plus `ctx.sender()` check guarantee
-///   single-claimer semantics without extra storage.
-public fun claim_discount_ticket(
-    shop: &mut Shop,
-    discount_template_id: ID,
-    clock: &clock::Clock,
-    ctx: &mut TxContext,
-) {
-    assert_shop_active!(shop);
-
-    let now_secs = now_secs(clock);
-    let claimer = ctx.sender();
-    let discount_ticket = shop.claim_discount_ticket_with_event(
-        discount_template_id,
-        now_secs,
-        ctx,
-    );
-
-    transfer_discount_ticket_to_recipient(discount_ticket, claimer);
-}
-
-/// Package-only helper that returns the owned ticket so package code can inline claim + buy in one
-/// PTB without exposing caller-supplied time controls to external transactions.
-/// The claimer is always bound to `ctx.sender()` to prevent third parties from minting on behalf of
-/// other addresses and exhausting template quotas.
-public(package) fun claim_discount_ticket_inline(
-    shop: &mut Shop,
-    discount_template_id: ID,
-    now_secs: u64,
-    ctx: &mut TxContext,
-): DiscountTicket {
-    assert_shop_active!(shop);
-    let applies_to_listing = {
-        let discount_template = shop.borrow_discount_template(discount_template_id);
-        discount_template.applies_to_listing
-    };
-    assert_listing_belongs_to_shop_if_some!(shop, applies_to_listing);
-    let shop_id = shop.id.to_inner();
-
-    let discount_template = shop.borrow_discount_template_mut(discount_template_id);
-    let claimer = ctx.sender();
-    assert_template_claimable!(discount_template, claimer, now_secs);
-
-    let discount_ticket = new_discount_ticket(
-        discount_template,
-        shop_id,
-        claimer,
-        ctx,
-    );
-
-    discount_template.record_discount_claim(claimer);
-    discount_ticket
-}
-
-fun claim_discount_ticket_with_event(
-    shop: &mut Shop,
-    discount_template_id: ID,
-    now_secs: u64,
-    ctx: &mut TxContext,
-): DiscountTicket {
-    let discount_ticket = shop.claim_discount_ticket_inline(discount_template_id, now_secs, ctx);
-
-    event::emit(
-        new_discount_claimed_event(
-            shop.id.to_inner(),
-            discount_ticket.id.to_inner(),
-        ),
-    );
-
-    discount_ticket
-}
-
 /// Remove recorded claim markers for a template that is no longer serving new tickets.
 /// Pruning is only allowed once the template is irrevocably finished (expired or maxed out)
 /// so that a pause cannot be used to bypass the one-claim-per-address guarantee.
@@ -1262,11 +1149,9 @@ public fun buy_item<TItem: store, TCoin>(
     transfer::public_transfer(minted_item, mint_to);
 }
 
-/// Same as `buy_item` but also validates and burns a `DiscountTicket`.
+/// Same as `buy_item` but also validates that discount is applicable.
 ///
 /// Sui mindset:
-/// - Promotions are owned objects (`DiscountTicket`). Burning here enforces single-use on-chain
-///   without external allowlists or signatures.
 /// - The discount template is a shared object anyone can read; this function validates the
 ///   template/listing/shop linkage and increments redemptions to keep limits accurate.
 /// - Refund destination is explicitly provided (`refund_extra_to`) so "gift" flows can return change
@@ -1277,7 +1162,6 @@ public fun buy_item<TItem: store, TCoin>(
 public fun buy_item_with_discount<TItem: store, TCoin>(
     shop: &mut Shop,
     discount_template_id: ID,
-    discount_ticket: DiscountTicket,
     price_info_object: &price_info::PriceInfoObject,
     payment: coin::Coin<TCoin>,
     listing_id: ID,
@@ -1289,14 +1173,17 @@ public fun buy_item_with_discount<TItem: store, TCoin>(
     ctx: &mut TxContext,
 ) {
     assert_shop_active!(shop);
-    let buyer = ctx.sender();
+
+    let sender = ctx.sender();
     let now = now_secs(clock);
     let listing_price_usd_cents = shop.borrow_listing(listing_id).base_price_usd_cents;
 
     let shop_id = shop.id.to_inner();
     let discount_template = shop.borrow_discount_template_mut(discount_template_id);
     assert_discount_redemption_allowed!(discount_template, listing_id, now);
-    assert_ticket_matches_context!(&discount_ticket, discount_template, shop_id, listing_id, buyer);
+    // TODO#q: rename since we don't claim anything now
+    assert_template_claimable!(discount_template, sender, now);
+    
     discount_template.redemptions = discount_template.redemptions + 1;
     let discounted_price_usd_cents = discount_template
         .rule
@@ -1304,11 +1191,10 @@ public fun buy_item_with_discount<TItem: store, TCoin>(
             listing_price_usd_cents,
         );
 
-    let event = new_discount_redeemed_event(
+    event::emit(new_discount_redeemed_event(
         shop_id,
         discount_template.id,
-        discount_ticket.id.to_inner(),
-    );
+    ));
 
     let (owed_coin_opt, change_coin, minted_item) = shop.process_purchase<TItem, TCoin>(
         price_info_object,
@@ -1330,66 +1216,6 @@ public fun buy_item_with_discount<TItem: store, TCoin>(
         transfer::public_transfer(change_coin, refund_extra_to);
     };
     transfer::public_transfer(minted_item, mint_to);
-
-    event::emit(event);
-    discount_ticket.burn_discount_ticket();
-}
-
-/// Claim a discount ticket for the sender and immediately redeem it during checkout within the
-/// same PTB.
-///
-/// Sui mindset:
-/// - Reduces front-end friction: callers do not need to manage a temporary `DiscountTicket`
-///   transfer between separate transactions or commands.
-/// - Emits the same `DiscountClaimedEvent` + `DiscountRedeemedEvent` events as the two-step flow so downstream
-///   analytics remain consistent.
-/// - The ticket is created and consumed inside one PTB, minimizing custody risk while still using
-///   the template's `claims_by_claimer` table to enforce one-claim-per-address.
-/// - This pattern highlights Sui's composability: objects can be created, used, and destroyed in a
-///   single PTB without extra approvals or intermediate transactions--something Solidity flows often
-///   approximate with meta-transactions or batching routers.
-public fun claim_and_buy_item_with_discount<TItem: store, TCoin>(
-    shop: &mut Shop,
-    discount_template_id: ID,
-    price_info_object: &price_info::PriceInfoObject,
-    payment: coin::Coin<TCoin>,
-    listing_id: ID,
-    mint_to: address,
-    refund_extra_to: address,
-    max_price_age_secs: Option<u64>,
-    max_confidence_ratio_bps: Option<u16>,
-    clock: &clock::Clock,
-    ctx: &mut TxContext,
-) {
-    assert_shop_active!(shop);
-    let now_secs = now_secs(clock);
-    let discount_ticket = shop.claim_discount_ticket_with_event(
-        discount_template_id,
-        now_secs,
-        ctx,
-    );
-
-    shop.buy_item_with_discount<TItem, TCoin>(
-        discount_template_id,
-        discount_ticket,
-        price_info_object,
-        payment,
-        listing_id,
-        mint_to,
-        refund_extra_to,
-        max_price_age_secs,
-        max_confidence_ratio_bps,
-        clock,
-        ctx,
-    );
-}
-
-fun transfer_shop_owner_cap(owner_cap: ShopOwnerCap, recipient: address) {
-    transfer::public_transfer(owner_cap, recipient);
-}
-
-fun transfer_discount_ticket_to_recipient(discount_ticket: DiscountTicket, recipient: address) {
-    transfer::public_transfer(discount_ticket, recipient);
 }
 
 // === Data ===
@@ -1467,21 +1293,6 @@ fun new_discount_template(
         redemptions: 0,
         active: true,
         claims_by_claimer,
-    }
-}
-
-fun new_discount_ticket(
-    template: &DiscountTemplate,
-    shop_id: ID,
-    claimer: address,
-    ctx: &mut TxContext,
-): DiscountTicket {
-    DiscountTicket {
-        id: object::new(ctx),
-        discount_template_id: template.id,
-        shop_id,
-        listing_id: template.applies_to_listing,
-        claimer,
     }
 }
 
@@ -1994,11 +1805,6 @@ public(package) fun apply_percent_discount(base_price_usd_cents: u64, bps: u16):
     DiscountRule::Percent { bps }.apply_discount(base_price_usd_cents)
 }
 
-fun burn_discount_ticket(discount_ticket: DiscountTicket) {
-    let DiscountTicket { id, .. } = discount_ticket;
-    id.delete();
-}
-
 // === Asserts and validations ===
 
 macro fun assert_owner_cap($shop: &Shop, $owner_cap: &ShopOwnerCap) {
@@ -2138,33 +1944,12 @@ macro fun assert_discount_redemption_allowed(
     assert!(discount_template.active, ETemplateInactive);
 
     discount_template.applies_to_listing.do_ref!(|applies_to_listing| {
-        assert!(*applies_to_listing == listing_id, EDiscountTicketListingMismatch);
+        assert!(*applies_to_listing == listing_id, EDiscountListingMismatch);
     });
 
     assert_template_in_time_window!(discount_template, now);
     assert!(discount_template.claims_issued > discount_template.redemptions, ETemplateMaxedOut);
     assert!(!discount_template.redemption_cap_reached(), ETemplateMaxedOut);
-}
-
-macro fun assert_ticket_matches_context(
-    $discount_ticket: &DiscountTicket,
-    $discount_template: &DiscountTemplate,
-    $shop_id: ID,
-    $listing_id: ID,
-    $buyer: address,
-) {
-    let discount_ticket = $discount_ticket;
-    let discount_template = $discount_template;
-    let shop_id = $shop_id;
-    let listing_id = $listing_id;
-    let buyer = $buyer;
-    assert!(discount_ticket.shop_id == shop_id, EDiscountTicketShopMismatch);
-    assert!(discount_ticket.discount_template_id == discount_template.id, EDiscountTicketMismatch);
-    assert!(discount_ticket.claimer == buyer, EDiscountTicketOwnerMismatch);
-
-    discount_ticket.listing_id.do_ref!(|ticket_listing_id| {
-        assert!(*ticket_listing_id == listing_id, EDiscountTicketListingMismatch);
-    });
 }
 
 macro fun assert_accepted_currency_inputs(
@@ -2461,26 +2246,6 @@ public fun discount_template_redemptions(template: &DiscountTemplate): u64 {
 /// Returns whether a template is currently active.
 public fun discount_template_active(template: &DiscountTemplate): bool {
     template.active
-}
-
-/// Returns the template ID encoded in a discount ticket.
-public fun discount_ticket_discount_template_id(ticket: &DiscountTicket): ID {
-    ticket.discount_template_id
-}
-
-/// Returns the shop ID encoded in a discount ticket.
-public fun discount_ticket_shop_id(ticket: &DiscountTicket): ID {
-    ticket.shop_id
-}
-
-/// Returns the optional listing ID encoded in a discount ticket.
-public fun discount_ticket_listing_id(ticket: &DiscountTicket): Option<ID> {
-    ticket.listing_id
-}
-
-/// Returns the claimer address encoded in a discount ticket.
-public fun discount_ticket_claimer(ticket: &DiscountTicket): address {
-    ticket.claimer
 }
 
 /// Returns whether `claimer` has an active claim marker for `template_id`.
