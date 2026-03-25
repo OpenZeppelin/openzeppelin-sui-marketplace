@@ -47,8 +47,7 @@ export const buildAddAcceptedCurrencyTransaction = ({
       transaction.pure.vector("u8", feedIdBytes),
       transaction.pure.id(pythObjectId),
       transaction.pure.option("u64", maxPriceAgeSecsCap ?? null),
-      transaction.pure.option("u16", maxConfidenceRatioBpsCap ?? null),
-      transaction.pure.option("u64", maxPriceStatusLagSecsCap ?? null)
+      transaction.pure.option("u16", maxConfidenceRatioBpsCap ?? null)
     ]
   })
 

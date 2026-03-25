@@ -168,8 +168,6 @@ const MAX_DECIMAL_POWER: u64 = 24;
 /// Reject price feeds with sigma/mu above 10%.
 const DEFAULT_MAX_CONFIDENCE_RATIO_BPS: u16 = 1_000;
 const PYTH_PRICE_IDENTIFIER_LENGTH: u64 = 32;
-/// Allow small attestation/publish skew without halting checkout.
-const DEFAULT_MAX_PRICE_STATUS_LAG_SECS: u64 = 5;
 
 /// Claims and returns the module's Publisher object during publish.
 public struct SHOP has drop {}
@@ -257,8 +255,6 @@ public struct AcceptedCurrency has drop, store {
     max_price_age_secs_cap: u64,
     /// Upper bound on caller-provided confidence override.
     max_confidence_ratio_bps_cap: u16,
-    /// Upper bound on publish/attestation lag override.
-    max_price_status_lag_secs_cap: u64,
 }
 
 /// Discount rules mirror the spec: fixed (USD cents) or percentage basis points off.
@@ -852,7 +848,7 @@ public fun remove_item_listing(shop: &mut Shop, owner_cap: &ShopOwnerCap, listin
 ///   bytes and the Pyth object ID to defend against spoofed inputs. This reduces reliance on
 ///   off-chain metadata, but the caller still must provide the correct on-chain object.
 /// - Sellers can optionally tighten oracle guardrails per currency (`max_price_age_secs_cap`,
-///   `max_confidence_ratio_bps_cap`, `max_price_status_lag_secs_cap`). Buyers may only tighten
+///   `max_confidence_ratio_bps_cap`). Buyers may only tighten
 ///   `max_price_age_secs`/`max_confidence_ratio_bps` further--never loosen.
 public fun add_accepted_currency<TCoin>(
     shop: &mut Shop,
@@ -863,7 +859,6 @@ public fun add_accepted_currency<TCoin>(
     pyth_object_id: ID,
     max_price_age_secs_cap: Option<u64>,
     max_confidence_ratio_bps_cap: Option<u16>,
-    max_price_status_lag_secs_cap: Option<u64>,
 ) {
     assert_owner_cap!(shop, owner_cap);
 
@@ -881,10 +876,6 @@ public fun add_accepted_currency<TCoin>(
         max_confidence_ratio_bps_cap,
         DEFAULT_MAX_CONFIDENCE_RATIO_BPS,
     );
-    let status_lag_cap = resolve_guardrail_cap!(
-        max_price_status_lag_secs_cap,
-        DEFAULT_MAX_PRICE_STATUS_LAG_SECS,
-    );
 
     let accepted_currency = new_accepted_currency(
         feed_id,
@@ -893,7 +884,6 @@ public fun add_accepted_currency<TCoin>(
         symbol,
         age_cap,
         confidence_cap,
-        status_lag_cap,
     );
     let accepted_currency_id = accepted_currency.pyth_object_id;
     shop.accepted_currencies.add(coin_type, accepted_currency);
@@ -1412,7 +1402,6 @@ fun new_accepted_currency(
     symbol: String,
     max_price_age_secs_cap: u64,
     max_confidence_ratio_bps_cap: u16,
-    max_price_status_lag_secs_cap: u64,
 ): AcceptedCurrency {
     assert_supported_decimals!(decimals);
 
@@ -1423,7 +1412,6 @@ fun new_accepted_currency(
         symbol,
         max_price_age_secs_cap,
         max_confidence_ratio_bps_cap,
-        max_price_status_lag_secs_cap,
     }
 }
 
@@ -2379,11 +2367,6 @@ public fun accepted_currency_max_price_age_secs_cap(currency: &AcceptedCurrency)
 /// Returns the seller cap for `max_confidence_ratio_bps` overrides.
 public fun accepted_currency_max_confidence_ratio_bps_cap(currency: &AcceptedCurrency): u16 {
     currency.max_confidence_ratio_bps_cap
-}
-
-/// Returns the seller cap for maximum attestation lag in seconds.
-public fun accepted_currency_max_price_status_lag_secs_cap(currency: &AcceptedCurrency): u64 {
-    currency.max_price_status_lag_secs_cap
 }
 
 /// Returns the discount template for `template_id`.
