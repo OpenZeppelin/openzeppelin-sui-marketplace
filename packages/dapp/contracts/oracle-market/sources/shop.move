@@ -284,9 +284,6 @@ public struct DiscountTemplate has drop, store {
     expires_at: Option<u64>,
     /// Optional global redemption cap.
     max_redemptions: Option<u64>,
-    // TODO#q: remove claims issue (we don't have tickets anyways)
-    /// Number of tickets claimed from this template.
-    claims_issued: u64,
     /// Number of discounts redeemed in checkout.
     redemptions: u64,
     /// Owner-controlled enable/disable flag.
@@ -1270,7 +1267,6 @@ fun new_discount_template(
         starts_at,
         expires_at,
         max_redemptions,
-        claims_issued: 0,
         redemptions: 0,
         active: true,
     }
@@ -1868,7 +1864,6 @@ fun template_finished(template: &DiscountTemplate, now: u64): bool {
 macro fun assert_template_updatable($template: &DiscountTemplate, $now: u64) {
     let template = $template;
     let now = $now;
-    assert!(template.claims_issued == 0, ETemplateFinalized);
     assert!(template.redemptions == 0, ETemplateFinalized);
     assert!(!template.template_finished(now), ETemplateFinalized);
 }
@@ -1888,7 +1883,6 @@ macro fun assert_discount_redemption_allowed(
     });
 
     assert_template_in_time_window!(discount_template, now);
-    assert!(discount_template.claims_issued > discount_template.redemptions, ETemplateMaxedOut);
     assert!(!discount_template.redemption_cap_reached(), ETemplateMaxedOut);
 }
 
@@ -2151,11 +2145,6 @@ public fun discount_template_expires_at(template: &DiscountTemplate): Option<u64
 /// Returns the optional maximum redemptions for a template.
 public fun discount_template_max_redemptions(template: &DiscountTemplate): Option<u64> {
     template.max_redemptions
-}
-
-/// Returns how many discount tickets have been issued for a template.
-public fun discount_template_claims_issued(template: &DiscountTemplate): u64 {
-    template.claims_issued
 }
 
 /// Returns how many times a template has been redeemed.
