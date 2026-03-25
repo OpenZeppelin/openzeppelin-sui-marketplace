@@ -60,7 +60,6 @@ type ExpectedAcceptedCurrencyFields = {
   pythObjectId?: string
   maxPriceAgeSecsCap?: string
   maxConfidenceRatioBpsCap?: string
-  maxPriceStatusLagSecsCap?: string
 }
 
 const expectAcceptedCurrencyMatches = (
@@ -264,7 +263,6 @@ describe("owner scripts integration", () => {
           feedIdHex: selection.feedIdHex,
           maxPriceAgeSecsCap: MAX_PRICE_AGE_SECS_CAP.toString(),
           maxConfidenceRatioBpsCap: "250",
-          maxPriceStatusLagSecsCap: "4"
         })
       }
     )
