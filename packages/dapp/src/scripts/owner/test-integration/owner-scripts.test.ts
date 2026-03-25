@@ -262,7 +262,7 @@ describe("owner scripts integration", () => {
           coinType: selection.coinType,
           feedIdHex: selection.feedIdHex,
           maxPriceAgeSecsCap: MAX_PRICE_AGE_SECS_CAP.toString(),
-          maxConfidenceRatioBpsCap: "250",
+          maxConfidenceRatioBpsCap: "250"
         })
       }
     )
