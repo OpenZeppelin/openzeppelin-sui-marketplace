@@ -271,7 +271,7 @@ public enum DiscountRuleKind has copy, drop {
 
 // TODO#q: rename DiscountTemplate -> Discount
 /// Coupon template for creating discounts tracked under the shop.
-public struct DiscountTemplate has store {
+public struct DiscountTemplate has drop, store {
     /// Template identifier and key in `Shop.discount_templates`.
     id: ID,
     /// Optional listing scope restriction.
@@ -291,9 +291,6 @@ public struct DiscountTemplate has store {
     redemptions: u64,
     /// Owner-controlled enable/disable flag.
     active: bool,
-    // TODO#q: remove claims counter
-    /// One-claim-per-address marker table used as a hash set (value is always `true`).
-    claims_by_claimer: Table<address, bool>,
 }
 
 /// Resolved pricing guardrails after capping buyer overrides against seller limits.
@@ -909,7 +906,6 @@ fun create_discount_template_core(
 
     let discount_rule_kind = parse_rule_kind(rule_kind);
     let discount_rule = discount_rule_kind.build_discount_rule(rule_value);
-    let claims_by_claimer = table::new<address, bool>(ctx);
     let discount_template_id = new_object_id(ctx);
     let discount_template = new_discount_template(
         discount_template_id,
@@ -918,7 +914,6 @@ fun create_discount_template_core(
         starts_at,
         expires_at,
         max_redemptions,
-        claims_by_claimer,
     );
     shop.discount_templates.add(discount_template_id, discount_template);
     shop.increment_active_template_count_if_listing_bound(applies_to_listing);
@@ -1076,24 +1071,6 @@ public fun clear_template_from_listing(shop: &mut Shop, owner_cap: &ShopOwnerCap
     item_listing.spotlight_discount_template_id = option::none();
 }
 
-/// Remove recorded claim markers for a template that is no longer serving new tickets.
-/// Pruning is only allowed once the template is irrevocably finished (expired or maxed out)
-/// so that a pause cannot be used to bypass the one-claim-per-address guarantee.
-public fun prune_discount_claims(
-    shop: &mut Shop,
-    owner_cap: &ShopOwnerCap,
-    discount_template_id: ID,
-    claimers: vector<address>,
-    clock: &clock::Clock,
-) {
-    assert_owner_cap!(shop, owner_cap);
-    assert_template_registered!(shop, discount_template_id);
-    let now_secs = now_secs(clock);
-    let discount_template = shop.borrow_discount_template_mut(discount_template_id);
-    assert_template_prunable!(discount_template, now_secs);
-    discount_template.prune_claim_markers(claimers);
-}
-
 // === Checkout ===
 
 /// Execute a purchase priced in USD cents but settled with any previously registered `AcceptedCurrency`.
@@ -1174,16 +1151,19 @@ public fun buy_item_with_discount<TItem: store, TCoin>(
 ) {
     assert_shop_active!(shop);
 
-    let sender = ctx.sender();
     let now = now_secs(clock);
     let listing_price_usd_cents = shop.borrow_listing(listing_id).base_price_usd_cents;
 
     let shop_id = shop.id.to_inner();
     let discount_template = shop.borrow_discount_template_mut(discount_template_id);
     assert_discount_redemption_allowed!(discount_template, listing_id, now);
-    // TODO#q: rename since we don't claim anything now
-    assert_template_claimable!(discount_template, sender, now);
-    
+
+    assert!(discount_template.active, ETemplateInactive);
+    assert_template_in_time_window!(discount_template, now);
+    discount_template.max_redemptions.do_ref!(|max_redemptions| {
+        assert!(discount_template.redemptions < *max_redemptions, ETemplateMaxedOut);
+    });
+
     discount_template.redemptions = discount_template.redemptions + 1;
     let discounted_price_usd_cents = discount_template
         .rule
@@ -1191,10 +1171,12 @@ public fun buy_item_with_discount<TItem: store, TCoin>(
             listing_price_usd_cents,
         );
 
-    event::emit(new_discount_redeemed_event(
-        shop_id,
-        discount_template.id,
-    ));
+    event::emit(
+        new_discount_redeemed_event(
+            shop_id,
+            discount_template.id,
+        ),
+    );
 
     let (owed_coin_opt, change_coin, minted_item) = shop.process_purchase<TItem, TCoin>(
         price_info_object,
@@ -1280,7 +1262,6 @@ fun new_discount_template(
     starts_at: u64,
     expires_at: Option<u64>,
     max_redemptions: Option<u64>,
-    claims_by_claimer: Table<address, bool>,
 ): DiscountTemplate {
     DiscountTemplate {
         id: discount_template_id,
@@ -1292,25 +1273,7 @@ fun new_discount_template(
         claims_issued: 0,
         redemptions: 0,
         active: true,
-        claims_by_claimer,
     }
-}
-
-fun record_discount_claim(template: &mut DiscountTemplate, claimer: address) {
-    // Track issued tickets; actual uses are counted at redemption time.
-    template.claims_issued = template.claims_issued + 1;
-    // `claims_by_claimer` behaves as a set: key presence enforces one claim per address.
-    template.claims_by_claimer.add(claimer, true);
-}
-
-fun remove_discount_claim_if_exists(template: &mut DiscountTemplate, claimer: address) {
-    if (template.claims_by_claimer.contains(claimer)) {
-        let _claim_record = template.claims_by_claimer.remove(claimer);
-    }
-}
-
-fun prune_claim_markers(template: &mut DiscountTemplate, claimers: vector<address>) {
-    claimers.destroy!(|claimer| template.remove_discount_claim_if_exists(claimer));
 }
 
 fun apply_discount_template_updates(
@@ -1381,8 +1344,7 @@ fun remove_discount_template_if_exists(shop: &mut Shop, template_id: ID) {
     shop.adjust_active_template_count(applies_to_listing, was_active, false);
     shop.clear_listing_spotlight_if_matches_template(applies_to_listing, template_id);
 
-    let template = shop.discount_templates.remove(template_id);
-    destroy_discount_template(template);
+    let _ = shop.discount_templates.remove(template_id);
 }
 
 fun clear_listing_spotlight_if_matches_template(
@@ -1398,22 +1360,6 @@ fun clear_listing_spotlight_if_matches_template(
             };
         };
     });
-}
-
-fun destroy_discount_template(template: DiscountTemplate) {
-    let DiscountTemplate {
-        id: _id,
-        applies_to_listing: _applies_to_listing,
-        rule: _rule,
-        starts_at: _starts_at,
-        expires_at: _expires_at,
-        max_redemptions: _max_redemptions,
-        claims_issued: _claims_issued,
-        redemptions: _redemptions,
-        active: _active,
-        claims_by_claimer,
-    } = template;
-    claims_by_claimer.drop();
 }
 
 fun increment_active_listing_template_count(shop: &mut Shop, listing_id: ID) {
@@ -1919,12 +1865,6 @@ fun template_finished(template: &DiscountTemplate, now: u64): bool {
     expired || maxed_out
 }
 
-macro fun assert_template_prunable($template: &DiscountTemplate, $now: u64) {
-    let template = $template;
-    let now = $now;
-    assert!(template.template_finished(now), EDiscountClaimsNotPrunable);
-}
-
 macro fun assert_template_updatable($template: &DiscountTemplate, $now: u64) {
     let template = $template;
     let now = $now;
@@ -2082,26 +2022,6 @@ macro fun assert_spotlight_template_matches_listing(
     });
 }
 
-/// Guardrails to keep claims inside schedule/limits and unique per address.
-macro fun assert_template_claimable(
-    $template: &DiscountTemplate,
-    $claimer: address,
-    $now_secs: u64,
-) {
-    let template = $template;
-    let claimer = $claimer;
-    let now_secs = $now_secs;
-    assert!(template.active, ETemplateInactive);
-    assert_template_in_time_window!(template, now_secs);
-
-    template.max_redemptions.do_ref!(|max_redemptions| {
-        assert!(template.claims_issued < *max_redemptions, ETemplateMaxedOut);
-        assert!(template.redemptions < *max_redemptions, ETemplateMaxedOut);
-    });
-
-    assert!(!template.claims_by_claimer.contains(claimer), EDiscountAlreadyClaimed);
-}
-
 /// Asserts that the feed attestation lag is within `max_price_status_lag_secs`.
 public(package) fun assert_price_status_trading_for_max_lag(
     price_info_object: &price_info::PriceInfoObject,
@@ -2246,12 +2166,6 @@ public fun discount_template_redemptions(template: &DiscountTemplate): u64 {
 /// Returns whether a template is currently active.
 public fun discount_template_active(template: &DiscountTemplate): bool {
     template.active
-}
-
-/// Returns whether `claimer` has an active claim marker for `template_id`.
-public(package) fun discount_claim_exists(shop: &Shop, template_id: ID, claimer: address): bool {
-    let template = shop.borrow_discount_template(template_id);
-    template.claims_by_claimer.contains(claimer)
 }
 
 /// Quotes the coin amount for a price info object with guardrails.
