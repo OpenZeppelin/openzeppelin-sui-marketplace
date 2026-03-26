@@ -16,6 +16,7 @@ use sui::coin_registry;
 use sui::event;
 use sui::package;
 use sui::table::{Self, Table};
+use sui_oracle_market::events;
 
 // === Concepts used in this module (what/why/how) ===
 // - Shared objects (Shop): shared objects are
@@ -298,285 +299,6 @@ public struct EffectiveGuardrails has copy, drop {
     max_confidence_ratio_bps: u16,
 }
 
-// === Event Definitions ===
-/// Event emitted when a shop is created.
-public struct ShopCreatedEvent has copy, drop {
-    /// Created shop ID.
-    shop_id: ID,
-    /// Created owner capability ID.
-    shop_owner_cap_id: ID,
-}
-
-/// Event emitted when a shop owner is updated.
-public struct ShopOwnerUpdatedEvent has copy, drop {
-    /// Shop whose owner changed.
-    shop_id: ID,
-    /// Owner capability used for the update.
-    shop_owner_cap_id: ID,
-}
-
-/// Event emitted when a shop is disabled.
-public struct ShopDisabledEvent has copy, drop {
-    /// Shop that was disabled.
-    shop_id: ID,
-    /// Owner capability used for disable.
-    shop_owner_cap_id: ID,
-}
-
-/// Event emitted when an item listing is added.
-public struct ItemListingAddedEvent has copy, drop {
-    /// Shop that owns the new listing.
-    shop_id: ID,
-    /// Created listing ID.
-    listing_id: ID,
-}
-
-/// Event emitted when listing stock is updated.
-public struct ItemListingStockUpdatedEvent has copy, drop {
-    /// Shop that owns the listing.
-    shop_id: ID,
-    /// Listing whose stock changed.
-    listing_id: ID,
-}
-
-/// Event emitted when an item listing is removed.
-public struct ItemListingRemovedEvent has copy, drop {
-    /// Shop that owned the removed listing.
-    shop_id: ID,
-    /// Removed listing ID.
-    listing_id: ID,
-}
-
-/// Event emitted when a discount template is created.
-public struct DiscountTemplateCreatedEvent has copy, drop {
-    /// Shop that created the template.
-    shop_id: ID,
-    /// Created template ID.
-    discount_template_id: ID,
-}
-
-/// Event emitted when a discount template is updated.
-public struct DiscountTemplateUpdatedEvent has copy, drop {
-    /// Shop that owns the updated template.
-    shop_id: ID,
-    /// Updated template ID.
-    discount_template_id: ID,
-}
-
-/// Event emitted when a discount template is toggled.
-public struct DiscountTemplateToggledEvent has copy, drop {
-    /// Shop that owns the toggled template.
-    shop_id: ID,
-    /// Toggled template ID.
-    discount_template_id: ID,
-}
-
-/// Event emitted when an accepted coin is added.
-public struct AcceptedCoinAddedEvent has copy, drop {
-    /// Shop that registered the accepted currency.
-    shop_id: ID,
-    /// Pyth price-info object ID bound to the accepted currency.
-    accepted_currency_id: ID,
-}
-
-/// Event emitted when an accepted coin is removed.
-public struct AcceptedCoinRemovedEvent has copy, drop {
-    /// Shop that removed the accepted currency.
-    shop_id: ID,
-    /// Pyth price-info object ID that was deregistered.
-    accepted_currency_id: ID,
-}
-
-/// Event emitted when a discount ticket is claimed.
-public struct DiscountClaimedEvent has copy, drop {
-    /// Shop that issued the ticket.
-    shop_id: ID,
-    /// Claimed discount ticket ID.
-    discount_id: ID,
-}
-
-/// Event emitted when a discount ticket is redeemed.
-public struct DiscountRedeemedEvent has copy, drop {
-    /// Shop where redemption occurred.
-    shop_id: ID,
-    // TODO#q: rename discount_template_id -> discount_id
-    /// Template used for redemption.
-    discount_template_id: ID,
-}
-
-/// Event emitted when a purchase completes.
-public struct PurchaseCompletedEvent has copy, drop {
-    /// Shop where checkout completed.
-    shop_id: ID,
-    /// Listing purchased in this checkout.
-    listing_id: ID,
-    /// Accepted currency entry used for pricing.
-    accepted_currency_id: ID,
-    /// Template applied to the purchase, if any.
-    discount_template_id: Option<ID>,
-    /// Newly minted `ShopItem` receipt ID.
-    minted_item_id: ID,
-    /// These checkout values are not persisted on any object and must remain in the event.
-    amount_paid: u64,
-    /// Final price in USD cents after discounts, used for analytics and indexing.
-    discounted_price_usd_cents: u64,
-}
-
-/// Builds a `ShopCreatedEvent` payload.
-public(package) fun new_shop_created_event(shop_id: ID, shop_owner_cap_id: ID): ShopCreatedEvent {
-    ShopCreatedEvent {
-        shop_id,
-        shop_owner_cap_id,
-    }
-}
-
-/// Builds a `ShopOwnerUpdatedEvent` payload.
-public(package) fun new_shop_owner_updated_event(
-    shop_id: ID,
-    shop_owner_cap_id: ID,
-): ShopOwnerUpdatedEvent {
-    ShopOwnerUpdatedEvent {
-        shop_id,
-        shop_owner_cap_id,
-    }
-}
-
-/// Builds a `ShopDisabledEvent` payload.
-public(package) fun new_shop_disabled_event(shop_id: ID, shop_owner_cap_id: ID): ShopDisabledEvent {
-    ShopDisabledEvent {
-        shop_id,
-        shop_owner_cap_id,
-    }
-}
-
-/// Builds an `ItemListingAddedEvent` payload.
-public(package) fun new_item_listing_added_event(
-    shop_id: ID,
-    listing_id: ID,
-): ItemListingAddedEvent {
-    ItemListingAddedEvent {
-        shop_id,
-        listing_id,
-    }
-}
-
-/// Builds an `ItemListingStockUpdatedEvent` payload.
-public(package) fun new_item_listing_stock_updated_event(
-    shop_id: ID,
-    listing_id: ID,
-): ItemListingStockUpdatedEvent {
-    ItemListingStockUpdatedEvent {
-        shop_id,
-        listing_id,
-    }
-}
-
-/// Builds an `ItemListingRemovedEvent` payload.
-public(package) fun new_item_listing_removed_event(
-    shop_id: ID,
-    listing_id: ID,
-): ItemListingRemovedEvent {
-    ItemListingRemovedEvent {
-        shop_id,
-        listing_id,
-    }
-}
-
-/// Builds a `DiscountTemplateCreatedEvent` payload.
-public(package) fun new_discount_template_created_event(
-    shop_id: ID,
-    discount_template_id: ID,
-): DiscountTemplateCreatedEvent {
-    DiscountTemplateCreatedEvent {
-        shop_id,
-        discount_template_id,
-    }
-}
-
-/// Builds a `DiscountTemplateUpdatedEvent` payload.
-public(package) fun new_discount_template_updated_event(
-    shop_id: ID,
-    discount_template_id: ID,
-): DiscountTemplateUpdatedEvent {
-    DiscountTemplateUpdatedEvent {
-        shop_id,
-        discount_template_id,
-    }
-}
-
-/// Builds a `DiscountTemplateToggledEvent` payload.
-public(package) fun new_discount_template_toggled_event(
-    shop_id: ID,
-    discount_template_id: ID,
-): DiscountTemplateToggledEvent {
-    DiscountTemplateToggledEvent {
-        shop_id,
-        discount_template_id,
-    }
-}
-
-/// Builds an `AcceptedCoinAddedEvent` payload.
-public(package) fun new_accepted_coin_added_event(
-    shop_id: ID,
-    accepted_currency_id: ID,
-): AcceptedCoinAddedEvent {
-    AcceptedCoinAddedEvent {
-        shop_id,
-        accepted_currency_id,
-    }
-}
-
-/// Builds an `AcceptedCoinRemovedEvent` payload.
-public(package) fun new_accepted_coin_removed_event(
-    shop_id: ID,
-    accepted_currency_id: ID,
-): AcceptedCoinRemovedEvent {
-    AcceptedCoinRemovedEvent {
-        shop_id,
-        accepted_currency_id,
-    }
-}
-
-/// Builds a `DiscountClaimedEvent` payload.
-public(package) fun new_discount_claimed_event(shop_id: ID, discount_id: ID): DiscountClaimedEvent {
-    DiscountClaimedEvent {
-        shop_id,
-        discount_id,
-    }
-}
-
-/// Builds a `DiscountRedeemedEvent` payload.
-public(package) fun new_discount_redeemed_event(
-    shop_id: ID,
-    discount_template_id: ID,
-): DiscountRedeemedEvent {
-    DiscountRedeemedEvent {
-        shop_id,
-        discount_template_id,
-    }
-}
-
-/// Builds a `PurchaseCompletedEvent` payload.
-public(package) fun new_purchase_completed_event(
-    shop_id: ID,
-    listing_id: ID,
-    accepted_currency_id: ID,
-    discount_template_id: Option<ID>,
-    minted_item_id: ID,
-    amount_paid: u64,
-    discounted_price_usd_cents: u64,
-): PurchaseCompletedEvent {
-    PurchaseCompletedEvent {
-        shop_id,
-        listing_id,
-        accepted_currency_id,
-        discount_template_id,
-        minted_item_id,
-        amount_paid,
-        discounted_price_usd_cents,
-    }
-}
-
 // === Entry Point Methods ===
 
 // === Shop ===
@@ -601,7 +323,7 @@ public fun create_shop(name: String, ctx: &mut TxContext): (ID, ShopOwnerCap) {
     };
     let owner_cap_id = owner_cap.id.to_inner();
 
-    event::emit(new_shop_created_event(shop_id, owner_cap_id));
+    events::emit_shop_created(shop_id, owner_cap_id);
 
     transfer::share_object(shop);
     (shop_id, owner_cap)
@@ -612,7 +334,7 @@ public fun disable_shop(shop: &mut Shop, owner_cap: &ShopOwnerCap) {
     assert_owner_cap!(shop, owner_cap);
     shop.disabled = true;
 
-    event::emit(new_shop_disabled_event(shop.id.to_inner(), owner_cap.id.to_inner()));
+    events::emit_shop_disabled(shop.id.to_inner(), owner_cap.id.to_inner());
 }
 
 /// Rotate the payout recipient for a shop.
@@ -627,7 +349,7 @@ public fun update_shop_owner(shop: &mut Shop, owner_cap: &ShopOwnerCap, new_owne
 
     shop.owner = new_owner;
 
-    event::emit(new_shop_owner_updated_event(shop.id.to_inner(), owner_cap.id.to_inner()));
+    events::emit_shop_owner_updated(shop.id.to_inner(), owner_cap.id.to_inner());
 }
 
 // === Item Listing ===
@@ -674,7 +396,7 @@ fun add_item_listing_core<T: store>(
     );
     shop.listings.add(listing_id, listing);
 
-    event::emit(new_item_listing_added_event(shop_id, listing_id));
+    events::emit_item_listing_added(shop_id, listing_id);
 
     listing_id
 }
@@ -770,11 +492,9 @@ public fun add_item_listing_with_discount_template<T: store>(
         ctx,
     );
 
-    event::emit(
-        new_discount_template_created_event(
-            shop.id.to_inner(),
-            discount_template_id,
-        ),
+    events::emit_discount_template_created(
+        shop.id.to_inner(),
+        discount_template_id,
     );
     (listing_id, discount_template_id)
 }
@@ -791,7 +511,7 @@ public fun update_item_listing_stock(
 
     item_listing.stock = new_stock;
 
-    event::emit(new_item_listing_stock_updated_event(shop.id.to_inner(), listing_id));
+    events::emit_item_listing_stock_updated(shop.id.to_inner(), listing_id);
 }
 
 /// Remove an item listing entirely.
@@ -803,7 +523,7 @@ public fun remove_item_listing(shop: &mut Shop, owner_cap: &ShopOwnerCap, listin
     assert!(!shop.has_active_listing_bound_templates(listing_id), EListingHasActiveTemplates);
     let _listing = shop.listings.remove(listing_id);
 
-    event::emit(new_item_listing_removed_event(shop.id.to_inner(), listing_id));
+    events::emit_item_listing_removed(shop.id.to_inner(), listing_id);
 }
 
 // === Accepted Currencies ===
@@ -870,7 +590,7 @@ public fun add_accepted_currency<TCoin>(
     let accepted_currency_id = accepted_currency.pyth_object_id;
     shop.accepted_currencies.add(coin_type, accepted_currency);
 
-    event::emit(new_accepted_coin_added_event(shop_id, accepted_currency_id))
+    events::emit_accepted_coin_added(shop_id, accepted_currency_id);
 }
 
 /// Deregister an accepted coin type.
@@ -879,11 +599,9 @@ public fun remove_accepted_currency<TCoin>(shop: &mut Shop, owner_cap: &ShopOwne
     let coin_type = currency_type<TCoin>();
     let accepted_currency = shop.remove_registered_accepted_currency(coin_type);
 
-    event::emit(
-        new_accepted_coin_removed_event(
-            shop.id.to_inner(),
-            accepted_currency.pyth_object_id,
-        ),
+    events::emit_accepted_coin_removed(
+        shop.id.to_inner(),
+        accepted_currency.pyth_object_id,
     );
 }
 
@@ -957,11 +675,9 @@ public fun create_discount_template(
         ctx,
     );
 
-    event::emit(
-        new_discount_template_created_event(
-            shop.id.to_inner(),
-            discount_template_id,
-        ),
+    events::emit_discount_template_created(
+        shop.id.to_inner(),
+        discount_template_id,
     );
 }
 
@@ -999,7 +715,7 @@ public fun update_discount_template(
         max_redemptions,
     );
 
-    event::emit(new_discount_template_updated_event(shop_id, discount_template.id));
+    events::emit_discount_template_updated(shop_id, discount_template.id);
 }
 
 /// Quickly enable/disable a coupon without deleting it.
@@ -1026,7 +742,7 @@ public fun toggle_discount_template(
     let discount_template = shop.borrow_discount_template_mut(discount_template_id);
     discount_template.active = active;
 
-    event::emit(new_discount_template_toggled_event(shop.id.to_inner(), discount_template_id));
+    events::emit_discount_template_toggled(shop.id.to_inner(), discount_template_id);
 }
 
 /// Removes a template from shop storage.
@@ -1168,11 +884,9 @@ public fun buy_item_with_discount<TItem: store, TCoin>(
             listing_price_usd_cents,
         );
 
-    event::emit(
-        new_discount_redeemed_event(
-            shop_id,
-            discount_template.id,
-        ),
+    events::emit_discount_redeemed(
+        shop_id,
+        discount_template.id,
     );
 
     let (owed_coin_opt, change_coin, minted_item) = shop.process_purchase<TItem, TCoin>(
@@ -1524,21 +1238,19 @@ fun process_purchase_core<TItem: store, TCoin>(
 
     item_listing.decrement_stock();
 
-    event::emit(new_item_listing_stock_updated_event(shop_id, item_listing.listing_id));
+    events::emit_item_listing_stock_updated(shop_id, item_listing.listing_id);
 
     let minted_item = item_listing.mint_shop_item<TItem>(shop_id, clock, ctx);
     let minted_item_id = minted_item.id.to_inner();
 
-    event::emit(
-        new_purchase_completed_event(
-            shop_id,
-            item_listing.listing_id,
-            accepted_currency_id,
-            discount_template_id,
-            minted_item_id,
-            amount_paid,
-            discounted_price_usd_cents,
-        ),
+    events::emit_purchase_completed(
+        shop_id,
+        item_listing.listing_id,
+        accepted_currency_id,
+        discount_template_id,
+        minted_item_id,
+        amount_paid,
+        discounted_price_usd_cents,
     );
     (owed_coin_opt, payment, minted_item)
 }
@@ -2259,11 +1971,9 @@ public fun test_create_discount_template_local(
         ctx,
     );
 
-    event::emit(
-        new_discount_template_created_event(
-            shop.id.to_inner(),
-            template_id,
-        ),
+    events::emit_discount_template_created(
+        shop.id.to_inner(),
+        template_id,
     );
 
     template_id
