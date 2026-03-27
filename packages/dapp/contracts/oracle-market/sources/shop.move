@@ -148,7 +148,7 @@ const EEmptyShopName: vector<u8> = b"empty shop name";
 #[error]
 const EShopDisabled: vector<u8> = b"shop disabled";
 #[error]
-const EPriceTooStale: vector<u8> = b"price too stale";
+const EPriceInvalidPublishTime: vector<u8> = b"invalid publish timestamp";
 #[error]
 const EDiscountListingMismatch: vector<u8> = b"discount listing mismatch";
 
@@ -487,10 +487,6 @@ public fun add_item_listing_with_discount_template<T: store>(
         ctx,
     );
 
-    events::emit_discount_template_created(
-        shop.id.to_inner(),
-        discount_template_id,
-    );
     (listing_id, discount_template_id)
 }
 
@@ -627,6 +623,12 @@ fun create_discount_template_core(
     );
     shop.discount_templates.add(discount_template_id, discount_template);
     shop.increment_active_template_count_if_listing_bound(applies_to_listing);
+
+    events::emit_discount_template_created(
+        shop.id.to_inner(),
+        discount_template_id,
+    );
+
     discount_template_id
 }
 
@@ -660,7 +662,7 @@ public fun create_discount_template(
     ctx: &mut TxContext,
 ) {
     assert_owner_cap!(shop, owner_cap);
-    let discount_template_id = shop.create_discount_template_core(
+    shop.create_discount_template_core(
         applies_to_listing,
         rule_kind,
         rule_value,
@@ -668,11 +670,6 @@ public fun create_discount_template(
         expires_at,
         max_redemptions,
         ctx,
-    );
-
-    events::emit_discount_template_created(
-        shop.id.to_inner(),
-        discount_template_id,
     );
 }
 
@@ -1156,8 +1153,11 @@ fun quote_amount_with_guardrails(
     let current_price = price_info.get_price_feed().get_price();
     let publish_time = current_price.get_timestamp();
     let now = now_secs(clock);
-    assert!(now >= publish_time, EPriceTooStale);
-    assert!(now - publish_time <= effective_guardrails.max_price_age_secs, EPriceTooStale);
+    assert!(now >= publish_time, EPriceInvalidPublishTime);
+    assert!(
+        now <= effective_guardrails.max_price_age_secs + publish_time,
+        EPriceInvalidPublishTime,
+    );
     let price = pyth::get_price_no_older_than(
         price_info_object,
         clock,
@@ -1956,7 +1956,7 @@ public fun test_create_discount_template_local(
     max_redemptions: Option<u64>,
     ctx: &mut TxContext,
 ): ID {
-    let template_id = shop.create_discount_template_core(
+    shop.create_discount_template_core(
         applies_to_listing,
         rule_kind,
         rule_value,
@@ -1964,12 +1964,5 @@ public fun test_create_discount_template_local(
         expires_at,
         max_redemptions,
         ctx,
-    );
-
-    events::emit_discount_template_created(
-        shop.id.to_inner(),
-        template_id,
-    );
-
-    template_id
+    )
 }
