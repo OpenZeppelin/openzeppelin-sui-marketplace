@@ -342,9 +342,10 @@ public fun disable_shop(shop: &mut Shop, owner_cap: &ShopOwnerCap) {
 public fun update_shop_owner(shop: &mut Shop, owner_cap: &ShopOwnerCap, new_owner: address) {
     assert_owner_cap!(shop, owner_cap);
 
+    let previous_owner = shop.owner;
     shop.owner = new_owner;
 
-    events::emit_shop_owner_updated(shop.id.to_inner(), owner_cap.id.to_inner());
+    events::emit_shop_owner_updated(shop.id.to_inner(), owner_cap.id.to_inner(), previous_owner);
 }
 
 // === Item Listing ===
@@ -504,9 +505,10 @@ public fun update_item_listing_stock(
     assert_owner_cap!(shop, owner_cap);
     let item_listing = shop.borrow_listing_mut(listing_id);
 
+    let previous_stock = item_listing.stock;
     item_listing.stock = new_stock;
 
-    events::emit_item_listing_stock_updated(shop.id.to_inner(), listing_id);
+    events::emit_item_listing_stock_updated(shop.id.to_inner(), listing_id, previous_stock);
 }
 
 /// Remove an item listing entirely.
@@ -735,9 +737,11 @@ public fun toggle_discount_template(
     );
 
     let discount_template = shop.borrow_discount_template_mut(discount_template_id);
-    discount_template.active = active;
 
-    events::emit_discount_template_toggled(shop.id.to_inner(), discount_template_id);
+    if (discount_template.active != active) {
+        discount_template.active = active;
+        events::emit_discount_template_toggled(shop.id.to_inner(), discount_template_id, active);
+    };
 }
 
 /// Removes a template from shop storage.
@@ -1231,9 +1235,10 @@ fun process_purchase_core<TItem: store, TCoin>(
     let owed_coin_opt = split_payment(&mut payment, quote_amount, ctx);
     let amount_paid = owed_coin_opt.map_ref!(|owed_coin| owed_coin.value()).destroy_or!(0);
 
+    let previous_stock = item_listing.stock;
     item_listing.decrement_stock();
 
-    events::emit_item_listing_stock_updated(shop_id, item_listing.listing_id);
+    events::emit_item_listing_stock_updated(shop_id, item_listing.listing_id, previous_stock);
 
     let minted_item = item_listing.mint_shop_item<TItem>(shop_id, clock, ctx);
     let minted_item_id = minted_item.id.to_inner();
