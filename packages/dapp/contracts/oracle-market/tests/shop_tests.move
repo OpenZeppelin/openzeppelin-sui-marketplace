@@ -14,8 +14,8 @@ use sui::coin;
 use sui::coin_registry;
 use sui::event;
 use sui::test_scenario;
-use sui_oracle_market::shop;
 use sui_oracle_market::events;
+use sui_oracle_market::shop;
 
 // === Constants ===
 
@@ -162,17 +162,6 @@ fun add_test_coin_accepted_currency_for_scenario(
     );
     transfer::public_share_object(price_info_object);
     accepted_currency_id
-}
-
-/// Setup policy:
-/// - `test_scenario` helpers are used for shared-object lifecycle and entry-path behavior.
-/// - `tx_context` + this helper are used for deterministic local tests where shared lifecycle is
-///   not part of the behavior under test.
-fun setup_local_shop_and_owner_cap(
-    owner: address,
-    ctx: &mut tx_context::TxContext,
-): (shop::Shop, shop::ShopOwnerCap) {
-    shop::test_setup_shop(owner, ctx)
 }
 
 fun remove_listing_if_exists(

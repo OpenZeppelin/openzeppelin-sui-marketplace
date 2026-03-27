@@ -13,7 +13,6 @@ use std::type_name::{Self, TypeName};
 use sui::clock;
 use sui::coin;
 use sui::coin_registry;
-use sui::event;
 use sui::package;
 use sui::table::{Self, Table};
 use sui_oracle_market::events;
@@ -152,10 +151,6 @@ const EShopDisabled: vector<u8> = b"shop disabled";
 const EPriceTooStale: vector<u8> = b"price too stale";
 #[error]
 const EDiscountListingMismatch: vector<u8> = b"discount listing mismatch";
-#[error]
-const EDiscountClaimsNotPrunable: vector<u8> = b"discount claims not prunable";
-#[error]
-const EDiscountAlreadyClaimed: vector<u8> = b"discount already claimed";
 
 // === Constants ===
 const CENTS_PER_DOLLAR: u64 = 100;
