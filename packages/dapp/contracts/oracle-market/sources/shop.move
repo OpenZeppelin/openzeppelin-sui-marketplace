@@ -320,7 +320,7 @@ public fun create_shop(name: String, ctx: &mut TxContext): (ID, ShopOwnerCap) {
 
     events::emit_shop_created(shop_id, owner_cap_id);
 
-    transfer::share_object(shop);
+    transfer::public_share_object(shop);
     (shop_id, owner_cap)
 }
 
