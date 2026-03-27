@@ -79,7 +79,7 @@ public struct AcceptedCoinAdded has copy, drop {
     /// Shop that registered the accepted currency.
     shop_id: ID,
     /// Pyth price-info object ID bound to the accepted currency.
-    accepted_currency_id: ID,
+    pyth_price_info_object_id: ID,
 }
 
 /// Event emitted when an accepted coin is removed.
@@ -87,7 +87,7 @@ public struct AcceptedCoinRemoved has copy, drop {
     /// Shop that removed the accepted currency.
     shop_id: ID,
     /// Pyth price-info object ID that was deregistered.
-    accepted_currency_id: ID,
+    pyth_price_info_object_id: ID,
 }
 
 /// Event emitted when a discount ticket is claimed.
@@ -114,7 +114,7 @@ public struct PurchaseCompleted has copy, drop {
     /// Listing purchased in this checkout.
     listing_id: ID,
     /// Accepted currency entry used for pricing.
-    accepted_currency_id: ID,
+    pyth_price_info_object_id: ID,
     /// Template applied to the purchase, if any.
     discount_template_id: Option<ID>,
     /// Newly minted `ShopItem` receipt ID.
@@ -198,18 +198,18 @@ public(package) fun emit_discount_template_toggled(shop_id: ID, discount_templat
 }
 
 /// Emits an `AcceptedCoinAdded` payload.
-public(package) fun emit_accepted_coin_added(shop_id: ID, accepted_currency_id: ID) {
+public(package) fun emit_accepted_coin_added(shop_id: ID, pyth_price_info_object_id: ID) {
     event::emit(AcceptedCoinAdded {
         shop_id,
-        accepted_currency_id,
+        pyth_price_info_object_id,
     });
 }
 
 /// Emits an `AcceptedCoinRemoved` payload.
-public(package) fun emit_accepted_coin_removed(shop_id: ID, accepted_currency_id: ID) {
+public(package) fun emit_accepted_coin_removed(shop_id: ID, pyth_price_info_object_id: ID) {
     event::emit(AcceptedCoinRemoved {
         shop_id,
-        accepted_currency_id,
+        pyth_price_info_object_id,
     });
 }
 
@@ -233,7 +233,7 @@ public(package) fun emit_discount_redeemed(shop_id: ID, discount_template_id: ID
 public(package) fun emit_purchase_completed(
     shop_id: ID,
     listing_id: ID,
-    accepted_currency_id: ID,
+    pyth_price_info_object_id: ID,
     discount_template_id: Option<ID>,
     minted_item_id: ID,
     amount_paid: u64,
@@ -242,7 +242,7 @@ public(package) fun emit_purchase_completed(
     event::emit(PurchaseCompleted {
         shop_id,
         listing_id,
-        accepted_currency_id,
+        pyth_price_info_object_id,
         discount_template_id,
         minted_item_id,
         amount_paid,
@@ -347,10 +347,13 @@ public(package) fun discount_template_toggled(
 
 /// Builds an `AcceptedCoinAdded` payload.
 #[test_only]
-public(package) fun accepted_coin_added(shop_id: ID, accepted_currency_id: ID): AcceptedCoinAdded {
+public(package) fun accepted_coin_added(
+    shop_id: ID,
+    pyth_price_info_object_id: ID,
+): AcceptedCoinAdded {
     AcceptedCoinAdded {
         shop_id,
-        accepted_currency_id,
+        pyth_price_info_object_id,
     }
 }
 
@@ -358,11 +361,11 @@ public(package) fun accepted_coin_added(shop_id: ID, accepted_currency_id: ID): 
 #[test_only]
 public(package) fun accepted_coin_removed(
     shop_id: ID,
-    accepted_currency_id: ID,
+    pyth_price_info_object_id: ID,
 ): AcceptedCoinRemoved {
     AcceptedCoinRemoved {
         shop_id,
-        accepted_currency_id,
+        pyth_price_info_object_id,
     }
 }
 
@@ -389,7 +392,7 @@ public(package) fun discount_redeemed(shop_id: ID, discount_template_id: ID): Di
 public(package) fun purchase_completed(
     shop_id: ID,
     listing_id: ID,
-    accepted_currency_id: ID,
+    pyth_price_info_object_id: ID,
     discount_template_id: Option<ID>,
     minted_item_id: ID,
     amount_paid: u64,
@@ -398,7 +401,7 @@ public(package) fun purchase_completed(
     PurchaseCompleted {
         shop_id,
         listing_id,
-        accepted_currency_id,
+        pyth_price_info_object_id,
         discount_template_id,
         minted_item_id,
         amount_paid,
