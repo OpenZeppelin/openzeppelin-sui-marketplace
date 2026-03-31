@@ -15,7 +15,6 @@ import {
 } from "@sui-oracle-market/tooling-core/constants"
 import {
   deriveRelevantPackageId,
-  getSuiObject,
   normalizeIdOrThrow,
   unwrapMoveObjectFields
 } from "@sui-oracle-market/tooling-core/object"

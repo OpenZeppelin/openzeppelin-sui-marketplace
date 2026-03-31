@@ -1,10 +1,8 @@
 import type { SuiClient, SuiObjectData } from "@mysten/sui/client"
 import { normalizeSuiObjectId } from "@mysten/sui/utils"
 import {
-  getAllOwnedObjectsByFilter,
   getSuiObject,
   normalizeIdOrThrow,
-  normalizeOptionalAddress,
   normalizeOptionalIdFromValue,
   unwrapMoveObjectFields
 } from "@sui-oracle-market/tooling-core/object"
@@ -26,7 +24,6 @@ import {
 import {
   parseNonNegativeU64,
   parseOptionalU64,
-  requireValue
 } from "@sui-oracle-market/tooling-core/utils/utility"
 import type { ItemListingSummary } from "./item-listing.ts"
 import { normalizeOptionalListingIdFromValue } from "./item-listing.ts"
