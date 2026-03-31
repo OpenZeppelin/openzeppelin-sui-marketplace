@@ -71,7 +71,7 @@ await tooling.executeTransactionWithSummary({
 	- `--package-path <path>`: package folder relative to `packages/dapp/contracts` (required).
 	- `--with-unpublished-dependencies`: allow unpublished deps (defaults to `true` on localnet; rejected on shared networks).
 	- `--re-publish`: publish even if a deployment artifact already exists.
-	- Use `--network <name>` to switch between `localnet`, `testnet`, etc; the script passes the matching Move `--environment` to the CLI.
+	- Use `--network <name>` to switch between `localnet`, `testnet`, etc; the script passes the matching Move `--build-env` to the CLI.
 
 ### `pnpm script mock:get-currency`
 - Localnet-only coin registry inspection. If `--coin-type` is omitted it reads coin types from `packages/dapp/deployments/mock.localnet.json`.
