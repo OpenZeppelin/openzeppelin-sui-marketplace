@@ -249,7 +249,7 @@ const parseShopCreatedEvent = (
       ownerAddress: normalizeOptionalIdFromValue(fields.owner),
       name: readMoveStringOrVector(fields.name),
       ownerCapId: normalizeOptionalIdFromValue(
-        fields.shop_owner_cap_id ?? fields.shop_owner_cap_address
+        fields.owner_cap_id ?? fields.shop_owner_cap_address
       ),
       createdAtMs: event.timestampMs ? String(event.timestampMs) : undefined,
       txDigest: event.id?.txDigest
