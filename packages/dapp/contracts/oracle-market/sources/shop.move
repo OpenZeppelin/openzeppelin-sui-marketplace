@@ -628,7 +628,6 @@ fun create_discount_template_core(
     );
     shop.discount_templates.add(discount_template_id, discount_template);
     shop.increment_active_template_count_if_listing_bound(applies_to_listing);
-
     discount_template_id
 }
 
