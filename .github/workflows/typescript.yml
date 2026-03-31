@@ -1,4 +1,4 @@
-name: CI
+name: TypeScript
 
 on:
   pull_request:
@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: ci-${{ github.ref }}
+  group: typescript-${{ github.ref }}
   cancel-in-progress: true
 
 permissions:
@@ -16,7 +16,6 @@ permissions:
 env:
   NODE_VERSION: "22.21.1"
   PNPM_VERSION: "10"
-  SUI_CLI_VERSION: "1.63.0"
   CI: true
 
 jobs:
@@ -42,7 +41,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        suite: [tooling, dapp]
+        suite: [dapp, tooling]
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup
@@ -78,6 +77,7 @@ jobs:
       - lint
       - typecheck
       - unit
+      - ui-build
     runs-on: ubuntu-latest
     timeout-minutes: 45
     strategy:
@@ -91,6 +91,7 @@ jobs:
             command: pnpm dapp test:integration
             report: reports/vitest-dapp-integration.xml
     env:
+      SUI_CLI_VERSION: "1.68.1"
       SUI_IT_WITH_FAUCET: "1"
       SUI_IT_KEEP_TEMP: "1"
     steps:
@@ -113,23 +114,6 @@ jobs:
             reports/**
             /tmp/sui-it-*/logs/**
           if-no-files-found: ignore
-
-  move-tests:
-    runs-on: ubuntu-latest
-    timeout-minutes: 40
-    strategy:
-      fail-fast: false
-      matrix:
-        package:
-          - oracle-market
-    steps:
-      - uses: actions/checkout@v4
-      - uses: ./.github/actions/setup
-      - uses: ./.github/actions/setup-sui
-      - name: Run Move tests (${{ matrix.package }})
-        run: |
-          sui move test --path ./packages/dapp/contracts/oracle-market --environment test-publish --coverage --trace --test
-          sui move coverage summary --path ./packages/dapp/contracts/oracle-market --environment test-publish --test
 
   security-audit:
     runs-on: ubuntu-latest

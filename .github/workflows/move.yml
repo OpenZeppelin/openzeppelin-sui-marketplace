@@ -1,0 +1,96 @@
+name: Move
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: move-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  SUI_CLI_VERSION: "1.68.1"
+
+jobs:
+  setup:
+    name: Setup
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      packages: ${{ steps.set-matrix.outputs.packages }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set package matrix
+        id: set-matrix
+        run: |
+          PACKAGES='["coin-mock", "item-examples", "oracle-market", "pyth-mock"]'
+          echo "packages=$PACKAGES" >> $GITHUB_OUTPUT
+
+      - uses: ./.github/actions/setup-sui
+
+  check-move-formatting:
+    name: Move Formatter Check
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Hide workspace package.json from the CI job
+        run: mv package.json package.json.bak
+      - uses: MystenLabs/move-formatter-action@v1
+        with:
+          prettier-plugin-move-version: "latest"
+          working-directory: "."
+          pattern: "**/*.move"
+          write-changes: false
+      - name: Restore package.json
+        if: always()
+        run: mv package.json.bak package.json
+
+  move-lint:
+    name: Move Lint ${{ matrix.package }}
+    needs: setup
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: true
+      matrix:
+        package: ${{ fromJson(needs.setup.outputs.packages) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-sui
+      - name: Lint ${{ matrix.package }}
+        run: sui move build --lint
+        working-directory: ./packages/dapp/contracts/${{ matrix.package }}
+      - name: Lint tests for ${{ matrix.package }}
+        run: sui move build --test --lint --build-env test-publish
+        working-directory: ./packages/dapp/contracts/${{ matrix.package }}
+
+  move-tests:
+    name: Move Test ${{ matrix.package }}
+    needs:
+      - setup
+      - move-lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    strategy:
+      fail-fast: true
+      matrix:
+        package: ${{ fromJson(needs.setup.outputs.packages) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-sui
+      - name: Run Move tests for ${{ matrix.package }}
+        run: sui move test --coverage --build-env test-publish
+        working-directory: ./packages/dapp/contracts/${{ matrix.package }}
+      - name: Generate coverage summary for ${{ matrix.package }}
+        run: |
+          if [ -f .coverage_map.mvcov ]; then
+            sui move coverage summary
+          fi
+        working-directory: ./packages/dapp/contracts/${{ matrix.package }}

@@ -1,12 +1,30 @@
 name: Setup Sui CLI
-description: Install Sui CLI and add it to PATH.
+description: Install Sui CLI (with caching) and add to PATH.
 runs:
   using: composite
   steps:
-    - name: Install Sui CLI (prebuilt release asset)
-      env:
-        GITHUB_TOKEN: ${{ github.token }}
+    - name: Cache Sui binary
+      id: cache-sui
+      uses: actions/cache@v4
+      with:
+        path: ~/.local/bin/sui
+        key: sui-${{ runner.os }}-${{ env.SUI_CLI_VERSION }}
+
+    - name: Install Sui CLI
+      if: steps.cache-sui.outputs.cache-hit != 'true'
       run: |
-        node scripts/ci/install-sui-cli.mjs
-        echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+        mkdir -p ~/.local/bin
+        curl -fLJ https://github.com/MystenLabs/sui/releases/download/mainnet-v${{ env.SUI_CLI_VERSION }}/sui-mainnet-v${{ env.SUI_CLI_VERSION }}-ubuntu-x86_64.tgz -o sui.tgz
+        tar -xzf sui.tgz
+        chmod +x sui
+        mv sui ~/.local/bin/
+        rm sui.tgz
+      shell: bash
+
+    - name: Add Sui to PATH
+      run: echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      shell: bash
+
+    - name: Verify Sui installation
+      run: sui --version
       shell: bash
