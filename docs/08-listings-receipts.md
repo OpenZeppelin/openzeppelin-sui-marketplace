@@ -33,7 +33,7 @@ pnpm script buyer:item-listing:list --shop-id <shopId>
 - **Table-backed listings**: listing create/update/remove paths mutate `Shop.listings` directly with `add`, `borrow_mut`, and `remove`.
   Code: `packages/dapp/contracts/oracle-market/sources/shop.move` (`add_item_listing_core`, `borrow_listing_mut`, `remove_item_listing`)
 - **Listing IDs are object `ID`s**: IDs are allocated from `TxContext`, emitted in events, and reused by scripts/UI as stable primary keys.
-  Code: `packages/dapp/contracts/oracle-market/sources/shop.move` (`new_object_id`, `ItemListingAddedEvent`)
+  Code: `packages/dapp/contracts/oracle-market/sources/shop.move` (`new_object_id`, `ItemListingAdded`)
 - **Off-chain enumeration still reads dynamic-field table entries**: `Table` is backed by dynamic fields, so the SDK discovers rows by reading table entry objects.
   Code: `packages/domain/core/src/models/item-listing.ts` (`getItemListingSummaries`)
 - **TypeName and type tags**: listing types are stored as `TypeName` for runtime checks, events, and UI metadata. Compile-time safety still comes from generics (`ShopItem<TItem>`), not from the stored value.
@@ -81,7 +81,7 @@ fun add_item_listing_core<T: store>(
     spotlight_discount_template_id,
   );
   shop.listings.add(listing_id, listing);
-  event::emit(ItemListingAddedEvent { shop_id, listing_id });
+  event::emit(ItemListingAdded { shop_id, listing_id });
   listing_id
 }
 ```

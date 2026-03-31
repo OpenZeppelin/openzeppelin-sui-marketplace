@@ -468,7 +468,6 @@ export const useAddDiscountModalState = ({
             startsAt: discountInputs.startsAt.toString(),
             expiresAt: discountInputs.expiresAt?.toString(),
             maxRedemptions: discountInputs.maxRedemptions?.toString(),
-            claimsIssued: "0",
             redemptions: "0",
             activeFlag: true,
             status: deriveTemplateStatus({

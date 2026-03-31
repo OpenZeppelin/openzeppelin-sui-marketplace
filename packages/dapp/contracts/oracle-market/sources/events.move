@@ -7,7 +7,7 @@ public struct ShopCreated has copy, drop {
     /// Created shop ID.
     shop_id: ID,
     /// Created owner capability ID.
-    shop_owner_cap_id: ID,
+    owner_cap_id: ID,
 }
 
 /// Event emitted when a shop owner is updated.
@@ -15,7 +15,7 @@ public struct ShopOwnerUpdated has copy, drop {
     /// Shop whose owner changed.
     shop_id: ID,
     /// Owner capability used for the update.
-    shop_owner_cap_id: ID,
+    owner_cap_id: ID,
 }
 
 /// Event emitted when a shop is disabled.
@@ -23,7 +23,7 @@ public struct ShopDisabled has copy, drop {
     /// Shop that was disabled.
     shop_id: ID,
     /// Owner capability used for disable.
-    shop_owner_cap_id: ID,
+    owner_cap_id: ID,
 }
 
 /// Event emitted when an item listing is added.
@@ -90,19 +90,10 @@ public struct AcceptedCoinRemoved has copy, drop {
     accepted_currency_id: ID,
 }
 
-/// Event emitted when a discount ticket is claimed.
-public struct DiscountClaimed has copy, drop {
-    /// Shop that issued the ticket.
-    shop_id: ID,
-    /// Claimed discount ticket ID.
-    discount_id: ID,
-}
-
-/// Event emitted when a discount ticket is redeemed.
+/// Event emitted when a discount is redeemed.
 public struct DiscountRedeemed has copy, drop {
     /// Shop where redemption occurred.
     shop_id: ID,
-    // TODO#q: rename discount_template_id -> discount_id
     /// Template used for redemption.
     discount_template_id: ID,
 }
@@ -126,26 +117,26 @@ public struct PurchaseCompleted has copy, drop {
 }
 
 /// Emits a `ShopCreated` payload.
-public(package) fun emit_shop_created(shop_id: ID, shop_owner_cap_id: ID) {
+public(package) fun emit_shop_created(shop_id: ID, owner_cap_id: ID) {
     event::emit(ShopCreated {
         shop_id,
-        shop_owner_cap_id,
+        owner_cap_id,
     });
 }
 
 /// Emits a `ShopOwnerUpdated` payload.
-public(package) fun emit_shop_owner_updated(shop_id: ID, shop_owner_cap_id: ID) {
+public(package) fun emit_shop_owner_updated(shop_id: ID, owner_cap_id: ID) {
     event::emit(ShopOwnerUpdated {
         shop_id,
-        shop_owner_cap_id,
+        owner_cap_id,
     });
 }
 
 /// Emits a `ShopDisabled` payload.
-public(package) fun emit_shop_disabled(shop_id: ID, shop_owner_cap_id: ID) {
+public(package) fun emit_shop_disabled(shop_id: ID, owner_cap_id: ID) {
     event::emit(ShopDisabled {
         shop_id,
-        shop_owner_cap_id,
+        owner_cap_id,
     });
 }
 
@@ -213,14 +204,6 @@ public(package) fun emit_accepted_coin_removed(shop_id: ID, accepted_currency_id
     });
 }
 
-/// Emits a `DiscountClaimed` payload.
-public(package) fun emit_discount_claimed(shop_id: ID, discount_id: ID) {
-    event::emit(DiscountClaimed {
-        shop_id,
-        discount_id,
-    });
-}
-
 /// Emits a `DiscountRedeemed` payload.
 public(package) fun emit_discount_redeemed(shop_id: ID, discount_template_id: ID) {
     event::emit(DiscountRedeemed {
@@ -254,28 +237,28 @@ public(package) fun emit_purchase_completed(
 
 /// Builds a `ShopCreated` payload.
 #[test_only]
-public(package) fun shop_created(shop_id: ID, shop_owner_cap_id: ID): ShopCreated {
+public(package) fun shop_created(shop_id: ID, owner_cap_id: ID): ShopCreated {
     ShopCreated {
         shop_id,
-        shop_owner_cap_id,
+        owner_cap_id,
     }
 }
 
 /// Builds a `ShopOwnerUpdated` payload.
 #[test_only]
-public(package) fun shop_owner_updated(shop_id: ID, shop_owner_cap_id: ID): ShopOwnerUpdated {
+public(package) fun shop_owner_updated(shop_id: ID, owner_cap_id: ID): ShopOwnerUpdated {
     ShopOwnerUpdated {
         shop_id,
-        shop_owner_cap_id,
+        owner_cap_id,
     }
 }
 
 /// Builds a `ShopDisabled` payload.
 #[test_only]
-public(package) fun shop_disabled(shop_id: ID, shop_owner_cap_id: ID): ShopDisabled {
+public(package) fun shop_disabled(shop_id: ID, owner_cap_id: ID): ShopDisabled {
     ShopDisabled {
         shop_id,
-        shop_owner_cap_id,
+        owner_cap_id,
     }
 }
 
@@ -363,15 +346,6 @@ public(package) fun accepted_coin_removed(
     AcceptedCoinRemoved {
         shop_id,
         accepted_currency_id,
-    }
-}
-
-/// Builds a `DiscountClaimed` payload.
-#[test_only]
-public(package) fun discount_claimed(shop_id: ID, discount_id: ID): DiscountClaimed {
-    DiscountClaimed {
-        shop_id,
-        discount_id,
     }
 }
 

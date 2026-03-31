@@ -249,7 +249,7 @@ const parseShopCreatedEvent = (
       ownerAddress: normalizeOptionalIdFromValue(fields.owner),
       name: readMoveStringOrVector(fields.name),
       ownerCapId: normalizeOptionalIdFromValue(
-        fields.shop_owner_cap_id ?? fields.shop_owner_cap_address
+        fields.owner_cap_id ?? fields.shop_owner_cap_address
       ),
       createdAtMs: event.timestampMs ? String(event.timestampMs) : undefined,
       txDigest: event.id?.txDigest
@@ -274,7 +274,7 @@ export const getShopCreatedSummaries = async ({
     shopPackageId,
     "Shop package ID is required."
   )
-  const eventType = `${normalizedPackageId}::shop::ShopCreatedEvent`
+  const eventType = `${normalizedPackageId}::events::ShopCreated`
   const summaries: ShopCreatedSummary[] = []
   const seen = new Set<string>()
   let cursor: Parameters<SuiClient["queryEvents"]>[0]["cursor"]
