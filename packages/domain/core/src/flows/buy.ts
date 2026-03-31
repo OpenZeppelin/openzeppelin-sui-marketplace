@@ -15,7 +15,6 @@ import {
 } from "@sui-oracle-market/tooling-core/constants"
 import {
   deriveRelevantPackageId,
-  getSuiObject,
   normalizeIdOrThrow,
   unwrapMoveObjectFields
 } from "@sui-oracle-market/tooling-core/object"
@@ -36,7 +35,6 @@ import type {
   DiscountContext,
   DiscountTemplateSummary
 } from "../models/discount.ts"
-import { parseDiscountTicketFromObject } from "../models/discount.ts"
 import type { PriceUpdatePolicy, PythPullOracleConfig } from "../models/pyth.ts"
 import { resolvePythPullOracleConfig } from "../models/pyth.ts"
 import {
@@ -471,50 +469,28 @@ const maybeUpdateMockPriceFeed = ({
 
 export const resolveDiscountContext = async ({
   claimDiscount,
-  discountTicketId,
   discountTemplateId,
-  suiClient
+  suiClient: _suiClient
 }: {
   claimDiscount: boolean
-  discountTicketId?: string
   discountTemplateId?: string
   suiClient: SuiClient
 }): Promise<DiscountContext> => {
-  if (claimDiscount) {
+  if (claimDiscount || discountTemplateId) {
     const templateId = requireValue(
       discountTemplateId,
-      "--discount-template-id is required when using --claim-discount."
+      "--discount-template-id is required when using discount checkout."
     )
-
     return {
-      mode: "claim",
-      discountTemplateId: templateId
+      mode: "template",
+      discountTemplateId: normalizeIdOrThrow(
+        templateId,
+        "Invalid discount template id provided for checkout."
+      )
     }
   }
 
-  if (!discountTicketId) return { mode: "none" }
-
-  const { object: ticketObject } = await getSuiObject(
-    {
-      objectId: discountTicketId,
-      options: { showContent: true, showType: true }
-    },
-    { suiClient }
-  )
-
-  const ticketDetails = parseDiscountTicketFromObject(ticketObject)
-
-  const resolvedTemplateId = normalizeIdOrThrow(
-    discountTemplateId ?? ticketDetails.discountTemplateId,
-    "Unable to resolve DiscountTemplate ID from the ticket; provide --discount-template-id."
-  )
-
-  return {
-    mode: "ticket",
-    discountTicketId,
-    discountTemplateId: resolvedTemplateId,
-    ticketDetails
-  }
+  return { mode: "none" }
 }
 
 export const resolvePaymentCoinObjectId = async ({
@@ -733,25 +709,7 @@ export const buildBuyTransaction = async (
     clockArgument
   ]
 
-  if (discountContext.mode === "claim") {
-    transaction.moveCall({
-      target: `${shopPackageId}::shop::claim_and_buy_item_with_discount`,
-      typeArguments,
-      arguments: [
-        shopArgument,
-        buildObjectIdArgument(
-          transaction,
-          discountContext.discountTemplateId,
-          "discountTemplateId"
-        ),
-        ...buildCommonBuyArguments()
-      ]
-    })
-
-    return transaction
-  }
-
-  if (discountContext.mode === "ticket") {
+  if (discountContext.mode === "template") {
     transaction.moveCall({
       target: `${shopPackageId}::shop::buy_item_with_discount`,
       typeArguments,
@@ -762,7 +720,6 @@ export const buildBuyTransaction = async (
           discountContext.discountTemplateId,
           "discountTemplateId"
         ),
-        transaction.object(discountContext.discountTicketId),
         ...buildCommonBuyArguments()
       ]
     })

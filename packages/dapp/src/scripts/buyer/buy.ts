@@ -1,7 +1,7 @@
 /**
- * Builds and executes a buy PTB for a listing, optionally claiming or redeeming a discount.
+ * Builds and executes a buy PTB for a listing, optionally applying a discount template.
  * Payments are Coin<T> objects (no approvals); if paying with SUI you need a separate SUI coin for gas.
- * The PTB can update Pyth and then call buy_item/claim_and_buy_item_with_discount in one atomic flow.
+ * The PTB can update Pyth and then call buy_item/buy_item_with_discount in one atomic flow.
  * Oracle freshness and confidence guardrails are enforced on-chain using PriceInfoObject + Clock.
  */
 import type { SuiObjectRef } from "@mysten/sui/client"
@@ -64,9 +64,7 @@ type BuyArguments = {
   paymentCoinObjectId?: string
   mintTo?: string
   refundTo?: string
-  discountTicketId?: string
   discountTemplateId?: string
-  claimDiscount?: boolean
   maxPriceAgeSecs?: string
   maxConfidenceRatioBps?: string
   skipPriceUpdate?: boolean
@@ -115,8 +113,7 @@ runSuiScript(
     )
 
     const discountContext = await resolveDiscountContext({
-      claimDiscount: inputs.claimDiscount,
-      discountTicketId: inputs.discountTicketId,
+      claimDiscount: false,
       discountTemplateId: inputs.discountTemplateId,
       suiClient: tooling.suiClient
     })
@@ -343,24 +340,10 @@ runSuiScript(
       description:
         "Address that receives any refunded change (defaults to the signer address)."
     })
-    .option("discountTicketId", {
-      alias: ["discount-ticket-id", "ticket-id"],
-      type: "string",
-      description:
-        "Optional DiscountTicket object ID to redeem during checkout (uses buy_item_with_discount)."
-    })
     .option("discountTemplateId", {
       alias: ["discount-template-id", "template-id"],
       type: "string",
-      description:
-        "Optional discount template ID. Required when using --claim-discount."
-    })
-    .option("claimDiscount", {
-      alias: ["claim-discount", "claim-and-buy"],
-      type: "boolean",
-      description:
-        "If set, the checkout will claim + redeem a ticket atomically using claim_and_buy_item_with_discount (requires --discount-template-id).",
-      default: false
+      description: "Optional discount template ID to apply during checkout."
     })
     .option("maxPriceAgeSecs", {
       alias: ["max-price-age-secs"],
@@ -454,11 +437,6 @@ const normalizeInputs = async (
 
   const coinType = normalizeCoinType(cliArguments.coinType)
 
-  if (cliArguments.claimDiscount && cliArguments.discountTicketId)
-    throw new Error(
-      "Use either --claim-discount or --discount-ticket-id, not both."
-    )
-
   const defaultPriceUpdatePolicy: PriceUpdatePolicy =
     networkName === "localnet" ||
     networkName === "testnet" ||
@@ -482,13 +460,9 @@ const normalizeInputs = async (
     refundTo: cliArguments.refundTo
       ? normalizeSuiAddress(cliArguments.refundTo)
       : undefined,
-    discountTicketId: cliArguments.discountTicketId
-      ? normalizeSuiObjectId(cliArguments.discountTicketId)
-      : undefined,
     discountTemplateId: cliArguments.discountTemplateId
       ? normalizeSuiObjectId(cliArguments.discountTemplateId)
       : undefined,
-    claimDiscount: Boolean(cliArguments.claimDiscount),
     maxPriceAgeSecs: parseOptionalU64(
       cliArguments.maxPriceAgeSecs,
       "maxPriceAgeSecs"
@@ -556,13 +530,12 @@ const logBuyContext = ({
   logKeyValueBlue("Pyth-price-info")(pythObjectId)
   logKeyValueBlue("Payment-coin")(paymentCoinObjectId)
 
-  if (discountContext.mode === "claim")
-    logKeyValueBlue("Discount")("claim + buy")
-  else if (discountContext.mode === "ticket") {
-    logKeyValueBlue("Discount")("redeem ticket")
-    logKeyValueBlue("Ticket")(discountContext.discountTicketId)
+  if (discountContext.mode === "template") {
+    logKeyValueBlue("Discount")("template")
     logKeyValueBlue("Template")(discountContext.discountTemplateId)
-  } else logKeyValueBlue("Discount")("none")
+  } else {
+    logKeyValueBlue("Discount")("none")
+  }
 
   console.log("")
 }

@@ -25,12 +25,12 @@ This repo assumes you already think in Solidity. The goal here is not to re-teac
   Code: `packages/dapp/contracts/oracle-market/sources/shop.move` (struct definitions)
 - **Resources and ownership**: Move resources must be moved, not copied. Owned objects (like
   `ShopOwnerCap`) are authority tokens. Passing a resource by value is a one-time action, which is
-  why a `DiscountTicket` can only be redeemed once.
-  Code: `packages/dapp/contracts/oracle-market/sources/shop.move` (ShopOwnerCap, DiscountTicket)
+  why capability and coin flows remain explicit.
+  Code: `packages/dapp/contracts/oracle-market/sources/shop.move` (ShopOwnerCap)
 - **Object ownership types**: Sui supports address-owned, shared, immutable, and object-owned
-  objects. This repo uses address-owned capabilities/tickets, shared objects for `Shop`/templates, and
-  object-owned dynamic-field children under tables or discount templates.
-  Code: `packages/dapp/contracts/oracle-market/sources/shop.move` (ShopOwnerCap, Shop, DiscountClaim)
+  objects. This repo uses address-owned capabilities/receipts, shared objects for `Shop`/templates, and
+  object-owned dynamic-field children under tables.
+  Code: `packages/dapp/contracts/oracle-market/sources/shop.move` (ShopOwnerCap, Shop)
 - **Strings (`String`)**: Sui Move’s String type is designed for user-facing, human-readable text and is always UTF-8 encoded. This is different from Solidity, where string is a dynamic byte array and encoding is not enforced. Using String ensures your data is valid UTF-8, which is important for interoperability and user interfaces. Many Sui and Move standard library functions expect or return String, making it the idiomatic choice for names, descriptions, and other text fields. Use vector<u8> only when you need to store arbitrary bytes (e.g., binary data, hashes, or non-UTF-8 content).
   Code: `packages/dapp/contracts/oracle-market/sources/shop.move` (Shop.name, ItemListing.name)
 - **Options instead of sentinels**: optional values use `Option` instead of magic constants.

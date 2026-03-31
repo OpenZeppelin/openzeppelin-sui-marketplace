@@ -29,8 +29,7 @@ import {
 import type {
   DiscountContext,
   DiscountOption,
-  DiscountTemplateSummary,
-  DiscountTicketDetails
+  DiscountTemplateSummary
 } from "@sui-oracle-market/domain-core/models/discount"
 import {
   buildDiscountOptions,
@@ -199,8 +198,7 @@ export const useBuyFlowModalState = ({
   shopId,
   listing,
   acceptedCurrencies,
-  discountTemplates,
-  discountTickets
+  discountTemplates
 }: {
   open: boolean
   onClose: () => void
@@ -209,7 +207,6 @@ export const useBuyFlowModalState = ({
   listing?: ItemListingSummary
   acceptedCurrencies: AcceptedCurrencySummary[]
   discountTemplates: DiscountTemplateSummary[]
-  discountTickets: DiscountTicketDetails[]
 }): BuyFlowModalState => {
   const currentAccount = useCurrentAccount()
   const { currentWallet } = useCurrentWallet()
@@ -329,10 +326,9 @@ export const useBuyFlowModalState = ({
       buildDiscountOptions({
         listing,
         shopId,
-        discountTemplates,
-        discountTickets
+        discountTemplates
       }),
-    [listing, shopId, discountTemplates, discountTickets]
+    [listing, shopId, discountTemplates]
   )
   const hasDiscountOptions = discountOptions.some(
     (option) => option.id !== "none"
