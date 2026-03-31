@@ -470,16 +470,14 @@ const maybeUpdateMockPriceFeed = ({
 
 export const resolveDiscountContext = async ({
   claimDiscount,
-  discountTicketId,
   discountTemplateId,
   suiClient: _suiClient
 }: {
   claimDiscount: boolean
-  discountTicketId?: string
   discountTemplateId?: string
   suiClient: SuiClient
 }): Promise<DiscountContext> => {
-  if (claimDiscount || discountTicketId || discountTemplateId) {
+  if (claimDiscount || discountTemplateId) {
     const templateId = requireValue(
       discountTemplateId,
       "--discount-template-id is required when using discount checkout."

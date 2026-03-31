@@ -90,11 +90,10 @@ public struct AcceptedCoinRemoved has copy, drop {
     accepted_currency_id: ID,
 }
 
-/// Event emitted when a discount ticket is redeemed.
+/// Event emitted when a discount is redeemed.
 public struct DiscountRedeemed has copy, drop {
     /// Shop where redemption occurred.
     shop_id: ID,
-    // TODO#q: rename discount_template_id -> discount_id
     /// Template used for redemption.
     discount_template_id: ID,
 }

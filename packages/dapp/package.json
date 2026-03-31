@@ -37,8 +37,6 @@
     "buyer:currency:list": "TS_NODE_SKIP_IGNORE=1 NODE_OPTIONS=\"--no-warnings\" ../../node_modules/.bin/ts-node-esm --transpile-only src/scripts/buyer/currency-list.ts",
     "buyer:item-listing:list": "TS_NODE_SKIP_IGNORE=1 NODE_OPTIONS=\"--no-warnings\" ../../node_modules/.bin/ts-node-esm --transpile-only src/scripts/buyer/item-listing-list.ts",
     "buyer:discount-template:list": "TS_NODE_SKIP_IGNORE=1 NODE_OPTIONS=\"--no-warnings\" ../../node_modules/.bin/ts-node-esm --transpile-only src/scripts/buyer/discount-template-list.ts",
-    "buyer:discount-ticket:list": "TS_NODE_SKIP_IGNORE=1 NODE_OPTIONS=\"--no-warnings\" ../../node_modules/.bin/ts-node-esm --transpile-only src/scripts/buyer/discount-ticket-list.ts",
-    "buyer:discount-ticket:claim": "TS_NODE_SKIP_IGNORE=1 NODE_OPTIONS=\"--no-warnings\" ../../node_modules/.bin/ts-node-esm --transpile-only src/scripts/buyer/discount-ticket-claim.ts",
     "buyer:buy": "TS_NODE_SKIP_IGNORE=1 NODE_OPTIONS=\"--no-warnings\" ../../node_modules/.bin/ts-node-esm --transpile-only src/scripts/buyer/buy.ts",
     "buyer:buy:list": "TS_NODE_SKIP_IGNORE=1 NODE_OPTIONS=\"--no-warnings\" ../../node_modules/.bin/ts-node-esm --transpile-only src/scripts/buyer/buy-list.ts",
     "buyer:shop:view": "TS_NODE_SKIP_IGNORE=1 NODE_OPTIONS=\"--no-warnings\" ../../node_modules/.bin/ts-node-esm --transpile-only src/scripts/buyer/shop-view.ts",

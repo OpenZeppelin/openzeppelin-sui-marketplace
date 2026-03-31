@@ -316,7 +316,7 @@ describe("buyer scripts integration", () => {
 
   it("buys with a discount template and accepted currency", async () => {
     await testEnv.withTestContext(
-      "buyer-buy-discount-ticket",
+      "buyer-buy-template-discount",
       async (context) => {
         const buyer = await createFundedTestAccount(context, {
           label: "buyer-ticket"
@@ -330,7 +330,7 @@ describe("buyer scripts integration", () => {
         } = await createShopWithItemExamplesAndAcceptedCurrencyFixture(
           context,
           {
-            shopName: "Buyer Buy Discount Ticket Integration",
+            shopName: "Buyer Buy Template Discount Integration",
             publisherLabel: "buyer-checkout-owner",
             buyerAddress: buyer.address
           }
@@ -343,7 +343,7 @@ describe("buyer scripts integration", () => {
             publisher,
             shopId,
             itemType,
-            listingName: "Buyer Discount Ticket Car",
+            listingName: "Buyer Template Discount Car",
             price: "100",
             stock: "3",
             ruleKind: "percent",
