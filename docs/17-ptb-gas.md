@@ -83,7 +83,7 @@ fun finalize_purchase_transfers<TItem: store, TCoin>(
 ```
 PTB
   1) update Pyth price feed (optional)
-  2) buy_item or claim_and_buy_item_with_discount
+  2) buy_item or buy_item_with_discount
   3) pay owner (convention prefers exact-amount coin; this repo may split and return change)
 ```
 

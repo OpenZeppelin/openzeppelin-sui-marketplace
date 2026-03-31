@@ -71,7 +71,7 @@ await tooling.executeTransactionWithSummary({
 	- `--package-path <path>`: package folder relative to `packages/dapp/contracts` (required).
 	- `--with-unpublished-dependencies`: allow unpublished deps (defaults to `true` on localnet; rejected on shared networks).
 	- `--re-publish`: publish even if a deployment artifact already exists.
-	- Use `--network <name>` to switch between `localnet`, `testnet`, etc; the script passes the matching Move `--environment` to the CLI.
+	- Use `--network <name>` to switch between `localnet`, `testnet`, etc; the script passes the matching Move `--build-env` to the CLI.
 
 ### `pnpm script mock:get-currency`
 - Localnet-only coin registry inspection. If `--coin-type` is omitted it reads coin types from `packages/dapp/deployments/mock.localnet.json`.
@@ -262,13 +262,6 @@ Owner scripts default `--shop-package-id`, `--shop-id`, and `--owner-cap-id` fro
 	- `--active` / `--no-active`: desired activation state (required boolean flag).
 	- `--shop-package-id <id>` / `--shop-id <id>` / `--owner-cap-id <id>`: override artifact defaults.
 
-### `pnpm script owner:discount-template:prune-claims`
-- Removes per-wallet claim markers for a finished template (expired or maxed).
-- Flags:
-	- `--discount-template-id <id>`: template object ID (required).
-	- `--claimers <addr,addr,...>` / `--claimer <addr>`: claimer addresses to prune (required).
-	- `--shop-package-id <id>` / `--shop-id <id>` / `--owner-cap-id <id>`: override artifact defaults.
-
 ### `pnpm script owner:item-listing:attach-discount-template`
 - Attaches a discount template to a listing for spotlighting.
 - Flags:
@@ -306,19 +299,6 @@ Owner scripts default `--shop-package-id`, `--shop-id`, and `--owner-cap-id` fro
 - Flags:
 	- `--shop-id <id>`: shop to inspect; defaults to the latest Shop artifact.
 
-### `pnpm script buyer:discount-ticket:list`
-- Lists DiscountTickets owned by an address (default: configured account) with optional shop filtering.
-- Flags:
-	- `--address <0x...>`: owner address to list; defaults to configured account.
-	- `--shop-package-id <id>`: `sui_oracle_market` package ID for type filtering; inferred from artifacts when omitted.
-	- `--shop-id <id>`: optional shop object ID filter.
-
-### `pnpm script buyer:discount-ticket:claim`
-- Claims a single-use DiscountTicket from a DiscountTemplate using the on-chain clock.
-- Flags:
-	- `--discount-template-id <id>`: template object ID to claim from (required).
-	- `--shop-id <id>`: shop object ID (optional; inferred from artifacts when omitted).
-
 ### `pnpm script buyer:buy`
 - Executes checkout with oracle guardrails and optional discounts.
 - Flags:
@@ -328,12 +308,10 @@ Owner scripts default `--shop-package-id`, `--shop-id`, and `--owner-cap-id` fro
 	- `--payment-coin-object-id <id>`: specific Coin object ID to use; otherwise the script picks the richest owned coin of that type.
 	- `--mint-to <0x...>`: address that receives the ShopItem receipt (defaults to signer); redeeming the receipt for the actual item happens in a separate flow.
 	- `--refund-to <0x...>`: address that receives any refund change (defaults to signer).
-	- `--discount-ticket-id <id>`: redeem an existing DiscountTicket during checkout.
-	- `--discount-template-id <id>` / `--claim-discount`: claim + redeem a ticket atomically in one PTB.
+	- `--discount-template-id <id>`: apply an existing discount template during checkout.
 	- `--max-price-age-secs <u64>` / `--max-confidence-ratio-bps <u64>`: tighter oracle guardrails (cannot exceed per-currency caps).
 	- `--skip-price-update`: skip Hermes price refresh (not recommended on shared networks).
 	- `--hermes-url <url>`: override the Hermes endpoint for price updates.
-	- Note: `--claim-discount` and `--discount-ticket-id` are mutually exclusive.
 
 ### `pnpm script buyer:buy:list`
 - Lists `ShopItem` receipts owned by an address (default: configured account) with optional shop filtering.

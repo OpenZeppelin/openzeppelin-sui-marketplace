@@ -3,11 +3,7 @@
 import { useSuiClient } from "@mysten/dapp-kit"
 import type { SuiClient } from "@mysten/sui/client"
 import type { AcceptedCurrencySummary } from "@sui-oracle-market/domain-core/models/currency"
-import type {
-  DiscountTemplateSummary,
-  DiscountTicketDetails
-} from "@sui-oracle-market/domain-core/models/discount"
-import { getDiscountTicketSummaries } from "@sui-oracle-market/domain-core/models/discount"
+import type { DiscountTemplateSummary } from "@sui-oracle-market/domain-core/models/discount"
 import type { ItemListingSummary } from "@sui-oracle-market/domain-core/models/item-listing"
 import { getShopSnapshot } from "@sui-oracle-market/domain-core/models/shop"
 import type { ShopItemReceiptSummary } from "@sui-oracle-market/domain-core/models/shop-item"
@@ -36,7 +32,6 @@ type WalletState = {
   status: RemoteStatus
   error?: string
   purchasedItems: ShopItemReceiptSummary[]
-  discountTickets: DiscountTicketDetails[]
 }
 
 type WalletQueryConfig = {
@@ -56,8 +51,7 @@ const emptyStorefrontState = (): StorefrontState => ({
 
 const emptyWalletState = (): WalletState => ({
   status: "idle",
-  purchasedItems: [],
-  discountTickets: []
+  purchasedItems: []
 })
 
 const storefrontRetryDelaysMs = [200, 400, 800]
@@ -165,26 +159,16 @@ const getWalletData = async ({
     ? await resolveShopPackageId({ shopId, packageId, suiClient })
     : normalizeOptionalId(packageId)
 
-  const [purchasedItems, discountTickets] = await Promise.all([
-    resolvedPackageId
-      ? getShopItemReceiptSummaries({
-          ownerAddress,
-          shopPackageId: resolvedPackageId,
-          shopFilterId: shopId,
-          suiClient
-        })
-      : Promise.resolve([]),
-    resolvedPackageId
-      ? getDiscountTicketSummaries({
-          ownerAddress,
-          shopPackageId: resolvedPackageId,
-          shopFilterId: shopId,
-          suiClient
-        })
-      : Promise.resolve([])
-  ])
+  const purchasedItems = resolvedPackageId
+    ? await getShopItemReceiptSummaries({
+        ownerAddress,
+        shopPackageId: resolvedPackageId,
+        shopFilterId: shopId,
+        suiClient
+      })
+    : []
 
-  return { purchasedItems, discountTickets }
+  return { purchasedItems }
 }
 
 const getWalletQueryConfig = ({
@@ -224,7 +208,7 @@ const sortPurchasedItemsLatestFirst = (items: ShopItemReceiptSummary[]) =>
  * Sui state lives in objects, so we query object summaries and owned objects
  * instead of reading contract storage or event logs. The hook separates:
  * - storefront: shared objects like listings, currencies, discount templates
- * - wallet: owned objects like ShopItem receipts and DiscountTicket objects
+ * - wallet: owned objects like ShopItem receipts
  * Package ID is resolved from the shop object's type so upgrades stay aligned.
  */
 export const useShopDashboardData = ({
@@ -355,32 +339,6 @@ export const useShopDashboardData = ({
     []
   )
 
-  const upsertDiscountTicket = useCallback((ticket: DiscountTicketDetails) => {
-    setWalletState((previous) => {
-      const existingIndex = previous.discountTickets.findIndex(
-        (item) => item.discountTicketId === ticket.discountTicketId
-      )
-
-      if (existingIndex === -1) {
-        return {
-          ...previous,
-          discountTickets: [ticket, ...previous.discountTickets]
-        }
-      }
-
-      const nextTickets = [...previous.discountTickets]
-      nextTickets[existingIndex] = {
-        ...nextTickets[existingIndex],
-        ...ticket
-      }
-
-      return {
-        ...previous,
-        discountTickets: nextTickets
-      }
-    })
-  }, [])
-
   const upsertPurchasedItem = useCallback((receipt: ShopItemReceiptSummary) => {
     setWalletState((previous) => {
       const existingIndex = previous.purchasedItems.findIndex(
@@ -481,8 +439,7 @@ export const useShopDashboardData = ({
         setWalletState({
           status: "success",
           error: undefined,
-          purchasedItems: sortPurchasedItemsLatestFirst(data.purchasedItems),
-          discountTickets: data.discountTickets
+          purchasedItems: sortPurchasedItemsLatestFirst(data.purchasedItems)
         })
       } catch (error) {
         if (!isSubscribed) return
@@ -510,7 +467,6 @@ export const useShopDashboardData = ({
     upsertItemListing,
     upsertPurchasedItem,
     upsertDiscountTemplate,
-    upsertDiscountTicket,
     removeItemListing,
     removeAcceptedCurrency
   }

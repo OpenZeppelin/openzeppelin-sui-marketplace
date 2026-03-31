@@ -29,7 +29,8 @@ runSuiScript(
 
     const createShopTransaction = buildCreateShopTransaction({
       packageId: shopPackageId,
-      shopName
+      shopName,
+      ownerAddress: tooling.loadedEd25519KeyPair.toSuiAddress()
     })
 
     const { execution, summary } = await tooling.executeTransactionWithSummary({

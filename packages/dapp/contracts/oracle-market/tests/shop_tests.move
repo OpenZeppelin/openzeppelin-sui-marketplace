@@ -31,7 +31,6 @@ const SECONDARY_FEED_ID: vector<u8> =
 const SHORT_FEED_ID: vector<u8> = b"SHORT";
 const TEST_DEFAULT_MAX_PRICE_AGE_SECS: u64 = 60;
 const TEST_DEFAULT_MAX_CONFIDENCE_RATIO_BPS: u16 = 1_000;
-const TEST_DEFAULT_MAX_PRICE_STATUS_LAG_SECS: u64 = 5;
 const TEST_MAX_DECIMAL_POWER: u64 = 24;
 
 // === Test Types ===
@@ -129,7 +128,6 @@ fun add_currency_with_feed<T>(
         price_info_id,
         option::none(),
         option::none(),
-        option::none(),
     );
     transfer::public_share_object(price_info_object);
     price_info_id
@@ -143,7 +141,6 @@ fun add_test_coin_accepted_currency_for_scenario(
     feed_id: vector<u8>,
     max_price_age_secs_cap: Option<u64>,
     max_confidence_ratio_bps_cap: Option<u16>,
-    max_price_status_lag_secs_cap: Option<u64>,
 ): ID {
     let price_info_object = create_price_info_object_for_feed(
         feed_id,
@@ -158,7 +155,6 @@ fun add_test_coin_accepted_currency_for_scenario(
         accepted_currency_id,
         max_price_age_secs_cap,
         max_confidence_ratio_bps_cap,
-        max_price_status_lag_secs_cap,
     );
     transfer::public_share_object(price_info_object);
     accepted_currency_id
@@ -262,6 +258,8 @@ macro fun assert_emitted<$T>($expected_event: $T) {
     };
 }
 
+// === Tests ===
+
 #[test]
 fun update_shop_owner_updates_owner_and_emits_previous_owner_event() {
     let mut ctx = tx_context::dummy();
@@ -326,7 +324,6 @@ fun add_accepted_currency_rejects_empty_feed_id() {
         price_info_id,
         option::none(),
         option::none(),
-        option::none(),
     );
 
     abort
@@ -351,61 +348,8 @@ fun add_accepted_currency_rejects_short_feed_id() {
         price_info_id,
         option::none(),
         option::none(),
-        option::none(),
     );
 
-    abort
-}
-
-#[test]
-fun attestation_time_within_lag_is_allowed() {
-    let mut ctx = tx_context::new_from_hint(@0x0, 16, 0, 0, 0);
-    let publish_time = 100;
-    let attestation_time = publish_time + TEST_DEFAULT_MAX_PRICE_STATUS_LAG_SECS;
-    let price = price::new(
-        i64::new(1_000, false),
-        10,
-        i64::new(2, true),
-        publish_time,
-    );
-    let price_info_object = create_price_info_object_for_feed_with_price_and_times(
-        PRIMARY_FEED_ID,
-        price,
-        attestation_time,
-        attestation_time,
-        &mut ctx,
-    );
-
-    shop::assert_price_status_trading_for_max_lag(
-        &price_info_object,
-        TEST_DEFAULT_MAX_PRICE_STATUS_LAG_SECS,
-    );
-    std::unit_test::destroy(price_info_object);
-}
-
-#[test, expected_failure(abort_code = ::sui_oracle_market::shop::EPriceStatusNotTrading)]
-fun attestation_time_lag_over_limit_is_rejected() {
-    let mut ctx = tx_context::new_from_hint(@0x0, 18, 0, 0, 0);
-    let publish_time = 200;
-    let attestation_time = publish_time + TEST_DEFAULT_MAX_PRICE_STATUS_LAG_SECS + 1;
-    let price = price::new(
-        i64::new(1_000, false),
-        10,
-        i64::new(2, true),
-        publish_time,
-    );
-    let price_info_object = create_price_info_object_for_feed_with_price_and_times(
-        PRIMARY_FEED_ID,
-        price,
-        attestation_time,
-        attestation_time,
-        &mut ctx,
-    );
-
-    shop::assert_price_status_trading_for_max_lag(
-        &price_info_object,
-        TEST_DEFAULT_MAX_PRICE_STATUS_LAG_SECS,
-    );
     abort
 }
 
@@ -426,7 +370,6 @@ fun add_accepted_currency_rejects_excessive_decimals() {
         &price_info_object,
         PRIMARY_FEED_ID,
         price_info_id,
-        option::none(),
         option::none(),
         option::none(),
     );
@@ -453,7 +396,6 @@ fun add_accepted_currency_rejects_identifier_mismatch() {
         price_info_id,
         option::none(),
         option::none(),
-        option::none(),
     );
 
     abort
@@ -477,72 +419,8 @@ fun add_accepted_currency_rejects_missing_price_object() {
         @0xB.to_id(),
         option::none(),
         option::none(),
-        option::none(),
     );
 
-    abort
-}
-
-#[test, expected_failure(abort_code = ::sui_oracle_market::shop::EPriceStatusNotTrading)]
-fun quote_rejects_attestation_lag_above_currency_cap() {
-    let mut scn = test_scenario::begin(TEST_OWNER);
-    let (shop_id, owner_cap_id) = create_default_shop_and_owner_cap_ids_for_sender(&mut scn);
-
-    let currency = prepare_test_currency_for_owner(&mut scn, TEST_OWNER);
-    let publish_time = 300;
-    let attestation_time = publish_time + 3;
-    let price = price::new(
-        i64::new(1_000, false),
-        10,
-        i64::new(2, true),
-        publish_time,
-    );
-    let price_info_object = create_price_info_object_for_feed_with_price_and_times(
-        PRIMARY_FEED_ID,
-        price,
-        attestation_time,
-        attestation_time,
-        test_scenario::ctx(&mut scn),
-    );
-    let price_info_id = price_info_object.uid_to_inner();
-
-    let mut shop_obj = take_shared_shop(&scn, shop_id);
-    let owner_cap_obj = test_scenario::take_from_sender_by_id(
-        &scn,
-        owner_cap_id,
-    );
-    shop_obj.add_accepted_currency<TestCoin>(
-        &owner_cap_obj,
-        &currency,
-        &price_info_object,
-        PRIMARY_FEED_ID,
-        price_info_id,
-        option::none(),
-        option::none(),
-        option::some(2),
-    );
-    test_scenario::return_to_sender(&scn, owner_cap_obj);
-    test_scenario::return_shared(shop_obj);
-    transfer::public_share_object(price_info_object);
-
-    let _ = test_scenario::next_tx(&mut scn, TEST_OWNER);
-
-    let shared_shop = take_shared_shop(&scn, shop_id);
-    let clock_obj = create_test_clock_at(
-        test_scenario::ctx(&mut scn),
-        (attestation_time + 1) * 1000,
-    );
-
-    shared_shop.quote_amount_for_price_info_object<TestCoin>(
-        &test_scenario::take_shared_by_id<price_info::PriceInfoObject>(
-            &scn,
-            price_info_id,
-        ),
-        10_000,
-        option::none(),
-        option::none(),
-        &clock_obj,
-    );
     abort
 }
 
@@ -580,7 +458,6 @@ fun quote_rejects_price_timestamp_older_than_max_age() {
         &price_info_object,
         PRIMARY_FEED_ID,
         price_info_id,
-        option::none(),
         option::none(),
         option::none(),
     );
@@ -636,7 +513,6 @@ fun remove_accepted_currency_removes_state_and_emits_event() {
         first_price_id,
         option::none(),
         option::none(),
-        option::none(),
     );
     let _first_currency_id = tx_context::last_created_object_id(
         test_scenario::ctx(&mut scn),
@@ -655,7 +531,6 @@ fun remove_accepted_currency_removes_state_and_emits_event() {
         &second_price_object,
         SECONDARY_FEED_ID,
         second_price_id,
-        option::none(),
         option::none(),
         option::none(),
     );
@@ -697,7 +572,6 @@ fun remove_accepted_currency_rejects_foreign_owner_cap() {
         &price_info_object,
         PRIMARY_FEED_ID,
         price_info_id,
-        option::none(),
         option::none(),
         option::none(),
     );
@@ -752,7 +626,6 @@ fun remove_accepted_currency_rejects_missing_id() {
         price_info_id,
         option::none(),
         option::none(),
-        option::none(),
     );
     let _foreign_currency_id = tx_context::last_created_object_id(
         test_scenario::ctx(&mut scn),
@@ -796,7 +669,6 @@ fun remove_accepted_currency_handles_missing_type_mapping() {
         &price_info_object,
         PRIMARY_FEED_ID,
         price_info_id,
-        option::none(),
         option::none(),
         option::none(),
     );
@@ -846,7 +718,6 @@ fun remove_accepted_currency_rejects_mismatched_type_mapping() {
         price_info_id,
         option::none(),
         option::none(),
-        option::none(),
     );
     let _first_currency_id = tx_context::last_created_object_id(
         test_scenario::ctx(&mut scn),
@@ -862,7 +733,6 @@ fun remove_accepted_currency_rejects_mismatched_type_mapping() {
         &price_info_object,
         PRIMARY_FEED_ID,
         price_info_id,
-        option::none(),
         option::none(),
         option::none(),
     );
@@ -912,7 +782,6 @@ fun quote_view_matches_internal_math() {
         &price_info_object,
         PRIMARY_FEED_ID,
         price_info_id,
-        option::none(),
         option::none(),
         option::none(),
     );
@@ -1006,7 +875,6 @@ fun quote_view_rejects_mismatched_price_info_object() {
         &price_info_object,
         PRIMARY_FEED_ID,
         price_info_id,
-        option::none(),
         option::none(),
         option::none(),
     );
@@ -3075,7 +2943,6 @@ fun discount_redemption_without_listing_restriction_allows_zero_price() {
         price_info_id,
         option::none(),
         option::none(),
-        option::none(),
     );
     std::unit_test::destroy(currency);
 
@@ -3169,7 +3036,6 @@ fun discount_redemption_rejects_listing_mismatch() {
         &price_info_object,
         PRIMARY_FEED_ID,
         price_info_id,
-        option::none(),
         option::none(),
         option::none(),
     );
@@ -3268,7 +3134,6 @@ fun discount_template_maxed_out_by_redemption() {
         &price_info_object,
         PRIMARY_FEED_ID,
         price_info_id,
-        option::none(),
         option::none(),
         option::none(),
     );
@@ -3470,65 +3335,6 @@ fun checkout_rejects_currency_from_other_shop() {
     abort
 }
 
-#[test, expected_failure(abort_code = ::sui_oracle_market::shop::EPriceStatusNotTrading)]
-fun price_status_rejects_attestation_before_publish() {
-    let mut scn = test_scenario::begin(TEST_OWNER);
-    let (shop_id, owner_cap_id) = create_default_shop_and_owner_cap_ids_for_sender(&mut scn);
-
-    let currency = prepare_test_currency_for_owner(&mut scn, TEST_OWNER);
-    let mut shop_obj = take_shared_shop(&scn, shop_id);
-    let owner_cap_obj = test_scenario::take_from_sender_by_id(
-        &scn,
-        owner_cap_id,
-    );
-    let price_value = i64::new(1_000, false);
-    let expo = i64::new(0, false);
-    let price = price::new(price_value, 10, expo, 100);
-    let price_info_object = create_price_info_object_for_feed_with_price_and_times(
-        PRIMARY_FEED_ID,
-        price,
-        50,
-        0,
-        test_scenario::ctx(&mut scn),
-    );
-    let price_info_id = price_info_object.uid_to_inner();
-
-    shop_obj.add_accepted_currency<TestCoin>(
-        &owner_cap_obj,
-        &currency,
-        &price_info_object,
-        PRIMARY_FEED_ID,
-        price_info_id,
-        option::none(),
-        option::none(),
-        option::none(),
-    );
-    std::unit_test::destroy(currency);
-
-    transfer::public_share_object(price_info_object);
-    test_scenario::return_to_sender(&scn, owner_cap_obj);
-    test_scenario::return_shared(shop_obj);
-
-    let _ = test_scenario::next_tx(&mut scn, TEST_OWNER);
-
-    let shared_shop = take_shared_shop(&scn, shop_id);
-    let price_info_obj = test_scenario::take_shared_by_id(
-        &scn,
-        price_info_id,
-    );
-    let clock_obj = create_test_clock_at(test_scenario::ctx(&mut scn), 1000);
-
-    shared_shop.quote_amount_for_price_info_object<TestCoin>(
-        &price_info_obj,
-        100,
-        option::none(),
-        option::none(),
-        &clock_obj,
-    );
-
-    abort
-}
-
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::ESpotlightTemplateListingMismatch)]
 fun add_item_listing_rejects_spotlight_template_listing_mismatch() {
     let mut ctx = tx_context::new_from_hint(TEST_OWNER, 10006, 0, 0, 0);
@@ -3592,7 +3398,6 @@ fun accepted_currency_rejects_foreign_shop() {
         PRIMARY_FEED_ID,
         option::none(),
         option::none(),
-        option::none(),
     );
 
     test_scenario::return_to_sender(&scn, owner_cap_obj);
@@ -3626,7 +3431,6 @@ fun remove_currency_field_clears_mapping() {
         PRIMARY_FEED_ID,
         option::none(),
         option::none(),
-        option::none(),
     );
 
     remove_currency_if_exists<TestCoin>(&mut shop_obj, &owner_cap_obj);
@@ -3655,7 +3459,6 @@ fun remove_accepted_currency_emits_removed_event_fields() {
         &owner_cap_obj,
         &currency,
         PRIMARY_FEED_ID,
-        option::none(),
         option::none(),
         option::none(),
     );
@@ -3743,7 +3546,6 @@ fun setup_shop_with_currency_listing_and_price_info_for_item<TItem: store>(
         &price_info_object,
         PRIMARY_FEED_ID,
         price_info_id,
-        option::none(),
         option::none(),
         option::none(),
     );
@@ -4128,7 +3930,6 @@ fun buy_item_rejects_price_info_object_id_mismatch() {
         price_info_id,
         option::none(),
         option::none(),
-        option::none(),
     );
     std::unit_test::destroy(currency);
 
@@ -4196,7 +3997,6 @@ fun buy_item_with_discount_emits_discount_redeemed_and_records_template_id() {
         &price_info_object,
         PRIMARY_FEED_ID,
         price_info_id,
-        option::none(),
         option::none(),
         option::none(),
     );
@@ -4435,7 +4235,6 @@ fun buy_item_rejects_guardrail_override_above_cap() {
         pyth_object_id,
         option::some(0),
         option::some(0),
-        option::some(0),
     );
 
     abort
@@ -4479,7 +4278,6 @@ fun buy_item_with_discount_rejects_inactive_template() {
         &price_info_object,
         PRIMARY_FEED_ID,
         price_info_id,
-        option::none(),
         option::none(),
         option::none(),
     );

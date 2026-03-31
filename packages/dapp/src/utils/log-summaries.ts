@@ -62,9 +62,6 @@ export const logAcceptedCurrencySummary = (
   logKeyValueGreen("Max-conf-bps")(
     acceptedCurrency.maxConfidenceRatioBpsCap ?? "module default"
   )
-  logKeyValueGreen("Max-status-lag")(
-    acceptedCurrency.maxPriceStatusLagSecsCap ?? "module default"
-  )
   console.log("")
 }
 
@@ -88,7 +85,6 @@ export const logDiscountTemplateSummary = (
   if (discountTemplate.maxRedemptions)
     logKeyValueGreen("Max-redemptions")(discountTemplate.maxRedemptions)
   else logKeyValueGreen("Max-redemptions")("Unlimited")
-  logKeyValueGreen("Claims")(discountTemplate.claimsIssued ?? "Unknown")
   logKeyValueGreen("Redeemed")(discountTemplate.redemptions ?? "Unknown")
   logKeyValueGreen("Table-entry-field")(discountTemplate.tableEntryFieldId)
   console.log("")

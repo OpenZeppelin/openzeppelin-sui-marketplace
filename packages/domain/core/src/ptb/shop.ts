@@ -3,19 +3,26 @@ import { newTransaction } from "@sui-oracle-market/tooling-core/transactions"
 
 export const buildCreateShopTransaction = ({
   packageId,
-  shopName
+  shopName,
+  ownerAddress
 }: {
   packageId: string
   shopName: string
+  ownerAddress: string
 }) => {
   const transaction = newTransaction()
   const normalizedShopName = shopName.trim()
   if (!normalizedShopName) throw new Error("Shop name cannot be empty.")
 
-  transaction.moveCall({
+  const [, ownerCapability] = transaction.moveCall({
     target: `${packageId}::shop::create_shop`,
     arguments: [transaction.pure.string(normalizedShopName)]
   })
+
+  transaction.transferObjects(
+    [ownerCapability],
+    transaction.pure.address(ownerAddress)
+  )
 
   return transaction
 }
