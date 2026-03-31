@@ -17,7 +17,7 @@ public struct ShopOwnerUpdated has copy, drop {
     /// Owner capability used for the update.
     owner_cap_id: ID,
     /// Previous owner address.
-    previous_owner_address: address,
+    previous_owner: address,
 }
 
 /// Event emitted when a shop is disabled.
@@ -134,12 +134,12 @@ public(package) fun emit_shop_created(shop_id: ID, owner_cap_id: ID) {
 public(package) fun emit_shop_owner_updated(
     shop_id: ID,
     owner_cap_id: ID,
-    previous_owner_address: address,
+    previous_owner: address,
 ) {
     event::emit(ShopOwnerUpdated {
         shop_id,
         owner_cap_id,
-        previous_owner_address,
+        previous_owner,
     });
 }
 
@@ -270,12 +270,12 @@ public(package) fun shop_created(shop_id: ID, owner_cap_id: ID): ShopCreated {
 public(package) fun shop_owner_updated(
     shop_id: ID,
     owner_cap_id: ID,
-    previous_owner_address: address,
+    previous_owner: address,
 ): ShopOwnerUpdated {
     ShopOwnerUpdated {
         shop_id,
         owner_cap_id,
-        previous_owner_address,
+        previous_owner,
     }
 }
 
