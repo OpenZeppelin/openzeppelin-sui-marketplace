@@ -23,7 +23,7 @@ import {
 } from "@sui-oracle-market/tooling-core/utils/move-values"
 import {
   parseNonNegativeU64,
-  parseOptionalU64,
+  parseOptionalU64
 } from "@sui-oracle-market/tooling-core/utils/utility"
 import type { ItemListingSummary } from "./item-listing.ts"
 import { normalizeOptionalListingIdFromValue } from "./item-listing.ts"
