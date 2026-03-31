@@ -237,7 +237,7 @@ What it does:
 
 Where to find values:
 - `ITEM_TYPE`: `packages/dapp/deployments/mock.localnet.json` -> `itemTypes[].itemType`
-- `itemListingId`: emitted in `ItemListingAddedEvent` and printed by the script.
+- `itemListingId`: emitted in `ItemListingAdded` and printed by the script.
 - You can list all current IDs with `pnpm script buyer:item-listing:list --shop-id <SHOP_ID>`.
 
 ### 7) Create a discount template

@@ -34,7 +34,7 @@ import { parseUsdToCents } from "./shop.ts"
 
 export const DISCOUNT_TEMPLATE_TYPE_FRAGMENT = "::shop::DiscountTemplate"
 export const DISCOUNT_TEMPLATE_CREATED_EVENT_TYPE_FRAGMENT =
-  "::shop::DiscountTemplateCreatedEvent"
+  "::shop::DiscountTemplateCreated"
 const SHOP_DISCOUNT_TEMPLATES_FIELD = "discount_templates"
 
 export const discountRuleChoices = ["fixed", "percent"] as const

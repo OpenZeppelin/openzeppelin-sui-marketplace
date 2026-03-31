@@ -19,7 +19,7 @@ import { formatTypeNameFromFieldValue } from "@sui-oracle-market/tooling-core/ut
 
 export const ITEM_LISTING_TYPE_FRAGMENT = "::shop::ItemListing"
 export const ITEM_LISTING_ADDED_EVENT_TYPE_FRAGMENT =
-  "::shop::ItemListingAddedEvent"
+  "::shop::ItemListingAdded"
 const SHOP_LISTINGS_FIELD = "listings"
 
 export type ItemListingDetails = {

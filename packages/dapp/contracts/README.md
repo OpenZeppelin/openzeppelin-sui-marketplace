@@ -14,7 +14,7 @@ Mental Model Shift
 - **Objects over contract storage:** The shop is a shared object. Listings, currencies, and discount templates all live in typed collections on `Shop` (`Shop.listings`, `Shop.accepted_currencies`, `Shop.discount_templates`). Edits touch targeted collection entries instead of append-only arrays.
 - **Typed coins and receipts:** Payment assets are `Coin<T>` resources with no approvals; receipts are `ShopItem<TItem>` whose type must match the listing to keep downstream logic strongly typed. These receipts can be exchanged in a separate fulfillment or on-chain redemption flow for the actual `TItem`.
 - **Clocked, guarded pricing:** Callers pass a refreshed `PriceInfoObject`; the module checks identity, freshness, confidence, and price-status lag against the shared `Clock` before quoting.
-- **Events over historical arrays:** Lifecycle events (`PurchaseCompletedEvent`, `DiscountRedeemedEvent`, etc.) are emitted for indexers/UIs instead of storing growing arrays on-chain.
+- **Events over historical arrays:** Lifecycle events (`PurchaseCompleted`, `DiscountRedeemed`, etc.) are emitted for indexers/UIs instead of storing growing arrays on-chain.
 
 Object Graph (shared + tables)
 --------------------------------------
@@ -87,7 +87,7 @@ Sui Fundamentals (EVM contrasts)
   `quote_amount_with_guardrails` wraps `pyth::get_price_no_older_than` and enforces status/σ guards
   before converting. Unlike Chainlink address lookups, callers must present the feed object and
   recent update data. Docs: https://docs.sui.io/guides/developer/app-examples/oracle.
-- **Data access stack (gRPC, indexer, custom):** Sui exposes fullnode gRPC/WebSocket streams plus a GraphQL indexer; custom indexers can process events like `PurchaseCompletedEvent` without managing RPC trace reorgs common on EVM. Docs: https://docs.sui.io/concepts/data-access/data-serving.
+- **Data access stack (gRPC, indexer, custom):** Sui exposes fullnode gRPC/WebSocket streams plus a GraphQL indexer; custom indexers can process events like `PurchaseCompleted` without managing RPC trace reorgs common on EVM. Docs: https://docs.sui.io/concepts/data-access/data-serving.
 - **Transaction DAG and lifecycle:** Objects record the digest that last mutated them, forming a DAG that clients can traverse to reason about causality; combined with fast-path execution for owned objects, this removes many reentrancy patterns seen on EVM. Docs: https://docs.sui.io/concepts/transactions/transaction-lifecycle.
 - **Consensus (Mysticeti) characteristics:** Shared-object transactions go through Sui’s consensus, which targets sub-second finality and high throughput by ordering a DAG of certificates rather than serial block mining. For this shop, shared writes (listing updates) wait for consensus while owned-coin spends in checkout can still batch in the same PTB. Docs: https://docs.sui.io/concepts/sui-architecture/consensus.
 - **PTB composition:** Sui lets clients chain calls at runtime in a single PTB (up to 1,024 commands). This repo uses PTBs to update Pyth and purchase in one atomic flow. Docs: https://docs.sui.io/concepts/transactions/prog-txn-blocks.
