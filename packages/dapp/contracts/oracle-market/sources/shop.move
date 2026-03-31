@@ -33,7 +33,7 @@ use sui_oracle_market::events;
 //   docs/08-listings-receipts.md, docs/10-discounts-tickets.md, docs/16-object-ownership.md
 // - Capability-based auth (ShopOwnerCap): admin entry points require the capability object, not
 //   ctx.sender() checks. This replaces Solidity modifiers. Docs: docs/07-shop-capabilities.md
-// - Table collections (listings + accepted currencies + discount templates + per-template claimers):
+// - Table collections (listings + accepted currencies + discount templates):
 //   typed dynamic collections keep config under `Shop` without exposing
 //   listings/currencies/templates as standalone shared objects.
 // - Type tags and TypeName: item and coin types are recorded as TypeName for runtime checks,
@@ -622,9 +622,8 @@ fun create_discount_template_core(
 ///
 /// Templates are stored in the shop's `discount_templates: Table<ID, DiscountTemplate>` collection.
 /// Admin functions enforce `ShopOwnerCap` checks when creating/updating/toggling templates, and
-/// templates remain addressable by `ID` for UIs. Claims are tracked in each template's
-/// `claims_by_claimer: Table<address, bool>` map to enforce one-claim-per-address. Callers send primitive args
-/// (`rule_kind` of `0 = fixed` or `1 = percent`), but we immediately convert them into the strongly
+/// templates remain addressable by `ID` for UIs.
+/// Callers send primitive args (`rule_kind` of `0 = fixed` or `1 = percent`), but we immediately convert them into the strongly
 /// typed `DiscountRule` before persisting. For `Fixed` rules the `rule_value` is denominated in USD
 /// cents to match listing prices.
 /// Sui mindset:

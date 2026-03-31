@@ -262,13 +262,6 @@ Owner scripts default `--shop-package-id`, `--shop-id`, and `--owner-cap-id` fro
 	- `--active` / `--no-active`: desired activation state (required boolean flag).
 	- `--shop-package-id <id>` / `--shop-id <id>` / `--owner-cap-id <id>`: override artifact defaults.
 
-### `pnpm script owner:discount-template:prune-claims`
-- Removes per-wallet claim markers for a finished template (expired or maxed).
-- Flags:
-	- `--discount-template-id <id>`: template object ID (required).
-	- `--claimers <addr,addr,...>` / `--claimer <addr>`: claimer addresses to prune (required).
-	- `--shop-package-id <id>` / `--shop-id <id>` / `--owner-cap-id <id>`: override artifact defaults.
-
 ### `pnpm script owner:item-listing:attach-discount-template`
 - Attaches a discount template to a listing for spotlighting.
 - Flags:
