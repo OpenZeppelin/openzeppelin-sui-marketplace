@@ -147,20 +147,16 @@ If you need enumeration, prefer:
 - off-chain enumeration + on-chain membership checks, or
 - bounded admin-only maintenance functions (like pruning claims) that accept explicit lists.
 
-## 6. Discount tickets: owned objects, single-use, and redemption-bound
-Tickets are owned objects, which is great for modeling a one-time right.
-But owned objects can be transferred, so you must explicitly define whether transfer should
-preserve redemption rights.
+## 6. Discount templates: bounded redemption and listing scope
+Discount redemption is now template-based (no separate ticket objects).
+The safety properties are enforced directly on the template and checkout path:
 
-This shop chooses a “transferable but redemption-bound” semantics:
-- the ticket can move between wallets,
-- but redemption checks enforce the original claimer.
+- template must be active;
+- template must be within its time window;
+- listing-scoped templates must match the purchased listing;
+- `max_redemptions` is enforced against `redemptions`.
 
-You can see that shape in the ticket context assertions (the ticket’s `claimer` must match the
-transaction sender).
-
-If you want transferable coupons later, that’s a conscious protocol change: you’ll need a new
-rule (e.g., ticket owner == sender) and you’ll be changing the trust/abuse surface.
+This keeps discount rules auditable and deterministic without introducing extra owned claim objects.
 
 ## 7. Package IDs, upgrades, and environment drift
 Two gotchas that bite teams coming from EVM:

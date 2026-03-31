@@ -106,14 +106,6 @@ const CurrencySummarySection = ({
           {formatGuardrailCap(summary.maxConfidenceRatioBpsCap)}
         </div>
       </div>
-      <div className="rounded-xl border border-slate-200/70 bg-white/80 p-3 dark:border-slate-50/15 dark:bg-slate-950/60">
-        <div className="text-[0.6rem] uppercase tracking-[0.18em] text-slate-500 dark:text-slate-200/60">
-          Max status lag (secs)
-        </div>
-        <div className="mt-1 text-sm font-semibold text-sds-dark dark:text-sds-light">
-          {formatGuardrailCap(summary.maxPriceStatusLagSecsCap)}
-        </div>
-      </div>
     </div>
     <div className="mt-4 flex flex-wrap items-center gap-3 text-xs">
       {summary.tableEntryFieldId ? (
@@ -524,7 +516,7 @@ const AddCurrencyModal = ({
               title="Guardrails"
               subtitle="Optional caps that override module defaults."
             >
-              <div className="grid gap-4 md:grid-cols-3 md:items-end">
+              <div className="grid gap-4 md:grid-cols-2 md:items-end">
                 <label className={modalFieldLabelClassName}>
                   <span className={modalFieldTitleClassName}>
                     Max price age (secs)
@@ -611,49 +603,6 @@ const AddCurrencyModal = ({
                     </span>
                   ) : undefined}
                 </label>
-                <label className={modalFieldLabelClassName}>
-                  <span className={modalFieldTitleClassName}>
-                    Max status lag (secs)
-                  </span>
-                  <span className={modalFieldDescriptionClassName}>
-                    Maximum gap between price status and publish time.
-                  </span>
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    value={formState.maxPriceStatusLagSecsCap}
-                    onChange={(event) =>
-                      handleInputChange(
-                        "maxPriceStatusLagSecsCap",
-                        event.target.value
-                      )
-                    }
-                    onBlur={() => markFieldBlur("maxPriceStatusLagSecsCap")}
-                    placeholder="Default"
-                    className={clsx(
-                      modalFieldInputClassName,
-                      shouldShowFieldError(
-                        "maxPriceStatusLagSecsCap",
-                        fieldErrors.maxPriceStatusLagSecsCap
-                      ) && modalFieldInputErrorClassName
-                    )}
-                  />
-                  {shouldShowFieldError(
-                    "maxPriceStatusLagSecsCap",
-                    fieldErrors.maxPriceStatusLagSecsCap
-                  ) ? (
-                    <span className={modalFieldErrorTextClassName}>
-                      {fieldErrors.maxPriceStatusLagSecsCap}
-                    </span>
-                  ) : shouldShowFieldWarning(
-                      "maxPriceStatusLagSecsCap",
-                      fieldWarnings.maxPriceStatusLagSecsCap
-                    ) ? (
-                    <span className={modalFieldWarningTextClassName}>
-                      {fieldWarnings.maxPriceStatusLagSecsCap}
-                    </span>
-                  ) : undefined}
-                </label>
               </div>
             </ModalSection>
 
@@ -708,14 +657,6 @@ const AddCurrencyModal = ({
                   </div>
                   <div className="mt-1 text-sm font-semibold text-sds-dark dark:text-sds-light">
                     {guardrailPreview.maxConfidenceRatioBpsCap}
-                  </div>
-                </div>
-                <div className="rounded-xl border border-slate-200/70 bg-white/80 p-3 sm:col-span-2 dark:border-slate-50/15 dark:bg-slate-950/60">
-                  <div className="text-[0.6rem] uppercase tracking-[0.18em] text-slate-500 dark:text-slate-200/60">
-                    Max status lag
-                  </div>
-                  <div className="mt-1 text-sm font-semibold text-sds-dark dark:text-sds-light">
-                    {guardrailPreview.maxPriceStatusLagSecsCap}
                   </div>
                 </div>
               </div>

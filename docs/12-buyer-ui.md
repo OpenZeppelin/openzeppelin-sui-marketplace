@@ -141,7 +141,6 @@ const paymentCoinObjectId = await resolvePaymentCoinObjectId({
 
 const discountContext = await resolveDiscountContext({
   claimDiscount: inputs.claimDiscount,
-  discountTicketId: inputs.discountTicketId,
   discountTemplateId: inputs.discountTemplateId,
   suiClient: tooling.suiClient
 })
@@ -155,7 +154,7 @@ const discountContext = await resolveDiscountContext({
 ```
 PTB
   1) pyth::update_price_feeds
-  2) shop::buy_item (or claim_and_buy_item_with_discount)
+  2) shop::buy_item (or buy_item_with_discount)
   3) emit events + mint ShopItem
 ```
 

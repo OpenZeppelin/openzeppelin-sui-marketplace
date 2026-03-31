@@ -255,7 +255,8 @@ export const useCreateShopModalState = ({
     try {
       const createShopTransaction = buildCreateShopTransaction({
         packageId,
-        shopName
+        shopName,
+        ownerAddress: walletAddress
       })
       createShopTransaction.setSender(walletAddress)
 

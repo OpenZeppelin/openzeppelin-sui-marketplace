@@ -19,7 +19,7 @@ public struct ShopOwnerCap has key {
 
 public struct ShopCreatedEvent has copy, drop {
   shop_id: address,
-  shop_owner_cap_id: address,
+  owner_cap_id: address,
   owner: address,
 }
 
@@ -42,7 +42,7 @@ entry fun create_shop(name: string::String, ctx: &mut TxContext) {
 
   transfer::share_object(shop);
   transfer::transfer(owner_cap, owner);
-  event::emit(ShopCreatedEvent { shop_id, shop_owner_cap_id: owner_cap_id, owner });
+  event::emit(ShopCreatedEvent { shop_id, owner_cap_id, owner });
 }
 
 entry fun update_shop_owner(
@@ -56,4 +56,3 @@ entry fun update_shop_owner(
   transfer::transfer(owner_cap, new_owner);
   event::emit(ShopOwnerUpdatedEvent { shop_id, new_owner });
 }
-
