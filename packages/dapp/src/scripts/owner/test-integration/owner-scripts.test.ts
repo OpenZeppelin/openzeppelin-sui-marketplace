@@ -249,8 +249,7 @@ describe("owner scripts integration", () => {
               args: {
                 ...baseCurrencyAddArguments,
                 maxPriceAgeSecsCap: "120",
-                maxConfidenceRatioBpsCap: "250",
-                maxPriceStatusLagSecsCap: "4"
+                maxConfidenceRatioBpsCap: "250"
               }
             }
           )

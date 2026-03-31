@@ -12,7 +12,6 @@ export const buildAddAcceptedCurrencyTransaction = ({
   ownerCapId,
   maxPriceAgeSecsCap,
   maxConfidenceRatioBpsCap,
-  maxPriceStatusLagSecsCap,
   gasBudget
 }: {
   packageId: string
@@ -25,7 +24,6 @@ export const buildAddAcceptedCurrencyTransaction = ({
   ownerCapId: string
   maxPriceAgeSecsCap?: bigint
   maxConfidenceRatioBpsCap?: number
-  maxPriceStatusLagSecsCap?: bigint
   gasBudget?: number
 }) => {
   const transaction = newTransaction(gasBudget)

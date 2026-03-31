@@ -164,7 +164,6 @@ type ShopSeedArguments = {
   itemPackageId?: string
   maxPriceAgeSecsCap?: string
   maxConfidenceRatioBpsCap?: string
-  maxPriceStatusLagSecsCap?: string
   json?: boolean
 }
 
@@ -379,12 +378,6 @@ runSuiScript(
       type: "string",
       description:
         "Optional guardrail for maximum confidence ratio (basis points). Leave empty to use the module default."
-    })
-    .option("maxPriceStatusLagSecsCap", {
-      alias: ["max-price-status-lag-secs-cap", "max-status-lag"],
-      type: "string",
-      description:
-        "Optional guardrail for maximum attestation lag in seconds. Leave empty to use the module default."
     })
     .option("json", {
       type: "boolean",
@@ -1078,7 +1071,6 @@ const ensureAcceptedCurrency = async ({
         ownerCapId: inputs.ownerCapId,
         maxPriceAgeSecsCap: inputs.maxPriceAgeSecsCap,
         maxConfidenceRatioBpsCap: inputs.maxConfidenceRatioBpsCap,
-        maxPriceStatusLagSecsCap: inputs.maxPriceStatusLagSecsCap,
         gasBudget
       })
   })
@@ -1138,10 +1130,6 @@ const normalizeAcceptedCurrencyInputs = async ({
     maxConfidenceRatioBpsCap: parseOptionalPositiveU16(
       cliArguments.maxConfidenceRatioBpsCap,
       "maxConfidenceRatioBpsCap"
-    ),
-    maxPriceStatusLagSecsCap: parseOptionalPositiveU64(
-      cliArguments.maxPriceStatusLagSecsCap,
-      "maxPriceStatusLagSecsCap"
     )
   }
 }
