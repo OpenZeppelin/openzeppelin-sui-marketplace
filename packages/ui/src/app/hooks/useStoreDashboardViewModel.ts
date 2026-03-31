@@ -3,17 +3,13 @@
 import { useCurrentAccount } from "@mysten/dapp-kit"
 import { normalizeSuiAddress } from "@mysten/sui/utils"
 import type { AcceptedCurrencySummary } from "@sui-oracle-market/domain-core/models/currency"
-import type {
-  DiscountTemplateSummary,
-  DiscountTicketDetails
-} from "@sui-oracle-market/domain-core/models/discount"
+import type { DiscountTemplateSummary } from "@sui-oracle-market/domain-core/models/discount"
 import type { ItemListingSummary } from "@sui-oracle-market/domain-core/models/item-listing"
 import { useCallback, useMemo, useState } from "react"
 import { CONTRACT_PACKAGE_ID_NOT_DEFINED } from "../config/network"
 import { buildDiscountTemplateLookup } from "../helpers/discountTemplates"
 import { resolveConfiguredId } from "../helpers/network"
 import type { PurchaseSuccessPayload } from "./useBuyFlowModalState"
-import { useClaimDiscountTicketAction } from "./useClaimDiscountTicketAction"
 import { useShopDashboardData } from "./useShopDashboardData"
 
 type DashboardModalState = {
@@ -69,7 +65,6 @@ export const useStoreDashboardViewModel = ({
     upsertItemListing,
     upsertPurchasedItem,
     upsertDiscountTemplate,
-    upsertDiscountTicket,
     removeItemListing,
     removeAcceptedCurrency
   } = useShopDashboardData({
@@ -96,24 +91,6 @@ export const useStoreDashboardViewModel = ({
     () => buildDiscountTemplateLookup(storefront.discountTemplates),
     [storefront.discountTemplates]
   )
-
-  const handleDiscountTicketClaimed = useCallback(
-    (ticket?: DiscountTicketDetails) => {
-      if (ticket) {
-        upsertDiscountTicket(ticket)
-      } else {
-        refreshWallet()
-      }
-      refreshStorefront()
-    },
-    [refreshStorefront, refreshWallet, upsertDiscountTicket]
-  )
-
-  const { claimingTemplateId, isClaiming, handleClaimDiscount } =
-    useClaimDiscountTicketAction({
-      shopId,
-      onClaimed: handleDiscountTicketClaimed
-    })
 
   const openBuyModal = useCallback((listing: ItemListingSummary) => {
     setModalState((previous) => ({
@@ -316,9 +293,6 @@ export const useStoreDashboardViewModel = ({
     canManageListings: Boolean(hasShopConfig && isShopOwner),
     canManageCurrencies: Boolean(hasShopConfig && isShopOwner),
     canManageDiscounts: Boolean(hasShopConfig && isShopOwner),
-    claimDiscountTicket: handleClaimDiscount,
-    claimingTemplateId,
-    isClaiming,
     discountTemplateLookup,
     modalState,
     openBuyModal,

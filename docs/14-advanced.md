@@ -136,7 +136,7 @@ public fun buy_item<TItem: store, TCoin>(
 ```
 Shared: Shop, DiscountTemplate
 Shop table entries: listings[ID] -> ItemListing, accepted_currencies[TypeName] -> AcceptedCurrency
-Owned: ShopOwnerCap, DiscountTicket, ShopItem
+Owned: ShopOwnerCap, ShopItem
 ```
 
 ## 10. Further reading (Sui docs)

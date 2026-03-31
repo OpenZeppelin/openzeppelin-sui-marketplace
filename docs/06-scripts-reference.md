@@ -306,19 +306,6 @@ Owner scripts default `--shop-package-id`, `--shop-id`, and `--owner-cap-id` fro
 - Flags:
 	- `--shop-id <id>`: shop to inspect; defaults to the latest Shop artifact.
 
-### `pnpm script buyer:discount-ticket:list`
-- Lists DiscountTickets owned by an address (default: configured account) with optional shop filtering.
-- Flags:
-	- `--address <0x...>`: owner address to list; defaults to configured account.
-	- `--shop-package-id <id>`: `sui_oracle_market` package ID for type filtering; inferred from artifacts when omitted.
-	- `--shop-id <id>`: optional shop object ID filter.
-
-### `pnpm script buyer:discount-ticket:claim`
-- Claims a single-use DiscountTicket from a DiscountTemplate using the on-chain clock.
-- Flags:
-	- `--discount-template-id <id>`: template object ID to claim from (required).
-	- `--shop-id <id>`: shop object ID (optional; inferred from artifacts when omitted).
-
 ### `pnpm script buyer:buy`
 - Executes checkout with oracle guardrails and optional discounts.
 - Flags:
@@ -328,12 +315,10 @@ Owner scripts default `--shop-package-id`, `--shop-id`, and `--owner-cap-id` fro
 	- `--payment-coin-object-id <id>`: specific Coin object ID to use; otherwise the script picks the richest owned coin of that type.
 	- `--mint-to <0x...>`: address that receives the ShopItem receipt (defaults to signer); redeeming the receipt for the actual item happens in a separate flow.
 	- `--refund-to <0x...>`: address that receives any refund change (defaults to signer).
-	- `--discount-ticket-id <id>`: redeem an existing DiscountTicket during checkout.
-	- `--discount-template-id <id>` / `--claim-discount`: claim + redeem a ticket atomically in one PTB.
+	- `--discount-template-id <id>`: apply an existing discount template during checkout.
 	- `--max-price-age-secs <u64>` / `--max-confidence-ratio-bps <u64>`: tighter oracle guardrails (cannot exceed per-currency caps).
 	- `--skip-price-update`: skip Hermes price refresh (not recommended on shared networks).
 	- `--hermes-url <url>`: override the Hermes endpoint for price updates.
-	- Note: `--claim-discount` and `--discount-ticket-id` are mutually exclusive.
 
 ### `pnpm script buyer:buy:list`
 - Lists `ShopItem` receipts owned by an address (default: configured account) with optional shop filtering.
