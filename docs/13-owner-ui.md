@@ -40,7 +40,7 @@ pnpm ui dev
 6. **Create discount template** -> `shop::create_discount_template`
    - UI: `packages/ui/src/app/components/AddDiscountModal.tsx`
    - Hook: `packages/ui/src/app/hooks/useAddDiscountModalState.ts`
-7. **Remove discount template** -> `shop::prune_discount_claims` + marker removal
+7. **Remove/disable discount template** -> `shop::remove_discount_template` / `shop::toggle_discount_template`
    - UI: `packages/ui/src/app/components/RemoveDiscountModal.tsx`
    - Hook: `packages/ui/src/app/hooks/useRemoveDiscountModalState.ts`
 

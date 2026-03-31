@@ -10,7 +10,7 @@ import { promisify } from "node:util"
 
 const execFileAsync = promisify(execFile)
 
-const version = process.env.SUI_CLI_VERSION || "1.63.0"
+const version = process.env.SUI_CLI_VERSION || "1.67.3"
 const installDir =
   process.env.SUI_CLI_INSTALL_DIR ||
   path.join(process.env.HOME ?? process.cwd(), ".local", "bin")

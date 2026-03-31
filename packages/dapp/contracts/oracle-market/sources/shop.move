@@ -33,7 +33,7 @@ use sui_oracle_market::events;
 //   docs/08-listings-receipts.md, docs/10-discounts-tickets.md, docs/16-object-ownership.md
 // - Capability-based auth (ShopOwnerCap): admin entry points require the capability object, not
 //   ctx.sender() checks. This replaces Solidity modifiers. Docs: docs/07-shop-capabilities.md
-// - Table collections (listings + accepted currencies + discount templates + per-template claimers):
+// - Table collections (listings + accepted currencies + discount templates):
 //   typed dynamic collections keep config under `Shop` without exposing
 //   listings/currencies/templates as standalone shared objects.
 // - Type tags and TypeName: item and coin types are recorded as TypeName for runtime checks,
@@ -138,8 +138,6 @@ const EInvalidGuardrailCap: vector<u8> = b"invalid guardrail cap";
 #[error]
 const ETemplateFinalized: vector<u8> = b"template finalized";
 #[error]
-const EPriceStatusNotTrading: vector<u8> = b"price status not trading";
-#[error]
 const EItemTypeMismatch: vector<u8> = b"item type mismatch";
 #[error]
 const EUnsupportedCurrencyDecimals: vector<u8> = b"unsupported currency decimals";
@@ -160,8 +158,6 @@ const MAX_DECIMAL_POWER: u64 = 24;
 /// Reject price feeds with sigma/mu above 10%.
 const DEFAULT_MAX_CONFIDENCE_RATIO_BPS: u16 = 1_000;
 const PYTH_PRICE_IDENTIFIER_LENGTH: u64 = 32;
-/// Allow small attestation/publish skew without halting checkout.
-const DEFAULT_MAX_PRICE_STATUS_LAG_SECS: u64 = 5;
 
 /// Claims and returns the module's Publisher object during publish.
 public struct SHOP has drop {}
@@ -249,8 +245,6 @@ public struct AcceptedCurrency has drop, store {
     max_price_age_secs_cap: u64,
     /// Upper bound on caller-provided confidence override.
     max_confidence_ratio_bps_cap: u16,
-    /// Upper bound on publish/attestation lag override.
-    max_price_status_lag_secs_cap: u64,
 }
 
 /// Discount rules mirror the spec: fixed (USD cents) or percentage basis points off.
@@ -539,7 +533,7 @@ public fun remove_item_listing(shop: &mut Shop, owner_cap: &ShopOwnerCap, listin
 ///   bytes and the Pyth object ID to defend against spoofed inputs. This reduces reliance on
 ///   off-chain metadata, but the caller still must provide the correct on-chain object.
 /// - Sellers can optionally tighten oracle guardrails per currency (`max_price_age_secs_cap`,
-///   `max_confidence_ratio_bps_cap`, `max_price_status_lag_secs_cap`). Buyers may only tighten
+///   `max_confidence_ratio_bps_cap`). Buyers may only tighten
 ///   `max_price_age_secs`/`max_confidence_ratio_bps` further--never loosen.
 public fun add_accepted_currency<TCoin>(
     shop: &mut Shop,
@@ -550,7 +544,6 @@ public fun add_accepted_currency<TCoin>(
     pyth_object_id: ID,
     max_price_age_secs_cap: Option<u64>,
     max_confidence_ratio_bps_cap: Option<u16>,
-    max_price_status_lag_secs_cap: Option<u64>,
 ) {
     assert_owner_cap!(shop, owner_cap);
 
@@ -568,10 +561,6 @@ public fun add_accepted_currency<TCoin>(
         max_confidence_ratio_bps_cap,
         DEFAULT_MAX_CONFIDENCE_RATIO_BPS,
     );
-    let status_lag_cap = resolve_guardrail_cap!(
-        max_price_status_lag_secs_cap,
-        DEFAULT_MAX_PRICE_STATUS_LAG_SECS,
-    );
 
     let accepted_currency = new_accepted_currency(
         feed_id,
@@ -580,7 +569,6 @@ public fun add_accepted_currency<TCoin>(
         symbol,
         age_cap,
         confidence_cap,
-        status_lag_cap,
     );
     let pyth_object_id = accepted_currency.pyth_object_id;
     shop.accepted_currencies.add(coin_type, accepted_currency);
@@ -634,9 +622,8 @@ fun create_discount_template_core(
 ///
 /// Templates are stored in the shop's `discount_templates: Table<ID, DiscountTemplate>` collection.
 /// Admin functions enforce `ShopOwnerCap` checks when creating/updating/toggling templates, and
-/// templates remain addressable by `ID` for UIs. Claims are tracked in each template's
-/// `claims_by_claimer: Table<address, bool>` map to enforce one-claim-per-address. Callers send primitive args
-/// (`rule_kind` of `0 = fixed` or `1 = percent`), but we immediately convert them into the strongly
+/// templates remain addressable by `ID` for UIs.
+/// Callers send primitive args (`rule_kind` of `0 = fixed` or `1 = percent`), but we immediately convert them into the strongly
 /// typed `DiscountRule` before persisting. For `Fixed` rules the `rule_value` is denominated in USD
 /// cents to match listing prices.
 /// Sui mindset:
@@ -866,12 +853,6 @@ public fun buy_item_with_discount<TItem: store, TCoin>(
     let discount_template = shop.borrow_discount_template_mut(discount_template_id);
     assert_discount_redemption_allowed!(discount_template, listing_id, now);
 
-    assert!(discount_template.active, ETemplateInactive);
-    assert_template_in_time_window!(discount_template, now);
-    discount_template.max_redemptions.do_ref!(|max_redemptions| {
-        assert!(discount_template.redemptions < *max_redemptions, ETemplateMaxedOut);
-    });
-
     discount_template.redemptions = discount_template.redemptions + 1;
     let discounted_price_usd_cents = discount_template
         .rule
@@ -928,7 +909,6 @@ fun new_accepted_currency(
     symbol: String,
     max_price_age_secs_cap: u64,
     max_confidence_ratio_bps_cap: u16,
-    max_price_status_lag_secs_cap: u64,
 ): AcceptedCurrency {
     assert_supported_decimals!(decimals);
 
@@ -939,7 +919,6 @@ fun new_accepted_currency(
         symbol,
         max_price_age_secs_cap,
         max_confidence_ratio_bps_cap,
-        max_price_status_lag_secs_cap,
     }
 }
 
@@ -1187,10 +1166,6 @@ fun process_purchase<TItem: store, TCoin>(
 
     let accepted_currency = shop.borrow_registered_accepted_currency(coin_type);
     assert_price_info_matches_currency!(accepted_currency, price_info_object);
-    assert_price_status_trading_for_max_lag(
-        price_info_object,
-        accepted_currency.max_price_status_lag_secs_cap,
-    );
     let quote_amount = accepted_currency.quote_amount_with_guardrails(
         price_info_object,
         discounted_price_usd_cents,
@@ -1660,24 +1635,6 @@ macro fun assert_price_info_matches_currency(
     );
 }
 
-macro fun assert_price_status_trading(
-    $price_info_object: &price_info::PriceInfoObject,
-    $max_price_status_lag_secs: u64,
-) {
-    let price_info_object = $price_info_object;
-    let max_price_status_lag_secs = $max_price_status_lag_secs;
-    let price_info = price_info::get_price_info_from_price_info_object(
-        price_info_object,
-    );
-    let attestation_time = price_info.get_attestation_time();
-    let current_price = price_info.get_price_feed().get_price();
-    let publish_time = current_price.get_timestamp();
-    // Treat feeds with stale attestations as unavailable even if Pyth doesn't expose an explicit status.
-    assert!(attestation_time >= publish_time, EPriceStatusNotTrading);
-    let attestation_lag_secs = attestation_time - publish_time;
-    assert!(attestation_lag_secs <= max_price_status_lag_secs, EPriceStatusNotTrading);
-}
-
 macro fun assert_template_belongs_to_shop($shop: &Shop, $discount_template_id: ID) {
     let shop = $shop;
     let discount_template_id = $discount_template_id;
@@ -1721,14 +1678,6 @@ macro fun assert_spotlight_template_matches_listing(
             assert!(*applies_to_listing == listing_id, ESpotlightTemplateListingMismatch);
         });
     });
-}
-
-/// Asserts that the feed attestation lag is within `max_price_status_lag_secs`.
-public(package) fun assert_price_status_trading_for_max_lag(
-    price_info_object: &price_info::PriceInfoObject,
-    max_price_status_lag_secs: u64,
-) {
-    assert_price_status_trading!(price_info_object, max_price_status_lag_secs);
 }
 
 // === View helpers ===
@@ -1819,11 +1768,6 @@ public fun accepted_currency_max_confidence_ratio_bps_cap(currency: &AcceptedCur
     currency.max_confidence_ratio_bps_cap
 }
 
-/// Returns the seller cap for maximum attestation lag in seconds.
-public fun accepted_currency_max_price_status_lag_secs_cap(currency: &AcceptedCurrency): u64 {
-    currency.max_price_status_lag_secs_cap
-}
-
 /// Returns the discount template for `template_id`.
 public fun discount_template(shop: &Shop, template_id: ID): &DiscountTemplate {
     shop.borrow_discount_template(template_id)
@@ -1876,10 +1820,6 @@ public fun quote_amount_for_price_info_object<TCoin>(
     let coin_type = currency_type<TCoin>();
     let accepted_currency = shop.borrow_registered_accepted_currency(coin_type);
     assert_price_info_matches_currency!(accepted_currency, price_info_object);
-    assert_price_status_trading_for_max_lag(
-        price_info_object,
-        accepted_currency.max_price_status_lag_secs_cap,
-    );
     // Entry-only quote helper; clients call via dev-inspect instead of storing quotes on-chain.
     accepted_currency.quote_amount_with_guardrails(
         price_info_object,

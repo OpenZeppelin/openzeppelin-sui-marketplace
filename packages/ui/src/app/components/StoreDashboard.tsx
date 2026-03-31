@@ -1,10 +1,7 @@
 "use client"
 
 import type { AcceptedCurrencySummary } from "@sui-oracle-market/domain-core/models/currency"
-import type {
-  DiscountTemplateSummary,
-  DiscountTicketDetails
-} from "@sui-oracle-market/domain-core/models/discount"
+import type { DiscountTemplateSummary } from "@sui-oracle-market/domain-core/models/discount"
 import type { ItemListingSummary } from "@sui-oracle-market/domain-core/models/item-listing"
 import type { ShopItemReceiptSummary } from "@sui-oracle-market/domain-core/models/shop-item"
 import clsx from "clsx"
@@ -64,7 +61,6 @@ const deriveTemplateStatusFromClock = ({
   const startsAt = parseOptionalBigInt(template.startsAt)
   const expiresAt = parseOptionalBigInt(template.expiresAt)
   const maxRedemptions = parseOptionalBigInt(template.maxRedemptions)
-  const claimsIssued = parseOptionalBigInt(template.claimsIssued) ?? 0n
   const redemptions = parseOptionalBigInt(template.redemptions) ?? 0n
 
   if (expiresAt !== undefined && nowSeconds >= expiresAt) return "expired"
@@ -72,7 +68,7 @@ const deriveTemplateStatusFromClock = ({
   if (
     maxRedemptions !== undefined &&
     maxRedemptions > 0n &&
-    (claimsIssued >= maxRedemptions || redemptions >= maxRedemptions)
+    redemptions >= maxRedemptions
   ) {
     return "maxed"
   }
@@ -629,38 +625,22 @@ const PurchasedItemsPanel = ({
 )
 
 const DiscountsPanel = ({
-  discountTickets,
   discountTemplates,
-  templateLookup,
   storefrontStatus,
   storefrontError,
   clockTimestampMs,
-  walletStatus,
-  walletError,
   shopConfigured,
-  walletConfigured,
   canManageDiscounts,
-  onClaimDiscount,
-  claimingTemplateId,
-  isClaiming,
   onAddDiscount,
   onRemoveDiscount,
   explorerUrl
 }: {
-  discountTickets: DiscountTicketDetails[]
   discountTemplates: DiscountTemplateSummary[]
-  templateLookup: Record<string, DiscountTemplateSummary>
   storefrontStatus: PanelStatus["status"]
   storefrontError?: string
   clockTimestampMs?: number
-  walletStatus: PanelStatus["status"]
-  walletError?: string
   shopConfigured: boolean
-  walletConfigured: boolean
   canManageDiscounts: boolean
-  onClaimDiscount?: (template: DiscountTemplateSummary) => void
-  claimingTemplateId?: string
-  isClaiming?: boolean
   onAddDiscount?: () => void
   onRemoveDiscount?: (template: DiscountTemplateSummary) => void
   explorerUrl?: string
@@ -670,7 +650,7 @@ const DiscountsPanel = ({
   return (
     <Panel
       title="Discounts"
-      subtitle="Templates / Tickets"
+      subtitle="Templates"
       headerAction={
         canManageDiscounts ? (
           <Button variant="primary" size="compact" onClick={onAddDiscount}>
@@ -701,49 +681,17 @@ const DiscountsPanel = ({
                       template,
                       nowSeconds
                     })
-                    const hasTicket = discountTickets.some(
-                      (ticket) =>
-                        ticket.discountTemplateId ===
-                        template.discountTemplateId
-                    )
-                    const isTemplateActive = templateStatus === "active"
-                    const isClaimingTemplate =
-                      isClaiming === true &&
-                      claimingTemplateId === template.discountTemplateId
                     const showDisable = canManageDiscounts
-                    const claimBlockingReason = !onClaimDiscount
-                      ? "Claim action unavailable."
-                      : isClaimingTemplate
-                        ? "Claiming in progress."
-                        : isClaiming === true
-                          ? "Another claim is already in progress."
-                          : !isTemplateActive
-                            ? `Template is ${templateStatus}.`
-                            : hasTicket
-                              ? "This wallet already claimed the discount."
-                              : undefined
-                    const isClaimDisabled =
-                      !walletConfigured || Boolean(claimBlockingReason)
                     const actionAlignment = showDisable
                       ? "justify-between"
                       : "justify-end"
-                    const claimLabel = isClaimingTemplate
-                      ? "Claiming..."
-                      : hasTicket
-                        ? "Claimed"
-                        : "Claim"
-                    const claimTitle = walletConfigured
-                      ? claimBlockingReason
-                      : undefined
-                    const isClaimable = !isClaimDisabled
                     return (
                       <div
                         key={template.discountTemplateId}
                         className={clsx(
                           "flex h-full flex-col rounded-xl border border-slate-300/80 bg-white/95 p-4 shadow-[0_12px_30px_-22px_rgba(15,23,42,0.35)] transition dark:border-slate-50/25 dark:bg-slate-950/60",
-                          isClaimable ? "" : "opacity-60"
+                          templateStatus === "active" ? "" : "opacity-75"
                         )}
-                        title={claimTitle}
                       >
                         <div className="flex flex-1 flex-col gap-3">
                           <div className="flex items-start justify-between gap-3">
@@ -822,15 +770,6 @@ const DiscountsPanel = ({
                                 {template.activeFlag ? "Disable" : "Disabled"}
                               </Button>
                             ) : undefined}
-                            <Button
-                              variant="primary"
-                              size="compact"
-                              onClick={() => onClaimDiscount?.(template)}
-                              disabled={isClaimDisabled}
-                              title={claimTitle}
-                            >
-                              {claimLabel}
-                            </Button>
                           </div>
                         </div>
                       </div>
@@ -839,73 +778,6 @@ const DiscountsPanel = ({
                 </div>
               )
             })}
-          </div>
-          <div className="space-y-3">
-            <div className="text-[0.6rem] font-semibold uppercase tracking-[0.22em] text-slate-500 dark:text-slate-200/60">
-              Tickets
-            </div>
-            {!walletConfigured ? (
-              <div className="text-sm text-slate-500 dark:text-slate-200/70">
-                Connect a wallet to view owned discount tickets.
-              </div>
-            ) : (
-              renderPanelBody({
-                status: walletStatus,
-                error: walletError,
-                isEmpty: discountTickets.length === 0,
-                emptyMessage: "No discount tickets held by this wallet.",
-                children: (
-                  <div className="space-y-3">
-                    {discountTickets.map((ticket) => {
-                      const template = templateLookup[ticket.discountTemplateId]
-                      return (
-                        <div
-                          key={ticket.discountTicketId}
-                          className="rounded-xl border border-slate-300/80 bg-white/95 p-4 shadow-[0_12px_30px_-22px_rgba(15,23,42,0.35)] dark:border-slate-50/25 dark:bg-slate-950/60"
-                        >
-                          <div className="flex flex-col gap-3">
-                            <div className="flex items-start justify-between gap-3">
-                              <div className="min-w-0">
-                                <div className="text-lg font-semibold text-sds-dark dark:text-sds-light">
-                                  {template?.ruleDescription ||
-                                    "Discount ticket"}
-                                </div>
-                                {ticket.listingId ? (
-                                  <CopyableId
-                                    value={ticket.listingId}
-                                    displayValue={`Applies to listing ${shortenId(
-                                      ticket.listingId
-                                    )}`}
-                                    title="Copy listing id"
-                                    className="mt-1 w-full justify-start text-sm font-semibold text-slate-500 dark:text-slate-200/70"
-                                    valueClassName="truncate font-semibold text-slate-500 dark:text-slate-200/70"
-                                    showExplorer={false}
-                                  />
-                                ) : (
-                                  <div className="mt-1 text-sm font-semibold text-slate-500 dark:text-slate-200/70">
-                                    Applies to any listing
-                                  </div>
-                                )}
-                              </div>
-                              {!canManageDiscounts ? (
-                                <span className="text-xs uppercase tracking-[0.12em] text-slate-500 dark:text-slate-200/60">
-                                  {template?.status || "active"}
-                                </span>
-                              ) : undefined}
-                            </div>
-                            <CopyableId
-                              value={ticket.discountTicketId}
-                              label="Object ID"
-                              explorerUrl={explorerUrl}
-                            />
-                          </div>
-                        </div>
-                      )
-                    })}
-                  </div>
-                )
-              })
-            )}
           </div>
         </div>
       )}
@@ -935,9 +807,6 @@ const StoreDashboard = ({
     canManageListings,
     canManageCurrencies,
     canManageDiscounts,
-    claimDiscountTicket,
-    claimingTemplateId,
-    isClaiming,
     discountTemplateLookup,
     modalState,
     openBuyModal,
@@ -1003,20 +872,12 @@ const StoreDashboard = ({
           explorerUrl={explorerUrl}
         />
         <DiscountsPanel
-          discountTickets={wallet.discountTickets}
           discountTemplates={storefront.discountTemplates}
-          templateLookup={discountTemplateLookup}
           storefrontStatus={storefront.status}
           storefrontError={storefront.error}
           clockTimestampMs={storefront.clockTimestampMs}
-          walletStatus={wallet.status}
-          walletError={wallet.error}
           shopConfigured={hasShopConfig}
-          walletConfigured={hasWalletConfig}
           canManageDiscounts={canManageDiscounts}
-          onClaimDiscount={claimDiscountTicket}
-          claimingTemplateId={claimingTemplateId}
-          isClaiming={isClaiming}
           onAddDiscount={openAddDiscountModal}
           onRemoveDiscount={openRemoveDiscountModal}
           explorerUrl={explorerUrl}
@@ -1031,7 +892,6 @@ const StoreDashboard = ({
         listing={modalState.activeListing ?? undefined}
         acceptedCurrencies={storefront.acceptedCurrencies}
         discountTemplates={storefront.discountTemplates}
-        discountTickets={wallet.discountTickets}
       />
 
       <AddItemModal

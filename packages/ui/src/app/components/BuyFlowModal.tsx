@@ -2,10 +2,7 @@
 
 import type { SuiTransactionBlockResponse } from "@mysten/sui/client"
 import type { AcceptedCurrencySummary } from "@sui-oracle-market/domain-core/models/currency"
-import type {
-  DiscountTemplateSummary,
-  DiscountTicketDetails
-} from "@sui-oracle-market/domain-core/models/discount"
+import type { DiscountTemplateSummary } from "@sui-oracle-market/domain-core/models/discount"
 import type { ItemListingSummary } from "@sui-oracle-market/domain-core/models/item-listing"
 import { mapOwnerToLabel } from "@sui-oracle-market/tooling-core/object-info"
 import { summarizeGasUsed } from "@sui-oracle-market/tooling-core/transactions"
@@ -368,8 +365,7 @@ const BuyFlowModal = ({
   shopId,
   listing,
   acceptedCurrencies,
-  discountTemplates,
-  discountTickets
+  discountTemplates
 }: {
   open: boolean
   onClose: () => void
@@ -378,7 +374,6 @@ const BuyFlowModal = ({
   listing?: ItemListingSummary
   acceptedCurrencies: AcceptedCurrencySummary[]
   discountTemplates: DiscountTemplateSummary[]
-  discountTickets: DiscountTicketDetails[]
 }) => {
   const {
     explorerUrl,
@@ -421,8 +416,7 @@ const BuyFlowModal = ({
     shopId,
     listing,
     acceptedCurrencies,
-    discountTemplates,
-    discountTickets
+    discountTemplates
   })
   const errorState =
     transactionState.status === "error" ? transactionState : undefined
@@ -639,7 +633,7 @@ const BuyFlowModal = ({
             {hasDiscountOptions ? (
               <ModalSection
                 title="Discounts"
-                subtitle="Apply a ticket or claim a spotlighted discount when available."
+                subtitle="Apply an active discount template when available."
               >
                 <div className="space-y-3">
                   {discountOptions.map((option) => {
