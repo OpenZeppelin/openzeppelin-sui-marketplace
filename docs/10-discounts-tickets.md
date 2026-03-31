@@ -1,4 +1,4 @@
-# 10 - Discounts (Templates)
+# 10 - Discounts
 
 **Path:** [Learning Path](./) > 10 Discounts
 

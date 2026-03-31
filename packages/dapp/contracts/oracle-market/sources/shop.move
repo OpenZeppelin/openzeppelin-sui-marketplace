@@ -854,12 +854,6 @@ public fun buy_item_with_discount<TItem: store, TCoin>(
     let discount_template = shop.borrow_discount_template_mut(discount_template_id);
     assert_discount_redemption_allowed!(discount_template, listing_id, now);
 
-    assert!(discount_template.active, ETemplateInactive);
-    assert_template_in_time_window!(discount_template, now);
-    discount_template.max_redemptions.do_ref!(|max_redemptions| {
-        assert!(discount_template.redemptions < *max_redemptions, ETemplateMaxedOut);
-    });
-
     discount_template.redemptions = discount_template.redemptions + 1;
     let discounted_price_usd_cents = discount_template
         .rule
