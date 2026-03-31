@@ -87,7 +87,6 @@ runSuiScript(
       ownerCapId: inputs.ownerCapId,
       maxPriceAgeSecsCap: inputs.maxPriceAgeSecsCap,
       maxConfidenceRatioBpsCap: inputs.maxConfidenceRatioBpsCap,
-      maxPriceStatusLagSecsCap: inputs.maxPriceStatusLagSecsCap,
       gasBudget
     })
 
@@ -182,12 +181,6 @@ runSuiScript(
       description:
         "Optional guardrail for maximum confidence ratio (basis points). Leave empty to use the module default."
     })
-    .option("maxPriceStatusLagSecsCap", {
-      alias: ["max-price-status-lag-secs-cap", "max-status-lag"],
-      type: "string",
-      description:
-        "Optional guardrail for maximum attestation lag in seconds. Leave empty to use the module default."
-    })
     .option("devInspect", {
       alias: ["dev-inspect", "debug"],
       type: "boolean",
@@ -219,7 +212,6 @@ const normalizeInputs = async (
     currencyId?: string
     maxPriceAgeSecsCap?: string
     maxConfidenceRatioBpsCap?: string
-    maxPriceStatusLagSecsCap?: string
     devInspect?: boolean
     dryRun?: boolean
     json?: boolean
@@ -266,10 +258,6 @@ const normalizeInputs = async (
     maxConfidenceRatioBpsCap: parseOptionalPositiveU16(
       cliArguments.maxConfidenceRatioBpsCap,
       "maxConfidenceRatioBpsCap"
-    ),
-    maxPriceStatusLagSecsCap: parseOptionalPositiveU64(
-      cliArguments.maxPriceStatusLagSecsCap,
-      "maxPriceStatusLagSecsCap"
     )
   }
 }

@@ -16,7 +16,6 @@ import {
   getAcceptedCurrencySummary,
   MAX_CONFIDENCE_RATIO_BPS_CAP,
   MAX_PRICE_AGE_SECS_CAP,
-  MAX_PRICE_STATUS_LAG_SECS_CAP,
   normalizeCoinType,
   parseAcceptedCurrencyBpsValue,
   parseAcceptedCurrencyGuardrailValue
@@ -68,7 +67,6 @@ type CurrencyFormState = {
   currencyObjectId: string
   maxPriceAgeSecsCap: string
   maxConfidenceRatioBpsCap: string
-  maxPriceStatusLagSecsCap: string
 }
 
 type CurrencyInputs = {
@@ -79,7 +77,6 @@ type CurrencyInputs = {
   currencyObjectId?: string
   maxPriceAgeSecsCap?: bigint
   maxConfidenceRatioBpsCap?: number
-  maxPriceStatusLagSecsCap?: bigint
 }
 
 export type CurrencyTransactionSummary = Omit<
@@ -104,8 +101,7 @@ const emptyFormState = (): CurrencyFormState => ({
   priceInfoObjectId: "",
   currencyObjectId: "",
   maxPriceAgeSecsCap: "",
-  maxConfidenceRatioBpsCap: "",
-  maxPriceStatusLagSecsCap: ""
+  maxConfidenceRatioBpsCap: ""
 })
 
 type CurrencyFieldErrors = Partial<Record<keyof CurrencyFormState, string>>
@@ -151,13 +147,6 @@ const buildCurrencyFieldErrors = (
   if (confidenceResult.error)
     errors.maxConfidenceRatioBpsCap = confidenceResult.error
 
-  const statusLagResult = parseAcceptedCurrencyGuardrailValue(
-    formState.maxPriceStatusLagSecsCap,
-    "Max status lag"
-  )
-  if (statusLagResult.error)
-    errors.maxPriceStatusLagSecsCap = statusLagResult.error
-
   return errors
 }
 
@@ -186,17 +175,6 @@ const buildCurrencyFieldWarnings = (
     confidenceResult.value > MAX_CONFIDENCE_RATIO_BPS_CAP
   ) {
     warnings.maxConfidenceRatioBpsCap = `Will be clamped to ${MAX_CONFIDENCE_RATIO_BPS_CAP.toString()} bps.`
-  }
-
-  const statusLagResult = parseAcceptedCurrencyGuardrailValue(
-    formState.maxPriceStatusLagSecsCap,
-    "Max status lag"
-  )
-  if (
-    statusLagResult.value !== undefined &&
-    statusLagResult.value > MAX_PRICE_STATUS_LAG_SECS_CAP
-  ) {
-    warnings.maxPriceStatusLagSecsCap = `Will be clamped to ${MAX_PRICE_STATUS_LAG_SECS_CAP.toString()} seconds.`
   }
 
   return warnings
@@ -231,10 +209,6 @@ const parseCurrencyInputs = (formState: CurrencyFormState): CurrencyInputs => {
     maxConfidenceRatioBpsCap: parseOptionalPositiveU16(
       trimToOptional(formState.maxConfidenceRatioBpsCap),
       "maxConfidenceRatioBpsCap"
-    ),
-    maxPriceStatusLagSecsCap: parseOptionalPositiveU64(
-      trimToOptional(formState.maxPriceStatusLagSecsCap),
-      "maxPriceStatusLagSecsCap"
     )
   }
 }
@@ -242,7 +216,6 @@ const parseCurrencyInputs = (formState: CurrencyFormState): CurrencyInputs => {
 type GuardrailPreview = {
   maxPriceAgeSecsCap: string
   maxConfidenceRatioBpsCap: string
-  maxPriceStatusLagSecsCap: string
 }
 
 type AddCurrencyModalState = {
@@ -368,16 +341,9 @@ export const useAddCurrencyModalState = ({
         : "Default",
       maxConfidenceRatioBpsCap: formState.maxConfidenceRatioBpsCap.trim()
         ? formState.maxConfidenceRatioBpsCap.trim()
-        : "Default",
-      maxPriceStatusLagSecsCap: formState.maxPriceStatusLagSecsCap.trim()
-        ? formState.maxPriceStatusLagSecsCap.trim()
         : "Default"
     }),
-    [
-      formState.maxConfidenceRatioBpsCap,
-      formState.maxPriceAgeSecsCap,
-      formState.maxPriceStatusLagSecsCap
-    ]
+    [formState.maxConfidenceRatioBpsCap, formState.maxPriceAgeSecsCap]
   )
 
   const isSubmissionPending = isLocalnet
@@ -543,8 +509,7 @@ export const useAddCurrencyModalState = ({
         pythObjectId: priceInfoShared.object.objectId,
         priceInfoObject: priceInfoShared,
         maxPriceAgeSecsCap: currencyInputs.maxPriceAgeSecsCap,
-        maxConfidenceRatioBpsCap: currencyInputs.maxConfidenceRatioBpsCap,
-        maxPriceStatusLagSecsCap: currencyInputs.maxPriceStatusLagSecsCap
+        maxConfidenceRatioBpsCap: currencyInputs.maxConfidenceRatioBpsCap
       })
       addCurrencyTransaction.setSender(walletAddress)
 

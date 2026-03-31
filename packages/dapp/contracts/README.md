@@ -40,7 +40,7 @@ Entry Points At A Glance
 Oracle Guardrails
 -----------------
 - Feed identity is re-validated on-chain: 32-byte `feed_id`, matching `pyth_object_id`, and `PriceInfoObject` contents must align or the call aborts.
-- Guardrails are two-tiered: sellers set caps per currency (`max_price_age_secs_cap`, `max_confidence_ratio_bps_cap`, `max_price_status_lag_secs_cap`), and buyers may only tighten them per call.
+- Guardrails are two-tiered: sellers set caps per currency (`max_price_age_secs_cap`, `max_confidence_ratio_bps_cap`), and buyers may only tighten them per call.
 - Pricing is conservative: quotes use μ-σ and bound confidence ratio (default 10%: `DEFAULT_MAX_CONFIDENCE_RATIO_BPS = 1_000`) before converting USD cents to the payment coin, with overflow checks and a 38-decimal power limit.
 - Status checks require the attestation time to be close to publish time (`DEFAULT_MAX_PRICE_STATUS_LAG_SECS = 5`), treating laggy feeds as unavailable.
 
@@ -135,8 +135,7 @@ add_accepted_currency<USDC>(
     /* feed_id */ feed_id_bytes,
     /* pyth_object_id */ pyth_obj_id,
     /* max_price_age_secs_cap */ none, // Optional tightenings; defaults enforce module caps.
-    /* max_confidence_ratio_bps_cap */ none,
-    /* max_price_status_lag_secs_cap */ none // Allowed attestation/publish skew.
+    /* max_confidence_ratio_bps_cap */ none
 );
 ```
 

@@ -33,7 +33,6 @@ const SHOP_ACCEPTED_CURRENCIES_FIELD = "accepted_currencies"
 
 export const MAX_PRICE_AGE_SECS_CAP = 60n
 export const MAX_CONFIDENCE_RATIO_BPS_CAP = 1_000
-export const MAX_PRICE_STATUS_LAG_SECS_CAP = 5n
 
 export { normalizeCoinType }
 
@@ -108,7 +107,6 @@ export type AcceptedCurrencySummary = {
   pythObjectId?: string
   maxPriceAgeSecsCap?: string
   maxConfidenceRatioBpsCap?: string
-  maxPriceStatusLagSecsCap?: string
 }
 
 export const ensureSignerOwnsCoin = ({
@@ -209,9 +207,6 @@ const buildAcceptedCurrencySummary = ({
     ),
     maxConfidenceRatioBpsCap: formatOptionalNumericValue(
       acceptedCurrencyFields.max_confidence_ratio_bps_cap
-    ),
-    maxPriceStatusLagSecsCap: formatOptionalNumericValue(
-      acceptedCurrencyFields.max_price_status_lag_secs_cap
     )
   }
 }
