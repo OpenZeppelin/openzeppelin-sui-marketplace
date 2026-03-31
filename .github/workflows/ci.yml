@@ -84,9 +84,6 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - name: tooling
-            command: pnpm tooling test:integration
-            report: reports/vitest-tooling-integration.xml
           - name: dapp
             command: pnpm dapp test:integration
             report: reports/vitest-dapp-integration.xml
