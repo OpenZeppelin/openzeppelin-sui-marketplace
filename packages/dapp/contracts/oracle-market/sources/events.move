@@ -90,14 +90,6 @@ public struct AcceptedCoinRemoved has copy, drop {
     accepted_currency_id: ID,
 }
 
-/// Event emitted when a discount ticket is claimed.
-public struct DiscountClaimed has copy, drop {
-    /// Shop that issued the ticket.
-    shop_id: ID,
-    /// Claimed discount ticket ID.
-    discount_id: ID,
-}
-
 /// Event emitted when a discount ticket is redeemed.
 public struct DiscountRedeemed has copy, drop {
     /// Shop where redemption occurred.
@@ -210,14 +202,6 @@ public(package) fun emit_accepted_coin_removed(shop_id: ID, accepted_currency_id
     event::emit(AcceptedCoinRemoved {
         shop_id,
         accepted_currency_id,
-    });
-}
-
-/// Emits a `DiscountClaimed` payload.
-public(package) fun emit_discount_claimed(shop_id: ID, discount_id: ID) {
-    event::emit(DiscountClaimed {
-        shop_id,
-        discount_id,
     });
 }
 
@@ -363,15 +347,6 @@ public(package) fun accepted_coin_removed(
     AcceptedCoinRemoved {
         shop_id,
         accepted_currency_id,
-    }
-}
-
-/// Builds a `DiscountClaimed` payload.
-#[test_only]
-public(package) fun discount_claimed(shop_id: ID, discount_id: ID): DiscountClaimed {
-    DiscountClaimed {
-        shop_id,
-        discount_id,
     }
 }
 
