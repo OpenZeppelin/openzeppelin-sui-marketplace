@@ -274,7 +274,7 @@ export const getShopCreatedSummaries = async ({
     shopPackageId,
     "Shop package ID is required."
   )
-  const eventType = `${normalizedPackageId}::shop::ShopCreatedEvent`
+  const eventType = `${normalizedPackageId}::events::ShopCreated`
   const summaries: ShopCreatedSummary[] = []
   const seen = new Set<string>()
   let cursor: Parameters<SuiClient["queryEvents"]>[0]["cursor"]
