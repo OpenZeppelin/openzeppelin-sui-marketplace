@@ -62,9 +62,6 @@ export const logAcceptedCurrencySummary = (
   logKeyValueGreen("Max-conf-bps")(
     acceptedCurrency.maxConfidenceRatioBpsCap ?? "module default"
   )
-  logKeyValueGreen("Max-status-lag")(
-    acceptedCurrency.maxPriceStatusLagSecsCap ?? "module default"
-  )
   console.log("")
 }
 
