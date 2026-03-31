@@ -226,15 +226,15 @@ const testEnv = createSuiLocalnetTestEnv({
 
 describe("integration flow", () => {
   it("builds and publishes a Move package", async () => {
-    await testEnv.withTestContext("publish-simple-contract", async (context) => {
+    await testEnv.withTestContext("publish-oracle-market", async (context) => {
       const publisher = context.createAccount("publisher")
       await context.fundAccount(publisher, { minimumCoinObjects: 2 })
 
-      const buildOutput = await context.buildMovePackage("simple-contract")
+      const buildOutput = await context.buildMovePackage("oracle-market")
       expect(buildOutput.modules.length).toBeGreaterThan(0)
 
       const artifacts = await context.publishPackage(
-        "simple-contract",
+        "oracle-market",
         publisher,
         { withUnpublishedDependencies: true }
       )
@@ -261,34 +261,34 @@ import { createSuiLocalnetTestEnv } from "_root_package__/tooling-node/testing/e
 const testEnv = createSuiLocalnetTestEnv({ mode: "test", withFaucet: true })
 
 describe("owner scripts", () => {
-  it("runs amm-create and parses JSON output", async () => {
-    await testEnv.withTestContext("owner-amm-create", async (context) => {
+  it("runs shop-create and parses JSON output", async () => {
+    await testEnv.withTestContext("owner-shop-create", async (context) => {
       const publisher = context.createAccount("publisher")
       await context.fundAccount(publisher, { minimumCoinObjects: 2 })
 
       const artifacts = await context.publishPackage(
-        "prop_amm",
+        "oracle-market",
         publisher,
         { withUnpublishedDependencies: true }
       )
       const rootArtifact = pickRootNonDependencyArtifact(artifacts)
 
       const scriptRunner = createSuiScriptRunner(context)
-      const result = await scriptRunner.runOwnerScript("amm-create", {
+      const result = await scriptRunner.runOwnerScript("shop-create", {
         account: publisher,
         args: {
           json: true,
-          ammPackageId: rootArtifact.packageId,
-          pythPriceFeedLabel: "MOCK_SUI_FEED"
+          shopPackageId: rootArtifact.packageId,
+          name: "Test Shop"
         }
       })
 
       expect(result.exitCode).toBe(0)
-      const parsed = parseJsonFromScriptOutput<{ ammConfig?: { configId?: string } }>(
+      const parsed = parseJsonFromScriptOutput<{ shopOverview?: { shopId?: string } }>(
         result.stdout,
-        "amm-create output"
+        "shop-create output"
       )
-      expect(parsed.ammConfig?.configId).toBeTruthy()
+      expect(parsed.shopOverview?.shopId).toBeTruthy()
     })
   })
 })
