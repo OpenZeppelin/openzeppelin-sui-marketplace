@@ -1138,7 +1138,7 @@ fun quote_amount_with_guardrails(
     let now = now_secs(clock);
     assert!(now >= publish_time, EPriceInvalidPublishTime);
     assert!(
-        now <= effective_guardrails.max_price_age_secs + publish_time,
+        now - publish_time <= effective_guardrails.max_price_age_secs,
         EPriceInvalidPublishTime,
     );
     let price = pyth::get_price_no_older_than(
