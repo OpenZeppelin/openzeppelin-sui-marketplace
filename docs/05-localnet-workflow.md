@@ -56,7 +56,7 @@ pnpm install
     - `artifacts`: alias for deployments (kept for compatibility).
 
 Move environments (localnet/devnet/testnet/mainnet):
-- All Move packages include `[environments]` so `--environment <name>` resolves chain IDs consistently.
+- All Move packages include `[environments]` so `--build-env <name>` resolves chain IDs consistently.
 - For localnet, we use `dep-replacements.test-publish` to swap Pyth to the mock package without dev-mode flags.
 - Chain IDs should match `sui client chain-identifier` for each CLI env. If you regenesis localnet, update its entry:
   ```bash
@@ -237,7 +237,7 @@ What it does:
 
 Where to find values:
 - `ITEM_TYPE`: `packages/dapp/deployments/mock.localnet.json` -> `itemTypes[].itemType`
-- `itemListingId`: emitted in `ItemListingAddedEvent` and printed by the script.
+- `itemListingId`: emitted in `ItemListingAdded` and printed by the script.
 - You can list all current IDs with `pnpm script buyer:item-listing:list --shop-id <SHOP_ID>`.
 
 ### 7) Create a discount template

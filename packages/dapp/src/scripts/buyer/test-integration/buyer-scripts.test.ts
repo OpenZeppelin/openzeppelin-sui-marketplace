@@ -40,15 +40,6 @@ type BuyOutput = {
   }
 }
 
-type DiscountTicketClaimOutput = {
-  discountTemplateId?: string
-  claimedTicketId?: string
-  digest?: string
-  transactionSummary?: {
-    status?: string
-  }
-}
-
 const listAcceptedCurrencyCoinTypes = (
   acceptedCurrencies: AcceptedCurrencySummary[] = []
 ) => acceptedCurrencies.map((currency) => currency.coinType)
@@ -323,9 +314,9 @@ describe("buyer scripts integration", () => {
     )
   })
 
-  it("buys with a claimed discount ticket and accepted currency", async () => {
+  it("buys with a discount template and accepted currency", async () => {
     await testEnv.withTestContext(
-      "buyer-buy-discount-ticket",
+      "buyer-buy-template-discount",
       async (context) => {
         const buyer = await createFundedTestAccount(context, {
           label: "buyer-ticket"
@@ -339,7 +330,7 @@ describe("buyer scripts integration", () => {
         } = await createShopWithItemExamplesAndAcceptedCurrencyFixture(
           context,
           {
-            shopName: "Buyer Buy Discount Ticket Integration",
+            shopName: "Buyer Buy Template Discount Integration",
             publisherLabel: "buyer-checkout-owner",
             buyerAddress: buyer.address
           }
@@ -352,34 +343,12 @@ describe("buyer scripts integration", () => {
             publisher,
             shopId,
             itemType,
-            listingName: "Buyer Discount Ticket Car",
+            listingName: "Buyer Template Discount Car",
             price: "100",
             stock: "3",
             ruleKind: "percent",
             value: "15"
           })
-
-        const discountTicketClaimPayload =
-          await runBuyerScriptJson<DiscountTicketClaimOutput>(
-            scriptRunner,
-            "discount-ticket-claim",
-            {
-              account: buyer,
-              args: {
-                shopId,
-                discountTemplateId: discountTemplate.discountTemplateId
-              }
-            }
-          )
-
-        expectSuccessfulTransaction(
-          discountTicketClaimPayload.transactionSummary?.status
-        )
-
-        const discountTicketId = requireDefined(
-          discountTicketClaimPayload.claimedTicketId,
-          "discount-ticket-claim did not return a claimedTicketId."
-        )
 
         const buyPayload = await runBuyerScriptJson<BuyOutput>(
           scriptRunner,
@@ -390,7 +359,7 @@ describe("buyer scripts integration", () => {
               shopId,
               itemListingId: itemListing.itemListingId,
               coinType: acceptedCurrency.coinType,
-              discountTicketId
+              discountTemplateId: discountTemplate.discountTemplateId
             }
           }
         )
@@ -449,7 +418,6 @@ describe("buyer scripts integration", () => {
               shopId,
               itemListingId: itemListing.itemListingId,
               coinType: acceptedCurrency.coinType,
-              claimDiscount: true,
               discountTemplateId: discountTemplate.discountTemplateId
             }
           }

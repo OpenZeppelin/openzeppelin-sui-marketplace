@@ -45,7 +45,7 @@ pnpm script buyer:buy --help
   many dynamic-field children in one go.
 - **Events**: events are typed structs emitted via `event::emit`. Indexers and UIs rely on them
   instead of scanning contract storage arrays.
-  Code: `packages/dapp/contracts/oracle-market/sources/shop.move` (ShopCreated, PurchaseCompleted)
+  Code: `packages/dapp/contracts/oracle-market/sources/events.move` (ShopCreated, PurchaseCompleted)
 - **Object IDs and addresses**: object IDs are addresses (but not every address is an object ID). We
   still convert between `UID` and address forms for events and off-chain tooling via
   `object::uid_to_address` and `object::id_from_address`.
@@ -136,7 +136,7 @@ public fun buy_item<TItem: store, TCoin>(
 ```
 Shared: Shop, DiscountTemplate
 Shop table entries: listings[ID] -> ItemListing, accepted_currencies[TypeName] -> AcceptedCurrency
-Owned: ShopOwnerCap, DiscountTicket, ShopItem
+Owned: ShopOwnerCap, ShopItem
 ```
 
 ## 10. Further reading (Sui docs)

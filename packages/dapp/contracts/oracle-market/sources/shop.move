@@ -13,9 +13,9 @@ use std::type_name::{Self, TypeName};
 use sui::clock;
 use sui::coin;
 use sui::coin_registry;
-use sui::event;
 use sui::package;
 use sui::table::{Self, Table};
+use sui_oracle_market::events;
 
 // === Concepts used in this module (what/why/how) ===
 // - Shared objects (Shop): shared objects are
@@ -28,12 +28,12 @@ use sui::table::{Self, Table};
 //   transfer::share_object.
 //   Docs: docs/07-shop-capabilities.md, docs/08-listings-receipts.md, docs/09-currencies-oracles.md,
 //   docs/10-discounts-tickets.md, docs/16-object-ownership.md
-// - Owned objects (ShopOwnerCap, DiscountTicket, ShopItem): ownership enforces authority or user
+// - Owned objects (ShopOwnerCap, ShopItem): ownership enforces authority or user
 //   assets. Passing an owned object by value is a single-use guarantee. Docs: docs/07-shop-capabilities.md,
 //   docs/08-listings-receipts.md, docs/10-discounts-tickets.md, docs/16-object-ownership.md
 // - Capability-based auth (ShopOwnerCap): admin entry points require the capability object, not
 //   ctx.sender() checks. This replaces Solidity modifiers. Docs: docs/07-shop-capabilities.md
-// - Table collections (listings + accepted currencies + discount templates + per-template claimers):
+// - Table collections (listings + accepted currencies + discount templates):
 //   typed dynamic collections keep config under `Shop` without exposing
 //   listings/currencies/templates as standalone shared objects.
 // - Type tags and TypeName: item and coin types are recorded as TypeName for runtime checks,
@@ -116,8 +116,6 @@ const ETemplateExpired: vector<u8> = b"template expired";
 #[error]
 const ETemplateMaxedOut: vector<u8> = b"template maxed out";
 #[error]
-const EDiscountAlreadyClaimed: vector<u8> = b"discount already claimed";
-#[error]
 const EOutOfStock: vector<u8> = b"out of stock";
 #[error]
 const EPythObjectMismatch: vector<u8> = b"pyth object mismatch";
@@ -130,21 +128,11 @@ const EPriceOverflow: vector<u8> = b"price overflow";
 #[error]
 const EInsufficientPayment: vector<u8> = b"insufficient payment";
 #[error]
-const EDiscountTicketMismatch: vector<u8> = b"discount ticket mismatch";
-#[error]
-const EDiscountTicketOwnerMismatch: vector<u8> = b"discount ticket owner mismatch";
-#[error]
-const EDiscountTicketListingMismatch: vector<u8> = b"discount ticket listing mismatch";
-#[error]
-const EDiscountTicketShopMismatch: vector<u8> = b"discount ticket shop mismatch";
-#[error]
 const EConfidenceIntervalTooWide: vector<u8> = b"confidence interval too wide";
 #[error]
 const EConfidenceExceedsPrice: vector<u8> = b"confidence exceeds price";
 #[error]
 const ESpotlightTemplateListingMismatch: vector<u8> = b"spotlight template listing mismatch";
-#[error]
-const EDiscountClaimsNotPrunable: vector<u8> = b"discount claims not prunable";
 #[error]
 const EInvalidGuardrailCap: vector<u8> = b"invalid guardrail cap";
 #[error]
@@ -159,6 +147,10 @@ const EEmptyShopName: vector<u8> = b"empty shop name";
 const EShopDisabled: vector<u8> = b"shop disabled";
 #[error]
 const EPriceTooStale: vector<u8> = b"price too stale";
+#[error]
+const EDiscountListingMismatch: vector<u8> = b"discount listing mismatch";
+#[error]
+const EInvalidMaxRedemptions: vector<u8> = b"invalid max redemptions";
 
 // === Constants ===
 const CENTS_PER_DOLLAR: u64 = 100;
@@ -270,7 +262,7 @@ public enum DiscountRuleKind has copy, drop {
 }
 
 /// Coupon template for creating discounts tracked under the shop.
-public struct DiscountTemplate has store {
+public struct DiscountTemplate has drop, store {
     /// Template identifier and key in `Shop.discount_templates`.
     id: ID,
     /// Optional listing scope restriction.
@@ -283,320 +275,16 @@ public struct DiscountTemplate has store {
     expires_at: Option<u64>,
     /// Optional global redemption cap.
     max_redemptions: Option<u64>,
-    /// Number of tickets claimed from this template.
-    claims_issued: u64,
-    /// Number of tickets redeemed in checkout.
+    /// Number of discounts redeemed in checkout.
     redemptions: u64,
     /// Owner-controlled enable/disable flag.
     active: bool,
-    /// One-claim-per-address marker table used as a hash set (value is always `true`).
-    claims_by_claimer: Table<address, bool>,
-}
-
-/// Discount ticket that future buyers will redeem during purchase flow.
-/// Tickets are owned objects. They can be transferred, but redemption enforces the original claimer
-/// so "transferable" does not mean "redeemable."
-public struct DiscountTicket has key, store {
-    /// Ticket object ID.
-    id: UID,
-    /// Template this ticket redeems against.
-    discount_template_id: ID,
-    /// Shop context captured at claim time.
-    shop_id: ID,
-    /// Optional listing scope captured from template.
-    listing_id: Option<ID>,
-    /// Address authorized to redeem this ticket.
-    claimer: address,
 }
 
 /// Resolved pricing guardrails after capping buyer overrides against seller limits.
-/// `max_price_status_lag_secs_cap` is intentionally not part of this struct because checkout and
-/// quote flows enforce `AcceptedCurrency.max_price_status_lag_secs_cap` directly.
 public struct EffectiveGuardrails has copy, drop {
     max_price_age_secs: u64,
     max_confidence_ratio_bps: u16,
-}
-
-// === Event Definitions ===
-/// Event emitted when a shop is created.
-public struct ShopCreatedEvent has copy, drop {
-    /// Created shop ID.
-    shop_id: ID,
-    /// Created owner capability ID.
-    shop_owner_cap_id: ID,
-}
-
-/// Event emitted when a shop owner is updated.
-public struct ShopOwnerUpdatedEvent has copy, drop {
-    /// Shop whose owner changed.
-    shop_id: ID,
-    /// Owner capability used for the update.
-    shop_owner_cap_id: ID,
-}
-
-/// Event emitted when a shop is disabled.
-public struct ShopDisabledEvent has copy, drop {
-    /// Shop that was disabled.
-    shop_id: ID,
-    /// Owner capability used for disable.
-    shop_owner_cap_id: ID,
-}
-
-/// Event emitted when an item listing is added.
-public struct ItemListingAddedEvent has copy, drop {
-    /// Shop that owns the new listing.
-    shop_id: ID,
-    /// Created listing ID.
-    listing_id: ID,
-}
-
-/// Event emitted when listing stock is updated.
-public struct ItemListingStockUpdatedEvent has copy, drop {
-    /// Shop that owns the listing.
-    shop_id: ID,
-    /// Listing whose stock changed.
-    listing_id: ID,
-}
-
-/// Event emitted when an item listing is removed.
-public struct ItemListingRemovedEvent has copy, drop {
-    /// Shop that owned the removed listing.
-    shop_id: ID,
-    /// Removed listing ID.
-    listing_id: ID,
-}
-
-/// Event emitted when a discount template is created.
-public struct DiscountTemplateCreatedEvent has copy, drop {
-    /// Shop that created the template.
-    shop_id: ID,
-    /// Created template ID.
-    discount_template_id: ID,
-}
-
-/// Event emitted when a discount template is updated.
-public struct DiscountTemplateUpdatedEvent has copy, drop {
-    /// Shop that owns the updated template.
-    shop_id: ID,
-    /// Updated template ID.
-    discount_template_id: ID,
-}
-
-/// Event emitted when a discount template is toggled.
-public struct DiscountTemplateToggledEvent has copy, drop {
-    /// Shop that owns the toggled template.
-    shop_id: ID,
-    /// Toggled template ID.
-    discount_template_id: ID,
-}
-
-/// Event emitted when an accepted coin is added.
-public struct AcceptedCoinAddedEvent has copy, drop {
-    /// Shop that registered the accepted currency.
-    shop_id: ID,
-    /// Pyth price-info object ID bound to the accepted currency.
-    accepted_currency_id: ID,
-}
-
-/// Event emitted when an accepted coin is removed.
-public struct AcceptedCoinRemovedEvent has copy, drop {
-    /// Shop that removed the accepted currency.
-    shop_id: ID,
-    /// Pyth price-info object ID that was deregistered.
-    accepted_currency_id: ID,
-}
-
-/// Event emitted when a discount ticket is claimed.
-public struct DiscountClaimedEvent has copy, drop {
-    /// Shop that issued the ticket.
-    shop_id: ID,
-    /// Claimed discount ticket ID.
-    discount_id: ID,
-}
-
-/// Event emitted when a discount ticket is redeemed.
-public struct DiscountRedeemedEvent has copy, drop {
-    /// Shop where redemption occurred.
-    shop_id: ID,
-    /// Template used for redemption.
-    discount_template_id: ID,
-    /// Redeemed discount ticket ID.
-    discount_id: ID,
-}
-
-/// Event emitted when a purchase completes.
-public struct PurchaseCompletedEvent has copy, drop {
-    /// Shop where checkout completed.
-    shop_id: ID,
-    /// Listing purchased in this checkout.
-    listing_id: ID,
-    /// Accepted currency entry used for pricing.
-    accepted_currency_id: ID,
-    /// Template applied to the purchase, if any.
-    discount_template_id: Option<ID>,
-    /// Newly minted `ShopItem` receipt ID.
-    minted_item_id: ID,
-    /// These checkout values are not persisted on any object and must remain in the event.
-    amount_paid: u64,
-    /// Final price in USD cents after discounts, used for analytics and indexing.
-    discounted_price_usd_cents: u64,
-}
-
-/// Builds a `ShopCreatedEvent` payload.
-public(package) fun new_shop_created_event(shop_id: ID, shop_owner_cap_id: ID): ShopCreatedEvent {
-    ShopCreatedEvent {
-        shop_id,
-        shop_owner_cap_id,
-    }
-}
-
-/// Builds a `ShopOwnerUpdatedEvent` payload.
-public(package) fun new_shop_owner_updated_event(
-    shop_id: ID,
-    shop_owner_cap_id: ID,
-): ShopOwnerUpdatedEvent {
-    ShopOwnerUpdatedEvent {
-        shop_id,
-        shop_owner_cap_id,
-    }
-}
-
-/// Builds a `ShopDisabledEvent` payload.
-public(package) fun new_shop_disabled_event(shop_id: ID, shop_owner_cap_id: ID): ShopDisabledEvent {
-    ShopDisabledEvent {
-        shop_id,
-        shop_owner_cap_id,
-    }
-}
-
-/// Builds an `ItemListingAddedEvent` payload.
-public(package) fun new_item_listing_added_event(
-    shop_id: ID,
-    listing_id: ID,
-): ItemListingAddedEvent {
-    ItemListingAddedEvent {
-        shop_id,
-        listing_id,
-    }
-}
-
-/// Builds an `ItemListingStockUpdatedEvent` payload.
-public(package) fun new_item_listing_stock_updated_event(
-    shop_id: ID,
-    listing_id: ID,
-): ItemListingStockUpdatedEvent {
-    ItemListingStockUpdatedEvent {
-        shop_id,
-        listing_id,
-    }
-}
-
-/// Builds an `ItemListingRemovedEvent` payload.
-public(package) fun new_item_listing_removed_event(
-    shop_id: ID,
-    listing_id: ID,
-): ItemListingRemovedEvent {
-    ItemListingRemovedEvent {
-        shop_id,
-        listing_id,
-    }
-}
-
-/// Builds a `DiscountTemplateCreatedEvent` payload.
-public(package) fun new_discount_template_created_event(
-    shop_id: ID,
-    discount_template_id: ID,
-): DiscountTemplateCreatedEvent {
-    DiscountTemplateCreatedEvent {
-        shop_id,
-        discount_template_id,
-    }
-}
-
-/// Builds a `DiscountTemplateUpdatedEvent` payload.
-public(package) fun new_discount_template_updated_event(
-    shop_id: ID,
-    discount_template_id: ID,
-): DiscountTemplateUpdatedEvent {
-    DiscountTemplateUpdatedEvent {
-        shop_id,
-        discount_template_id,
-    }
-}
-
-/// Builds a `DiscountTemplateToggledEvent` payload.
-public(package) fun new_discount_template_toggled_event(
-    shop_id: ID,
-    discount_template_id: ID,
-): DiscountTemplateToggledEvent {
-    DiscountTemplateToggledEvent {
-        shop_id,
-        discount_template_id,
-    }
-}
-
-/// Builds an `AcceptedCoinAddedEvent` payload.
-public(package) fun new_accepted_coin_added_event(
-    shop_id: ID,
-    accepted_currency_id: ID,
-): AcceptedCoinAddedEvent {
-    AcceptedCoinAddedEvent {
-        shop_id,
-        accepted_currency_id,
-    }
-}
-
-/// Builds an `AcceptedCoinRemovedEvent` payload.
-public(package) fun new_accepted_coin_removed_event(
-    shop_id: ID,
-    accepted_currency_id: ID,
-): AcceptedCoinRemovedEvent {
-    AcceptedCoinRemovedEvent {
-        shop_id,
-        accepted_currency_id,
-    }
-}
-
-/// Builds a `DiscountClaimedEvent` payload.
-public(package) fun new_discount_claimed_event(shop_id: ID, discount_id: ID): DiscountClaimedEvent {
-    DiscountClaimedEvent {
-        shop_id,
-        discount_id,
-    }
-}
-
-/// Builds a `DiscountRedeemedEvent` payload.
-public(package) fun new_discount_redeemed_event(
-    shop_id: ID,
-    discount_template_id: ID,
-    discount_id: ID,
-): DiscountRedeemedEvent {
-    DiscountRedeemedEvent {
-        shop_id,
-        discount_template_id,
-        discount_id,
-    }
-}
-
-/// Builds a `PurchaseCompletedEvent` payload.
-public(package) fun new_purchase_completed_event(
-    shop_id: ID,
-    listing_id: ID,
-    accepted_currency_id: ID,
-    discount_template_id: Option<ID>,
-    minted_item_id: ID,
-    amount_paid: u64,
-    discounted_price_usd_cents: u64,
-): PurchaseCompletedEvent {
-    PurchaseCompletedEvent {
-        shop_id,
-        listing_id,
-        accepted_currency_id,
-        discount_template_id,
-        minted_item_id,
-        amount_paid,
-        discounted_price_usd_cents,
-    }
 }
 
 // === Entry Point Methods ===
@@ -613,9 +301,8 @@ public(package) fun new_purchase_completed_event(
 /// - Shared object composition: the shop is shared, with listings/currencies stored in typed
 ///   table storage and discount templates stored directly in a typed `Table`.
 /// - State stays sharded so PTBs only touch the listing slot/template object they mutate.
-public fun create_shop(name: String, ctx: &mut TxContext): (ID, ID) {
-    let owner = ctx.sender();
-    let shop = new_shop(name, owner, ctx);
+public fun create_shop(name: String, ctx: &mut TxContext): (ID, ShopOwnerCap) {
+    let shop = new_shop(name, ctx.sender(), ctx);
     let shop_id = shop.id.to_inner();
 
     let owner_cap = ShopOwnerCap {
@@ -624,11 +311,10 @@ public fun create_shop(name: String, ctx: &mut TxContext): (ID, ID) {
     };
     let owner_cap_id = owner_cap.id.to_inner();
 
-    event::emit(new_shop_created_event(shop_id, owner_cap_id));
+    events::emit_shop_created(shop_id, owner_cap_id);
 
     transfer::share_object(shop);
-    transfer_shop_owner_cap(owner_cap, owner);
-    (shop_id, owner_cap_id)
+    (shop_id, owner_cap)
 }
 
 /// Disable a shop permanently (buyer flows will reject new checkouts).
@@ -636,7 +322,7 @@ public fun disable_shop(shop: &mut Shop, owner_cap: &ShopOwnerCap) {
     assert_owner_cap!(shop, owner_cap);
     shop.disabled = true;
 
-    event::emit(new_shop_disabled_event(shop.id.to_inner(), owner_cap.id.to_inner()));
+    events::emit_shop_disabled(shop.id.to_inner(), owner_cap.id.to_inner());
 }
 
 /// Rotate the payout recipient for a shop.
@@ -651,7 +337,7 @@ public fun update_shop_owner(shop: &mut Shop, owner_cap: &ShopOwnerCap, new_owne
 
     shop.owner = new_owner;
 
-    event::emit(new_shop_owner_updated_event(shop.id.to_inner(), owner_cap.id.to_inner()));
+    events::emit_shop_owner_updated(shop.id.to_inner(), owner_cap.id.to_inner());
 }
 
 // === Item Listing ===
@@ -698,7 +384,7 @@ fun add_item_listing_core<T: store>(
     );
     shop.listings.add(listing_id, listing);
 
-    event::emit(new_item_listing_added_event(shop_id, listing_id));
+    events::emit_item_listing_added(shop_id, listing_id);
 
     listing_id
 }
@@ -794,11 +480,9 @@ public fun add_item_listing_with_discount_template<T: store>(
         ctx,
     );
 
-    event::emit(
-        new_discount_template_created_event(
-            shop.id.to_inner(),
-            discount_template_id,
-        ),
+    events::emit_discount_template_created(
+        shop.id.to_inner(),
+        discount_template_id,
     );
     (listing_id, discount_template_id)
 }
@@ -815,7 +499,7 @@ public fun update_item_listing_stock(
 
     item_listing.stock = new_stock;
 
-    event::emit(new_item_listing_stock_updated_event(shop.id.to_inner(), listing_id));
+    events::emit_item_listing_stock_updated(shop.id.to_inner(), listing_id);
 }
 
 /// Remove an item listing entirely.
@@ -827,7 +511,7 @@ public fun remove_item_listing(shop: &mut Shop, owner_cap: &ShopOwnerCap, listin
     assert!(!shop.has_active_listing_bound_templates(listing_id), EListingHasActiveTemplates);
     let _listing = shop.listings.remove(listing_id);
 
-    event::emit(new_item_listing_removed_event(shop.id.to_inner(), listing_id));
+    events::emit_item_listing_removed(shop.id.to_inner(), listing_id);
 }
 
 // === Accepted Currencies ===
@@ -888,7 +572,7 @@ public fun add_accepted_currency<TCoin>(
     let accepted_currency_id = accepted_currency.pyth_object_id;
     shop.accepted_currencies.add(coin_type, accepted_currency);
 
-    event::emit(new_accepted_coin_added_event(shop_id, accepted_currency_id))
+    events::emit_accepted_coin_added(shop_id, accepted_currency_id);
 }
 
 /// Deregister an accepted coin type.
@@ -897,11 +581,9 @@ public fun remove_accepted_currency<TCoin>(shop: &mut Shop, owner_cap: &ShopOwne
     let coin_type = currency_type<TCoin>();
     let accepted_currency = shop.remove_registered_accepted_currency(coin_type);
 
-    event::emit(
-        new_accepted_coin_removed_event(
-            shop.id.to_inner(),
-            accepted_currency.pyth_object_id,
-        ),
+    events::emit_accepted_coin_removed(
+        shop.id.to_inner(),
+        accepted_currency.pyth_object_id,
     );
 }
 
@@ -918,10 +600,12 @@ fun create_discount_template_core(
     ctx: &mut TxContext,
 ): ID {
     assert_discount_template_inputs!(shop, applies_to_listing, starts_at, expires_at);
+    max_redemptions.do_ref!(|max_value| {
+        assert!(*max_value > 0, EInvalidMaxRedemptions);
+    });
 
     let discount_rule_kind = parse_rule_kind(rule_kind);
     let discount_rule = discount_rule_kind.build_discount_rule(rule_value);
-    let claims_by_claimer = table::new<address, bool>(ctx);
     let discount_template_id = new_object_id(ctx);
     let discount_template = new_discount_template(
         discount_template_id,
@@ -930,7 +614,6 @@ fun create_discount_template_core(
         starts_at,
         expires_at,
         max_redemptions,
-        claims_by_claimer,
     );
     shop.discount_templates.add(discount_template_id, discount_template);
     shop.increment_active_template_count_if_listing_bound(applies_to_listing);
@@ -941,12 +624,11 @@ fun create_discount_template_core(
 ///
 /// Templates are stored in the shop's `discount_templates: Table<ID, DiscountTemplate>` collection.
 /// Admin functions enforce `ShopOwnerCap` checks when creating/updating/toggling templates, and
-/// templates remain addressable by `ID` for UIs. Claims are tracked in each template's
-/// `claims_by_claimer: Table<address, bool>` map to enforce one-claim-per-address. Callers send primitive args
-/// (`rule_kind` of `0 = fixed` or `1 = percent`), but we immediately convert them into the strongly
+/// templates remain addressable by `ID` for UIs.
+/// Callers send primitive args (`rule_kind` of `0 = fixed` or `1 = percent`), but we immediately convert them into the strongly
 /// typed `DiscountRule` before persisting. For `Fixed` rules the `rule_value` is denominated in USD
 /// cents to match listing prices.
-/// Sui mindset:
+/// 
 /// - Discounts live inside a typed on-chain collection attached to the shared shop instead of rows
 ///   in opaque contract storage.
 /// - Converting user-friendly primitives into enums early avoids magic numbers and preserves type
@@ -955,6 +637,8 @@ fun create_discount_template_core(
 /// - Time windows and limits are stored on-chain and later checked against the shared `Clock`
 ///   (timestamp_ms -> seconds). On Sui, time is an explicit input object; on EVM, `block.timestamp`
 ///   is global state available to view/read-only calls but can drift within protocol bounds.
+/// - `max_redemptions`: if set, must be greater than 0. If not set (`None`), there is no cap on
+///   total redemptions and the counter is not protected from overflow.
 public fun create_discount_template(
     shop: &mut Shop,
     owner_cap: &ShopOwnerCap,
@@ -977,11 +661,9 @@ public fun create_discount_template(
         ctx,
     );
 
-    event::emit(
-        new_discount_template_created_event(
-            shop.id.to_inner(),
-            discount_template_id,
-        ),
+    events::emit_discount_template_created(
+        shop.id.to_inner(),
+        discount_template_id,
     );
 }
 
@@ -989,6 +671,8 @@ public fun create_discount_template(
 /// For `Fixed` discounts the `rule_value` remains in USD cents.
 /// Updates are only allowed before any tickets are issued or redeemed and before the template is
 /// finished (expired or capped), so claim accounting cannot be retroactively changed.
+/// `max_redemptions`: if set, must be greater than 0. If not set (`None`), there is no cap on
+/// total redemptions and the counter is not protected from overflow.
 public fun update_discount_template(
     shop: &mut Shop,
     owner_cap: &ShopOwnerCap,
@@ -1003,6 +687,9 @@ public fun update_discount_template(
     assert_owner_cap!(shop, owner_cap);
     assert_template_registered!(shop, discount_template_id);
     assert_schedule!(starts_at, expires_at);
+    max_redemptions.do_ref!(|max_value| {
+        assert!(*max_value > 0, EInvalidMaxRedemptions);
+    });
 
     let discount_rule_kind = parse_rule_kind(rule_kind);
     let discount_rule = discount_rule_kind.build_discount_rule(rule_value);
@@ -1019,7 +706,7 @@ public fun update_discount_template(
         max_redemptions,
     );
 
-    event::emit(new_discount_template_updated_event(shop_id, discount_template.id));
+    events::emit_discount_template_updated(shop_id, discount_template.id);
 }
 
 /// Quickly enable/disable a coupon without deleting it.
@@ -1046,7 +733,7 @@ public fun toggle_discount_template(
     let discount_template = shop.borrow_discount_template_mut(discount_template_id);
     discount_template.active = active;
 
-    event::emit(new_discount_template_toggled_event(shop.id.to_inner(), discount_template_id));
+    events::emit_discount_template_toggled(shop.id.to_inner(), discount_template_id);
 }
 
 /// Removes a template from shop storage.
@@ -1086,113 +773,6 @@ public fun clear_template_from_listing(shop: &mut Shop, owner_cap: &ShopOwnerCap
     assert_owner_cap!(shop, owner_cap);
     let item_listing = shop.borrow_listing_mut(listing_id);
     item_listing.spotlight_discount_template_id = option::none();
-}
-
-/// Mint a single-use discount ticket to the caller using the template schedule and limits.
-///
-/// Sui mindset:
-/// - Discount tickets are owned objects rather than balances in contract storage, so callers can
-///   compose claim + checkout. Use `claim_and_buy_item_with_discount` to mint and spend in one
-///   transaction, or call this function to mint a ticket that the wallet can redeem later.
-/// - Per-wallet claim limits are enforced by writing the claimer address into the template's
-///   `claims_by_claimer` table entry stored under `Shop.discount_templates`. Each claim increments
-///   template counters and writes a claim marker, so it mutates the shared `Shop` path for that
-///   template.
-/// - Time windows are checked against the shared `Clock` (seconds) to avoid surprises when epochs
-///   are long-lived; passing the clock keeps the function pure from a caller perspective.
-/// - Because templates are stored in the shop's table, claims no longer take a standalone template
-///   shared object input. Callers provide only `discount_template_id`, and the module resolves and
-///   validates the template from `shop`.
-/// - Tickets are transferable as objects, but redemption is bound to the original claimer. If a
-///   ticket is moved to another address, it cannot be redeemed by the recipient. In EVM you might
-///   airdrop ERC-1155 coupons; here the object identity plus `ctx.sender()` check guarantee
-///   single-claimer semantics without extra storage.
-public fun claim_discount_ticket(
-    shop: &mut Shop,
-    discount_template_id: ID,
-    clock: &clock::Clock,
-    ctx: &mut TxContext,
-) {
-    assert_shop_active!(shop);
-
-    let now_secs = now_secs(clock);
-    let claimer = ctx.sender();
-    let discount_ticket = shop.claim_discount_ticket_with_event(
-        discount_template_id,
-        now_secs,
-        ctx,
-    );
-
-    transfer_discount_ticket_to_recipient(discount_ticket, claimer);
-}
-
-/// Package-only helper that returns the owned ticket so package code can inline claim + buy in one
-/// PTB without exposing caller-supplied time controls to external transactions.
-/// The claimer is always bound to `ctx.sender()` to prevent third parties from minting on behalf of
-/// other addresses and exhausting template quotas.
-public(package) fun claim_discount_ticket_inline(
-    shop: &mut Shop,
-    discount_template_id: ID,
-    now_secs: u64,
-    ctx: &mut TxContext,
-): DiscountTicket {
-    assert_shop_active!(shop);
-    let applies_to_listing = {
-        let discount_template = shop.borrow_discount_template(discount_template_id);
-        discount_template.applies_to_listing
-    };
-    assert_listing_belongs_to_shop_if_some!(shop, applies_to_listing);
-    let shop_id = shop.id.to_inner();
-
-    let discount_template = shop.borrow_discount_template_mut(discount_template_id);
-    let claimer = ctx.sender();
-    assert_template_claimable!(discount_template, claimer, now_secs);
-
-    let discount_ticket = new_discount_ticket(
-        discount_template,
-        shop_id,
-        claimer,
-        ctx,
-    );
-
-    discount_template.record_discount_claim(claimer);
-    discount_ticket
-}
-
-fun claim_discount_ticket_with_event(
-    shop: &mut Shop,
-    discount_template_id: ID,
-    now_secs: u64,
-    ctx: &mut TxContext,
-): DiscountTicket {
-    let discount_ticket = shop.claim_discount_ticket_inline(discount_template_id, now_secs, ctx);
-
-    event::emit(
-        new_discount_claimed_event(
-            shop.id.to_inner(),
-            discount_ticket.id.to_inner(),
-        ),
-    );
-
-    discount_ticket
-}
-
-/// Remove recorded claim markers for a template that is no longer serving new tickets.
-/// Pruning is only allowed once the template is irrevocably finished (expired or maxed out)
-/// so that a pause cannot be used to bypass the one-claim-per-address guarantee.
-public fun prune_discount_claims(
-    shop: &mut Shop,
-    owner_cap: &ShopOwnerCap,
-    discount_template_id: ID,
-    claimers: vector<address>,
-    clock: &clock::Clock,
-) {
-    assert_owner_cap!(shop, owner_cap);
-    assert_template_registered!(shop, discount_template_id);
-    let now_secs = now_secs(clock);
-    let discount_template = shop.borrow_discount_template_mut(discount_template_id);
-    assert_template_prunable!(discount_template, now_secs);
-    discount_template.prune_claim_markers(claimers);
 }
 
 // === Checkout ===
@@ -1250,11 +830,9 @@ public fun buy_item<TItem: store, TCoin>(
     transfer::public_transfer(minted_item, mint_to);
 }
 
-/// Same as `buy_item` but also validates and burns a `DiscountTicket`.
+/// Same as `buy_item` but also validates that discount is applicable.
 ///
 /// Sui mindset:
-/// - Promotions are owned objects (`DiscountTicket`). Burning here enforces single-use on-chain
-///   without external allowlists or signatures.
 /// - The discount template is a shared object anyone can read; this function validates the
 ///   template/listing/shop linkage and increments redemptions to keep limits accurate.
 /// - Refund destination is explicitly provided (`refund_extra_to`) so "gift" flows can return change
@@ -1265,7 +843,6 @@ public fun buy_item<TItem: store, TCoin>(
 public fun buy_item_with_discount<TItem: store, TCoin>(
     shop: &mut Shop,
     discount_template_id: ID,
-    discount_ticket: DiscountTicket,
     price_info_object: &price_info::PriceInfoObject,
     payment: coin::Coin<TCoin>,
     listing_id: ID,
@@ -1277,14 +854,14 @@ public fun buy_item_with_discount<TItem: store, TCoin>(
     ctx: &mut TxContext,
 ) {
     assert_shop_active!(shop);
-    let buyer = ctx.sender();
+
     let now = now_secs(clock);
     let listing_price_usd_cents = shop.borrow_listing(listing_id).base_price_usd_cents;
 
     let shop_id = shop.id.to_inner();
     let discount_template = shop.borrow_discount_template_mut(discount_template_id);
     assert_discount_redemption_allowed!(discount_template, listing_id, now);
-    assert_ticket_matches_context!(&discount_ticket, discount_template, shop_id, listing_id, buyer);
+
     discount_template.redemptions = discount_template.redemptions + 1;
     let discounted_price_usd_cents = discount_template
         .rule
@@ -1292,10 +869,9 @@ public fun buy_item_with_discount<TItem: store, TCoin>(
             listing_price_usd_cents,
         );
 
-    let event = new_discount_redeemed_event(
+    events::emit_discount_redeemed(
         shop_id,
         discount_template.id,
-        discount_ticket.id.to_inner(),
     );
 
     let (owed_coin_opt, change_coin, minted_item) = shop.process_purchase<TItem, TCoin>(
@@ -1318,66 +894,6 @@ public fun buy_item_with_discount<TItem: store, TCoin>(
         transfer::public_transfer(change_coin, refund_extra_to);
     };
     transfer::public_transfer(minted_item, mint_to);
-
-    event::emit(event);
-    discount_ticket.burn_discount_ticket();
-}
-
-/// Claim a discount ticket for the sender and immediately redeem it during checkout within the
-/// same PTB.
-///
-/// Sui mindset:
-/// - Reduces front-end friction: callers do not need to manage a temporary `DiscountTicket`
-///   transfer between separate transactions or commands.
-/// - Emits the same `DiscountClaimedEvent` + `DiscountRedeemedEvent` events as the two-step flow so downstream
-///   analytics remain consistent.
-/// - The ticket is created and consumed inside one PTB, minimizing custody risk while still using
-///   the template's `claims_by_claimer` table to enforce one-claim-per-address.
-/// - This pattern highlights Sui's composability: objects can be created, used, and destroyed in a
-///   single PTB without extra approvals or intermediate transactions--something Solidity flows often
-///   approximate with meta-transactions or batching routers.
-public fun claim_and_buy_item_with_discount<TItem: store, TCoin>(
-    shop: &mut Shop,
-    discount_template_id: ID,
-    price_info_object: &price_info::PriceInfoObject,
-    payment: coin::Coin<TCoin>,
-    listing_id: ID,
-    mint_to: address,
-    refund_extra_to: address,
-    max_price_age_secs: Option<u64>,
-    max_confidence_ratio_bps: Option<u16>,
-    clock: &clock::Clock,
-    ctx: &mut TxContext,
-) {
-    assert_shop_active!(shop);
-    let now_secs = now_secs(clock);
-    let discount_ticket = shop.claim_discount_ticket_with_event(
-        discount_template_id,
-        now_secs,
-        ctx,
-    );
-
-    shop.buy_item_with_discount<TItem, TCoin>(
-        discount_template_id,
-        discount_ticket,
-        price_info_object,
-        payment,
-        listing_id,
-        mint_to,
-        refund_extra_to,
-        max_price_age_secs,
-        max_confidence_ratio_bps,
-        clock,
-        ctx,
-    );
-}
-
-fun transfer_shop_owner_cap(owner_cap: ShopOwnerCap, recipient: address) {
-    transfer::public_transfer(owner_cap, recipient);
-}
-
-fun transfer_discount_ticket_to_recipient(discount_ticket: DiscountTicket, recipient: address) {
-    transfer::public_transfer(discount_ticket, recipient);
 }
 
 // === Data ===
@@ -1440,7 +956,6 @@ fun new_discount_template(
     starts_at: u64,
     expires_at: Option<u64>,
     max_redemptions: Option<u64>,
-    claims_by_claimer: Table<address, bool>,
 ): DiscountTemplate {
     DiscountTemplate {
         id: discount_template_id,
@@ -1449,43 +964,9 @@ fun new_discount_template(
         starts_at,
         expires_at,
         max_redemptions,
-        claims_issued: 0,
         redemptions: 0,
         active: true,
-        claims_by_claimer,
     }
-}
-
-fun new_discount_ticket(
-    template: &DiscountTemplate,
-    shop_id: ID,
-    claimer: address,
-    ctx: &mut TxContext,
-): DiscountTicket {
-    DiscountTicket {
-        id: object::new(ctx),
-        discount_template_id: template.id,
-        shop_id,
-        listing_id: template.applies_to_listing,
-        claimer,
-    }
-}
-
-fun record_discount_claim(template: &mut DiscountTemplate, claimer: address) {
-    // Track issued tickets; actual uses are counted at redemption time.
-    template.claims_issued = template.claims_issued + 1;
-    // `claims_by_claimer` behaves as a set: key presence enforces one claim per address.
-    template.claims_by_claimer.add(claimer, true);
-}
-
-fun remove_discount_claim_if_exists(template: &mut DiscountTemplate, claimer: address) {
-    if (template.claims_by_claimer.contains(claimer)) {
-        let _claim_record = template.claims_by_claimer.remove(claimer);
-    }
-}
-
-fun prune_claim_markers(template: &mut DiscountTemplate, claimers: vector<address>) {
-    claimers.destroy!(|claimer| template.remove_discount_claim_if_exists(claimer));
 }
 
 fun apply_discount_template_updates(
@@ -1556,8 +1037,7 @@ fun remove_discount_template_if_exists(shop: &mut Shop, template_id: ID) {
     shop.adjust_active_template_count(applies_to_listing, was_active, false);
     shop.clear_listing_spotlight_if_matches_template(applies_to_listing, template_id);
 
-    let template = shop.discount_templates.remove(template_id);
-    destroy_discount_template(template);
+    let _ = shop.discount_templates.remove(template_id);
 }
 
 fun clear_listing_spotlight_if_matches_template(
@@ -1573,22 +1053,6 @@ fun clear_listing_spotlight_if_matches_template(
             };
         };
     });
-}
-
-fun destroy_discount_template(template: DiscountTemplate) {
-    let DiscountTemplate {
-        id: _id,
-        applies_to_listing: _applies_to_listing,
-        rule: _rule,
-        starts_at: _starts_at,
-        expires_at: _expires_at,
-        max_redemptions: _max_redemptions,
-        claims_issued: _claims_issued,
-        redemptions: _redemptions,
-        active: _active,
-        claims_by_claimer,
-    } = template;
-    claims_by_claimer.drop();
 }
 
 fun increment_active_listing_template_count(shop: &mut Shop, listing_id: ID) {
@@ -1753,21 +1217,19 @@ fun process_purchase_core<TItem: store, TCoin>(
 
     item_listing.decrement_stock();
 
-    event::emit(new_item_listing_stock_updated_event(shop_id, item_listing.listing_id));
+    events::emit_item_listing_stock_updated(shop_id, item_listing.listing_id);
 
     let minted_item = item_listing.mint_shop_item<TItem>(shop_id, clock, ctx);
     let minted_item_id = minted_item.id.to_inner();
 
-    event::emit(
-        new_purchase_completed_event(
-            shop_id,
-            item_listing.listing_id,
-            accepted_currency_id,
-            discount_template_id,
-            minted_item_id,
-            amount_paid,
-            discounted_price_usd_cents,
-        ),
+    events::emit_purchase_completed(
+        shop_id,
+        item_listing.listing_id,
+        accepted_currency_id,
+        discount_template_id,
+        minted_item_id,
+        amount_paid,
+        discounted_price_usd_cents,
     );
     (owed_coin_opt, payment, minted_item)
 }
@@ -1976,11 +1438,6 @@ public(package) fun apply_percent_discount(base_price_usd_cents: u64, bps: u16):
     DiscountRule::Percent { bps }.apply_discount(base_price_usd_cents)
 }
 
-fun burn_discount_ticket(discount_ticket: DiscountTicket) {
-    let DiscountTicket { id, .. } = discount_ticket;
-    id.delete();
-}
-
 // === Asserts and validations ===
 
 macro fun assert_owner_cap($shop: &Shop, $owner_cap: &ShopOwnerCap) {
@@ -2083,9 +1540,7 @@ macro fun assert_template_in_time_window($template: &DiscountTemplate, $now_secs
 fun redemption_cap_reached(template: &DiscountTemplate): bool {
     template
         .max_redemptions
-        .map_ref!(
-            |max_redemptions| (*max_redemptions > 0) && (template.redemptions >= *max_redemptions),
-        )
+        .map_ref!(|max_redemptions| template.redemptions >= *max_redemptions)
         .destroy_or!(false)
 }
 
@@ -2095,16 +1550,9 @@ fun template_finished(template: &DiscountTemplate, now: u64): bool {
     expired || maxed_out
 }
 
-macro fun assert_template_prunable($template: &DiscountTemplate, $now: u64) {
-    let template = $template;
-    let now = $now;
-    assert!(template.template_finished(now), EDiscountClaimsNotPrunable);
-}
-
 macro fun assert_template_updatable($template: &DiscountTemplate, $now: u64) {
     let template = $template;
     let now = $now;
-    assert!(template.claims_issued == 0, ETemplateFinalized);
     assert!(template.redemptions == 0, ETemplateFinalized);
     assert!(!template.template_finished(now), ETemplateFinalized);
 }
@@ -2120,33 +1568,11 @@ macro fun assert_discount_redemption_allowed(
     assert!(discount_template.active, ETemplateInactive);
 
     discount_template.applies_to_listing.do_ref!(|applies_to_listing| {
-        assert!(*applies_to_listing == listing_id, EDiscountTicketListingMismatch);
+        assert!(*applies_to_listing == listing_id, EDiscountListingMismatch);
     });
 
     assert_template_in_time_window!(discount_template, now);
-    assert!(discount_template.claims_issued > discount_template.redemptions, ETemplateMaxedOut);
     assert!(!discount_template.redemption_cap_reached(), ETemplateMaxedOut);
-}
-
-macro fun assert_ticket_matches_context(
-    $discount_ticket: &DiscountTicket,
-    $discount_template: &DiscountTemplate,
-    $shop_id: ID,
-    $listing_id: ID,
-    $buyer: address,
-) {
-    let discount_ticket = $discount_ticket;
-    let discount_template = $discount_template;
-    let shop_id = $shop_id;
-    let listing_id = $listing_id;
-    let buyer = $buyer;
-    assert!(discount_ticket.shop_id == shop_id, EDiscountTicketShopMismatch);
-    assert!(discount_ticket.discount_template_id == discount_template.id, EDiscountTicketMismatch);
-    assert!(discount_ticket.claimer == buyer, EDiscountTicketOwnerMismatch);
-
-    discount_ticket.listing_id.do_ref!(|ticket_listing_id| {
-        assert!(*ticket_listing_id == listing_id, EDiscountTicketListingMismatch);
-    });
 }
 
 macro fun assert_accepted_currency_inputs(
@@ -2259,26 +1685,6 @@ macro fun assert_spotlight_template_matches_listing(
             assert!(*applies_to_listing == listing_id, ESpotlightTemplateListingMismatch);
         });
     });
-}
-
-/// Guardrails to keep claims inside schedule/limits and unique per address.
-macro fun assert_template_claimable(
-    $template: &DiscountTemplate,
-    $claimer: address,
-    $now_secs: u64,
-) {
-    let template = $template;
-    let claimer = $claimer;
-    let now_secs = $now_secs;
-    assert!(template.active, ETemplateInactive);
-    assert_template_in_time_window!(template, now_secs);
-
-    template.max_redemptions.do_ref!(|max_redemptions| {
-        assert!(template.claims_issued < *max_redemptions, ETemplateMaxedOut);
-        assert!(template.redemptions < *max_redemptions, ETemplateMaxedOut);
-    });
-
-    assert!(!template.claims_by_claimer.contains(claimer), EDiscountAlreadyClaimed);
 }
 
 // === View helpers ===
@@ -2399,11 +1805,6 @@ public fun discount_template_max_redemptions(template: &DiscountTemplate): Optio
     template.max_redemptions
 }
 
-/// Returns how many discount tickets have been issued for a template.
-public fun discount_template_claims_issued(template: &DiscountTemplate): u64 {
-    template.claims_issued
-}
-
 /// Returns how many times a template has been redeemed.
 public fun discount_template_redemptions(template: &DiscountTemplate): u64 {
     template.redemptions
@@ -2412,32 +1813,6 @@ public fun discount_template_redemptions(template: &DiscountTemplate): u64 {
 /// Returns whether a template is currently active.
 public fun discount_template_active(template: &DiscountTemplate): bool {
     template.active
-}
-
-/// Returns the template ID encoded in a discount ticket.
-public fun discount_ticket_discount_template_id(ticket: &DiscountTicket): ID {
-    ticket.discount_template_id
-}
-
-/// Returns the shop ID encoded in a discount ticket.
-public fun discount_ticket_shop_id(ticket: &DiscountTicket): ID {
-    ticket.shop_id
-}
-
-/// Returns the optional listing ID encoded in a discount ticket.
-public fun discount_ticket_listing_id(ticket: &DiscountTicket): Option<ID> {
-    ticket.listing_id
-}
-
-/// Returns the claimer address encoded in a discount ticket.
-public fun discount_ticket_claimer(ticket: &DiscountTicket): address {
-    ticket.claimer
-}
-
-/// Returns whether `claimer` has an active claim marker for `template_id`.
-public(package) fun discount_claim_exists(shop: &Shop, template_id: ID, claimer: address): bool {
-    let template = shop.borrow_discount_template(template_id);
-    template.claims_by_claimer.contains(claimer)
 }
 
 /// Quotes the coin amount for a price info object with guardrails.
@@ -2538,11 +1913,9 @@ public fun test_create_discount_template_local(
         ctx,
     );
 
-    event::emit(
-        new_discount_template_created_event(
-            shop.id.to_inner(),
-            template_id,
-        ),
+    events::emit_discount_template_created(
+        shop.id.to_inner(),
+        template_id,
     );
 
     template_id

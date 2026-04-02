@@ -1,13 +1,13 @@
-# 10 - Discounts + Tickets
+# 10 - Discounts
 
-**Path:** [Learning Path](./) > 10 Discounts + Tickets
+**Path:** [Learning Path](./) > 10 Discounts
 
-Discounts are first-class objects. Claiming a discount mints an owned `DiscountTicket`.
+Discounts are template records stored under the shared `Shop`. Buyers apply a template directly during checkout through `buy_item_with_discount`.
 
 ## 1. Learning goals
 1. Create a discount template with a schedule and rule.
 2. Attach a template to a listing for UI spotlight.
-3. Claim a ticket and understand one-claim semantics.
+3. Redeem a template directly at checkout.
 
 ## 2. Prerequisites
 1. Localnet running.
@@ -25,166 +25,32 @@ pnpm script owner:item-listing:attach-discount-template \
   --item-listing-id <listingId> \
   --discount-template-id <templateId>
 
-pnpm script buyer:discount-ticket:claim --discount-template-id <templateId>
-pnpm script buyer:discount-ticket:list
+pnpm script buyer:buy \
+  --item-listing-id <listingId> \
+  --discount-template-id <templateId>
 ```
 
 ## 4. EVM -> Sui translation
-1. **Coupon codes -> template records in shop storage**: templates are stored under the shared `Shop` in `discount_templates: Table<ID, DiscountTemplate>`. See `DiscountTemplate` and `create_discount_template` in `packages/dapp/contracts/oracle-market/sources/shop.move`.
-2. **Allowlist of claimed addresses -> claim-marker table**: each template tracks claimed addresses in `claims_by_claimer: Table<address, bool>`. See `DiscountTemplate` and `claim_discount_ticket` in `packages/dapp/contracts/oracle-market/sources/shop.move`.
-3. **Redeem with a receipt -> redeem with an owned ticket**: a `DiscountTicket` is an owned object that is burned on redemption. See `buy_item_with_discount` in `packages/dapp/contracts/oracle-market/sources/shop.move`.
+1. **Coupon codes -> template records in shop storage**: templates are stored under shared `Shop` in `discount_templates: Table<ID, DiscountTemplate>`.
+2. **Per-checkout apply -> direct template arg**: checkout passes `discount_template_id` directly to `buy_item_with_discount`.
+3. **Redemption limits -> on-template counters**: `max_redemptions` and `redemptions` enforce bounds without separate ticket objects.
 
-## 5. Concept deep dive: discount lifecycle mechanics
-- **Owned tickets as one-time rights**: a `DiscountTicket` is an owned object. Passing it by value
-  to `buy_item_with_discount` consumes it, which enforces single-use redemption without extra
-  storage or signatures. This is the Move-native way to model a coupon that cannot be reused.
-  Code: `packages/dapp/contracts/oracle-market/sources/shop.move` (`DiscountTicket`, `buy_item_with_discount`)
-- **Claim-marker table**: each claimer address is tracked in `claims_by_claimer` under the
-  template. This prevents multiple claims per wallet without locking the whole shop, and it keeps
-  the one-claim rule entirely on-chain.
-  Code: `packages/dapp/contracts/oracle-market/sources/shop.move` (`claim_discount_ticket`, `claims_by_claimer`)
-- **Schedules and scoping**: `starts_at` is required, while `expires_at` and `max_redemptions` are
-  optional. Templates can also be scoped to a specific listing via `applies_to_listing`.
-  Code: `packages/dapp/contracts/oracle-market/sources/shop.move` (`DiscountTemplate` fields)
-- **Claim + redemption caps**: max redemptions are enforced at both claim time and redemption time,
-  so a template cannot be over-claimed and then over-redeemed.
-  Code: `packages/dapp/contracts/oracle-market/sources/shop.move` (`assert_template_claimable`, `assert_discount_redemption_allowed`)
-- **Enums for rules and references**: `DiscountRule` and `DiscountRuleKind` encode fixed vs percent
-  discounts at the type level to avoid ambiguous numeric inputs. `ReferenceKind` is a small enum
-  used for internal lookup paths when validating IDs.
-  Code: `packages/dapp/contracts/oracle-market/sources/shop.move` (`DiscountRule`, `ReferenceKind`)
-- **Clock for windows**: discount windows are checked against the shared `Clock`, not client time.
-  Code: `packages/dapp/contracts/oracle-market/sources/shop.move` (`assert_discount_redemption_allowed`)
+## 5. Lifecycle mechanics
+- **Schedules and scoping**: `starts_at` is required; `expires_at` and `max_redemptions` are optional. When `max_redemptions` is set, it must be greater than `0`. Templates may be listing-scoped via `applies_to_listing`.
+- **Redemption guards**: checkout validates template active state, time window, listing scope, and max redemptions.
+- **Clock-based timing**: redemption checks use shared `Clock`, not client time.
 
 ## 6. Code references
-1. `packages/dapp/contracts/oracle-market/sources/shop.move` (DiscountTemplate, DiscountTicket, claim_discount_ticket)
+1. `packages/dapp/contracts/oracle-market/sources/shop.move` (`DiscountTemplate`, `buy_item_with_discount`)
 2. `packages/domain/core/src/models/discount.ts` (rule parsing + status)
 3. `packages/dapp/src/scripts/owner/discount-template-create.ts` (script)
-4. `packages/dapp/src/scripts/buyer/discount-ticket-claim.ts` (script)
-5. PTB builder definition: `packages/domain/core/src/ptb/discount-template.ts` (buildCreateDiscountTemplateTransaction)
-
-**Code spotlight: create a DiscountTemplate under a Shop**
-`packages/dapp/contracts/oracle-market/sources/shop.move`
-```move
-public fun create_discount_template(
-  shop: &mut Shop,
-  owner_cap: &ShopOwnerCap,
-  applies_to_listing: Option<ID>,
-  rule_kind: u8,
-  rule_value: u64,
-  starts_at: u64,
-  expires_at: Option<u64>,
-  max_redemptions: Option<u64>,
-  ctx: &mut TxContext,
-) {
-  assert_owner_cap!(shop, owner_cap);
-  let discount_template_id = shop.create_discount_template_core(
-    applies_to_listing,
-    rule_kind,
-    rule_value,
-    starts_at,
-    expires_at,
-    max_redemptions,
-    ctx,
-  );
-  event::emit(
-    new_discount_template_created_event(
-      shop.id.to_inner(),
-      discount_template_id,
-    ),
-  );
-}
-```
-
-**Code spotlight: claim a single-use ticket**
-`packages/dapp/contracts/oracle-market/sources/shop.move`
-```move
-public fun claim_discount_ticket(
-  shop: &mut Shop,
-  discount_template_id: ID,
-  clock: &clock::Clock,
-  ctx: &mut TxContext,
-) {
-  assert_shop_active!(shop);
-  let now_secs = now_secs(clock);
-  let claimer = ctx.sender();
-  let discount_ticket = shop.claim_discount_ticket_with_event(
-    discount_template_id,
-    now_secs,
-    ctx,
-  );
-  transfer::public_transfer(discount_ticket, claimer);
-}
-```
-
-**Code spotlight: owner script validates rule + schedule**
-`packages/dapp/src/scripts/owner/discount-template-create.ts`
-```ts
-const ruleKind = parseDiscountRuleKind(cliArguments.ruleKind)
-const startsAt = parseNonNegativeU64(
-  cliArguments.startsAt ?? defaultStartTimestampSeconds().toString(),
-  "startsAt"
-)
-const expiresAt = parseOptionalU64(cliArguments.expiresAt, "expiresAt")
-
-validateDiscountSchedule(startsAt, expiresAt)
-
-return {
-  packageId,
-  shopId,
-  ownerCapId,
-  appliesToListingId: cliArguments.listingId
-    ? normalizeListingId(cliArguments.listingId, "listingId")
-    : undefined,
-  ruleKind,
-  ruleValue: parseDiscountRuleValue(ruleKind, cliArguments.value),
-  startsAt,
-  expiresAt,
-  maxRedemptions: parseOptionalU64(
-    cliArguments.maxRedemptions,
-    "maxRedemptions"
-  )
-}
-```
-
-**Code spotlight: buyer script loads shared inputs + clock**
-`packages/dapp/src/scripts/buyer/discount-ticket-claim.ts`
-```ts
-const shopShared = await tooling.getMutableSharedObject({
-  objectId: shopId
-})
-const discountTemplateShared = await tooling.getMutableSharedObject({
-  objectId: discountTemplateId
-})
-const sharedClockObject = await tooling.getImmutableSharedObject({
-  objectId: SUI_CLOCK_ID
-})
-```
-
-## 6.1 Read this next (deep dive)
-- [/reading/move-readme](/reading/move-readme) -> "Shared Object + Marker Pattern (deep dive)"
+4. `packages/dapp/src/scripts/buyer/buy.ts` (template-aware checkout)
 
 ## 7. Exercises
-1. Try claiming the same template twice. Expected outcome: a Move abort with `EDiscountAlreadyClaimed`.
-2. Toggle the template off with `pnpm script owner:discount-template:toggle --discount-template-id <id> --active false`. Expected outcome: new claims are rejected while toggled off.
+1. Toggle a template off with `pnpm script owner:discount-template:toggle --discount-template-id <id> --active false` and verify checkout with that template fails.
+2. Create a listing-scoped template and try redeeming it on a different listing; verify checkout aborts.
 
-## 8. Diagram: ticket lifecycle
-```
-DiscountTemplate (shared)
-  df: claimer_address -> DiscountClaim
-  |
-  v
-claim_discount_ticket
-  -> DiscountTicket (owned)
-  -> DiscountClaim (df child)
-```
-
-## 9. Further reading (Sui docs)
-- https://docs.sui.io/guides/developer/objects/object-model
-- https://docs.sui.io/concepts/dynamic-fields
-- https://docs.sui.io/references/framework/sui_sui/tx_context
-
-## 10. Navigation
+## 8. Navigation
 1. Previous: [09 Currencies + Oracles](./09-currencies-oracles.md)
 2. Next: [17 PTBs + Gas + Fees](./17-ptb-gas.md)
 3. Back to map: [Learning Path Map](./)

@@ -427,7 +427,8 @@ const resolveOrCreateShopIdentifiers = async ({
     buildTransaction: () =>
       buildCreateShopTransaction({
         packageId: shopPackageId,
-        shopName
+        shopName,
+        ownerAddress: tooling.loadedEd25519KeyPair.toSuiAddress()
       })
   })
 

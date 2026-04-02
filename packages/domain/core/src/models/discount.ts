@@ -1,10 +1,8 @@
 import type { SuiClient, SuiObjectData } from "@mysten/sui/client"
 import { normalizeSuiObjectId } from "@mysten/sui/utils"
 import {
-  getAllOwnedObjectsByFilter,
   getSuiObject,
   normalizeIdOrThrow,
-  normalizeOptionalAddress,
   normalizeOptionalIdFromValue,
   unwrapMoveObjectFields
 } from "@sui-oracle-market/tooling-core/object"
@@ -25,8 +23,7 @@ import {
 } from "@sui-oracle-market/tooling-core/utils/move-values"
 import {
   parseNonNegativeU64,
-  parseOptionalU64,
-  requireValue
+  parseOptionalU64
 } from "@sui-oracle-market/tooling-core/utils/utility"
 import type { ItemListingSummary } from "./item-listing.ts"
 import { normalizeOptionalListingIdFromValue } from "./item-listing.ts"
@@ -34,7 +31,7 @@ import { parseUsdToCents } from "./shop.ts"
 
 export const DISCOUNT_TEMPLATE_TYPE_FRAGMENT = "::shop::DiscountTemplate"
 export const DISCOUNT_TEMPLATE_CREATED_EVENT_TYPE_FRAGMENT =
-  "::shop::DiscountTemplateCreatedEvent"
+  "::events::DiscountTemplateCreated"
 const SHOP_DISCOUNT_TEMPLATES_FIELD = "discount_templates"
 
 export const discountRuleChoices = ["fixed", "percent"] as const
@@ -45,13 +42,7 @@ export type NormalizedRuleKind = 0 | 1
 
 export type DiscountContext =
   | { mode: "none" }
-  | {
-      mode: "ticket"
-      discountTicketId: string
-      discountTemplateId: string
-      ticketDetails: DiscountTicketDetails
-    }
-  | { mode: "claim"; discountTemplateId: string }
+  | { mode: "template"; discountTemplateId: string }
 
 export const defaultStartTimestampSeconds = () => Math.floor(Date.now() / 1000)
 
@@ -380,7 +371,6 @@ export type DiscountTemplateSummary = {
   startsAt?: string
   expiresAt?: string
   maxRedemptions?: string
-  claimsIssued?: string
   redemptions?: string
   activeFlag: boolean
   status: string
@@ -422,88 +412,56 @@ export const pickDefaultDiscountOptionId = (options: DiscountOption[]) => {
 export const buildDiscountOptions = ({
   listing,
   shopId,
-  discountTemplates,
-  discountTickets
+  discountTemplates
 }: {
   listing?: ItemListingSummary
   shopId?: string
   discountTemplates: DiscountTemplateSummary[]
-  discountTickets: DiscountTicketDetails[]
 }): DiscountOption[] => {
   if (!listing || !shopId) return []
-  const templateLookup = buildDiscountTemplateLookup(discountTemplates)
-  const spotlightTemplate = listing.spotlightTemplateId
-    ? templateLookup[listing.spotlightTemplateId]
-    : undefined
-
-  const eligibleTickets = discountTickets.filter((ticket) => {
-    if (ticket.shopId !== shopId) return false
-    if (ticket.listingId && ticket.listingId !== listing.itemListingId)
-      return false
-
-    const template = templateLookup[ticket.discountTemplateId]
-    if (
-      template?.appliesToListingId &&
-      template.appliesToListingId !== listing.itemListingId
+  const eligibleTemplates = discountTemplates
+    .filter((template) => {
+      if (template.shopId !== shopId) return false
+      if (
+        template.appliesToListingId &&
+        template.appliesToListingId !== listing.itemListingId
+      )
+        return false
+      return true
+    })
+    .sort((leftTemplate, rightTemplate) =>
+      leftTemplate.discountTemplateId.localeCompare(
+        rightTemplate.discountTemplateId
+      )
     )
-      return false
 
-    return true
-  })
-
-  const ticketOptions: DiscountOption[] = eligibleTickets.map((ticket) => {
-    const template = templateLookup[ticket.discountTemplateId]
-    const status = template?.status
-    const isActive = status ? status === "active" : true
-
-    return {
-      id: `ticket:${ticket.discountTicketId}`,
-      label: template?.ruleDescription || "Discount ticket",
-      description: `Use ticket ${shortenId(ticket.discountTicketId)}${
-        ticket.listingId ? " for this listing" : ""
-      }.`,
-      status,
-      disabled: !isActive,
-      selection: {
-        mode: "ticket",
-        discountTicketId: ticket.discountTicketId,
-        discountTemplateId: ticket.discountTemplateId,
-        ticketDetails: ticket
+  const templateOptions: DiscountOption[] = eligibleTemplates.map(
+    (template) => {
+      const isActive = template.status === "active"
+      return {
+        id: `template:${template.discountTemplateId}`,
+        label: template.ruleDescription,
+        description: template.appliesToListingId
+          ? `Applies to listing ${shortenId(template.appliesToListingId)}.`
+          : "Applies to all listings.",
+        status: template.status,
+        disabled: !isActive,
+        selection: {
+          mode: "template",
+          discountTemplateId: template.discountTemplateId
+        }
       }
     }
-  })
-
-  const claimOption: DiscountOption[] =
-    spotlightTemplate &&
-    spotlightTemplate.status === "active" &&
-    !eligibleTickets.some(
-      (ticket) =>
-        ticket.discountTemplateId === spotlightTemplate.discountTemplateId
-    )
-      ? [
-          {
-            id: "claim",
-            label: spotlightTemplate.ruleDescription,
-            description:
-              "Claim a single-use ticket and redeem it in the same transaction.",
-            status: spotlightTemplate.status,
-            selection: {
-              mode: "claim",
-              discountTemplateId: spotlightTemplate.discountTemplateId
-            }
-          }
-        ]
-      : []
+  )
 
   return [
     {
       id: "none",
       label: "No discount",
-      description: "Checkout without a discount ticket.",
+      description: "Checkout without a discount template.",
       selection: { mode: "none" }
     },
-    ...ticketOptions,
-    ...claimOption
+    ...templateOptions
   ]
 }
 
@@ -665,9 +623,6 @@ const buildDiscountTemplateSummary = (
   const maxRedemptions = normalizeOptionalU64FromValue(
     discountTemplateFields.max_redemptions
   )
-  const claimsIssued = normalizeOptionalU64FromValue(
-    discountTemplateFields.claims_issued
-  )
   const redemptions = normalizeOptionalU64FromValue(
     discountTemplateFields.redemptions
   )
@@ -692,7 +647,6 @@ const buildDiscountTemplateSummary = (
       maxRedemptions === undefined
         ? undefined
         : formatOptionalNumericValue(maxRedemptions),
-    claimsIssued: formatOptionalNumericValue(claimsIssued),
     redemptions: formatOptionalNumericValue(redemptions),
     activeFlag,
     status: deriveTemplateStatus({
@@ -703,108 +657,4 @@ const buildDiscountTemplateSummary = (
       redemptions
     })
   }
-}
-
-export const DISCOUNT_TICKET_TYPE_FRAGMENT = "::shop::DiscountTicket"
-
-export const formatDiscountTicketStructType = (packageId: string): string =>
-  `${normalizeSuiObjectId(packageId)}${DISCOUNT_TICKET_TYPE_FRAGMENT}`
-
-export type DiscountTicketDetails = {
-  discountTicketId: string
-  discountTemplateId: string
-  shopId: string
-  listingId?: string
-  claimer: string
-}
-
-export const parseDiscountTicketFromObject = (
-  discountTicketObject: SuiObjectData
-): DiscountTicketDetails => {
-  const discountTicketId = normalizeIdOrThrow(
-    discountTicketObject.objectId,
-    "DiscountTicket object is missing an id."
-  )
-
-  const discountTicketFields = unwrapMoveObjectFields<{
-    discount_template_id: unknown
-    shop_id: unknown
-    listing_id: unknown
-    claimer: unknown
-  }>(discountTicketObject)
-
-  const listingId = normalizeOptionalListingIdFromValue(
-    discountTicketFields.listing_id
-  )
-
-  return {
-    discountTicketId,
-    discountTemplateId: normalizeIdOrThrow(
-      normalizeOptionalIdFromValue(discountTicketFields.discount_template_id),
-      `Missing discount_template_id for DiscountTicket ${discountTicketId}.`
-    ),
-    shopId: normalizeIdOrThrow(
-      normalizeOptionalIdFromValue(discountTicketFields.shop_id),
-      `Missing shop_id for DiscountTicket ${discountTicketId}.`
-    ),
-    listingId,
-    claimer: requireValue(
-      normalizeOptionalAddress(
-        discountTicketFields.claimer as string | undefined
-      ),
-      `Missing claimer for DiscountTicket ${discountTicketId}.`
-    )
-  }
-}
-
-type CreatedObjectLike = {
-  objectType?: string | null
-  objectId?: string | null
-}
-
-export const findCreatedDiscountTicketId = (
-  createdObjects: CreatedObjectLike[]
-) =>
-  createdObjects.find((object) =>
-    object.objectType?.includes(DISCOUNT_TICKET_TYPE_FRAGMENT)
-  )?.objectId || undefined
-
-/**
- * Lists DiscountTicket objects owned by an address with optional shop filtering.
- */
-export const getDiscountTicketSummaries = async ({
-  ownerAddress,
-  shopPackageId,
-  shopFilterId,
-  suiClient
-}: {
-  ownerAddress: string
-  shopPackageId: string
-  shopFilterId?: string
-  suiClient: SuiClient
-}): Promise<DiscountTicketDetails[]> => {
-  const discountTicketStructType = formatDiscountTicketStructType(shopPackageId)
-
-  const discountTicketObjects = await getAllOwnedObjectsByFilter(
-    {
-      ownerAddress,
-      filter: { StructType: discountTicketStructType }
-    },
-    { suiClient }
-  )
-
-  const discountTickets = discountTicketObjects.map(
-    parseDiscountTicketFromObject
-  )
-
-  if (!shopFilterId) return discountTickets
-
-  const normalizedShopFilterId = normalizeIdOrThrow(
-    shopFilterId,
-    "Invalid shop id provided for filtering."
-  )
-
-  return discountTickets.filter(
-    (discountTicket) => discountTicket.shopId === normalizedShopFilterId
-  )
 }
