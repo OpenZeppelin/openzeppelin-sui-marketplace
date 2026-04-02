@@ -281,8 +281,6 @@ public struct DiscountTemplate has drop, store {
 }
 
 /// Resolved pricing guardrails after capping buyer overrides against seller limits.
-/// `max_price_status_lag_secs_cap` is intentionally not part of this struct because checkout and
-/// quote flows enforce `AcceptedCurrency.max_price_status_lag_secs_cap` directly.
 public struct EffectiveGuardrails has copy, drop {
     max_price_age_secs: u64,
     max_confidence_ratio_bps: u16,
