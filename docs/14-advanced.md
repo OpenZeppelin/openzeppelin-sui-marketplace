@@ -50,10 +50,10 @@ pnpm script buyer:buy --help
   still convert between `UID` and address forms for events and off-chain tooling via
   `object::uid_to_address` and `object::id_from_address`.
   Code: `packages/dapp/contracts/oracle-market/sources/shop.move` (helper functions and events)
-- **Transfers and sharing**: `txf::public_transfer` moves owned resources, and `txf::share_object`
+- **Transfers and sharing**: `transfer::public_transfer` moves owned resources, and `transfer::public_share_object`
   creates shared objects. This pattern replaces EVM-style factory deployments.
   Code: `packages/dapp/contracts/oracle-market/sources/shop.move` (`create_shop`, `finalize_purchase_transfers`)
-- **TxContext usage**: `tx::TxContext` is needed for object creation (`object::new`) and coin splits.
+- **TxContext usage**: `TxContext` is needed for object creation (`object::new`) and coin splits.
   Code: `packages/dapp/contracts/oracle-market/sources/shop.move` (`split_payment`, `create_shop`)
 - **Fixed-point math**: prices are stored in USD cents; discounts use basis points; conversion uses
   u128 scaling with OZ decimal helpers to avoid floating-point math.

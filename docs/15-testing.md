@@ -51,7 +51,7 @@ let price_info_id = pyth_price_info::uid_to_inner(&price_info_object);
 #[test_only]
 public fun new_price_info_object_for_test(
   price_info: PriceInfo,
-  ctx: &mut tx::TxContext,
+  ctx: &mut TxContext,
 ): PriceInfoObject {
   new_price_info_object(price_info, ctx)
 }

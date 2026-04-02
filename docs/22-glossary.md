@@ -32,7 +32,7 @@
 public struct Shop has key, store {
   id: UID,
   owner: address,
-  name: string::String,
+  name: String,
   disabled: bool,
 }
 ```
