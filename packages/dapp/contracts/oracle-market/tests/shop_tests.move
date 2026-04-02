@@ -260,6 +260,26 @@ macro fun assert_emitted<$T>($expected_event: $T) {
 
 // === Tests ===
 
+#[test]
+fun update_shop_owner_updates_owner_and_emits_previous_owner_event() {
+    let mut ctx = tx_context::dummy();
+    let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
+
+    shop.update_shop_owner(&owner_cap, OTHER_OWNER);
+
+    assert_eq!(shop.shop_owner(), OTHER_OWNER);
+    assert_emitted!(
+        events::shop_owner_updated(
+            shop.shop_id(),
+            owner_cap.shop_owner_cap_id(),
+            TEST_OWNER,
+        ),
+    );
+
+    std::unit_test::destroy(owner_cap);
+    std::unit_test::destroy(shop);
+}
+
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::EAcceptedCurrencyExists)]
 fun add_accepted_currency_rejects_duplicate_coin_type() {
     let mut ctx = tx_context::new_from_hint(@0x0, 9, 0, 0, 0);
@@ -1186,7 +1206,7 @@ fun update_item_listing_stock_updates_listing_and_emits_events() {
     assert!(option::is_none(&spotlight_template));
     assert_eq!(stock, 11);
 
-    assert_emitted!(events::item_listing_stock_updated(shop.shop_id(), listing_id));
+    assert_emitted!(events::item_listing_stock_updated(shop.shop_id(), listing_id, 4));
 
     remove_listing_if_exists(&mut shop, &owner_cap, listing_id);
     std::unit_test::destroy(owner_cap);
@@ -1264,6 +1284,7 @@ fun update_item_listing_stock_handles_multiple_updates_and_events() {
     let expected_stock_updated_event = events::item_listing_stock_updated(
         shop.shop_id(),
         listing_id,
+        5,
     );
     shop.update_item_listing_stock(
         &owner_cap,
@@ -1286,6 +1307,7 @@ fun update_item_listing_stock_handles_multiple_updates_and_events() {
         events::item_listing_stock_updated(
             shop.shop_id(),
             listing_id,
+            8,
         ),
     );
     assert_eq!(event::events_by_type<events::ItemListingStockUpdated>().length(), 2);
@@ -2103,8 +2125,8 @@ fun toggle_discount_template_updates_active_and_emits_events() {
     assert_eq!(redemptions_after_second, redemptions);
     assert!(active_after_second);
 
-    assert_emitted!(events::discount_template_toggled(shop.shop_id(), template));
-    assert_eq!(event::events_by_type<events::DiscountTemplateToggled>().length(), 2);
+    assert_emitted!(events::discount_template_toggled(shop.shop_id(), template, false));
+    assert_emitted!(events::discount_template_toggled(shop.shop_id(), template, true));
 
     shop.remove_discount_template(&owner_cap, template);
     std::unit_test::destroy(owner_cap);
@@ -3656,6 +3678,7 @@ fun buy_item_emits_events_decrements_stock_and_refunds_change() {
         events::item_listing_stock_updated(
             shared_shop.shop_id(),
             listing_id,
+            2,
         ),
     );
 
