@@ -424,7 +424,7 @@ fun add_accepted_currency_rejects_missing_price_object() {
     abort
 }
 
-#[test, expected_failure(abort_code = ::sui_oracle_market::shop::EPriceTooStale)]
+#[test, expected_failure(abort_code = ::sui_oracle_market::shop::EPriceInvalidPublishTime)]
 fun quote_rejects_price_timestamp_older_than_max_age() {
     let mut scn = test_scenario::begin(TEST_OWNER);
     let (shop_id, owner_cap_id) = create_default_shop_and_owner_cap_ids_for_sender(&mut scn);
