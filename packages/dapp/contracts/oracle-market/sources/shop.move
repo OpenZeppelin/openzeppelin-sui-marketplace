@@ -569,7 +569,6 @@ public fun add_accepted_currency<TCoin>(
         age_cap,
         confidence_cap,
     );
-    let pyth_object_id = accepted_currency.pyth_object_id;
     shop.accepted_currencies.add(coin_type, accepted_currency);
 
     events::emit_accepted_coin_added(shop_id, pyth_object_id);
