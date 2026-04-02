@@ -154,7 +154,7 @@ The safety properties are enforced directly on the template and checkout path:
 - template must be active;
 - template must be within its time window;
 - listing-scoped templates must match the purchased listing;
-- `max_redemptions` is enforced against `redemptions`.
+- `max_redemptions`, when present, must be greater than `0` and is enforced against `redemptions`.
 
 This keeps discount rules auditable and deterministic without introducing extra owned claim objects.
 
