@@ -26,7 +26,7 @@ pnpm script owner:shop:update-owner --new-owner <0x...>
 
 ## 5. Concept deep dive: shared objects and capabilities
 - **Shared objects**: `Shop` is shared so anyone can read it and anyone can submit a transaction that
-  touches it, but only the right capability can mutate it. Sharing is explicit via `txf::share_object`,
+  touches it, but only the right capability can mutate it. Sharing is explicit via `transfer::public_share_object`,
   and shared objects become the concurrency boundary for transactions.
   Code: `packages/dapp/contracts/oracle-market/sources/shop.move` (`create_shop`, `Shop`)
 - **Ownership types in practice**: `ShopOwnerCap` is address-owned, the Shop is shared, and dynamic
@@ -40,7 +40,7 @@ pnpm script owner:shop:update-owner --new-owner <0x...>
 - **TxContext and object creation**: `obj::new(ctx)` creates new objects and assigns IDs. The
   capability and the shop are minted in a single transaction.
   Code: `packages/dapp/contracts/oracle-market/sources/shop.move` (`create_shop`, `new_shop`)
-- **Public transfer vs sharing**: `txf::public_transfer` moves owned objects to an address; sharing
+- **Public transfer vs sharing**: `transfer::public_transfer` moves owned objects to an address; sharing
   creates a global shared object. This mirrors deploy + ownership transfer in a single PTB.
   Code: `packages/dapp/contracts/oracle-market/sources/shop.move` (`create_shop`)
 
@@ -53,7 +53,7 @@ pnpm script owner:shop:update-owner --new-owner <0x...>
 **Code spotlight: Shop creation + owner cap mint**
 `packages/dapp/contracts/oracle-market/sources/shop.move`
 ```move
-public fun create_shop(name: string::String, ctx: &mut tx::TxContext) {
+public fun create_shop(name: String, ctx: &mut TxContext) {
   let owner = ctx.sender();
   let shop = new_shop(name, owner, ctx);
 
@@ -62,8 +62,8 @@ public fun create_shop(name: string::String, ctx: &mut tx::TxContext) {
     shop_id: shop.id.to_inner(),
   };
 
-  txf::share_object(shop);
-  txf::public_transfer(owner_cap, owner);
+  transfer::public_share_object(shop);
+  transfer::public_transfer(owner_cap, owner);
 }
 ```
 
