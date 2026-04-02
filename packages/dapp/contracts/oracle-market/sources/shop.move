@@ -44,10 +44,10 @@
 /// - Transfers and sharing: transfer::public_transfer moves owned objects;
 ///   transfer::public_share_object makes shared objects.
 ///   Docs: docs/07-shop-capabilities.md, docs/14-advanced.md
-/// - Coins and coin registry: Coin<T> is a resource, coin_registry::Currency<T> supplies metadata.
+/// - Coins and coin registry: Coin<T> is a resource, Currency<T> supplies metadata.
 ///   coin::split and coin::destroy_zero manage payment/change. Docs: docs/05-currencies-oracles.md,
 ///   docs/09-currencies-oracles.md, docs/17-ptb-gas.md
-/// - Clock and time: clock::Clock is a shared, read-only object with a consensus-set timestamp_ms.
+/// - Clock and time: Clock is a shared, read-only object with a consensus-set timestamp_ms.
 ///   It can only be read via immutable reference in transaction-invoked functions. This module converts it to
 ///   seconds for discount windows and oracle freshness; it is not a wall-clock guarantee. Docs:
 ///   docs/09-currencies-oracles.md, docs/10-discounts-tickets.md
@@ -68,13 +68,13 @@ use openzeppelin_math::u128;
 use openzeppelin_math::u64;
 use pyth::i64;
 use pyth::price;
-use pyth::price_info;
+use pyth::price_info::{Self, PriceInfoObject};
 use pyth::pyth;
 use std::string::String;
 use std::type_name::{Self, TypeName};
-use sui::clock;
-use sui::coin;
-use sui::coin_registry;
+use sui::clock::Clock;
+use sui::coin::Coin;
+use sui::coin_registry::Currency;
 use sui::package;
 use sui::table::{Self, Table};
 use sui_oracle_market::events;
@@ -542,8 +542,8 @@ public fun remove_item_listing(shop: &mut Shop, owner_cap: &ShopOwnerCap, listin
 public fun add_accepted_currency<TCoin>(
     shop: &mut Shop,
     owner_cap: &ShopOwnerCap,
-    currency: &coin_registry::Currency<TCoin>,
-    price_info_object: &price_info::PriceInfoObject,
+    currency: &Currency<TCoin>,
+    price_info_object: &PriceInfoObject,
     feed_id: vector<u8>,
     pyth_object_id: ID,
     max_price_age_secs_cap: Option<u64>,
@@ -687,7 +687,7 @@ public fun update_discount_template(
     starts_at: u64,
     expires_at: Option<u64>,
     max_redemptions: Option<u64>,
-    clock: &clock::Clock,
+    clock: &Clock,
 ) {
     assert_owner_cap!(shop, owner_cap);
     assert_template_registered!(shop, discount_template_id);
@@ -802,14 +802,14 @@ public fun clear_template_from_listing(shop: &mut Shop, owner_cap: &ShopOwnerCap
 ///   of owned resources, not external calls.
 public fun buy_item<TItem: store, TCoin>(
     shop: &mut Shop,
-    price_info_object: &price_info::PriceInfoObject,
-    payment: coin::Coin<TCoin>,
+    price_info_object: &PriceInfoObject,
+    payment: Coin<TCoin>,
     listing_id: ID,
     mint_to: address,
     refund_extra_to: address,
     max_price_age_secs: Option<u64>,
     max_confidence_ratio_bps: Option<u16>,
-    clock: &clock::Clock,
+    clock: &Clock,
     ctx: &mut TxContext,
 ) {
     assert_shop_active!(shop);
@@ -850,14 +850,14 @@ public fun buy_item<TItem: store, TCoin>(
 public fun buy_item_with_discount<TItem: store, TCoin>(
     shop: &mut Shop,
     discount_template_id: ID,
-    price_info_object: &price_info::PriceInfoObject,
-    payment: coin::Coin<TCoin>,
+    price_info_object: &PriceInfoObject,
+    payment: Coin<TCoin>,
     listing_id: ID,
     mint_to: address,
     refund_extra_to: address,
     max_price_age_secs: Option<u64>,
     max_confidence_ratio_bps: Option<u16>,
-    clock: &clock::Clock,
+    clock: &Clock,
     ctx: &mut TxContext,
 ) {
     assert_shop_active!(shop);
@@ -1134,11 +1134,11 @@ fun remove_registered_accepted_currency(shop: &mut Shop, coin_type: TypeName): A
 
 fun quote_amount_with_guardrails(
     accepted_currency: &AcceptedCurrency,
-    price_info_object: &price_info::PriceInfoObject,
+    price_info_object: &PriceInfoObject,
     price_usd_cents: u64,
     max_price_age_secs: Option<u64>,
     max_confidence_ratio_bps: Option<u16>,
-    clock: &clock::Clock,
+    clock: &Clock,
 ): u64 {
     let effective_guardrails = resolve_effective_guardrails(
         accepted_currency,
@@ -1171,16 +1171,16 @@ fun quote_amount_with_guardrails(
 
 fun process_purchase<TItem: store, TCoin>(
     shop: &mut Shop,
-    price_info_object: &price_info::PriceInfoObject,
-    payment: coin::Coin<TCoin>,
+    price_info_object: &PriceInfoObject,
+    payment: Coin<TCoin>,
     listing_id: ID,
     discounted_price_usd_cents: u64,
     discount_template_id: Option<ID>,
     max_price_age_secs: Option<u64>,
     max_confidence_ratio_bps: Option<u16>,
-    clock: &clock::Clock,
+    clock: &Clock,
     ctx: &mut TxContext,
-): (Option<coin::Coin<TCoin>>, coin::Coin<TCoin>, ShopItem<TItem>) {
+): (Option<Coin<TCoin>>, Coin<TCoin>, ShopItem<TItem>) {
     let coin_type = currency_type<TCoin>();
 
     let accepted_currency = shop.borrow_registered_accepted_currency(coin_type);
@@ -1211,15 +1211,15 @@ fun process_purchase<TItem: store, TCoin>(
 
 fun process_purchase_core<TItem: store, TCoin>(
     item_listing: &mut ItemListing,
-    mut payment: coin::Coin<TCoin>,
+    mut payment: Coin<TCoin>,
     shop_id: ID,
     pyth_price_info_object_id: ID,
     quote_amount: u64,
     discounted_price_usd_cents: u64,
     discount_template_id: Option<ID>,
-    clock: &clock::Clock,
+    clock: &Clock,
     ctx: &mut TxContext,
-): (Option<coin::Coin<TCoin>>, coin::Coin<TCoin>, ShopItem<TItem>) {
+): (Option<Coin<TCoin>>, Coin<TCoin>, ShopItem<TItem>) {
     assert_stock_available!(item_listing);
 
     let owed_coin_opt = split_payment(&mut payment, quote_amount, ctx);
@@ -1283,7 +1283,7 @@ public(package) fun discount_rule_value(rule: DiscountRule): u64 {
 /// Normalize consensus clock milliseconds to seconds once at the boundary.
 /// Pyth stale checks and price timestamps are second-based (`max_age_secs` vs `price::get_timestamp`),
 /// so keeping module guardrails in seconds avoids mixed-unit errors.
-fun now_secs(clock: &clock::Clock): u64 {
+fun now_secs(clock: &Clock): u64 {
     clock.timestamp_ms() / 1000
 }
 
@@ -1385,10 +1385,10 @@ fun conservative_price_mantissa(
 }
 
 fun split_payment<TCoin>(
-    payment: &mut coin::Coin<TCoin>,
+    payment: &mut Coin<TCoin>,
     amount_due: u64,
     ctx: &mut TxContext,
-): Option<coin::Coin<TCoin>> {
+): Option<Coin<TCoin>> {
     if (amount_due == 0) {
         return option::none()
     };
@@ -1406,7 +1406,7 @@ fun decrement_stock(item_listing: &mut ItemListing) {
 fun mint_shop_item<TItem: store>(
     item_listing: &ItemListing,
     shop_id: ID,
-    clock: &clock::Clock,
+    clock: &Clock,
     ctx: &mut TxContext,
 ): ShopItem<TItem> {
     assert_listing_type_matches!<TItem>(item_listing);
@@ -1591,7 +1591,7 @@ macro fun assert_accepted_currency_inputs(
     $coin_type: TypeName,
     $feed_id: vector<u8>,
     $pyth_object_id: ID,
-    $price_info_object: &price_info::PriceInfoObject,
+    $price_info_object: &PriceInfoObject,
 ) {
     let shop = $shop;
     let coin_type = $coin_type;
@@ -1613,7 +1613,7 @@ macro fun assert_valid_feed_id($feed_id: vector<u8>) {
 macro fun assert_price_info_identity(
     $expected_feed_id: vector<u8>,
     $expected_pyth_object_id: ID,
-    $price_info_object: &price_info::PriceInfoObject,
+    $price_info_object: &PriceInfoObject,
 ) {
     let expected_feed_id = $expected_feed_id;
     let expected_pyth_object_id = $expected_pyth_object_id;
@@ -1642,7 +1642,7 @@ macro fun assert_supported_decimals($decimals: u8) {
 
 macro fun assert_price_info_matches_currency(
     $accepted_currency: &AcceptedCurrency,
-    $price_info_object: &price_info::PriceInfoObject,
+    $price_info_object: &PriceInfoObject,
 ) {
     let accepted_currency = $accepted_currency;
     let price_info_object = $price_info_object;
@@ -1829,11 +1829,11 @@ public fun discount_template_active(template: &DiscountTemplate): bool {
 /// Quotes the coin amount for a price info object with guardrails.
 public fun quote_amount_for_price_info_object<TCoin>(
     shop: &Shop,
-    price_info_object: &price_info::PriceInfoObject,
+    price_info_object: &PriceInfoObject,
     price_usd_cents: u64,
     max_price_age_secs: Option<u64>,
     max_confidence_ratio_bps: Option<u16>,
-    clock: &clock::Clock,
+    clock: &Clock,
 ): u64 {
     let coin_type = currency_type<TCoin>();
     let accepted_currency = shop.borrow_registered_accepted_currency(coin_type);

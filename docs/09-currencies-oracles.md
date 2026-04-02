@@ -68,7 +68,7 @@ public fun add_accepted_currency<T>(
   shop: &mut Shop,
   owner_cap: &ShopOwnerCap,
   currency: &coin_registry::Currency<T>,
-  price_info_object: &price_info::PriceInfoObject,
+  price_info_object: &PriceInfoObject,
   feed_id: vector<u8>,
   pyth_object_id: ID,
   max_price_age_secs_cap: Option<u64>,

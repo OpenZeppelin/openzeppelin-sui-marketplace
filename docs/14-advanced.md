@@ -109,8 +109,8 @@ function buy(uint256 listingId, address payToken) external {
 // Move (actual shape)
 public fun buy_item<TItem: store, TCoin>(
   shop: &mut Shop,
-  price_info: &price_info::PriceInfoObject,
-  payment_coin: coin::Coin<TCoin>,
+  price_info: &PriceInfoObject,
+  payment_coin: Coin<TCoin>,
   listing_id: ID,
   mint_to: address,
   refund_to: address,

@@ -1,7 +1,7 @@
 module mock_coin::mock_coin;
 
 use sui::coin;
-use sui::coin_registry;
+use sui::coin_registry::{Self, CurrencyInitializer, CoinRegistry};
 
 // === Structs ===
 
@@ -26,7 +26,7 @@ const MOCK_COIN_SUPPLY: u64 = 1_000_000_000_000_000_000;
 
 /// Initializes the local mock USD currency.
 entry fun init_local_mock_usd(
-    registry: &mut coin_registry::CoinRegistry,
+    registry: &mut CoinRegistry,
     recipient: address,
     ctx: &mut TxContext,
 ) {
@@ -44,7 +44,7 @@ entry fun init_local_mock_usd(
 
 /// Initializes the local mock BTC currency.
 entry fun init_local_mock_btc(
-    registry: &mut coin_registry::CoinRegistry,
+    registry: &mut CoinRegistry,
     recipient: address,
     ctx: &mut TxContext,
 ) {
@@ -64,7 +64,7 @@ entry fun init_local_mock_btc(
 
 fun finalize_and_fund_coin<T: key + store>(
     mut treasury_cap: coin::TreasuryCap<T>,
-    init: coin_registry::CurrencyInitializer<T>,
+    init: CurrencyInitializer<T>,
     recipient: address,
     ctx: &mut TxContext,
 ) {

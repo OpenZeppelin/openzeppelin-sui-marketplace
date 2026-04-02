@@ -68,7 +68,7 @@ From `assert_price_info_identity` in `packages/dapp/contracts/oracle-market/sour
 fun assert_price_info_identity(
    expected_feed_id: &vector<u8>,
    expected_pyth_object_id: &ID,
-   price_info_object: &price_info::PriceInfoObject,
+   price_info_object: &PriceInfoObject,
 ) {
    let confirmed_price_object = price_info::uid_to_inner(price_info_object);
    assert!(

@@ -9,9 +9,9 @@ use pyth::price_info;
 use pyth::pyth;
 use std::type_name;
 use std::unit_test::assert_eq;
-use sui::clock;
+use sui::clock::{Self, Clock};
 use sui::coin;
-use sui::coin_registry;
+use sui::coin_registry::{Self, Currency};
 use sui::event;
 use sui::test_scenario;
 use sui_oracle_market::events;
@@ -110,7 +110,7 @@ fun take_shared_shop(scn: &test_scenario::Scenario, shop_id: ID): shop::Shop {
 
 fun add_currency_with_feed<T>(
     shop: &mut shop::Shop,
-    currency: &coin_registry::Currency<T>,
+    currency: &Currency<T>,
     feed_id: vector<u8>,
     owner_cap: &shop::ShopOwnerCap,
     ctx: &mut tx_context::TxContext,
@@ -137,7 +137,7 @@ fun add_test_coin_accepted_currency_for_scenario(
     scn: &mut test_scenario::Scenario,
     shop: &mut shop::Shop,
     owner_cap: &shop::ShopOwnerCap,
-    currency: &coin_registry::Currency<TestCoin>,
+    currency: &Currency<TestCoin>,
     feed_id: vector<u8>,
     max_price_age_secs_cap: Option<u64>,
     max_confidence_ratio_bps_cap: Option<u16>,
@@ -196,7 +196,7 @@ fun create_default_shop_and_owner_cap_ids_for_sender(scn: &mut test_scenario::Sc
     create_shop_and_owner_cap_ids_for_sender(scn, DEFAULT_SHOP_NAME)
 }
 
-fun create_test_clock_at(ctx: &mut tx_context::TxContext, timestamp_secs: u64): clock::Clock {
+fun create_test_clock_at(ctx: &mut tx_context::TxContext, timestamp_secs: u64): Clock {
     let mut clock_object = clock::create_for_testing(ctx);
     clock::set_for_testing(&mut clock_object, timestamp_secs);
     clock_object
@@ -208,7 +208,7 @@ fun begin_buyer_checkout_context(
     shop_id: ID,
     price_info_id: ID,
     timestamp_secs: u64,
-): (shop::Shop, price_info::PriceInfoObject, clock::Clock) {
+): (shop::Shop, price_info::PriceInfoObject, Clock) {
     let _ = test_scenario::next_tx(scn, buyer);
     let shared_shop = take_shared_shop(scn, shop_id);
     let price_info_object = test_scenario::take_shared_by_id(
@@ -222,7 +222,7 @@ fun begin_buyer_checkout_context(
 fun close_buyer_checkout_context(
     shared_shop: shop::Shop,
     price_info_object: price_info::PriceInfoObject,
-    clock_object: clock::Clock,
+    clock_object: Clock,
 ) {
     test_scenario::return_shared(shared_shop);
     test_scenario::return_shared(price_info_object);
@@ -4436,7 +4436,7 @@ fun quote_amount_from_usd_cents_rejects_confidence_interval_too_wide() {
     abort
 }
 
-fun create_test_currency(ctx: &mut tx_context::TxContext): coin_registry::Currency<TestCoin> {
+fun create_test_currency(ctx: &mut tx_context::TxContext): Currency<TestCoin> {
     let mut registry_obj = coin_registry::create_coin_data_registry_for_testing(ctx);
     let (init, treasury_cap) = coin_registry::new_currency<TestCoin>(
         &mut registry_obj,
@@ -4453,9 +4453,7 @@ fun create_test_currency(ctx: &mut tx_context::TxContext): coin_registry::Curren
     currency
 }
 
-fun create_alt_test_currency(
-    ctx: &mut tx_context::TxContext,
-): coin_registry::Currency<AltTestCoin> {
+fun create_alt_test_currency(ctx: &mut tx_context::TxContext): Currency<AltTestCoin> {
     let mut registry_obj = coin_registry::create_coin_data_registry_for_testing(ctx);
     let (init, treasury_cap) = coin_registry::new_currency<AltTestCoin>(
         &mut registry_obj,
@@ -4472,9 +4470,7 @@ fun create_alt_test_currency(
     currency
 }
 
-fun create_high_decimal_currency(
-    ctx: &mut tx_context::TxContext,
-): coin_registry::Currency<HighDecimalCoin> {
+fun create_high_decimal_currency(ctx: &mut tx_context::TxContext): Currency<HighDecimalCoin> {
     let mut registry_obj = coin_registry::create_coin_data_registry_for_testing(ctx);
     let over_max_decimals = (TEST_MAX_DECIMAL_POWER + 1) as u8;
     let (init, treasury_cap) = coin_registry::new_currency<HighDecimalCoin>(
@@ -4495,7 +4491,7 @@ fun create_high_decimal_currency(
 fun prepare_test_currency_for_owner(
     scn: &mut test_scenario::Scenario,
     owner: address,
-): coin_registry::Currency<TestCoin> {
+): Currency<TestCoin> {
     let _ = test_scenario::next_tx(scn, @0x0);
     let currency = create_test_currency(test_scenario::ctx(scn));
     let _ = test_scenario::next_tx(scn, owner);
