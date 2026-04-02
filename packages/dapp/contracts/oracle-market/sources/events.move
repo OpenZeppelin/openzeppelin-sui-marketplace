@@ -16,6 +16,8 @@ public struct ShopOwnerUpdated has copy, drop {
     shop_id: ID,
     /// Owner capability used for the update.
     owner_cap_id: ID,
+    /// Previous owner address.
+    previous_owner: address,
 }
 
 /// Event emitted when a shop is disabled.
@@ -40,6 +42,8 @@ public struct ItemListingStockUpdated has copy, drop {
     shop_id: ID,
     /// Listing whose stock changed.
     listing_id: ID,
+    /// Previous stock.
+    previous_stock: u64,
 }
 
 /// Event emitted when an item listing is removed.
@@ -72,6 +76,8 @@ public struct DiscountTemplateToggled has copy, drop {
     shop_id: ID,
     /// Toggled template ID.
     discount_template_id: ID,
+    /// New template status.
+    active: bool,
 }
 
 /// Event emitted when an accepted coin is added.
@@ -125,10 +131,15 @@ public(package) fun emit_shop_created(shop_id: ID, owner_cap_id: ID) {
 }
 
 /// Emits a `ShopOwnerUpdated` payload.
-public(package) fun emit_shop_owner_updated(shop_id: ID, owner_cap_id: ID) {
+public(package) fun emit_shop_owner_updated(
+    shop_id: ID,
+    owner_cap_id: ID,
+    previous_owner: address,
+) {
     event::emit(ShopOwnerUpdated {
         shop_id,
         owner_cap_id,
+        previous_owner,
     });
 }
 
@@ -149,10 +160,15 @@ public(package) fun emit_item_listing_added(shop_id: ID, listing_id: ID) {
 }
 
 /// Emits an `ItemListingStockUpdated` payload.
-public(package) fun emit_item_listing_stock_updated(shop_id: ID, listing_id: ID) {
+public(package) fun emit_item_listing_stock_updated(
+    shop_id: ID,
+    listing_id: ID,
+    previous_stock: u64,
+) {
     event::emit(ItemListingStockUpdated {
         shop_id,
         listing_id,
+        previous_stock,
     });
 }
 
@@ -181,10 +197,15 @@ public(package) fun emit_discount_template_updated(shop_id: ID, discount_templat
 }
 
 /// Emits a `DiscountTemplateToggled` payload.
-public(package) fun emit_discount_template_toggled(shop_id: ID, discount_template_id: ID) {
+public(package) fun emit_discount_template_toggled(
+    shop_id: ID,
+    discount_template_id: ID,
+    active: bool,
+) {
     event::emit(DiscountTemplateToggled {
         shop_id,
         discount_template_id,
+        active,
     });
 }
 
@@ -246,10 +267,15 @@ public(package) fun shop_created(shop_id: ID, owner_cap_id: ID): ShopCreated {
 
 /// Builds a `ShopOwnerUpdated` payload.
 #[test_only]
-public(package) fun shop_owner_updated(shop_id: ID, owner_cap_id: ID): ShopOwnerUpdated {
+public(package) fun shop_owner_updated(
+    shop_id: ID,
+    owner_cap_id: ID,
+    previous_owner: address,
+): ShopOwnerUpdated {
     ShopOwnerUpdated {
         shop_id,
         owner_cap_id,
+        previous_owner,
     }
 }
 
@@ -276,10 +302,12 @@ public(package) fun item_listing_added(shop_id: ID, listing_id: ID): ItemListing
 public(package) fun item_listing_stock_updated(
     shop_id: ID,
     listing_id: ID,
+    previous_stock: u64,
 ): ItemListingStockUpdated {
     ItemListingStockUpdated {
         shop_id,
         listing_id,
+        previous_stock,
     }
 }
 
@@ -321,10 +349,12 @@ public(package) fun discount_template_updated(
 public(package) fun discount_template_toggled(
     shop_id: ID,
     discount_template_id: ID,
+    active: bool,
 ): DiscountTemplateToggled {
     DiscountTemplateToggled {
         shop_id,
         discount_template_id,
+        active,
     }
 }
 
