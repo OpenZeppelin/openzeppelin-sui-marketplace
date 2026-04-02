@@ -25,7 +25,7 @@ use sui_oracle_market::events;
 //   single shared root (`Shop`) and stores listings/currencies/templates in typed dynamic
 //   collections under that root, so callers pass one shared object and the module resolves internal
 //   entries by ID/type. Shared objects are created with object::new and shared via
-//   transfer::share_object.
+//   transfer::public_share_object.
 //   Docs: docs/07-shop-capabilities.md, docs/08-listings-receipts.md, docs/09-currencies-oracles.md,
 //   docs/10-discounts-tickets.md, docs/16-object-ownership.md
 // - Owned objects (ShopOwnerCap, ShopItem): ownership enforces authority or user
@@ -59,7 +59,7 @@ use sui_oracle_market::events;
 //   object::UID holds that ID,
 //   and object::uid_to_inner / object::id_from_address convert between UID/ID and address forms
 //   for indexing and off-chain tooling. Docs: docs/14-advanced.md
-// - Transfers and sharing: transfer::public_transfer moves owned objects; transfer::share_object makes shared
+// - Transfers and sharing: transfer::public_transfer moves owned objects; transfer::public_share_object makes shared
 //   objects. Docs: docs/07-shop-capabilities.md, docs/14-advanced.md
 // - Coins and coin registry: Coin<T> is a resource, coin_registry::Currency<T> supplies metadata.
 //   coin::split and coin::destroy_zero manage payment/change. Docs: docs/05-currencies-oracles.md,
@@ -77,79 +77,79 @@ use sui_oracle_market::events;
 //   production calls. Docs: docs/15-testing.md
 
 // === Errors ===
-#[error]
+#[error(code = 0)]
 const EInvalidOwnerCap: vector<u8> = b"invalid owner capability";
-#[error]
+#[error(code = 1)]
 const EEmptyItemName: vector<u8> = b"empty item name";
-#[error]
+#[error(code = 2)]
 const EInvalidPrice: vector<u8> = b"invalid price";
-#[error]
+#[error(code = 3)]
 const EZeroStock: vector<u8> = b"zero stock";
-#[error]
+#[error(code = 4)]
 const ETemplateWindow: vector<u8> = b"invalid template window";
-#[error]
+#[error(code = 5)]
 const ETemplateNotFound: vector<u8> = b"template not found";
-#[error]
+#[error(code = 6)]
 const EListingNotFound: vector<u8> = b"listing not found";
-#[error]
+#[error(code = 7)]
 const EListingHasActiveTemplates: vector<u8> = b"listing has active templates";
-#[error]
+#[error(code = 8)]
 const EListingTemplateCountUnderflow: vector<u8> = b"listing template count underflow";
-#[error]
+#[error(code = 9)]
 const EInvalidRuleKind: vector<u8> = b"invalid rule kind";
-#[error]
+#[error(code = 10)]
 const EInvalidRuleValue: vector<u8> = b"invalid rule value";
-#[error]
+#[error(code = 11)]
 const EAcceptedCurrencyExists: vector<u8> = b"accepted currency exists";
-#[error]
+#[error(code = 12)]
 const EAcceptedCurrencyMissing: vector<u8> = b"accepted currency missing";
-#[error]
+#[error(code = 13)]
 const EEmptyFeedId: vector<u8> = b"empty feed id";
-#[error]
+#[error(code = 14)]
 const EInvalidFeedIdLength: vector<u8> = b"invalid feed id length";
-#[error]
+#[error(code = 15)]
 const ETemplateInactive: vector<u8> = b"template inactive";
-#[error]
+#[error(code = 16)]
 const ETemplateTooEarly: vector<u8> = b"template too early";
-#[error]
+#[error(code = 17)]
 const ETemplateExpired: vector<u8> = b"template expired";
-#[error]
+#[error(code = 18)]
 const ETemplateMaxedOut: vector<u8> = b"template maxed out";
-#[error]
+#[error(code = 19)]
 const EOutOfStock: vector<u8> = b"out of stock";
-#[error]
+#[error(code = 20)]
 const EPythObjectMismatch: vector<u8> = b"pyth object mismatch";
-#[error]
+#[error(code = 21)]
 const EFeedIdentifierMismatch: vector<u8> = b"feed identifier mismatch";
-#[error]
+#[error(code = 22)]
 const EPriceNonPositive: vector<u8> = b"price non-positive";
-#[error]
+#[error(code = 23)]
 const EPriceOverflow: vector<u8> = b"price overflow";
-#[error]
+#[error(code = 24)]
 const EInsufficientPayment: vector<u8> = b"insufficient payment";
-#[error]
+#[error(code = 25)]
 const EConfidenceIntervalTooWide: vector<u8> = b"confidence interval too wide";
-#[error]
+#[error(code = 26)]
 const EConfidenceExceedsPrice: vector<u8> = b"confidence exceeds price";
-#[error]
+#[error(code = 27)]
 const ESpotlightTemplateListingMismatch: vector<u8> = b"spotlight template listing mismatch";
-#[error]
+#[error(code = 28)]
 const EInvalidGuardrailCap: vector<u8> = b"invalid guardrail cap";
-#[error]
+#[error(code = 29)]
 const ETemplateFinalized: vector<u8> = b"template finalized";
-#[error]
+#[error(code = 30)]
 const EItemTypeMismatch: vector<u8> = b"item type mismatch";
-#[error]
+#[error(code = 31)]
 const EUnsupportedCurrencyDecimals: vector<u8> = b"unsupported currency decimals";
-#[error]
+#[error(code = 32)]
 const EEmptyShopName: vector<u8> = b"empty shop name";
-#[error]
+#[error(code = 33)]
 const EShopDisabled: vector<u8> = b"shop disabled";
-#[error]
-const EPriceTooStale: vector<u8> = b"price too stale";
-#[error]
+#[error(code = 34)]
+const EPriceInvalidPublishTime: vector<u8> = b"invalid publish timestamp";
+#[error(code = 35)]
 const EDiscountListingMismatch: vector<u8> = b"discount listing mismatch";
-#[error]
+#[error(code = 36)]
 const EInvalidMaxRedemptions: vector<u8> = b"invalid max redemptions";
 
 // === Constants ===
@@ -313,7 +313,7 @@ public fun create_shop(name: String, ctx: &mut TxContext): (ID, ShopOwnerCap) {
 
     events::emit_shop_created(shop_id, owner_cap_id);
 
-    transfer::share_object(shop);
+    transfer::public_share_object(shop);
     (shop_id, owner_cap)
 }
 
@@ -1144,8 +1144,11 @@ fun quote_amount_with_guardrails(
     let current_price = price_info.get_price_feed().get_price();
     let publish_time = current_price.get_timestamp();
     let now = now_secs(clock);
-    assert!(now >= publish_time, EPriceTooStale);
-    assert!(now - publish_time <= effective_guardrails.max_price_age_secs, EPriceTooStale);
+    assert!(now >= publish_time, EPriceInvalidPublishTime);
+    assert!(
+        now - publish_time <= effective_guardrails.max_price_age_secs,
+        EPriceInvalidPublishTime,
+    );
     let price = pyth::get_price_no_older_than(
         price_info_object,
         clock,

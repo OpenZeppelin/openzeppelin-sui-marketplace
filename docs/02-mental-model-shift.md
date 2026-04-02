@@ -53,10 +53,10 @@ public struct ShopOwnerCap has key, store {
 public struct Shop has key, store {
   id: UID,
   owner: address,
-  name: string::String,
+  name: String,
   disabled: bool,
-  accepted_currencies: table::Table<TypeName, AcceptedCurrency>,
-  listings: table::Table<ID, ItemListing>,
+  accepted_currencies: Table<TypeName, AcceptedCurrency>,
+  listings: Table<ID, ItemListing>,
 }
 ```
 
@@ -94,17 +94,17 @@ await publishPackageToNetwork(
 **Code spotlight: instantiate a Shop after publish**
 `packages/dapp/contracts/oracle-market/sources/shop.move`
 ```move
-public fun create_shop(name: string::String, ctx: &mut tx::TxContext) {
-  let owner = ctx.sender();
-  let shop = new_shop(name, owner, ctx);
+public fun create_shop(name: String, ctx: &mut TxContext): (ID, ShopOwnerCap) {
+    let shop = new_shop(name, ctx.sender(), ctx);
+    let shop_id = shop.id.to_inner();
 
-  let owner_cap = ShopOwnerCap {
-    id: obj::new(ctx),
-    shop_id: shop.id.to_inner(),
-  };
+    let owner_cap = ShopOwnerCap {
+        id: object::new(ctx),
+        shop_id,
+    };
 
-  txf::share_object(shop);
-  txf::public_transfer(owner_cap, owner);
+    transfer::public_share_object(shop);
+    (shop_id, owner_cap)
 }
 ```
 
