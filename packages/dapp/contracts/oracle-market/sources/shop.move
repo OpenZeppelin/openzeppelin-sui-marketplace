@@ -481,10 +481,6 @@ public fun add_item_listing_with_discount_template<T: store>(
         ctx,
     );
 
-    events::emit_discount_template_created(
-        shop.id.to_inner(),
-        discount_template_id,
-    );
     (listing_id, discount_template_id)
 }
 
@@ -619,6 +615,12 @@ fun create_discount_template_core(
     );
     shop.discount_templates.add(discount_template_id, discount_template);
     shop.increment_active_template_count_if_listing_bound(applies_to_listing);
+
+    events::emit_discount_template_created(
+        shop.id.to_inner(),
+        discount_template_id,
+    );
+
     discount_template_id
 }
 
@@ -653,7 +655,7 @@ public fun create_discount_template(
     ctx: &mut TxContext,
 ) {
     assert_owner_cap!(shop, owner_cap);
-    let discount_template_id = shop.create_discount_template_core(
+    shop.create_discount_template_core(
         applies_to_listing,
         rule_kind,
         rule_value,
@@ -661,11 +663,6 @@ public fun create_discount_template(
         expires_at,
         max_redemptions,
         ctx,
-    );
-
-    events::emit_discount_template_created(
-        shop.id.to_inner(),
-        discount_template_id,
     );
 }
 
@@ -1908,7 +1905,7 @@ public fun test_create_discount_template_local(
     max_redemptions: Option<u64>,
     ctx: &mut TxContext,
 ): ID {
-    let template_id = shop.create_discount_template_core(
+    shop.create_discount_template_core(
         applies_to_listing,
         rule_kind,
         rule_value,
@@ -1916,12 +1913,5 @@ public fun test_create_discount_template_local(
         expires_at,
         max_redemptions,
         ctx,
-    );
-
-    events::emit_discount_template_created(
-        shop.id.to_inner(),
-        template_id,
-    );
-
-    template_id
+    )
 }
