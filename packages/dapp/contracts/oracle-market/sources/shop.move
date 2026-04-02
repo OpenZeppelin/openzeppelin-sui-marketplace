@@ -659,7 +659,7 @@ public fun create_discount_template(
     expires_at: Option<u64>,
     max_redemptions: Option<u64>,
     ctx: &mut TxContext,
-) {
+): ID {
     assert_owner_cap!(shop, owner_cap);
     shop.create_discount_template_core(
         applies_to_listing,
@@ -669,7 +669,7 @@ public fun create_discount_template(
         expires_at,
         max_redemptions,
         ctx,
-    );
+    )
 }
 
 /// Update mutable fields on a template (schedule, rule, limits).
@@ -1900,27 +1900,4 @@ public fun test_setup_shop(owner: address, ctx: &mut TxContext): (Shop, ShopOwne
         shop_id: shop.id.to_inner(),
     };
     (shop, owner_cap)
-}
-
-/// Creates a discount template in local test state and emits the created event.
-#[test_only]
-public fun test_create_discount_template_local(
-    shop: &mut Shop,
-    applies_to_listing: Option<ID>,
-    rule_kind: u8,
-    rule_value: u64,
-    starts_at: u64,
-    expires_at: Option<u64>,
-    max_redemptions: Option<u64>,
-    ctx: &mut TxContext,
-): ID {
-    shop.create_discount_template_core(
-        applies_to_listing,
-        rule_kind,
-        rule_value,
-        starts_at,
-        expires_at,
-        max_redemptions,
-        ctx,
-    )
 }
