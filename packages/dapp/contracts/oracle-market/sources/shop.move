@@ -25,7 +25,7 @@ use sui_oracle_market::events;
 //   single shared root (`Shop`) and stores listings/currencies/templates in typed dynamic
 //   collections under that root, so callers pass one shared object and the module resolves internal
 //   entries by ID/type. Shared objects are created with object::new and shared via
-//   transfer::share_object.
+//   transfer::public_share_object.
 //   Docs: docs/07-shop-capabilities.md, docs/08-listings-receipts.md, docs/09-currencies-oracles.md,
 //   docs/10-discounts-tickets.md, docs/16-object-ownership.md
 // - Owned objects (ShopOwnerCap, ShopItem): ownership enforces authority or user
@@ -59,7 +59,7 @@ use sui_oracle_market::events;
 //   object::UID holds that ID,
 //   and object::uid_to_inner / object::id_from_address convert between UID/ID and address forms
 //   for indexing and off-chain tooling. Docs: docs/14-advanced.md
-// - Transfers and sharing: transfer::public_transfer moves owned objects; transfer::share_object makes shared
+// - Transfers and sharing: transfer::public_transfer moves owned objects; transfer::public_share_object makes shared
 //   objects. Docs: docs/07-shop-capabilities.md, docs/14-advanced.md
 // - Coins and coin registry: Coin<T> is a resource, coin_registry::Currency<T> supplies metadata.
 //   coin::split and coin::destroy_zero manage payment/change. Docs: docs/05-currencies-oracles.md,
