@@ -36,7 +36,7 @@ pnpm script buyer:buy \
 3. **Redemption limits -> on-template counters**: `max_redemptions` and `redemptions` enforce bounds without separate ticket objects.
 
 ## 5. Lifecycle mechanics
-- **Schedules and scoping**: `starts_at` is required; `expires_at` and `max_redemptions` are optional. Templates may be listing-scoped via `applies_to_listing`.
+- **Schedules and scoping**: `starts_at` is required; `expires_at` and `max_redemptions` are optional. When `max_redemptions` is set, it must be greater than `0`. Templates may be listing-scoped via `applies_to_listing`.
 - **Redemption guards**: checkout validates template active state, time window, listing scope, and max redemptions.
 - **Clock-based timing**: redemption checks use shared `Clock`, not client time.
 

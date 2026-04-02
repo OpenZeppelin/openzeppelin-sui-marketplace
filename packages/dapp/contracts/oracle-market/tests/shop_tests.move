@@ -1687,6 +1687,25 @@ fun create_discount_template_rejects_invalid_schedule() {
     abort
 }
 
+#[test, expected_failure(abort_code = ::sui_oracle_market::shop::EInvalidMaxRedemptions)]
+fun create_discount_template_rejects_zero_max_redemptions() {
+    let mut ctx = tx_context::dummy();
+    let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
+
+    shop.create_discount_template(
+        &owner_cap,
+        option::none(),
+        0,
+        1_000,
+        10,
+        option::some(20),
+        option::some(0),
+        &mut ctx,
+    );
+
+    abort
+}
+
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::EListingNotFound)]
 fun create_discount_template_rejects_foreign_listing_reference() {
     let mut ctx = tx_context::dummy();
@@ -1880,6 +1899,36 @@ fun update_discount_template_rejects_invalid_schedule() {
         100,
         option::some(50),
         option::none(),
+        &clock_obj,
+    );
+
+    abort
+}
+
+#[test, expected_failure(abort_code = ::sui_oracle_market::shop::EInvalidMaxRedemptions)]
+fun update_discount_template_rejects_zero_max_redemptions() {
+    let mut ctx = tx_context::dummy();
+    let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
+
+    let template = shop.test_create_discount_template_local(
+        option::none(),
+        0,
+        500,
+        0,
+        option::none(),
+        option::some(5),
+        &mut ctx,
+    );
+
+    let clock_obj = clock::create_for_testing(&mut ctx);
+    shop.update_discount_template(
+        &owner_cap,
+        template,
+        0,
+        1_000,
+        0,
+        option::none(),
+        option::some(0),
         &clock_obj,
     );
 

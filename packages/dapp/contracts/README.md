@@ -45,7 +45,7 @@ Oracle Guardrails
 
 Discount Lifecycle Notes
 ------------------------
-- Templates track schedules (`starts_at`/`expires_at`), optional max redemptions, and activity flags; once redemptions exist and the window is closed/maxed, updates are blocked.
+- Templates track schedules (`starts_at`/`expires_at`), optional max redemptions (if set, must be > 0), and activity flags; once redemptions exist and the window is closed/maxed, updates are blocked.
 - Spotlighting is explicit: listings can carry an optional template for UI promotion, and assertions ensure the template actually applies to that listing.
 - Redemption limits are enforced by `max_redemptions` + `redemptions` counters on each template.
 

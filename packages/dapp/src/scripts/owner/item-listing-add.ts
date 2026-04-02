@@ -172,7 +172,7 @@ runSuiScript(
       alias: ["create-spotlight-max-redemptions", "spotlight-max-redemptions"],
       type: "string",
       description:
-        "Optional max redemptions for the atomically created spotlight template."
+        "Optional max redemptions for the atomically created spotlight template. If set, must be greater than zero."
     })
     .option("publisherId", {
       alias: "publisher-id",
