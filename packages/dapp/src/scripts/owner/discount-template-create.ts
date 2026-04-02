@@ -108,7 +108,7 @@ runSuiScript(
       alias: ["max-redemptions", "max-uses"],
       type: "string",
       description:
-        "Optional global redemption cap. Omit for unlimited redemptions."
+        "Optional global redemption cap. If set, must be greater than zero; omit for unlimited redemptions."
     })
     .option("listingId", {
       alias: ["listing-id", "applies-to"],

@@ -73,7 +73,6 @@ public fun add_accepted_currency<T>(
   pyth_object_id: ID,
   max_price_age_secs_cap: Option<u64>,
   max_confidence_ratio_bps_cap: Option<u16>,
-  max_price_status_lag_secs_cap: Option<u64>,
 ) {
   assert_owner_cap!(shop, owner_cap);
 
@@ -93,7 +92,6 @@ public fun add_accepted_currency<T>(
     coin_registry::symbol(currency),
     resolve_guardrail_cap!(max_price_age_secs_cap, DEFAULT_MAX_PRICE_AGE_SECS),
     resolve_guardrail_cap!(max_confidence_ratio_bps_cap, DEFAULT_MAX_CONFIDENCE_RATIO_BPS),
-    resolve_guardrail_cap!(max_price_status_lag_secs_cap, DEFAULT_MAX_PRICE_STATUS_LAG_SECS),
   );
 
   shop.accepted_currencies.add(coin_type, accepted_currency);
