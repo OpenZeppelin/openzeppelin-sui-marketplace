@@ -630,7 +630,7 @@ fun create_discount_template_core(
 /// Callers send primitive args (`rule_kind` of `0 = fixed` or `1 = percent`), but we immediately convert them into the strongly
 /// typed `DiscountRule` before persisting. For `Fixed` rules the `rule_value` is denominated in USD
 /// cents to match listing prices.
-/// 
+///
 /// - Discounts live inside a typed on-chain collection attached to the shared shop instead of rows
 ///   in opaque contract storage.
 /// - Converting user-friendly primitives into enums early avoids magic numbers and preserves type
