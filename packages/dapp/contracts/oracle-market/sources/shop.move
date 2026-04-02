@@ -149,6 +149,8 @@ const EShopDisabled: vector<u8> = b"shop disabled";
 const EPriceTooStale: vector<u8> = b"price too stale";
 #[error]
 const EDiscountListingMismatch: vector<u8> = b"discount listing mismatch";
+#[error]
+const EInvalidMaxRedemptions: vector<u8> = b"invalid max redemptions";
 
 // === Constants ===
 const CENTS_PER_DOLLAR: u64 = 100;
@@ -259,7 +261,6 @@ public enum DiscountRuleKind has copy, drop {
     Percent,
 }
 
-// TODO#q: rename DiscountTemplate -> Discount
 /// Coupon template for creating discounts tracked under the shop.
 public struct DiscountTemplate has drop, store {
     /// Template identifier and key in `Shop.discount_templates`.
@@ -281,8 +282,6 @@ public struct DiscountTemplate has drop, store {
 }
 
 /// Resolved pricing guardrails after capping buyer overrides against seller limits.
-/// `max_price_status_lag_secs_cap` is intentionally not part of this struct because checkout and
-/// quote flows enforce `AcceptedCurrency.max_price_status_lag_secs_cap` directly.
 public struct EffectiveGuardrails has copy, drop {
     max_price_age_secs: u64,
     max_confidence_ratio_bps: u16,
@@ -603,6 +602,9 @@ fun create_discount_template_core(
     ctx: &mut TxContext,
 ): ID {
     assert_discount_template_inputs!(shop, applies_to_listing, starts_at, expires_at);
+    max_redemptions.do_ref!(|max_value| {
+        assert!(*max_value > 0, EInvalidMaxRedemptions);
+    });
 
     let discount_rule_kind = parse_rule_kind(rule_kind);
     let discount_rule = discount_rule_kind.build_discount_rule(rule_value);
@@ -683,6 +685,9 @@ public fun update_discount_template(
     assert_owner_cap!(shop, owner_cap);
     assert_template_registered!(shop, discount_template_id);
     assert_schedule!(starts_at, expires_at);
+    max_redemptions.do_ref!(|max_value| {
+        assert!(*max_value > 0, EInvalidMaxRedemptions);
+    });
 
     let discount_rule_kind = parse_rule_kind(rule_kind);
     let discount_rule = discount_rule_kind.build_discount_rule(rule_value);
@@ -1536,9 +1541,7 @@ macro fun assert_template_in_time_window($template: &DiscountTemplate, $now_secs
 fun redemption_cap_reached(template: &DiscountTemplate): bool {
     template
         .max_redemptions
-        .map_ref!(
-            |max_redemptions| (*max_redemptions > 0) && (template.redemptions >= *max_redemptions),
-        )
+        .map_ref!(|max_redemptions| template.redemptions >= *max_redemptions)
         .destroy_or!(false)
 }
 
