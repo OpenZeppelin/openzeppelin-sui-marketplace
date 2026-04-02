@@ -335,9 +335,10 @@ public fun disable_shop(shop: &mut Shop, owner_cap: &ShopOwnerCap) {
 public fun update_shop_owner(shop: &mut Shop, owner_cap: &ShopOwnerCap, new_owner: address) {
     assert_owner_cap!(shop, owner_cap);
 
+    let previous_owner = shop.owner;
     shop.owner = new_owner;
 
-    events::emit_shop_owner_updated(shop.id.to_inner(), owner_cap.id.to_inner());
+    events::emit_shop_owner_updated(shop.id.to_inner(), owner_cap.id.to_inner(), previous_owner);
 }
 
 // === Item Listing ===
@@ -480,10 +481,6 @@ public fun add_item_listing_with_discount_template<T: store>(
         ctx,
     );
 
-    events::emit_discount_template_created(
-        shop.id.to_inner(),
-        discount_template_id,
-    );
     (listing_id, discount_template_id)
 }
 
@@ -497,9 +494,10 @@ public fun update_item_listing_stock(
     assert_owner_cap!(shop, owner_cap);
     let item_listing = shop.borrow_listing_mut(listing_id);
 
+    let previous_stock = item_listing.stock;
     item_listing.stock = new_stock;
 
-    events::emit_item_listing_stock_updated(shop.id.to_inner(), listing_id);
+    events::emit_item_listing_stock_updated(shop.id.to_inner(), listing_id, previous_stock);
 }
 
 /// Remove an item listing entirely.
@@ -569,10 +567,9 @@ public fun add_accepted_currency<TCoin>(
         age_cap,
         confidence_cap,
     );
-    let accepted_currency_id = accepted_currency.pyth_object_id;
     shop.accepted_currencies.add(coin_type, accepted_currency);
 
-    events::emit_accepted_coin_added(shop_id, accepted_currency_id);
+    events::emit_accepted_coin_added(shop_id, pyth_object_id);
 }
 
 /// Deregister an accepted coin type.
@@ -617,6 +614,12 @@ fun create_discount_template_core(
     );
     shop.discount_templates.add(discount_template_id, discount_template);
     shop.increment_active_template_count_if_listing_bound(applies_to_listing);
+
+    events::emit_discount_template_created(
+        shop.id.to_inner(),
+        discount_template_id,
+    );
+
     discount_template_id
 }
 
@@ -628,7 +631,7 @@ fun create_discount_template_core(
 /// Callers send primitive args (`rule_kind` of `0 = fixed` or `1 = percent`), but we immediately convert them into the strongly
 /// typed `DiscountRule` before persisting. For `Fixed` rules the `rule_value` is denominated in USD
 /// cents to match listing prices.
-/// 
+///
 /// - Discounts live inside a typed on-chain collection attached to the shared shop instead of rows
 ///   in opaque contract storage.
 /// - Converting user-friendly primitives into enums early avoids magic numbers and preserves type
@@ -651,7 +654,7 @@ public fun create_discount_template(
     ctx: &mut TxContext,
 ) {
     assert_owner_cap!(shop, owner_cap);
-    let discount_template_id = shop.create_discount_template_core(
+    shop.create_discount_template_core(
         applies_to_listing,
         rule_kind,
         rule_value,
@@ -659,11 +662,6 @@ public fun create_discount_template(
         expires_at,
         max_redemptions,
         ctx,
-    );
-
-    events::emit_discount_template_created(
-        shop.id.to_inner(),
-        discount_template_id,
     );
 }
 
@@ -731,9 +729,11 @@ public fun toggle_discount_template(
     );
 
     let discount_template = shop.borrow_discount_template_mut(discount_template_id);
-    discount_template.active = active;
 
-    events::emit_discount_template_toggled(shop.id.to_inner(), discount_template_id);
+    if (discount_template.active != active) {
+        discount_template.active = active;
+        events::emit_discount_template_toggled(shop.id.to_inner(), discount_template_id, active);
+    };
 }
 
 /// Removes a template from shop storage.
@@ -1182,7 +1182,7 @@ fun process_purchase<TItem: store, TCoin>(
         max_confidence_ratio_bps,
         clock,
     );
-    let accepted_currency_id = accepted_currency.pyth_object_id;
+    let pyth_price_info_object_id = accepted_currency.pyth_object_id;
     let shop_id = shop.id.to_inner();
 
     let item_listing = shop.borrow_listing_mut(listing_id);
@@ -1190,7 +1190,7 @@ fun process_purchase<TItem: store, TCoin>(
     item_listing.process_purchase_core<TItem, TCoin>(
         payment,
         shop_id,
-        accepted_currency_id,
+        pyth_price_info_object_id,
         quote_amount,
         discounted_price_usd_cents,
         discount_template_id,
@@ -1203,7 +1203,7 @@ fun process_purchase_core<TItem: store, TCoin>(
     item_listing: &mut ItemListing,
     mut payment: coin::Coin<TCoin>,
     shop_id: ID,
-    accepted_currency_id: ID,
+    pyth_price_info_object_id: ID,
     quote_amount: u64,
     discounted_price_usd_cents: u64,
     discount_template_id: Option<ID>,
@@ -1215,9 +1215,10 @@ fun process_purchase_core<TItem: store, TCoin>(
     let owed_coin_opt = split_payment(&mut payment, quote_amount, ctx);
     let amount_paid = owed_coin_opt.map_ref!(|owed_coin| owed_coin.value()).destroy_or!(0);
 
+    let previous_stock = item_listing.stock;
     item_listing.decrement_stock();
 
-    events::emit_item_listing_stock_updated(shop_id, item_listing.listing_id);
+    events::emit_item_listing_stock_updated(shop_id, item_listing.listing_id, previous_stock);
 
     let minted_item = item_listing.mint_shop_item<TItem>(shop_id, clock, ctx);
     let minted_item_id = minted_item.id.to_inner();
@@ -1225,7 +1226,7 @@ fun process_purchase_core<TItem: store, TCoin>(
     events::emit_purchase_completed(
         shop_id,
         item_listing.listing_id,
-        accepted_currency_id,
+        pyth_price_info_object_id,
         discount_template_id,
         minted_item_id,
         amount_paid,
@@ -1903,7 +1904,7 @@ public fun test_create_discount_template_local(
     max_redemptions: Option<u64>,
     ctx: &mut TxContext,
 ): ID {
-    let template_id = shop.create_discount_template_core(
+    shop.create_discount_template_core(
         applies_to_listing,
         rule_kind,
         rule_value,
@@ -1911,12 +1912,5 @@ public fun test_create_discount_template_local(
         expires_at,
         max_redemptions,
         ctx,
-    );
-
-    events::emit_discount_template_created(
-        shop.id.to_inner(),
-        template_id,
-    );
-
-    template_id
+    )
 }

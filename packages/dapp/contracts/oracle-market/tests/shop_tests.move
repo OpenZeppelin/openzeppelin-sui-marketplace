@@ -146,18 +146,18 @@ fun add_test_coin_accepted_currency_for_scenario(
         feed_id,
         test_scenario::ctx(scn),
     );
-    let accepted_currency_id = price_info_object.uid_to_inner();
+    let pyth_object_id = price_info_object.uid_to_inner();
     shop.add_accepted_currency<TestCoin>(
         owner_cap,
         currency,
         &price_info_object,
         feed_id,
-        accepted_currency_id,
+        pyth_object_id,
         max_price_age_secs_cap,
         max_confidence_ratio_bps_cap,
     );
     transfer::public_share_object(price_info_object);
-    accepted_currency_id
+    pyth_object_id
 }
 
 fun remove_listing_if_exists(
@@ -259,6 +259,26 @@ macro fun assert_emitted<$T>($expected_event: $T) {
 }
 
 // === Tests ===
+
+#[test]
+fun update_shop_owner_updates_owner_and_emits_previous_owner_event() {
+    let mut ctx = tx_context::dummy();
+    let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
+
+    shop.update_shop_owner(&owner_cap, OTHER_OWNER);
+
+    assert_eq!(shop.shop_owner(), OTHER_OWNER);
+    assert_emitted!(
+        events::shop_owner_updated(
+            shop.shop_id(),
+            owner_cap.shop_owner_cap_id(),
+            TEST_OWNER,
+        ),
+    );
+
+    std::unit_test::destroy(owner_cap);
+    std::unit_test::destroy(shop);
+}
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::EAcceptedCurrencyExists)]
 fun add_accepted_currency_rejects_duplicate_coin_type() {
@@ -1186,7 +1206,7 @@ fun update_item_listing_stock_updates_listing_and_emits_events() {
     assert!(option::is_none(&spotlight_template));
     assert_eq!(stock, 11);
 
-    assert_emitted!(events::item_listing_stock_updated(shop.shop_id(), listing_id));
+    assert_emitted!(events::item_listing_stock_updated(shop.shop_id(), listing_id, 4));
 
     remove_listing_if_exists(&mut shop, &owner_cap, listing_id);
     std::unit_test::destroy(owner_cap);
@@ -1264,6 +1284,7 @@ fun update_item_listing_stock_handles_multiple_updates_and_events() {
     let expected_stock_updated_event = events::item_listing_stock_updated(
         shop.shop_id(),
         listing_id,
+        5,
     );
     shop.update_item_listing_stock(
         &owner_cap,
@@ -1286,6 +1307,7 @@ fun update_item_listing_stock_handles_multiple_updates_and_events() {
         events::item_listing_stock_updated(
             shop.shop_id(),
             listing_id,
+            8,
         ),
     );
     assert_eq!(event::events_by_type<events::ItemListingStockUpdated>().length(), 2);
@@ -2103,8 +2125,8 @@ fun toggle_discount_template_updates_active_and_emits_events() {
     assert_eq!(redemptions_after_second, redemptions);
     assert!(active_after_second);
 
-    assert_emitted!(events::discount_template_toggled(shop.shop_id(), template));
-    assert_eq!(event::events_by_type<events::DiscountTemplateToggled>().length(), 2);
+    assert_emitted!(events::discount_template_toggled(shop.shop_id(), template, false));
+    assert_emitted!(events::discount_template_toggled(shop.shop_id(), template, true));
 
     shop.remove_discount_template(&owner_cap, template);
     std::unit_test::destroy(owner_cap);
@@ -3480,7 +3502,7 @@ fun remove_accepted_currency_emits_removed_event_fields() {
         &scn,
         owner_cap_id,
     );
-    let accepted_currency_id = add_test_coin_accepted_currency_for_scenario(
+    let pyth_object_id = add_test_coin_accepted_currency_for_scenario(
         &mut scn,
         &mut shop_obj,
         &owner_cap_obj,
@@ -3507,7 +3529,7 @@ fun remove_accepted_currency_emits_removed_event_fields() {
     assert_emitted!(
         events::accepted_coin_removed(
             shared_shop.shop_id(),
-            accepted_currency_id,
+            pyth_object_id,
         ),
     );
 
@@ -3537,7 +3559,7 @@ fun setup_shop_with_listing_and_price_info(
 ): (ID, ID, ID) {
     let (
         shop_id,
-        _accepted_currency_id,
+        _pyth_object_id,
         listing_id,
         price_info_id,
     ) = setup_shop_with_currency_listing_and_price_info(
@@ -3576,7 +3598,7 @@ fun setup_shop_with_currency_listing_and_price_info_for_item<TItem: store>(
         option::none(),
         option::none(),
     );
-    let accepted_currency_id = price_info_id;
+    let pyth_object_id = price_info_id;
     std::unit_test::destroy(currency);
 
     let listing_id = shop_obj.add_item_listing<TItem>(
@@ -3592,7 +3614,7 @@ fun setup_shop_with_currency_listing_and_price_info_for_item<TItem: store>(
     transfer::public_share_object(shop_obj);
     transfer::public_transfer(owner_cap, @0x0);
 
-    (shop_id, accepted_currency_id, listing_id, price_info_id)
+    (shop_id, pyth_object_id, listing_id, price_info_id)
 }
 
 #[test]
@@ -3600,7 +3622,7 @@ fun buy_item_emits_events_decrements_stock_and_refunds_change() {
     let mut scn = test_scenario::begin(TEST_OWNER);
     let (
         shop_id,
-        accepted_currency_id,
+        pyth_object_id,
         listing_id,
         price_info_id,
     ) = setup_shop_with_currency_listing_and_price_info(&mut scn, 100, 2);
@@ -3644,7 +3666,7 @@ fun buy_item_emits_events_decrements_stock_and_refunds_change() {
         events::purchase_completed(
             shared_shop.shop_id(),
             listing_id,
-            accepted_currency_id,
+            pyth_object_id,
             option::none(),
             minted_item_id,
             quote_amount,
@@ -3656,6 +3678,7 @@ fun buy_item_emits_events_decrements_stock_and_refunds_change() {
         events::item_listing_stock_updated(
             shared_shop.shop_id(),
             listing_id,
+            2,
         ),
     );
 
@@ -3668,7 +3691,7 @@ fun buy_item_supports_example_car_receipts() {
     let mut scn = test_scenario::begin(TEST_OWNER);
     let (
         shop_id,
-        accepted_currency_id,
+        pyth_object_id,
         listing_id,
         price_info_id,
     ) = setup_shop_with_currency_listing_and_price_info_for_item<Car>(
@@ -3716,7 +3739,7 @@ fun buy_item_supports_example_car_receipts() {
         events::purchase_completed(
             shared_shop.shop_id(),
             listing_id,
-            accepted_currency_id,
+            pyth_object_id,
             option::none(),
             minted_item_id,
             quote_amount,
@@ -3733,7 +3756,7 @@ fun buy_item_supports_example_bike_receipts() {
     let mut scn = test_scenario::begin(TEST_OWNER);
     let (
         shop_id,
-        accepted_currency_id,
+        pyth_object_id,
         listing_id,
         price_info_id,
     ) = setup_shop_with_currency_listing_and_price_info_for_item<Bike>(
@@ -3781,7 +3804,7 @@ fun buy_item_supports_example_bike_receipts() {
         events::purchase_completed(
             shared_shop.shop_id(),
             listing_id,
-            accepted_currency_id,
+            pyth_object_id,
             option::none(),
             minted_item_id,
             quote_amount,
@@ -3798,7 +3821,7 @@ fun buy_item_emits_events_with_exact_payment_and_zero_change() {
     let mut scn = test_scenario::begin(TEST_OWNER);
     let (
         shop_id,
-        accepted_currency_id,
+        pyth_object_id,
         listing_id,
         price_info_id,
     ) = setup_shop_with_currency_listing_and_price_info(&mut scn, 100, 2);
@@ -3841,7 +3864,7 @@ fun buy_item_emits_events_with_exact_payment_and_zero_change() {
         events::purchase_completed(
             shared_shop.shop_id(),
             listing_id,
-            accepted_currency_id,
+            pyth_object_id,
             option::none(),
             minted_item_id,
             quote_amount,
