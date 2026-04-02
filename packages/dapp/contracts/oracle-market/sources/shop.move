@@ -423,7 +423,8 @@ fun add_item_listing_with_discount_template_core<T: store>(
         option::none(),
         ctx,
     );
-    let discount_template_id = shop.create_discount_template_core(
+    let discount_template_id = shop.create_discount_template(
+        owner_cap,
         option::some(listing_id),
         rule_kind,
         rule_value,
@@ -593,43 +594,6 @@ public fun remove_accepted_currency<TCoin>(shop: &mut Shop, owner_cap: &ShopOwne
 
 // === Discount ===
 
-fun create_discount_template_core(
-    shop: &mut Shop,
-    applies_to_listing: Option<ID>,
-    rule_kind: u8,
-    rule_value: u64,
-    starts_at: u64,
-    expires_at: Option<u64>,
-    max_redemptions: Option<u64>,
-    ctx: &mut TxContext,
-): ID {
-    assert_discount_template_inputs!(shop, applies_to_listing, starts_at, expires_at);
-    max_redemptions.do_ref!(|max_value| {
-        assert!(*max_value > 0, EInvalidMaxRedemptions);
-    });
-
-    let discount_rule_kind = parse_rule_kind(rule_kind);
-    let discount_rule = discount_rule_kind.build_discount_rule(rule_value);
-    let discount_template_id = new_object_id(ctx);
-    let discount_template = new_discount_template(
-        discount_template_id,
-        applies_to_listing,
-        discount_rule,
-        starts_at,
-        expires_at,
-        max_redemptions,
-    );
-    shop.discount_templates.add(discount_template_id, discount_template);
-    shop.increment_active_template_count_if_listing_bound(applies_to_listing);
-
-    events::emit_discount_template_created(
-        shop.id.to_inner(),
-        discount_template_id,
-    );
-
-    discount_template_id
-}
-
 /// Create a discount template anchored under the shop.
 ///
 /// Templates are stored in the shop's `discount_templates: Table<ID, DiscountTemplate>` collection.
@@ -661,15 +625,31 @@ public fun create_discount_template(
     ctx: &mut TxContext,
 ): ID {
     assert_owner_cap!(shop, owner_cap);
-    shop.create_discount_template_core(
+    assert_discount_template_inputs!(shop, applies_to_listing, starts_at, expires_at);
+    max_redemptions.do_ref!(|max_value| {
+        assert!(*max_value > 0, EInvalidMaxRedemptions);
+    });
+
+    let discount_rule_kind = parse_rule_kind(rule_kind);
+    let discount_rule = discount_rule_kind.build_discount_rule(rule_value);
+    let discount_template_id = new_object_id(ctx);
+    let discount_template = new_discount_template(
+        discount_template_id,
         applies_to_listing,
-        rule_kind,
-        rule_value,
+        discount_rule,
         starts_at,
         expires_at,
         max_redemptions,
-        ctx,
-    )
+    );
+    shop.discount_templates.add(discount_template_id, discount_template);
+    shop.increment_active_template_count_if_listing_bound(applies_to_listing);
+
+    events::emit_discount_template_created(
+        shop.id.to_inner(),
+        discount_template_id,
+    );
+
+    discount_template_id
 }
 
 /// Update mutable fields on a template (schedule, rule, limits).
