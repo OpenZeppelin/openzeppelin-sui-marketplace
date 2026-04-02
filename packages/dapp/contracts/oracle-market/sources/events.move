@@ -1,6 +1,10 @@
+/// Events for the marketplace.
+
 module sui_oracle_market::events;
 
 use sui::event;
+
+// === Events ===
 
 /// Event emitted when a shop is created.
 public struct ShopCreated has copy, drop {
@@ -121,6 +125,8 @@ public struct PurchaseCompleted has copy, drop {
     /// Final price in USD cents after discounts, used for analytics and indexing.
     discounted_price_usd_cents: u64,
 }
+
+// === Package Functions ===
 
 /// Emits a `ShopCreated` payload.
 public(package) fun emit_shop_created(shop_id: ID, owner_cap_id: ID) {
@@ -254,7 +260,7 @@ public(package) fun emit_purchase_completed(
     });
 }
 
-// === #[test_only] API ===
+// === Test Functions ===
 
 /// Builds a `ShopCreated` payload.
 #[test_only]

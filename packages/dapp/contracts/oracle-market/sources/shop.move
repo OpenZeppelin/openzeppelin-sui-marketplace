@@ -1,3 +1,65 @@
+/// Oracle marketplace implementation overview:
+///
+/// - Shared objects (Shop): shared objects are
+///   globally addressable. Anyone can include them as inputs and read them, and any transaction
+///   that mutates them goes through consensus. What "can mutate" really means is "can submit a
+///   tx that tries" -- the module still enforces its own authorization checks. This module keeps a
+///   single shared root (`Shop`) and stores listings/currencies/templates in typed dynamic
+///   collections under that root, so callers pass one shared object and the module resolves internal
+///   entries by ID/type. Shared objects are created with object::new and shared via
+///   transfer::public_share_object.
+///   Docs: docs/07-shop-capabilities.md, docs/08-listings-receipts.md, docs/09-currencies-oracles.md,
+///   docs/10-discounts-tickets.md, docs/16-object-ownership.md
+/// - Owned objects (ShopOwnerCap, ShopItem): ownership enforces authority or user
+///   assets. Passing an owned object by value is a single-use guarantee. Docs: docs/07-shop-capabilities.md,
+///   docs/08-listings-receipts.md, docs/10-discounts-tickets.md, docs/16-object-ownership.md
+/// - Capability-based auth (ShopOwnerCap): admin entry points require the capability object, not
+///   ctx.sender() checks. This replaces Solidity modifiers. Docs: docs/07-shop-capabilities.md
+/// - Table collections (listings + accepted currencies + discount templates):
+///   typed dynamic collections keep config under `Shop` without exposing
+///   listings/currencies/templates as standalone shared objects.
+/// - Type tags and TypeName: item and coin types are recorded as TypeName for runtime checks,
+///   events, and UI metadata; compile-time correctness still comes from generics (ShopItem<TItem>,
+///   Coin<T>) and explicit comparisons when needed. Docs: docs/08-listings-receipts.md,
+///   docs/09-currencies-oracles.md
+/// - Phantom types: ShopItem<phantom TItem> records the item type in the type system without storing
+///   the value. Docs: docs/08-listings-receipts.md
+/// - Abilities (key, store, copy, drop): on Sui, `key` means "this is an object" and the first field
+///   must be `id: UID` (the object ID). `store` allows values to be stored in objects, while `copy`
+///   and `drop` control value semantics. These drive ownership rules. Docs: docs/02-mental-model-shift.md,
+///   docs/16-object-ownership.md
+/// - Option types: Option makes optional IDs and optional limits/expiry explicit instead of
+///   sentinel values. Docs: docs/08-listings-receipts.md, docs/10-discounts-tickets.md
+/// - Entry vs public functions: PTBs can call `entry` and `public`, while other Move modules can only call
+///   `public`. Most state-changing transaction APIs in this module are `public` to maximize package
+///   composition, while quote-oriented endpoints stay `entry` when they are intended for dev-inspect/clients.
+/// - Events: event::emit writes typed events for indexers and UIs. Docs: docs/08-advanced.md,
+///   docs/18-data-access.md
+/// - TxContext and sender: TxContext is required for object creation and coin splits; ctx.sender()
+///   identifies the signer for access control and receipts. Docs: docs/14-advanced.md
+/// - Object IDs and addresses: on Sui, object IDs are addresses (but not every address is an object ID).
+///   object::UID holds that ID,
+///   and object::uid_to_inner / object::id_from_address convert between UID/ID and address forms
+///   for indexing and off-chain tooling. Docs: docs/14-advanced.md
+/// - Transfers and sharing: transfer::public_transfer moves owned objects;
+///   transfer::public_share_object makes shared objects.
+///   Docs: docs/07-shop-capabilities.md, docs/14-advanced.md
+/// - Coins and coin registry: Coin<T> is a resource, coin_registry::Currency<T> supplies metadata.
+///   coin::split and coin::destroy_zero manage payment/change. Docs: docs/05-currencies-oracles.md,
+///   docs/09-currencies-oracles.md, docs/17-ptb-gas.md
+/// - Clock and time: clock::Clock is a shared, read-only object with a consensus-set timestamp_ms.
+///   It can only be read via immutable reference in transaction-invoked functions. This module converts it to
+///   seconds for discount windows and oracle freshness; it is not a wall-clock guarantee. Docs:
+///   docs/09-currencies-oracles.md, docs/10-discounts-tickets.md
+/// - Oracle objects (Pyth): price feeds are objects (PriceInfoObject) validated by feed_id and object
+///   ID; guardrails enforce freshness and confidence. Docs: docs/09-currencies-oracles.md
+/// - Fixed-point math: prices are stored in USD cents, discounts in basis points, and decimal scaling
+///   uses `std::u128::pow` plus OZ decimal helpers. Docs: docs/14-advanced.md
+/// - Enums: DiscountRule and DiscountRuleKind model variant logic explicitly.
+///   Docs: docs/10-discounts-tickets.md
+/// - Test-only APIs: #[test_only] functions expose helpers for Move tests without shipping them to
+///   production calls. Docs: docs/15-testing.md
+
 module sui_oracle_market::shop;
 
 use openzeppelin_math::decimal_scaling;
@@ -17,142 +79,85 @@ use sui::package;
 use sui::table::{Self, Table};
 use sui_oracle_market::events;
 
-// === Concepts used in this module (what/why/how) ===
-// - Shared objects (Shop): shared objects are
-//   globally addressable. Anyone can include them as inputs and read them, and any transaction
-//   that mutates them goes through consensus. What "can mutate" really means is "can submit a
-//   tx that tries" -- the module still enforces its own authorization checks. This module keeps a
-//   single shared root (`Shop`) and stores listings/currencies/templates in typed dynamic
-//   collections under that root, so callers pass one shared object and the module resolves internal
-//   entries by ID/type. Shared objects are created with object::new and shared via
-//   transfer::public_share_object.
-//   Docs: docs/07-shop-capabilities.md, docs/08-listings-receipts.md, docs/09-currencies-oracles.md,
-//   docs/10-discounts-tickets.md, docs/16-object-ownership.md
-// - Owned objects (ShopOwnerCap, ShopItem): ownership enforces authority or user
-//   assets. Passing an owned object by value is a single-use guarantee. Docs: docs/07-shop-capabilities.md,
-//   docs/08-listings-receipts.md, docs/10-discounts-tickets.md, docs/16-object-ownership.md
-// - Capability-based auth (ShopOwnerCap): admin entry points require the capability object, not
-//   ctx.sender() checks. This replaces Solidity modifiers. Docs: docs/07-shop-capabilities.md
-// - Table collections (listings + accepted currencies + discount templates):
-//   typed dynamic collections keep config under `Shop` without exposing
-//   listings/currencies/templates as standalone shared objects.
-// - Type tags and TypeName: item and coin types are recorded as TypeName for runtime checks,
-//   events, and UI metadata; compile-time correctness still comes from generics (ShopItem<TItem>,
-//   Coin<T>) and explicit comparisons when needed. Docs: docs/08-listings-receipts.md,
-//   docs/09-currencies-oracles.md
-// - Phantom types: ShopItem<phantom TItem> records the item type in the type system without storing
-//   the value. Docs: docs/08-listings-receipts.md
-// - Abilities (key, store, copy, drop): on Sui, `key` means "this is an object" and the first field
-//   must be `id: UID` (the object ID). `store` allows values to be stored in objects, while `copy`
-//   and `drop` control value semantics. These drive ownership rules. Docs: docs/02-mental-model-shift.md,
-//   docs/16-object-ownership.md
-// - Option types: Option makes optional IDs and optional limits/expiry explicit instead of
-//   sentinel values. Docs: docs/08-listings-receipts.md, docs/10-discounts-tickets.md
-// - Entry vs public functions: PTBs can call `entry` and `public`, while other Move modules can only call
-//   `public`. Most state-changing transaction APIs in this module are `public` to maximize package
-//   composition, while quote-oriented endpoints stay `entry` when they are intended for dev-inspect/clients.
-// - Events: event::emit writes typed events for indexers and UIs. Docs: docs/08-advanced.md,
-//   docs/18-data-access.md
-// - TxContext and sender: TxContext is required for object creation and coin splits; ctx.sender()
-//   identifies the signer for access control and receipts. Docs: docs/14-advanced.md
-// - Object IDs and addresses: on Sui, object IDs are addresses (but not every address is an object ID).
-//   object::UID holds that ID,
-//   and object::uid_to_inner / object::id_from_address convert between UID/ID and address forms
-//   for indexing and off-chain tooling. Docs: docs/14-advanced.md
-// - Transfers and sharing: transfer::public_transfer moves owned objects; transfer::public_share_object makes shared
-//   objects. Docs: docs/07-shop-capabilities.md, docs/14-advanced.md
-// - Coins and coin registry: Coin<T> is a resource, coin_registry::Currency<T> supplies metadata.
-//   coin::split and coin::destroy_zero manage payment/change. Docs: docs/05-currencies-oracles.md,
-//   docs/09-currencies-oracles.md, docs/17-ptb-gas.md
-// - Clock and time: clock::Clock is a shared, read-only object with a consensus-set timestamp_ms.
-//   It can only be read via immutable reference in transaction-invoked functions. This module converts it to
-//   seconds for discount windows and oracle freshness; it is not a wall-clock guarantee. Docs:
-//   docs/09-currencies-oracles.md, docs/10-discounts-tickets.md
-// - Oracle objects (Pyth): price feeds are objects (PriceInfoObject) validated by feed_id and object
-//   ID; guardrails enforce freshness and confidence. Docs: docs/09-currencies-oracles.md
-// - Fixed-point math: prices are stored in USD cents, discounts in basis points, and decimal scaling
-//   uses `std::u128::pow` plus OZ decimal helpers. Docs: docs/14-advanced.md
-// - Enums: DiscountRule and DiscountRuleKind model variant logic explicitly. Docs: docs/10-discounts-tickets.md
-// - Test-only APIs: #[test_only] functions expose helpers for Move tests without shipping them to
-//   production calls. Docs: docs/15-testing.md
-
 // === Errors ===
+
 #[error(code = 0)]
-const EInvalidOwnerCap: vector<u8> = b"invalid owner capability";
+const EInvalidOwnerCap: vector<u8> = "invalid owner capability";
 #[error(code = 1)]
-const EEmptyItemName: vector<u8> = b"empty item name";
+const EEmptyItemName: vector<u8> = "empty item name";
 #[error(code = 2)]
-const EInvalidPrice: vector<u8> = b"invalid price";
+const EInvalidPrice: vector<u8> = "invalid price";
 #[error(code = 3)]
-const EZeroStock: vector<u8> = b"zero stock";
+const EZeroStock: vector<u8> = "zero stock";
 #[error(code = 4)]
-const ETemplateWindow: vector<u8> = b"invalid template window";
+const ETemplateWindow: vector<u8> = "invalid template window";
 #[error(code = 5)]
-const ETemplateNotFound: vector<u8> = b"template not found";
+const ETemplateNotFound: vector<u8> = "template not found";
 #[error(code = 6)]
-const EListingNotFound: vector<u8> = b"listing not found";
+const EListingNotFound: vector<u8> = "listing not found";
 #[error(code = 7)]
-const EListingHasActiveTemplates: vector<u8> = b"listing has active templates";
+const EListingHasActiveTemplates: vector<u8> = "listing has active templates";
 #[error(code = 8)]
-const EListingTemplateCountUnderflow: vector<u8> = b"listing template count underflow";
+const EListingTemplateCountUnderflow: vector<u8> = "listing template count underflow";
 #[error(code = 9)]
-const EInvalidRuleKind: vector<u8> = b"invalid rule kind";
+const EInvalidRuleKind: vector<u8> = "invalid rule kind";
 #[error(code = 10)]
-const EInvalidRuleValue: vector<u8> = b"invalid rule value";
+const EInvalidRuleValue: vector<u8> = "invalid rule value";
 #[error(code = 11)]
-const EAcceptedCurrencyExists: vector<u8> = b"accepted currency exists";
+const EAcceptedCurrencyExists: vector<u8> = "accepted currency exists";
 #[error(code = 12)]
-const EAcceptedCurrencyMissing: vector<u8> = b"accepted currency missing";
+const EAcceptedCurrencyMissing: vector<u8> = "accepted currency missing";
 #[error(code = 13)]
-const EEmptyFeedId: vector<u8> = b"empty feed id";
+const EEmptyFeedId: vector<u8> = "empty feed id";
 #[error(code = 14)]
-const EInvalidFeedIdLength: vector<u8> = b"invalid feed id length";
+const EInvalidFeedIdLength: vector<u8> = "invalid feed id length";
 #[error(code = 15)]
-const ETemplateInactive: vector<u8> = b"template inactive";
+const ETemplateInactive: vector<u8> = "template inactive";
 #[error(code = 16)]
-const ETemplateTooEarly: vector<u8> = b"template too early";
+const ETemplateTooEarly: vector<u8> = "template too early";
 #[error(code = 17)]
-const ETemplateExpired: vector<u8> = b"template expired";
+const ETemplateExpired: vector<u8> = "template expired";
 #[error(code = 18)]
-const ETemplateMaxedOut: vector<u8> = b"template maxed out";
+const ETemplateMaxedOut: vector<u8> = "template maxed out";
 #[error(code = 19)]
-const EOutOfStock: vector<u8> = b"out of stock";
+const EOutOfStock: vector<u8> = "out of stock";
 #[error(code = 20)]
-const EPythObjectMismatch: vector<u8> = b"pyth object mismatch";
+const EPythObjectMismatch: vector<u8> = "pyth object mismatch";
 #[error(code = 21)]
-const EFeedIdentifierMismatch: vector<u8> = b"feed identifier mismatch";
+const EFeedIdentifierMismatch: vector<u8> = "feed identifier mismatch";
 #[error(code = 22)]
-const EPriceNonPositive: vector<u8> = b"price non-positive";
+const EPriceNonPositive: vector<u8> = "price non-positive";
 #[error(code = 23)]
-const EPriceOverflow: vector<u8> = b"price overflow";
+const EPriceOverflow: vector<u8> = "price overflow";
 #[error(code = 24)]
-const EInsufficientPayment: vector<u8> = b"insufficient payment";
+const EInsufficientPayment: vector<u8> = "insufficient payment";
 #[error(code = 25)]
-const EConfidenceIntervalTooWide: vector<u8> = b"confidence interval too wide";
+const EConfidenceIntervalTooWide: vector<u8> = "confidence interval too wide";
 #[error(code = 26)]
-const EConfidenceExceedsPrice: vector<u8> = b"confidence exceeds price";
+const EConfidenceExceedsPrice: vector<u8> = "confidence exceeds price";
 #[error(code = 27)]
-const ESpotlightTemplateListingMismatch: vector<u8> = b"spotlight template listing mismatch";
+const ESpotlightTemplateListingMismatch: vector<u8> = "spotlight template listing mismatch";
 #[error(code = 28)]
-const EInvalidGuardrailCap: vector<u8> = b"invalid guardrail cap";
+const EInvalidGuardrailCap: vector<u8> = "invalid guardrail cap";
 #[error(code = 29)]
-const ETemplateFinalized: vector<u8> = b"template finalized";
+const ETemplateFinalized: vector<u8> = "template finalized";
 #[error(code = 30)]
-const EItemTypeMismatch: vector<u8> = b"item type mismatch";
+const EItemTypeMismatch: vector<u8> = "item type mismatch";
 #[error(code = 31)]
-const EUnsupportedCurrencyDecimals: vector<u8> = b"unsupported currency decimals";
+const EUnsupportedCurrencyDecimals: vector<u8> = "unsupported currency decimals";
 #[error(code = 32)]
-const EEmptyShopName: vector<u8> = b"empty shop name";
+const EEmptyShopName: vector<u8> = "empty shop name";
 #[error(code = 33)]
-const EShopDisabled: vector<u8> = b"shop disabled";
+const EShopDisabled: vector<u8> = "shop disabled";
 #[error(code = 34)]
-const EPriceInvalidPublishTime: vector<u8> = b"invalid publish timestamp";
+const EPriceInvalidPublishTime: vector<u8> = "invalid publish timestamp";
 #[error(code = 35)]
-const EDiscountListingMismatch: vector<u8> = b"discount listing mismatch";
+const EDiscountListingMismatch: vector<u8> = "discount listing mismatch";
 #[error(code = 36)]
-const EInvalidMaxRedemptions: vector<u8> = b"invalid max redemptions";
+const EInvalidMaxRedemptions: vector<u8> = "invalid max redemptions";
 
 // === Constants ===
+
 const CENTS_PER_DOLLAR: u64 = 100;
 const BASIS_POINT_DENOMINATOR: u64 = 10_000;
 const DEFAULT_MAX_PRICE_AGE_SECS: u64 = 60;
@@ -160,6 +165,8 @@ const MAX_DECIMAL_POWER: u64 = 24;
 /// Reject price feeds with sigma/mu above 10%.
 const DEFAULT_MAX_CONFIDENCE_RATIO_BPS: u16 = 1_000;
 const PYTH_PRICE_IDENTIFIER_LENGTH: u64 = 32;
+
+// === Init ===
 
 /// Claims and returns the module's Publisher object during publish.
 public struct SHOP has drop {}
@@ -1876,16 +1883,16 @@ public fun shop_owner_cap_shop_id(owner_cap: &ShopOwnerCap): ID {
     owner_cap.shop_id
 }
 
-// === #[test_only] API ===
+// === Test Functions ===
 
-#[test_only]
 /// Runs module initialization in tests.
+#[test_only]
 public fun test_init(ctx: &mut TxContext) {
     init(SHOP {}, ctx)
 }
 
-#[test_only]
 /// Creates an unshared shop and owner capability pair for local tests.
+#[test_only]
 public fun test_setup_shop(owner: address, ctx: &mut TxContext): (Shop, ShopOwnerCap) {
     let shop = new_shop(b"Shop".to_string(), owner, ctx);
     let owner_cap = ShopOwnerCap {
@@ -1895,8 +1902,8 @@ public fun test_setup_shop(owner: address, ctx: &mut TxContext): (Shop, ShopOwne
     (shop, owner_cap)
 }
 
-#[test_only]
 /// Creates a discount template in local test state and emits the created event.
+#[test_only]
 public fun test_create_discount_template_local(
     shop: &mut Shop,
     applies_to_listing: Option<ID>,
