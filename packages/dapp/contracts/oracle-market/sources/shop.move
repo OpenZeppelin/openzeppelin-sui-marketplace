@@ -630,7 +630,7 @@ fun create_discount_template_core(
 /// Callers send primitive args (`rule_kind` of `0 = fixed` or `1 = percent`), but we immediately convert them into the strongly
 /// typed `DiscountRule` before persisting. For `Fixed` rules the `rule_value` is denominated in USD
 /// cents to match listing prices.
-/// Sui mindset:
+///
 /// - Discounts live inside a typed on-chain collection attached to the shared shop instead of rows
 ///   in opaque contract storage.
 /// - Converting user-friendly primitives into enums early avoids magic numbers and preserves type
@@ -639,6 +639,8 @@ fun create_discount_template_core(
 /// - Time windows and limits are stored on-chain and later checked against the shared `Clock`
 ///   (timestamp_ms -> seconds). On Sui, time is an explicit input object; on EVM, `block.timestamp`
 ///   is global state available to view/read-only calls but can drift within protocol bounds.
+/// - `max_redemptions`: if set, must be greater than 0. If not set (`None`), there is no cap on
+///   total redemptions and the counter is not protected from overflow.
 public fun create_discount_template(
     shop: &mut Shop,
     owner_cap: &ShopOwnerCap,
@@ -666,6 +668,8 @@ public fun create_discount_template(
 /// For `Fixed` discounts the `rule_value` remains in USD cents.
 /// Updates are only allowed before any tickets are issued or redeemed and before the template is
 /// finished (expired or capped), so claim accounting cannot be retroactively changed.
+/// `max_redemptions`: if set, must be greater than 0. If not set (`None`), there is no cap on
+/// total redemptions and the counter is not protected from overflow.
 public fun update_discount_template(
     shop: &mut Shop,
     owner_cap: &ShopOwnerCap,
