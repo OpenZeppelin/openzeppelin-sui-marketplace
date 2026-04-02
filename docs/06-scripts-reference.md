@@ -240,7 +240,7 @@ Owner scripts default `--shop-package-id`, `--shop-id`, and `--owner-cap-id` fro
 	- `--value <amount>`: USD value (fixed) or percentage (percent) (required).
 	- `--starts-at <epoch-seconds>`: activation time (defaults to now).
 	- `--expires-at <epoch-seconds>`: optional expiry (must be > `starts-at` when set).
-	- `--max-redemptions <u64>`: optional redemption cap.
+	- `--max-redemptions <u64>`: optional redemption cap; if provided it must be > `0` (omit for unlimited).
 	- `--listing-id <id>`: optional listing ID to pin this template to.
 	- `--publisher-id <id>`: optional metadata-only field; not passed on-chain.
 	- `--shop-package-id <id>` / `--shop-id <id>` / `--owner-cap-id <id>`: override artifact defaults.
@@ -252,7 +252,7 @@ Owner scripts default `--shop-package-id`, `--shop-id`, and `--owner-cap-id` fro
 	- `--rule-kind <fixed|percent>` / `--value <amount>`: new rule type and value (required).
 	- `--starts-at <epoch-seconds>`: new start time (defaults to now).
 	- `--expires-at <epoch-seconds>`: optional new expiry.
-	- `--max-redemptions <u64>`: optional new redemption cap.
+	- `--max-redemptions <u64>`: optional new redemption cap; if provided it must be > `0` (omit for unlimited).
 	- `--shop-package-id <id>` / `--shop-id <id>` / `--owner-cap-id <id>`: override artifact defaults.
 
 ### `pnpm script owner:discount-template:toggle`
