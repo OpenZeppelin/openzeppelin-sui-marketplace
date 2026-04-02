@@ -146,18 +146,18 @@ fun add_test_coin_accepted_currency_for_scenario(
         feed_id,
         test_scenario::ctx(scn),
     );
-    let accepted_currency_id = price_info_object.uid_to_inner();
+    let pyth_object_id = price_info_object.uid_to_inner();
     shop.add_accepted_currency<TestCoin>(
         owner_cap,
         currency,
         &price_info_object,
         feed_id,
-        accepted_currency_id,
+        pyth_object_id,
         max_price_age_secs_cap,
         max_confidence_ratio_bps_cap,
     );
     transfer::public_share_object(price_info_object);
-    accepted_currency_id
+    pyth_object_id
 }
 
 fun remove_listing_if_exists(
@@ -3502,7 +3502,7 @@ fun remove_accepted_currency_emits_removed_event_fields() {
         &scn,
         owner_cap_id,
     );
-    let accepted_currency_id = add_test_coin_accepted_currency_for_scenario(
+    let pyth_object_id = add_test_coin_accepted_currency_for_scenario(
         &mut scn,
         &mut shop_obj,
         &owner_cap_obj,
@@ -3529,7 +3529,7 @@ fun remove_accepted_currency_emits_removed_event_fields() {
     assert_emitted!(
         events::accepted_coin_removed(
             shared_shop.shop_id(),
-            accepted_currency_id,
+            pyth_object_id,
         ),
     );
 
@@ -3559,7 +3559,7 @@ fun setup_shop_with_listing_and_price_info(
 ): (ID, ID, ID) {
     let (
         shop_id,
-        _accepted_currency_id,
+        _pyth_object_id,
         listing_id,
         price_info_id,
     ) = setup_shop_with_currency_listing_and_price_info(
@@ -3598,7 +3598,7 @@ fun setup_shop_with_currency_listing_and_price_info_for_item<TItem: store>(
         option::none(),
         option::none(),
     );
-    let accepted_currency_id = price_info_id;
+    let pyth_object_id = price_info_id;
     std::unit_test::destroy(currency);
 
     let listing_id = shop_obj.add_item_listing<TItem>(
@@ -3614,7 +3614,7 @@ fun setup_shop_with_currency_listing_and_price_info_for_item<TItem: store>(
     transfer::public_share_object(shop_obj);
     transfer::public_transfer(owner_cap, @0x0);
 
-    (shop_id, accepted_currency_id, listing_id, price_info_id)
+    (shop_id, pyth_object_id, listing_id, price_info_id)
 }
 
 #[test]
@@ -3622,7 +3622,7 @@ fun buy_item_emits_events_decrements_stock_and_refunds_change() {
     let mut scn = test_scenario::begin(TEST_OWNER);
     let (
         shop_id,
-        accepted_currency_id,
+        pyth_object_id,
         listing_id,
         price_info_id,
     ) = setup_shop_with_currency_listing_and_price_info(&mut scn, 100, 2);
@@ -3666,7 +3666,7 @@ fun buy_item_emits_events_decrements_stock_and_refunds_change() {
         events::purchase_completed(
             shared_shop.shop_id(),
             listing_id,
-            accepted_currency_id,
+            pyth_object_id,
             option::none(),
             minted_item_id,
             quote_amount,
@@ -3691,7 +3691,7 @@ fun buy_item_supports_example_car_receipts() {
     let mut scn = test_scenario::begin(TEST_OWNER);
     let (
         shop_id,
-        accepted_currency_id,
+        pyth_object_id,
         listing_id,
         price_info_id,
     ) = setup_shop_with_currency_listing_and_price_info_for_item<Car>(
@@ -3739,7 +3739,7 @@ fun buy_item_supports_example_car_receipts() {
         events::purchase_completed(
             shared_shop.shop_id(),
             listing_id,
-            accepted_currency_id,
+            pyth_object_id,
             option::none(),
             minted_item_id,
             quote_amount,
@@ -3756,7 +3756,7 @@ fun buy_item_supports_example_bike_receipts() {
     let mut scn = test_scenario::begin(TEST_OWNER);
     let (
         shop_id,
-        accepted_currency_id,
+        pyth_object_id,
         listing_id,
         price_info_id,
     ) = setup_shop_with_currency_listing_and_price_info_for_item<Bike>(
@@ -3804,7 +3804,7 @@ fun buy_item_supports_example_bike_receipts() {
         events::purchase_completed(
             shared_shop.shop_id(),
             listing_id,
-            accepted_currency_id,
+            pyth_object_id,
             option::none(),
             minted_item_id,
             quote_amount,
@@ -3821,7 +3821,7 @@ fun buy_item_emits_events_with_exact_payment_and_zero_change() {
     let mut scn = test_scenario::begin(TEST_OWNER);
     let (
         shop_id,
-        accepted_currency_id,
+        pyth_object_id,
         listing_id,
         price_info_id,
     ) = setup_shop_with_currency_listing_and_price_info(&mut scn, 100, 2);
@@ -3864,7 +3864,7 @@ fun buy_item_emits_events_with_exact_payment_and_zero_change() {
         events::purchase_completed(
             shared_shop.shop_id(),
             listing_id,
-            accepted_currency_id,
+            pyth_object_id,
             option::none(),
             minted_item_id,
             quote_amount,

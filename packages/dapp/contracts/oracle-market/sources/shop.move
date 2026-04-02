@@ -567,10 +567,9 @@ public fun add_accepted_currency<TCoin>(
         age_cap,
         confidence_cap,
     );
-    let accepted_currency_id = accepted_currency.pyth_object_id;
     shop.accepted_currencies.add(coin_type, accepted_currency);
 
-    events::emit_accepted_coin_added(shop_id, accepted_currency_id);
+    events::emit_accepted_coin_added(shop_id, pyth_object_id);
 }
 
 /// Deregister an accepted coin type.
@@ -1183,7 +1182,7 @@ fun process_purchase<TItem: store, TCoin>(
         max_confidence_ratio_bps,
         clock,
     );
-    let accepted_currency_id = accepted_currency.pyth_object_id;
+    let pyth_price_info_object_id = accepted_currency.pyth_object_id;
     let shop_id = shop.id.to_inner();
 
     let item_listing = shop.borrow_listing_mut(listing_id);
@@ -1191,7 +1190,7 @@ fun process_purchase<TItem: store, TCoin>(
     item_listing.process_purchase_core<TItem, TCoin>(
         payment,
         shop_id,
-        accepted_currency_id,
+        pyth_price_info_object_id,
         quote_amount,
         discounted_price_usd_cents,
         discount_template_id,
@@ -1204,7 +1203,7 @@ fun process_purchase_core<TItem: store, TCoin>(
     item_listing: &mut ItemListing,
     mut payment: coin::Coin<TCoin>,
     shop_id: ID,
-    accepted_currency_id: ID,
+    pyth_price_info_object_id: ID,
     quote_amount: u64,
     discounted_price_usd_cents: u64,
     discount_template_id: Option<ID>,
@@ -1227,7 +1226,7 @@ fun process_purchase_core<TItem: store, TCoin>(
     events::emit_purchase_completed(
         shop_id,
         item_listing.listing_id,
-        accepted_currency_id,
+        pyth_price_info_object_id,
         discount_template_id,
         minted_item_id,
         amount_paid,
