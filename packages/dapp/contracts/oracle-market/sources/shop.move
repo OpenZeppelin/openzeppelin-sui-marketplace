@@ -638,12 +638,11 @@ public fun update_discount_template(
     let discount_template = shop.borrow_discount_template_mut(discount_template_id);
     assert_template_updatable!(discount_template, now);
 
-    discount_template.apply_discount_template_updates(
-        discount_rule,
-        starts_at,
-        expires_at,
-        max_redemptions,
-    );
+    // Apply discount template updates
+    discount_template.rule = discount_rule;
+    discount_template.starts_at = starts_at;
+    discount_template.expires_at = expires_at;
+    discount_template.max_redemptions = max_redemptions;
 
     events::emit_discount_template_updated(shop_id, discount_template.id);
 }
@@ -910,26 +909,12 @@ fun new_discount_template(
     }
 }
 
-// TODO#q: remove it
-fun apply_discount_template_updates(
-    discount_template: &mut DiscountTemplate,
-    discount_rule: DiscountRule,
-    starts_at: u64,
-    expires_at: Option<u64>,
-    max_redemptions: Option<u64>,
-) {
-    discount_template.rule = discount_rule;
-    discount_template.starts_at = starts_at;
-    discount_template.expires_at = expires_at;
-    discount_template.max_redemptions = max_redemptions;
-}
+// === Helpers ===
 
 // TODO#q: use bag instead
 fun currency_type<TCoin>(): TypeName {
     type_name::with_defining_ids<TCoin>()
 }
-
-// === Helpers ===
 
 // TODO#q: inline
 fun new_object_id(ctx: &mut TxContext): ID {
