@@ -605,10 +605,7 @@ public fun toggle_discount(
 }
 
 /// Removes a discount from shop storage.
-///
-/// Package visibility keeps this API available for local tests and package scripts while avoiding
-/// extra `#[test_only]` wrapper surface.
-public(package) fun remove_discount(
+public fun remove_discount(
     shop: &mut Shop,
     owner_cap: &ShopOwnerCap,
     discount_id: ID,
@@ -1100,6 +1097,7 @@ fun now_secs(clock: &Clock): u64 {
     clock.timestamp_ms() / 1000
 }
 
+// TODO#q: should be moved to Package Functions
 /// Converts a USD-cent amount into a quoted coin amount.
 public(package) fun quote_amount_from_usd_cents(
     usd_cents: u64,
