@@ -100,58 +100,56 @@ const EListingNotFound: vector<u8> = "listing not found";
 #[error(code = 7)]
 const EListingHasActiveDiscounts: vector<u8> = "listing has active discounts";
 #[error(code = 8)]
-const EListingDiscountCountUnderflow: vector<u8> = "listing discount count underflow";
-#[error(code = 9)]
 const EAcceptedCurrencyExists: vector<u8> = "accepted currency exists";
-#[error(code = 10)]
+#[error(code = 9)]
 const EAcceptedCurrencyMissing: vector<u8> = "accepted currency missing";
-#[error(code = 11)]
+#[error(code = 10)]
 const EEmptyFeedId: vector<u8> = "empty feed id";
-#[error(code = 12)]
+#[error(code = 11)]
 const EInvalidFeedIdLength: vector<u8> = "invalid feed id length";
-#[error(code = 13)]
+#[error(code = 12)]
 const EDiscountInactive: vector<u8> = "discount inactive";
-#[error(code = 14)]
+#[error(code = 13)]
 const EDiscountTooEarly: vector<u8> = "discount too early";
-#[error(code = 15)]
+#[error(code = 14)]
 const EDiscountExpired: vector<u8> = "discount expired";
-#[error(code = 16)]
+#[error(code = 15)]
 const EDiscountMaxedOut: vector<u8> = "discount maxed out";
-#[error(code = 17)]
+#[error(code = 16)]
 const EOutOfStock: vector<u8> = "out of stock";
-#[error(code = 18)]
+#[error(code = 17)]
 const EPythObjectMismatch: vector<u8> = "pyth object mismatch";
-#[error(code = 19)]
+#[error(code = 18)]
 const EFeedIdentifierMismatch: vector<u8> = "feed identifier mismatch";
-#[error(code = 20)]
+#[error(code = 19)]
 const EPriceNonPositive: vector<u8> = "price non-positive";
-#[error(code = 21)]
+#[error(code = 20)]
 const EPriceOverflow: vector<u8> = "price overflow";
-#[error(code = 22)]
+#[error(code = 21)]
 const EInsufficientPayment: vector<u8> = "insufficient payment";
-#[error(code = 23)]
+#[error(code = 22)]
 const EConfidenceIntervalTooWide: vector<u8> = "confidence interval too wide";
-#[error(code = 24)]
+#[error(code = 23)]
 const EConfidenceExceedsPrice: vector<u8> = "confidence exceeds price";
-#[error(code = 25)]
+#[error(code = 24)]
 const ESpotlightDiscountListingMismatch: vector<u8> = "spotlight discount listing mismatch";
-#[error(code = 26)]
+#[error(code = 25)]
 const EInvalidGuardrailCap: vector<u8> = "invalid guardrail cap";
-#[error(code = 27)]
+#[error(code = 26)]
 const EDiscountFinalized: vector<u8> = "discount finalized";
-#[error(code = 28)]
+#[error(code = 27)]
 const EItemTypeMismatch: vector<u8> = "item type mismatch";
-#[error(code = 29)]
+#[error(code = 28)]
 const EUnsupportedCurrencyDecimals: vector<u8> = "unsupported currency decimals";
-#[error(code = 30)]
+#[error(code = 29)]
 const EEmptyShopName: vector<u8> = "empty shop name";
-#[error(code = 31)]
+#[error(code = 30)]
 const EShopDisabled: vector<u8> = "shop disabled";
-#[error(code = 32)]
+#[error(code = 31)]
 const EPriceInvalidPublishTime: vector<u8> = "invalid publish timestamp";
-#[error(code = 33)]
+#[error(code = 32)]
 const EDiscountListingMismatch: vector<u8> = "discount listing mismatch";
-#[error(code = 34)]
+#[error(code = 33)]
 const EInvalidMaxRedemptions: vector<u8> = "invalid max redemptions";
 
 // === Constants ===
@@ -228,6 +226,7 @@ public struct EffectiveGuardrails has copy, drop {
 
 // === Public Functions ===
 
+// TODO#q: have two apis create_shop and create_shop_and_share
 /// Create a new shop and its owner capability.
 ///
 /// Any address can spin up a shop and receive the corresponding owner capability.
@@ -307,7 +306,7 @@ public fun add_item_listing<T: store>(
     assert_listing_inputs!(shop, &name, base_price_usd_cents, stock, spotlight_discount_id);
 
     let shop_id = shop.id();
-    let listing_id = new_object_id(ctx);
+    let listing_id = ctx.fresh_object_address().to_id();
     assert_spotlight_discount_matches_listing!(shop, listing_id, spotlight_discount_id);
     let listing = listing::new<T>(
         listing_id,
@@ -321,12 +320,6 @@ public fun add_item_listing<T: store>(
     events::emit_item_listing_added(shop_id, listing_id);
 
     listing_id
-}
-
-// TODO#q: drop this function
-fun link_listing_spotlight_discount(shop: &mut Shop, listing_id: ID, discount_id: ID) {
-    let listing = shop.borrow_listing_mut(listing_id);
-    listing.set_spotlight(discount_id);
 }
 
 /// Add an item listing and atomically create a listing-scoped discount in one transaction.
@@ -365,7 +358,8 @@ public fun add_item_listing_with_discount<T: store>(
         ctx,
     );
 
-    shop.link_listing_spotlight_discount(listing_id, discount_id);
+    // Link listing to spotlight discount.
+    shop.listing_mut(listing_id).set_spotlight(discount_id);
 
     (listing_id, discount_id)
 }
@@ -378,8 +372,8 @@ public fun update_item_listing_stock(
     new_stock: u64,
 ) {
     assert!(owner_cap.shop_id == shop.id(), EInvalidOwnerCap);
-    let item_listing = shop.borrow_listing_mut(listing_id);
 
+    let item_listing = shop.listing_mut(listing_id);
     let previous_stock = item_listing.stock();
     item_listing.set_stock(new_stock);
 
@@ -392,7 +386,10 @@ public fun update_item_listing_stock(
 /// Listings with any active listing-bound discounts must pause those discounts first.
 public fun remove_item_listing(shop: &mut Shop, owner_cap: &ShopOwnerCap, listing_id: ID) {
     assert!(owner_cap.shop_id == shop.id(), EInvalidOwnerCap);
-    assert!(!shop.has_active_listing_bound_discounts(listing_id), EListingHasActiveDiscounts);
+    assert!(
+        shop.listing(listing_id).active_bound_discount_count() == 0,
+        EListingHasActiveDiscounts,
+    );
     let _listing = shop.listings.remove(listing_id);
 
     events::emit_item_listing_removed(shop.id(), listing_id);
@@ -429,7 +426,7 @@ public fun add_accepted_currency<TCoin>(
     assert!(owner_cap.shop_id == shop.id(), EInvalidOwnerCap);
 
     // Bind this currency to a specific PriceInfoObject to prevent oracle feed spoofing.
-    let coin_type = currency_type<TCoin>();
+    let coin_type = type_name::with_defining_ids<TCoin>();
     assert!(!shop.accepted_currencies.contains(coin_type), EAcceptedCurrencyExists);
     // Assert feed_id is valid.
     assert!(!feed_id.is_empty(), EEmptyFeedId);
@@ -464,8 +461,9 @@ public fun add_accepted_currency<TCoin>(
 public fun remove_accepted_currency<TCoin>(shop: &mut Shop, owner_cap: &ShopOwnerCap) {
     assert!(owner_cap.shop_id == shop.id(), EInvalidOwnerCap);
 
-    let coin_type = currency_type<TCoin>();
-    let accepted_currency = shop.remove_registered_accepted_currency(coin_type);
+    let coin_type = type_name::with_defining_ids<TCoin>();
+    assert!(shop.accepted_currencies.contains(coin_type), EAcceptedCurrencyMissing);
+    let accepted_currency = shop.accepted_currencies.remove(coin_type);
 
     events::emit_accepted_coin_removed(
         shop.id(),
@@ -504,7 +502,9 @@ public fun create_discount(
     ctx: &mut TxContext,
 ): ID {
     assert!(owner_cap.shop_id == shop.id(), EInvalidOwnerCap);
-    assert_schedule!(starts_at, expires_at);
+    expires_at.do!(|expires_at| {
+        assert!(expires_at > starts_at, EDiscountWindow);
+    });
     applies_to_listing.do!(|listing_id| {
         assert!(shop.listings.contains(listing_id), EListingNotFound);
     });
@@ -514,7 +514,7 @@ public fun create_discount(
 
     let discount_rule_kind = discount::parse_kind(rule_kind);
     let discount_rule = discount::build(discount_rule_kind, rule_value);
-    let discount_id = new_object_id(ctx);
+    let discount_id = ctx.fresh_object_address().to_id();
     let discount = discount::new(
         discount_id,
         applies_to_listing,
@@ -526,9 +526,9 @@ public fun create_discount(
     shop.discounts.add(discount_id, discount);
 
     // Increment the active listing discount count if any listing is attached.
-    applies_to_listing.do_ref!(|listing_id| {
-        shop.increment_active_listing_discount_count(*listing_id);
-    });
+    applies_to_listing.do!(
+        |listing_id| shop.listing_mut(listing_id).increment_active_bound_discount_count(),
+    );
 
     events::emit_discount_created(
         shop.id(),
@@ -557,7 +557,9 @@ public fun update_discount(
 ) {
     assert!(owner_cap.shop_id == shop.id(), EInvalidOwnerCap);
     assert!(shop.discounts.contains(discount_id), EDiscountNotFound);
-    assert_schedule!(starts_at, expires_at);
+    expires_at.do!(|expires_at| {
+        assert!(expires_at > starts_at, EDiscountWindow);
+    });
     max_redemptions.do_ref!(|max_value| {
         assert!(*max_value > 0, EInvalidMaxRedemptions);
     });
@@ -567,7 +569,7 @@ public fun update_discount(
     let now = now_secs(clock);
     let shop_id = shop.id();
 
-    let discount = shop.borrow_discount_mut(discount_id);
+    let discount = shop.discount_mut(discount_id);
 
     // Assert discount can be updated
     assert!(discount.redemptions() == 0, EDiscountFinalized);
@@ -593,7 +595,7 @@ public fun toggle_discount(
     assert!(owner_cap.shop_id == shop.id(), EInvalidOwnerCap);
     assert!(shop.discounts.contains(discount_id), EDiscountNotFound);
 
-    let discount = shop.borrow_discount(discount_id);
+    let discount = shop.discount(discount_id);
     if (active) {
         discount.applies_to_listing().do!(|listing_id| {
             assert!(shop.listings.contains(listing_id), EListingNotFound);
@@ -605,7 +607,7 @@ public fun toggle_discount(
         active,
     );
 
-    let discount = shop.borrow_discount_mut(discount_id);
+    let discount = shop.discount_mut(discount_id);
 
     if (discount.active() != active) {
         discount.set_active(active);
@@ -631,7 +633,7 @@ public fun attach_discount_to_listing(
     assert!(shop.discounts.contains(discount_id), EDiscountNotFound);
     assert_spotlight_discount_matches_listing!(shop, listing_id, option::some(discount_id));
 
-    let item_listing = shop.borrow_listing_mut(listing_id);
+    let item_listing = shop.listing_mut(listing_id);
     item_listing.set_spotlight(discount_id);
 }
 
@@ -639,7 +641,7 @@ public fun attach_discount_to_listing(
 public fun clear_discount_from_listing(shop: &mut Shop, owner_cap: &ShopOwnerCap, listing_id: ID) {
     assert!(owner_cap.shop_id == shop.id(), EInvalidOwnerCap);
 
-    let item_listing = shop.borrow_listing_mut(listing_id);
+    let item_listing = shop.listing_mut(listing_id);
     item_listing.clear_spotlight();
 }
 
@@ -673,7 +675,7 @@ public fun buy_item<TItem: store, TCoin>(
 ) {
     assert!(!shop.disabled, EShopDisabled);
 
-    let base_price_usd_cents = shop.borrow_listing(listing_id).base_price_usd_cents();
+    let base_price_usd_cents = shop.listing(listing_id).base_price_usd_cents();
     // Payment is a Coin<T> object; process_purchase splits the payment and returns change.
     let (owed_coin_opt, change_coin, minted_item) = shop.process_purchase<TItem, TCoin>(
         price_info_object,
@@ -723,10 +725,10 @@ public fun buy_item_with_discount<TItem: store, TCoin>(
     assert!(!shop.disabled, EShopDisabled);
 
     let now = now_secs(clock);
-    let listing_price_usd_cents = shop.borrow_listing(listing_id).base_price_usd_cents();
+    let listing_price_usd_cents = shop.listing(listing_id).base_price_usd_cents();
 
     let shop_id = shop.id();
-    let discount = shop.borrow_discount_mut(discount_id);
+    let discount = shop.discount_mut(discount_id);
     assert_discount_redemption_allowed!(discount, listing_id, now);
 
     discount.increment_redemptions();
@@ -778,7 +780,7 @@ public fun listing_exists(shop: &Shop, listing_id: ID): bool {
 
 /// Returns the accepted currency config for `TCoin`.
 public fun currency<TCoin>(shop: &Shop): &AcceptedCurrency {
-    let coin_type = currency_type<TCoin>();
+    let coin_type = type_name::with_defining_ids<TCoin>();
     assert!(shop.accepted_currencies.contains(coin_type), EAcceptedCurrencyMissing);
     shop.accepted_currencies.borrow(coin_type)
 }
@@ -808,8 +810,7 @@ public fun quote_amount_for_price_info_object<TCoin>(
     max_confidence_ratio_bps: Option<u16>,
     clock: &Clock,
 ): u64 {
-    let coin_type = currency_type<TCoin>();
-    let accepted_currency = shop.borrow_registered_accepted_currency(coin_type);
+    let accepted_currency = shop.currency<TCoin>();
     assert_price_info_identity!(
         accepted_currency.feed_id(),
         accepted_currency.pyth_object_id(),
@@ -937,19 +938,14 @@ fun new(name: String, owner: address, ctx: &mut TxContext): Shop {
     }
 }
 
-// TODO#q: use bag instead
-fun currency_type<TCoin>(): TypeName {
-    type_name::with_defining_ids<TCoin>()
+fun listing_mut(shop: &mut Shop, listing_id: ID): &mut ItemListing {
+    assert!(shop.listings.contains(listing_id), EListingNotFound);
+    shop.listings.borrow_mut(listing_id)
 }
 
-// TODO#q: inline
-fun new_object_id(ctx: &mut TxContext): ID {
-    ctx.fresh_object_address().to_id()
-}
-
-// TODO#q: inline
-fun has_active_listing_bound_discounts(shop: &Shop, listing_id: ID): bool {
-    shop.borrow_listing(listing_id).active_bound_discount_count() > 0
+fun discount_mut(shop: &mut Shop, discount_id: ID): &mut Discount {
+    assert!(shop.discounts.contains(discount_id), EDiscountNotFound);
+    shop.discounts.borrow_mut(discount_id)
 }
 
 fun adjust_active_discount_count(
@@ -959,11 +955,11 @@ fun adjust_active_discount_count(
     is_active: bool,
 ) {
     if (was_active == is_active) return;
-    applies_to_listing.do_ref!(|listing_id| {
+    applies_to_listing.do!(|listing_id| {
         if (is_active) {
-            shop.increment_active_listing_discount_count(*listing_id);
+            shop.listing_mut(listing_id).increment_active_bound_discount_count();
         } else {
-            shop.decrement_active_listing_discount_count(*listing_id);
+            shop.listing_mut(listing_id).decrement_active_bound_discount_count();
         };
     });
 }
@@ -972,7 +968,7 @@ fun remove_discount_if_exists(shop: &mut Shop, discount_id: ID) {
     if (!shop.discounts.contains(discount_id)) return;
 
     let (applies_to_listing, was_active) = {
-        let discount = shop.borrow_discount(discount_id);
+        let discount = shop.discount(discount_id);
         (discount.applies_to_listing(), discount.active())
     };
 
@@ -994,57 +990,12 @@ fun clear_listing_spotlight_if_matches_discount(
 ) {
     applies_to_listing.do_ref!(|listing_id| {
         if (shop.listings.contains(*listing_id)) {
-            let listing = shop.borrow_listing_mut(*listing_id);
+            let listing = shop.listing_mut(*listing_id);
             if (listing.spotlight_discount_id() == option::some(discount_id)) {
                 listing.clear_spotlight();
             };
         };
     });
-}
-
-// TODO#q: drop
-fun increment_active_listing_discount_count(shop: &mut Shop, listing_id: ID) {
-    let listing = shop.borrow_listing_mut(listing_id);
-    listing.increment_active_bound_discount_count();
-}
-
-// TODO#q: drop
-fun decrement_active_listing_discount_count(shop: &mut Shop, listing_id: ID) {
-    let listing = shop.borrow_listing_mut(listing_id);
-    assert!(listing.active_bound_discount_count() > 0, EListingDiscountCountUnderflow);
-    listing.decrement_active_bound_discount_count();
-}
-
-// TODO#q: We should have listing and listing_mut only
-fun borrow_listing(shop: &Shop, listing_id: ID): &ItemListing {
-    assert!(shop.listings.contains(listing_id), EListingNotFound);
-    shop.listings.borrow(listing_id)
-}
-
-fun borrow_listing_mut(shop: &mut Shop, listing_id: ID): &mut ItemListing {
-    assert!(shop.listings.contains(listing_id), EListingNotFound);
-    shop.listings.borrow_mut(listing_id)
-}
-
-fun borrow_discount(shop: &Shop, discount_id: ID): &Discount {
-    assert!(shop.discounts.contains(discount_id), EDiscountNotFound);
-    shop.discounts.borrow(discount_id)
-}
-
-fun borrow_discount_mut(shop: &mut Shop, discount_id: ID): &mut Discount {
-    assert!(shop.discounts.contains(discount_id), EDiscountNotFound);
-    shop.discounts.borrow_mut(discount_id)
-}
-
-// TODO#q: use view
-fun borrow_registered_accepted_currency(shop: &Shop, coin_type: TypeName): &AcceptedCurrency {
-    assert!(shop.accepted_currencies.contains(coin_type), EAcceptedCurrencyMissing);
-    shop.accepted_currencies.borrow(coin_type)
-}
-
-fun remove_registered_accepted_currency(shop: &mut Shop, coin_type: TypeName): AcceptedCurrency {
-    assert!(shop.accepted_currencies.contains(coin_type), EAcceptedCurrencyMissing);
-    shop.accepted_currencies.remove(coin_type)
 }
 
 /// Normalize a seller-provided guardrail cap, enforcing module-level ceilings and non-zero.
@@ -1125,9 +1076,7 @@ fun process_purchase<TItem: store, TCoin>(
     clock: &Clock,
     ctx: &mut TxContext,
 ): (Option<Coin<TCoin>>, Coin<TCoin>, ShopItem<TItem>) {
-    let coin_type = currency_type<TCoin>();
-
-    let accepted_currency = shop.borrow_registered_accepted_currency(coin_type);
+    let accepted_currency = shop.currency<TCoin>();
     assert_price_info_identity!(
         accepted_currency.feed_id(),
         accepted_currency.pyth_object_id(),
@@ -1145,8 +1094,8 @@ fun process_purchase<TItem: store, TCoin>(
     let pyth_price_info_object_id = accepted_currency.pyth_object_id();
     let shop_id = shop.id();
 
-    let item_listing = shop.borrow_listing_mut(listing_id);
-    assert_listing_type_matches!<TItem>(item_listing);
+    let item_listing = shop.listing_mut(listing_id);
+    assert!(item_listing.item_type() == type_name::with_defining_ids<TItem>(), EItemTypeMismatch);
     assert!(item_listing.stock() > 0, EOutOfStock);
 
     let owed_coin_opt = split_payment(&mut payment, quote_amount, ctx);
@@ -1235,7 +1184,7 @@ fun mint_shop_item<TItem: store>(
     clock: &Clock,
     ctx: &mut TxContext,
 ): ShopItem<TItem> {
-    assert_listing_type_matches!<TItem>(item_listing);
+    assert!(item_listing.item_type() == type_name::with_defining_ids<TItem>(), EItemTypeMismatch);
 
     ShopItem {
         id: object::new(ctx),
@@ -1245,20 +1194,6 @@ fun mint_shop_item<TItem: store>(
         name: item_listing.name(),
         acquired_at: now_secs(clock),
     }
-}
-
-macro fun assert_schedule($starts_at: u64, $expires_at: Option<u64>) {
-    let starts_at = $starts_at;
-    let expires_at = $expires_at;
-    expires_at.do!(|expires_at| {
-        assert!(expires_at > starts_at, EDiscountWindow);
-    });
-}
-
-macro fun assert_listing_type_matches<$TItem: store>($item_listing: &ItemListing) {
-    let item_listing = $item_listing;
-    let expected = type_name::with_defining_ids<$TItem>();
-    assert!(item_listing.item_type() == expected, EItemTypeMismatch);
 }
 
 macro fun assert_listing_inputs(
@@ -1330,7 +1265,7 @@ macro fun assert_spotlight_discount_matches_listing(
     let discount_id = $discount_id;
     discount_id.do!(|discount_id| {
         assert!(shop.discounts.contains(discount_id), EDiscountNotFound);
-        let discount = shop.borrow_discount(discount_id);
+        let discount = shop.discount(discount_id);
         discount.applies_to_listing().do_ref!(|applies_to_listing| {
             assert!(*applies_to_listing == listing_id, ESpotlightDiscountListingMismatch);
         });

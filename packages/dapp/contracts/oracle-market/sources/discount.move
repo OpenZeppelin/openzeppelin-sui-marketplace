@@ -189,10 +189,7 @@ public(package) fun set_expires_at(discount: &mut Discount, expires_at: Option<u
     discount.expires_at = expires_at;
 }
 
-public(package) fun set_max_redemptions(
-    discount: &mut Discount,
-    max_redemptions: Option<u64>,
-) {
+public(package) fun set_max_redemptions(discount: &mut Discount, max_redemptions: Option<u64>) {
     discount.max_redemptions = max_redemptions;
 }
 

@@ -4,6 +4,11 @@ module sui_oracle_market::listing;
 use std::string::String;
 use std::type_name::{Self, TypeName};
 
+// === Errors ===
+
+#[error(code = 0)]
+const EListingDiscountCountUnderflow: vector<u8> = "listing discount count underflow";
+
 // === Structs ===
 
 /// Item listing metadata keyed under the shared `Shop`, used to mint specific items on purchase.
@@ -101,5 +106,7 @@ public(package) fun increment_active_bound_discount_count(listing: &mut ItemList
 }
 
 public(package) fun decrement_active_bound_discount_count(listing: &mut ItemListing) {
+    assert!(listing.active_bound_discount_count > 0, EListingDiscountCountUnderflow);
+
     listing.active_bound_discount_count = listing.active_bound_discount_count - 1;
 }
