@@ -365,7 +365,7 @@ public fun update_shop_owner(shop: &mut Shop, owner_cap: &ShopOwnerCap, new_owne
 ///   flows mutate `Shop` directly by listing ID.
 /// - The type parameter `T` captures what will be minted, keeping item receipt types explicit
 ///   (phantom-typed `ShopItem<T>`) rather than relying on ad-hoc metadata blobs common in EVM NFTs.
-fun add_item_listing<T: store>(
+public fun add_item_listing<T: store>(
     shop: &mut Shop,
     owner_cap: &ShopOwnerCap,
     name: String,
@@ -1112,7 +1112,7 @@ fun quote_amount_with_guardrails(
 fun process_purchase<TItem: store, TCoin>(
     shop: &mut Shop,
     price_info_object: &PriceInfoObject,
-    payment: Coin<TCoin>,
+    mut payment: Coin<TCoin>,
     listing_id: ID,
     discounted_price_usd_cents: u64,
     discount_template_id: Option<ID>,
@@ -1137,29 +1137,6 @@ fun process_purchase<TItem: store, TCoin>(
 
     let item_listing = shop.borrow_listing_mut(listing_id);
     assert_listing_type_matches!<TItem>(item_listing);
-    item_listing.process_purchase_core<TItem, TCoin>(
-        payment,
-        shop_id,
-        pyth_price_info_object_id,
-        quote_amount,
-        discounted_price_usd_cents,
-        discount_template_id,
-        clock,
-        ctx,
-    )
-}
-
-fun process_purchase_core<TItem: store, TCoin>(
-    item_listing: &mut ItemListing,
-    mut payment: Coin<TCoin>,
-    shop_id: ID,
-    pyth_price_info_object_id: ID,
-    quote_amount: u64,
-    discounted_price_usd_cents: u64,
-    discount_template_id: Option<ID>,
-    clock: &Clock,
-    ctx: &mut TxContext,
-): (Option<Coin<TCoin>>, Coin<TCoin>, ShopItem<TItem>) {
     assert_stock_available!(item_listing);
 
     let owed_coin_opt = split_payment(&mut payment, quote_amount, ctx);
