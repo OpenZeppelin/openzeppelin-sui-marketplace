@@ -19,10 +19,10 @@ public struct ItemListing has drop, store {
     base_price_usd_cents: u64,
     /// Remaining inventory for this listing.
     stock: u64,
-    /// Number of active templates pinned to this listing.
-    active_bound_template_count: u64,
-    /// Optional template highlighted in storefront UIs.
-    spotlight_discount_template_id: Option<ID>,
+    /// Number of active discounts pinned to this listing.
+    active_bound_discount_count: u64,
+    /// Optional discount highlighted in storefront UIs.
+    spotlight_discount_id: Option<ID>,
 }
 
 // === View Functions ===
@@ -47,9 +47,9 @@ public fun stock(listing: &ItemListing): u64 {
     listing.stock
 }
 
-/// Returns the spotlight discount template ID attached to the listing, if any.
-public fun spotlight_discount_template_id(listing: &ItemListing): Option<ID> {
-    listing.spotlight_discount_template_id
+/// Returns the spotlight discount ID attached to the listing, if any.
+public fun spotlight_discount_id(listing: &ItemListing): Option<ID> {
+    listing.spotlight_discount_id
 }
 
 // === Package Functions ===
@@ -59,7 +59,7 @@ public(package) fun new<T: store>(
     name: String,
     base_price_usd_cents: u64,
     stock: u64,
-    spotlight_discount_template_id: Option<ID>,
+    spotlight_discount_id: Option<ID>,
 ): ItemListing {
     ItemListing {
         listing_id,
@@ -67,8 +67,8 @@ public(package) fun new<T: store>(
         name,
         base_price_usd_cents,
         stock,
-        active_bound_template_count: 0,
-        spotlight_discount_template_id,
+        active_bound_discount_count: 0,
+        spotlight_discount_id,
     }
 }
 
@@ -76,8 +76,8 @@ public(package) fun item_type(listing: &ItemListing): TypeName {
     listing.item_type
 }
 
-public(package) fun active_bound_template_count(listing: &ItemListing): u64 {
-    listing.active_bound_template_count
+public(package) fun active_bound_discount_count(listing: &ItemListing): u64 {
+    listing.active_bound_discount_count
 }
 
 public(package) fun decrement_stock(listing: &mut ItemListing) {
@@ -85,21 +85,21 @@ public(package) fun decrement_stock(listing: &mut ItemListing) {
 }
 
 public(package) fun set_spotlight(listing: &mut ItemListing, template_id: ID) {
-    listing.spotlight_discount_template_id = option::some(template_id);
+    listing.spotlight_discount_id = option::some(template_id);
 }
 
 public(package) fun clear_spotlight(listing: &mut ItemListing) {
-    listing.spotlight_discount_template_id = option::none();
+    listing.spotlight_discount_id = option::none();
 }
 
 public(package) fun set_stock(listing: &mut ItemListing, new_stock: u64) {
     listing.stock = new_stock;
 }
 
-public(package) fun increment_active_bound_template_count(listing: &mut ItemListing) {
-    listing.active_bound_template_count = listing.active_bound_template_count + 1;
+public(package) fun increment_active_bound_discount_count(listing: &mut ItemListing) {
+    listing.active_bound_discount_count = listing.active_bound_discount_count + 1;
 }
 
-public(package) fun decrement_active_bound_template_count(listing: &mut ItemListing) {
-    listing.active_bound_template_count = listing.active_bound_template_count - 1;
+public(package) fun decrement_active_bound_discount_count(listing: &mut ItemListing) {
+    listing.active_bound_discount_count = listing.active_bound_discount_count - 1;
 }

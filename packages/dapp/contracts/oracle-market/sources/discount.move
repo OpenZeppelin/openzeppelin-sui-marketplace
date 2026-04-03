@@ -1,4 +1,4 @@
-/// This module defines the `DiscountTemplate` struct, which represents a configurable discount that can be applied to item listings in the oracle market. Templates are owned by shops and can be attached to listings to create promotions.
+/// This module defines the `Discount` struct, which represents a configurable discount that can be applied to item listings in the oracle market. Discounts are owned by shops and can be attached to listings to create promotions.
 module sui_oracle_market::discount;
 
 use openzeppelin_math::rounding;
@@ -31,9 +31,9 @@ public enum DiscountRuleKind has copy, drop {
     Percent,
 }
 
-/// Coupon template for creating discounts tracked under the shop.
-public struct DiscountTemplate has drop, store {
-    /// Template identifier and key in `Shop.discount_templates`.
+/// Configurable discount tracked under the shop.
+public struct Discount has drop, store {
+    /// Discount identifier and key in `Shop.discounts`.
     id: ID,
     /// Optional listing scope restriction.
     applies_to_listing: Option<ID>,
@@ -53,58 +53,58 @@ public struct DiscountTemplate has drop, store {
 
 // === View Functions ===
 
-/// Returns the template ID.
-public fun id(template: &DiscountTemplate): ID {
-    template.id
+/// Returns the discount ID.
+public fun id(discount: &Discount): ID {
+    discount.id
 }
 
-/// Returns the optional listing ID this template applies to.
-public fun applies_to_listing(template: &DiscountTemplate): Option<ID> {
-    template.applies_to_listing
+/// Returns the optional listing ID this discount applies to.
+public fun applies_to_listing(discount: &Discount): Option<ID> {
+    discount.applies_to_listing
 }
 
-/// Returns the discount rule configured on a template.
-public fun rule(template: &DiscountTemplate): DiscountRule {
-    template.rule
+/// Returns the discount rule configured on a discount.
+public fun rule(discount: &Discount): DiscountRule {
+    discount.rule
 }
 
-/// Returns the template start time in seconds.
-public fun starts_at(template: &DiscountTemplate): u64 {
-    template.starts_at
+/// Returns the discount start time in seconds.
+public fun starts_at(discount: &Discount): u64 {
+    discount.starts_at
 }
 
-/// Returns the optional template expiration time in seconds.
-public fun expires_at(template: &DiscountTemplate): Option<u64> {
-    template.expires_at
+/// Returns the optional discount expiration time in seconds.
+public fun expires_at(discount: &Discount): Option<u64> {
+    discount.expires_at
 }
 
-/// Returns the optional maximum redemptions for a template.
-public fun max_redemptions(template: &DiscountTemplate): Option<u64> {
-    template.max_redemptions
+/// Returns the optional maximum redemptions for a discount.
+public fun max_redemptions(discount: &Discount): Option<u64> {
+    discount.max_redemptions
 }
 
-/// Returns how many times a template has been redeemed.
-public fun redemptions(template: &DiscountTemplate): u64 {
-    template.redemptions
+/// Returns how many times a discount has been redeemed.
+public fun redemptions(discount: &Discount): u64 {
+    discount.redemptions
 }
 
-/// Returns whether a template is currently active.
-public fun active(template: &DiscountTemplate): bool {
-    template.active
+/// Returns whether a discount is currently active.
+public fun active(discount: &Discount): bool {
+    discount.active
 }
 
 // === Package Functions ===
 
 public(package) fun new(
-    template_id: ID,
+    discount_id: ID,
     applies_to_listing: Option<ID>,
     rule: DiscountRule,
     starts_at: u64,
     expires_at: Option<u64>,
     max_redemptions: Option<u64>,
-): DiscountTemplate {
-    DiscountTemplate {
-        id: template_id,
+): Discount {
+    Discount {
+        id: discount_id,
         applies_to_listing,
         rule,
         starts_at,
@@ -177,42 +177,42 @@ public(package) fun value(rule: DiscountRule): u64 {
     }
 }
 
-public(package) fun set_rule(template: &mut DiscountTemplate, rule: DiscountRule) {
-    template.rule = rule;
+public(package) fun set_rule(discount: &mut Discount, rule: DiscountRule) {
+    discount.rule = rule;
 }
 
-public(package) fun set_starts_at(template: &mut DiscountTemplate, starts_at: u64) {
-    template.starts_at = starts_at;
+public(package) fun set_starts_at(discount: &mut Discount, starts_at: u64) {
+    discount.starts_at = starts_at;
 }
 
-public(package) fun set_expires_at(template: &mut DiscountTemplate, expires_at: Option<u64>) {
-    template.expires_at = expires_at;
+public(package) fun set_expires_at(discount: &mut Discount, expires_at: Option<u64>) {
+    discount.expires_at = expires_at;
 }
 
 public(package) fun set_max_redemptions(
-    template: &mut DiscountTemplate,
+    discount: &mut Discount,
     max_redemptions: Option<u64>,
 ) {
-    template.max_redemptions = max_redemptions;
+    discount.max_redemptions = max_redemptions;
 }
 
-public(package) fun set_active(template: &mut DiscountTemplate, active: bool) {
-    template.active = active;
+public(package) fun set_active(discount: &mut Discount, active: bool) {
+    discount.active = active;
 }
 
-public(package) fun increment_redemptions(template: &mut DiscountTemplate) {
-    template.redemptions = template.redemptions + 1;
+public(package) fun increment_redemptions(discount: &mut Discount) {
+    discount.redemptions = discount.redemptions + 1;
 }
 
-public(package) fun redemption_cap_reached(template: &DiscountTemplate): bool {
-    template
+public(package) fun redemption_cap_reached(discount: &Discount): bool {
+    discount
         .max_redemptions
-        .map_ref!(|max_redemptions| template.redemptions >= *max_redemptions)
+        .map_ref!(|max_redemptions| discount.redemptions >= *max_redemptions)
         .destroy_or!(false)
 }
 
-public(package) fun finished(template: &DiscountTemplate, now: u64): bool {
-    let expired = template.expires_at.map_ref!(|expires_at| now >= *expires_at).destroy_or!(false);
-    let maxed_out = template.redemption_cap_reached();
+public(package) fun finished(discount: &Discount, now: u64): bool {
+    let expired = discount.expires_at.map_ref!(|expires_at| now >= *expires_at).destroy_or!(false);
+    let maxed_out = discount.redemption_cap_reached();
     expired || maxed_out
 }
