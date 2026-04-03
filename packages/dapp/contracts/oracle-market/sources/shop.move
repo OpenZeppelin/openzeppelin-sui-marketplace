@@ -857,6 +857,71 @@ public fun owner_cap_shop_id(owner_cap: &ShopOwnerCap): ID {
     owner_cap.shop_id
 }
 
+// === Package Functions ===
+
+/// Converts a USD-cent amount into a quoted coin amount.
+public(package) fun quote_amount_from_usd_cents(
+    usd_cents: u64,
+    decimals: u8,
+    price: price::Price,
+    max_confidence_ratio_bps: u16,
+): u64 {
+    let price_value = price.get_price();
+    let mantissa = positive_price_to_u128(price_value);
+    let confidence = price.get_conf() as u128;
+    let exponent = price.get_expo();
+    let exponent_is_negative = exponent.get_is_negative();
+    let exponent_magnitude = if (exponent_is_negative) {
+        exponent.get_magnitude_if_negative()
+    } else {
+        exponent.get_magnitude_if_positive()
+    };
+    let conservative_mantissa = conservative_price_mantissa(
+        mantissa,
+        confidence,
+        max_confidence_ratio_bps,
+    );
+
+    let coin_decimals_pow10 = decimals_pow10_u128(decimals);
+    let exponent_pow10 = pow10_u128(exponent_magnitude);
+
+    let mut numerator_multiplier = coin_decimals_pow10;
+    if (exponent_is_negative) {
+        numerator_multiplier =
+            u128::mul_div(
+                numerator_multiplier,
+                exponent_pow10,
+                1,
+                rounding::down(),
+            ).destroy_or!(abort EPriceOverflow);
+    };
+
+    let mut denominator_multiplier = u128::mul_div(
+        conservative_mantissa,
+        CENTS_PER_DOLLAR as u128,
+        1,
+        rounding::down(),
+    ).destroy_or!(abort EPriceOverflow);
+    if (!exponent_is_negative) {
+        denominator_multiplier =
+            u128::mul_div(
+                denominator_multiplier,
+                exponent_pow10,
+                1,
+                rounding::down(),
+            ).destroy_or!(abort EPriceOverflow);
+    };
+
+    let amount = u128::mul_div(
+        usd_cents as u128,
+        numerator_multiplier,
+        denominator_multiplier,
+        rounding::up(),
+    ).destroy_or!(abort EPriceOverflow);
+    let maybe_amount_u64 = amount.try_as_u64();
+    maybe_amount_u64.destroy_or!(abort EPriceOverflow)
+}
+
 // === Private Functions ===
 
 fun new(name: String, owner: address, ctx: &mut TxContext): Shop {
@@ -1112,70 +1177,6 @@ fun process_purchase<TItem: store, TCoin>(
 /// so keeping module guardrails in seconds avoids mixed-unit errors.
 fun now_secs(clock: &Clock): u64 {
     clock.timestamp_ms() / 1000
-}
-
-// TODO#q: should be moved to Package Functions
-/// Converts a USD-cent amount into a quoted coin amount.
-public(package) fun quote_amount_from_usd_cents(
-    usd_cents: u64,
-    decimals: u8,
-    price: price::Price,
-    max_confidence_ratio_bps: u16,
-): u64 {
-    let price_value = price.get_price();
-    let mantissa = positive_price_to_u128(price_value);
-    let confidence = price.get_conf() as u128;
-    let exponent = price.get_expo();
-    let exponent_is_negative = exponent.get_is_negative();
-    let exponent_magnitude = if (exponent_is_negative) {
-        exponent.get_magnitude_if_negative()
-    } else {
-        exponent.get_magnitude_if_positive()
-    };
-    let conservative_mantissa = conservative_price_mantissa(
-        mantissa,
-        confidence,
-        max_confidence_ratio_bps,
-    );
-
-    let coin_decimals_pow10 = decimals_pow10_u128(decimals);
-    let exponent_pow10 = pow10_u128(exponent_magnitude);
-
-    let mut numerator_multiplier = coin_decimals_pow10;
-    if (exponent_is_negative) {
-        numerator_multiplier =
-            u128::mul_div(
-                numerator_multiplier,
-                exponent_pow10,
-                1,
-                rounding::down(),
-            ).destroy_or!(abort EPriceOverflow);
-    };
-
-    let mut denominator_multiplier = u128::mul_div(
-        conservative_mantissa,
-        CENTS_PER_DOLLAR as u128,
-        1,
-        rounding::down(),
-    ).destroy_or!(abort EPriceOverflow);
-    if (!exponent_is_negative) {
-        denominator_multiplier =
-            u128::mul_div(
-                denominator_multiplier,
-                exponent_pow10,
-                1,
-                rounding::down(),
-            ).destroy_or!(abort EPriceOverflow);
-    };
-
-    let amount = u128::mul_div(
-        usd_cents as u128,
-        numerator_multiplier,
-        denominator_multiplier,
-        rounding::up(),
-    ).destroy_or!(abort EPriceOverflow);
-    let maybe_amount_u64 = amount.try_as_u64();
-    maybe_amount_u64.destroy_or!(abort EPriceOverflow)
 }
 
 fun decimals_pow10_u128(decimals: u8): u128 {
