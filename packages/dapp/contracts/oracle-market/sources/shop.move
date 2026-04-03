@@ -352,7 +352,7 @@ public fun update_shop_owner(shop: &mut Shop, owner_cap: &ShopOwnerCap, new_owne
 // === Item Listing ===
 
 /// /// Adds a listing and returns the created listing ID.
-/// 
+///
 /// Add an `ItemListing` attached to the `Shop`. The generic `T` encodes what will eventually be
 /// minted when a buyer completes checkout. Prices are provided in USD cents (e.g. $12.50 -> 1_250)
 /// to avoid floating point math.
@@ -405,7 +405,11 @@ fun link_listing_spotlight_template(shop: &mut Shop, listing_id: ID, discount_te
     listing.spotlight_discount_template_id = option::some(discount_template_id);
 }
 
-fun add_item_listing_with_discount_template_core<T: store>(
+/// Add an item listing and atomically create a listing-scoped discount template in one transaction.
+///
+/// This is useful when callers want a listing-specific template without requiring a pre-existing
+/// listing ID. The new template is automatically attached as the listing's spotlight template.
+public fun add_item_listing_with_discount_template<T: store>(
     shop: &mut Shop,
     owner_cap: &ShopOwnerCap,
     name: String,
@@ -438,39 +442,6 @@ fun add_item_listing_with_discount_template_core<T: store>(
     );
 
     shop.link_listing_spotlight_template(listing_id, discount_template_id);
-
-    (listing_id, discount_template_id)
-}
-
-/// Add an item listing and atomically create a listing-scoped discount template in one transaction.
-///
-/// This is useful when callers want a listing-specific template without requiring a pre-existing
-/// listing ID. The new template is automatically attached as the listing's spotlight template.
-public fun add_item_listing_with_discount_template<T: store>(
-    shop: &mut Shop,
-    owner_cap: &ShopOwnerCap,
-    name: String,
-    base_price_usd_cents: u64,
-    stock: u64,
-    rule_kind: u8,
-    rule_value: u64,
-    starts_at: u64,
-    expires_at: Option<u64>,
-    max_redemptions: Option<u64>,
-    ctx: &mut TxContext,
-): (ID, ID) {
-    let (listing_id, discount_template_id) = shop.add_item_listing_with_discount_template_core<T>(
-        owner_cap,
-        name,
-        base_price_usd_cents,
-        stock,
-        rule_kind,
-        rule_value,
-        starts_at,
-        expires_at,
-        max_redemptions,
-        ctx,
-    );
 
     (listing_id, discount_template_id)
 }
