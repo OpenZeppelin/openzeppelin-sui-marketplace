@@ -268,6 +268,7 @@ public enum DiscountRuleKind has copy, drop {
     Percent,
 }
 
+// TODO#q: rename DiscountTemplate -> Discount
 /// Coupon template for creating discounts tracked under the shop.
 public struct DiscountTemplate has drop, store {
     /// Template identifier and key in `Shop.discount_templates`.
@@ -956,6 +957,7 @@ fun new_discount_template(
     }
 }
 
+// TODO#q: remove it
 fun apply_discount_template_updates(
     discount_template: &mut DiscountTemplate,
     discount_rule: DiscountRule,
@@ -969,16 +971,19 @@ fun apply_discount_template_updates(
     discount_template.max_redemptions = max_redemptions;
 }
 
+// TODO#q: use bag instead
 fun currency_type<TCoin>(): TypeName {
     type_name::with_defining_ids<TCoin>()
 }
 
 // === Helpers ===
 
+// TODO#q: inline
 fun new_object_id(ctx: &mut TxContext): ID {
     ctx.fresh_object_address().to_id()
 }
 
+// TODO#q: inline
 fun increment_active_template_count_if_listing_bound(
     shop: &mut Shop,
     applies_to_listing: Option<ID>,
@@ -988,6 +993,7 @@ fun increment_active_template_count_if_listing_bound(
     });
 }
 
+// TODO#q: inline
 fun has_active_listing_bound_templates(shop: &Shop, listing_id: ID): bool {
     shop.borrow_listing(listing_id).active_bound_template_count > 0
 }
@@ -1053,6 +1059,7 @@ fun decrement_active_listing_template_count(shop: &mut Shop, listing_id: ID) {
     listing.active_bound_template_count = listing.active_bound_template_count - 1;
 }
 
+// TODO#q: We should have listing and listing_mut only
 fun borrow_listing(shop: &Shop, listing_id: ID): &ItemListing {
     assert_listing_registered!(shop, listing_id);
     shop.listings.borrow(listing_id)
