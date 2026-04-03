@@ -1556,40 +1556,27 @@ macro fun assert_spotlight_template_matches_listing(
 
 // === View helpers ===
 
+/// Returns the listing for `listing_id`.
+public fun listing(shop: &Shop, listing_id: ID): &ItemListing {
+    assert!(shop.listings.contains(listing_id), EListingNotFound);
+    shop.listings.borrow(listing_id)
+}
+
 /// Returns true if the listing is registered under the shop.
 public fun listing_exists(shop: &Shop, listing_id: ID): bool {
     shop.listings.contains(listing_id)
 }
 
-/// Returns true if the discount template is registered under the shop.
-public fun discount_template_exists(shop: &Shop, template_id: ID): bool {
-    shop.discount_templates.contains(template_id)
+/// Returns the accepted currency config for `TCoin`.
+public fun accepted_currency<TCoin>(shop: &Shop): &AcceptedCurrency {
+    let coin_type = currency_type<TCoin>();
+    assert!(shop.accepted_currencies.contains(coin_type), EAcceptedCurrencyMissing);
+    shop.accepted_currencies.borrow(coin_type)
 }
 
 /// Returns true if the accepted currency is registered under the shop.
 public fun accepted_currency_exists(shop: &Shop, coin_type: TypeName): bool {
     shop.accepted_currencies.contains(coin_type)
-}
-
-/// Returns the template ID for a template address if registered.
-public fun discount_template_id_for_address(shop: &Shop, template_address: address): Option<ID> {
-    let template_id = template_address.to_id();
-    if (shop.discount_template_exists(template_id)) {
-        option::some(template_id)
-    } else {
-        option::none()
-    }
-}
-
-/// Returns the listing for `listing_id`.
-public fun listing(shop: &Shop, listing_id: ID): &ItemListing {
-    shop.borrow_listing(listing_id)
-}
-
-/// Returns the accepted currency config for `TCoin`.
-public fun accepted_currency<TCoin>(shop: &Shop): &AcceptedCurrency {
-    let coin_type = currency_type<TCoin>();
-    shop.borrow_registered_accepted_currency(coin_type)
 }
 
 /// Returns the oracle feed identifier bytes for an accepted currency.
@@ -1624,7 +1611,13 @@ public fun accepted_currency_max_confidence_ratio_bps_cap(currency: &AcceptedCur
 
 /// Returns the discount template for `template_id`.
 public fun discount_template(shop: &Shop, template_id: ID): &DiscountTemplate {
-    shop.borrow_discount_template(template_id)
+    assert!(shop.discount_templates.contains(template_id), ETemplateNotFound);
+    shop.discount_templates.borrow(template_id)
+}
+
+/// Returns true if the discount template is registered under the shop.
+public fun discount_template_exists(shop: &Shop, template_id: ID): bool {
+    shop.discount_templates.contains(template_id)
 }
 
 /// Returns the optional listing ID this template applies to.

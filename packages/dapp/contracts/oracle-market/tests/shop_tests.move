@@ -2829,21 +2829,6 @@ fun test_init_claims_publisher() {
     shop::test_init(&mut ctx);
 }
 
-#[test]
-fun listing_and_template_id_for_address_return_none_when_missing() {
-    let mut ctx = tx_context::new_from_hint(TEST_OWNER, 9993, 0, 0, 0);
-    let (shop_obj, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
-    let missing_listing_identifier = missing_listing_id();
-
-    assert!(!shop_obj.listing_exists(missing_listing_identifier));
-    let missing_address = @0x1234;
-    let template_id_opt = shop_obj.discount_template_id_for_address(missing_address);
-    assert!(option::is_none(&template_id_opt));
-
-    std::unit_test::destroy(shop_obj);
-    std::unit_test::destroy(owner_cap);
-}
-
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::EEmptyShopName)]
 fun create_shop_rejects_empty_name() {
     let mut ctx = tx_context::new_from_hint(TEST_OWNER, 10001, 0, 0, 0);
