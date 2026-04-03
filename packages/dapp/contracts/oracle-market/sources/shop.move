@@ -76,6 +76,7 @@ use sui::coin::Coin;
 use sui::coin_registry::Currency;
 use sui::package;
 use sui::table::{Self, Table};
+use sui_oracle_market::currency::{Self, AcceptedCurrency};
 use sui_oracle_market::discount::{Self, DiscountTemplate};
 use sui_oracle_market::events;
 use sui_oracle_market::listing::{Self, ItemListing};
@@ -216,22 +217,6 @@ public struct ShopItem<phantom TItem> has key, store {
     name: String,
     /// Timestamp seconds when purchase completed.
     acquired_at: u64,
-}
-
-/// Defines which external coins the shop is able to price/accept.
-public struct AcceptedCurrency has drop, store {
-    /// Pyth price feed identifier (32 bytes).
-    feed_id: vector<u8>,
-    /// ID of Pyth PriceInfoObject
-    pyth_object_id: ID,
-    /// Coin decimal precision from registry metadata.
-    decimals: u8,
-    /// Display symbol for UIs/logging.
-    symbol: String,
-    /// Upper bound on caller-provided max age override.
-    max_price_age_secs_cap: u64,
-    /// Upper bound on caller-provided confidence override.
-    max_confidence_ratio_bps_cap: u16,
 }
 
 /// Resolved pricing guardrails after capping buyer overrides against seller limits.
@@ -466,7 +451,7 @@ public fun add_accepted_currency<TCoin>(
         DEFAULT_MAX_CONFIDENCE_RATIO_BPS,
     );
 
-    let accepted_currency = new_accepted_currency(
+    let accepted_currency = currency::new(
         feed_id,
         pyth_object_id,
         decimals,
@@ -487,7 +472,7 @@ public fun remove_accepted_currency<TCoin>(shop: &mut Shop, owner_cap: &ShopOwne
 
     events::emit_accepted_coin_removed(
         shop.id.to_inner(),
-        accepted_currency.pyth_object_id,
+        accepted_currency.pyth_object_id(),
     );
 }
 
@@ -800,26 +785,6 @@ fun new_shop(name: String, owner: address, ctx: &mut TxContext): Shop {
     }
 }
 
-fun new_accepted_currency(
-    feed_id: vector<u8>,
-    pyth_object_id: ID,
-    decimals: u8,
-    symbol: String,
-    max_price_age_secs_cap: u64,
-    max_confidence_ratio_bps_cap: u16,
-): AcceptedCurrency {
-    assert_supported_decimals!(decimals);
-
-    AcceptedCurrency {
-        feed_id,
-        pyth_object_id,
-        decimals,
-        symbol,
-        max_price_age_secs_cap,
-        max_confidence_ratio_bps_cap,
-    }
-}
-
 // === Helpers ===
 
 // TODO#q: use bag instead
@@ -935,13 +900,13 @@ fun resolve_effective_guardrails(
     max_confidence_ratio_bps: Option<u16>,
 ): EffectiveGuardrails {
     let requested_max_age = max_price_age_secs.destroy_or!(
-        accepted_currency.max_price_age_secs_cap,
+        accepted_currency.max_price_age_secs_cap(),
     );
     let requested_confidence_ratio = max_confidence_ratio_bps.destroy_or!(
-        accepted_currency.max_confidence_ratio_bps_cap,
+        accepted_currency.max_confidence_ratio_bps_cap(),
     );
-    let effective_max_age = requested_max_age.min(accepted_currency.max_price_age_secs_cap);
-    let effective_confidence_ratio = requested_confidence_ratio.min(accepted_currency.max_confidence_ratio_bps_cap);
+    let effective_max_age = requested_max_age.min(accepted_currency.max_price_age_secs_cap());
+    let effective_confidence_ratio = requested_confidence_ratio.min(accepted_currency.max_confidence_ratio_bps_cap());
     EffectiveGuardrails {
         max_price_age_secs: effective_max_age,
         max_confidence_ratio_bps: effective_confidence_ratio,
@@ -989,7 +954,7 @@ fun quote_amount_with_guardrails(
     );
     quote_amount_from_usd_cents(
         price_usd_cents,
-        accepted_currency.decimals,
+        accepted_currency.decimals(),
         price,
         effective_guardrails.max_confidence_ratio_bps,
     )
@@ -1011,14 +976,15 @@ fun process_purchase<TItem: store, TCoin>(
 
     let accepted_currency = shop.borrow_registered_accepted_currency(coin_type);
     assert_price_info_matches_currency!(accepted_currency, price_info_object);
-    let quote_amount = accepted_currency.quote_amount_with_guardrails(
+    let quote_amount = quote_amount_with_guardrails(
+        accepted_currency,
         price_info_object,
         discounted_price_usd_cents,
         max_price_age_secs,
         max_confidence_ratio_bps,
         clock,
     );
-    let pyth_price_info_object_id = accepted_currency.pyth_object_id;
+    let pyth_price_info_object_id = accepted_currency.pyth_object_id();
     let shop_id = shop.id.to_inner();
 
     let item_listing = shop.borrow_listing_mut(listing_id);
@@ -1370,8 +1336,8 @@ macro fun assert_price_info_matches_currency(
     let accepted_currency = $accepted_currency;
     let price_info_object = $price_info_object;
     assert_price_info_identity!(
-        accepted_currency.feed_id,
-        accepted_currency.pyth_object_id,
+        accepted_currency.feed_id(),
+        accepted_currency.pyth_object_id(),
         price_info_object,
     );
 }
@@ -1435,45 +1401,15 @@ public fun listing_exists(shop: &Shop, listing_id: ID): bool {
 }
 
 /// Returns the accepted currency config for `TCoin`.
-public fun accepted_currency<TCoin>(shop: &Shop): &AcceptedCurrency {
+public fun currency<TCoin>(shop: &Shop): &AcceptedCurrency {
     let coin_type = currency_type<TCoin>();
     assert!(shop.accepted_currencies.contains(coin_type), EAcceptedCurrencyMissing);
     shop.accepted_currencies.borrow(coin_type)
 }
 
 /// Returns true if the accepted currency is registered under the shop.
-public fun accepted_currency_exists(shop: &Shop, coin_type: TypeName): bool {
+public fun currency_exists(shop: &Shop, coin_type: TypeName): bool {
     shop.accepted_currencies.contains(coin_type)
-}
-
-/// Returns the oracle feed identifier bytes for an accepted currency.
-public fun accepted_currency_feed_id(currency: &AcceptedCurrency): vector<u8> {
-    currency.feed_id
-}
-
-/// Returns the bound Pyth object ID for an accepted currency.
-public fun accepted_currency_pyth_object_id(currency: &AcceptedCurrency): ID {
-    currency.pyth_object_id
-}
-
-/// Returns the decimals configured for an accepted currency.
-public fun accepted_currency_decimals(currency: &AcceptedCurrency): u8 {
-    currency.decimals
-}
-
-/// Returns the ticker symbol configured for an accepted currency.
-public fun accepted_currency_symbol(currency: &AcceptedCurrency): String {
-    currency.symbol
-}
-
-/// Returns the seller cap for `max_price_age_secs` overrides.
-public fun accepted_currency_max_price_age_secs_cap(currency: &AcceptedCurrency): u64 {
-    currency.max_price_age_secs_cap
-}
-
-/// Returns the seller cap for `max_confidence_ratio_bps` overrides.
-public fun accepted_currency_max_confidence_ratio_bps_cap(currency: &AcceptedCurrency): u16 {
-    currency.max_confidence_ratio_bps_cap
 }
 
 /// Returns the discount template for `template_id`.
@@ -1500,7 +1436,8 @@ public fun quote_amount_for_price_info_object<TCoin>(
     let accepted_currency = shop.borrow_registered_accepted_currency(coin_type);
     assert_price_info_matches_currency!(accepted_currency, price_info_object);
     // Entry-only quote helper; clients call via dev-inspect instead of storing quotes on-chain.
-    accepted_currency.quote_amount_with_guardrails(
+    quote_amount_with_guardrails(
+        accepted_currency,
         price_info_object,
         price_usd_cents,
         max_price_age_secs,

@@ -172,7 +172,7 @@ fun remove_listing_if_exists(
 
 fun remove_currency_if_exists<TCoin>(shop: &mut shop::Shop, owner_cap: &shop::ShopOwnerCap) {
     let coin_type = type_name::with_defining_ids<TCoin>();
-    if (shop.accepted_currency_exists(coin_type)) {
+    if (shop.currency_exists(coin_type)) {
         shop.remove_accepted_currency<TCoin>(owner_cap);
     };
 }
@@ -798,8 +798,8 @@ fun quote_view_matches_internal_math() {
     );
     let clock_obj = create_test_clock_at(test_scenario::ctx(&mut scn), 1);
     let price_usd_cents = 10_000;
-    let accepted_currency = shared_shop.accepted_currency<TestCoin>();
-    let decimals = accepted_currency.accepted_currency_decimals();
+    let accepted_currency = shared_shop.currency<TestCoin>();
+    let decimals = accepted_currency.decimals();
 
     let view_quote = shared_shop.quote_amount_for_price_info_object<TestCoin>(
         &price_info_obj,
@@ -3451,7 +3451,7 @@ fun accepted_currency_rejects_foreign_shop() {
 
     let shared_shop_b = take_shared_shop(&scn, shop_b_id);
 
-    shared_shop_b.accepted_currency<TestCoin>();
+    shared_shop_b.currency<TestCoin>();
     abort
 }
 
@@ -3477,7 +3477,7 @@ fun remove_currency_field_clears_mapping() {
     );
 
     remove_currency_if_exists<TestCoin>(&mut shop_obj, &owner_cap_obj);
-    assert!(!shop_obj.accepted_currency_exists(test_coin_type()));
+    assert!(!shop_obj.currency_exists(test_coin_type()));
 
     test_scenario::return_to_sender(&scn, owner_cap_obj);
     test_scenario::return_shared(shop_obj);
