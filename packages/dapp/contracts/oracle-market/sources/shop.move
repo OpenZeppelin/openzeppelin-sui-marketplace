@@ -173,7 +173,7 @@ fun init(publisher_witness: SHOP, ctx: &mut TxContext) {
     package::claim_and_keep<SHOP>(publisher_witness, ctx);
 }
 
-// === Capability & Core ===
+// === Structs ===
 
 /// Capability that proves the caller can administer a specific `Shop`.
 /// Holding and using this object is the Sui-native equivalent of matching `onlyOwner` criteria in Solidity.
@@ -240,7 +240,7 @@ public struct EffectiveGuardrails has copy, drop {
 /// - State stays sharded so PTBs only touch the listing slot/discount object they mutate.
 public fun create_shop(name: String, ctx: &mut TxContext): (ID, ShopOwnerCap) {
     let shop = new(name, ctx.sender(), ctx);
-    let shop_id = shop.id.to_inner();
+    let shop_id = shop.id();
 
     let owner_cap = ShopOwnerCap {
         id: object::new(ctx),
@@ -256,10 +256,12 @@ public fun create_shop(name: String, ctx: &mut TxContext): (ID, ShopOwnerCap) {
 
 /// Disable a shop permanently (buyer flows will reject new checkouts).
 public fun disable_shop(shop: &mut Shop, owner_cap: &ShopOwnerCap) {
-    assert_owner_cap!(shop, owner_cap);
+    assert!(owner_cap.shop_id == shop.id(), EInvalidOwnerCap);
+
     shop.disabled = true;
 
-    events::emit_shop_disabled(shop.id.to_inner(), owner_cap.id.to_inner());
+    // TODO#q: emit shop disabled should be emitted when only state changes
+    events::emit_shop_disabled(shop.id(), owner_cap.id.to_inner());
 }
 
 /// Rotate the payout recipient for a shop.
@@ -270,12 +272,12 @@ public fun disable_shop(shop: &mut Shop, owner_cap: &ShopOwnerCap) {
 ///   `ctx.sender()`. Rotating the cap keeps payouts aligned to the current operator.
 /// - Buyers never handle capabilities--checkout remains permissionless against the shared `Shop`.
 public fun update_shop_owner(shop: &mut Shop, owner_cap: &ShopOwnerCap, new_owner: address) {
-    assert_owner_cap!(shop, owner_cap);
+    assert!(owner_cap.shop_id == shop.id(), EInvalidOwnerCap);
 
     let previous_owner = shop.owner;
     shop.owner = new_owner;
 
-    events::emit_shop_owner_updated(shop.id.to_inner(), owner_cap.id.to_inner(), previous_owner);
+    events::emit_shop_owner_updated(shop.id(), owner_cap.id.to_inner(), previous_owner);
 }
 
 /// /// Adds a listing and returns the created listing ID.
@@ -301,16 +303,10 @@ public fun add_item_listing<T: store>(
     spotlight_discount_id: Option<ID>,
     ctx: &mut TxContext,
 ): ID {
-    assert_owner_cap!(shop, owner_cap);
-    assert_listing_inputs!(
-        shop,
-        &name,
-        base_price_usd_cents,
-        stock,
-        spotlight_discount_id,
-    );
+    assert!(owner_cap.shop_id == shop.id(), EInvalidOwnerCap);
+    assert_listing_inputs!(shop, &name, base_price_usd_cents, stock, spotlight_discount_id);
 
-    let shop_id = shop.id.to_inner();
+    let shop_id = shop.id();
     let listing_id = new_object_id(ctx);
     assert_spotlight_discount_matches_listing!(shop, listing_id, spotlight_discount_id);
     let listing = listing::new<T>(
@@ -381,13 +377,13 @@ public fun update_item_listing_stock(
     listing_id: ID,
     new_stock: u64,
 ) {
-    assert_owner_cap!(shop, owner_cap);
+    assert!(owner_cap.shop_id == shop.id(), EInvalidOwnerCap);
     let item_listing = shop.borrow_listing_mut(listing_id);
 
     let previous_stock = item_listing.stock();
     item_listing.set_stock(new_stock);
 
-    events::emit_item_listing_stock_updated(shop.id.to_inner(), listing_id, previous_stock);
+    events::emit_item_listing_stock_updated(shop.id(), listing_id, previous_stock);
 }
 
 /// Remove an item listing entirely.
@@ -395,11 +391,11 @@ public fun update_item_listing_stock(
 /// This delists by removing the listing entry from `Shop.listings`.
 /// Listings with any active listing-bound discounts must pause those discounts first.
 public fun remove_item_listing(shop: &mut Shop, owner_cap: &ShopOwnerCap, listing_id: ID) {
-    assert_owner_cap!(shop, owner_cap);
+    assert!(owner_cap.shop_id == shop.id(), EInvalidOwnerCap);
     assert!(!shop.has_active_listing_bound_discounts(listing_id), EListingHasActiveDiscounts);
     let _listing = shop.listings.remove(listing_id);
 
-    events::emit_item_listing_removed(shop.id.to_inner(), listing_id);
+    events::emit_item_listing_removed(shop.id(), listing_id);
 }
 
 /// Register a coin type that the shop will price through an oracle feed.
@@ -430,17 +426,21 @@ public fun add_accepted_currency<TCoin>(
     max_price_age_secs_cap: Option<u64>,
     max_confidence_ratio_bps_cap: Option<u16>,
 ) {
-    assert_owner_cap!(shop, owner_cap);
-
-    let coin_type = currency_type<TCoin>();
+    assert!(owner_cap.shop_id == shop.id(), EInvalidOwnerCap);
 
     // Bind this currency to a specific PriceInfoObject to prevent oracle feed spoofing.
-    assert_accepted_currency_inputs!(shop, coin_type, feed_id, pyth_object_id, price_info_object);
+    let coin_type = currency_type<TCoin>();
+    assert!(!shop.accepted_currencies.contains(coin_type), EAcceptedCurrencyExists);
+    // Assert feed_id is valid.
+    assert!(!feed_id.is_empty(), EEmptyFeedId);
+    assert!(feed_id.length() == PYTH_PRICE_IDENTIFIER_LENGTH, EInvalidFeedIdLength);
+    assert_price_info_identity!(feed_id, pyth_object_id, price_info_object);
 
     let decimals = currency.decimals();
-    assert_supported_decimals!(decimals);
+    assert!(decimals as u64 <= MAX_DECIMAL_POWER, EUnsupportedCurrencyDecimals);
+
     let symbol = currency.symbol();
-    let shop_id = shop.id.to_inner();
+    let shop_id = shop.id();
     let age_cap = resolve_guardrail_cap!(max_price_age_secs_cap, DEFAULT_MAX_PRICE_AGE_SECS);
     let confidence_cap = resolve_guardrail_cap!(
         max_confidence_ratio_bps_cap,
@@ -462,12 +462,13 @@ public fun add_accepted_currency<TCoin>(
 
 /// Deregister an accepted coin type.
 public fun remove_accepted_currency<TCoin>(shop: &mut Shop, owner_cap: &ShopOwnerCap) {
-    assert_owner_cap!(shop, owner_cap);
+    assert!(owner_cap.shop_id == shop.id(), EInvalidOwnerCap);
+
     let coin_type = currency_type<TCoin>();
     let accepted_currency = shop.remove_registered_accepted_currency(coin_type);
 
     events::emit_accepted_coin_removed(
-        shop.id.to_inner(),
+        shop.id(),
         accepted_currency.pyth_object_id(),
     );
 }
@@ -502,8 +503,11 @@ public fun create_discount(
     max_redemptions: Option<u64>,
     ctx: &mut TxContext,
 ): ID {
-    assert_owner_cap!(shop, owner_cap);
-    assert_discount_inputs!(shop, applies_to_listing, starts_at, expires_at);
+    assert!(owner_cap.shop_id == shop.id(), EInvalidOwnerCap);
+    assert_schedule!(starts_at, expires_at);
+    applies_to_listing.do!(|listing_id| {
+        assert!(shop.listings.contains(listing_id), EListingNotFound);
+    });
     max_redemptions.do_ref!(|max_value| {
         assert!(*max_value > 0, EInvalidMaxRedemptions);
     });
@@ -527,7 +531,7 @@ public fun create_discount(
     });
 
     events::emit_discount_created(
-        shop.id.to_inner(),
+        shop.id(),
         discount_id,
     );
 
@@ -551,8 +555,8 @@ public fun update_discount(
     max_redemptions: Option<u64>,
     clock: &Clock,
 ) {
-    assert_owner_cap!(shop, owner_cap);
-    assert_discount_registered!(shop, discount_id);
+    assert!(owner_cap.shop_id == shop.id(), EInvalidOwnerCap);
+    assert!(shop.discounts.contains(discount_id), EDiscountNotFound);
     assert_schedule!(starts_at, expires_at);
     max_redemptions.do_ref!(|max_value| {
         assert!(*max_value > 0, EInvalidMaxRedemptions);
@@ -561,10 +565,13 @@ public fun update_discount(
     let discount_rule_kind = discount::parse_kind(rule_kind);
     let discount_rule = discount::build(discount_rule_kind, rule_value);
     let now = now_secs(clock);
-    let shop_id = shop.id.to_inner();
+    let shop_id = shop.id();
 
     let discount = shop.borrow_discount_mut(discount_id);
-    assert_discount_updatable!(discount, now);
+
+    // Assert discount can be updated
+    assert!(discount.redemptions() == 0, EDiscountFinalized);
+    assert!(!discount.finished(now), EDiscountFinalized);
 
     // Apply discount updates.
     discount.set_rule(discount_rule);
@@ -583,12 +590,14 @@ public fun toggle_discount(
     discount_id: ID,
     active: bool,
 ) {
-    assert_owner_cap!(shop, owner_cap);
-    assert_discount_registered!(shop, discount_id);
+    assert!(owner_cap.shop_id == shop.id(), EInvalidOwnerCap);
+    assert!(shop.discounts.contains(discount_id), EDiscountNotFound);
 
     let discount = shop.borrow_discount(discount_id);
     if (active) {
-        assert_listing_belongs_to_shop_if_some!(shop, discount.applies_to_listing());
+        discount.applies_to_listing().do!(|listing_id| {
+            assert!(shop.listings.contains(listing_id), EListingNotFound);
+        });
     };
     shop.adjust_active_discount_count(
         discount.applies_to_listing(),
@@ -600,17 +609,14 @@ public fun toggle_discount(
 
     if (discount.active() != active) {
         discount.set_active(active);
-        events::emit_discount_toggled(shop.id.to_inner(), discount_id, active);
+        events::emit_discount_toggled(shop.id(), discount_id, active);
     };
 }
 
 /// Removes a discount from shop storage.
-public fun remove_discount(
-    shop: &mut Shop,
-    owner_cap: &ShopOwnerCap,
-    discount_id: ID,
-) {
-    assert_owner_cap!(shop, owner_cap);
+public fun remove_discount(shop: &mut Shop, owner_cap: &ShopOwnerCap, discount_id: ID) {
+    assert!(owner_cap.shop_id == shop.id(), EInvalidOwnerCap);
+
     shop.remove_discount_if_exists(discount_id);
 }
 
@@ -621,13 +627,9 @@ public fun attach_discount_to_listing(
     discount_id: ID,
     listing_id: ID,
 ) {
-    assert_owner_cap!(shop, owner_cap);
-    assert_discount_registered!(shop, discount_id);
-    assert_spotlight_discount_matches_listing!(
-        shop,
-        listing_id,
-        option::some(discount_id),
-    );
+    assert!(owner_cap.shop_id == shop.id(), EInvalidOwnerCap);
+    assert!(shop.discounts.contains(discount_id), EDiscountNotFound);
+    assert_spotlight_discount_matches_listing!(shop, listing_id, option::some(discount_id));
 
     let item_listing = shop.borrow_listing_mut(listing_id);
     item_listing.set_spotlight(discount_id);
@@ -635,7 +637,8 @@ public fun attach_discount_to_listing(
 
 /// Remove the promotion banner from a listing.
 public fun clear_discount_from_listing(shop: &mut Shop, owner_cap: &ShopOwnerCap, listing_id: ID) {
-    assert_owner_cap!(shop, owner_cap);
+    assert!(owner_cap.shop_id == shop.id(), EInvalidOwnerCap);
+
     let item_listing = shop.borrow_listing_mut(listing_id);
     item_listing.clear_spotlight();
 }
@@ -668,7 +671,8 @@ public fun buy_item<TItem: store, TCoin>(
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
-    assert_shop_active!(shop);
+    assert!(!shop.disabled, EShopDisabled);
+
     let base_price_usd_cents = shop.borrow_listing(listing_id).base_price_usd_cents();
     // Payment is a Coin<T> object; process_purchase splits the payment and returns change.
     let (owed_coin_opt, change_coin, minted_item) = shop.process_purchase<TItem, TCoin>(
@@ -716,12 +720,12 @@ public fun buy_item_with_discount<TItem: store, TCoin>(
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
-    assert_shop_active!(shop);
+    assert!(!shop.disabled, EShopDisabled);
 
     let now = now_secs(clock);
     let listing_price_usd_cents = shop.borrow_listing(listing_id).base_price_usd_cents();
 
-    let shop_id = shop.id.to_inner();
+    let shop_id = shop.id();
     let discount = shop.borrow_discount_mut(discount_id);
     assert_discount_redemption_allowed!(discount, listing_id, now);
 
@@ -806,7 +810,12 @@ public fun quote_amount_for_price_info_object<TCoin>(
 ): u64 {
     let coin_type = currency_type<TCoin>();
     let accepted_currency = shop.borrow_registered_accepted_currency(coin_type);
-    assert_price_info_matches_currency!(accepted_currency, price_info_object);
+    assert_price_info_identity!(
+        accepted_currency.feed_id(),
+        accepted_currency.pyth_object_id(),
+        price_info_object,
+    );
+
     // Entry-only quote helper; clients call via dev-inspect instead of storing quotes on-chain.
     quote_amount_with_guardrails(
         accepted_currency,
@@ -851,7 +860,7 @@ public fun owner_cap_shop_id(owner_cap: &ShopOwnerCap): ID {
 // === Private Functions ===
 
 fun new(name: String, owner: address, ctx: &mut TxContext): Shop {
-    assert_shop_name!(&name);
+    assert!(!name.is_empty(), EEmptyShopName);
     Shop {
         id: object::new(ctx),
         owner,
@@ -928,11 +937,13 @@ fun clear_listing_spotlight_if_matches_discount(
     });
 }
 
+// TODO#q: drop
 fun increment_active_listing_discount_count(shop: &mut Shop, listing_id: ID) {
     let listing = shop.borrow_listing_mut(listing_id);
     listing.increment_active_bound_discount_count();
 }
 
+// TODO#q: drop
 fun decrement_active_listing_discount_count(shop: &mut Shop, listing_id: ID) {
     let listing = shop.borrow_listing_mut(listing_id);
     assert!(listing.active_bound_discount_count() > 0, EListingDiscountCountUnderflow);
@@ -941,23 +952,34 @@ fun decrement_active_listing_discount_count(shop: &mut Shop, listing_id: ID) {
 
 // TODO#q: We should have listing and listing_mut only
 fun borrow_listing(shop: &Shop, listing_id: ID): &ItemListing {
-    assert_listing_registered!(shop, listing_id);
+    assert!(shop.listings.contains(listing_id), EListingNotFound);
     shop.listings.borrow(listing_id)
 }
 
 fun borrow_listing_mut(shop: &mut Shop, listing_id: ID): &mut ItemListing {
-    assert_listing_registered!(shop, listing_id);
+    assert!(shop.listings.contains(listing_id), EListingNotFound);
     shop.listings.borrow_mut(listing_id)
 }
 
 fun borrow_discount(shop: &Shop, discount_id: ID): &Discount {
-    assert_discount_registered!(shop, discount_id);
+    assert!(shop.discounts.contains(discount_id), EDiscountNotFound);
     shop.discounts.borrow(discount_id)
 }
 
 fun borrow_discount_mut(shop: &mut Shop, discount_id: ID): &mut Discount {
-    assert_discount_registered!(shop, discount_id);
+    assert!(shop.discounts.contains(discount_id), EDiscountNotFound);
     shop.discounts.borrow_mut(discount_id)
+}
+
+// TODO#q: use view
+fun borrow_registered_accepted_currency(shop: &Shop, coin_type: TypeName): &AcceptedCurrency {
+    assert!(shop.accepted_currencies.contains(coin_type), EAcceptedCurrencyMissing);
+    shop.accepted_currencies.borrow(coin_type)
+}
+
+fun remove_registered_accepted_currency(shop: &mut Shop, coin_type: TypeName): AcceptedCurrency {
+    assert!(shop.accepted_currencies.contains(coin_type), EAcceptedCurrencyMissing);
+    shop.accepted_currencies.remove(coin_type)
 }
 
 /// Normalize a seller-provided guardrail cap, enforcing module-level ceilings and non-zero.
@@ -987,16 +1009,6 @@ fun resolve_effective_guardrails(
         max_price_age_secs: effective_max_age,
         max_confidence_ratio_bps: effective_confidence_ratio,
     }
-}
-
-fun borrow_registered_accepted_currency(shop: &Shop, coin_type: TypeName): &AcceptedCurrency {
-    assert!(shop.accepted_currencies.contains(coin_type), EAcceptedCurrencyMissing);
-    shop.accepted_currencies.borrow(coin_type)
-}
-
-fun remove_registered_accepted_currency(shop: &mut Shop, coin_type: TypeName): AcceptedCurrency {
-    assert!(shop.accepted_currencies.contains(coin_type), EAcceptedCurrencyMissing);
-    shop.accepted_currencies.remove(coin_type)
 }
 
 fun quote_amount_with_guardrails(
@@ -1051,7 +1063,12 @@ fun process_purchase<TItem: store, TCoin>(
     let coin_type = currency_type<TCoin>();
 
     let accepted_currency = shop.borrow_registered_accepted_currency(coin_type);
-    assert_price_info_matches_currency!(accepted_currency, price_info_object);
+    assert_price_info_identity!(
+        accepted_currency.feed_id(),
+        accepted_currency.pyth_object_id(),
+        price_info_object,
+    );
+
     let quote_amount = quote_amount_with_guardrails(
         accepted_currency,
         price_info_object,
@@ -1061,11 +1078,11 @@ fun process_purchase<TItem: store, TCoin>(
         clock,
     );
     let pyth_price_info_object_id = accepted_currency.pyth_object_id();
-    let shop_id = shop.id.to_inner();
+    let shop_id = shop.id();
 
     let item_listing = shop.borrow_listing_mut(listing_id);
     assert_listing_type_matches!<TItem>(item_listing);
-    assert_stock_available!(item_listing);
+    assert!(item_listing.stock() > 0, EOutOfStock);
 
     let owed_coin_opt = split_payment(&mut payment, quote_amount, ctx);
     let amount_paid = owed_coin_opt.map_ref!(|owed_coin| owed_coin.value()).destroy_or!(0);
@@ -1101,7 +1118,7 @@ fun now_secs(clock: &Clock): u64 {
 /// Converts a USD-cent amount into a quoted coin amount.
 public(package) fun quote_amount_from_usd_cents(
     usd_cents: u64,
-    coin_decimals: u8,
+    decimals: u8,
     price: price::Price,
     max_confidence_ratio_bps: u16,
 ): u64 {
@@ -1121,7 +1138,7 @@ public(package) fun quote_amount_from_usd_cents(
         max_confidence_ratio_bps,
     );
 
-    let coin_decimals_pow10 = decimals_pow10_u128(coin_decimals);
+    let coin_decimals_pow10 = decimals_pow10_u128(decimals);
     let exponent_pow10 = pow10_u128(exponent_magnitude);
 
     let mut numerator_multiplier = coin_decimals_pow10;
@@ -1161,12 +1178,13 @@ public(package) fun quote_amount_from_usd_cents(
     maybe_amount_u64.destroy_or!(abort EPriceOverflow)
 }
 
-fun decimals_pow10_u128(coin_decimals: u8): u128 {
-    assert_supported_decimals!(coin_decimals);
+fun decimals_pow10_u128(decimals: u8): u128 {
+    assert!(decimals as u64 <= MAX_DECIMAL_POWER, EUnsupportedCurrencyDecimals);
+
     decimal_scaling::safe_upcast_balance(
         1,
         0,
-        coin_decimals,
+        decimals,
     )
         .try_as_u128()
         .destroy_or!(abort EPriceOverflow)
@@ -1228,44 +1246,11 @@ fun mint_shop_item<TItem: store>(
     }
 }
 
-macro fun assert_owner_cap($shop: &Shop, $owner_cap: &ShopOwnerCap) {
-    let shop = $shop;
-    let owner_cap = $owner_cap;
-    assert!(owner_cap.shop_id == shop.id.to_inner(), EInvalidOwnerCap);
-}
-
-macro fun assert_shop_active($shop: &Shop) {
-    let shop = $shop;
-    assert!(!shop.disabled, EShopDisabled);
-}
-
-macro fun assert_discount_registered($shop: &Shop, $discount_id: ID) {
-    let shop = $shop;
-    let discount_id = $discount_id;
-    assert!(shop.discounts.contains(discount_id), EDiscountNotFound);
-}
-
-macro fun assert_listing_registered($shop: &Shop, $listing_id: ID) {
-    let shop = $shop;
-    let listing_id = $listing_id;
-    assert!(shop.listings.contains(listing_id), EListingNotFound);
-}
-
-macro fun assert_non_zero_stock($stock: u64) {
-    let stock = $stock;
-    assert!(stock > 0, EZeroStock)
-}
-
-macro fun assert_stock_available($item_listing: &ItemListing) {
-    let item_listing = $item_listing;
-    assert!(item_listing.stock() > 0, EOutOfStock);
-}
-
 macro fun assert_schedule($starts_at: u64, $expires_at: Option<u64>) {
     let starts_at = $starts_at;
     let expires_at = $expires_at;
-    expires_at.do_ref!(|expires_at_value| {
-        assert!(*expires_at_value > starts_at, EDiscountWindow);
+    expires_at.do!(|expires_at| {
+        assert!(expires_at > starts_at, EDiscountWindow);
     });
 }
 
@@ -1288,90 +1273,31 @@ macro fun assert_listing_inputs(
     let stock = $stock;
     let spotlight_discount_id = $spotlight_discount_id;
 
-    assert_non_zero_stock!(stock);
+    assert!(stock > 0, EZeroStock);
     assert!(!name.is_empty(), EEmptyItemName);
     assert!(base_price_usd_cents > 0, EInvalidPrice);
 
-    assert_discount_belongs_to_shop_if_some!(shop, spotlight_discount_id);
-}
-
-macro fun assert_shop_name($name: &String) {
-    let name = $name;
-    assert!(!name.is_empty(), EEmptyShopName);
-}
-
-macro fun assert_discount_inputs(
-    $shop: &Shop,
-    $applies_to_listing: Option<ID>,
-    $starts_at: u64,
-    $expires_at: Option<u64>,
-) {
-    let shop = $shop;
-    let applies_to_listing = $applies_to_listing;
-    let starts_at = $starts_at;
-    let expires_at = $expires_at;
-
-    assert_schedule!(starts_at, expires_at);
-    assert_listing_belongs_to_shop_if_some!(shop, applies_to_listing);
-}
-
-macro fun assert_discount_in_time_window($discount: &Discount, $now_secs: u64) {
-    let discount = $discount;
-    let now_secs = $now_secs;
-    assert!(discount.starts_at() <= now_secs, EDiscountTooEarly);
-
-    discount.expires_at().do_ref!(|expires_at| {
-        assert!(now_secs < *expires_at, EDiscountExpired);
+    spotlight_discount_id.do!(|discount_id| {
+        assert!(shop.discounts.contains(discount_id), EDiscountNotFound);
     });
 }
 
-macro fun assert_discount_updatable($discount: &Discount, $now: u64) {
-    let discount = $discount;
-    let now = $now;
-    assert!(discount.redemptions() == 0, EDiscountFinalized);
-    assert!(!discount.finished(now), EDiscountFinalized);
-}
-
-macro fun assert_discount_redemption_allowed(
-    $discount: &Discount,
-    $listing_id: ID,
-    $now: u64,
-) {
+macro fun assert_discount_redemption_allowed($discount: &Discount, $listing_id: ID, $now: u64) {
     let discount = $discount;
     let listing_id = $listing_id;
     let now = $now;
-    assert!(discount.active(), EDiscountInactive);
 
+    assert!(discount.active(), EDiscountInactive);
     discount.applies_to_listing().do_ref!(|applies_to_listing| {
         assert!(*applies_to_listing == listing_id, EDiscountListingMismatch);
     });
 
-    assert_discount_in_time_window!(discount, now);
+    assert!(discount.starts_at() <= now, EDiscountTooEarly);
+    discount.expires_at().do_ref!(|expires_at| {
+        assert!(now < *expires_at, EDiscountExpired);
+    });
+
     assert!(!discount.redemption_cap_reached(), EDiscountMaxedOut);
-}
-
-macro fun assert_accepted_currency_inputs(
-    $shop: &Shop,
-    $coin_type: TypeName,
-    $feed_id: vector<u8>,
-    $pyth_object_id: ID,
-    $price_info_object: &PriceInfoObject,
-) {
-    let shop = $shop;
-    let coin_type = $coin_type;
-    let feed_id = $feed_id;
-    let pyth_object_id = $pyth_object_id;
-    let price_info_object = $price_info_object;
-
-    assert_currency_not_registered!(shop, coin_type);
-    assert_valid_feed_id!(feed_id);
-    assert_price_info_identity!(feed_id, pyth_object_id, price_info_object);
-}
-
-macro fun assert_valid_feed_id($feed_id: vector<u8>) {
-    let feed_id = $feed_id;
-    assert!(!feed_id.is_empty(), EEmptyFeedId);
-    assert!(feed_id.length() == PYTH_PRICE_IDENTIFIER_LENGTH, EInvalidFeedIdLength);
 }
 
 macro fun assert_price_info_identity(
@@ -1393,58 +1319,6 @@ macro fun assert_price_info_identity(
     assert!(expected_feed_id == identifier_bytes, EFeedIdentifierMismatch);
 }
 
-macro fun assert_currency_not_registered($shop: &Shop, $coin_type: TypeName) {
-    let shop = $shop;
-    let coin_type = $coin_type;
-    assert!(!shop.accepted_currencies.contains(coin_type), EAcceptedCurrencyExists);
-}
-
-macro fun assert_supported_decimals($decimals: u8) {
-    let decimals = $decimals;
-    assert!(decimals as u64 <= MAX_DECIMAL_POWER, EUnsupportedCurrencyDecimals);
-}
-
-macro fun assert_price_info_matches_currency(
-    $accepted_currency: &AcceptedCurrency,
-    $price_info_object: &PriceInfoObject,
-) {
-    let accepted_currency = $accepted_currency;
-    let price_info_object = $price_info_object;
-    assert_price_info_identity!(
-        accepted_currency.feed_id(),
-        accepted_currency.pyth_object_id(),
-        price_info_object,
-    );
-}
-
-macro fun assert_discount_belongs_to_shop($shop: &Shop, $discount_id: ID) {
-    let shop = $shop;
-    let discount_id = $discount_id;
-    assert_discount_registered!(shop, discount_id);
-}
-
-macro fun assert_discount_belongs_to_shop_if_some($shop: &Shop, $maybe_id: Option<ID>) {
-    let shop = $shop;
-    let maybe_id = $maybe_id;
-    maybe_id.do_ref!(|id| {
-        assert_discount_belongs_to_shop!(shop, *id);
-    });
-}
-
-macro fun assert_listing_belongs_to_shop($shop: &Shop, $listing_id: ID) {
-    let shop = $shop;
-    let listing_id = $listing_id;
-    assert_listing_registered!(shop, listing_id);
-}
-
-macro fun assert_listing_belongs_to_shop_if_some($shop: &Shop, $maybe_id: Option<ID>) {
-    let shop = $shop;
-    let maybe_id = $maybe_id;
-    maybe_id.do_ref!(|id| {
-        assert_listing_belongs_to_shop!(shop, *id);
-    });
-}
-
 macro fun assert_spotlight_discount_matches_listing(
     $shop: &Shop,
     $listing_id: ID,
@@ -1453,9 +1327,9 @@ macro fun assert_spotlight_discount_matches_listing(
     let shop = $shop;
     let listing_id = $listing_id;
     let discount_id = $discount_id;
-    discount_id.do_ref!(|discount_id| {
-        assert_discount_belongs_to_shop!(shop, *discount_id);
-        let discount = shop.borrow_discount(*discount_id);
+    discount_id.do!(|discount_id| {
+        assert!(shop.discounts.contains(discount_id), EDiscountNotFound);
+        let discount = shop.borrow_discount(discount_id);
         discount.applies_to_listing().do_ref!(|applies_to_listing| {
             assert!(*applies_to_listing == listing_id, ESpotlightDiscountListingMismatch);
         });
@@ -1476,7 +1350,7 @@ public fun test_setup_shop(owner: address, ctx: &mut TxContext): (Shop, ShopOwne
     let shop = new(b"Shop".to_string(), owner, ctx);
     let owner_cap = ShopOwnerCap {
         id: object::new(ctx),
-        shop_id: shop.id.to_inner(),
+        shop_id: shop.id(),
     };
     (shop, owner_cap)
 }
