@@ -219,6 +219,7 @@ public struct ShopItem<phantom TItem> has key, store {
     acquired_at: u64,
 }
 
+// TODO#q: drop this struct
 /// Resolved pricing guardrails after capping buyer overrides against seller limits.
 public struct EffectiveGuardrails has copy, drop {
     max_price_age_secs: u64,
@@ -226,8 +227,6 @@ public struct EffectiveGuardrails has copy, drop {
 }
 
 // === Public Functions ===
-
-// === Shop ===
 
 /// Create a new shop and its owner capability.
 ///
@@ -240,7 +239,7 @@ public struct EffectiveGuardrails has copy, drop {
 ///   table storage and discount templates stored directly in a typed `Table`.
 /// - State stays sharded so PTBs only touch the listing slot/template object they mutate.
 public fun create_shop(name: String, ctx: &mut TxContext): (ID, ShopOwnerCap) {
-    let shop = new_shop(name, ctx.sender(), ctx);
+    let shop = new(name, ctx.sender(), ctx);
     let shop_id = shop.id.to_inner();
 
     let owner_cap = ShopOwnerCap {
@@ -278,8 +277,6 @@ public fun update_shop_owner(shop: &mut Shop, owner_cap: &ShopOwnerCap, new_owne
 
     events::emit_shop_owner_updated(shop.id.to_inner(), owner_cap.id.to_inner(), previous_owner);
 }
-
-// === Item Listing ===
 
 /// /// Adds a listing and returns the created listing ID.
 ///
@@ -330,6 +327,7 @@ public fun add_item_listing<T: store>(
     listing_id
 }
 
+// TODO#q: drop this function
 fun link_listing_spotlight_template(shop: &mut Shop, listing_id: ID, discount_template_id: ID) {
     let listing = shop.borrow_listing_mut(listing_id);
     listing.set_spotlight(discount_template_id);
@@ -404,8 +402,6 @@ public fun remove_item_listing(shop: &mut Shop, owner_cap: &ShopOwnerCap, listin
     events::emit_item_listing_removed(shop.id.to_inner(), listing_id);
 }
 
-// === Accepted Currencies ===
-
 /// Register a coin type that the shop will price through an oracle feed.
 ///
 /// Sui mindset:
@@ -475,8 +471,6 @@ public fun remove_accepted_currency<TCoin>(shop: &mut Shop, owner_cap: &ShopOwne
         accepted_currency.pyth_object_id(),
     );
 }
-
-// === Discount ===
 
 /// Create a discount template anchored under the shop.
 ///
@@ -649,8 +643,6 @@ public fun clear_template_from_listing(shop: &mut Shop, owner_cap: &ShopOwnerCap
     item_listing.clear_spotlight();
 }
 
-// === Checkout ===
-
 /// Execute a purchase priced in USD cents but settled with any previously registered `AcceptedCurrency`.
 ///
 /// Sui mindset:
@@ -770,9 +762,98 @@ public fun buy_item_with_discount<TItem: store, TCoin>(
     transfer::public_transfer(minted_item, mint_to);
 }
 
-// === Data ===
+// === View Functions ===
 
-fun new_shop(name: String, owner: address, ctx: &mut TxContext): Shop {
+/// Returns the listing for `listing_id`.
+public fun listing(shop: &Shop, listing_id: ID): &ItemListing {
+    assert!(shop.listings.contains(listing_id), EListingNotFound);
+    shop.listings.borrow(listing_id)
+}
+
+/// Returns true if the listing is registered under the shop.
+public fun listing_exists(shop: &Shop, listing_id: ID): bool {
+    shop.listings.contains(listing_id)
+}
+
+/// Returns the accepted currency config for `TCoin`.
+public fun currency<TCoin>(shop: &Shop): &AcceptedCurrency {
+    let coin_type = currency_type<TCoin>();
+    assert!(shop.accepted_currencies.contains(coin_type), EAcceptedCurrencyMissing);
+    shop.accepted_currencies.borrow(coin_type)
+}
+
+/// Returns true if the accepted currency is registered under the shop.
+public fun currency_exists(shop: &Shop, coin_type: TypeName): bool {
+    shop.accepted_currencies.contains(coin_type)
+}
+
+/// Returns the discount template for `template_id`.
+public fun template(shop: &Shop, template_id: ID): &DiscountTemplate {
+    assert!(shop.discount_templates.contains(template_id), ETemplateNotFound);
+    shop.discount_templates.borrow(template_id)
+}
+
+/// Returns true if the discount template is registered under the shop.
+public fun template_exists(shop: &Shop, template_id: ID): bool {
+    shop.discount_templates.contains(template_id)
+}
+
+/// Quotes the coin amount for a price info object with guardrails.
+public fun quote_amount_for_price_info_object<TCoin>(
+    shop: &Shop,
+    price_info_object: &PriceInfoObject,
+    price_usd_cents: u64,
+    max_price_age_secs: Option<u64>,
+    max_confidence_ratio_bps: Option<u16>,
+    clock: &Clock,
+): u64 {
+    let coin_type = currency_type<TCoin>();
+    let accepted_currency = shop.borrow_registered_accepted_currency(coin_type);
+    assert_price_info_matches_currency!(accepted_currency, price_info_object);
+    // Entry-only quote helper; clients call via dev-inspect instead of storing quotes on-chain.
+    quote_amount_with_guardrails(
+        accepted_currency,
+        price_info_object,
+        price_usd_cents,
+        max_price_age_secs,
+        max_confidence_ratio_bps,
+        clock,
+    )
+}
+
+/// Returns `id` from the provided value.
+public fun id(shop: &Shop): ID {
+    shop.id.to_inner()
+}
+
+/// Returns `owner` from the provided value.
+public fun owner(shop: &Shop): address {
+    shop.owner
+}
+
+/// Returns `name` from the provided value.
+public fun name(shop: &Shop): String {
+    shop.name
+}
+
+/// Returns `disabled` from the provided value.
+public fun disabled(shop: &Shop): bool {
+    shop.disabled
+}
+
+/// Returns `owner_cap_id` from the provided value.
+public fun owner_cap_id(owner_cap: &ShopOwnerCap): ID {
+    owner_cap.id.to_inner()
+}
+
+/// Returns `owner_cap_shop_id` from the provided value.
+public fun owner_cap_shop_id(owner_cap: &ShopOwnerCap): ID {
+    owner_cap.shop_id
+}
+
+// === Private Functions ===
+
+fun new(name: String, owner: address, ctx: &mut TxContext): Shop {
     assert_shop_name!(&name);
     Shop {
         id: object::new(ctx),
@@ -784,8 +865,6 @@ fun new_shop(name: String, owner: address, ctx: &mut TxContext): Shop {
         discount_templates: table::new<ID, DiscountTemplate>(ctx),
     }
 }
-
-// === Helpers ===
 
 // TODO#q: use bag instead
 fun currency_type<TCoin>(): TypeName {
@@ -1151,8 +1230,6 @@ fun mint_shop_item<TItem: store>(
     }
 }
 
-// === Asserts and validations ===
-
 macro fun assert_owner_cap($shop: &Shop, $owner_cap: &ShopOwnerCap) {
     let shop = $shop;
     let owner_cap = $owner_cap;
@@ -1387,95 +1464,6 @@ macro fun assert_spotlight_template_matches_listing(
     });
 }
 
-// === View helpers ===
-
-/// Returns the listing for `listing_id`.
-public fun listing(shop: &Shop, listing_id: ID): &ItemListing {
-    assert!(shop.listings.contains(listing_id), EListingNotFound);
-    shop.listings.borrow(listing_id)
-}
-
-/// Returns true if the listing is registered under the shop.
-public fun listing_exists(shop: &Shop, listing_id: ID): bool {
-    shop.listings.contains(listing_id)
-}
-
-/// Returns the accepted currency config for `TCoin`.
-public fun currency<TCoin>(shop: &Shop): &AcceptedCurrency {
-    let coin_type = currency_type<TCoin>();
-    assert!(shop.accepted_currencies.contains(coin_type), EAcceptedCurrencyMissing);
-    shop.accepted_currencies.borrow(coin_type)
-}
-
-/// Returns true if the accepted currency is registered under the shop.
-public fun currency_exists(shop: &Shop, coin_type: TypeName): bool {
-    shop.accepted_currencies.contains(coin_type)
-}
-
-/// Returns the discount template for `template_id`.
-public fun template(shop: &Shop, template_id: ID): &DiscountTemplate {
-    assert!(shop.discount_templates.contains(template_id), ETemplateNotFound);
-    shop.discount_templates.borrow(template_id)
-}
-
-/// Returns true if the discount template is registered under the shop.
-public fun template_exists(shop: &Shop, template_id: ID): bool {
-    shop.discount_templates.contains(template_id)
-}
-
-/// Quotes the coin amount for a price info object with guardrails.
-public fun quote_amount_for_price_info_object<TCoin>(
-    shop: &Shop,
-    price_info_object: &PriceInfoObject,
-    price_usd_cents: u64,
-    max_price_age_secs: Option<u64>,
-    max_confidence_ratio_bps: Option<u16>,
-    clock: &Clock,
-): u64 {
-    let coin_type = currency_type<TCoin>();
-    let accepted_currency = shop.borrow_registered_accepted_currency(coin_type);
-    assert_price_info_matches_currency!(accepted_currency, price_info_object);
-    // Entry-only quote helper; clients call via dev-inspect instead of storing quotes on-chain.
-    quote_amount_with_guardrails(
-        accepted_currency,
-        price_info_object,
-        price_usd_cents,
-        max_price_age_secs,
-        max_confidence_ratio_bps,
-        clock,
-    )
-}
-
-/// Returns `shop_id` from the provided value.
-public fun shop_id(shop: &Shop): ID {
-    shop.id.to_inner()
-}
-
-/// Returns `shop_owner` from the provided value.
-public fun shop_owner(shop: &Shop): address {
-    shop.owner
-}
-
-/// Returns `shop_name` from the provided value.
-public fun shop_name(shop: &Shop): String {
-    shop.name
-}
-
-/// Returns `shop_disabled` from the provided value.
-public fun shop_disabled(shop: &Shop): bool {
-    shop.disabled
-}
-
-/// Returns `shop_owner_cap_id` from the provided value.
-public fun shop_owner_cap_id(owner_cap: &ShopOwnerCap): ID {
-    owner_cap.id.to_inner()
-}
-
-/// Returns `shop_owner_cap_shop_id` from the provided value.
-public fun shop_owner_cap_shop_id(owner_cap: &ShopOwnerCap): ID {
-    owner_cap.shop_id
-}
-
 // === Test Functions ===
 
 /// Runs module initialization in tests.
@@ -1487,7 +1475,7 @@ public fun test_init(ctx: &mut TxContext) {
 /// Creates an unshared shop and owner capability pair for local tests.
 #[test_only]
 public fun test_setup_shop(owner: address, ctx: &mut TxContext): (Shop, ShopOwnerCap) {
-    let shop = new_shop(b"Shop".to_string(), owner, ctx);
+    let shop = new(b"Shop".to_string(), owner, ctx);
     let owner_cap = ShopOwnerCap {
         id: object::new(ctx),
         shop_id: shop.id.to_inner(),

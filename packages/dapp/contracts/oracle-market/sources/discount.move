@@ -1,3 +1,4 @@
+/// This module defines the `DiscountTemplate` struct, which represents a configurable discount that can be applied to item listings in the oracle market. Templates are owned by shops and can be attached to listings to create promotions.
 module sui_oracle_market::discount;
 
 use openzeppelin_math::rounding;
@@ -50,7 +51,7 @@ public struct DiscountTemplate has drop, store {
     active: bool,
 }
 
-// === View helpers ===
+// === View Functions ===
 
 /// Returns the template ID.
 public fun id(template: &DiscountTemplate): ID {

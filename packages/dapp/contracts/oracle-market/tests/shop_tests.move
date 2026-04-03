@@ -267,11 +267,11 @@ fun update_shop_owner_updates_owner_and_emits_previous_owner_event() {
 
     shop.update_shop_owner(&owner_cap, OTHER_OWNER);
 
-    assert_eq!(shop.shop_owner(), OTHER_OWNER);
+    assert_eq!(shop.owner(), OTHER_OWNER);
     assert_emitted!(
         events::shop_owner_updated(
-            shop.shop_id(),
-            owner_cap.shop_owner_cap_id(),
+            shop.id(),
+            owner_cap.owner_cap_id(),
             TEST_OWNER,
         ),
     );
@@ -932,7 +932,7 @@ fun add_item_listing_stores_metadata() {
     assert!(option::is_none(&spotlight_template_id));
     assert_emitted!(
         events::item_listing_added(
-            shop.shop_id(),
+            shop.id(),
             listing_id,
         ),
     );
@@ -969,7 +969,7 @@ fun add_item_listing_links_spotlight_template() {
     });
     assert_emitted!(
         events::item_listing_added(
-            shop.shop_id(),
+            shop.id(),
             listing_id,
         ),
     );
@@ -1013,7 +1013,7 @@ fun add_item_listing_with_discount_template_creates_listing_and_pinned_template(
         0,
         20,
     );
-    let shop_id = shop.shop_id();
+    let shop_id = shop.id();
     assert_emitted!(events::item_listing_added(shop_id, listing_id));
     assert_emitted!(
         events::discount_template_created(
@@ -1206,7 +1206,7 @@ fun update_item_listing_stock_updates_listing_and_emits_events() {
     assert!(option::is_none(&spotlight_template));
     assert_eq!(stock, 11);
 
-    assert_emitted!(events::item_listing_stock_updated(shop.shop_id(), listing_id, 4));
+    assert_emitted!(events::item_listing_stock_updated(shop.id(), listing_id, 4));
 
     remove_listing_if_exists(&mut shop, &owner_cap, listing_id);
     std::unit_test::destroy(owner_cap);
@@ -1282,7 +1282,7 @@ fun update_item_listing_stock_handles_multiple_updates_and_events() {
     );
 
     let expected_stock_updated_event = events::item_listing_stock_updated(
-        shop.shop_id(),
+        shop.id(),
         listing_id,
         5,
     );
@@ -1305,7 +1305,7 @@ fun update_item_listing_stock_handles_multiple_updates_and_events() {
 
     assert_emitted!(
         events::item_listing_stock_updated(
-            shop.shop_id(),
+            shop.id(),
             listing_id,
             8,
         ),
@@ -1339,7 +1339,7 @@ fun remove_item_listing_removes_listing_and_emits_event() {
         option::none(),
         &mut ctx,
     );
-    let shop_address = shop.shop_id();
+    let shop_address = shop.id();
 
     shop.remove_item_listing(
         &owner_cap,
@@ -1555,7 +1555,7 @@ fun create_discount_template_persists_fields_and_emits_event() {
     assert_eq!(redemptions, 0);
     assert!(active);
 
-    assert_emitted!(events::discount_template_created(shop.shop_id(), template_id));
+    assert_emitted!(events::discount_template_created(shop.id(), template_id));
 
     shop.remove_discount_template(&owner_cap, template_id);
     std::unit_test::destroy(owner_cap);
@@ -1610,7 +1610,7 @@ fun create_discount_template_links_listing_and_percent_rule() {
     assert_eq!(redemptions, 0);
     assert!(active);
 
-    assert_emitted!(events::discount_template_created(shop.shop_id(), template_id));
+    assert_emitted!(events::discount_template_created(shop.id(), template_id));
 
     shop.remove_discount_template(&owner_cap, template_id);
     remove_listing_if_exists(&mut shop, &owner_cap, listing_id);
@@ -1812,7 +1812,7 @@ fun update_discount_template_updates_fields_and_emits_event() {
     assert_eq!(redemptions, 0);
     assert!(active);
 
-    assert_emitted!(events::discount_template_updated(shop.shop_id(), template));
+    assert_emitted!(events::discount_template_updated(shop.id(), template));
 
     shop.remove_discount_template(&owner_cap, template);
     remove_listing_if_exists(&mut shop, &owner_cap, listing_id);
@@ -2120,8 +2120,8 @@ fun toggle_discount_template_updates_active_and_emits_events() {
     assert_eq!(redemptions_after_second, redemptions);
     assert!(active_after_second);
 
-    assert_emitted!(events::discount_template_toggled(shop.shop_id(), template, false));
-    assert_emitted!(events::discount_template_toggled(shop.shop_id(), template, true));
+    assert_emitted!(events::discount_template_toggled(shop.id(), template, false));
+    assert_emitted!(events::discount_template_toggled(shop.id(), template, true));
 
     shop.remove_discount_template(&owner_cap, template);
     std::unit_test::destroy(owner_cap);
@@ -3522,7 +3522,7 @@ fun remove_accepted_currency_emits_removed_event_fields() {
 
     assert_emitted!(
         events::accepted_coin_removed(
-            shared_shop.shop_id(),
+            shared_shop.id(),
             pyth_object_id,
         ),
     );
@@ -3658,7 +3658,7 @@ fun buy_item_emits_events_decrements_stock_and_refunds_change() {
     let minted_item_id = tx_context::last_created_object_id(test_scenario::ctx(&mut scn)).to_id();
     assert_emitted!(
         events::purchase_completed(
-            shared_shop.shop_id(),
+            shared_shop.id(),
             listing_id,
             pyth_object_id,
             option::none(),
@@ -3670,7 +3670,7 @@ fun buy_item_emits_events_decrements_stock_and_refunds_change() {
 
     assert_emitted!(
         events::item_listing_stock_updated(
-            shared_shop.shop_id(),
+            shared_shop.id(),
             listing_id,
             2,
         ),
@@ -3731,7 +3731,7 @@ fun buy_item_supports_example_car_receipts() {
     let minted_item_id = tx_context::last_created_object_id(test_scenario::ctx(&mut scn)).to_id();
     assert_emitted!(
         events::purchase_completed(
-            shared_shop.shop_id(),
+            shared_shop.id(),
             listing_id,
             pyth_object_id,
             option::none(),
@@ -3796,7 +3796,7 @@ fun buy_item_supports_example_bike_receipts() {
     let minted_item_id = tx_context::last_created_object_id(test_scenario::ctx(&mut scn)).to_id();
     assert_emitted!(
         events::purchase_completed(
-            shared_shop.shop_id(),
+            shared_shop.id(),
             listing_id,
             pyth_object_id,
             option::none(),
@@ -3856,7 +3856,7 @@ fun buy_item_emits_events_with_exact_payment_and_zero_change() {
     let minted_item_id = tx_context::last_created_object_id(test_scenario::ctx(&mut scn)).to_id();
     assert_emitted!(
         events::purchase_completed(
-            shared_shop.shop_id(),
+            shared_shop.id(),
             listing_id,
             pyth_object_id,
             option::none(),
@@ -4109,7 +4109,7 @@ fun buy_item_with_discount_emits_discount_redeemed_and_records_template_id() {
     let minted_item_id = tx_context::last_created_object_id(test_scenario::ctx(&mut scn)).to_id();
     assert_emitted!(
         events::purchase_completed(
-            shared_shop.shop_id(),
+            shared_shop.id(),
             listing_id,
             price_info_id,
             option::some(template_id),
@@ -4121,7 +4121,7 @@ fun buy_item_with_discount_emits_discount_redeemed_and_records_template_id() {
 
     assert_emitted!(
         events::discount_redeemed(
-            shared_shop.shop_id(),
+            shared_shop.id(),
             template_id,
         ),
     );

@@ -1,3 +1,4 @@
+/// This module defines the `AcceptedCurrency` struct, which represents a currency that a shop accepts for purchases. Each accepted currency is associated with a Pyth price feed to enable real-time pricing in the oracle market.
 module sui_oracle_market::currency;
 
 use std::string::String;
@@ -20,7 +21,7 @@ public struct AcceptedCurrency has drop, store {
     max_confidence_ratio_bps_cap: u16,
 }
 
-// === View helpers ===
+// === View Functions ===
 
 /// Returns the oracle feed identifier bytes for an accepted currency.
 public fun feed_id(currency: &AcceptedCurrency): vector<u8> {

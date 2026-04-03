@@ -25,7 +25,7 @@ public struct ItemListing has drop, store {
     spotlight_discount_template_id: Option<ID>,
 }
 
-// === View helpers ===
+// === View Functions ===
 
 /// Returns the listing ID.
 public fun id(listing: &ItemListing): ID {
