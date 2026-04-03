@@ -17,6 +17,8 @@ use sui::test_scenario;
 use sui_oracle_market::events;
 use sui_oracle_market::shop;
 
+// TODO#q: split unit tests by domains
+
 // === Constants ===
 
 const TEST_OWNER: address = @0xBEEF;

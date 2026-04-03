@@ -66,7 +66,7 @@ use openzeppelin_math::decimal_scaling;
 use openzeppelin_math::rounding;
 use openzeppelin_math::u128;
 use pyth::i64;
-use pyth::price;
+use pyth::price::Price;
 use pyth::price_info::{Self, PriceInfoObject};
 use pyth::pyth;
 use std::string::String;
@@ -200,6 +200,7 @@ public struct Shop has key, store {
     discounts: Table<ID, Discount>,
 }
 
+// TODO#q: move to listing module
 /// Shop item type for receipts. `TItem` is enforced at mint time so downstream
 /// Move code can depend on the type system instead of opaque metadata alone.
 public struct ShopItem<phantom TItem> has key, store {
@@ -257,6 +258,7 @@ public fun create_shop(name: String, ctx: &mut TxContext): (ID, ShopOwnerCap) {
 public fun disable_shop(shop: &mut Shop, owner_cap: &ShopOwnerCap) {
     assert!(owner_cap.shop_id == shop.id(), EInvalidOwnerCap);
 
+    // TODO#q: we only disable shop but never enable it
     shop.disabled = true;
 
     // TODO#q: emit shop disabled should be emitted when only state changes
@@ -303,6 +305,8 @@ public fun add_item_listing<T: store>(
     ctx: &mut TxContext,
 ): ID {
     assert!(owner_cap.shop_id == shop.id(), EInvalidOwnerCap);
+
+    // TODO#q: move to item listing `listing::create` function with validation
     assert_listing_inputs!(shop, &name, base_price_usd_cents, stock, spotlight_discount_id);
 
     let shop_id = shop.id();
@@ -428,6 +432,8 @@ public fun add_accepted_currency<TCoin>(
     // Bind this currency to a specific PriceInfoObject to prevent oracle feed spoofing.
     let coin_type = type_name::with_defining_ids<TCoin>();
     assert!(!shop.accepted_currencies.contains(coin_type), EAcceptedCurrencyExists);
+
+    // TODO#q: move to currency `currency::create` function with validation.
     // Assert feed_id is valid.
     assert!(!feed_id.is_empty(), EEmptyFeedId);
     assert!(feed_id.length() == PYTH_PRICE_IDENTIFIER_LENGTH, EInvalidFeedIdLength);
@@ -502,14 +508,16 @@ public fun create_discount(
     ctx: &mut TxContext,
 ): ID {
     assert!(owner_cap.shop_id == shop.id(), EInvalidOwnerCap);
+
+    // TODO#: move to discount module `create` function
     expires_at.do!(|expires_at| {
         assert!(expires_at > starts_at, EDiscountWindow);
     });
     applies_to_listing.do!(|listing_id| {
         assert!(shop.listings.contains(listing_id), EListingNotFound);
     });
-    max_redemptions.do_ref!(|max_value| {
-        assert!(*max_value > 0, EInvalidMaxRedemptions);
+    max_redemptions.do!(|max_value| {
+        assert!(max_value > 0, EInvalidMaxRedemptions);
     });
 
     let discount_rule_kind = discount::parse_kind(rule_kind);
@@ -556,12 +564,14 @@ public fun update_discount(
     clock: &Clock,
 ) {
     assert!(owner_cap.shop_id == shop.id(), EInvalidOwnerCap);
+
+    // TODO#q: Move to discount module
     assert!(shop.discounts.contains(discount_id), EDiscountNotFound);
     expires_at.do!(|expires_at| {
         assert!(expires_at > starts_at, EDiscountWindow);
     });
-    max_redemptions.do_ref!(|max_value| {
-        assert!(*max_value > 0, EInvalidMaxRedemptions);
+    max_redemptions.do!(|max_value| {
+        assert!(max_value > 0, EInvalidMaxRedemptions);
     });
 
     let discount_rule_kind = discount::parse_kind(rule_kind);
@@ -575,6 +585,7 @@ public fun update_discount(
     assert!(discount.redemptions() == 0, EDiscountFinalized);
     assert!(!discount.finished(now), EDiscountFinalized);
 
+    // TODO#q: replace many small setters with a single function discount.update(..) with validation
     // Apply discount updates.
     discount.set_rule(discount_rule);
     discount.set_starts_at(starts_at);
@@ -593,6 +604,8 @@ public fun toggle_discount(
     active: bool,
 ) {
     assert!(owner_cap.shop_id == shop.id(), EInvalidOwnerCap);
+
+    // TODO#q: move to discount module
     assert!(shop.discounts.contains(discount_id), EDiscountNotFound);
 
     let discount = shop.discount(discount_id);
@@ -619,7 +632,31 @@ public fun toggle_discount(
 public fun remove_discount(shop: &mut Shop, owner_cap: &ShopOwnerCap, discount_id: ID) {
     assert!(owner_cap.shop_id == shop.id(), EInvalidOwnerCap);
 
-    shop.remove_discount_if_exists(discount_id);
+    if (!shop.discounts.contains(discount_id)) return;
+
+    let (applies_to_listing, was_active) = {
+        let discount = shop.discount(discount_id);
+        (discount.applies_to_listing(), discount.active())
+    };
+
+    if (was_active) {
+        applies_to_listing.do!(|listing_id| {
+            assert!(shop.listings.contains(listing_id), EListingNotFound);
+        });
+    };
+    shop.adjust_active_discount_count(applies_to_listing, was_active, false);
+
+    // Clear listing spotlight if it matches discount.
+    applies_to_listing.do!(|listing_id| {
+        if (shop.listings.contains(listing_id)) {
+            let listing = shop.listing_mut(listing_id);
+            if (listing.spotlight_discount_id() == option::some(discount_id)) {
+                listing.clear_spotlight();
+            };
+        };
+    });
+
+    let _ = shop.discounts.remove(discount_id);
 }
 
 /// Surface a discount alongside a listing so UIs can highlight the promotion.
@@ -729,6 +766,7 @@ public fun buy_item_with_discount<TItem: store, TCoin>(
 
     let shop_id = shop.id();
     let discount = shop.discount_mut(discount_id);
+    // TODO#q: Move to discount module and create `discount.redeem()` function ----
     assert_discount_redemption_allowed!(discount, listing_id, now);
 
     discount.increment_redemptions();
@@ -737,6 +775,7 @@ public fun buy_item_with_discount<TItem: store, TCoin>(
         .apply(
             listing_price_usd_cents,
         );
+    // ----------------------------------------------------------------------------
 
     events::emit_discount_redeemed(
         shop_id,
@@ -860,11 +899,12 @@ public fun owner_cap_shop_id(owner_cap: &ShopOwnerCap): ID {
 
 // === Package Functions ===
 
+// TODO#q: move to currency module
 /// Converts a USD-cent amount into a quoted coin amount.
 public(package) fun quote_amount_from_usd_cents(
     usd_cents: u64,
     decimals: u8,
-    price: price::Price,
+    price: Price,
     max_confidence_ratio_bps: u16,
 ): u64 {
     let price_value = price.get_price();
@@ -888,6 +928,7 @@ public(package) fun quote_amount_from_usd_cents(
 
     let mut numerator_multiplier = coin_decimals_pow10;
     if (exponent_is_negative) {
+        // TODO#q: use normal multiplication (without division by 1)
         numerator_multiplier =
             u128::mul_div(
                 numerator_multiplier,
@@ -904,6 +945,7 @@ public(package) fun quote_amount_from_usd_cents(
         rounding::down(),
     ).destroy_or!(abort EPriceOverflow);
     if (!exponent_is_negative) {
+        // TODO#q: use normal multiplication (without division by 1)
         denominator_multiplier =
             u128::mul_div(
                 denominator_multiplier,
@@ -964,40 +1006,7 @@ fun adjust_active_discount_count(
     });
 }
 
-fun remove_discount_if_exists(shop: &mut Shop, discount_id: ID) {
-    if (!shop.discounts.contains(discount_id)) return;
-
-    let (applies_to_listing, was_active) = {
-        let discount = shop.discount(discount_id);
-        (discount.applies_to_listing(), discount.active())
-    };
-
-    if (was_active) {
-        applies_to_listing.do_ref!(|listing_id| {
-            assert!(shop.listings.contains(*listing_id), EListingNotFound);
-        });
-    };
-    shop.adjust_active_discount_count(applies_to_listing, was_active, false);
-    shop.clear_listing_spotlight_if_matches_discount(applies_to_listing, discount_id);
-
-    let _ = shop.discounts.remove(discount_id);
-}
-
-fun clear_listing_spotlight_if_matches_discount(
-    shop: &mut Shop,
-    applies_to_listing: Option<ID>,
-    discount_id: ID,
-) {
-    applies_to_listing.do_ref!(|listing_id| {
-        if (shop.listings.contains(*listing_id)) {
-            let listing = shop.listing_mut(*listing_id);
-            if (listing.spotlight_discount_id() == option::some(discount_id)) {
-                listing.clear_spotlight();
-            };
-        };
-    });
-}
-
+// TODO#q: inline and move to currency
 /// Normalize a seller-provided guardrail cap, enforcing module-level ceilings and non-zero.
 macro fun resolve_guardrail_cap<$T>($proposed_cap: Option<$T>, $module_cap: $T): $T {
     let proposed_cap = $proposed_cap;
@@ -1007,6 +1016,7 @@ macro fun resolve_guardrail_cap<$T>($proposed_cap: Option<$T>, $module_cap: $T):
     value.min(module_cap)
 }
 
+// TODO#q: move to currency module
 /// Resolve caller overrides against seller caps so pricing guardrails stay tight.
 fun resolve_effective_guardrails(
     accepted_currency: &AcceptedCurrency,
@@ -1027,6 +1037,7 @@ fun resolve_effective_guardrails(
     }
 }
 
+// TODO#q: move to currency module
 fun quote_amount_with_guardrails(
     accepted_currency: &AcceptedCurrency,
     price_info_object: &PriceInfoObject,
@@ -1121,6 +1132,7 @@ fun process_purchase<TItem: store, TCoin>(
     (owed_coin_opt, payment, minted_item)
 }
 
+// TODO#q: use ms and convert to sec when we need
 /// Normalize consensus clock milliseconds to seconds once at the boundary.
 /// Pyth stale checks and price timestamps are second-based (`max_age_secs` vs `price::get_timestamp`),
 /// so keeping module guardrails in seconds avoids mixed-unit errors.
@@ -1178,6 +1190,7 @@ fun split_payment<TCoin>(
     option::some(owed)
 }
 
+// TODO#q: move to listing module
 fun mint_shop_item<TItem: store>(
     item_listing: &ItemListing,
     shop_id: ID,
@@ -1196,6 +1209,7 @@ fun mint_shop_item<TItem: store>(
     }
 }
 
+// TODO#q: inline and move to listing module
 macro fun assert_listing_inputs(
     $shop: &Shop,
     $name: &String,
@@ -1218,24 +1232,26 @@ macro fun assert_listing_inputs(
     });
 }
 
+// TODO#q: inline and move to discount module
 macro fun assert_discount_redemption_allowed($discount: &Discount, $listing_id: ID, $now: u64) {
     let discount = $discount;
     let listing_id = $listing_id;
     let now = $now;
 
     assert!(discount.active(), EDiscountInactive);
-    discount.applies_to_listing().do_ref!(|applies_to_listing| {
-        assert!(*applies_to_listing == listing_id, EDiscountListingMismatch);
+    discount.applies_to_listing().do!(|applies_to_listing| {
+        assert!(applies_to_listing == listing_id, EDiscountListingMismatch);
     });
 
     assert!(discount.starts_at() <= now, EDiscountTooEarly);
-    discount.expires_at().do_ref!(|expires_at| {
-        assert!(now < *expires_at, EDiscountExpired);
+    discount.expires_at().do!(|expires_at| {
+        assert!(now < expires_at, EDiscountExpired);
     });
 
     assert!(!discount.redemption_cap_reached(), EDiscountMaxedOut);
 }
 
+// TODO#q: move to currency module
 macro fun assert_price_info_identity(
     $expected_feed_id: vector<u8>,
     $expected_pyth_object_id: ID,
@@ -1266,8 +1282,8 @@ macro fun assert_spotlight_discount_matches_listing(
     discount_id.do!(|discount_id| {
         assert!(shop.discounts.contains(discount_id), EDiscountNotFound);
         let discount = shop.discount(discount_id);
-        discount.applies_to_listing().do_ref!(|applies_to_listing| {
-            assert!(*applies_to_listing == listing_id, ESpotlightDiscountListingMismatch);
+        discount.applies_to_listing().do!(|applies_to_listing| {
+            assert!(applies_to_listing == listing_id, ESpotlightDiscountListingMismatch);
         });
     });
 }
