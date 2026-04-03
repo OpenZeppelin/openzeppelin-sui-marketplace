@@ -351,6 +351,8 @@ public fun update_shop_owner(shop: &mut Shop, owner_cap: &ShopOwnerCap, new_owne
 
 // === Item Listing ===
 
+/// /// Adds a listing and returns the created listing ID.
+/// 
 /// Add an `ItemListing` attached to the `Shop`. The generic `T` encodes what will eventually be
 /// minted when a buyer completes checkout. Prices are provided in USD cents (e.g. $12.50 -> 1_250)
 /// to avoid floating point math.
@@ -363,7 +365,7 @@ public fun update_shop_owner(shop: &mut Shop, owner_cap: &ShopOwnerCap, new_owne
 ///   flows mutate `Shop` directly by listing ID.
 /// - The type parameter `T` captures what will be minted, keeping item receipt types explicit
 ///   (phantom-typed `ShopItem<T>`) rather than relying on ad-hoc metadata blobs common in EVM NFTs.
-fun add_item_listing_core<T: store>(
+fun add_item_listing<T: store>(
     shop: &mut Shop,
     owner_cap: &ShopOwnerCap,
     name: String,
@@ -416,7 +418,7 @@ fun add_item_listing_with_discount_template_core<T: store>(
     max_redemptions: Option<u64>,
     ctx: &mut TxContext,
 ): (ID, ID) {
-    let listing_id = shop.add_item_listing_core<T>(
+    let listing_id = shop.add_item_listing<T>(
         owner_cap,
         name,
         base_price_usd_cents,
@@ -438,26 +440,6 @@ fun add_item_listing_with_discount_template_core<T: store>(
     shop.link_listing_spotlight_template(listing_id, discount_template_id);
 
     (listing_id, discount_template_id)
-}
-
-/// Adds a listing and returns the created listing ID.
-public fun add_item_listing<T: store>(
-    shop: &mut Shop,
-    owner_cap: &ShopOwnerCap,
-    name: String,
-    base_price_usd_cents: u64,
-    stock: u64,
-    spotlight_discount_template_id: Option<ID>,
-    ctx: &mut TxContext,
-): ID {
-    shop.add_item_listing_core<T>(
-        owner_cap,
-        name,
-        base_price_usd_cents,
-        stock,
-        spotlight_discount_template_id,
-        ctx,
-    )
 }
 
 /// Add an item listing and atomically create a listing-scoped discount template in one transaction.
