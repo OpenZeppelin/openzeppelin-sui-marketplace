@@ -78,6 +78,7 @@ use sui::coin_registry::Currency;
 use sui::package;
 use sui::table::{Self, Table};
 use sui_oracle_market::events;
+use sui_oracle_market::listing::{Self, ItemListing};
 
 // === Errors ===
 
@@ -202,25 +203,6 @@ public struct Shop has key, store {
     listings: Table<ID, ItemListing>,
     /// Discount templates keyed by template ID.
     discount_templates: Table<ID, DiscountTemplate>,
-}
-
-/// Item listing metadata keyed under the shared `Shop`, used to mint specific items on purchase.
-/// Discounts can be attached to highlight promotions in the UI.
-public struct ItemListing has drop, store {
-    /// Stable listing identifier.
-    listing_id: ID,
-    /// Runtime type that checkout must mint.
-    item_type: TypeName,
-    /// Display name shown to buyers.
-    name: String,
-    /// Stored in USD cents to avoid floating point math.
-    base_price_usd_cents: u64,
-    /// Remaining inventory for this listing.
-    stock: u64,
-    /// Number of active templates pinned to this listing.
-    active_bound_template_count: u64,
-    /// Optional template highlighted in storefront UIs.
-    spotlight_discount_template_id: Option<ID>,
 }
 
 /// Shop item type for receipts. `TItem` is enforced at mint time so downstream
@@ -386,7 +368,7 @@ public fun add_item_listing<T: store>(
     let shop_id = shop.id.to_inner();
     let listing_id = new_object_id(ctx);
     assert_spotlight_template_matches_listing!(shop, listing_id, spotlight_discount_template_id);
-    let listing = new_item_listing<T>(
+    let listing = listing::new_item_listing<T>(
         listing_id,
         name,
         base_price_usd_cents,
@@ -402,7 +384,7 @@ public fun add_item_listing<T: store>(
 
 fun link_listing_spotlight_template(shop: &mut Shop, listing_id: ID, discount_template_id: ID) {
     let listing = shop.borrow_listing_mut(listing_id);
-    listing.spotlight_discount_template_id = option::some(discount_template_id);
+    listing.set_spotlight(discount_template_id);
 }
 
 /// Add an item listing and atomically create a listing-scoped discount template in one transaction.
@@ -456,8 +438,8 @@ public fun update_item_listing_stock(
     assert_owner_cap!(shop, owner_cap);
     let item_listing = shop.borrow_listing_mut(listing_id);
 
-    let previous_stock = item_listing.stock;
-    item_listing.stock = new_stock;
+    let previous_stock = item_listing.stock();
+    item_listing.set_stock(new_stock);
 
     events::emit_item_listing_stock_updated(shop.id.to_inner(), listing_id, previous_stock);
 }
@@ -596,7 +578,7 @@ public fun create_discount_template(
         max_redemptions,
     );
     shop.discount_templates.add(discount_template_id, discount_template);
-    
+
     // Increment active listing template count if any listing attached.
     applies_to_listing.do_ref!(|listing_id| {
         shop.increment_active_listing_template_count(*listing_id);
@@ -709,14 +691,14 @@ public fun attach_template_to_listing(
     );
 
     let item_listing = shop.borrow_listing_mut(listing_id);
-    item_listing.spotlight_discount_template_id = option::some(discount_template_id);
+    item_listing.set_spotlight(discount_template_id);
 }
 
 /// Remove the promotion banner from a listing.
 public fun clear_template_from_listing(shop: &mut Shop, owner_cap: &ShopOwnerCap, listing_id: ID) {
     assert_owner_cap!(shop, owner_cap);
     let item_listing = shop.borrow_listing_mut(listing_id);
-    item_listing.spotlight_discount_template_id = option::none();
+    item_listing.clear_spotlight();
 }
 
 // === Checkout ===
@@ -750,7 +732,7 @@ public fun buy_item<TItem: store, TCoin>(
     ctx: &mut TxContext,
 ) {
     assert_shop_active!(shop);
-    let base_price_usd_cents = shop.borrow_listing(listing_id).base_price_usd_cents;
+    let base_price_usd_cents = shop.borrow_listing(listing_id).base_price_usd_cents();
     // Payment is a Coin<T> object; process_purchase splits the payment and returns change.
     let (owed_coin_opt, change_coin, minted_item) = shop.process_purchase<TItem, TCoin>(
         price_info_object,
@@ -800,7 +782,7 @@ public fun buy_item_with_discount<TItem: store, TCoin>(
     assert_shop_active!(shop);
 
     let now = now_secs(clock);
-    let listing_price_usd_cents = shop.borrow_listing(listing_id).base_price_usd_cents;
+    let listing_price_usd_cents = shop.borrow_listing(listing_id).base_price_usd_cents();
 
     let shop_id = shop.id.to_inner();
     let discount_template = shop.borrow_discount_template_mut(discount_template_id);
@@ -875,24 +857,6 @@ fun new_accepted_currency(
     }
 }
 
-fun new_item_listing<T: store>(
-    listing_id: ID,
-    name: String,
-    base_price_usd_cents: u64,
-    stock: u64,
-    spotlight_discount_template_id: Option<ID>,
-): ItemListing {
-    ItemListing {
-        listing_id,
-        item_type: type_name::with_defining_ids<T>(),
-        name,
-        base_price_usd_cents,
-        stock,
-        active_bound_template_count: 0,
-        spotlight_discount_template_id,
-    }
-}
-
 fun new_discount_template(
     discount_template_id: ID,
     applies_to_listing: Option<ID>,
@@ -927,7 +891,7 @@ fun new_object_id(ctx: &mut TxContext): ID {
 
 // TODO#q: inline
 fun has_active_listing_bound_templates(shop: &Shop, listing_id: ID): bool {
-    shop.borrow_listing(listing_id).active_bound_template_count > 0
+    shop.borrow_listing(listing_id).active_bound_template_count() > 0
 }
 
 fun adjust_active_template_count(
@@ -973,8 +937,8 @@ fun clear_listing_spotlight_if_matches_template(
     applies_to_listing.do_ref!(|listing_id| {
         if (shop.listings.contains(*listing_id)) {
             let listing = shop.borrow_listing_mut(*listing_id);
-            if (listing.spotlight_discount_template_id == option::some(template_id)) {
-                listing.spotlight_discount_template_id = option::none();
+            if (listing.spotlight_discount_template_id() == option::some(template_id)) {
+                listing.clear_spotlight();
             };
         };
     });
@@ -982,13 +946,13 @@ fun clear_listing_spotlight_if_matches_template(
 
 fun increment_active_listing_template_count(shop: &mut Shop, listing_id: ID) {
     let listing = shop.borrow_listing_mut(listing_id);
-    listing.active_bound_template_count = listing.active_bound_template_count + 1;
+    listing.increment_active_bound_template_count();
 }
 
 fun decrement_active_listing_template_count(shop: &mut Shop, listing_id: ID) {
     let listing = shop.borrow_listing_mut(listing_id);
-    assert!(listing.active_bound_template_count > 0, EListingTemplateCountUnderflow);
-    listing.active_bound_template_count = listing.active_bound_template_count - 1;
+    assert!(listing.active_bound_template_count() > 0, EListingTemplateCountUnderflow);
+    listing.decrement_active_bound_template_count();
 }
 
 // TODO#q: We should have listing and listing_mut only
@@ -1121,17 +1085,17 @@ fun process_purchase<TItem: store, TCoin>(
     let owed_coin_opt = split_payment(&mut payment, quote_amount, ctx);
     let amount_paid = owed_coin_opt.map_ref!(|owed_coin| owed_coin.value()).destroy_or!(0);
 
-    let previous_stock = item_listing.stock;
+    let previous_stock = item_listing.stock();
     item_listing.decrement_stock();
 
-    events::emit_item_listing_stock_updated(shop_id, item_listing.listing_id, previous_stock);
+    events::emit_item_listing_stock_updated(shop_id, item_listing.id(), previous_stock);
 
-    let minted_item = item_listing.mint_shop_item<TItem>(shop_id, clock, ctx);
+    let minted_item = mint_shop_item<TItem>(item_listing, shop_id, clock, ctx);
     let minted_item_id = minted_item.id.to_inner();
 
     events::emit_purchase_completed(
         shop_id,
-        item_listing.listing_id,
+        item_listing.id(),
         pyth_price_info_object_id,
         discount_template_id,
         minted_item_id,
@@ -1295,10 +1259,6 @@ fun split_payment<TCoin>(
     option::some(owed)
 }
 
-fun decrement_stock(item_listing: &mut ItemListing) {
-    item_listing.stock = item_listing.stock - 1;
-}
-
 fun mint_shop_item<TItem: store>(
     item_listing: &ItemListing,
     shop_id: ID,
@@ -1310,9 +1270,9 @@ fun mint_shop_item<TItem: store>(
     ShopItem {
         id: object::new(ctx),
         shop_id,
-        item_listing_id: item_listing.listing_id,
-        item_type: item_listing.item_type,
-        name: item_listing.name,
+        item_listing_id: item_listing.id(),
+        item_type: item_listing.item_type(),
+        name: item_listing.name(),
         acquired_at: now_secs(clock),
     }
 }
@@ -1377,7 +1337,7 @@ macro fun assert_non_zero_stock($stock: u64) {
 
 macro fun assert_stock_available($item_listing: &ItemListing) {
     let item_listing = $item_listing;
-    assert!(item_listing.stock > 0, EOutOfStock);
+    assert!(item_listing.stock() > 0, EOutOfStock);
 }
 
 macro fun assert_schedule($starts_at: u64, $expires_at: Option<u64>) {
@@ -1391,7 +1351,7 @@ macro fun assert_schedule($starts_at: u64, $expires_at: Option<u64>) {
 macro fun assert_listing_type_matches<$TItem: store>($item_listing: &ItemListing) {
     let item_listing = $item_listing;
     let expected = type_name::with_defining_ids<$TItem>();
-    assert!(item_listing.item_type == expected, EItemTypeMismatch);
+    assert!(item_listing.item_type() == expected, EItemTypeMismatch);
 }
 
 macro fun assert_listing_inputs(
@@ -1626,26 +1586,6 @@ public fun listing(shop: &Shop, listing_id: ID): &ItemListing {
     shop.borrow_listing(listing_id)
 }
 
-/// Returns the listing name.
-public fun listing_name(listing: &ItemListing): String {
-    listing.name
-}
-
-/// Returns the listing base price in USD cents.
-public fun listing_base_price_usd_cents(listing: &ItemListing): u64 {
-    listing.base_price_usd_cents
-}
-
-/// Returns the current stock for a listing.
-public fun listing_stock(listing: &ItemListing): u64 {
-    listing.stock
-}
-
-/// Returns the spotlight discount template ID attached to the listing, if any.
-public fun listing_spotlight_discount_template_id(listing: &ItemListing): Option<ID> {
-    listing.spotlight_discount_template_id
-}
-
 /// Returns the accepted currency config for `TCoin`.
 public fun accepted_currency<TCoin>(shop: &Shop): &AcceptedCurrency {
     let coin_type = currency_type<TCoin>();
@@ -1742,11 +1682,6 @@ public fun quote_amount_for_price_info_object<TCoin>(
         max_confidence_ratio_bps,
         clock,
     )
-}
-
-/// Returns `listing_id` from the provided value.
-public fun listing_id(listing: &ItemListing): ID {
-    listing.listing_id
 }
 
 /// Returns `shop_id` from the provided value.

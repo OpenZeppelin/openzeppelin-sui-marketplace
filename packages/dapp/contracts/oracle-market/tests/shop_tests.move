@@ -235,7 +235,7 @@ fun assert_listing_spotlight_template_id(
     expected_template_id: ID,
 ) {
     let listing = shop.listing(listing_id);
-    let spotlight_template_id = listing.listing_spotlight_discount_template_id();
+    let spotlight_template_id = listing.spotlight_discount_template_id();
     assert!(option::is_some(&spotlight_template_id));
     spotlight_template_id.do_ref!(|value| {
         assert_eq!(*value, expected_template_id);
@@ -921,10 +921,10 @@ fun add_item_listing_stores_metadata() {
     assert_eq!(tx_context::last_created_object_id(&ctx).to_id(), listing_id);
     assert!(shop.listing_exists(listing_id));
     let listing = shop.listing(listing_id);
-    let name = listing.listing_name();
-    let base_price_usd_cents = listing.listing_base_price_usd_cents();
-    let stock = listing.listing_stock();
-    let spotlight_template_id = listing.listing_spotlight_discount_template_id();
+    let name = listing.name();
+    let base_price_usd_cents = listing.base_price_usd_cents();
+    let stock = listing.stock();
+    let spotlight_template_id = listing.spotlight_discount_template_id();
 
     assert_eq!(name, b"Cool Bike".to_string());
     assert_eq!(base_price_usd_cents, 125_00);
@@ -961,7 +961,7 @@ fun add_item_listing_links_spotlight_template() {
         &mut ctx,
     );
     let listing = shop.listing(listing_id);
-    let spotlight_template_id = listing.listing_spotlight_discount_template_id();
+    let spotlight_template_id = listing.spotlight_discount_template_id();
 
     assert!(option::is_some(&spotlight_template_id));
     spotlight_template_id.do_ref!(|value| {
@@ -1197,10 +1197,10 @@ fun update_item_listing_stock_updates_listing_and_emits_events() {
     );
 
     let listing = shop.listing(listing_id);
-    let name = listing.listing_name();
-    let base_price_usd_cents = listing.listing_base_price_usd_cents();
-    let stock = listing.listing_stock();
-    let spotlight_template = listing.listing_spotlight_discount_template_id();
+    let name = listing.name();
+    let base_price_usd_cents = listing.base_price_usd_cents();
+    let stock = listing.stock();
+    let spotlight_template = listing.spotlight_discount_template_id();
     assert_eq!(name, b"Helmet".to_string());
     assert_eq!(base_price_usd_cents, 48_00);
     assert!(option::is_none(&spotlight_template));
@@ -1300,7 +1300,7 @@ fun update_item_listing_stock_handles_multiple_updates_and_events() {
     assert_emitted!(expected_stock_updated_event);
 
     let listing = shop.listing(listing_id);
-    let stock = listing.listing_stock();
+    let stock = listing.stock();
     assert_eq!(stock, 3);
 
     assert_emitted!(
@@ -1352,10 +1352,10 @@ fun remove_item_listing_removes_listing_and_emits_event() {
     assert!(shop.listing_exists(remaining_listing_id));
 
     let listing = shop.listing(remaining_listing_id);
-    let name = listing.listing_name();
-    let price = listing.listing_base_price_usd_cents();
-    let stock = listing.listing_stock();
-    let spotlight = listing.listing_spotlight_discount_template_id();
+    let name = listing.name();
+    let price = listing.base_price_usd_cents();
+    let stock = listing.stock();
+    let spotlight = listing.spotlight_discount_template_id();
     assert_eq!(name, b"Repair Kit".to_string());
     assert_eq!(price, 42_00);
     assert_eq!(stock, 2);
@@ -2250,7 +2250,7 @@ fun toggle_template_on_listing_sets_and_clears_spotlight() {
     let ids_before_toggle = tx_context::get_ids_created(&ctx);
 
     let listing_before = shop.listing(listing_id);
-    let spotlight_before = listing_before.listing_spotlight_discount_template_id();
+    let spotlight_before = listing_before.spotlight_discount_template_id();
     assert!(option::is_none(&spotlight_before));
     assert_eq!(event::events_by_type<events::DiscountTemplateToggled>().length(), 0);
 
@@ -2261,7 +2261,7 @@ fun toggle_template_on_listing_sets_and_clears_spotlight() {
     );
 
     let listing_after_set = shop.listing(listing_id);
-    let spotlight_after_set = listing_after_set.listing_spotlight_discount_template_id();
+    let spotlight_after_set = listing_after_set.spotlight_discount_template_id();
     assert!(option::is_some(&spotlight_after_set));
     spotlight_after_set.do_ref!(|value| {
         assert_eq!(*value, template);
@@ -2275,7 +2275,7 @@ fun toggle_template_on_listing_sets_and_clears_spotlight() {
     );
 
     let listing_after_clear = shop.listing(listing_id);
-    let spotlight_after_clear = listing_after_clear.listing_spotlight_discount_template_id();
+    let spotlight_after_clear = listing_after_clear.spotlight_discount_template_id();
     assert!(option::is_none(&spotlight_after_clear));
     assert_eq!(tx_context::get_ids_created(&ctx), ids_before_toggle);
     assert_eq!(event::events_by_type<events::DiscountTemplateToggled>().length(), 0);
@@ -2455,7 +2455,7 @@ fun attach_template_to_listing_sets_spotlight_without_emitting_events() {
     );
 
     let listing = shop.listing(listing_id);
-    let spotlight = listing.listing_spotlight_discount_template_id();
+    let spotlight = listing.spotlight_discount_template_id();
     assert!(option::is_some(&spotlight));
     spotlight.do_ref!(|value| {
         assert_eq!(*value, template);
@@ -2496,7 +2496,7 @@ fun attach_template_to_listing_overwrites_existing_spotlight() {
     let ids_before = tx_context::get_ids_created(&ctx);
 
     let listing_before = shop.listing(listing_id);
-    let spotlight_before = listing_before.listing_spotlight_discount_template_id();
+    let spotlight_before = listing_before.spotlight_discount_template_id();
     assert!(option::is_some(&spotlight_before));
     spotlight_before.do_ref!(|value| {
         assert_eq!(*value, first_template);
@@ -2509,7 +2509,7 @@ fun attach_template_to_listing_overwrites_existing_spotlight() {
     );
 
     let listing_after = shop.listing(listing_id);
-    let spotlight_after = listing_after.listing_spotlight_discount_template_id();
+    let spotlight_after = listing_after.spotlight_discount_template_id();
     assert!(option::is_some(&spotlight_after));
     spotlight_after.do_ref!(|value| {
         assert_eq!(*value, second_template);
@@ -2557,7 +2557,7 @@ fun attach_template_to_listing_accepts_matching_listing() {
     );
 
     let listing = shop.listing(listing_id);
-    let spotlight = listing.listing_spotlight_discount_template_id();
+    let spotlight = listing.spotlight_discount_template_id();
     assert!(option::is_some(&spotlight));
     spotlight.do_ref!(|value| {
         assert_eq!(*value, template);
@@ -2718,7 +2718,7 @@ fun clear_template_from_listing_removes_spotlight_without_side_effects() {
     );
 
     let listing_before = shop.listing(listing_id);
-    let spotlight_before = listing_before.listing_spotlight_discount_template_id();
+    let spotlight_before = listing_before.spotlight_discount_template_id();
     let created_before = tx_context::get_ids_created(&ctx);
     assert!(option::is_some(&spotlight_before));
     spotlight_before.do_ref!(|value| {
@@ -2731,7 +2731,7 @@ fun clear_template_from_listing_removes_spotlight_without_side_effects() {
     );
 
     let listing_after = shop.listing(listing_id);
-    let spotlight_after = listing_after.listing_spotlight_discount_template_id();
+    let spotlight_after = listing_after.spotlight_discount_template_id();
     assert!(option::is_none(&spotlight_after));
     assert_eq!(tx_context::get_ids_created(&ctx), created_before);
     assert_eq!(event::events_by_type<events::DiscountTemplateToggled>().length(), 0);
@@ -2764,7 +2764,7 @@ fun clear_template_from_listing_is_noop_when_no_spotlight_set() {
     );
 
     let listing_after = shop.listing(listing_id);
-    let spotlight_after = listing_after.listing_spotlight_discount_template_id();
+    let spotlight_after = listing_after.spotlight_discount_template_id();
     assert!(option::is_none(&spotlight_after));
     assert_eq!(tx_context::get_ids_created(&ctx), created_before);
     assert_eq!(event::events_by_type<events::DiscountTemplateToggled>().length(), 0);
@@ -2939,7 +2939,7 @@ fun remove_discount_template_drops_template_and_clears_spotlight() {
 
     assert!(!shop_obj.discount_template_exists(template_id));
     let listing = shop_obj.listing(listing_id);
-    let spotlight_after = listing.listing_spotlight_discount_template_id();
+    let spotlight_after = listing.spotlight_discount_template_id();
     assert!(option::is_none(&spotlight_after));
 
     remove_listing_if_exists(&mut shop_obj, &owner_cap, listing_id);
