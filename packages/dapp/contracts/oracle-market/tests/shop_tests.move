@@ -1003,7 +1003,7 @@ fun add_item_listing_with_discount_template_creates_listing_and_pinned_template(
     assert_eq!(tx_context::last_created_object_id(&ctx).to_id(), template_id);
 
     assert!(shop.listing_exists(listing_id));
-    assert!(shop.discount_template_exists(template_id));
+    assert!(shop.template_exists(template_id));
     assert_listing_spotlight_template_id(&shop, listing_id, template_id);
     assert_listing_scoped_percent_template(
         &shop,
@@ -1036,20 +1036,20 @@ fun assert_listing_scoped_percent_template(
     expected_starts_at: u64,
     expected_max_redemptions: u64,
 ) {
-    let template_values = shop.discount_template(template_id);
-    let applies_to_listing = template_values.discount_template_applies_to_listing();
-    let discount_rule = template_values.discount_template_rule();
-    let starts_at = template_values.discount_template_starts_at();
-    let expires_at = template_values.discount_template_expires_at();
-    let max_redemptions = template_values.discount_template_max_redemptions();
-    let redemptions = template_values.discount_template_redemptions();
-    let active = template_values.discount_template_active();
+    let template_values = shop.template(template_id);
+    let applies_to_listing = template_values.applies_to_listing();
+    let discount_rule = template_values.rule();
+    let starts_at = template_values.starts_at();
+    let expires_at = template_values.expires_at();
+    let max_redemptions = template_values.max_redemptions();
+    let redemptions = template_values.redemptions();
+    let active = template_values.active();
     assert!(option::is_some(&applies_to_listing));
     applies_to_listing.do_ref!(|value| {
         assert_eq!(*value, listing_id);
     });
-    let rule_kind = discount_rule.discount_rule_kind();
-    let rule_value = discount_rule.discount_rule_value();
+    let rule_kind = discount_rule.kind();
+    let rule_value = discount_rule.value();
     assert_eq!(rule_kind, 1);
     assert_eq!(rule_value, expected_rule_value);
     assert_eq!(starts_at, expected_starts_at);
@@ -1527,20 +1527,20 @@ fun create_discount_template_persists_fields_and_emits_event() {
         option::some(5),
         &mut ctx,
     );
-    assert!(shop.discount_template_exists(template_id));
+    assert!(shop.template_exists(template_id));
 
-    let template_values = shop.discount_template(template_id);
-    let applies_to_listing = template_values.discount_template_applies_to_listing();
-    let rule = template_values.discount_template_rule();
-    let starts_at = template_values.discount_template_starts_at();
-    let expires_at = template_values.discount_template_expires_at();
-    let max_redemptions = template_values.discount_template_max_redemptions();
-    let redemptions = template_values.discount_template_redemptions();
-    let active = template_values.discount_template_active();
+    let template_values = shop.template(template_id);
+    let applies_to_listing = template_values.applies_to_listing();
+    let rule = template_values.rule();
+    let starts_at = template_values.starts_at();
+    let expires_at = template_values.expires_at();
+    let max_redemptions = template_values.max_redemptions();
+    let redemptions = template_values.redemptions();
+    let active = template_values.active();
 
     assert!(option::is_none(&applies_to_listing));
-    let rule_kind = rule.discount_rule_kind();
-    let rule_value = rule.discount_rule_value();
+    let rule_kind = rule.kind();
+    let rule_value = rule.value();
     assert_eq!(rule_kind, 0);
     assert_eq!(rule_value, 1_250);
     assert_eq!(starts_at, 10);
@@ -1586,22 +1586,22 @@ fun create_discount_template_links_listing_and_percent_rule() {
         option::none(),
         &mut ctx,
     );
-    assert!(shop.discount_template_exists(template_id));
-    let template_values = shop.discount_template(template_id);
-    let applies_to_listing = template_values.discount_template_applies_to_listing();
-    let rule = template_values.discount_template_rule();
-    let starts_at = template_values.discount_template_starts_at();
-    let expires_at = template_values.discount_template_expires_at();
-    let max_redemptions = template_values.discount_template_max_redemptions();
-    let redemptions = template_values.discount_template_redemptions();
-    let active = template_values.discount_template_active();
+    assert!(shop.template_exists(template_id));
+    let template_values = shop.template(template_id);
+    let applies_to_listing = template_values.applies_to_listing();
+    let rule = template_values.rule();
+    let starts_at = template_values.starts_at();
+    let expires_at = template_values.expires_at();
+    let max_redemptions = template_values.max_redemptions();
+    let redemptions = template_values.redemptions();
+    let active = template_values.active();
 
     assert!(option::is_some(&applies_to_listing));
     applies_to_listing.do_ref!(|value| {
         assert_eq!(*value, listing_id);
     });
-    let rule_kind = rule.discount_rule_kind();
-    let rule_value = rule.discount_rule_value();
+    let rule_kind = rule.kind();
+    let rule_value = rule.value();
     assert_eq!(rule_kind, 1);
     assert_eq!(rule_value, 2_500);
     assert_eq!(starts_at, 0);
@@ -1638,7 +1638,7 @@ fun create_discount_template_rejects_foreign_owner_cap() {
     abort
 }
 
-#[test, expected_failure(abort_code = ::sui_oracle_market::shop::EInvalidRuleKind)]
+#[test, expected_failure(abort_code = ::sui_oracle_market::discount::EInvalidRuleKind)]
 fun create_discount_template_rejects_invalid_rule_kind() {
     let mut ctx = tx_context::dummy();
     let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
@@ -1657,7 +1657,7 @@ fun create_discount_template_rejects_invalid_rule_kind() {
     abort
 }
 
-#[test, expected_failure(abort_code = ::sui_oracle_market::shop::EInvalidRuleValue)]
+#[test, expected_failure(abort_code = ::sui_oracle_market::discount::EInvalidRuleValue)]
 fun create_discount_template_rejects_percent_above_limit() {
     let mut ctx = tx_context::dummy();
     let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
@@ -1673,24 +1673,6 @@ fun create_discount_template_rejects_percent_above_limit() {
         &mut ctx,
     );
 
-    abort
-}
-
-#[test]
-fun percent_discount_rounds_up_instead_of_zeroing_low_prices() {
-    let discounted = shop::apply_percent_discount(1, 100);
-    assert_eq!(discounted, 1);
-}
-
-#[test]
-fun percent_discount_allows_full_discount_to_reach_zero() {
-    let discounted = shop::apply_percent_discount(1, 10_000);
-    assert_eq!(discounted, 0);
-}
-
-#[test, expected_failure(abort_code = ::sui_oracle_market::shop::EInvalidRuleValue)]
-fun percent_discount_rejects_basis_points_above_denominator() {
-    let _ = shop::apply_percent_discount(1, 10_001);
     abort
 }
 
@@ -1802,20 +1784,20 @@ fun update_discount_template_updates_fields_and_emits_event() {
     );
     std::unit_test::destroy(clock_obj);
 
-    let template_values = shop.discount_template(template);
-    let applies_to_listing = template_values.discount_template_applies_to_listing();
-    let rule = template_values.discount_template_rule();
-    let starts_at = template_values.discount_template_starts_at();
-    let expires_at = template_values.discount_template_expires_at();
-    let max_redemptions = template_values.discount_template_max_redemptions();
-    let redemptions = template_values.discount_template_redemptions();
-    let active = template_values.discount_template_active();
+    let template_values = shop.template(template);
+    let applies_to_listing = template_values.applies_to_listing();
+    let rule = template_values.rule();
+    let starts_at = template_values.starts_at();
+    let expires_at = template_values.expires_at();
+    let max_redemptions = template_values.max_redemptions();
+    let redemptions = template_values.redemptions();
+    let active = template_values.active();
     assert!(option::is_some(&applies_to_listing));
     applies_to_listing.do_ref!(|value| {
         assert_eq!(*value, listing_id);
     });
-    let rule_kind = rule.discount_rule_kind();
-    let rule_value = rule.discount_rule_value();
+    let rule_kind = rule.kind();
+    let rule_value = rule.value();
     assert_eq!(rule_kind, 1);
     assert_eq!(rule_value, 750);
     assert_eq!(starts_at, 50);
@@ -1966,7 +1948,7 @@ fun update_discount_template_rejects_zero_max_redemptions() {
     abort
 }
 
-#[test, expected_failure(abort_code = ::sui_oracle_market::shop::EInvalidRuleKind)]
+#[test, expected_failure(abort_code = ::sui_oracle_market::discount::EInvalidRuleKind)]
 fun update_discount_template_rejects_invalid_rule_kind() {
     let mut ctx = tx_context::dummy();
     let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
@@ -1997,7 +1979,7 @@ fun update_discount_template_rejects_invalid_rule_kind() {
     abort
 }
 
-#[test, expected_failure(abort_code = ::sui_oracle_market::shop::EInvalidRuleValue)]
+#[test, expected_failure(abort_code = ::sui_oracle_market::discount::EInvalidRuleValue)]
 fun update_discount_template_rejects_percent_above_limit() {
     let mut ctx = tx_context::dummy();
     let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
@@ -2075,14 +2057,14 @@ fun toggle_discount_template_updates_active_and_emits_events() {
         &mut ctx,
     );
 
-    let template_values = shop.discount_template(template);
-    let applies_to_listing = template_values.discount_template_applies_to_listing();
-    let rule = template_values.discount_template_rule();
-    let starts_at = template_values.discount_template_starts_at();
-    let expires_at = template_values.discount_template_expires_at();
-    let max_redemptions = template_values.discount_template_max_redemptions();
-    let redemptions = template_values.discount_template_redemptions();
-    let active = template_values.discount_template_active();
+    let template_values = shop.template(template);
+    let applies_to_listing = template_values.applies_to_listing();
+    let rule = template_values.rule();
+    let starts_at = template_values.starts_at();
+    let expires_at = template_values.expires_at();
+    let max_redemptions = template_values.max_redemptions();
+    let redemptions = template_values.redemptions();
+    let active = template_values.active();
 
     assert!(active);
     shop.toggle_discount_template(
@@ -2091,20 +2073,20 @@ fun toggle_discount_template_updates_active_and_emits_events() {
         false,
     );
 
-    let template_values_after_first = shop.discount_template(template);
-    let applies_to_listing_after_first = template_values_after_first.discount_template_applies_to_listing();
-    let rule_after_first = template_values_after_first.discount_template_rule();
-    let starts_at_after_first = template_values_after_first.discount_template_starts_at();
-    let expires_at_after_first = template_values_after_first.discount_template_expires_at();
-    let max_redemptions_after_first = template_values_after_first.discount_template_max_redemptions();
-    let redemptions_after_first = template_values_after_first.discount_template_redemptions();
-    let active_after_first = template_values_after_first.discount_template_active();
+    let template_values_after_first = shop.template(template);
+    let applies_to_listing_after_first = template_values_after_first.applies_to_listing();
+    let rule_after_first = template_values_after_first.rule();
+    let starts_at_after_first = template_values_after_first.starts_at();
+    let expires_at_after_first = template_values_after_first.expires_at();
+    let max_redemptions_after_first = template_values_after_first.max_redemptions();
+    let redemptions_after_first = template_values_after_first.redemptions();
+    let active_after_first = template_values_after_first.active();
 
     assert_eq!(applies_to_listing_after_first, applies_to_listing);
-    let rule_kind = rule.discount_rule_kind();
-    let rule_value = rule.discount_rule_value();
-    let rule_after_first_kind = rule_after_first.discount_rule_kind();
-    let rule_after_first_value = rule_after_first.discount_rule_value();
+    let rule_kind = rule.kind();
+    let rule_value = rule.value();
+    let rule_after_first_kind = rule_after_first.kind();
+    let rule_after_first_value = rule_after_first.value();
     assert_eq!(rule_after_first_kind, rule_kind);
     assert_eq!(rule_after_first_value, rule_value);
     assert_eq!(starts_at_after_first, starts_at);
@@ -2119,17 +2101,17 @@ fun toggle_discount_template_updates_active_and_emits_events() {
         true,
     );
 
-    let template_values_after_second = shop.discount_template(template);
-    let applies_to_listing_after_second = template_values_after_second.discount_template_applies_to_listing();
-    let rule_after_second = template_values_after_second.discount_template_rule();
-    let starts_at_after_second = template_values_after_second.discount_template_starts_at();
-    let expires_at_after_second = template_values_after_second.discount_template_expires_at();
-    let max_redemptions_after_second = template_values_after_second.discount_template_max_redemptions();
-    let redemptions_after_second = template_values_after_second.discount_template_redemptions();
-    let active_after_second = template_values_after_second.discount_template_active();
+    let template_values_after_second = shop.template(template);
+    let applies_to_listing_after_second = template_values_after_second.applies_to_listing();
+    let rule_after_second = template_values_after_second.rule();
+    let starts_at_after_second = template_values_after_second.starts_at();
+    let expires_at_after_second = template_values_after_second.expires_at();
+    let max_redemptions_after_second = template_values_after_second.max_redemptions();
+    let redemptions_after_second = template_values_after_second.redemptions();
+    let active_after_second = template_values_after_second.active();
     assert_eq!(applies_to_listing_after_second, applies_to_listing);
-    let rule_after_second_kind = rule_after_second.discount_rule_kind();
-    let rule_after_second_value = rule_after_second.discount_rule_value();
+    let rule_after_second_kind = rule_after_second.kind();
+    let rule_after_second_value = rule_after_second.value();
     assert_eq!(rule_after_second_kind, rule_kind);
     assert_eq!(rule_after_second_value, rule_value);
     assert_eq!(starts_at_after_second, starts_at);
@@ -2462,7 +2444,7 @@ fun attach_template_to_listing_sets_spotlight_without_emitting_events() {
     });
     assert_eq!(tx_context::get_ids_created(&ctx), ids_before);
     assert_eq!(event::events_by_type<events::DiscountTemplateToggled>().length(), 0);
-    assert!(shop.discount_template_exists(template));
+    assert!(shop.template_exists(template));
 
     shop.remove_discount_template(&owner_cap, template);
     remove_listing_if_exists(&mut shop, &owner_cap, listing_id);
@@ -2515,8 +2497,8 @@ fun attach_template_to_listing_overwrites_existing_spotlight() {
         assert_eq!(*value, second_template);
     });
     assert_eq!(tx_context::get_ids_created(&ctx), ids_before);
-    assert!(shop.discount_template_exists(first_template));
-    assert!(shop.discount_template_exists(second_template));
+    assert!(shop.template_exists(first_template));
+    assert!(shop.template_exists(second_template));
     assert_eq!(event::events_by_type<events::DiscountTemplateToggled>().length(), 0);
 
     shop.remove_discount_template(&owner_cap, second_template);
@@ -2735,7 +2717,7 @@ fun clear_template_from_listing_removes_spotlight_without_side_effects() {
     assert!(option::is_none(&spotlight_after));
     assert_eq!(tx_context::get_ids_created(&ctx), created_before);
     assert_eq!(event::events_by_type<events::DiscountTemplateToggled>().length(), 0);
-    assert!(shop.discount_template_exists(template));
+    assert!(shop.template_exists(template));
 
     shop.remove_discount_template(&owner_cap, template);
     remove_listing_if_exists(&mut shop, &owner_cap, listing_id);
@@ -2872,7 +2854,7 @@ fun discount_template_rejects_foreign_shop() {
         &mut ctx,
     );
 
-    shop_b.discount_template(template);
+    shop_b.template(template);
     abort
 }
 
@@ -2922,7 +2904,7 @@ fun remove_discount_template_drops_template_and_clears_spotlight() {
     );
     shop_obj.remove_discount_template(&owner_cap, template_id);
 
-    assert!(!shop_obj.discount_template_exists(template_id));
+    assert!(!shop_obj.template_exists(template_id));
     let listing = shop_obj.listing(listing_id);
     let spotlight_after = listing.spotlight_discount_template_id();
     assert!(option::is_none(&spotlight_after));
@@ -4144,8 +4126,8 @@ fun buy_item_with_discount_emits_discount_redeemed_and_records_template_id() {
         ),
     );
 
-    let template_values = shared_shop.discount_template(template_id);
-    let redemptions = template_values.discount_template_redemptions();
+    let template_values = shared_shop.template(template_id);
+    let redemptions = template_values.redemptions();
     assert_eq!(redemptions, 1);
 
     close_buyer_checkout_context(shared_shop, price_info_obj, clock_obj);

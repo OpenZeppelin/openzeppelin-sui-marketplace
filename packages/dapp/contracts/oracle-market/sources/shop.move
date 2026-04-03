@@ -65,7 +65,6 @@ module sui_oracle_market::shop;
 use openzeppelin_math::decimal_scaling;
 use openzeppelin_math::rounding;
 use openzeppelin_math::u128;
-use openzeppelin_math::u64;
 use pyth::i64;
 use pyth::price;
 use pyth::price_info::{Self, PriceInfoObject};
@@ -77,6 +76,7 @@ use sui::coin::Coin;
 use sui::coin_registry::Currency;
 use sui::package;
 use sui::table::{Self, Table};
+use sui_oracle_market::discount::{Self, DiscountTemplate};
 use sui_oracle_market::events;
 use sui_oracle_market::listing::{Self, ItemListing};
 
@@ -101,60 +101,56 @@ const EListingHasActiveTemplates: vector<u8> = "listing has active templates";
 #[error(code = 8)]
 const EListingTemplateCountUnderflow: vector<u8> = "listing template count underflow";
 #[error(code = 9)]
-const EInvalidRuleKind: vector<u8> = "invalid rule kind";
-#[error(code = 10)]
-const EInvalidRuleValue: vector<u8> = "invalid rule value";
-#[error(code = 11)]
 const EAcceptedCurrencyExists: vector<u8> = "accepted currency exists";
-#[error(code = 12)]
+#[error(code = 10)]
 const EAcceptedCurrencyMissing: vector<u8> = "accepted currency missing";
-#[error(code = 13)]
+#[error(code = 11)]
 const EEmptyFeedId: vector<u8> = "empty feed id";
-#[error(code = 14)]
+#[error(code = 12)]
 const EInvalidFeedIdLength: vector<u8> = "invalid feed id length";
-#[error(code = 15)]
+#[error(code = 13)]
 const ETemplateInactive: vector<u8> = "template inactive";
-#[error(code = 16)]
+#[error(code = 14)]
 const ETemplateTooEarly: vector<u8> = "template too early";
-#[error(code = 17)]
+#[error(code = 15)]
 const ETemplateExpired: vector<u8> = "template expired";
-#[error(code = 18)]
+#[error(code = 16)]
 const ETemplateMaxedOut: vector<u8> = "template maxed out";
-#[error(code = 19)]
+#[error(code = 17)]
 const EOutOfStock: vector<u8> = "out of stock";
-#[error(code = 20)]
+#[error(code = 18)]
 const EPythObjectMismatch: vector<u8> = "pyth object mismatch";
-#[error(code = 21)]
+#[error(code = 19)]
 const EFeedIdentifierMismatch: vector<u8> = "feed identifier mismatch";
-#[error(code = 22)]
+#[error(code = 20)]
 const EPriceNonPositive: vector<u8> = "price non-positive";
-#[error(code = 23)]
+#[error(code = 21)]
 const EPriceOverflow: vector<u8> = "price overflow";
-#[error(code = 24)]
+#[error(code = 22)]
 const EInsufficientPayment: vector<u8> = "insufficient payment";
-#[error(code = 25)]
+#[error(code = 23)]
 const EConfidenceIntervalTooWide: vector<u8> = "confidence interval too wide";
-#[error(code = 26)]
+#[error(code = 24)]
 const EConfidenceExceedsPrice: vector<u8> = "confidence exceeds price";
-#[error(code = 27)]
+#[error(code = 25)]
 const ESpotlightTemplateListingMismatch: vector<u8> = "spotlight template listing mismatch";
-#[error(code = 28)]
+#[error(code = 26)]
 const EInvalidGuardrailCap: vector<u8> = "invalid guardrail cap";
-#[error(code = 29)]
+#[error(code = 27)]
 const ETemplateFinalized: vector<u8> = "template finalized";
-#[error(code = 30)]
+#[error(code = 28)]
 const EItemTypeMismatch: vector<u8> = "item type mismatch";
-#[error(code = 31)]
+#[error(code = 29)]
 const EUnsupportedCurrencyDecimals: vector<u8> = "unsupported currency decimals";
-#[error(code = 32)]
+#[error(code = 30)]
 const EEmptyShopName: vector<u8> = "empty shop name";
-#[error(code = 33)]
+#[error(code = 31)]
 const EShopDisabled: vector<u8> = "shop disabled";
-#[error(code = 34)]
+#[error(code = 32)]
 const EPriceInvalidPublishTime: vector<u8> = "invalid publish timestamp";
-#[error(code = 35)]
+#[error(code = 33)]
 const EDiscountListingMismatch: vector<u8> = "discount listing mismatch";
-#[error(code = 36)]
+#[error(code = 34)]
 const EInvalidMaxRedemptions: vector<u8> = "invalid max redemptions";
 
 // === Constants ===
@@ -236,39 +232,6 @@ public struct AcceptedCurrency has drop, store {
     max_price_age_secs_cap: u64,
     /// Upper bound on caller-provided confidence override.
     max_confidence_ratio_bps_cap: u16,
-}
-
-/// Discount rules mirror the spec: fixed (USD cents) or percentage basis points off.
-public enum DiscountRule has copy, drop, store {
-    Fixed { amount_cents: u64 },
-    Percent { bps: u16 },
-}
-
-/// Local representation for the rule kind that callers encode as a primitive.
-public enum DiscountRuleKind has copy, drop {
-    Fixed,
-    Percent,
-}
-
-// TODO#q: rename DiscountTemplate -> Discount
-/// Coupon template for creating discounts tracked under the shop.
-public struct DiscountTemplate has drop, store {
-    /// Template identifier and key in `Shop.discount_templates`.
-    id: ID,
-    /// Optional listing scope restriction.
-    applies_to_listing: Option<ID>,
-    /// Fixed/percent discount payload.
-    rule: DiscountRule,
-    /// Activation timestamp (seconds).
-    starts_at: u64,
-    /// Optional expiration timestamp (seconds).
-    expires_at: Option<u64>,
-    /// Optional global redemption cap.
-    max_redemptions: Option<u64>,
-    /// Number of discounts redeemed in checkout.
-    redemptions: u64,
-    /// Owner-controlled enable/disable flag.
-    active: bool,
 }
 
 /// Resolved pricing guardrails after capping buyer overrides against seller limits.
@@ -368,7 +331,7 @@ public fun add_item_listing<T: store>(
     let shop_id = shop.id.to_inner();
     let listing_id = new_object_id(ctx);
     assert_spotlight_template_matches_listing!(shop, listing_id, spotlight_discount_template_id);
-    let listing = listing::new_item_listing<T>(
+    let listing = listing::new<T>(
         listing_id,
         name,
         base_price_usd_cents,
@@ -542,7 +505,7 @@ public fun remove_accepted_currency<TCoin>(shop: &mut Shop, owner_cap: &ShopOwne
 /// - Discounts live inside a typed on-chain collection attached to the shared shop instead of rows
 ///   in opaque contract storage.
 /// - Converting user-friendly primitives into enums early avoids magic numbers and preserves type
-///   safety. In EVM you might store raw ints and rely on comments; here the `DiscountRule` enum
+///   safety. In EVM you might store raw integers and rely on comments; here the `DiscountRule` enum
 ///   forces exhaustive matching.
 /// - Time windows and limits are stored on-chain and later checked against the shared `Clock`
 ///   (timestamp_ms -> seconds). On Sui, time is an explicit input object; on EVM, `block.timestamp`
@@ -566,10 +529,10 @@ public fun create_discount_template(
         assert!(*max_value > 0, EInvalidMaxRedemptions);
     });
 
-    let discount_rule_kind = parse_rule_kind(rule_kind);
-    let discount_rule = discount_rule_kind.build_discount_rule(rule_value);
+    let discount_rule_kind = discount::parse_kind(rule_kind);
+    let discount_rule = discount::build(discount_rule_kind, rule_value);
     let discount_template_id = new_object_id(ctx);
-    let discount_template = new_discount_template(
+    let discount_template = discount::new(
         discount_template_id,
         applies_to_listing,
         discount_rule,
@@ -616,8 +579,8 @@ public fun update_discount_template(
         assert!(*max_value > 0, EInvalidMaxRedemptions);
     });
 
-    let discount_rule_kind = parse_rule_kind(rule_kind);
-    let discount_rule = discount_rule_kind.build_discount_rule(rule_value);
+    let discount_rule_kind = discount::parse_kind(rule_kind);
+    let discount_rule = discount::build(discount_rule_kind, rule_value);
     let now = now_secs(clock);
     let shop_id = shop.id.to_inner();
 
@@ -625,12 +588,12 @@ public fun update_discount_template(
     assert_template_updatable!(discount_template, now);
 
     // Apply discount template updates
-    discount_template.rule = discount_rule;
-    discount_template.starts_at = starts_at;
-    discount_template.expires_at = expires_at;
-    discount_template.max_redemptions = max_redemptions;
+    discount_template.set_rule(discount_rule);
+    discount_template.set_starts_at(starts_at);
+    discount_template.set_expires_at(expires_at);
+    discount_template.set_max_redemptions(max_redemptions);
 
-    events::emit_discount_template_updated(shop_id, discount_template.id);
+    events::emit_discount_template_updated(shop_id, discount_template.id());
 }
 
 /// Quickly enable/disable a coupon without deleting it.
@@ -646,18 +609,18 @@ public fun toggle_discount_template(
 
     let discount_template = shop.borrow_discount_template(discount_template_id);
     if (active) {
-        assert_listing_belongs_to_shop_if_some!(shop, discount_template.applies_to_listing);
+        assert_listing_belongs_to_shop_if_some!(shop, discount_template.applies_to_listing());
     };
     shop.adjust_active_template_count(
-        discount_template.applies_to_listing,
-        discount_template.active,
+        discount_template.applies_to_listing(),
+        discount_template.active(),
         active,
     );
 
     let discount_template = shop.borrow_discount_template_mut(discount_template_id);
 
-    if (discount_template.active != active) {
-        discount_template.active = active;
+    if (discount_template.active() != active) {
+        discount_template.set_active(active);
         events::emit_discount_template_toggled(shop.id.to_inner(), discount_template_id, active);
     };
 }
@@ -788,16 +751,16 @@ public fun buy_item_with_discount<TItem: store, TCoin>(
     let discount_template = shop.borrow_discount_template_mut(discount_template_id);
     assert_discount_redemption_allowed!(discount_template, listing_id, now);
 
-    discount_template.redemptions = discount_template.redemptions + 1;
+    discount_template.increment_redemptions();
     let discounted_price_usd_cents = discount_template
-        .rule
-        .apply_discount(
+        .rule()
+        .apply(
             listing_price_usd_cents,
         );
 
     events::emit_discount_redeemed(
         shop_id,
-        discount_template.id,
+        discount_template.id(),
     );
 
     let (owed_coin_opt, change_coin, minted_item) = shop.process_purchase<TItem, TCoin>(
@@ -805,7 +768,7 @@ public fun buy_item_with_discount<TItem: store, TCoin>(
         payment,
         listing_id,
         discounted_price_usd_cents,
-        option::some(discount_template.id),
+        option::some(discount_template.id()),
         max_price_age_secs,
         max_confidence_ratio_bps,
         clock,
@@ -857,26 +820,6 @@ fun new_accepted_currency(
     }
 }
 
-fun new_discount_template(
-    discount_template_id: ID,
-    applies_to_listing: Option<ID>,
-    rule: DiscountRule,
-    starts_at: u64,
-    expires_at: Option<u64>,
-    max_redemptions: Option<u64>,
-): DiscountTemplate {
-    DiscountTemplate {
-        id: discount_template_id,
-        applies_to_listing,
-        rule,
-        starts_at,
-        expires_at,
-        max_redemptions,
-        redemptions: 0,
-        active: true,
-    }
-}
-
 // === Helpers ===
 
 // TODO#q: use bag instead
@@ -915,7 +858,7 @@ fun remove_discount_template_if_exists(shop: &mut Shop, template_id: ID) {
 
     let (applies_to_listing, was_active) = {
         let template = shop.borrow_discount_template(template_id);
-        (template.applies_to_listing, template.active)
+        (template.applies_to_listing(), template.active())
     };
 
     if (was_active) {
@@ -1105,41 +1048,6 @@ fun process_purchase<TItem: store, TCoin>(
     (owed_coin_opt, payment, minted_item)
 }
 
-fun parse_rule_kind(raw_kind: u8): DiscountRuleKind {
-    if (raw_kind == 0) {
-        DiscountRuleKind::Fixed
-    } else {
-        assert!(raw_kind == 1, EInvalidRuleKind);
-        DiscountRuleKind::Percent
-    }
-}
-
-fun build_discount_rule(rule_kind: DiscountRuleKind, rule_value: u64): DiscountRule {
-    match (rule_kind) {
-        DiscountRuleKind::Fixed => DiscountRule::Fixed { amount_cents: rule_value },
-        DiscountRuleKind::Percent => {
-            assert!(rule_value <= BASIS_POINT_DENOMINATOR, EInvalidRuleValue);
-            DiscountRule::Percent { bps: rule_value as u16 }
-        },
-    }
-}
-
-/// Returns the encoded rule kind (`0 = fixed`, `1 = percent`) for a `DiscountRule`.
-public(package) fun discount_rule_kind(rule: DiscountRule): u8 {
-    match (rule) {
-        DiscountRule::Fixed { amount_cents: _ } => 0,
-        DiscountRule::Percent { bps: _ } => 1,
-    }
-}
-
-/// Returns the numeric payload (`amount_cents` or `bps`) for a `DiscountRule`.
-public(package) fun discount_rule_value(rule: DiscountRule): u64 {
-    match (rule) {
-        DiscountRule::Fixed { amount_cents } => amount_cents,
-        DiscountRule::Percent { bps } => bps as u64,
-    }
-}
-
 /// Normalize consensus clock milliseconds to seconds once at the boundary.
 /// Pyth stale checks and price timestamps are second-based (`max_age_secs` vs `price::get_timestamp`),
 /// so keeping module guardrails in seconds avoids mixed-unit errors.
@@ -1277,34 +1185,6 @@ fun mint_shop_item<TItem: store>(
     }
 }
 
-fun apply_discount(rule: DiscountRule, base_price_usd_cents: u64): u64 {
-    match (rule) {
-        DiscountRule::Fixed { amount_cents } => {
-            if (amount_cents >= base_price_usd_cents) {
-                0
-            } else {
-                base_price_usd_cents - amount_cents
-            }
-        },
-        DiscountRule::Percent { bps } => {
-            let remaining_bps = BASIS_POINT_DENOMINATOR - (bps as u64);
-            let maybe_discounted = u64::mul_div(
-                base_price_usd_cents,
-                remaining_bps,
-                BASIS_POINT_DENOMINATOR,
-                rounding::up(),
-            );
-            maybe_discounted.destroy_or!(abort EPriceOverflow)
-        },
-    }
-}
-
-/// Applies a percent discount rule to `base_price_usd_cents`.
-public(package) fun apply_percent_discount(base_price_usd_cents: u64, bps: u16): u64 {
-    assert!((bps as u64) <= BASIS_POINT_DENOMINATOR, EInvalidRuleValue);
-    DiscountRule::Percent { bps }.apply_discount(base_price_usd_cents)
-}
-
 // === Asserts and validations ===
 
 macro fun assert_owner_cap($shop: &Shop, $owner_cap: &ShopOwnerCap) {
@@ -1397,31 +1277,18 @@ macro fun assert_discount_template_inputs(
 macro fun assert_template_in_time_window($template: &DiscountTemplate, $now_secs: u64) {
     let template = $template;
     let now_secs = $now_secs;
-    assert!(template.starts_at <= now_secs, ETemplateTooEarly);
+    assert!(template.starts_at() <= now_secs, ETemplateTooEarly);
 
-    template.expires_at.do_ref!(|expires_at| {
+    template.expires_at().do_ref!(|expires_at| {
         assert!(now_secs < *expires_at, ETemplateExpired);
     });
-}
-
-fun redemption_cap_reached(template: &DiscountTemplate): bool {
-    template
-        .max_redemptions
-        .map_ref!(|max_redemptions| template.redemptions >= *max_redemptions)
-        .destroy_or!(false)
-}
-
-fun template_finished(template: &DiscountTemplate, now: u64): bool {
-    let expired = template.expires_at.map_ref!(|expires_at| now >= *expires_at).destroy_or!(false);
-    let maxed_out = template.redemption_cap_reached();
-    expired || maxed_out
 }
 
 macro fun assert_template_updatable($template: &DiscountTemplate, $now: u64) {
     let template = $template;
     let now = $now;
-    assert!(template.redemptions == 0, ETemplateFinalized);
-    assert!(!template.template_finished(now), ETemplateFinalized);
+    assert!(template.redemptions() == 0, ETemplateFinalized);
+    assert!(!template.finished(now), ETemplateFinalized);
 }
 
 macro fun assert_discount_redemption_allowed(
@@ -1432,9 +1299,9 @@ macro fun assert_discount_redemption_allowed(
     let discount_template = $discount_template;
     let listing_id = $listing_id;
     let now = $now;
-    assert!(discount_template.active, ETemplateInactive);
+    assert!(discount_template.active(), ETemplateInactive);
 
-    discount_template.applies_to_listing.do_ref!(|applies_to_listing| {
+    discount_template.applies_to_listing().do_ref!(|applies_to_listing| {
         assert!(*applies_to_listing == listing_id, EDiscountListingMismatch);
     });
 
@@ -1548,7 +1415,7 @@ macro fun assert_spotlight_template_matches_listing(
     discount_template_id.do_ref!(|template_id| {
         assert_template_belongs_to_shop!(shop, *template_id);
         let discount_template = shop.borrow_discount_template(*template_id);
-        discount_template.applies_to_listing.do_ref!(|applies_to_listing| {
+        discount_template.applies_to_listing().do_ref!(|applies_to_listing| {
             assert!(*applies_to_listing == listing_id, ESpotlightTemplateListingMismatch);
         });
     });
@@ -1610,49 +1477,14 @@ public fun accepted_currency_max_confidence_ratio_bps_cap(currency: &AcceptedCur
 }
 
 /// Returns the discount template for `template_id`.
-public fun discount_template(shop: &Shop, template_id: ID): &DiscountTemplate {
+public fun template(shop: &Shop, template_id: ID): &DiscountTemplate {
     assert!(shop.discount_templates.contains(template_id), ETemplateNotFound);
     shop.discount_templates.borrow(template_id)
 }
 
 /// Returns true if the discount template is registered under the shop.
-public fun discount_template_exists(shop: &Shop, template_id: ID): bool {
+public fun template_exists(shop: &Shop, template_id: ID): bool {
     shop.discount_templates.contains(template_id)
-}
-
-/// Returns the optional listing ID this template applies to.
-public fun discount_template_applies_to_listing(template: &DiscountTemplate): Option<ID> {
-    template.applies_to_listing
-}
-
-/// Returns the discount rule configured on a template.
-public fun discount_template_rule(template: &DiscountTemplate): DiscountRule {
-    template.rule
-}
-
-/// Returns the template start time in seconds.
-public fun discount_template_starts_at(template: &DiscountTemplate): u64 {
-    template.starts_at
-}
-
-/// Returns the optional template expiration time in seconds.
-public fun discount_template_expires_at(template: &DiscountTemplate): Option<u64> {
-    template.expires_at
-}
-
-/// Returns the optional maximum redemptions for a template.
-public fun discount_template_max_redemptions(template: &DiscountTemplate): Option<u64> {
-    template.max_redemptions
-}
-
-/// Returns how many times a template has been redeemed.
-public fun discount_template_redemptions(template: &DiscountTemplate): u64 {
-    template.redemptions
-}
-
-/// Returns whether a template is currently active.
-public fun discount_template_active(template: &DiscountTemplate): bool {
-    template.active
 }
 
 /// Quotes the coin amount for a price info object with guardrails.

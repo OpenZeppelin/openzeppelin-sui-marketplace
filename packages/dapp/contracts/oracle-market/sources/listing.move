@@ -4,6 +4,8 @@ module sui_oracle_market::listing;
 use std::string::String;
 use std::type_name::{Self, TypeName};
 
+// === Structs ===
+
 /// Item listing metadata keyed under the shared `Shop`, used to mint specific items on purchase.
 /// Discounts can be attached to highlight promotions in the UI.
 public struct ItemListing has drop, store {
@@ -52,7 +54,7 @@ public fun spotlight_discount_template_id(listing: &ItemListing): Option<ID> {
 
 // === Package Functions ===
 
-public(package) fun new_item_listing<T: store>(
+public(package) fun new<T: store>(
     listing_id: ID,
     name: String,
     base_price_usd_cents: u64,
