@@ -295,7 +295,7 @@ public struct EffectiveGuardrails has copy, drop {
     max_confidence_ratio_bps: u16,
 }
 
-// === Entry Point Methods ===
+// === Public Functions ===
 
 // === Shop ===
 
@@ -596,7 +596,11 @@ public fun create_discount_template(
         max_redemptions,
     );
     shop.discount_templates.add(discount_template_id, discount_template);
-    shop.increment_active_template_count_if_listing_bound(applies_to_listing);
+    
+    // Increment active listing template count if any listing attached.
+    applies_to_listing.do_ref!(|listing_id| {
+        shop.increment_active_listing_template_count(*listing_id);
+    });
 
     events::emit_discount_template_created(
         shop.id.to_inner(),
@@ -919,16 +923,6 @@ fun currency_type<TCoin>(): TypeName {
 // TODO#q: inline
 fun new_object_id(ctx: &mut TxContext): ID {
     ctx.fresh_object_address().to_id()
-}
-
-// TODO#q: inline
-fun increment_active_template_count_if_listing_bound(
-    shop: &mut Shop,
-    applies_to_listing: Option<ID>,
-) {
-    applies_to_listing.do_ref!(|listing_id| {
-        shop.increment_active_listing_template_count(*listing_id);
-    });
 }
 
 // TODO#q: inline
