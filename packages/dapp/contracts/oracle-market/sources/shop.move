@@ -70,7 +70,7 @@ use sui::coin::Coin;
 use sui::coin_registry::Currency;
 use sui::package;
 use sui::table::{Self, Table};
-use sui_oracle_market::currency::{Self, AcceptedCurrency};
+use sui_oracle_market::currency::{Self, AcceptedCurrency, now_secs};
 use sui_oracle_market::discount::{Self, Discount};
 use sui_oracle_market::events;
 use sui_oracle_market::listing::{Self, ItemListing, ShopItem};
@@ -848,14 +848,6 @@ fun process_purchase<TItem: store, TCoin>(
         discounted_price_usd_cents,
     );
     (owed_coin_opt, payment, minted_item)
-}
-
-// TODO#q: use ms and convert to sec when we need
-/// Normalize consensus clock milliseconds to seconds once at the boundary.
-/// Pyth stale checks and price timestamps are second-based (`max_age_secs` vs `price::get_timestamp`),
-/// so keeping module guardrails in seconds avoids mixed-unit errors.
-fun now_secs(clock: &Clock): u64 {
-    clock.timestamp_ms() / 1000
 }
 
 fun split_payment<TCoin>(
