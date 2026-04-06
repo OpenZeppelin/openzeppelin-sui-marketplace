@@ -23,7 +23,7 @@ const EItemTypeMismatch: vector<u8> = "item type mismatch";
 /// Discounts can be attached to highlight promotions in the UI.
 public struct ItemListing has drop, store {
     /// Stable listing identifier.
-    listing_id: ID,
+    id: ID,
     /// Runtime type that checkout must mint.
     item_type: TypeName,
     /// Display name shown to buyers.
@@ -59,7 +59,12 @@ public struct ShopItem<phantom TItem> has key, store {
 
 /// Returns the listing ID.
 public fun id(listing: &ItemListing): ID {
-    listing.listing_id
+    listing.id
+}
+
+/// Returns the item type that this listing mints.
+public fun item_type(listing: &ItemListing): TypeName {
+    listing.item_type
 }
 
 /// Returns the listing name.
@@ -75,6 +80,11 @@ public fun base_price_usd_cents(listing: &ItemListing): u64 {
 /// Returns the current stock for a listing.
 public fun stock(listing: &ItemListing): u64 {
     listing.stock
+}
+
+/// Returns how many active discounts are currently bound to this listing.
+public fun active_bound_discount_count(listing: &ItemListing): u64 {
+    listing.active_bound_discount_count
 }
 
 /// Returns the spotlight discount ID attached to the listing, if any.
@@ -98,7 +108,7 @@ public(package) fun create<T: store>(
     assert!(base_price_usd_cents > 0, EInvalidPrice);
 
     ItemListing {
-        listing_id: ctx.fresh_object_address().to_id(),
+        id: ctx.fresh_object_address().to_id(),
         item_type: type_name::with_defining_ids<T>(),
         name,
         base_price_usd_cents,
@@ -115,24 +125,16 @@ public(package) fun mint_shop_item<TItem: store>(
     now_sec: u64,
     ctx: &mut TxContext,
 ): ShopItem<TItem> {
-    assert!(item_listing.item_type() == type_name::with_defining_ids<TItem>(), EItemTypeMismatch);
+    assert!(item_listing.item_type == type_name::with_defining_ids<TItem>(), EItemTypeMismatch);
 
     ShopItem {
         id: object::new(ctx),
         shop_id,
-        item_listing_id: item_listing.id(),
-        item_type: item_listing.item_type(),
-        name: item_listing.name(),
+        item_listing_id: item_listing.id,
+        item_type: item_listing.item_type,
+        name: item_listing.name,
         acquired_at: now_sec,
     }
-}
-
-public(package) fun item_type(listing: &ItemListing): TypeName {
-    listing.item_type
-}
-
-public(package) fun active_bound_discount_count(listing: &ItemListing): u64 {
-    listing.active_bound_discount_count
 }
 
 public(package) fun decrement_stock(listing: &mut ItemListing) {

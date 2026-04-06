@@ -136,15 +136,15 @@ public(package) fun quote_amount_with_guardrails(
 ): u64 {
     // Compute effective max age.
     let requested_max_age = max_price_age_secs.destroy_or!(
-        accepted_currency.max_price_age_secs_cap(),
+        accepted_currency.max_price_age_secs_cap,
     );
-    let effective_max_age = requested_max_age.min(accepted_currency.max_price_age_secs_cap());
+    let effective_max_age = requested_max_age.min(accepted_currency.max_price_age_secs_cap);
 
     // Compute effective confidence ratio.
     let requested_confidence_ratio = max_confidence_ratio_bps.destroy_or!(
-        accepted_currency.max_confidence_ratio_bps_cap(),
+        accepted_currency.max_confidence_ratio_bps_cap,
     );
-    let effective_confidence_ratio = requested_confidence_ratio.min(accepted_currency.max_confidence_ratio_bps_cap());
+    let effective_confidence_ratio = requested_confidence_ratio.min(accepted_currency.max_confidence_ratio_bps_cap);
 
     // Assert publish time.
     let price_info = price_info::get_price_info_from_price_info_object(
@@ -164,7 +164,7 @@ public(package) fun quote_amount_with_guardrails(
     );
     quote_amount_from_usd_cents(
         price_usd_cents,
-        accepted_currency.decimals(),
+        accepted_currency.decimals,
         price,
         effective_confidence_ratio,
     )

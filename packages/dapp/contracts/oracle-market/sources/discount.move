@@ -162,7 +162,7 @@ public(package) fun update(
     });
 
     // Assert discount can be updated
-    assert!(discount.redemptions() == 0, EDiscountFinalized);
+    assert!(discount.redemptions == 0, EDiscountFinalized);
     assert!(!discount.finished(now_sec), EDiscountFinalized);
 
     let discount_rule_kind = parse_kind(rule_kind);
