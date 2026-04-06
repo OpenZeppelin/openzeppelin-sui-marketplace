@@ -18,6 +18,16 @@ const EDiscountWindow: vector<u8> = "invalid discount window";
 const EInvalidMaxRedemptions: vector<u8> = "invalid max redemptions";
 #[error(code = 6)]
 const EDiscountFinalized: vector<u8> = "discount finalized";
+#[error(code = 7)]
+const EDiscountInactive: vector<u8> = "discount inactive";
+#[error(code = 8)]
+const EDiscountTooEarly: vector<u8> = "discount too early";
+#[error(code = 9)]
+const EDiscountExpired: vector<u8> = "discount expired";
+#[error(code = 10)]
+const EDiscountMaxedOut: vector<u8> = "discount maxed out";
+#[error(code = 11)]
+const EDiscountListingMismatch: vector<u8> = "discount listing mismatch";
 
 // === Constants ===
 
@@ -133,7 +143,8 @@ public(package) fun create(
     }
 }
 
-/// Updates the discount rule or timing parameters on an existing discount, subject to guardrails and restrictions to prevent updates to finalized discounts.
+/// Updates the discount rule or timing parameters on an existing discount,
+/// subject to guardrails and restrictions to prevent updates to finalized discounts.
 public(package) fun update(
     discount: &mut Discount,
     rule_kind: u8,
@@ -163,26 +174,33 @@ public(package) fun update(
     discount.max_redemptions = max_redemptions;
 }
 
-public(package) fun apply(rule: DiscountRule, base_price_usd_cents: u64): u64 {
-    match (rule) {
-        DiscountRule::Fixed { amount_cents } => {
-            if (amount_cents >= base_price_usd_cents) {
-                0
-            } else {
-                base_price_usd_cents - amount_cents
-            }
-        },
-        DiscountRule::Percent { bps } => {
-            let remaining_bps = BASIS_POINT_DENOMINATOR - (bps as u64);
-            let maybe_discounted = u64::mul_div(
-                base_price_usd_cents,
-                remaining_bps,
-                BASIS_POINT_DENOMINATOR,
-                rounding::up(),
-            );
-            maybe_discounted.destroy_or!(abort EPriceOverflow)
-        },
-    }
+/// Applies a discount to a listing price, enforcing all guardrails
+/// and restrictions (active, timing, redemption cap, listing scope)
+/// and incrementing redemptions if successful.
+/// Returns the discounted price in USD cents.
+public(package) fun redeem(
+    discount: &mut Discount,
+    listing_id: ID,
+    listing_price_usd_cents: u64,
+    now_sec: u64,
+): u64 {
+    assert!(discount.active, EDiscountInactive);
+    discount.applies_to_listing.do!(|applies_to_listing| {
+        assert!(applies_to_listing == listing_id, EDiscountListingMismatch);
+    });
+    assert!(discount.starts_at <= now_sec, EDiscountTooEarly);
+    discount.expires_at.do!(|expires_at| {
+        assert!(now_sec < expires_at, EDiscountExpired);
+    });
+    assert!(!discount.redemption_cap_reached(), EDiscountMaxedOut);
+
+    // Increment redemptions and calculate discount price.
+    discount.redemptions = discount.redemptions + 1;
+    discount
+        .rule()
+        .apply(
+            listing_price_usd_cents,
+        )
 }
 
 /// Returns the encoded rule kind (`0 = fixed`, `1 = percent`) for a `DiscountRule`.
@@ -203,17 +221,6 @@ public(package) fun value(rule: DiscountRule): u64 {
 
 public(package) fun set_active(discount: &mut Discount, active: bool) {
     discount.active = active;
-}
-
-public(package) fun increment_redemptions(discount: &mut Discount) {
-    discount.redemptions = discount.redemptions + 1;
-}
-
-public(package) fun redemption_cap_reached(discount: &Discount): bool {
-    discount
-        .max_redemptions
-        .map_ref!(|max_redemptions| discount.redemptions >= *max_redemptions)
-        .destroy_or!(false)
 }
 
 // === Private Functions ===
@@ -237,6 +244,28 @@ fun build(rule_kind: DiscountRuleKind, rule_value: u64): DiscountRule {
     }
 }
 
+fun apply(rule: DiscountRule, base_price_usd_cents: u64): u64 {
+    match (rule) {
+        DiscountRule::Fixed { amount_cents } => {
+            if (amount_cents >= base_price_usd_cents) {
+                0
+            } else {
+                base_price_usd_cents - amount_cents
+            }
+        },
+        DiscountRule::Percent { bps } => {
+            let remaining_bps = BASIS_POINT_DENOMINATOR - (bps as u64);
+            let maybe_discounted = u64::mul_div(
+                base_price_usd_cents,
+                remaining_bps,
+                BASIS_POINT_DENOMINATOR,
+                rounding::up(),
+            );
+            maybe_discounted.destroy_or!(abort EPriceOverflow)
+        },
+    }
+}
+
 fun finished(discount: &Discount, now_sec: u64): bool {
     let expired = discount
         .expires_at
@@ -244,4 +273,11 @@ fun finished(discount: &Discount, now_sec: u64): bool {
         .destroy_or!(false);
     let maxed_out = discount.redemption_cap_reached();
     expired || maxed_out
+}
+
+fun redemption_cap_reached(discount: &Discount): bool {
+    discount
+        .max_redemptions
+        .map_ref!(|max_redemptions| discount.redemptions >= *max_redemptions)
+        .destroy_or!(false)
 }

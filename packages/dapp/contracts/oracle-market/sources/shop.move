@@ -101,14 +101,6 @@ const EListingHasActiveDiscounts: vector<u8> = "listing has active discounts";
 const EAcceptedCurrencyExists: vector<u8> = "accepted currency exists";
 #[error(code = 8)]
 const EAcceptedCurrencyMissing: vector<u8> = "accepted currency missing";
-#[error(code = 9)]
-const EDiscountInactive: vector<u8> = "discount inactive";
-#[error(code = 10)]
-const EDiscountTooEarly: vector<u8> = "discount too early";
-#[error(code = 11)]
-const EDiscountExpired: vector<u8> = "discount expired";
-#[error(code = 12)]
-const EDiscountMaxedOut: vector<u8> = "discount maxed out";
 #[error(code = 13)]
 const EOutOfStock: vector<u8> = "out of stock";
 #[error(code = 14)]
@@ -137,8 +129,6 @@ const EEmptyShopName: vector<u8> = "empty shop name";
 const EShopDisabled: vector<u8> = "shop disabled";
 #[error(code = 26)]
 const EPriceInvalidPublishTime: vector<u8> = "invalid publish timestamp";
-#[error(code = 27)]
-const EDiscountListingMismatch: vector<u8> = "discount listing mismatch";
 
 // === Constants ===
 
@@ -211,6 +201,7 @@ public struct EffectiveGuardrails has copy, drop {
 
 // === Public Functions ===
 
+// TODO#q: remove sui mindset from docs.
 // TODO#q: have two apis create_shop and create_shop_and_share
 /// Create a new shop and its owner capability.
 ///
@@ -697,16 +688,7 @@ public fun buy_item_with_discount<TItem: store, TCoin>(
 
     let shop_id = shop.id();
     let discount = shop.discount_mut(discount_id);
-    // TODO#q: Move to discount module and create `discount.redeem()` function ----
-    assert_discount_redemption_allowed!(discount, listing_id, now_sec);
-
-    discount.increment_redemptions();
-    let discounted_price_usd_cents = discount
-        .rule()
-        .apply(
-            listing_price_usd_cents,
-        );
-    // ----------------------------------------------------------------------------
+    let discounted_price_usd_cents = discount.redeem(listing_id, listing_price_usd_cents, now_sec);
 
     events::emit_discount_redeemed(
         shop_id,
@@ -1151,25 +1133,6 @@ macro fun assert_listing_inputs(
     spotlight_discount_id.do!(|discount_id| {
         assert!(shop.discounts.contains(discount_id), EDiscountNotFound);
     });
-}
-
-// TODO#q: inline and move to discount module
-macro fun assert_discount_redemption_allowed($discount: &Discount, $listing_id: ID, $now_sec: u64) {
-    let discount = $discount;
-    let listing_id = $listing_id;
-    let now_sec = $now_sec;
-
-    assert!(discount.active(), EDiscountInactive);
-    discount.applies_to_listing().do!(|applies_to_listing| {
-        assert!(applies_to_listing == listing_id, EDiscountListingMismatch);
-    });
-
-    assert!(discount.starts_at() <= now_sec, EDiscountTooEarly);
-    discount.expires_at().do!(|expires_at| {
-        assert!(now_sec < expires_at, EDiscountExpired);
-    });
-
-    assert!(!discount.redemption_cap_reached(), EDiscountMaxedOut);
 }
 
 // TODO#q: move to currency module

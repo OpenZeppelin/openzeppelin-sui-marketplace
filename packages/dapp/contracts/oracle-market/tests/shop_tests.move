@@ -3057,7 +3057,7 @@ fun discount_redemption_without_listing_restriction_allows_zero_price() {
     let _ = test_scenario::end(scn);
 }
 
-#[test, expected_failure(abort_code = ::sui_oracle_market::shop::EDiscountListingMismatch)]
+#[test, expected_failure(abort_code = ::sui_oracle_market::discount::EDiscountListingMismatch)]
 fun discount_redemption_rejects_listing_mismatch() {
     let mut scn = test_scenario::begin(TEST_OWNER);
     let (shop_id, owner_cap_id) = create_default_shop_and_owner_cap_ids_for_sender(&mut scn);
@@ -3155,7 +3155,7 @@ fun discount_redemption_rejects_listing_mismatch() {
     abort
 }
 
-#[test, expected_failure(abort_code = ::sui_oracle_market::shop::EDiscountMaxedOut)]
+#[test, expected_failure(abort_code = ::sui_oracle_market::discount::EDiscountMaxedOut)]
 fun discount_discount_maxed_out_by_redemption() {
     let mut scn = test_scenario::begin(TEST_OWNER);
     let (shop_id, owner_cap_id) = create_default_shop_and_owner_cap_ids_for_sender(&mut scn);
@@ -4299,7 +4299,7 @@ fun quote_amount_from_usd_cents_rejects_negative_price() {
     abort
 }
 
-#[test, expected_failure(abort_code = ::sui_oracle_market::shop::EDiscountInactive)]
+#[test, expected_failure(abort_code = ::sui_oracle_market::discount::EDiscountInactive)]
 fun buy_item_with_discount_rejects_inactive_discount() {
     let mut scn = test_scenario::begin(TEST_OWNER);
     let (shop_id, owner_cap_id) = create_default_shop_and_owner_cap_ids_for_sender(&mut scn);
