@@ -240,28 +240,28 @@ Where to find values:
 - `itemListingId`: emitted in `ItemListingAdded` and printed by the script.
 - You can list all current IDs with `pnpm script buyer:item-listing:list --shop-id <SHOP_ID>`.
 
-### 7) Create a discount template
+### 7) Create a discount
 ```bash
-pnpm script owner:discount-template:create \
+pnpm script owner:discount:create \
   --rule-kind fixed \
   --value 5.00
 ```
 What it does:
-- Creates a reusable `DiscountTemplate` object with schedule and rule settings.
+- Creates a reusable `Discount` object with schedule and rule settings.
 - Optionally scope it to a listing with `--listing-id <ITEM_LISTING_ID_U64>`.
 
 Where to find values:
-- `discountTemplateId`: `objects.localnet.json` entry with `objectType` ending in `::shop::DiscountTemplate`
-- If you scoped the template, `--listing-id` should be the `itemListingId` from step 6.
+- `discountId`: `objects.localnet.json` entry with `objectType` ending in `::discount::Discount`
+- If you scoped the discount, `--listing-id` should be the `itemListingId` from step 6.
 
-### 8) Attach the discount template to a listing (spotlight)
+### 8) Attach the discount to a listing (spotlight)
 ```bash
-pnpm script owner:item-listing:attach-discount-template \
+pnpm script owner:item-listing:attach-discount \
   --item-listing-id <ITEM_LISTING_ID_U64> \
-  --discount-template-id <DISCOUNT_TEMPLATE_ID>
+  --discount-id <DISCOUNT_TEMPLATE_ID>
 ```
 What it does:
-- Updates the listing to reference the discount template so it is spotlighted.
+- Updates the listing to reference the discount so it is spotlighted.
 
 Where to find values:
 - `ITEM_LISTING_ID`: from step 6 (script output or `buyer:item-listing:list`)
@@ -295,7 +295,7 @@ pnpm script buyer:shop:view
 ```
 
 What it does:
-- Prints the shop overview plus listings, accepted currencies, and discount templates in one read-only snapshot.
+- Prints the shop overview plus listings, accepted currencies, and discounts in one read-only snapshot.
 - Uses the latest Shop artifact if `--shop-id` is omitted.
 
 Where to find values:

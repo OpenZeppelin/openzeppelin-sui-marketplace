@@ -20,7 +20,7 @@ This chapter explains how to read Sui data for apps: object queries, table entri
 ## 4. Concept deep dive: read paths
 - **Direct RPC (fullnode)**: best for current state and object ownership.
 - **Events**: query by type and sender to track lifecycle changes (listings, purchases, discounts).
-- **Tables + dynamic fields**: listings and accepted currencies are read from `Shop` table entries (`Shop.listings`, `Shop.accepted_currencies`), while discount-template claims use dynamic-field markers under each template.
+- **Tables + dynamic fields**: listings and accepted currencies are read from `Shop` table entries (`Shop.listings`, `Shop.accepted_currencies`), while discount-discount claims use dynamic-field markers under each discount.
 
 Code:
 1. `packages/domain/core/src/models/shop.ts` (events + shop overview)
@@ -33,7 +33,7 @@ Code:
 - **When to use**: RPC for live object state, indexers for analytics and timelines.
 
 ## 6. UI mapping
-- **Storefront**: shared objects (Shop, listings, currencies, templates).
+- **Storefront**: shared objects (Shop, listings, currencies, discounts).
 - **Wallet**: owned objects (tickets, receipts, owner caps).
 - **Events**: used to render transaction recaps and history.
 

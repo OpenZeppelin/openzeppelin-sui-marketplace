@@ -1,6 +1,6 @@
 "use client"
 
-import type { DiscountTemplateSummary } from "@sui-oracle-market/domain-core/models/discount"
+import type { DiscountSummary } from "@sui-oracle-market/domain-core/models/discount"
 import { formatEpochSeconds, shortenId } from "../helpers/format"
 import {
   useRemoveDiscountModalState,
@@ -25,7 +25,7 @@ const DiscountSummarySection = ({
   shopId,
   explorerUrl
 }: {
-  template: DiscountTemplateSummary
+  template: DiscountSummary
   shopId?: string
   explorerUrl?: string
 }) => (
@@ -81,7 +81,7 @@ const DiscountSummarySection = ({
     </div>
     <div className="mt-4 flex flex-wrap items-center gap-3 text-xs">
       <CopyableId
-        value={template.discountTemplateId}
+        value={template.discountId}
         label="Template ID"
         explorerUrl={explorerUrl}
       />
@@ -127,7 +127,7 @@ const DiscountSuccessView = ({
       status="success"
       title="Discount disabled"
       subtitle={summary.template.ruleDescription}
-      description="The discount template has been disabled on chain."
+      description="The discount has been disabled on chain."
       onClose={onClose}
     />
     <ModalBody>
@@ -187,8 +187,8 @@ const RemoveDiscountModal = ({
   open: boolean
   onClose: () => void
   shopId?: string
-  template?: DiscountTemplateSummary
-  onDiscountUpdated?: (template?: DiscountTemplateSummary) => void
+  template?: DiscountSummary
+  onDiscountUpdated?: (template?: DiscountSummary) => void
 }) => {
   const {
     transactionState,
@@ -236,7 +236,7 @@ const RemoveDiscountModal = ({
             onClose={onClose}
             footer={
               <CopyableId
-                value={template.discountTemplateId}
+                value={template.discountId}
                 label="Template"
                 explorerUrl={explorerUrl}
               />

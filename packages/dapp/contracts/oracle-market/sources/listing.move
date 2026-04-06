@@ -139,8 +139,8 @@ public(package) fun decrement_stock(listing: &mut ItemListing) {
     listing.stock = listing.stock - 1;
 }
 
-public(package) fun set_spotlight(listing: &mut ItemListing, template_id: ID) {
-    listing.spotlight_discount_id = option::some(template_id);
+public(package) fun set_spotlight(listing: &mut ItemListing, discount_id: ID) {
+    listing.spotlight_discount_id = option::some(discount_id);
 }
 
 public(package) fun clear_spotlight(listing: &mut ItemListing) {

@@ -59,7 +59,7 @@ fun add_item_listing_core<T: store>(
   name: String,
   base_price_usd_cents: u64,
   stock: u64,
-  spotlight_discount_template_id: Option<ID>,
+  spotlight_discount_id: Option<ID>,
   ctx: &mut TxContext,
 ): ID {
   assert_owner_cap!(shop, owner_cap);
@@ -68,7 +68,7 @@ fun add_item_listing_core<T: store>(
     &name,
     base_price_usd_cents,
     stock,
-    spotlight_discount_template_id,
+    spotlight_discount_id,
   );
 
   let shop_id = shop.id.to_inner();
@@ -78,7 +78,7 @@ fun add_item_listing_core<T: store>(
     name,
     base_price_usd_cents,
     stock,
-    spotlight_discount_template_id,
+    spotlight_discount_id,
   );
   shop.listings.add(listing_id, listing);
   event::emit(ItemListingAdded { shop_id, listing_id });

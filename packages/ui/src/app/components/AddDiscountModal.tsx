@@ -8,7 +8,7 @@ import {
   describeRuleKind,
   discountRuleChoices,
   type DiscountRuleKindLabel,
-  type DiscountTemplateSummary
+  type DiscountSummary
 } from "@sui-oracle-market/domain-core/models/discount"
 import type { ItemListingSummary } from "@sui-oracle-market/domain-core/models/item-listing"
 import { parseNonNegativeU64 } from "@sui-oracle-market/tooling-core/utils/utility"
@@ -132,9 +132,9 @@ const DiscountSummarySection = ({
       </div>
     </div>
     <div className="mt-4 flex flex-wrap items-center gap-3 text-xs">
-      {summary.discountTemplateId ? (
+      {summary.discountId ? (
         <CopyableId
-          value={summary.discountTemplateId}
+          value={summary.discountId}
           label="Template ID"
           explorerUrl={explorerUrl}
         />
@@ -164,7 +164,7 @@ const DiscountSuccessView = ({
   <>
     <ModalStatusHeader
       status="success"
-      title="Discount template created"
+      title="Discount created"
       subtitle={formatDiscountRulePreview({
         ruleKind: summary.ruleKind,
         ruleValue: summary.ruleValue
@@ -232,7 +232,7 @@ const AddDiscountModal = ({
   onClose: () => void
   shopId?: string
   itemListings: ItemListingSummary[]
-  onDiscountCreated?: (template?: DiscountTemplateSummary) => void
+  onDiscountCreated?: (template?: DiscountSummary) => void
 }) => {
   const {
     formState,
@@ -335,7 +335,7 @@ const AddDiscountModal = ({
           <ModalHeader
             eyebrow="Promotions"
             title="Add Discount"
-            description="Create a discount template for your storefront."
+            description="Create a discount for your storefront."
             onClose={onClose}
             footer={
               shopId ? (

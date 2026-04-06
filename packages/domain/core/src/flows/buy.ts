@@ -31,10 +31,7 @@ import {
   requireValue
 } from "@sui-oracle-market/tooling-core/utils/utility"
 import { normalizeCoinType } from "../models/currency.ts"
-import type {
-  DiscountContext,
-  DiscountTemplateSummary
-} from "../models/discount.ts"
+import type { DiscountContext, DiscountSummary } from "../models/discount.ts"
 import type { PriceUpdatePolicy, PythPullOracleConfig } from "../models/pyth.ts"
 import { resolvePythPullOracleConfig } from "../models/pyth.ts"
 import {
@@ -113,22 +110,24 @@ const BASIS_POINT_DENOMINATOR = 10_000n
 export const resolveDiscountedPriceUsdCents = ({
   basePriceUsdCents,
   discountSelection,
-  discountTemplateLookup
+  discountLookup
 }: {
   basePriceUsdCents?: string
   discountSelection: DiscountContext
-  discountTemplateLookup: Record<string, DiscountTemplateSummary>
+  discountLookup: Record<string, DiscountSummary>
 }): bigint | undefined => {
   if (!basePriceUsdCents) return undefined
 
   const basePrice = BigInt(basePriceUsdCents)
   if (discountSelection.mode === "none") return basePrice
 
-  const template = discountTemplateLookup[discountSelection.discountTemplateId]
-  if (!template) return basePrice
+  const selectedDiscount = discountLookup[discountSelection.discountId]
+  if (!selectedDiscount) return basePrice
 
-  const ruleKind = template.ruleKind
-  const ruleValue = template.ruleValue ? BigInt(template.ruleValue) : undefined
+  const ruleKind = selectedDiscount.ruleKind
+  const ruleValue = selectedDiscount.ruleValue
+    ? BigInt(selectedDiscount.ruleValue)
+    : undefined
   if (!ruleKind || ruleKind === "unknown" || ruleValue === undefined)
     return basePrice
 
@@ -469,23 +468,23 @@ const maybeUpdateMockPriceFeed = ({
 
 export const resolveDiscountContext = async ({
   claimDiscount,
-  discountTemplateId,
+  discountId,
   suiClient: _suiClient
 }: {
   claimDiscount: boolean
-  discountTemplateId?: string
+  discountId?: string
   suiClient: SuiClient
 }): Promise<DiscountContext> => {
-  if (claimDiscount || discountTemplateId) {
-    const templateId = requireValue(
-      discountTemplateId,
-      "--discount-template-id is required when using discount checkout."
+  if (claimDiscount || discountId) {
+    const selectedDiscountId = requireValue(
+      discountId,
+      "--discount-id is required when using discount checkout."
     )
     return {
-      mode: "template",
-      discountTemplateId: normalizeIdOrThrow(
-        templateId,
-        "Invalid discount template id provided for checkout."
+      mode: "discount",
+      discountId: normalizeIdOrThrow(
+        selectedDiscountId,
+        "Invalid discount id provided for checkout."
       )
     }
   }
@@ -709,7 +708,7 @@ export const buildBuyTransaction = async (
     clockArgument
   ]
 
-  if (discountContext.mode === "template") {
+  if (discountContext.mode === "discount") {
     transaction.moveCall({
       target: `${shopPackageId}::shop::buy_item_with_discount`,
       typeArguments,
@@ -717,8 +716,8 @@ export const buildBuyTransaction = async (
         shopArgument,
         buildObjectIdArgument(
           transaction,
-          discountContext.discountTemplateId,
-          "discountTemplateId"
+          discountContext.discountId,
+          "discountId"
         ),
         ...buildCommonBuyArguments()
       ]

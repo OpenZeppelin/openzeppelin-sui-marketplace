@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest"
 
 import {
-  attachDiscountTemplateToListing,
+  attachDiscountToListing,
   createDappIntegrationTestEnv,
-  createDiscountTemplateFixture,
+  createDiscountFixture,
   createItemListingFixture,
   createShopWithItemExamplesFixture,
   resolveItemType,
@@ -22,7 +22,7 @@ type ItemListingSummary = {
   itemType?: string
   basePriceUsdCents?: string
   stock?: string
-  spotlightTemplateId?: string
+  spotlightDiscountId?: string
 }
 
 type ItemListingOutput = {
@@ -35,9 +35,9 @@ type RemoveItemListingOutput = {
   transactionSummary?: TransactionSummary
 }
 
-type AttachDiscountTemplateOutput = ItemListingOutput & {
-  discountTemplate?: {
-    discountTemplateId?: string
+type AttachDiscountOutput = ItemListingOutput & {
+  discount?: {
+    discountId?: string
   }
 }
 
@@ -145,7 +145,7 @@ describe("owner item listing scripts integration", () => {
         basePriceUsdCents: DEFAULT_LISTING_INPUT.priceUsdCents,
         stock: DEFAULT_LISTING_INPUT.stock
       })
-      expect(listingOutput.itemListing?.spotlightTemplateId).toBeUndefined()
+      expect(listingOutput.itemListing?.spotlightDiscountId).toBeUndefined()
     })
   })
 
@@ -156,7 +156,7 @@ describe("owner item listing scripts integration", () => {
         const { publisher, scriptRunner, shopId, itemType } =
           await createShopWithItemType(context, "Item Listing Spotlight Shop")
 
-        const discountTemplate = await createDiscountTemplateFixture({
+        const discount = await createDiscountFixture({
           scriptRunner,
           publisher,
           shopId,
@@ -175,7 +175,7 @@ describe("owner item listing scripts integration", () => {
               price: DEFAULT_LISTING_INPUT.priceUsd,
               stock: DEFAULT_LISTING_INPUT.stock,
               itemType,
-              spotlightDiscountId: discountTemplate.discountTemplateId
+              spotlightDiscountId: discount.discountId
             }
           }
         )
@@ -187,8 +187,8 @@ describe("owner item listing scripts integration", () => {
           basePriceUsdCents: DEFAULT_LISTING_INPUT.priceUsdCents,
           stock: DEFAULT_LISTING_INPUT.stock
         })
-        expect(listingOutput.itemListing?.spotlightTemplateId).toBe(
-          discountTemplate.discountTemplateId
+        expect(listingOutput.itemListing?.spotlightDiscountId).toBe(
+          discount.discountId
         )
       }
     )
@@ -229,7 +229,7 @@ describe("owner item listing scripts integration", () => {
           basePriceUsdCents: DEFAULT_LISTING_INPUT.priceUsdCents,
           stock: DEFAULT_LISTING_INPUT.stock
         })
-        expect(listingOutput.itemListing?.spotlightTemplateId).toBeTruthy()
+        expect(listingOutput.itemListing?.spotlightDiscountId).toBeTruthy()
       }
     )
   })
@@ -316,7 +316,7 @@ describe("owner item listing scripts integration", () => {
     )
   })
 
-  it("attaches discount templates to item listings", async () => {
+  it("attaches discounts to item listings", async () => {
     await testEnv.withTestContext(
       "owner-item-listing-attach-discount",
       async (context) => {
@@ -332,7 +332,7 @@ describe("owner item listing scripts integration", () => {
           stock: DEFAULT_LISTING_INPUT.stock
         })
 
-        const discountTemplate = await createDiscountTemplateFixture({
+        const discount = await createDiscountFixture({
           scriptRunner,
           publisher,
           shopId,
@@ -341,35 +341,32 @@ describe("owner item listing scripts integration", () => {
           listingId: listing.itemListingId
         })
 
-        const attachOutput =
-          await runOwnerScriptJson<AttachDiscountTemplateOutput>(
-            scriptRunner,
-            "item-listing-attach-discount-template",
-            {
-              account: publisher,
-              args: {
-                shopId,
-                itemListingId: listing.itemListingId,
-                discountTemplateId: discountTemplate.discountTemplateId
-              }
+        const attachOutput = await runOwnerScriptJson<AttachDiscountOutput>(
+          scriptRunner,
+          "item-listing-attach-discount",
+          {
+            account: publisher,
+            args: {
+              shopId,
+              itemListingId: listing.itemListingId,
+              discountId: discount.discountId
             }
-          )
+          }
+        )
 
         expectSuccessfulTransaction(attachOutput.transactionSummary)
         expect(attachOutput.itemListing?.itemListingId).toBe(
           listing.itemListingId
         )
-        expect(attachOutput.itemListing?.spotlightTemplateId).toBe(
-          discountTemplate.discountTemplateId
+        expect(attachOutput.itemListing?.spotlightDiscountId).toBe(
+          discount.discountId
         )
-        expect(attachOutput.discountTemplate?.discountTemplateId).toBe(
-          discountTemplate.discountTemplateId
-        )
+        expect(attachOutput.discount?.discountId).toBe(discount.discountId)
       }
     )
   })
 
-  it("clears item listing discount templates", async () => {
+  it("clears item listing discounts", async () => {
     await testEnv.withTestContext(
       "owner-item-listing-clear-discount",
       async (context) => {
@@ -388,7 +385,7 @@ describe("owner item listing scripts integration", () => {
           stock: DEFAULT_LISTING_INPUT.stock
         })
 
-        const discountTemplate = await createDiscountTemplateFixture({
+        const discount = await createDiscountFixture({
           scriptRunner,
           publisher,
           shopId,
@@ -397,17 +394,17 @@ describe("owner item listing scripts integration", () => {
           listingId: listing.itemListingId
         })
 
-        await attachDiscountTemplateToListing({
+        await attachDiscountToListing({
           scriptRunner,
           publisher,
           shopId,
           itemListingId: listing.itemListingId,
-          discountTemplateId: discountTemplate.discountTemplateId
+          discountId: discount.discountId
         })
 
         const clearOutput = await runOwnerScriptJson<ItemListingOutput>(
           scriptRunner,
-          "item-listing-clear-discount-template",
+          "item-listing-clear-discount",
           {
             account: publisher,
             args: {
@@ -421,7 +418,7 @@ describe("owner item listing scripts integration", () => {
         expect(clearOutput.itemListing?.itemListingId).toBe(
           listing.itemListingId
         )
-        expect(clearOutput.itemListing?.spotlightTemplateId).toBeUndefined()
+        expect(clearOutput.itemListing?.spotlightDiscountId).toBeUndefined()
       }
     )
   })

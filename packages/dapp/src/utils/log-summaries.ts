@@ -1,5 +1,5 @@
 import type { AcceptedCurrencySummary } from "@sui-oracle-market/domain-core/models/currency"
-import type { DiscountTemplateSummary } from "@sui-oracle-market/domain-core/models/discount"
+import type { DiscountSummary } from "@sui-oracle-market/domain-core/models/discount"
 import type {
   ItemListingDetails,
   ItemListingSummary
@@ -36,8 +36,8 @@ export const logItemListingSummary = (
     itemListing.basePriceUsdCents ?? "Unknown price"
   )
   logKeyValueGreen("Stock")(itemListing.stock ?? "Unknown stock")
-  if (itemListing.spotlightTemplateId)
-    logKeyValueGreen("Spotlight")(itemListing.spotlightTemplateId)
+  if (itemListing.spotlightDiscountId)
+    logKeyValueGreen("Spotlight")(itemListing.spotlightDiscountId)
   logKeyValueGreen("Table-entry-field")(itemListing.tableEntryFieldId)
   console.log("")
 }
@@ -65,28 +65,27 @@ export const logAcceptedCurrencySummary = (
   console.log("")
 }
 
-export const logDiscountTemplateSummary = (
-  discountTemplate: DiscountTemplateSummary,
+export const logDiscountSummary = (
+  discount: DiscountSummary,
   index?: number
 ) => {
   if (index !== undefined) logKeyValueGreen("Template")(index)
-  logKeyValueGreen("Object")(discountTemplate.discountTemplateId)
-  logKeyValueGreen("Status")(discountTemplate.status)
-  logKeyValueGreen("Active-flag")(discountTemplate.activeFlag)
-  logKeyValueGreen("Shop")(discountTemplate.shopId)
-  if (discountTemplate.appliesToListingId)
-    logKeyValueGreen("Listing")(discountTemplate.appliesToListingId)
+  logKeyValueGreen("Object")(discount.discountId)
+  logKeyValueGreen("Status")(discount.status)
+  logKeyValueGreen("Active-flag")(discount.activeFlag)
+  logKeyValueGreen("Shop")(discount.shopId)
+  if (discount.appliesToListingId)
+    logKeyValueGreen("Listing")(discount.appliesToListingId)
   else logKeyValueGreen("Listing")("Reusable across listings")
-  logKeyValueGreen("Rule")(discountTemplate.ruleDescription)
-  logKeyValueGreen("Starts-at")(discountTemplate.startsAt ?? "Unknown start")
-  if (discountTemplate.expiresAt)
-    logKeyValueGreen("Expires-at")(discountTemplate.expiresAt)
+  logKeyValueGreen("Rule")(discount.ruleDescription)
+  logKeyValueGreen("Starts-at")(discount.startsAt ?? "Unknown start")
+  if (discount.expiresAt) logKeyValueGreen("Expires-at")(discount.expiresAt)
   else logKeyValueGreen("Expires-at")("No expiry")
-  if (discountTemplate.maxRedemptions)
-    logKeyValueGreen("Max-redemptions")(discountTemplate.maxRedemptions)
+  if (discount.maxRedemptions)
+    logKeyValueGreen("Max-redemptions")(discount.maxRedemptions)
   else logKeyValueGreen("Max-redemptions")("Unlimited")
-  logKeyValueGreen("Redeemed")(discountTemplate.redemptions ?? "Unknown")
-  logKeyValueGreen("Table-entry-field")(discountTemplate.tableEntryFieldId)
+  logKeyValueGreen("Redeemed")(discount.redemptions ?? "Unknown")
+  logKeyValueGreen("Table-entry-field")(discount.tableEntryFieldId)
   console.log("")
 }
 
@@ -109,8 +108,8 @@ export const logShopItemReceiptSummary = (
       listingDetails.basePriceUsdCents ?? "Unknown price"
     )
     logKeyValueGreen("Listing-stock")(listingDetails.stock ?? "Unknown stock")
-    if (listingDetails.spotlightTemplateId)
-      logKeyValueGreen("Listing-spotlight")(listingDetails.spotlightTemplateId)
+    if (listingDetails.spotlightDiscountId)
+      logKeyValueGreen("Listing-spotlight")(listingDetails.spotlightDiscountId)
     logKeyValueGreen("Listing-table-entry")(
       listingDetails.tableEntryFieldId ?? "Not listed"
     )

@@ -29,7 +29,7 @@ import {
 import type {
   DiscountContext,
   DiscountOption,
-  DiscountTemplateSummary
+  DiscountSummary
 } from "@sui-oracle-market/domain-core/models/discount"
 import {
   buildDiscountOptions,
@@ -62,7 +62,7 @@ import { requireValue } from "@sui-oracle-market/tooling-core/utils/utility"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { EXPLORER_URL_VARIABLE_NAME } from "../config/network"
 import { parseBalance } from "../helpers/balance"
-import { buildDiscountTemplateLookup } from "../helpers/discountTemplates"
+import { buildDiscountLookup } from "../helpers/discounts"
 import { formatCoinBalance, getStructLabel } from "../helpers/format"
 import { validateOptionalSuiAddress } from "../helpers/inputValidation"
 import {
@@ -198,7 +198,7 @@ export const useBuyFlowModalState = ({
   shopId,
   listing,
   acceptedCurrencies,
-  discountTemplates
+  discounts
 }: {
   open: boolean
   onClose: () => void
@@ -206,7 +206,7 @@ export const useBuyFlowModalState = ({
   shopId?: string
   listing?: ItemListingSummary
   acceptedCurrencies: AcceptedCurrencySummary[]
-  discountTemplates: DiscountTemplateSummary[]
+  discounts: DiscountSummary[]
 }): BuyFlowModalState => {
   const currentAccount = useCurrentAccount()
   const { currentWallet } = useCurrentWallet()
@@ -316,9 +316,9 @@ export const useBuyFlowModalState = ({
     [currencyBalances]
   )
 
-  const discountTemplateLookup = useMemo(
-    () => buildDiscountTemplateLookup(discountTemplates),
-    [discountTemplates]
+  const discountLookup = useMemo(
+    () => buildDiscountLookup(discounts),
+    [discounts]
   )
 
   const discountOptions = useMemo(
@@ -326,9 +326,9 @@ export const useBuyFlowModalState = ({
       buildDiscountOptions({
         listing,
         shopId,
-        discountTemplates
+        discounts
       }),
-    [listing, shopId, discountTemplates]
+    [listing, shopId, discounts]
   )
   const hasDiscountOptions = discountOptions.some(
     (option) => option.id !== "none"
@@ -512,7 +512,7 @@ export const useBuyFlowModalState = ({
     const discountedPriceUsdCents = resolveDiscountedPriceUsdCents({
       basePriceUsdCents: listing.basePriceUsdCents,
       discountSelection: selectedDiscount.selection,
-      discountTemplateLookup
+      discountLookup
     })
 
     if (discountedPriceUsdCents === undefined) {
@@ -595,7 +595,7 @@ export const useBuyFlowModalState = ({
       oracleQuoteRequestInFlight.current = false
     }
   }, [
-    discountTemplateLookup,
+    discountLookup,
     listing,
     open,
     oracleQuoteRefreshIndex,
@@ -768,7 +768,7 @@ export const useBuyFlowModalState = ({
       const discountedPriceUsdCents = resolveDiscountedPriceUsdCents({
         basePriceUsdCents: listingSnapshot.basePriceUsdCents,
         discountSelection,
-        discountTemplateLookup
+        discountLookup
       })
       let paymentCoinMinimumBalance: bigint | undefined = undefined
 
@@ -1017,7 +1017,7 @@ export const useBuyFlowModalState = ({
   }, [
     currentAccount,
     currentWallet,
-    discountTemplateLookup,
+    discountLookup,
     hasFieldErrors,
     isLocalnet,
     lastWalletContext,

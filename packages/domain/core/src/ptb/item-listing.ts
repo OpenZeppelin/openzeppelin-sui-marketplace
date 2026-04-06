@@ -3,7 +3,7 @@ import { normalizeSuiObjectId } from "@mysten/sui/utils"
 
 import type { WrappedSuiSharedObject } from "@sui-oracle-market/tooling-core/shared-object"
 import {
-  getDiscountTemplateSummary,
+  getDiscountSummary,
   type NormalizedRuleKind
 } from "../models/discount.ts"
 import {
@@ -22,13 +22,13 @@ type ListingMetadata = {
   shopId: string
 }
 
-type DiscountTemplateMetadata = {
+type DiscountMetadata = {
   id: string
   shopId: string
   appliesToListing?: string
 }
 
-export type AddListingSpotlightTemplateInput = {
+export type AddListingSpotlightDiscountInput = {
   ruleKind: NormalizedRuleKind
   ruleValue: bigint
   startsAt: bigint
@@ -52,54 +52,57 @@ export const getItemListingMetadata = async (
   }
 }
 
-export const getDiscountTemplateMetadata = async (
-  templateId: string,
+export const getDiscountMetadata = async (
+  discountId: string,
   shopId: string,
   suiClient: SuiClient
-): Promise<DiscountTemplateMetadata> => {
-  const templateSummary = await getDiscountTemplateSummary(
+): Promise<DiscountMetadata> => {
+  const discountSummary = await getDiscountSummary(
     shopId,
-    templateId,
+    discountId,
     suiClient
   )
 
   return {
-    id: templateSummary.discountTemplateId,
-    shopId: templateSummary.shopId,
-    appliesToListing: templateSummary.appliesToListingId
+    id: discountSummary.discountId,
+    shopId: discountSummary.shopId,
+    appliesToListing: discountSummary.appliesToListingId
   }
 }
 
-export const validateTemplateAndListing = async ({
+export const validateDiscountAndListing = async ({
   shopId,
   itemListingId,
-  discountTemplateId,
+  discountId,
   suiClient
 }: {
   shopId: string
   itemListingId: string
-  discountTemplateId: string
+  discountId: string
   suiClient: SuiClient
-}): Promise<{ itemListingId: string; discountTemplateId: string }> => {
+}): Promise<{ itemListingId: string; discountId: string }> => {
   const normalizedShopId = normalizeSuiObjectId(shopId)
-  const [listing, template] = await Promise.all([
+  const [listing, resolvedDiscount] = await Promise.all([
     getItemListingMetadata(itemListingId, normalizedShopId, suiClient),
-    getDiscountTemplateMetadata(discountTemplateId, normalizedShopId, suiClient)
+    getDiscountMetadata(discountId, normalizedShopId, suiClient)
   ])
 
-  if (template.shopId !== normalizedShopId)
+  if (resolvedDiscount.shopId !== normalizedShopId)
     throw new Error(
-      `Discount template ${template.id} belongs to shop ${template.shopId}, not ${normalizedShopId}.`
+      `Discount ${resolvedDiscount.id} belongs to shop ${resolvedDiscount.shopId}, not ${normalizedShopId}.`
     )
 
-  if (template.appliesToListing && template.appliesToListing !== listing.id)
+  if (
+    resolvedDiscount.appliesToListing &&
+    resolvedDiscount.appliesToListing !== listing.id
+  )
     throw new Error(
-      `Discount template ${template.id} is pinned to listing ${template.appliesToListing} and cannot be attached to ${listing.id}. Create a template for this listing or use the pinned listing.`
+      `Discount ${resolvedDiscount.id} is pinned to listing ${resolvedDiscount.appliesToListing} and cannot be attached to ${listing.id}. Create a discount for this listing or use the pinned listing.`
     )
 
   return {
     itemListingId: listing.id,
-    discountTemplateId: template.id
+    discountId: resolvedDiscount.id
   }
 }
 
@@ -129,7 +132,7 @@ export const buildAddItemListingTransaction = ({
   basePriceUsdCents,
   stock,
   spotlightDiscountId,
-  createSpotlightDiscountTemplate
+  createSpotlightDiscount
 }: {
   packageId: string
   itemType: string
@@ -139,7 +142,7 @@ export const buildAddItemListingTransaction = ({
   basePriceUsdCents: bigint
   stock: bigint
   spotlightDiscountId?: string
-  createSpotlightDiscountTemplate?: AddListingSpotlightTemplateInput
+  createSpotlightDiscount?: AddListingSpotlightDiscountInput
 }) => {
   const { transaction, shopArgument, ownerCapabilityArgument } =
     buildShopOwnerTransactionContext({
@@ -148,14 +151,14 @@ export const buildAddItemListingTransaction = ({
     })
   const normalizedItemName = itemName.trim()
   if (!normalizedItemName) throw new Error("Item name cannot be empty.")
-  if (spotlightDiscountId && createSpotlightDiscountTemplate)
+  if (spotlightDiscountId && createSpotlightDiscount)
     throw new Error(
-      "Choose either spotlightDiscountId or createSpotlightDiscountTemplate, but not both."
+      "Choose either spotlightDiscountId or createSpotlightDiscount, but not both."
     )
 
-  if (createSpotlightDiscountTemplate) {
+  if (createSpotlightDiscount) {
     transaction.moveCall({
-      target: `${packageId}::shop::add_item_listing_with_discount_template`,
+      target: `${packageId}::shop::add_item_listing_with_discount`,
       typeArguments: [itemType],
       arguments: [
         shopArgument,
@@ -163,16 +166,16 @@ export const buildAddItemListingTransaction = ({
         transaction.pure.string(normalizedItemName),
         transaction.pure.u64(basePriceUsdCents),
         transaction.pure.u64(stock),
-        transaction.pure.u8(createSpotlightDiscountTemplate.ruleKind),
-        transaction.pure.u64(createSpotlightDiscountTemplate.ruleValue),
-        transaction.pure.u64(createSpotlightDiscountTemplate.startsAt),
+        transaction.pure.u8(createSpotlightDiscount.ruleKind),
+        transaction.pure.u64(createSpotlightDiscount.ruleValue),
+        transaction.pure.u64(createSpotlightDiscount.startsAt),
         transaction.pure.option(
           "u64",
-          createSpotlightDiscountTemplate.expiresAt ?? null
+          createSpotlightDiscount.expiresAt ?? null
         ),
         transaction.pure.option(
           "u64",
-          createSpotlightDiscountTemplate.maxRedemptions ?? null
+          createSpotlightDiscount.maxRedemptions ?? null
         )
       ]
     })
@@ -259,17 +262,17 @@ export const buildUpdateItemListingStockTransaction = ({
   return transaction
 }
 
-export const buildAttachDiscountTemplateTransaction = ({
+export const buildAttachDiscountTransaction = ({
   packageId,
   shop,
   itemListingId,
-  discountTemplateId,
+  discountId,
   ownerCapId
 }: {
   packageId: string
   shop: WrappedSuiSharedObject
   itemListingId: string
-  discountTemplateId: string
+  discountId: string
   ownerCapId: string
 }) => {
   const { transaction, shopArgument, ownerCapabilityArgument } =
@@ -279,15 +282,11 @@ export const buildAttachDiscountTemplateTransaction = ({
     })
 
   transaction.moveCall({
-    target: `${packageId}::shop::attach_template_to_listing`,
+    target: `${packageId}::shop::attach_discount_to_listing`,
     arguments: [
       shopArgument,
       ownerCapabilityArgument,
-      buildObjectIdArgument(
-        transaction,
-        discountTemplateId,
-        "discountTemplateId"
-      ),
+      buildObjectIdArgument(transaction, discountId, "discountId"),
       buildListingIdArgument(transaction, itemListingId)
     ]
   })
@@ -295,7 +294,7 @@ export const buildAttachDiscountTemplateTransaction = ({
   return transaction
 }
 
-export const buildClearDiscountTemplateTransaction = ({
+export const buildClearDiscountTransaction = ({
   packageId,
   shop,
   itemListingId,
@@ -313,7 +312,7 @@ export const buildClearDiscountTemplateTransaction = ({
     })
 
   transaction.moveCall({
-    target: `${packageId}::shop::clear_template_from_listing`,
+    target: `${packageId}::shop::clear_discount_from_listing`,
     arguments: [
       shopArgument,
       ownerCapabilityArgument,

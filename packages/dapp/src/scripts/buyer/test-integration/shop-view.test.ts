@@ -32,18 +32,17 @@ describe("buyer shop-view integration", () => {
         })
 
       const itemType = resolveItemType(itemExamplesPackageId, "Car")
-      const { itemListing, discountTemplate } =
-        await seedShopWithListingAndDiscount({
-          scriptRunner,
-          publisher,
-          shopId,
-          itemType,
-          listingName: DEFAULT_LISTING_INPUT.name,
-          price: DEFAULT_LISTING_INPUT.priceUsd,
-          stock: DEFAULT_LISTING_INPUT.stock,
-          ruleKind: "percent",
-          value: "10"
-        })
+      const { itemListing, discount } = await seedShopWithListingAndDiscount({
+        scriptRunner,
+        publisher,
+        shopId,
+        itemType,
+        listingName: DEFAULT_LISTING_INPUT.name,
+        price: DEFAULT_LISTING_INPUT.priceUsd,
+        stock: DEFAULT_LISTING_INPUT.stock,
+        ruleKind: "percent",
+        value: "10"
+      })
 
       const viewPayload = await runBuyerScriptJson<ShopSnapshot>(
         scriptRunner,
@@ -75,20 +74,18 @@ describe("buyer shop-view integration", () => {
         DEFAULT_LISTING_INPUT.priceUsdCents
       )
       expect(seededListing?.stock).toBe(DEFAULT_LISTING_INPUT.stock)
-      expect(seededListing?.spotlightTemplateId).toBe(
-        discountTemplate.discountTemplateId
-      )
+      expect(seededListing?.spotlightDiscountId).toBe(discount.discountId)
 
       const acceptedCurrencies = viewPayload.acceptedCurrencies
       expect(acceptedCurrencies.length).toBe(0)
 
-      const discountTemplates = viewPayload.discountTemplates
-      expect(discountTemplates.length).toBeGreaterThan(0)
-      discountTemplates.forEach((templateSummary) => {
-        expect(templateSummary.discountTemplateId).toBeTruthy()
-        expect(templateSummary.tableEntryFieldId).toBeTruthy()
-        expect(templateSummary.shopId).toBeTruthy()
-        expect(templateSummary.status).toBeTruthy()
+      const discounts = viewPayload.discounts
+      expect(discounts.length).toBeGreaterThan(0)
+      discounts.forEach((discountSummary) => {
+        expect(discountSummary.discountId).toBeTruthy()
+        expect(discountSummary.tableEntryFieldId).toBeTruthy()
+        expect(discountSummary.shopId).toBeTruthy()
+        expect(discountSummary.status).toBeTruthy()
       })
     })
   })

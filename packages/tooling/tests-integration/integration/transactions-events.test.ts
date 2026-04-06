@@ -18,12 +18,20 @@ const testEnv = createToolingIntegrationTestEnv()
 const eventTypeEndsWith = (eventType: string, suffix: string) =>
   eventType.toLowerCase().endsWith(suffix.toLowerCase())
 
-const buildCreateShopTransaction = (packageId: string, shopName: string) => {
+const buildCreateShopTransaction = (
+  packageId: string,
+  shopName: string,
+  ownerAddress: string
+) => {
   const transaction = newTransaction()
-  transaction.moveCall({
+  const [, ownerCap] = transaction.moveCall({
     target: `${packageId}::shop::create_shop`,
     arguments: [transaction.pure.string(shopName.trim())]
   })
+  transaction.transferObjects(
+    [ownerCap],
+    transaction.pure.address(ownerAddress)
+  )
   return transaction
 }
 
@@ -63,7 +71,8 @@ describe("transactions and events", () => {
 
         const createShopTransaction = buildCreateShopTransaction(
           rootArtifact.packageId,
-          "Integration Shop"
+          "Integration Shop",
+          publisher.address
         )
         const createResult = await context.signAndExecuteTransaction(
           createShopTransaction,

@@ -1,23 +1,16 @@
 /**
- * Sets the listing's spotlight DiscountTemplate reference for UI promotion.
- * Validates template ownership and requires the ShopOwnerCap capability.
+ * Clears the listing's spotlight Discount reference.
+ * Requires the ShopOwnerCap capability.
  */
-import { normalizeSuiObjectId } from "@mysten/sui/utils"
 import yargs from "yargs"
 
-import { getDiscountTemplateSummary } from "@sui-oracle-market/domain-core/models/discount"
 import {
-  buildAttachDiscountTemplateTransaction,
-  validateTemplateAndListing
+  buildClearDiscountTransaction,
+  resolveListingIdForShop
 } from "@sui-oracle-market/domain-core/ptb/item-listing"
-import { emitJsonOutput } from "@sui-oracle-market/tooling-node/json"
-import { logKeyValueGreen } from "@sui-oracle-market/tooling-node/log"
 import { runSuiScript } from "@sui-oracle-market/tooling-node/process"
 import {
-  logDiscountTemplateSummary,
-  logItemListingSummary
-} from "../../utils/log-summaries.ts"
-import {
+  emitOrLogItemListingMutationResult,
   executeItemListingMutation,
   fetchItemListingSummaryForMutation,
   resolveOwnerListingMutationContext
@@ -29,31 +22,26 @@ runSuiScript(
       cliArguments,
       tooling.network.networkName
     )
-
-    const resolvedIds = await validateTemplateAndListing({
+    const resolvedListingId = await resolveListingIdForShop({
       shopId: inputs.shopId,
       itemListingId: inputs.itemListingId,
-      discountTemplateId: inputs.discountTemplateId,
       suiClient: tooling.suiClient
     })
-
     const shopSharedObject = await tooling.getMutableSharedObject({
       objectId: inputs.shopId
     })
 
-    const attachDiscountTemplateTransaction =
-      buildAttachDiscountTemplateTransaction({
-        packageId: inputs.packageId,
-        shop: shopSharedObject,
-        itemListingId: resolvedIds.itemListingId,
-        discountTemplateId: resolvedIds.discountTemplateId,
-        ownerCapId: inputs.ownerCapId
-      })
+    const clearDiscountTransaction = buildClearDiscountTransaction({
+      packageId: inputs.packageId,
+      shop: shopSharedObject,
+      itemListingId: resolvedListingId,
+      ownerCapId: inputs.ownerCapId
+    })
 
     const mutationResult = await executeItemListingMutation({
       tooling,
-      transaction: attachDiscountTemplateTransaction,
-      summaryLabel: "attach-discount-template",
+      transaction: clearDiscountTransaction,
+      summaryLabel: "clear-discount",
       devInspect: cliArguments.devInspect,
       dryRun: cliArguments.dryRun
     })
@@ -61,49 +49,25 @@ runSuiScript(
     if (!mutationResult) return
 
     const { execution, summary } = mutationResult
-    const digest = execution.transactionResult.digest
 
-    const [listingSummary, discountTemplateSummary] = await Promise.all([
-      fetchItemListingSummaryForMutation({
-        shopId: inputs.shopId,
-        itemListingId: resolvedIds.itemListingId,
-        tooling
-      }),
-      getDiscountTemplateSummary(
-        inputs.shopId,
-        resolvedIds.discountTemplateId,
-        tooling.suiClient
-      )
-    ])
+    const listingSummary = await fetchItemListingSummaryForMutation({
+      shopId: inputs.shopId,
+      itemListingId: resolvedListingId,
+      tooling
+    })
 
-    if (
-      emitJsonOutput(
-        {
-          itemListing: listingSummary,
-          discountTemplate: discountTemplateSummary,
-          digest,
-          transactionSummary: summary
-        },
-        cliArguments.json
-      )
-    )
-      return
-
-    logItemListingSummary(listingSummary)
-    logDiscountTemplateSummary(discountTemplateSummary)
-    if (digest) logKeyValueGreen("digest")(digest)
+    emitOrLogItemListingMutationResult({
+      itemListingSummary: listingSummary,
+      digest: execution.transactionResult.digest,
+      transactionSummary: summary,
+      json: cliArguments.json
+    })
   },
   yargs()
     .option("itemListingId", {
       alias: ["item-listing-id", "item-id", "listing-id"],
       type: "string",
-      description: "Item listing ID to attach the discount to.",
-      demandOption: true
-    })
-    .option("discountTemplateId", {
-      alias: ["discount-template-id", "template-id"],
-      type: "string",
-      description: "Discount template ID to spotlight on the listing.",
+      description: "Item listing ID to clear the spotlighted discount from.",
       demandOption: true
     })
     .option("shopPackageId", {
@@ -150,7 +114,6 @@ const normalizeInputs = async (
     shopId?: string
     ownerCapId?: string
     itemListingId: string
-    discountTemplateId: string
   },
   networkName: string
 ) => {
@@ -167,7 +130,6 @@ const normalizeInputs = async (
     packageId,
     shopId,
     ownerCapId,
-    itemListingId,
-    discountTemplateId: normalizeSuiObjectId(cliArguments.discountTemplateId)
+    itemListingId
   }
 }

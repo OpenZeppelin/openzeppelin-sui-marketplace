@@ -3,11 +3,11 @@
 import { useCurrentAccount } from "@mysten/dapp-kit"
 import { normalizeSuiAddress } from "@mysten/sui/utils"
 import type { AcceptedCurrencySummary } from "@sui-oracle-market/domain-core/models/currency"
-import type { DiscountTemplateSummary } from "@sui-oracle-market/domain-core/models/discount"
+import type { DiscountSummary } from "@sui-oracle-market/domain-core/models/discount"
 import type { ItemListingSummary } from "@sui-oracle-market/domain-core/models/item-listing"
 import { useCallback, useMemo, useState } from "react"
 import { CONTRACT_PACKAGE_ID_NOT_DEFINED } from "../config/network"
-import { buildDiscountTemplateLookup } from "../helpers/discountTemplates"
+import { buildDiscountLookup } from "../helpers/discounts"
 import { resolveConfiguredId } from "../helpers/network"
 import type { PurchaseSuccessPayload } from "./useBuyFlowModalState"
 import { useShopDashboardData } from "./useShopDashboardData"
@@ -16,7 +16,7 @@ type DashboardModalState = {
   activeListing: ItemListingSummary | undefined
   activeListingToRemove: ItemListingSummary | undefined
   activeCurrencyToRemove: AcceptedCurrencySummary | undefined
-  activeDiscountToRemove: DiscountTemplateSummary | undefined
+  activeDiscountToRemove: DiscountSummary | undefined
   isBuyModalOpen: boolean
   isAddItemModalOpen: boolean
   isAddDiscountModalOpen: boolean
@@ -64,7 +64,7 @@ export const useStoreDashboardViewModel = ({
     upsertAcceptedCurrency,
     upsertItemListing,
     upsertPurchasedItem,
-    upsertDiscountTemplate,
+    upsertDiscount,
     removeItemListing,
     removeAcceptedCurrency
   } = useShopDashboardData({
@@ -87,9 +87,9 @@ export const useStoreDashboardViewModel = ({
     normalizedOwnerAddress === normalizedWalletAddress
   )
 
-  const discountTemplateLookup = useMemo(
-    () => buildDiscountTemplateLookup(storefront.discountTemplates),
-    [storefront.discountTemplates]
+  const discountLookup = useMemo(
+    () => buildDiscountLookup(storefront.discounts),
+    [storefront.discounts]
   )
 
   const openBuyModal = useCallback((listing: ItemListingSummary) => {
@@ -189,16 +189,13 @@ export const useStoreDashboardViewModel = ({
     }))
   }, [])
 
-  const openRemoveDiscountModal = useCallback(
-    (template: DiscountTemplateSummary) => {
-      setModalState((previous) => ({
-        ...previous,
-        activeDiscountToRemove: template,
-        isRemoveDiscountModalOpen: true
-      }))
-    },
-    []
-  )
+  const openRemoveDiscountModal = useCallback((template: DiscountSummary) => {
+    setModalState((previous) => ({
+      ...previous,
+      activeDiscountToRemove: template,
+      isRemoveDiscountModalOpen: true
+    }))
+  }, [])
 
   const closeRemoveDiscountModal = useCallback(() => {
     setModalState((previous) => ({
@@ -221,15 +218,15 @@ export const useStoreDashboardViewModel = ({
   )
 
   const handleDiscountCreated = useCallback(
-    (template?: DiscountTemplateSummary) => {
+    (template?: DiscountSummary) => {
       if (template) {
-        upsertDiscountTemplate(template)
+        upsertDiscount(template)
         return
       }
 
       refreshStorefront()
     },
-    [refreshStorefront, upsertDiscountTemplate]
+    [refreshStorefront, upsertDiscount]
   )
 
   const handleCurrencyCreated = useCallback(
@@ -269,9 +266,9 @@ export const useStoreDashboardViewModel = ({
   )
 
   const handleDiscountUpdated = useCallback(
-    (template?: DiscountTemplateSummary) => {
+    (template?: DiscountSummary) => {
       if (template) {
-        upsertDiscountTemplate(template)
+        upsertDiscount(template)
         if (!template.activeFlag) {
           refreshStorefront()
         }
@@ -280,7 +277,7 @@ export const useStoreDashboardViewModel = ({
 
       refreshStorefront()
     },
-    [refreshStorefront, upsertDiscountTemplate]
+    [refreshStorefront, upsertDiscount]
   )
 
   return {
@@ -293,7 +290,7 @@ export const useStoreDashboardViewModel = ({
     canManageListings: Boolean(hasShopConfig && isShopOwner),
     canManageCurrencies: Boolean(hasShopConfig && isShopOwner),
     canManageDiscounts: Boolean(hasShopConfig && isShopOwner),
-    discountTemplateLookup,
+    discountLookup,
     modalState,
     openBuyModal,
     closeBuyModal,

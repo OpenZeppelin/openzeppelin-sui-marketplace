@@ -29,7 +29,7 @@ export type ItemListingDetails = {
   itemType: string
   basePriceUsdCents?: string
   stock?: string
-  spotlightTemplateId?: string
+  spotlightDiscountId?: string
 }
 
 export type ItemListingSummary = ItemListingDetails & {
@@ -357,8 +357,8 @@ const buildItemListingDetails = (
       itemListingFields.base_price_usd_cents
     ),
     stock: formatOptionalNumericValue(itemListingFields.stock),
-    spotlightTemplateId: normalizeOptionalIdFromValue(
-      itemListingFields.spotlight_discount_template_id
+    spotlightDiscountId: normalizeOptionalIdFromValue(
+      itemListingFields.spotlight_discount_id
     )
   }
 }

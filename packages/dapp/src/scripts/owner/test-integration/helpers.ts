@@ -1,8 +1,8 @@
 export {
-  attachDiscountTemplateToListing,
+  attachDiscountToListing,
   createAcceptedCurrencyFixture,
   createDappIntegrationTestEnv,
-  createDiscountTemplateFixture,
+  createDiscountFixture,
   createFundedTestAccount,
   createItemListingFixture,
   createScriptRunner,

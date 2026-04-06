@@ -10,9 +10,9 @@ import {
 } from "@mysten/dapp-kit"
 import type { SuiTransactionBlockResponse } from "@mysten/sui/client"
 import type { IdentifierString } from "@mysten/wallet-standard"
-import type { DiscountTemplateSummary } from "@sui-oracle-market/domain-core/models/discount"
-import { getDiscountTemplateSummary } from "@sui-oracle-market/domain-core/models/discount"
-import { buildToggleDiscountTemplateTransaction } from "@sui-oracle-market/domain-core/ptb/discount-template"
+import type { DiscountSummary } from "@sui-oracle-market/domain-core/models/discount"
+import { getDiscountSummary } from "@sui-oracle-market/domain-core/models/discount"
+import { buildToggleDiscountTransaction } from "@sui-oracle-market/domain-core/ptb/discount"
 import { deriveRelevantPackageId } from "@sui-oracle-market/tooling-core/object"
 import { getSuiSharedObject } from "@sui-oracle-market/tooling-core/shared-object"
 import { ENetwork } from "@sui-oracle-market/tooling-core/types"
@@ -34,7 +34,7 @@ import { waitForTransactionBlock } from "../helpers/transactionWait"
 import useNetworkConfig from "./useNetworkConfig"
 
 export type RemoveDiscountTransactionSummary = {
-  template: DiscountTemplateSummary
+  template: DiscountSummary
   digest: string
   transactionBlock: SuiTransactionBlockResponse
 }
@@ -58,8 +58,8 @@ type RemoveDiscountModalState = {
 }
 
 const buildDisabledTemplateSnapshot = (
-  template: DiscountTemplateSummary
-): DiscountTemplateSummary => ({
+  template: DiscountSummary
+): DiscountSummary => ({
   ...template,
   activeFlag: false,
   status: "disabled"
@@ -73,8 +73,8 @@ export const useRemoveDiscountModalState = ({
 }: {
   open: boolean
   shopId?: string
-  template?: DiscountTemplateSummary
-  onDiscountUpdated?: (template?: DiscountTemplateSummary) => void
+  template?: DiscountSummary
+  onDiscountUpdated?: (template?: DiscountSummary) => void
 }): RemoveDiscountModalState => {
   const currentAccount = useCurrentAccount()
   const { currentWallet } = useCurrentWallet()
@@ -106,10 +106,7 @@ export const useRemoveDiscountModalState = ({
 
   const canSubmit =
     Boolean(
-      walletAddress &&
-      shopId &&
-      template?.discountTemplateId &&
-      template?.activeFlag
+      walletAddress && shopId && template?.discountId && template?.activeFlag
     ) &&
     transactionState.status !== "processing" &&
     isSubmissionPending !== true
@@ -122,7 +119,7 @@ export const useRemoveDiscountModalState = ({
   useEffect(() => {
     if (!open) return
     resetState()
-  }, [open, template?.discountTemplateId, resetState])
+  }, [open, template?.discountId, resetState])
 
   const handleDisableDiscount = useCallback(async () => {
     if (!walletAddress || !shopId || !template) {
@@ -135,7 +132,7 @@ export const useRemoveDiscountModalState = ({
     if (!template.activeFlag) {
       setTransactionState({
         status: "error",
-        error: "This discount template is already disabled."
+        error: "This discount is already disabled."
       })
       return
     }
@@ -205,15 +202,13 @@ export const useRemoveDiscountModalState = ({
         suiClient
       })
 
-      const disableDiscountTransaction = buildToggleDiscountTemplateTransaction(
-        {
-          packageId: shopPackageId,
-          shop: shopShared,
-          discountTemplateId: template.discountTemplateId,
-          active: false,
-          ownerCapId: ownerCapabilityId
-        }
-      )
+      const disableDiscountTransaction = buildToggleDiscountTransaction({
+        packageId: shopPackageId,
+        shop: shopShared,
+        discountId: template.discountId,
+        active: false,
+        ownerCapId: ownerCapabilityId
+      })
       disableDiscountTransaction.setSender(walletAddress)
 
       let digest = ""
@@ -250,9 +245,9 @@ export const useRemoveDiscountModalState = ({
 
       onDiscountUpdated?.(disabledTemplate)
 
-      void getDiscountTemplateSummary(
+      void getDiscountSummary(
         shopShared.object.objectId,
-        template.discountTemplateId,
+        template.discountId,
         suiClient
       )
         .then((summary) => onDiscountUpdated?.(summary))

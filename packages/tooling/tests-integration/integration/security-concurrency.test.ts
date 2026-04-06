@@ -38,12 +38,20 @@ const publishSimpleContract = async (
   return { publisher, packageId: rootArtifact.packageId }
 }
 
-const buildCreateShopTransaction = (packageId: string, shopName: string) => {
+const buildCreateShopTransaction = (
+  packageId: string,
+  shopName: string,
+  ownerAddress: string
+) => {
   const transaction = newTransaction()
-  transaction.moveCall({
+  const [, ownerCap] = transaction.moveCall({
     target: `${packageId}::shop::create_shop`,
     arguments: [transaction.pure.string(shopName.trim())]
   })
+  transaction.transferObjects(
+    [ownerCap],
+    transaction.pure.address(ownerAddress)
+  )
   return transaction
 }
 
@@ -72,7 +80,11 @@ const createShop = async (
   owner: TestAccount,
   shopName: string
 ) => {
-  const createShopTransaction = buildCreateShopTransaction(packageId, shopName)
+  const createShopTransaction = buildCreateShopTransaction(
+    packageId,
+    shopName,
+    owner.address
+  )
   const createResult = await context.signAndExecuteTransaction(
     createShopTransaction,
     owner

@@ -1,5 +1,5 @@
 /**
- * Builds and executes a buy PTB for a listing, optionally applying a discount template.
+ * Builds and executes a buy PTB for a listing, optionally applying a discount.
  * Payments are Coin<T> objects (no approvals); if paying with SUI you need a separate SUI coin for gas.
  * The PTB can update Pyth and then call buy_item/buy_item_with_discount in one atomic flow.
  * Oracle freshness and confidence guardrails are enforced on-chain using PriceInfoObject + Clock.
@@ -20,8 +20,8 @@ import {
   requireAcceptedCurrencyByCoinType
 } from "@sui-oracle-market/domain-core/models/currency"
 import {
-  buildDiscountTemplateLookup,
-  getDiscountTemplateSummary,
+  buildDiscountLookup,
+  getDiscountSummary,
   type DiscountContext
 } from "@sui-oracle-market/domain-core/models/discount"
 import {
@@ -64,7 +64,7 @@ type BuyArguments = {
   paymentCoinObjectId?: string
   mintTo?: string
   refundTo?: string
-  discountTemplateId?: string
+  discountId?: string
   maxPriceAgeSecs?: string
   maxConfidenceRatioBps?: string
   skipPriceUpdate?: boolean
@@ -114,7 +114,7 @@ runSuiScript(
 
     const discountContext = await resolveDiscountContext({
       claimDiscount: false,
-      discountTemplateId: inputs.discountTemplateId,
+      discountId: inputs.discountId,
       suiClient: tooling.suiClient
     })
 
@@ -340,10 +340,10 @@ runSuiScript(
       description:
         "Address that receives any refunded change (defaults to the signer address)."
     })
-    .option("discountTemplateId", {
-      alias: ["discount-template-id", "template-id"],
+    .option("discountId", {
+      alias: ["discount-id"],
       type: "string",
-      description: "Optional discount template ID to apply during checkout."
+      description: "Optional discount ID to apply during checkout."
     })
     .option("maxPriceAgeSecs", {
       alias: ["max-price-age-secs"],
@@ -410,22 +410,18 @@ const resolveDiscountedPriceUsdCentsForPurchase = async ({
 }): Promise<bigint | undefined> => {
   if (!listingSummary.basePriceUsdCents) return undefined
 
-  const templateSummary =
+  const discountSummary =
     discountContext.mode === "none"
       ? undefined
-      : await getDiscountTemplateSummary(
-          shopId,
-          discountContext.discountTemplateId,
-          suiClient
-        )
-  const discountTemplateLookup = templateSummary
-    ? buildDiscountTemplateLookup([templateSummary])
+      : await getDiscountSummary(shopId, discountContext.discountId, suiClient)
+  const discountLookup = discountSummary
+    ? buildDiscountLookup([discountSummary])
     : {}
 
   return resolveDiscountedPriceUsdCents({
     basePriceUsdCents: listingSummary.basePriceUsdCents,
     discountSelection: discountContext,
-    discountTemplateLookup
+    discountLookup
   })
 }
 
@@ -460,8 +456,8 @@ const normalizeInputs = async (
     refundTo: cliArguments.refundTo
       ? normalizeSuiAddress(cliArguments.refundTo)
       : undefined,
-    discountTemplateId: cliArguments.discountTemplateId
-      ? normalizeSuiObjectId(cliArguments.discountTemplateId)
+    discountId: cliArguments.discountId
+      ? normalizeSuiObjectId(cliArguments.discountId)
       : undefined,
     maxPriceAgeSecs: parseOptionalU64(
       cliArguments.maxPriceAgeSecs,
@@ -530,9 +526,9 @@ const logBuyContext = ({
   logKeyValueBlue("Pyth-price-info")(pythObjectId)
   logKeyValueBlue("Payment-coin")(paymentCoinObjectId)
 
-  if (discountContext.mode === "template") {
-    logKeyValueBlue("Discount")("template")
-    logKeyValueBlue("Template")(discountContext.discountTemplateId)
+  if (discountContext.mode === "discount") {
+    logKeyValueBlue("Discount")("discount")
+    logKeyValueBlue("Discount-id")(discountContext.discountId)
   } else {
     logKeyValueBlue("Discount")("none")
   }

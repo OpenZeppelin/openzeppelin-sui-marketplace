@@ -21,7 +21,7 @@ None. This is a conceptual chapter that builds on earlier examples.
 - **Address-owned objects (fastpath)**: owned by a wallet address. These can execute on the fastpath with low latency. Examples here: `ShopOwnerCap` and `ShopItem`.
 - **Shared objects (consensus)**: anyone can include them in a transaction, and mutations are
   sequenced by consensus, but module checks still gate what can change. Examples here: `Shop`,
-  `DiscountTemplate`, and the Pyth `PriceInfoObject`.
+  `Discount`, and the Pyth `PriceInfoObject`.
 - **Object-owned objects**: children owned by another object. This is how table entries work.
 - **Immutable objects**: globally readable, never mutable. Common for package-published constants or registry-like data.
 
@@ -29,7 +29,7 @@ None. This is a conceptual chapter that builds on earlier examples.
 - **Fastpath objects**: address-owned objects execute without consensus and require the latest version in each transaction input. Conflicting transactions from the same owner fail, so avoid signing two transactions against the same version.
 - **Immutable objects**: read-only inputs that never change, so they do not participate in version contention.
 - **Consensus objects**: shared objects are sequenced by consensus, which simplifies coordination at the cost of higher latency.
-- **What this repo chooses**: listing/currency/template mutations happen through shared objects, while owned capabilities and receipts use fastpath for low-latency user interactions.
+- **What this repo chooses**: listing/currency/discount mutations happen through shared objects, while owned capabilities and receipts use fastpath for low-latency user interactions.
 
 ## 6. Code references
 1. `packages/dapp/contracts/oracle-market/sources/shop.move` (Shop, ShopOwnerCap, table usage)
@@ -56,13 +56,13 @@ public struct Shop has key, store {
 
 ## 7. Exercises
 1. Find a `ShopOwnerCap` in your wallet. Expected outcome: you can explain why it is address-owned and fastpath.
-2. Inspect a `DiscountTemplate` object ID and verify it is shared. Expected outcome: you can identify a shared object via RPC owner metadata.
+2. Inspect a `Discount` object ID and verify it is shared. Expected outcome: you can identify a shared object via RPC owner metadata.
 
 ## 8. Diagram: ownership layout
 ```
 Address-owned (fastpath): ShopOwnerCap, ShopItem
-Shared (consensus): Shop, DiscountTemplate, PriceInfoObject
-Object-owned: table entries for Shop.listings / Shop.accepted_currencies / Shop.discount_templates
+Shared (consensus): Shop, Discount, PriceInfoObject
+Object-owned: table entries for Shop.listings / Shop.accepted_currencies / Shop.discounts
 ```
 
 ## 9. Further reading (Sui docs)

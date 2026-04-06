@@ -1,6 +1,6 @@
 "use client"
 
-import type { DiscountTemplateSummary } from "@sui-oracle-market/domain-core/models/discount"
+import type { DiscountSummary } from "@sui-oracle-market/domain-core/models/discount"
 import type { ItemListingSummary } from "@sui-oracle-market/domain-core/models/item-listing"
 import clsx from "clsx"
 import { useCallback, useEffect, useMemo } from "react"
@@ -69,7 +69,7 @@ const SpotlightTemplateCard = ({
   onSelect,
   explorerUrl
 }: {
-  template: DiscountTemplateSummary
+  template: DiscountSummary
   selected: boolean
   onSelect: (templateId: string) => void
   explorerUrl?: string
@@ -84,7 +84,7 @@ const SpotlightTemplateCard = ({
   >
     <button
       type="button"
-      onClick={() => onSelect(template.discountTemplateId)}
+      onClick={() => onSelect(template.discountId)}
       aria-pressed={selected}
       className="focus-visible:ring-sds-blue/40 w-full text-left focus-visible:outline-none focus-visible:ring-2"
     >
@@ -111,7 +111,7 @@ const SpotlightTemplateCard = ({
     <div className="mt-3 border-t border-slate-200/70 pt-3 text-xs dark:border-slate-50/15">
       <div className="mt-2">
         <CopyableId
-          value={template.discountTemplateId}
+          value={template.discountId}
           label="Template"
           explorerUrl={explorerUrl}
         />
@@ -126,7 +126,7 @@ const SpotlightTemplateSelector = ({
   onSelectTemplate,
   explorerUrl
 }: {
-  templates: DiscountTemplateSummary[]
+  templates: DiscountSummary[]
   selectedTemplateId?: string
   onSelectTemplate: (templateId: string) => void
   explorerUrl?: string
@@ -134,8 +134,8 @@ const SpotlightTemplateSelector = ({
   if (templates.length === 0)
     return (
       <div className="rounded-xl border border-dashed border-slate-200/70 bg-white/50 p-4 text-sm text-slate-500 dark:border-slate-50/20 dark:bg-slate-950/40 dark:text-slate-200/70">
-        No discount templates are available yet. Create one to highlight it on
-        this listing.
+        No discounts are available yet. Create one to highlight it on this
+        listing.
       </div>
     )
 
@@ -143,9 +143,9 @@ const SpotlightTemplateSelector = ({
     <div className="grid gap-3 sm:grid-cols-2">
       {templates.map((template) => (
         <SpotlightTemplateCard
-          key={template.discountTemplateId}
+          key={template.discountId}
           template={template}
-          selected={template.discountTemplateId === selectedTemplateId}
+          selected={template.discountId === selectedTemplateId}
           onSelect={onSelectTemplate}
           explorerUrl={explorerUrl}
         />
@@ -158,23 +158,23 @@ const hasSpotlightTemplateId = ({
   templates,
   templateId
 }: {
-  templates: DiscountTemplateSummary[]
+  templates: DiscountSummary[]
   templateId?: string
 }): boolean =>
   Boolean(
     templateId &&
-    templates.some((template) => template.discountTemplateId === templateId)
+    templates.some((template) => template.discountId === templateId)
   )
 
 const getSelectedSpotlightTemplate = ({
   templates,
   templateId
 }: {
-  templates: DiscountTemplateSummary[]
+  templates: DiscountSummary[]
   templateId?: string
 }) =>
   templateId
-    ? templates.find((template) => template.discountTemplateId === templateId)
+    ? templates.find((template) => template.discountId === templateId)
     : undefined
 
 const ListingSummarySection = ({
@@ -331,13 +331,13 @@ const AddItemModal = ({
   open,
   onClose,
   shopId,
-  discountTemplates,
+  discounts,
   onListingCreated
 }: {
   open: boolean
   onClose: () => void
   shopId?: string
-  discountTemplates?: DiscountTemplateSummary[]
+  discounts?: DiscountSummary[]
   onListingCreated?: (listing?: ItemListingSummary) => void
 }) => {
   const {
@@ -360,12 +360,12 @@ const AddItemModal = ({
   } = useAddItemModalState({ open, shopId, onListingCreated })
   const availableSpotlightTemplates = useMemo(
     () =>
-      (discountTemplates ?? [])
+      (discounts ?? [])
         .slice()
         .sort((templateA, templateB) =>
           templateA.ruleDescription.localeCompare(templateB.ruleDescription)
         ),
-    [discountTemplates]
+    [discounts]
   )
   const selectedSpotlightTemplateId =
     formState.spotlightDiscountId.trim() || undefined
@@ -567,7 +567,7 @@ const AddItemModal = ({
                 >
                   <div>
                     <span className={modalFieldTitleClassName}>
-                      Spotlight discount template (optional)
+                      Spotlight discount (optional)
                     </span>
                     <span className={modalFieldDescriptionClassName}>
                       Click a template to highlight it. Leave all templates

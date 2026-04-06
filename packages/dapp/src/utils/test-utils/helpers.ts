@@ -144,15 +144,15 @@ export type ItemListingFixture = {
   name: string
 }
 
-export type DiscountTemplateFixture = {
-  discountTemplateId: string
+export type DiscountFixture = {
+  discountId: string
   ruleKind: string
   value: string
 }
 
 export type ShopSeedFixture = {
   itemListing: ItemListingFixture
-  discountTemplate: DiscountTemplateFixture
+  discount: DiscountFixture
 }
 
 export type CurrencyAddScriptOutput = {
@@ -456,7 +456,7 @@ export const createItemListingFixture = async ({
   }
 }
 
-export const createDiscountTemplateFixture = async ({
+export const createDiscountFixture = async ({
   scriptRunner,
   publisher,
   shopId,
@@ -470,16 +470,16 @@ export const createDiscountTemplateFixture = async ({
   ruleKind?: string
   value?: string
   listingId?: string
-}): Promise<DiscountTemplateFixture> => {
-  type DiscountTemplateOutput = {
-    discountTemplate?: {
-      discountTemplateId?: string
+}): Promise<DiscountFixture> => {
+  type DiscountOutput = {
+    discount?: {
+      discountId?: string
     }
   }
 
-  const discountOutput = await runOwnerScriptJson<DiscountTemplateOutput>(
+  const discountOutput = await runOwnerScriptJson<DiscountOutput>(
     scriptRunner,
-    "discount-template-create",
+    "discount-create",
     {
       account: publisher,
       args: {
@@ -491,40 +491,40 @@ export const createDiscountTemplateFixture = async ({
     }
   )
 
-  const discountTemplateId = requireDefined(
-    discountOutput.discountTemplate?.discountTemplateId,
-    "discount-template-create did not return a discountTemplateId."
+  const discountId = requireDefined(
+    discountOutput.discount?.discountId,
+    "discount-create did not return a discountId."
   )
 
   return {
-    discountTemplateId,
+    discountId,
     ruleKind,
     value
   }
 }
 
-export const attachDiscountTemplateToListing = async ({
+export const attachDiscountToListing = async ({
   scriptRunner,
   publisher,
   shopId,
   itemListingId,
-  discountTemplateId
+  discountId
 }: {
   scriptRunner: SuiScriptRunner
   publisher: TestAccount
   shopId: string
   itemListingId: string
-  discountTemplateId: string
+  discountId: string
 }): Promise<void> => {
   await runOwnerScriptJson<Record<string, unknown>>(
     scriptRunner,
-    "item-listing-attach-discount-template",
+    "item-listing-attach-discount",
     {
       account: publisher,
       args: {
         shopId,
         itemListingId,
-        discountTemplateId
+        discountId
       }
     }
   )
@@ -561,7 +561,7 @@ export const seedShopWithListingAndDiscount = async ({
     stock
   })
 
-  const discountTemplate = await createDiscountTemplateFixture({
+  const discount = await createDiscountFixture({
     scriptRunner,
     publisher,
     shopId,
@@ -569,17 +569,17 @@ export const seedShopWithListingAndDiscount = async ({
     value
   })
 
-  await attachDiscountTemplateToListing({
+  await attachDiscountToListing({
     scriptRunner,
     publisher,
     shopId,
     itemListingId: itemListing.itemListingId,
-    discountTemplateId: discountTemplate.discountTemplateId
+    discountId: discount.discountId
   })
 
   return {
     itemListing,
-    discountTemplate
+    discount
   }
 }
 

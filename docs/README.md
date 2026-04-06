@@ -48,12 +48,12 @@ Use this page as the navigation hub for the docs. Each chapter ends with Prev/Ne
 
 | Concept | Why it matters | Code anchor | Docs |
 | --- | --- | --- | --- |
-| Shared objects | Concurrency boundary; avoid global storage contention | `packages/dapp/contracts/oracle-market/sources/shop.move` (Shop, DiscountTemplate) | `docs/07-shop-capabilities.md`, `docs/08-listings-receipts.md` |
+| Shared objects | Concurrency boundary; avoid global storage contention | `packages/dapp/contracts/oracle-market/sources/shop.move` (Shop, Discount) | `docs/07-shop-capabilities.md`, `docs/08-listings-receipts.md` |
 | Address-owned objects | Capabilities and receipts live in wallets | `packages/dapp/contracts/oracle-market/sources/shop.move` (ShopOwnerCap, ShopItem) | `docs/07-shop-capabilities.md`, `docs/08-listings-receipts.md` |
 | Object-owned children | Table entries and claim markers are owned by parent objects | `packages/dapp/contracts/oracle-market/sources/shop.move` (Shop.listings table entries, DiscountClaim) | `docs/08-listings-receipts.md`, `docs/10-discounts-tickets.md` |
 | Ownership types | Fastpath vs consensus trade-offs | `packages/tooling/core/src/object-info.ts` (owner labels) | `docs/16-object-ownership.md` |
 | Capabilities | Explicit admin auth via owned objects | `packages/dapp/contracts/oracle-market/sources/shop.move` (ShopOwnerCap) | `docs/07-shop-capabilities.md` |
-| Dynamic fields / Table | Typed collections in `Shop` plus per-template claim tracking | `packages/dapp/contracts/oracle-market/sources/shop.move` (`Table<ID, ItemListing>`, `Table<TypeName, AcceptedCurrency>`, `DiscountClaim`) | `docs/08-listings-receipts.md`, `docs/10-discounts-tickets.md` |
+| Dynamic fields / Table | Typed collections in `Shop` plus per-discount claim tracking | `packages/dapp/contracts/oracle-market/sources/shop.move` (`Table<ID, ItemListing>`, `Table<TypeName, AcceptedCurrency>`, `DiscountClaim`) | `docs/08-listings-receipts.md`, `docs/10-discounts-tickets.md` |
 | Type tags / TypeName | Runtime type names for listings and coins; compile-time safety still comes from generics | `packages/dapp/contracts/oracle-market/sources/shop.move` (item_type, coin_type) | `docs/08-listings-receipts.md`, `docs/09-currencies-oracles.md` |
 | Phantom types | Typed receipts without storing the value | `packages/dapp/contracts/oracle-market/sources/shop.move` (`ShopItem<phantom TItem>`) | `docs/08-listings-receipts.md` |
 | `Coin<T>` resources | Payment as objects, not allowances | `packages/dapp/contracts/oracle-market/sources/shop.move` (process_purchase, split_payment, finalize_purchase_transfers) | `docs/09-currencies-oracles.md` |

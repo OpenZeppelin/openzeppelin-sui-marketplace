@@ -314,66 +314,59 @@ describe("buyer scripts integration", () => {
     )
   })
 
-  it("buys with a discount template and accepted currency", async () => {
-    await testEnv.withTestContext(
-      "buyer-buy-template-discount",
-      async (context) => {
-        const buyer = await createFundedTestAccount(context, {
-          label: "buyer-ticket"
-        })
-        const {
-          publisher,
-          scriptRunner,
-          shopId,
-          itemExamplesPackageId,
-          acceptedCurrency
-        } = await createShopWithItemExamplesAndAcceptedCurrencyFixture(
-          context,
-          {
-            shopName: "Buyer Buy Template Discount Integration",
-            publisherLabel: "buyer-checkout-owner",
-            buyerAddress: buyer.address
-          }
-        )
+  it("buys with a discount and accepted currency", async () => {
+    await testEnv.withTestContext("buyer-buy-discount", async (context) => {
+      const buyer = await createFundedTestAccount(context, {
+        label: "buyer-ticket"
+      })
+      const {
+        publisher,
+        scriptRunner,
+        shopId,
+        itemExamplesPackageId,
+        acceptedCurrency
+      } = await createShopWithItemExamplesAndAcceptedCurrencyFixture(context, {
+        shopName: "Buyer Buy Discount Integration",
+        publisherLabel: "buyer-checkout-owner",
+        buyerAddress: buyer.address
+      })
 
-        const itemType = resolveItemType(itemExamplesPackageId, "Car")
-        const { itemListing, discountTemplate } =
-          await seedShopWithListingAndDiscount({
-            scriptRunner,
-            publisher,
+      const itemType = resolveItemType(itemExamplesPackageId, "Car")
+      const { itemListing, discount } = await seedShopWithListingAndDiscount({
+        scriptRunner,
+        publisher,
+        shopId,
+        itemType,
+        listingName: "Buyer Discount Car",
+        price: "100",
+        stock: "3",
+        ruleKind: "percent",
+        value: "15"
+      })
+
+      const buyPayload = await runBuyerScriptJson<BuyOutput>(
+        scriptRunner,
+        "buy",
+        {
+          account: buyer,
+          args: {
             shopId,
-            itemType,
-            listingName: "Buyer Template Discount Car",
-            price: "100",
-            stock: "3",
-            ruleKind: "percent",
-            value: "15"
-          })
-
-        const buyPayload = await runBuyerScriptJson<BuyOutput>(
-          scriptRunner,
-          "buy",
-          {
-            account: buyer,
-            args: {
-              shopId,
-              itemListingId: itemListing.itemListingId,
-              coinType: acceptedCurrency.coinType,
-              discountTemplateId: discountTemplate.discountTemplateId
-            }
+            itemListingId: itemListing.itemListingId,
+            coinType: acceptedCurrency.coinType,
+            discountId: discount.discountId
           }
-        )
+        }
+      )
 
-        expectSuccessfulBuyPayload({
-          buyPayload,
-          expectedMintTo: buyer.address,
-          expectedRefundTo: buyer.address
-        })
-      }
-    )
+      expectSuccessfulBuyPayload({
+        buyPayload,
+        expectedMintTo: buyer.address,
+        expectedRefundTo: buyer.address
+      })
+    })
   })
 
-  it("claims and buys with discount template using accepted currency", async () => {
+  it("claims and buys with discount using accepted currency", async () => {
     await testEnv.withTestContext(
       "buyer-buy-claim-discount",
       async (context) => {
@@ -396,18 +389,17 @@ describe("buyer scripts integration", () => {
         )
 
         const itemType = resolveItemType(itemExamplesPackageId, "Car")
-        const { itemListing, discountTemplate } =
-          await seedShopWithListingAndDiscount({
-            scriptRunner,
-            publisher,
-            shopId,
-            itemType,
-            listingName: "Buyer Claim Discount Car",
-            price: "100",
-            stock: "3",
-            ruleKind: "percent",
-            value: "20"
-          })
+        const { itemListing, discount } = await seedShopWithListingAndDiscount({
+          scriptRunner,
+          publisher,
+          shopId,
+          itemType,
+          listingName: "Buyer Claim Discount Car",
+          price: "100",
+          stock: "3",
+          ruleKind: "percent",
+          value: "20"
+        })
 
         const buyPayload = await runBuyerScriptJson<BuyOutput>(
           scriptRunner,
@@ -418,7 +410,7 @@ describe("buyer scripts integration", () => {
               shopId,
               itemListingId: itemListing.itemListingId,
               coinType: acceptedCurrency.coinType,
-              discountTemplateId: discountTemplate.discountTemplateId
+              discountId: discount.discountId
             }
           }
         )

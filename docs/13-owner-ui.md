@@ -37,10 +37,10 @@ pnpm ui dev
 5. **Remove currency** -> `shop::remove_accepted_currency`
    - UI: `packages/ui/src/app/components/RemoveCurrencyModal.tsx`
    - Hook: `packages/ui/src/app/hooks/useRemoveCurrencyModalState.ts`
-6. **Create discount template** -> `shop::create_discount_template`
+6. **Create discount** -> `shop::create_discount`
    - UI: `packages/ui/src/app/components/AddDiscountModal.tsx`
    - Hook: `packages/ui/src/app/hooks/useAddDiscountModalState.ts`
-7. **Remove/disable discount template** -> `shop::remove_discount_template` / `shop::toggle_discount_template`
+7. **Remove/disable discount** -> `shop::remove_discount` / `shop::toggle_discount`
    - UI: `packages/ui/src/app/components/RemoveDiscountModal.tsx`
    - Hook: `packages/ui/src/app/hooks/useRemoveDiscountModalState.ts`
 

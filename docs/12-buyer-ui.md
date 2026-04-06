@@ -13,7 +13,7 @@ This chapter shows the PTB buy flow and the UI path that mirrors it.
 1. Localnet running.
 2. `sui_oracle_market` published.
 3. A Shop with listings and at least one accepted currency.
-4. Optionally, a discount template to test the discount path.
+4. Optionally, a discount to test the discount path.
 
 ## 3. Run it (CLI buy)
 ```bash
@@ -26,7 +26,7 @@ pnpm script buyer:buy \
   --shop-id <shopId> \
   --item-listing-id <listingId> \
   --coin-type <coinType> \
-  --discount-template-id <templateId> \
+  --discount-id <discountId> \
   --claim-discount
 ```
 
@@ -58,7 +58,7 @@ pnpm ui dev
 - **Price update policy**: for localnet/testnet/mainnet, the UI requires a Pyth update to be added
   to the PTB; for other networks it can be auto/skip. This keeps pricing deterministic and fresh.
   Code: `packages/ui/src/app/hooks/useBuyFlowModalState.ts`
-- **Shared vs owned reads in UI**: storefront data comes from shared objects (`Shop`, templates)
+- **Shared vs owned reads in UI**: storefront data comes from shared objects (`Shop`, discounts)
   plus `Shop` table entries (listings, currencies). Wallet data comes from owned objects (tickets, receipts).
   Code: `packages/ui/src/app/hooks/useShopDashboardData.tsx`
 
@@ -141,7 +141,7 @@ const paymentCoinObjectId = await resolvePaymentCoinObjectId({
 
 const discountContext = await resolveDiscountContext({
   claimDiscount: inputs.claimDiscount,
-  discountTemplateId: inputs.discountTemplateId,
+  discountId: inputs.discountId,
   suiClient: tooling.suiClient
 })
 ```

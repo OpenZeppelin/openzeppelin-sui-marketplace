@@ -31,7 +31,7 @@ pnpm script buyer:buy --help
 ```
 
 ## 4. EVM -> Sui translation
-1. **Single-threaded storage -> object-level parallelism**: shared objects lock independently. Listings, accepted currencies, and discount templates are table entries under the shared `Shop`. See `Shop`, `ItemListing`, and `DiscountTemplate` in `packages/dapp/contracts/oracle-market/sources/shop.move`.
+1. **Single-threaded storage -> object-level parallelism**: shared objects lock independently. Listings, accepted currencies, and discounts are table entries under the shared `Shop`. See `Shop`, `ItemListing`, and `Discount` in `packages/dapp/contracts/oracle-market/sources/shop.move`.
 2. **Proxy upgrades -> new package IDs**: upgrades publish a new package; callers opt into new IDs. See `packages/dapp/contracts/oracle-market/Move.toml` and `packages/dapp/src/scripts/contracts/publish.ts` for artifacts.
 3. **Blocks -> object DAG**: each object records the last transaction digest that mutated it, giving you causal history per object instead of global block history.
 
@@ -134,7 +134,7 @@ public fun buy_item<TItem: store, TCoin>(
 
 ## 9. Diagram: shared vs owned objects in tests
 ```
-Shared: Shop, DiscountTemplate
+Shared: Shop, Discount
 Shop table entries: listings[ID] -> ItemListing, accepted_currencies[TypeName] -> AcceptedCurrency
 Owned: ShopOwnerCap, ShopItem
 ```
