@@ -16,6 +16,7 @@ use sui::event;
 use sui::test_scenario;
 use sui_oracle_market::events;
 use sui_oracle_market::shop;
+use sui_oracle_market::currency;
 
 // TODO#q: split unit tests by domains
 
@@ -426,7 +427,7 @@ fun add_accepted_currency_rejects_missing_price_object() {
     abort
 }
 
-#[test, expected_failure(abort_code = ::sui_oracle_market::shop::EPriceInvalidPublishTime)]
+#[test, expected_failure(abort_code = ::sui_oracle_market::currency::EPriceInvalidPublishTime)]
 fun quote_rejects_price_timestamp_older_than_max_age() {
     let mut scn = test_scenario::begin(TEST_OWNER);
     let (shop_id, owner_cap_id) = create_default_shop_and_owner_cap_ids_for_sender(&mut scn);
@@ -816,7 +817,7 @@ fun quote_view_matches_internal_math() {
         &clock_obj,
         TEST_DEFAULT_MAX_PRICE_AGE_SECS,
     );
-    let derived_quote = shop::quote_amount_from_usd_cents(
+    let derived_quote = currency::quote_amount_from_usd_cents(
         price_usd_cents,
         decimals,
         price,
@@ -833,7 +834,7 @@ fun quote_view_matches_internal_math() {
     let _ = test_scenario::end(scn);
 }
 
-#[test, expected_failure(abort_code = ::sui_oracle_market::shop::EPriceOverflow)]
+#[test, expected_failure(abort_code = ::sui_oracle_market::currency::EPriceOverflow)]
 fun quote_amount_rejects_overflow_before_runtime_abort() {
     let price = price::new(
         i64::new(1, false),
@@ -843,7 +844,7 @@ fun quote_amount_rejects_overflow_before_runtime_abort() {
     );
     let max_usd_cents = 18_446_744_073_709_551_615;
 
-    shop::quote_amount_from_usd_cents(
+    currency::quote_amount_from_usd_cents(
         max_usd_cents,
         24, // MAX_DECIMAL_POWER; forces usd_cents * 10^24 to overflow u128.
         price,
@@ -2941,7 +2942,7 @@ fun quote_amount_with_positive_exponent() {
     let price_value = i64::new(1_000, false);
     let expo = i64::new(2, false);
     let price = price::new(price_value, 10, expo, 0);
-    let amount = shop::quote_amount_from_usd_cents(
+    let amount = currency::quote_amount_from_usd_cents(
         100,
         9,
         price,
@@ -2950,10 +2951,10 @@ fun quote_amount_with_positive_exponent() {
     assert!(amount > 0);
 }
 
-#[test, expected_failure(abort_code = ::sui_oracle_market::shop::EUnsupportedCurrencyDecimals)]
+#[test, expected_failure(abort_code = ::sui_oracle_market::currency::EUnsupportedCurrencyDecimals)]
 fun quote_amount_rejects_large_exponent() {
     let price = sample_price();
-    let _ = shop::quote_amount_from_usd_cents(
+    let _ = currency::quote_amount_from_usd_cents(
         100,
         39,
         price,
@@ -4259,12 +4260,12 @@ fun buy_item_rejects_guardrail_override_above_cap() {
     abort
 }
 
-#[test, expected_failure(abort_code = ::sui_oracle_market::shop::EPriceNonPositive)]
+#[test, expected_failure(abort_code = ::sui_oracle_market::currency::EPriceNonPositive)]
 fun quote_amount_from_usd_cents_rejects_negative_price() {
     let price_value = i64::new(1, true);
     let expo = i64::new(0, false);
     let price = price::new(price_value, 0, expo, 0);
-    let _ = shop::quote_amount_from_usd_cents(
+    let _ = currency::quote_amount_from_usd_cents(
         100,
         9,
         price,
@@ -4378,12 +4379,12 @@ fun buy_item_with_discount_rejects_inactive_discount() {
 
     abort
 }
-#[test, expected_failure(abort_code = ::sui_oracle_market::shop::EConfidenceExceedsPrice)]
+#[test, expected_failure(abort_code = ::sui_oracle_market::currency::EConfidenceExceedsPrice)]
 fun quote_amount_from_usd_cents_rejects_confidence_exceeds_price() {
     let price_value = i64::new(10, false);
     let expo = i64::new(0, false);
     let price = price::new(price_value, 10, expo, 0);
-    let _ = shop::quote_amount_from_usd_cents(
+    let _ = currency::quote_amount_from_usd_cents(
         100,
         9,
         price,
@@ -4392,12 +4393,12 @@ fun quote_amount_from_usd_cents_rejects_confidence_exceeds_price() {
     abort
 }
 
-#[test, expected_failure(abort_code = ::sui_oracle_market::shop::EConfidenceIntervalTooWide)]
+#[test, expected_failure(abort_code = ::sui_oracle_market::currency::EConfidenceIntervalTooWide)]
 fun quote_amount_from_usd_cents_rejects_confidence_interval_too_wide() {
     let price_value = i64::new(100, false);
     let expo = i64::new(0, false);
     let price = price::new(price_value, 50, expo, 0);
-    let _ = shop::quote_amount_from_usd_cents(
+    let _ = currency::quote_amount_from_usd_cents(
         100,
         9,
         price,

@@ -1,7 +1,15 @@
 /// This module defines the `AcceptedCurrency` struct, which represents a currency that a shop accepts for purchases. Each accepted currency is associated with a Pyth price feed to enable real-time pricing in the oracle market.
 module sui_oracle_market::currency;
 
+use openzeppelin_math::decimal_scaling;
+use openzeppelin_math::rounding;
+use openzeppelin_math::u128;
+use pyth::i64;
+use pyth::price::Price;
+use pyth::price_info::{Self, PriceInfoObject};
+use pyth::pyth;
 use std::string::String;
+use sui::clock::Clock;
 use sui::coin_registry::Currency;
 
 // === Errors ===
@@ -14,6 +22,16 @@ const EInvalidFeedIdLength: vector<u8> = "invalid feed id length";
 const EUnsupportedCurrencyDecimals: vector<u8> = "unsupported currency decimals";
 #[error(code = 3)]
 const EInvalidGuardrailCap: vector<u8> = "invalid guardrail cap";
+#[error(code = 4)]
+const EPriceInvalidPublishTime: vector<u8> = "invalid publish timestamp";
+#[error(code = 5)]
+const EPriceOverflow: vector<u8> = "price overflow";
+#[error(code = 6)]
+const EPriceNonPositive: vector<u8> = "price non-positive";
+#[error(code = 7)]
+const EConfidenceIntervalTooWide: vector<u8> = "confidence interval too wide";
+#[error(code = 8)]
+const EConfidenceExceedsPrice: vector<u8> = "confidence exceeds price";
 
 // === Constants ===
 
@@ -22,6 +40,8 @@ const MAX_DECIMAL_POWER: u64 = 24;
 const DEFAULT_MAX_PRICE_AGE_SECS: u64 = 60;
 /// Reject price feeds with sigma/mu above 10%.
 const DEFAULT_MAX_CONFIDENCE_RATIO_BPS: u16 = 1_000;
+const BASIS_POINT_DENOMINATOR: u64 = 10_000;
+const CENTS_PER_DOLLAR: u64 = 100;
 
 // === Structs ===
 
@@ -106,6 +126,115 @@ public(package) fun create<TCoin>(
     }
 }
 
+public(package) fun quote_amount_with_guardrails(
+    accepted_currency: &AcceptedCurrency,
+    price_info_object: &PriceInfoObject,
+    price_usd_cents: u64,
+    max_price_age_secs: Option<u64>,
+    max_confidence_ratio_bps: Option<u16>,
+    clock: &Clock,
+): u64 {
+    // Compute effective max age.
+    let requested_max_age = max_price_age_secs.destroy_or!(
+        accepted_currency.max_price_age_secs_cap(),
+    );
+    let effective_max_age = requested_max_age.min(accepted_currency.max_price_age_secs_cap());
+
+    // Compute effective confidence ratio.
+    let requested_confidence_ratio = max_confidence_ratio_bps.destroy_or!(
+        accepted_currency.max_confidence_ratio_bps_cap(),
+    );
+    let effective_confidence_ratio = requested_confidence_ratio.min(accepted_currency.max_confidence_ratio_bps_cap());
+
+    // Assert publish time.
+    let price_info = price_info::get_price_info_from_price_info_object(
+        price_info_object,
+    );
+    let current_price = price_info.get_price_feed().get_price();
+    let publish_time = current_price.get_timestamp();
+    let now_sec = now_secs(clock);
+    assert!(now_sec >= publish_time, EPriceInvalidPublishTime);
+    assert!(now_sec - publish_time <= effective_max_age, EPriceInvalidPublishTime);
+
+    // Get pyth price and quote amount.
+    let price = pyth::get_price_no_older_than(
+        price_info_object,
+        clock,
+        effective_max_age,
+    );
+    quote_amount_from_usd_cents(
+        price_usd_cents,
+        accepted_currency.decimals(),
+        price,
+        effective_confidence_ratio,
+    )
+}
+
+/// Converts a USD-cent amount into a quoted coin amount.
+public(package) fun quote_amount_from_usd_cents(
+    usd_cents: u64,
+    decimals: u8,
+    price: Price,
+    max_confidence_ratio_bps: u16,
+): u64 {
+    let price_value = price.get_price();
+    let mantissa = positive_price_to_u128(price_value);
+    let confidence = price.get_conf() as u128;
+    let exponent = price.get_expo();
+    let exponent_is_negative = exponent.get_is_negative();
+    let exponent_magnitude = if (exponent_is_negative) {
+        exponent.get_magnitude_if_negative()
+    } else {
+        exponent.get_magnitude_if_positive()
+    };
+    let conservative_mantissa = conservative_price_mantissa(
+        mantissa,
+        confidence,
+        max_confidence_ratio_bps,
+    );
+
+    let coin_decimals_pow10 = decimals_pow10_u128(decimals);
+    let exponent_pow10 = pow10_u128(exponent_magnitude);
+
+    let mut numerator_multiplier = coin_decimals_pow10;
+    if (exponent_is_negative) {
+        // TODO#q: use normal multiplication (without division by 1)
+        numerator_multiplier =
+            u128::mul_div(
+                numerator_multiplier,
+                exponent_pow10,
+                1,
+                rounding::down(),
+            ).destroy_or!(abort EPriceOverflow);
+    };
+
+    let mut denominator_multiplier = u128::mul_div(
+        conservative_mantissa,
+        CENTS_PER_DOLLAR as u128,
+        1,
+        rounding::down(),
+    ).destroy_or!(abort EPriceOverflow);
+    if (!exponent_is_negative) {
+        // TODO#q: use normal multiplication (without division by 1)
+        denominator_multiplier =
+            u128::mul_div(
+                denominator_multiplier,
+                exponent_pow10,
+                1,
+                rounding::down(),
+            ).destroy_or!(abort EPriceOverflow);
+    };
+
+    let amount = u128::mul_div(
+        usd_cents as u128,
+        numerator_multiplier,
+        denominator_multiplier,
+        rounding::up(),
+    ).destroy_or!(abort EPriceOverflow);
+    let maybe_amount_u64 = amount.try_as_u64();
+    maybe_amount_u64.destroy_or!(abort EPriceOverflow)
+}
+
 // === Private Functions ===
 
 /// Normalize a seller-provided guardrail cap, enforcing module-level ceilings and non-zero.
@@ -115,4 +244,46 @@ macro fun resolve_guardrail_cap<$T>($proposed_cap: Option<$T>, $module_cap: $T):
     let value = proposed_cap.destroy_or!(module_cap);
     assert!(value > 0, EInvalidGuardrailCap);
     value.min(module_cap)
+}
+
+// TODO#q: refactor clock conversion
+fun now_secs(clock: &Clock): u64 {
+    clock.timestamp_ms() / 1000
+}
+
+/// Apply mu-sigma per Pyth best practices to avoid undercharging when prices are uncertain.
+fun conservative_price_mantissa(
+    mantissa: u128,
+    confidence: u128,
+    max_confidence_ratio_bps: u16,
+): u128 {
+    assert!(mantissa > confidence, EConfidenceExceedsPrice);
+    let scaled_confidence = confidence * (BASIS_POINT_DENOMINATOR as u128);
+    let max_allowed = mantissa * (max_confidence_ratio_bps as u128);
+    assert!(scaled_confidence <= max_allowed, EConfidenceIntervalTooWide);
+    mantissa - confidence
+}
+
+// TODO#q: ref pow10 functions
+
+fun decimals_pow10_u128(decimals: u8): u128 {
+    assert!(decimals as u64 <= MAX_DECIMAL_POWER, EUnsupportedCurrencyDecimals);
+
+    decimal_scaling::safe_upcast_balance(
+        1,
+        0,
+        decimals,
+    )
+        .try_as_u128()
+        .destroy_or!(abort EPriceOverflow)
+}
+
+fun pow10_u128(exponent: u64): u128 {
+    assert!(exponent <= MAX_DECIMAL_POWER, EPriceOverflow);
+    std::u128::pow(10, exponent as u8)
+}
+
+fun positive_price_to_u128(value: i64::I64): u128 {
+    assert!(!value.get_is_negative(), EPriceNonPositive);
+    value.get_magnitude_if_positive() as u128
 }

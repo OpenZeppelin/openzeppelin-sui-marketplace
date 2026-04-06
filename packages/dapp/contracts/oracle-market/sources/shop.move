@@ -62,13 +62,7 @@
 
 module sui_oracle_market::shop;
 
-use openzeppelin_math::decimal_scaling;
-use openzeppelin_math::rounding;
-use openzeppelin_math::u128;
-use pyth::i64;
-use pyth::price::Price;
 use pyth::price_info::{Self, PriceInfoObject};
-use pyth::pyth;
 use std::string::String;
 use std::type_name::{Self, TypeName};
 use sui::clock::Clock;
@@ -102,31 +96,13 @@ const EPythObjectMismatch: vector<u8> = "pyth object mismatch";
 #[error(code = 8)]
 const EFeedIdentifierMismatch: vector<u8> = "feed identifier mismatch";
 #[error(code = 9)]
-const EPriceNonPositive: vector<u8> = "price non-positive";
-#[error(code = 10)]
-const EPriceOverflow: vector<u8> = "price overflow";
-#[error(code = 11)]
 const EInsufficientPayment: vector<u8> = "insufficient payment";
-#[error(code = 12)]
-const EConfidenceIntervalTooWide: vector<u8> = "confidence interval too wide";
-#[error(code = 13)]
-const EConfidenceExceedsPrice: vector<u8> = "confidence exceeds price";
-#[error(code = 14)]
+#[error(code = 10)]
 const ESpotlightDiscountListingMismatch: vector<u8> = "spotlight discount listing mismatch";
-#[error(code = 15)]
-const EUnsupportedCurrencyDecimals: vector<u8> = "unsupported currency decimals";
-#[error(code = 16)]
+#[error(code = 11)]
 const EEmptyShopName: vector<u8> = "empty shop name";
-#[error(code = 17)]
+#[error(code = 12)]
 const EShopDisabled: vector<u8> = "shop disabled";
-#[error(code = 18)]
-const EPriceInvalidPublishTime: vector<u8> = "invalid publish timestamp";
-
-// === Constants ===
-
-const CENTS_PER_DOLLAR: u64 = 100;
-const BASIS_POINT_DENOMINATOR: u64 = 10_000;
-const MAX_DECIMAL_POWER: u64 = 24;
 
 // === Init ===
 
@@ -164,13 +140,6 @@ public struct Shop has key, store {
     listings: Table<ID, ItemListing>,
     /// Discounts keyed by discount ID.
     discounts: Table<ID, Discount>,
-}
-
-// TODO#q: drop this struct
-/// Resolved pricing guardrails after capping buyer overrides against seller limits.
-public struct EffectiveGuardrails has copy, drop {
-    max_price_age_secs: u64,
-    max_confidence_ratio_bps: u16,
 }
 
 // === Public Functions ===
@@ -746,8 +715,7 @@ public fun quote_amount_for_price_info_object<TCoin>(
     );
 
     // Entry-only quote helper; clients call via dev-inspect instead of storing quotes on-chain.
-    quote_amount_with_guardrails(
-        accepted_currency,
+    accepted_currency.quote_amount_with_guardrails(
         price_info_object,
         price_usd_cents,
         max_price_age_secs,
@@ -784,74 +752,6 @@ public fun owner_cap_id(owner_cap: &ShopOwnerCap): ID {
 /// Returns `owner_cap_shop_id` from the provided value.
 public fun owner_cap_shop_id(owner_cap: &ShopOwnerCap): ID {
     owner_cap.shop_id
-}
-
-// === Package Functions ===
-
-// TODO#q: move to currency module
-/// Converts a USD-cent amount into a quoted coin amount.
-public(package) fun quote_amount_from_usd_cents(
-    usd_cents: u64,
-    decimals: u8,
-    price: Price,
-    max_confidence_ratio_bps: u16,
-): u64 {
-    let price_value = price.get_price();
-    let mantissa = positive_price_to_u128(price_value);
-    let confidence = price.get_conf() as u128;
-    let exponent = price.get_expo();
-    let exponent_is_negative = exponent.get_is_negative();
-    let exponent_magnitude = if (exponent_is_negative) {
-        exponent.get_magnitude_if_negative()
-    } else {
-        exponent.get_magnitude_if_positive()
-    };
-    let conservative_mantissa = conservative_price_mantissa(
-        mantissa,
-        confidence,
-        max_confidence_ratio_bps,
-    );
-
-    let coin_decimals_pow10 = decimals_pow10_u128(decimals);
-    let exponent_pow10 = pow10_u128(exponent_magnitude);
-
-    let mut numerator_multiplier = coin_decimals_pow10;
-    if (exponent_is_negative) {
-        // TODO#q: use normal multiplication (without division by 1)
-        numerator_multiplier =
-            u128::mul_div(
-                numerator_multiplier,
-                exponent_pow10,
-                1,
-                rounding::down(),
-            ).destroy_or!(abort EPriceOverflow);
-    };
-
-    let mut denominator_multiplier = u128::mul_div(
-        conservative_mantissa,
-        CENTS_PER_DOLLAR as u128,
-        1,
-        rounding::down(),
-    ).destroy_or!(abort EPriceOverflow);
-    if (!exponent_is_negative) {
-        // TODO#q: use normal multiplication (without division by 1)
-        denominator_multiplier =
-            u128::mul_div(
-                denominator_multiplier,
-                exponent_pow10,
-                1,
-                rounding::down(),
-            ).destroy_or!(abort EPriceOverflow);
-    };
-
-    let amount = u128::mul_div(
-        usd_cents as u128,
-        numerator_multiplier,
-        denominator_multiplier,
-        rounding::up(),
-    ).destroy_or!(abort EPriceOverflow);
-    let maybe_amount_u64 = amount.try_as_u64();
-    maybe_amount_u64.destroy_or!(abort EPriceOverflow)
 }
 
 // === Private Functions ===
@@ -895,65 +795,6 @@ fun adjust_active_discount_count(
     });
 }
 
-// TODO#q: move to currency module
-/// Resolve caller overrides against seller caps so pricing guardrails stay tight.
-fun resolve_effective_guardrails(
-    accepted_currency: &AcceptedCurrency,
-    max_price_age_secs: Option<u64>,
-    max_confidence_ratio_bps: Option<u16>,
-): EffectiveGuardrails {
-    let requested_max_age = max_price_age_secs.destroy_or!(
-        accepted_currency.max_price_age_secs_cap(),
-    );
-    let requested_confidence_ratio = max_confidence_ratio_bps.destroy_or!(
-        accepted_currency.max_confidence_ratio_bps_cap(),
-    );
-    let effective_max_age = requested_max_age.min(accepted_currency.max_price_age_secs_cap());
-    let effective_confidence_ratio = requested_confidence_ratio.min(accepted_currency.max_confidence_ratio_bps_cap());
-    EffectiveGuardrails {
-        max_price_age_secs: effective_max_age,
-        max_confidence_ratio_bps: effective_confidence_ratio,
-    }
-}
-
-// TODO#q: move to currency module
-fun quote_amount_with_guardrails(
-    accepted_currency: &AcceptedCurrency,
-    price_info_object: &PriceInfoObject,
-    price_usd_cents: u64,
-    max_price_age_secs: Option<u64>,
-    max_confidence_ratio_bps: Option<u16>,
-    clock: &Clock,
-): u64 {
-    let effective_guardrails = resolve_effective_guardrails(
-        accepted_currency,
-        max_price_age_secs,
-        max_confidence_ratio_bps,
-    );
-    let price_info = price_info::get_price_info_from_price_info_object(
-        price_info_object,
-    );
-    let current_price = price_info.get_price_feed().get_price();
-    let publish_time = current_price.get_timestamp();
-    let now_sec = now_secs(clock);
-    assert!(now_sec >= publish_time, EPriceInvalidPublishTime);
-    assert!(
-        now_sec - publish_time <= effective_guardrails.max_price_age_secs,
-        EPriceInvalidPublishTime,
-    );
-    let price = pyth::get_price_no_older_than(
-        price_info_object,
-        clock,
-        effective_guardrails.max_price_age_secs,
-    );
-    quote_amount_from_usd_cents(
-        price_usd_cents,
-        accepted_currency.decimals(),
-        price,
-        effective_guardrails.max_confidence_ratio_bps,
-    )
-}
-
 fun process_purchase<TItem: store, TCoin>(
     shop: &mut Shop,
     price_info_object: &PriceInfoObject,
@@ -973,8 +814,7 @@ fun process_purchase<TItem: store, TCoin>(
         price_info_object,
     );
 
-    let quote_amount = quote_amount_with_guardrails(
-        accepted_currency,
+    let quote_amount = accepted_currency.quote_amount_with_guardrails(
         price_info_object,
         discounted_price_usd_cents,
         max_price_age_secs,
@@ -1016,41 +856,6 @@ fun process_purchase<TItem: store, TCoin>(
 /// so keeping module guardrails in seconds avoids mixed-unit errors.
 fun now_secs(clock: &Clock): u64 {
     clock.timestamp_ms() / 1000
-}
-
-fun decimals_pow10_u128(decimals: u8): u128 {
-    assert!(decimals as u64 <= MAX_DECIMAL_POWER, EUnsupportedCurrencyDecimals);
-
-    decimal_scaling::safe_upcast_balance(
-        1,
-        0,
-        decimals,
-    )
-        .try_as_u128()
-        .destroy_or!(abort EPriceOverflow)
-}
-
-fun pow10_u128(exponent: u64): u128 {
-    assert!(exponent <= MAX_DECIMAL_POWER, EPriceOverflow);
-    std::u128::pow(10, exponent as u8)
-}
-
-fun positive_price_to_u128(value: i64::I64): u128 {
-    assert!(!value.get_is_negative(), EPriceNonPositive);
-    value.get_magnitude_if_positive() as u128
-}
-
-/// Apply mu-sigma per Pyth best practices to avoid undercharging when prices are uncertain.
-fun conservative_price_mantissa(
-    mantissa: u128,
-    confidence: u128,
-    max_confidence_ratio_bps: u16,
-): u128 {
-    assert!(mantissa > confidence, EConfidenceExceedsPrice);
-    let scaled_confidence = confidence * (BASIS_POINT_DENOMINATOR as u128);
-    let max_allowed = mantissa * (max_confidence_ratio_bps as u128);
-    assert!(scaled_confidence <= max_allowed, EConfidenceIntervalTooWide);
-    mantissa - confidence
 }
 
 fun split_payment<TCoin>(
