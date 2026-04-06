@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest"
 import {
   buildSuiObjectData,
   createSuiClientMock
-} from "../../../tests-integration/helpers/sui.ts"
+} from "../../../test-helpers/helpers/sui.ts"
 import {
   extractInitialSharedVersion,
   getSuiSharedObject

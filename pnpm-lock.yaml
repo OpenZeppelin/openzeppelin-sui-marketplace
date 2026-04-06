@@ -202,24 +202,6 @@ importers:
         specifier: ^17.0.35
         version: 17.0.35
 
-  packages/tooling/tests-integration:
-    devDependencies:
-      '@mysten/sui':
-        specifier: ^1.45.2
-        version: 1.45.2(typescript@5.9.3)
-      '@sui-oracle-market/tooling-core':
-        specifier: workspace:*
-        version: link:../core
-      '@sui-oracle-market/tooling-node':
-        specifier: workspace:*
-        version: link:../node
-      '@types/node':
-        specifier: ^22.19.2
-        version: 22.19.3
-      vitest:
-        specifier: ^3.2.4
-        version: 3.2.4(@types/debug@4.1.12)(@types/node@22.19.3)(jiti@1.21.7)(yaml@2.8.3)
-
   packages/ui:
     dependencies:
       '@mysten/dapp-kit':

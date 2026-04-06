@@ -1,7 +1,7 @@
 import os from "node:os"
 import path from "node:path"
 import { describe, expect, it, vi } from "vitest"
-import { withEnv } from "../../../tests-integration/helpers/env.ts"
+import { withEnv } from "../../../test-helpers/helpers/env.ts"
 
 const suiClientMocks = vi.hoisted(() => ({
   createSuiClient: vi.fn()

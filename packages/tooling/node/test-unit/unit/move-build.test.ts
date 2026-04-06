@@ -4,8 +4,8 @@ import {
   readTextFile,
   withTempDir,
   writeFileTree
-} from "../../../tests-integration/helpers/fs.ts"
-import { createSuiClientMock } from "../../../tests-integration/helpers/sui.ts"
+} from "../../../test-helpers/helpers/fs.ts"
+import { createSuiClientMock } from "../../../test-helpers/helpers/sui.ts"
 
 const runSuiCliMock = vi.hoisted(() => vi.fn())
 const getSuiCliEnvironmentChainIdMock = vi.hoisted(() => vi.fn())

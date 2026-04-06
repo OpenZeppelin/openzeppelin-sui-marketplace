@@ -11,7 +11,7 @@ import {
   buildCreatedObjectChange,
   buildTransactionResponse,
   createSuiClientMock
-} from "../../../tests-integration/helpers/sui.ts"
+} from "../../../test-helpers/helpers/sui.ts"
 
 describe("coin helpers", () => {
   it("normalizes coin types", () => {

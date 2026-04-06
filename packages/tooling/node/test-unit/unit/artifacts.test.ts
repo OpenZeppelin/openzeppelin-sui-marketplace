@@ -3,12 +3,12 @@ import { describe, expect, it } from "vitest"
 import { normalizeSuiObjectId } from "@mysten/sui/utils"
 import type { ObjectArtifact } from "@sui-oracle-market/tooling-core/object"
 import type { PublishArtifact } from "@sui-oracle-market/tooling-core/types"
-import { withCwd } from "../../../tests-integration/helpers/cwd.ts"
+import { withCwd } from "../../../test-helpers/helpers/cwd.ts"
 import {
   readTextFile,
   withTempDir,
   writeFileTree
-} from "../../../tests-integration/helpers/fs.ts"
+} from "../../../test-helpers/helpers/fs.ts"
 import {
   findLatestArtifactThat,
   getLatestArtifact,

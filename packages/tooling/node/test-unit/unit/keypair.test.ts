@@ -2,10 +2,7 @@ import { describe, expect, it } from "vitest"
 import { Ed25519Keypair } from "@mysten/sui/keypairs/ed25519"
 import { SIGNATURE_SCHEME_TO_FLAG } from "@mysten/sui/cryptography"
 import { normalizeSuiAddress } from "@mysten/sui/utils"
-import {
-  withTempDir,
-  writeFileTree
-} from "../../../tests-integration/helpers/fs.ts"
+import { withTempDir, writeFileTree } from "../../../test-helpers/helpers/fs.ts"
 import { buildKeystoreEntry, loadKeypair } from "../../src/keypair.ts"
 
 const buildBase64Secret = (seed: number) => {

@@ -14,9 +14,6 @@
       "path": "./packages/domain/node"
     },
     {
-      "path": "./packages/tooling/tests-integration"
-    },
-    {
       "path": "./packages/dapp"
     },
     {

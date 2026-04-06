@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest"
 import { Ed25519Keypair } from "@mysten/sui/keypairs/ed25519"
 import { newTransaction } from "@sui-oracle-market/tooling-core/transactions"
 import type { SuiResolvedConfig } from "../../src/config.ts"
-import { createSuiClientMock } from "../../../tests-integration/helpers/sui.ts"
+import { createSuiClientMock } from "../../../test-helpers/helpers/sui.ts"
 import {
   findCreatedArtifactIdBySuffix,
   requireCreatedArtifactIdBySuffix,

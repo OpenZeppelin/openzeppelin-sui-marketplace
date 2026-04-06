@@ -1,12 +1,12 @@
 import path from "node:path"
 import { describe, expect, it } from "vitest"
-import { withCwd } from "../../../tests-integration/helpers/cwd.ts"
-import { withEnv } from "../../../tests-integration/helpers/env.ts"
+import { withCwd } from "../../../test-helpers/helpers/cwd.ts"
+import { withEnv } from "../../../test-helpers/helpers/env.ts"
 import {
   resolveRealPath,
   withTempDir,
   writeFileTree
-} from "../../../tests-integration/helpers/fs.ts"
+} from "../../../test-helpers/helpers/fs.ts"
 import {
   getAccountConfig,
   getNetworkConfig,

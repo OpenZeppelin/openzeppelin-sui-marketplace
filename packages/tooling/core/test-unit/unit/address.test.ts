@@ -6,7 +6,7 @@ import {
   getCoinBalances,
   parseAddressList
 } from "../../src/address.ts"
-import { createSuiClientMock } from "../../../tests-integration/helpers/sui.ts"
+import { createSuiClientMock } from "../../../test-helpers/helpers/sui.ts"
 
 describe("address helpers", () => {
   it("parses and normalizes address lists", () => {
