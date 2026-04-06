@@ -15,7 +15,7 @@ export const buildCreateShopTransaction = ({
   if (!normalizedShopName) throw new Error("Shop name cannot be empty.")
 
   const [, ownerCapability] = transaction.moveCall({
-    target: `${packageId}::shop::create_shop`,
+    target: `${packageId}::shop::create_shop_and_share`,
     arguments: [transaction.pure.string(normalizedShopName)]
   })
 

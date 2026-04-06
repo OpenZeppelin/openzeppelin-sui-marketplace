@@ -38,9 +38,9 @@ public struct ItemListing has drop, store {
     spotlight_discount_id: Option<ID>,
 }
 
-/// Shop item type for receipts. `TItem` is enforced at mint time so downstream
+/// Shop item type for receipts. `T` is enforced at mint time so downstream
 /// Move code can depend on the type system instead of opaque metadata alone.
-public struct ShopItem<phantom TItem> has key, store {
+public struct ShopItem<phantom T> has key, store {
     /// Receipt object ID.
     id: UID,
     /// Shop that minted this item.
@@ -119,13 +119,13 @@ public(package) fun create<T: store>(
 }
 
 /// Mints a `ShopItem` for a given `ItemListing`, enforcing the item type and associating it with the minting shop.
-public(package) fun mint_shop_item<TItem: store>(
+public(package) fun mint_shop_item<T: store>(
     item_listing: &ItemListing,
     shop_id: ID,
     now_sec: u64,
     ctx: &mut TxContext,
-): ShopItem<TItem> {
-    assert!(item_listing.item_type == type_name::with_defining_ids<TItem>(), EItemTypeMismatch);
+): ShopItem<T> {
+    assert!(item_listing.item_type == type_name::with_defining_ids<T>(), EItemTypeMismatch);
 
     ShopItem {
         id: object::new(ctx),

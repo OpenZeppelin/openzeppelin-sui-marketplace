@@ -95,10 +95,10 @@ public fun max_confidence_ratio_bps_cap(currency: &AcceptedCurrency): u16 {
 
 // === Package Functions ===
 
-public(package) fun create<TCoin>(
+public(package) fun create<C>(
     feed_id: vector<u8>,
     pyth_object_id: ID,
-    currency: &Currency<TCoin>,
+    currency: &Currency<C>,
     max_price_age_secs_cap: Option<u64>,
     max_confidence_ratio_bps_cap: Option<u16>,
 ): AcceptedCurrency {
@@ -200,11 +200,13 @@ public(package) fun quote_amount_from_usd_cents(
 
     let mut numerator_multiplier = coin_decimals_pow10;
     if (exponent_is_negative) {
-        numerator_multiplier =
-            // TODO#q: try checked_mul and remove wormhole dep.
-            oz_u128::mul_div(numerator_multiplier, exponent_pow10, 1, rounding::down()).destroy_or!(
-                abort EPriceOverflow,
-            );
+        numerator_multiplier = // TODO#q: try checked_mul and remove wormhole dep.
+            oz_u128::mul_div(
+                numerator_multiplier,
+                exponent_pow10,
+                1,
+                rounding::down(),
+            ).destroy_or!(abort EPriceOverflow);
     };
 
     let mut denominator_multiplier = oz_u128::mul_div(

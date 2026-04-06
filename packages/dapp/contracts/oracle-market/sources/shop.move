@@ -19,10 +19,10 @@
 ///   typed dynamic collections keep config under `Shop` without exposing
 ///   listings/currencies/discounts as standalone shared objects.
 /// - Type tags and TypeName: item and coin types are recorded as TypeName for runtime checks,
-///   events, and UI metadata; compile-time correctness still comes from generics (ShopItem<TItem>,
+///   events, and UI metadata; compile-time correctness still comes from generics (ShopItem<T>,
 ///   Coin<T>) and explicit comparisons when needed. Docs: docs/08-listings-receipts.md,
 ///   docs/09-currencies-oracles.md
-/// - Phantom types: ShopItem<phantom TItem> records the item type in the type system without storing
+/// - Phantom types: ShopItem<phantom T> records the item type in the type system without storing
 ///   the value. Docs: docs/08-listings-receipts.md
 /// - Abilities (key, store, copy, drop): on Sui, `key` means "this is an object" and the first field
 ///   must be `id: UID` (the object ID). `store` allows values to be stored in objects, while `copy`
@@ -144,19 +144,10 @@ public struct Shop has key, store {
 
 // === Public Functions ===
 
-// TODO#q: remove sui mindset from docs.
-// TODO#q: have two apis create_shop and create_shop_and_share
-/// Create a new shop and its owner capability.
+/// Create and return a new shop and its owner capability.
 ///
-/// Any address can spin up a shop and receive the corresponding owner capability.
-/// Sui mindset:
-/// - Capability > `msg.sender`: ownership lives in a first-class `ShopOwnerCap`. Admin functions
-///   require the cap, so authority follows the object holder rather than whichever address signs
-///   the PTB. Solidity relies on `msg.sender` and modifiers; here, capabilities are explicit inputs.
-/// - Shared object composition: the shop is shared, with listings/currencies stored in typed
-///   table storage and discounts stored directly in a typed `Table`.
-/// - State stays sharded so PTBs only touch the listing slot/discount object they mutate.
-public fun create_shop(name: String, ctx: &mut TxContext): (ID, ShopOwnerCap) {
+/// Any address can spin up a shop and receive the corresponding shop and owner capability.
+public fun create_shop(name: String, ctx: &mut TxContext): (Shop, ShopOwnerCap) {
     let shop = new(name, ctx.sender(), ctx);
     let shop_id = shop.id();
 
@@ -167,6 +158,16 @@ public fun create_shop(name: String, ctx: &mut TxContext): (ID, ShopOwnerCap) {
     let owner_cap_id = owner_cap.id.to_inner();
 
     events::emit_shop_created(shop_id, owner_cap_id);
+
+    (shop, owner_cap)
+}
+
+/// Create and share a new shop and return its owner capability.
+///
+/// Any address can spin up a shop and receive the corresponding shop and owner capability.
+public fun create_shop_and_share(name: String, ctx: &mut TxContext): (ID, ShopOwnerCap) {
+    let (shop, owner_cap) = create_shop(name, ctx);
+    let shop_id = shop.id();
 
     transfer::public_share_object(shop);
     (shop_id, owner_cap)
@@ -186,10 +187,6 @@ public fun disable_shop(shop: &mut Shop, owner_cap: &ShopOwnerCap) {
 /// Rotate the payout recipient for a shop.
 ///
 /// Payouts should follow the current operator, not the address that originally created the shop.
-/// Sui mindset:
-/// - Access control is explicit: the operator must show the `ShopOwnerCap` rather than relying on
-///   `ctx.sender()`. Rotating the cap keeps payouts aligned to the current operator.
-/// - Buyers never handle capabilities--checkout remains permissionless against the shared `Shop`.
 public fun update_shop_owner(shop: &mut Shop, owner_cap: &ShopOwnerCap, new_owner: address) {
     assert!(owner_cap.shop_id == shop.id(), EInvalidOwnerCap);
 
@@ -204,15 +201,6 @@ public fun update_shop_owner(shop: &mut Shop, owner_cap: &ShopOwnerCap, new_owne
 /// Add an `ItemListing` attached to the `Shop`. The generic `T` encodes what will eventually be
 /// minted when a buyer completes checkout. Prices are provided in USD cents (e.g. $12.50 -> 1_250)
 /// to avoid floating point math.
-///
-/// Sui mindset:
-/// - Capability-first auth replaces Solidity modifiers: the operator must present `ShopOwnerCap`
-///   minted during `create_shop`; `ctx.sender()` alone is never trusted. Losing the cap means losing
-///   control--much like losing a private key--but without implicit global ownership variables.
-/// - Listings are stored in `Shop.listings` (`Table<ID, ItemListing>`), so admin and checkout
-///   flows mutate `Shop` directly by listing ID.
-/// - The type parameter `T` captures what will be minted, keeping item receipt types explicit
-///   (phantom-typed `ShopItem<T>`) rather than relying on ad-hoc metadata blobs common in EVM NFTs.
 public fun add_item_listing<T: store>(
     shop: &mut Shop,
     owner_cap: &ShopOwnerCap,
@@ -318,26 +306,16 @@ public fun remove_item_listing(shop: &mut Shop, owner_cap: &ShopOwnerCap, listin
 
 /// Register a coin type that the shop will price through an oracle feed.
 ///
-/// Sui mindset:
-/// - Payment assets are Move resources (`Coin<T>`, `Currency<T>`) instead of ERC-20 balances, so we
-///   register by type--not by interface address--to keep currencies separated at compile time.
-/// - Metadata (symbol/decimals) is fetched from `coin_registry`, a shared on-chain registry, rather
-///   than trusting whatever a token contract returns. This avoids the "fake decimals" risk common in
-///   ERC-20 land.
-/// - Operators prove authority with `ShopOwnerCap`; buyers never touch this path. The cap pattern is
-///   the Sui-native replacement for `onlyOwner`.
-/// - Accepted currencies are stored in a typed `Table<TypeName, AcceptedCurrency>` under the
-///   shared `Shop`, keyed by coin type.
 /// - Callers supply the on-chain `PriceInfoObject` (fetched via RPC); the module re-validates feed
 ///   bytes and the Pyth object ID to defend against spoofed inputs. This reduces reliance on
 ///   off-chain metadata, but the caller still must provide the correct on-chain object.
 /// - Sellers can optionally tighten oracle guardrails per currency (`max_price_age_secs_cap`,
 ///   `max_confidence_ratio_bps_cap`). Buyers may only tighten
 ///   `max_price_age_secs`/`max_confidence_ratio_bps` further--never loosen.
-public fun add_accepted_currency<TCoin>(
+public fun add_accepted_currency<C>(
     shop: &mut Shop,
     owner_cap: &ShopOwnerCap,
-    currency: &Currency<TCoin>,
+    currency: &Currency<C>,
     price_info_object: &PriceInfoObject,
     feed_id: vector<u8>,
     pyth_object_id: ID,
@@ -347,7 +325,7 @@ public fun add_accepted_currency<TCoin>(
     assert!(owner_cap.shop_id == shop.id(), EInvalidOwnerCap);
 
     // Bind this currency to a specific PriceInfoObject to prevent oracle feed spoofing.
-    let coin_type = type_name::with_defining_ids<TCoin>();
+    let coin_type = type_name::with_defining_ids<C>();
     assert!(!shop.accepted_currencies.contains(coin_type), EAcceptedCurrencyExists);
 
     // Add accepted currency to storage.
@@ -368,10 +346,10 @@ public fun add_accepted_currency<TCoin>(
 
 /// Deregister an accepted coin type.
 /// Fails if accepted currency is not registered.
-public fun remove_accepted_currency<TCoin>(shop: &mut Shop, owner_cap: &ShopOwnerCap) {
+public fun remove_accepted_currency<C>(shop: &mut Shop, owner_cap: &ShopOwnerCap) {
     assert!(owner_cap.shop_id == shop.id(), EInvalidOwnerCap);
 
-    let coin_type = type_name::with_defining_ids<TCoin>();
+    let coin_type = type_name::with_defining_ids<C>();
     assert!(shop.accepted_currencies.contains(coin_type), EAcceptedCurrencyMissing);
     let accepted_currency = shop.accepted_currencies.remove(coin_type);
 
@@ -390,14 +368,7 @@ public fun remove_accepted_currency<TCoin>(shop: &mut Shop, owner_cap: &ShopOwne
 /// typed `DiscountRule` before persisting. For `Fixed` rules the `rule_value` is denominated in USD
 /// cents to match listing prices.
 ///
-/// - Discounts live inside a typed on-chain collection attached to the shared shop instead of rows
-///   in opaque contract storage.
-/// - Converting user-friendly primitives into enums early avoids magic numbers and preserves type
-///   safety. In EVM you might store raw integers and rely on comments; here the `DiscountRule` enum
-///   forces exhaustive matching.
-/// - Time windows and limits are stored on-chain and later checked against the shared `Clock`
-///   (timestamp_ms -> seconds). On Sui, time is an explicit input object; on EVM, `block.timestamp`
-///   is global state available to view/read-only calls but can drift within protocol bounds.
+/// NOTE:
 /// - `max_redemptions`: if set, must be greater than 0. If not set (`None`), there is no cap on
 ///   total redemptions and the counter is not protected from overflow.
 public fun create_discount(
@@ -551,24 +522,15 @@ public fun clear_discount_from_listing(shop: &mut Shop, owner_cap: &ShopOwnerCap
 
 /// Execute a purchase priced in USD cents but settled with any previously registered `AcceptedCurrency`.
 ///
-/// Sui mindset:
-/// - There is no global ERC-20 allowance; the buyer passes an owned `Coin<T>`, the function splits
-///   exactly what is needed, and refunds change in the same PTB.
-/// - The `Shop` stores listings in a table, so checkout mutates the `Shop` to decrement stock for
-///   the selected listing.
-/// - Buyers pass explicit `mint_to` and `refund_extra_to` targets so PTBs can gift receipts or route
-///   change without extra hops--common for custody or marketplace flows.
+/// NOTE:
 /// - Oracles are first-class objects. Callers supply a refreshed `PriceInfoObject`, and on-chain
 ///   logic verifies identity/freshness against the shared `Clock` and feed metadata.
 /// - Guardrails (`max_price_age_secs`, `max_confidence_ratio_bps`) are caller-tunable only to
 ///   tighten them; overrides are capped at seller-set per-currency limits and `none` uses those caps.
-/// - Compared to EVM: no `approve/transferFrom` race windows, no reliance on global stateful
-///   oracles, and refunds happen in-line without reentrancy hooks because coin transfers are moves
-///   of owned resources, not external calls.
-public fun buy_item<TItem: store, TCoin>(
+public fun buy_item<T: store, C>(
     shop: &mut Shop,
     price_info_object: &PriceInfoObject,
-    payment: Coin<TCoin>,
+    payment: Coin<C>,
     listing_id: ID,
     mint_to: address,
     refund_extra_to: address,
@@ -581,7 +543,7 @@ public fun buy_item<TItem: store, TCoin>(
 
     let base_price_usd_cents = shop.listing(listing_id).base_price_usd_cents();
     // Payment is a Coin<T> object; process_purchase splits the payment and returns change.
-    let (owed_coin_opt, change_coin, minted_item) = shop.process_purchase<TItem, TCoin>(
+    let (owed_coin_opt, change_coin, minted_item) = shop.process_purchase<T, C>(
         price_info_object,
         payment,
         listing_id,
@@ -604,20 +566,11 @@ public fun buy_item<TItem: store, TCoin>(
 }
 
 /// Same as `buy_item` but also validates that discount is applicable.
-///
-/// Sui mindset:
-/// - The discount is a shared object anyone can read; this function validates the
-///   discount/listing/shop linkage and increments redemptions to keep limits accurate.
-/// - Refund destination is explicitly provided (`refund_extra_to`) so "gift" flows can return change
-///   to the payer or recipient.
-/// - Oracle guardrails remain caller-tunable; pass `none` to use defaults.
-/// - In EVM you might check a Merkle root or signature each time; here the coupon object plus
-///   discount counters provide the proof and rate-limiting without bespoke off-chain infra.
-public fun buy_item_with_discount<TItem: store, TCoin>(
+public fun buy_item_with_discount<T: store, C>(
     shop: &mut Shop,
     discount_id: ID,
     price_info_object: &PriceInfoObject,
-    payment: Coin<TCoin>,
+    payment: Coin<C>,
     listing_id: ID,
     mint_to: address,
     refund_extra_to: address,
@@ -640,7 +593,7 @@ public fun buy_item_with_discount<TItem: store, TCoin>(
         discount.id(),
     );
 
-    let (owed_coin_opt, change_coin, minted_item) = shop.process_purchase<TItem, TCoin>(
+    let (owed_coin_opt, change_coin, minted_item) = shop.process_purchase<T, C>(
         price_info_object,
         payment,
         listing_id,
@@ -675,9 +628,9 @@ public fun listing_exists(shop: &Shop, listing_id: ID): bool {
     shop.listings.contains(listing_id)
 }
 
-/// Returns the accepted currency config for `TCoin`.
-public fun currency<TCoin>(shop: &Shop): &AcceptedCurrency {
-    let coin_type = type_name::with_defining_ids<TCoin>();
+/// Returns the accepted currency config for `C`.
+public fun currency<C>(shop: &Shop): &AcceptedCurrency {
+    let coin_type = type_name::with_defining_ids<C>();
     assert!(shop.accepted_currencies.contains(coin_type), EAcceptedCurrencyMissing);
     shop.accepted_currencies.borrow(coin_type)
 }
@@ -699,7 +652,7 @@ public fun discount_exists(shop: &Shop, discount_id: ID): bool {
 }
 
 /// Quotes the coin amount for a price info object with guardrails.
-public fun quote_amount_for_price_info_object<TCoin>(
+public fun quote_amount_for_price_info_object<C>(
     shop: &Shop,
     price_info_object: &PriceInfoObject,
     price_usd_cents: u64,
@@ -707,7 +660,7 @@ public fun quote_amount_for_price_info_object<TCoin>(
     max_confidence_ratio_bps: Option<u16>,
     clock: &Clock,
 ): u64 {
-    let accepted_currency = shop.currency<TCoin>();
+    let accepted_currency = shop.currency<C>();
     assert_price_info_identity!(
         accepted_currency.feed_id(),
         accepted_currency.pyth_object_id(),
@@ -795,10 +748,10 @@ fun adjust_active_discount_count(
     });
 }
 
-fun process_purchase<TItem: store, TCoin>(
+fun process_purchase<T: store, C>(
     shop: &mut Shop,
     price_info_object: &PriceInfoObject,
-    mut payment: Coin<TCoin>,
+    mut payment: Coin<C>,
     listing_id: ID,
     discounted_price_usd_cents: u64,
     discount_id: Option<ID>,
@@ -806,8 +759,8 @@ fun process_purchase<TItem: store, TCoin>(
     max_confidence_ratio_bps: Option<u16>,
     clock: &Clock,
     ctx: &mut TxContext,
-): (Option<Coin<TCoin>>, Coin<TCoin>, ShopItem<TItem>) {
-    let accepted_currency = shop.currency<TCoin>();
+): (Option<Coin<C>>, Coin<C>, ShopItem<T>) {
+    let accepted_currency = shop.currency<C>();
     assert_price_info_identity!(
         accepted_currency.feed_id(),
         accepted_currency.pyth_object_id(),
@@ -835,7 +788,7 @@ fun process_purchase<TItem: store, TCoin>(
 
     events::emit_item_listing_stock_updated(shop_id, item_listing.id(), previous_stock);
 
-    let minted_item = item_listing.mint_shop_item<TItem>(shop_id, now_secs(clock), ctx);
+    let minted_item = item_listing.mint_shop_item<T>(shop_id, now_secs(clock), ctx);
     let minted_item_id = object::id(&minted_item);
 
     events::emit_purchase_completed(
@@ -850,11 +803,7 @@ fun process_purchase<TItem: store, TCoin>(
     (owed_coin_opt, payment, minted_item)
 }
 
-fun split_payment<TCoin>(
-    payment: &mut Coin<TCoin>,
-    amount_due: u64,
-    ctx: &mut TxContext,
-): Option<Coin<TCoin>> {
+fun split_payment<C>(payment: &mut Coin<C>, amount_due: u64, ctx: &mut TxContext): Option<Coin<C>> {
     if (amount_due == 0) {
         return option::none()
     };
@@ -865,7 +814,6 @@ fun split_payment<TCoin>(
     option::some(owed)
 }
 
-// TODO#q: move to currency module
 macro fun assert_price_info_identity(
     $expected_feed_id: vector<u8>,
     $expected_pyth_object_id: ID,

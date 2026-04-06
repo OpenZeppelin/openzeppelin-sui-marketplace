@@ -218,7 +218,7 @@ public(package) fun create_shop_and_owner_cap_ids_for_sender(
     scn: &mut test_scenario::Scenario,
     shop_name: vector<u8>,
 ): (ID, ID) {
-    let (shop_id, owner_cap) = shop::create_shop(shop_name.to_string(), scn.ctx());
+    let (shop_id, owner_cap) = shop::create_shop_and_share(shop_name.to_string(), scn.ctx());
     let owner_cap_id = object::id(&owner_cap);
 
     assert_emitted!(events::shop_created(shop_id, owner_cap_id));
