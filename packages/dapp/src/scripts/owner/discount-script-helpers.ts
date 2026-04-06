@@ -18,7 +18,7 @@ type ToolingExecutionResult = Awaited<
 >
 type ExecutedTransaction = NonNullable<ToolingExecutionResult["execution"]>
 
-export const resolveOwnerTemplateMutationContext = async ({
+export const resolveOwnerDiscountMutationContext = async ({
   networkName,
   shopPackageId,
   shopId,

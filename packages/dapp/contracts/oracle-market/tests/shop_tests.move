@@ -1169,7 +1169,7 @@ fun add_item_listing_rejects_foreign_discount() {
 
     shop.add_item_listing<TestItem>(
         &owner_cap,
-        b"Bad Template".to_string(),
+        b"Bad Discount".to_string(),
         15_00,
         5,
         option::some(foreign_discount_id),
@@ -1427,7 +1427,7 @@ fun remove_item_listing_rejects_listing_with_active_bound_discount() {
     let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
     let listing_id = shop.add_item_listing<TestItem>(
         &owner_cap,
-        b"Template Locked Listing".to_string(),
+        b"Discount Locked Listing".to_string(),
         45_00,
         2,
         option::none(),
@@ -1458,7 +1458,7 @@ fun remove_item_listing_allows_listing_with_inactive_bound_discount() {
     let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
     let listing_id = shop.add_item_listing<TestItem>(
         &owner_cap,
-        b"Template Paused Listing".to_string(),
+        b"Discount Paused Listing".to_string(),
         45_00,
         2,
         option::none(),
@@ -2883,7 +2883,7 @@ fun remove_discount_drops_discount_and_clears_spotlight() {
     let (mut shop_obj, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
     let listing_id = shop_obj.add_item_listing<TestItem>(
         &owner_cap,
-        b"Template Listing".to_string(),
+        b"Discount Listing".to_string(),
         100,
         1,
         option::none(),
@@ -4305,7 +4305,7 @@ fun buy_item_with_discount_rejects_inactive_discount() {
 
     let listing_id = shop_obj.add_item_listing<TestItem>(
         &owner_cap_obj,
-        b"Inactive Template Item".to_string(),
+        b"Inactive Discount Item".to_string(),
         100,
         1,
         option::none(),

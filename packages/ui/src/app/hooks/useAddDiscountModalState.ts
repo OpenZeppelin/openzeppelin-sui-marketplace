@@ -12,7 +12,7 @@ import type { SuiTransactionBlockResponse } from "@mysten/sui/client"
 import type { IdentifierString } from "@mysten/wallet-standard"
 import {
   defaultStartTimestampSeconds,
-  deriveTemplateStatus,
+  deriveDiscountStatus,
   extractDiscountIdFromCreatedEvents,
   extractDiscountTableEntryFieldIdFromCreatedObjects,
   getDiscountSummary,
@@ -469,7 +469,7 @@ export const useAddDiscountModalState = ({
             maxRedemptions: discountInputs.maxRedemptions?.toString(),
             redemptions: "0",
             activeFlag: true,
-            status: deriveTemplateStatus({
+            status: deriveDiscountStatus({
               activeFlag: true,
               startsAt: discountInputs.startsAt,
               expiresAt: discountInputs.expiresAt,

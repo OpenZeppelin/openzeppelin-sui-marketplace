@@ -10,7 +10,7 @@ import {
   emitOrLogDiscountMutationResult,
   executeDiscountMutation,
   fetchDiscountSummaryForMutation,
-  resolveOwnerTemplateMutationContext
+  resolveOwnerDiscountMutationContext
 } from "./discount-script-helpers.ts"
 
 runSuiScript(
@@ -113,8 +113,8 @@ const normalizeInputs = async (
   },
   networkName: string
 ) => {
-  const ownerTemplateMutationContext =
-    await resolveOwnerTemplateMutationContext({
+  const ownerDiscountMutationContext =
+    await resolveOwnerDiscountMutationContext({
       networkName,
       shopPackageId: cliArguments.shopPackageId,
       shopId: cliArguments.shopId,
@@ -123,7 +123,7 @@ const normalizeInputs = async (
     })
 
   return {
-    ...ownerTemplateMutationContext,
+    ...ownerDiscountMutationContext,
     active: cliArguments.active
   }
 }

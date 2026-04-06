@@ -214,7 +214,7 @@ const normalizeInputs = async (
     cliArguments.spotlightDiscountId
   )
   const createSpotlightDiscount =
-    normalizeCreateSpotlightTemplateInput(cliArguments)
+    normalizeCreateSpotlightDiscountInput(cliArguments)
   const itemType = cliArguments.itemType.trim()
 
   if (!itemType)
@@ -236,7 +236,7 @@ const normalizeInputs = async (
   }
 }
 
-const normalizeCreateSpotlightTemplateInput = (cliArguments: {
+const normalizeCreateSpotlightDiscountInput = (cliArguments: {
   spotlightDiscountId?: string
   createSpotlightRuleKind?: DiscountRuleKindLabel
   createSpotlightValue?: string
@@ -244,7 +244,7 @@ const normalizeCreateSpotlightTemplateInput = (cliArguments: {
   createSpotlightExpiresAt?: string
   createSpotlightMaxRedemptions?: string
 }) => {
-  const hasAnyCreateTemplateInput = [
+  const hasAnyCreateDiscountInput = [
     cliArguments.createSpotlightRuleKind,
     cliArguments.createSpotlightValue,
     cliArguments.createSpotlightStartsAt,
@@ -252,7 +252,7 @@ const normalizeCreateSpotlightTemplateInput = (cliArguments: {
     cliArguments.createSpotlightMaxRedemptions
   ].some((value) => value !== undefined)
 
-  if (!hasAnyCreateTemplateInput) return undefined
+  if (!hasAnyCreateDiscountInput) return undefined
 
   if (normalizeOptionalId(cliArguments.spotlightDiscountId))
     throw new Error(

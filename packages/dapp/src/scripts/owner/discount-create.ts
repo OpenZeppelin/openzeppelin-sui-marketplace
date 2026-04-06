@@ -1,6 +1,6 @@
 /**
  * Creates a Discount entry in the Shop's discount table.
- * Templates can be global or scoped to a listing; the Clock enforces time windows.
+ * Discounts can be global or scoped to a listing; the Clock enforces time windows.
  * Requires the ShopOwnerCap capability.
  */
 import { normalizeSuiObjectId } from "@mysten/sui/utils"

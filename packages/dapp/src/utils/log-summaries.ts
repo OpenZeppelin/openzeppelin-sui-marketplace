@@ -69,7 +69,7 @@ export const logDiscountSummary = (
   discount: DiscountSummary,
   index?: number
 ) => {
-  if (index !== undefined) logKeyValueGreen("Template")(index)
+  if (index !== undefined) logKeyValueGreen("Discount")(index)
   logKeyValueGreen("Object")(discount.discountId)
   logKeyValueGreen("Status")(discount.status)
   logKeyValueGreen("Active-flag")(discount.activeFlag)
