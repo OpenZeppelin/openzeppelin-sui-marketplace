@@ -307,7 +307,7 @@ fun add_accepted_currency_rejects_duplicate_coin_type() {
     abort
 }
 
-#[test, expected_failure(abort_code = ::sui_oracle_market::shop::EEmptyFeedId)]
+#[test, expected_failure(abort_code = ::sui_oracle_market::currency::EEmptyFeedId)]
 fun add_accepted_currency_rejects_empty_feed_id() {
     let mut ctx = tx_context::new_from_hint(@0x0, 10, 0, 0, 0);
     let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
@@ -331,7 +331,7 @@ fun add_accepted_currency_rejects_empty_feed_id() {
     abort
 }
 
-#[test, expected_failure(abort_code = ::sui_oracle_market::shop::EInvalidFeedIdLength)]
+#[test, expected_failure(abort_code = ::sui_oracle_market::currency::EInvalidFeedIdLength)]
 fun add_accepted_currency_rejects_short_feed_id() {
     let mut ctx = tx_context::new_from_hint(@0x0, 14, 0, 0, 0);
     let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
@@ -355,7 +355,7 @@ fun add_accepted_currency_rejects_short_feed_id() {
     abort
 }
 
-#[test, expected_failure(abort_code = ::sui_oracle_market::shop::EUnsupportedCurrencyDecimals)]
+#[test, expected_failure(abort_code = ::sui_oracle_market::currency::EUnsupportedCurrencyDecimals)]
 fun add_accepted_currency_rejects_excessive_decimals() {
     let mut ctx = tx_context::new_from_hint(@0x0, 11, 0, 0, 0);
     let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
@@ -4253,7 +4253,7 @@ fun buy_item_rejects_item_type_mismatch() {
     abort
 }
 
-#[test, expected_failure(abort_code = ::sui_oracle_market::shop::EInvalidGuardrailCap)]
+#[test, expected_failure(abort_code = ::sui_oracle_market::currency::EInvalidGuardrailCap)]
 fun buy_item_rejects_guardrail_override_above_cap() {
     let mut scn = test_scenario::begin(TEST_OWNER);
     let (shop_id, owner_cap_id) = create_default_shop_and_owner_cap_ids_for_sender(&mut scn);

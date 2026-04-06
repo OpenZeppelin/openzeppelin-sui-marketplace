@@ -2,6 +2,26 @@
 module sui_oracle_market::currency;
 
 use std::string::String;
+use sui::coin_registry::Currency;
+
+// === Errors ===
+
+#[error(code = 0)]
+const EEmptyFeedId: vector<u8> = "empty feed id";
+#[error(code = 1)]
+const EInvalidFeedIdLength: vector<u8> = "invalid feed id length";
+#[error(code = 2)]
+const EUnsupportedCurrencyDecimals: vector<u8> = "unsupported currency decimals";
+#[error(code = 3)]
+const EInvalidGuardrailCap: vector<u8> = "invalid guardrail cap";
+
+// === Constants ===
+
+const PYTH_PRICE_IDENTIFIER_LENGTH: u64 = 32;
+const MAX_DECIMAL_POWER: u64 = 24;
+const DEFAULT_MAX_PRICE_AGE_SECS: u64 = 60;
+/// Reject price feeds with sigma/mu above 10%.
+const DEFAULT_MAX_CONFIDENCE_RATIO_BPS: u16 = 1_000;
 
 // === Structs ===
 
@@ -55,20 +75,44 @@ public fun max_confidence_ratio_bps_cap(currency: &AcceptedCurrency): u16 {
 
 // === Package Functions ===
 
-public(package) fun new(
+public(package) fun create<TCoin>(
     feed_id: vector<u8>,
     pyth_object_id: ID,
-    decimals: u8,
-    symbol: String,
-    max_price_age_secs_cap: u64,
-    max_confidence_ratio_bps_cap: u16,
+    currency: &Currency<TCoin>,
+    max_price_age_secs_cap: Option<u64>,
+    max_confidence_ratio_bps_cap: Option<u16>,
 ): AcceptedCurrency {
+    // Resolve age_cap and confidence_cap
+    let age_cap = resolve_guardrail_cap!(max_price_age_secs_cap, DEFAULT_MAX_PRICE_AGE_SECS);
+    let confidence_cap = resolve_guardrail_cap!(
+        max_confidence_ratio_bps_cap,
+        DEFAULT_MAX_CONFIDENCE_RATIO_BPS,
+    );
+
+    let decimals = currency.decimals();
+    let symbol = currency.symbol();
+
+    assert!(!feed_id.is_empty(), EEmptyFeedId);
+    assert!(feed_id.length() == PYTH_PRICE_IDENTIFIER_LENGTH, EInvalidFeedIdLength);
+    assert!(decimals as u64 <= MAX_DECIMAL_POWER, EUnsupportedCurrencyDecimals);
+
     AcceptedCurrency {
         feed_id,
         pyth_object_id,
         decimals,
         symbol,
-        max_price_age_secs_cap,
-        max_confidence_ratio_bps_cap,
+        max_price_age_secs_cap: age_cap,
+        max_confidence_ratio_bps_cap: confidence_cap,
     }
+}
+
+// === Private Functions ===
+
+/// Normalize a seller-provided guardrail cap, enforcing module-level ceilings and non-zero.
+macro fun resolve_guardrail_cap<$T>($proposed_cap: Option<$T>, $module_cap: $T): $T {
+    let proposed_cap = $proposed_cap;
+    let module_cap = $module_cap;
+    let value = proposed_cap.destroy_or!(module_cap);
+    assert!(value > 0, EInvalidGuardrailCap);
+    value.min(module_cap)
 }

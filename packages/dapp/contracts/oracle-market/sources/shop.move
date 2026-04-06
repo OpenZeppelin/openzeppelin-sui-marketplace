@@ -103,10 +103,6 @@ const EListingHasActiveDiscounts: vector<u8> = "listing has active discounts";
 const EAcceptedCurrencyExists: vector<u8> = "accepted currency exists";
 #[error(code = 9)]
 const EAcceptedCurrencyMissing: vector<u8> = "accepted currency missing";
-#[error(code = 10)]
-const EEmptyFeedId: vector<u8> = "empty feed id";
-#[error(code = 11)]
-const EInvalidFeedIdLength: vector<u8> = "invalid feed id length";
 #[error(code = 12)]
 const EDiscountInactive: vector<u8> = "discount inactive";
 #[error(code = 13)]
@@ -133,8 +129,7 @@ const EConfidenceIntervalTooWide: vector<u8> = "confidence interval too wide";
 const EConfidenceExceedsPrice: vector<u8> = "confidence exceeds price";
 #[error(code = 24)]
 const ESpotlightDiscountListingMismatch: vector<u8> = "spotlight discount listing mismatch";
-#[error(code = 25)]
-const EInvalidGuardrailCap: vector<u8> = "invalid guardrail cap";
+
 #[error(code = 26)]
 const EDiscountFinalized: vector<u8> = "discount finalized";
 #[error(code = 27)]
@@ -156,12 +151,7 @@ const EInvalidMaxRedemptions: vector<u8> = "invalid max redemptions";
 
 const CENTS_PER_DOLLAR: u64 = 100;
 const BASIS_POINT_DENOMINATOR: u64 = 10_000;
-const DEFAULT_MAX_PRICE_AGE_SECS: u64 = 60;
 const MAX_DECIMAL_POWER: u64 = 24;
-/// Reject price feeds with sigma/mu above 10%.
-const DEFAULT_MAX_CONFIDENCE_RATIO_BPS: u16 = 1_000;
-const PYTH_PRICE_IDENTIFIER_LENGTH: u64 = 32;
-
 // === Init ===
 
 /// Claims and returns the module's Publisher object during publish.
@@ -433,34 +423,20 @@ public fun add_accepted_currency<TCoin>(
     let coin_type = type_name::with_defining_ids<TCoin>();
     assert!(!shop.accepted_currencies.contains(coin_type), EAcceptedCurrencyExists);
 
-    // TODO#q: move to currency `currency::create` function with validation.
-    // Assert feed_id is valid.
-    assert!(!feed_id.is_empty(), EEmptyFeedId);
-    assert!(feed_id.length() == PYTH_PRICE_IDENTIFIER_LENGTH, EInvalidFeedIdLength);
-    assert_price_info_identity!(feed_id, pyth_object_id, price_info_object);
-
-    let decimals = currency.decimals();
-    assert!(decimals as u64 <= MAX_DECIMAL_POWER, EUnsupportedCurrencyDecimals);
-
-    let symbol = currency.symbol();
-    let shop_id = shop.id();
-    let age_cap = resolve_guardrail_cap!(max_price_age_secs_cap, DEFAULT_MAX_PRICE_AGE_SECS);
-    let confidence_cap = resolve_guardrail_cap!(
-        max_confidence_ratio_bps_cap,
-        DEFAULT_MAX_CONFIDENCE_RATIO_BPS,
-    );
-
-    let accepted_currency = currency::new(
+    // Add accepted currency to storage.
+    let accepted_currency = currency::create(
         feed_id,
         pyth_object_id,
-        decimals,
-        symbol,
-        age_cap,
-        confidence_cap,
+        currency,
+        max_price_age_secs_cap,
+        max_confidence_ratio_bps_cap,
     );
     shop.accepted_currencies.add(coin_type, accepted_currency);
 
-    events::emit_accepted_coin_added(shop_id, pyth_object_id);
+    // Validate on-chain oracle identity against the provided feed + object pairing.
+    assert_price_info_identity!(feed_id, pyth_object_id, price_info_object);
+
+    events::emit_accepted_coin_added(shop.id(), pyth_object_id);
 }
 
 /// Deregister an accepted coin type.
@@ -1004,16 +980,6 @@ fun adjust_active_discount_count(
             shop.listing_mut(listing_id).decrement_active_bound_discount_count();
         };
     });
-}
-
-// TODO#q: inline and move to currency
-/// Normalize a seller-provided guardrail cap, enforcing module-level ceilings and non-zero.
-macro fun resolve_guardrail_cap<$T>($proposed_cap: Option<$T>, $module_cap: $T): $T {
-    let proposed_cap = $proposed_cap;
-    let module_cap = $module_cap;
-    let value = proposed_cap.destroy_or!(module_cap);
-    assert!(value > 0, EInvalidGuardrailCap);
-    value.min(module_cap)
 }
 
 // TODO#q: move to currency module
