@@ -14,7 +14,7 @@ import { formatTypeNameFromFieldValue } from "@sui-oracle-market/tooling-core/ut
 import { requireValue } from "@sui-oracle-market/tooling-core/utils/utility"
 import { normalizeOptionalListingIdFromValue } from "./item-listing.ts"
 
-export const SHOP_ITEM_TYPE_FRAGMENT = "::shop::ShopItem"
+export const SHOP_ITEM_TYPE_FRAGMENT = "::listing::ShopItem"
 
 type CreatedObjectLike = {
   objectType?: string | null
