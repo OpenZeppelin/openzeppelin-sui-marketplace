@@ -92,66 +92,60 @@ const EInvalidPrice: vector<u8> = "invalid price";
 #[error(code = 3)]
 const EZeroStock: vector<u8> = "zero stock";
 #[error(code = 4)]
-const EDiscountWindow: vector<u8> = "invalid discount window";
-#[error(code = 5)]
 const EDiscountNotFound: vector<u8> = "discount not found";
-#[error(code = 6)]
+#[error(code = 5)]
 const EListingNotFound: vector<u8> = "listing not found";
-#[error(code = 7)]
+#[error(code = 6)]
 const EListingHasActiveDiscounts: vector<u8> = "listing has active discounts";
-#[error(code = 8)]
+#[error(code = 7)]
 const EAcceptedCurrencyExists: vector<u8> = "accepted currency exists";
-#[error(code = 9)]
+#[error(code = 8)]
 const EAcceptedCurrencyMissing: vector<u8> = "accepted currency missing";
-#[error(code = 12)]
+#[error(code = 9)]
 const EDiscountInactive: vector<u8> = "discount inactive";
-#[error(code = 13)]
+#[error(code = 10)]
 const EDiscountTooEarly: vector<u8> = "discount too early";
-#[error(code = 14)]
+#[error(code = 11)]
 const EDiscountExpired: vector<u8> = "discount expired";
-#[error(code = 15)]
+#[error(code = 12)]
 const EDiscountMaxedOut: vector<u8> = "discount maxed out";
-#[error(code = 16)]
+#[error(code = 13)]
 const EOutOfStock: vector<u8> = "out of stock";
-#[error(code = 17)]
+#[error(code = 14)]
 const EPythObjectMismatch: vector<u8> = "pyth object mismatch";
-#[error(code = 18)]
+#[error(code = 15)]
 const EFeedIdentifierMismatch: vector<u8> = "feed identifier mismatch";
-#[error(code = 19)]
+#[error(code = 16)]
 const EPriceNonPositive: vector<u8> = "price non-positive";
-#[error(code = 20)]
+#[error(code = 17)]
 const EPriceOverflow: vector<u8> = "price overflow";
-#[error(code = 21)]
+#[error(code = 18)]
 const EInsufficientPayment: vector<u8> = "insufficient payment";
-#[error(code = 22)]
+#[error(code = 19)]
 const EConfidenceIntervalTooWide: vector<u8> = "confidence interval too wide";
-#[error(code = 23)]
+#[error(code = 20)]
 const EConfidenceExceedsPrice: vector<u8> = "confidence exceeds price";
-#[error(code = 24)]
+#[error(code = 21)]
 const ESpotlightDiscountListingMismatch: vector<u8> = "spotlight discount listing mismatch";
-
-#[error(code = 26)]
-const EDiscountFinalized: vector<u8> = "discount finalized";
-#[error(code = 27)]
+#[error(code = 22)]
 const EItemTypeMismatch: vector<u8> = "item type mismatch";
-#[error(code = 28)]
+#[error(code = 23)]
 const EUnsupportedCurrencyDecimals: vector<u8> = "unsupported currency decimals";
-#[error(code = 29)]
+#[error(code = 24)]
 const EEmptyShopName: vector<u8> = "empty shop name";
-#[error(code = 30)]
+#[error(code = 25)]
 const EShopDisabled: vector<u8> = "shop disabled";
-#[error(code = 31)]
+#[error(code = 26)]
 const EPriceInvalidPublishTime: vector<u8> = "invalid publish timestamp";
-#[error(code = 32)]
+#[error(code = 27)]
 const EDiscountListingMismatch: vector<u8> = "discount listing mismatch";
-#[error(code = 33)]
-const EInvalidMaxRedemptions: vector<u8> = "invalid max redemptions";
 
 // === Constants ===
 
 const CENTS_PER_DOLLAR: u64 = 100;
 const BASIS_POINT_DENOMINATOR: u64 = 10_000;
 const MAX_DECIMAL_POWER: u64 = 24;
+
 // === Init ===
 
 /// Claims and returns the module's Publisher object during publish.
@@ -377,13 +371,14 @@ public fun update_item_listing_stock(
 /// Remove an item listing entirely.
 ///
 /// This delists by removing the listing entry from `Shop.listings`.
+/// Fails if listing doesn't exist.
 /// Listings with any active listing-bound discounts must pause those discounts first.
 public fun remove_item_listing(shop: &mut Shop, owner_cap: &ShopOwnerCap, listing_id: ID) {
     assert!(owner_cap.shop_id == shop.id(), EInvalidOwnerCap);
-    assert!(
-        shop.listing(listing_id).active_bound_discount_count() == 0,
-        EListingHasActiveDiscounts,
-    );
+
+    // Will fail if listing doesn't exist.
+    let listing = shop.listing(listing_id);
+    assert!(listing.active_bound_discount_count() == 0, EListingHasActiveDiscounts);
     let _listing = shop.listings.remove(listing_id);
 
     events::emit_item_listing_removed(shop.id(), listing_id);
@@ -440,6 +435,7 @@ public fun add_accepted_currency<TCoin>(
 }
 
 /// Deregister an accepted coin type.
+/// Fails if accepted currency is not registered.
 public fun remove_accepted_currency<TCoin>(shop: &mut Shop, owner_cap: &ShopOwnerCap) {
     assert!(owner_cap.shop_id == shop.id(), EInvalidOwnerCap);
 
@@ -485,34 +481,23 @@ public fun create_discount(
 ): ID {
     assert!(owner_cap.shop_id == shop.id(), EInvalidOwnerCap);
 
-    // TODO#: move to discount module `create` function
-    expires_at.do!(|expires_at| {
-        assert!(expires_at > starts_at, EDiscountWindow);
-    });
+    // Check that attached listing exists and update discount count if any listing is attached.
     applies_to_listing.do!(|listing_id| {
-        assert!(shop.listings.contains(listing_id), EListingNotFound);
-    });
-    max_redemptions.do!(|max_value| {
-        assert!(max_value > 0, EInvalidMaxRedemptions);
+        shop.listing_mut(listing_id).increment_active_bound_discount_count();
     });
 
-    let discount_rule_kind = discount::parse_kind(rule_kind);
-    let discount_rule = discount::build(discount_rule_kind, rule_value);
-    let discount_id = ctx.fresh_object_address().to_id();
-    let discount = discount::new(
-        discount_id,
+    // Create discount object and add to storage.
+    let discount = discount::create(
         applies_to_listing,
-        discount_rule,
+        rule_kind,
+        rule_value,
         starts_at,
         expires_at,
         max_redemptions,
+        ctx,
     );
+    let discount_id = discount.id();
     shop.discounts.add(discount_id, discount);
-
-    // Increment the active listing discount count if any listing is attached.
-    applies_to_listing.do!(
-        |listing_id| shop.listing_mut(listing_id).increment_active_bound_discount_count(),
-    );
 
     events::emit_discount_created(
         shop.id(),
@@ -539,34 +524,12 @@ public fun update_discount(
     max_redemptions: Option<u64>,
     clock: &Clock,
 ) {
-    assert!(owner_cap.shop_id == shop.id(), EInvalidOwnerCap);
-
-    // TODO#q: Move to discount module
-    assert!(shop.discounts.contains(discount_id), EDiscountNotFound);
-    expires_at.do!(|expires_at| {
-        assert!(expires_at > starts_at, EDiscountWindow);
-    });
-    max_redemptions.do!(|max_value| {
-        assert!(max_value > 0, EInvalidMaxRedemptions);
-    });
-
-    let discount_rule_kind = discount::parse_kind(rule_kind);
-    let discount_rule = discount::build(discount_rule_kind, rule_value);
-    let now = now_secs(clock);
     let shop_id = shop.id();
+    assert!(owner_cap.shop_id == shop_id, EInvalidOwnerCap);
 
+    let now_sec = now_secs(clock);
     let discount = shop.discount_mut(discount_id);
-
-    // Assert discount can be updated
-    assert!(discount.redemptions() == 0, EDiscountFinalized);
-    assert!(!discount.finished(now), EDiscountFinalized);
-
-    // TODO#q: replace many small setters with a single function discount.update(..) with validation
-    // Apply discount updates.
-    discount.set_rule(discount_rule);
-    discount.set_starts_at(starts_at);
-    discount.set_expires_at(expires_at);
-    discount.set_max_redemptions(max_redemptions);
+    discount.update(rule_kind, rule_value, starts_at, expires_at, max_redemptions, now_sec);
 
     events::emit_discount_updated(shop_id, discount.id());
 }
@@ -580,9 +543,6 @@ public fun toggle_discount(
     active: bool,
 ) {
     assert!(owner_cap.shop_id == shop.id(), EInvalidOwnerCap);
-
-    // TODO#q: move to discount module
-    assert!(shop.discounts.contains(discount_id), EDiscountNotFound);
 
     let discount = shop.discount(discount_id);
     if (active) {
@@ -605,21 +565,16 @@ public fun toggle_discount(
 }
 
 /// Removes a discount from shop storage.
+/// Fails if discount doesn't exist.
+/// Fails if discount active and attached listing doesn't exists.
 public fun remove_discount(shop: &mut Shop, owner_cap: &ShopOwnerCap, discount_id: ID) {
     assert!(owner_cap.shop_id == shop.id(), EInvalidOwnerCap);
 
-    if (!shop.discounts.contains(discount_id)) return;
+    // Fails when discount doesn't exist.
+    let discount = shop.discount(discount_id);
+    let applies_to_listing = discount.applies_to_listing();
+    let was_active = discount.active();
 
-    let (applies_to_listing, was_active) = {
-        let discount = shop.discount(discount_id);
-        (discount.applies_to_listing(), discount.active())
-    };
-
-    if (was_active) {
-        applies_to_listing.do!(|listing_id| {
-            assert!(shop.listings.contains(listing_id), EListingNotFound);
-        });
-    };
     shop.adjust_active_discount_count(applies_to_listing, was_active, false);
 
     // Clear listing spotlight if it matches discount.
@@ -737,13 +692,13 @@ public fun buy_item_with_discount<TItem: store, TCoin>(
 ) {
     assert!(!shop.disabled, EShopDisabled);
 
-    let now = now_secs(clock);
+    let now_sec = now_secs(clock);
     let listing_price_usd_cents = shop.listing(listing_id).base_price_usd_cents();
 
     let shop_id = shop.id();
     let discount = shop.discount_mut(discount_id);
     // TODO#q: Move to discount module and create `discount.redeem()` function ----
-    assert_discount_redemption_allowed!(discount, listing_id, now);
+    assert_discount_redemption_allowed!(discount, listing_id, now_sec);
 
     discount.increment_redemptions();
     let discounted_price_usd_cents = discount
@@ -1022,10 +977,10 @@ fun quote_amount_with_guardrails(
     );
     let current_price = price_info.get_price_feed().get_price();
     let publish_time = current_price.get_timestamp();
-    let now = now_secs(clock);
-    assert!(now >= publish_time, EPriceInvalidPublishTime);
+    let now_sec = now_secs(clock);
+    assert!(now_sec >= publish_time, EPriceInvalidPublishTime);
     assert!(
-        now - publish_time <= effective_guardrails.max_price_age_secs,
+        now_sec - publish_time <= effective_guardrails.max_price_age_secs,
         EPriceInvalidPublishTime,
     );
     let price = pyth::get_price_no_older_than(
@@ -1199,19 +1154,19 @@ macro fun assert_listing_inputs(
 }
 
 // TODO#q: inline and move to discount module
-macro fun assert_discount_redemption_allowed($discount: &Discount, $listing_id: ID, $now: u64) {
+macro fun assert_discount_redemption_allowed($discount: &Discount, $listing_id: ID, $now_sec: u64) {
     let discount = $discount;
     let listing_id = $listing_id;
-    let now = $now;
+    let now_sec = $now_sec;
 
     assert!(discount.active(), EDiscountInactive);
     discount.applies_to_listing().do!(|applies_to_listing| {
         assert!(applies_to_listing == listing_id, EDiscountListingMismatch);
     });
 
-    assert!(discount.starts_at() <= now, EDiscountTooEarly);
+    assert!(discount.starts_at() <= now_sec, EDiscountTooEarly);
     discount.expires_at().do!(|expires_at| {
-        assert!(now < expires_at, EDiscountExpired);
+        assert!(now_sec < expires_at, EDiscountExpired);
     });
 
     assert!(!discount.redemption_cap_reached(), EDiscountMaxedOut);

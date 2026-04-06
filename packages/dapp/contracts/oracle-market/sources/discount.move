@@ -12,6 +12,12 @@ const EInvalidRuleKind: vector<u8> = "invalid rule kind";
 const EInvalidRuleValue: vector<u8> = "invalid rule value";
 #[error(code = 3)]
 const EPriceOverflow: vector<u8> = "price overflow";
+#[error(code = 4)]
+const EDiscountWindow: vector<u8> = "invalid discount window";
+#[error(code = 5)]
+const EInvalidMaxRedemptions: vector<u8> = "invalid max redemptions";
+#[error(code = 6)]
+const EDiscountFinalized: vector<u8> = "discount finalized";
 
 // === Constants ===
 
@@ -95,16 +101,28 @@ public fun active(discount: &Discount): bool {
 
 // === Package Functions ===
 
-public(package) fun new(
-    discount_id: ID,
+/// Creates a discount from primitive rule inputs and allocates a fresh ID.
+public(package) fun create(
     applies_to_listing: Option<ID>,
-    rule: DiscountRule,
+    rule_kind: u8,
+    rule_value: u64,
     starts_at: u64,
     expires_at: Option<u64>,
     max_redemptions: Option<u64>,
+    ctx: &mut TxContext,
 ): Discount {
+    expires_at.do!(|expires_at| {
+        assert!(expires_at > starts_at, EDiscountWindow);
+    });
+    max_redemptions.do!(|max_value| {
+        assert!(max_value > 0, EInvalidMaxRedemptions);
+    });
+
+    let rule = build(parse_kind(rule_kind), rule_value);
+    let id = ctx.fresh_object_address().to_id();
+
     Discount {
-        id: discount_id,
+        id,
         applies_to_listing,
         rule,
         starts_at,
@@ -115,23 +133,34 @@ public(package) fun new(
     }
 }
 
-public(package) fun parse_kind(raw_kind: u8): DiscountRuleKind {
-    if (raw_kind == 0) {
-        DiscountRuleKind::Fixed
-    } else {
-        assert!(raw_kind == 1, EInvalidRuleKind);
-        DiscountRuleKind::Percent
-    }
-}
+/// Updates the discount rule or timing parameters on an existing discount, subject to guardrails and restrictions to prevent updates to finalized discounts.
+public(package) fun update(
+    discount: &mut Discount,
+    rule_kind: u8,
+    rule_value: u64,
+    starts_at: u64,
+    expires_at: Option<u64>,
+    max_redemptions: Option<u64>,
+    now_sec: u64,
+) {
+    expires_at.do!(|expires_at| {
+        assert!(expires_at > starts_at, EDiscountWindow);
+    });
+    max_redemptions.do!(|max_value| {
+        assert!(max_value > 0, EInvalidMaxRedemptions);
+    });
 
-public(package) fun build(rule_kind: DiscountRuleKind, rule_value: u64): DiscountRule {
-    match (rule_kind) {
-        DiscountRuleKind::Fixed => DiscountRule::Fixed { amount_cents: rule_value },
-        DiscountRuleKind::Percent => {
-            assert!(rule_value <= BASIS_POINT_DENOMINATOR, EInvalidRuleValue);
-            DiscountRule::Percent { bps: rule_value as u16 }
-        },
-    }
+    // Assert discount can be updated
+    assert!(discount.redemptions() == 0, EDiscountFinalized);
+    assert!(!discount.finished(now_sec), EDiscountFinalized);
+
+    let discount_rule_kind = parse_kind(rule_kind);
+    let discount_rule = build(discount_rule_kind, rule_value);
+
+    discount.rule = discount_rule;
+    discount.starts_at = starts_at;
+    discount.expires_at = expires_at;
+    discount.max_redemptions = max_redemptions;
 }
 
 public(package) fun apply(rule: DiscountRule, base_price_usd_cents: u64): u64 {
@@ -156,11 +185,6 @@ public(package) fun apply(rule: DiscountRule, base_price_usd_cents: u64): u64 {
     }
 }
 
-public(package) fun apply_percent(base_price_usd_cents: u64, bps: u16): u64 {
-    assert!((bps as u64) <= BASIS_POINT_DENOMINATOR, EInvalidRuleValue);
-    DiscountRule::Percent { bps }.apply(base_price_usd_cents)
-}
-
 /// Returns the encoded rule kind (`0 = fixed`, `1 = percent`) for a `DiscountRule`.
 public(package) fun kind(rule: DiscountRule): u8 {
     match (rule) {
@@ -175,22 +199,6 @@ public(package) fun value(rule: DiscountRule): u64 {
         DiscountRule::Fixed { amount_cents } => amount_cents,
         DiscountRule::Percent { bps } => bps as u64,
     }
-}
-
-public(package) fun set_rule(discount: &mut Discount, rule: DiscountRule) {
-    discount.rule = rule;
-}
-
-public(package) fun set_starts_at(discount: &mut Discount, starts_at: u64) {
-    discount.starts_at = starts_at;
-}
-
-public(package) fun set_expires_at(discount: &mut Discount, expires_at: Option<u64>) {
-    discount.expires_at = expires_at;
-}
-
-public(package) fun set_max_redemptions(discount: &mut Discount, max_redemptions: Option<u64>) {
-    discount.max_redemptions = max_redemptions;
 }
 
 public(package) fun set_active(discount: &mut Discount, active: bool) {
@@ -208,8 +216,32 @@ public(package) fun redemption_cap_reached(discount: &Discount): bool {
         .destroy_or!(false)
 }
 
-public(package) fun finished(discount: &Discount, now: u64): bool {
-    let expired = discount.expires_at.map_ref!(|expires_at| now >= *expires_at).destroy_or!(false);
+// === Private Functions ===
+
+fun parse_kind(raw_kind: u8): DiscountRuleKind {
+    if (raw_kind == 0) {
+        DiscountRuleKind::Fixed
+    } else {
+        assert!(raw_kind == 1, EInvalidRuleKind);
+        DiscountRuleKind::Percent
+    }
+}
+
+fun build(rule_kind: DiscountRuleKind, rule_value: u64): DiscountRule {
+    match (rule_kind) {
+        DiscountRuleKind::Fixed => DiscountRule::Fixed { amount_cents: rule_value },
+        DiscountRuleKind::Percent => {
+            assert!(rule_value <= BASIS_POINT_DENOMINATOR, EInvalidRuleValue);
+            DiscountRule::Percent { bps: rule_value as u16 }
+        },
+    }
+}
+
+fun finished(discount: &Discount, now_sec: u64): bool {
+    let expired = discount
+        .expires_at
+        .map_ref!(|expires_at| now_sec >= *expires_at)
+        .destroy_or!(false);
     let maxed_out = discount.redemption_cap_reached();
     expired || maxed_out
 }

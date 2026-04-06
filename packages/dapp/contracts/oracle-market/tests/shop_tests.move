@@ -1678,7 +1678,7 @@ fun create_discount_rejects_percent_above_limit() {
     abort
 }
 
-#[test, expected_failure(abort_code = ::sui_oracle_market::shop::EDiscountWindow)]
+#[test, expected_failure(abort_code = ::sui_oracle_market::discount::EDiscountWindow)]
 fun create_discount_rejects_invalid_schedule() {
     let mut ctx = tx_context::dummy();
     let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
@@ -1697,7 +1697,7 @@ fun create_discount_rejects_invalid_schedule() {
     abort
 }
 
-#[test, expected_failure(abort_code = ::sui_oracle_market::shop::EInvalidMaxRedemptions)]
+#[test, expected_failure(abort_code = ::sui_oracle_market::discount::EInvalidMaxRedemptions)]
 fun create_discount_rejects_zero_max_redemptions() {
     let mut ctx = tx_context::dummy();
     let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
@@ -1888,7 +1888,7 @@ fun update_discount_rejects_foreign_discount() {
     abort
 }
 
-#[test, expected_failure(abort_code = ::sui_oracle_market::shop::EDiscountWindow)]
+#[test, expected_failure(abort_code = ::sui_oracle_market::discount::EDiscountWindow)]
 fun update_discount_rejects_invalid_schedule() {
     let mut ctx = tx_context::dummy();
     let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
@@ -1919,7 +1919,7 @@ fun update_discount_rejects_invalid_schedule() {
     abort
 }
 
-#[test, expected_failure(abort_code = ::sui_oracle_market::shop::EInvalidMaxRedemptions)]
+#[test, expected_failure(abort_code = ::sui_oracle_market::discount::EInvalidMaxRedemptions)]
 fun update_discount_rejects_zero_max_redemptions() {
     let mut ctx = tx_context::dummy();
     let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
@@ -2012,7 +2012,7 @@ fun update_discount_rejects_percent_above_limit() {
     abort
 }
 
-#[test, expected_failure(abort_code = ::sui_oracle_market::shop::EDiscountFinalized)]
+#[test, expected_failure(abort_code = ::sui_oracle_market::discount::EDiscountFinalized)]
 fun update_discount_rejects_after_expiry() {
     let mut ctx = tx_context::dummy();
     let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
@@ -2860,8 +2860,8 @@ fun discount_discount_rejects_foreign_shop() {
     abort
 }
 
-#[test]
-fun remove_listing_and_discount_noop_when_missing() {
+#[test, expected_failure(abort_code = ::sui_oracle_market::shop::EDiscountNotFound)]
+fun remove_listing_and_discount_when_missing() {
     let mut ctx = tx_context::new_from_hint(TEST_OWNER, 10004, 0, 0, 0);
     let (mut shop_obj, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
     let dummy_uid = object::new(&mut ctx);
