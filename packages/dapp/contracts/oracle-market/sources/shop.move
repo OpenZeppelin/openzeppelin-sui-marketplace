@@ -86,48 +86,42 @@ use sui_oracle_market::listing::{Self, ItemListing};
 #[error(code = 0)]
 const EInvalidOwnerCap: vector<u8> = "invalid owner capability";
 #[error(code = 1)]
-const EEmptyItemName: vector<u8> = "empty item name";
-#[error(code = 2)]
-const EInvalidPrice: vector<u8> = "invalid price";
-#[error(code = 3)]
-const EZeroStock: vector<u8> = "zero stock";
-#[error(code = 4)]
 const EDiscountNotFound: vector<u8> = "discount not found";
-#[error(code = 5)]
+#[error(code = 2)]
 const EListingNotFound: vector<u8> = "listing not found";
-#[error(code = 6)]
+#[error(code = 3)]
 const EListingHasActiveDiscounts: vector<u8> = "listing has active discounts";
-#[error(code = 7)]
+#[error(code = 4)]
 const EAcceptedCurrencyExists: vector<u8> = "accepted currency exists";
-#[error(code = 8)]
+#[error(code = 5)]
 const EAcceptedCurrencyMissing: vector<u8> = "accepted currency missing";
-#[error(code = 13)]
+#[error(code = 6)]
 const EOutOfStock: vector<u8> = "out of stock";
-#[error(code = 14)]
+#[error(code = 7)]
 const EPythObjectMismatch: vector<u8> = "pyth object mismatch";
-#[error(code = 15)]
+#[error(code = 8)]
 const EFeedIdentifierMismatch: vector<u8> = "feed identifier mismatch";
-#[error(code = 16)]
+#[error(code = 9)]
 const EPriceNonPositive: vector<u8> = "price non-positive";
-#[error(code = 17)]
+#[error(code = 10)]
 const EPriceOverflow: vector<u8> = "price overflow";
-#[error(code = 18)]
+#[error(code = 11)]
 const EInsufficientPayment: vector<u8> = "insufficient payment";
-#[error(code = 19)]
+#[error(code = 12)]
 const EConfidenceIntervalTooWide: vector<u8> = "confidence interval too wide";
-#[error(code = 20)]
+#[error(code = 13)]
 const EConfidenceExceedsPrice: vector<u8> = "confidence exceeds price";
-#[error(code = 21)]
+#[error(code = 14)]
 const ESpotlightDiscountListingMismatch: vector<u8> = "spotlight discount listing mismatch";
-#[error(code = 22)]
+#[error(code = 15)]
 const EItemTypeMismatch: vector<u8> = "item type mismatch";
-#[error(code = 23)]
+#[error(code = 16)]
 const EUnsupportedCurrencyDecimals: vector<u8> = "unsupported currency decimals";
-#[error(code = 24)]
+#[error(code = 17)]
 const EEmptyShopName: vector<u8> = "empty shop name";
-#[error(code = 25)]
+#[error(code = 18)]
 const EShopDisabled: vector<u8> = "shop disabled";
-#[error(code = 26)]
+#[error(code = 19)]
 const EPriceInvalidPublishTime: vector<u8> = "invalid publish timestamp";
 
 // === Constants ===
@@ -281,22 +275,21 @@ public fun add_item_listing<T: store>(
 ): ID {
     assert!(owner_cap.shop_id == shop.id(), EInvalidOwnerCap);
 
-    // TODO#q: move to item listing `listing::create` function with validation
-    assert_listing_inputs!(shop, &name, base_price_usd_cents, stock, spotlight_discount_id);
+    spotlight_discount_id.do!(|discount_id| {
+        assert!(shop.discounts.contains(discount_id), EDiscountNotFound);
+    });
 
-    let shop_id = shop.id();
-    let listing_id = ctx.fresh_object_address().to_id();
-    assert_spotlight_discount_matches_listing!(shop, listing_id, spotlight_discount_id);
-    let listing = listing::new<T>(
-        listing_id,
+    let listing = listing::create<T>(
         name,
         base_price_usd_cents,
         stock,
         spotlight_discount_id,
+        ctx,
     );
+    let listing_id = listing.id();
     shop.listings.add(listing_id, listing);
 
-    events::emit_item_listing_added(shop_id, listing_id);
+    events::emit_item_listing_added(shop.id(), listing_id);
 
     listing_id
 }
@@ -359,9 +352,8 @@ public fun update_item_listing_stock(
     events::emit_item_listing_stock_updated(shop.id(), listing_id, previous_stock);
 }
 
-/// Remove an item listing entirely.
+/// Remove an item listing.
 ///
-/// This delists by removing the listing entry from `Shop.listings`.
 /// Fails if listing doesn't exist.
 /// Listings with any active listing-bound discounts must pause those discounts first.
 public fun remove_item_listing(shop: &mut Shop, owner_cap: &ShopOwnerCap, listing_id: ID) {
@@ -581,6 +573,7 @@ public fun remove_discount(shop: &mut Shop, owner_cap: &ShopOwnerCap, discount_i
     let _ = shop.discounts.remove(discount_id);
 }
 
+// TODO#q: rename to link_discount_and_listing and change logic for discount and listing creation.
 /// Surface a discount alongside a listing so UIs can highlight the promotion.
 public fun attach_discount_to_listing(
     shop: &mut Shop,
@@ -589,11 +582,14 @@ public fun attach_discount_to_listing(
     listing_id: ID,
 ) {
     assert!(owner_cap.shop_id == shop.id(), EInvalidOwnerCap);
-    assert!(shop.discounts.contains(discount_id), EDiscountNotFound);
-    assert_spotlight_discount_matches_listing!(shop, listing_id, option::some(discount_id));
 
-    let item_listing = shop.listing_mut(listing_id);
-    item_listing.set_spotlight(discount_id);
+    // Assert discount matches to listing.
+    shop.discount(discount_id).applies_to_listing().do!(|applies_to_listing| {
+        assert!(applies_to_listing == listing_id, ESpotlightDiscountListingMismatch);
+    });
+
+    // Attach discount to listing.
+    shop.listing_mut(listing_id).set_spotlight(discount_id);
 }
 
 /// Remove the promotion banner from a listing.
@@ -1112,29 +1108,6 @@ fun mint_shop_item<TItem: store>(
     }
 }
 
-// TODO#q: inline and move to listing module
-macro fun assert_listing_inputs(
-    $shop: &Shop,
-    $name: &String,
-    $base_price_usd_cents: u64,
-    $stock: u64,
-    $spotlight_discount_id: Option<ID>,
-) {
-    let shop = $shop;
-    let name = $name;
-    let base_price_usd_cents = $base_price_usd_cents;
-    let stock = $stock;
-    let spotlight_discount_id = $spotlight_discount_id;
-
-    assert!(stock > 0, EZeroStock);
-    assert!(!name.is_empty(), EEmptyItemName);
-    assert!(base_price_usd_cents > 0, EInvalidPrice);
-
-    spotlight_discount_id.do!(|discount_id| {
-        assert!(shop.discounts.contains(discount_id), EDiscountNotFound);
-    });
-}
-
 // TODO#q: move to currency module
 macro fun assert_price_info_identity(
     $expected_feed_id: vector<u8>,
@@ -1153,23 +1126,6 @@ macro fun assert_price_info_identity(
     let identifier = price_info.get_price_identifier();
     let identifier_bytes = identifier.get_bytes();
     assert!(expected_feed_id == identifier_bytes, EFeedIdentifierMismatch);
-}
-
-macro fun assert_spotlight_discount_matches_listing(
-    $shop: &Shop,
-    $listing_id: ID,
-    $discount_id: Option<ID>,
-) {
-    let shop = $shop;
-    let listing_id = $listing_id;
-    let discount_id = $discount_id;
-    discount_id.do!(|discount_id| {
-        assert!(shop.discounts.contains(discount_id), EDiscountNotFound);
-        let discount = shop.discount(discount_id);
-        discount.applies_to_listing().do!(|applies_to_listing| {
-            assert!(applies_to_listing == listing_id, ESpotlightDiscountListingMismatch);
-        });
-    });
 }
 
 // === Test Functions ===

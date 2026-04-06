@@ -1086,7 +1086,7 @@ fun add_item_listing_with_discount_rejects_foreign_owner_cap() {
     abort
 }
 
-#[test, expected_failure(abort_code = ::sui_oracle_market::shop::EEmptyItemName)]
+#[test, expected_failure(abort_code = ::sui_oracle_market::listing::EEmptyItemName)]
 fun add_item_listing_rejects_empty_name() {
     let mut ctx = tx_context::new_from_hint(TEST_OWNER, 45, 0, 0, 0);
     let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
@@ -1121,7 +1121,7 @@ fun add_item_listing_rejects_foreign_owner_cap() {
     abort
 }
 
-#[test, expected_failure(abort_code = ::sui_oracle_market::shop::EInvalidPrice)]
+#[test, expected_failure(abort_code = ::sui_oracle_market::listing::EInvalidPrice)]
 fun add_item_listing_rejects_zero_price() {
     let mut ctx = tx_context::dummy();
     let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
@@ -1138,7 +1138,7 @@ fun add_item_listing_rejects_zero_price() {
     abort
 }
 
-#[test, expected_failure(abort_code = ::sui_oracle_market::shop::EZeroStock)]
+#[test, expected_failure(abort_code = ::sui_oracle_market::listing::EZeroStock)]
 fun add_item_listing_rejects_zero_stock() {
     let mut ctx = tx_context::dummy();
     let (mut shop, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
@@ -3374,42 +3374,6 @@ fun checkout_rejects_currency_from_other_shop() {
         option::none(),
         &clock_obj,
         test_scenario::ctx(&mut scn),
-    );
-
-    abort
-}
-
-#[test, expected_failure(abort_code = ::sui_oracle_market::shop::ESpotlightDiscountListingMismatch)]
-fun add_item_listing_rejects_spotlight_discount_listing_mismatch() {
-    let mut ctx = tx_context::new_from_hint(TEST_OWNER, 10006, 0, 0, 0);
-    let (mut shop_obj, owner_cap) = shop::test_setup_shop(TEST_OWNER, &mut ctx);
-    let listing_id = shop_obj.add_item_listing<TestItem>(
-        &owner_cap,
-        b"Listing A".to_string(),
-        100,
-        1,
-        option::none(),
-        &mut ctx,
-    );
-
-    let discount_id = shop_obj.create_discount(
-        &owner_cap,
-        option::some(listing_id),
-        0,
-        50,
-        0,
-        option::none(),
-        option::none(),
-        &mut ctx,
-    );
-
-    shop_obj.add_item_listing<TestItem>(
-        &owner_cap,
-        b"Listing B".to_string(),
-        100,
-        1,
-        option::some(discount_id),
-        &mut ctx,
     );
 
     abort

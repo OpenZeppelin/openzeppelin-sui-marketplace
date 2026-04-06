@@ -7,6 +7,12 @@ use std::type_name::{Self, TypeName};
 // === Errors ===
 
 #[error(code = 0)]
+const EEmptyItemName: vector<u8> = "empty item name";
+#[error(code = 1)]
+const EInvalidPrice: vector<u8> = "invalid price";
+#[error(code = 2)]
+const EZeroStock: vector<u8> = "zero stock";
+#[error(code = 3)]
 const EListingDiscountCountUnderflow: vector<u8> = "listing discount count underflow";
 
 // === Structs ===
@@ -59,15 +65,21 @@ public fun spotlight_discount_id(listing: &ItemListing): Option<ID> {
 
 // === Package Functions ===
 
-public(package) fun new<T: store>(
-    listing_id: ID,
+/// Creates a new item listing with the provided metadata and returns it.
+/// The listing ID is generated from transaction context.
+public(package) fun create<T: store>(
     name: String,
     base_price_usd_cents: u64,
     stock: u64,
     spotlight_discount_id: Option<ID>,
+    ctx: &mut TxContext,
 ): ItemListing {
+    assert!(stock > 0, EZeroStock);
+    assert!(!name.is_empty(), EEmptyItemName);
+    assert!(base_price_usd_cents > 0, EInvalidPrice);
+
     ItemListing {
-        listing_id,
+        listing_id: ctx.fresh_object_address().to_id(),
         item_type: type_name::with_defining_ids<T>(),
         name,
         base_price_usd_cents,
