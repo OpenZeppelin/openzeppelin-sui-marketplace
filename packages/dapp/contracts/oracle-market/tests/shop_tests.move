@@ -4183,7 +4183,7 @@ fun buy_item_rejects_wrong_coin_type() {
     abort
 }
 
-#[test, expected_failure(abort_code = ::sui_oracle_market::shop::EItemTypeMismatch)]
+#[test, expected_failure(abort_code = ::sui_oracle_market::listing::EItemTypeMismatch)]
 fun buy_item_rejects_item_type_mismatch() {
     let mut scn = test_scenario::begin(TEST_OWNER);
     let (shop_id, listing_id, price_info_id) = setup_shop_with_listing_and_price_info(
@@ -4201,7 +4201,17 @@ fun buy_item_rejects_item_type_mismatch() {
     );
     let clock_obj = create_test_clock_at(test_scenario::ctx(&mut scn), 10);
 
-    let payment = coin::mint_for_testing<TestCoin>(1, test_scenario::ctx(&mut scn));
+    let quote_amount = shared_shop.quote_amount_for_price_info_object<TestCoin>(
+        &price_info_obj,
+        100,
+        option::none(),
+        option::none(),
+        &clock_obj,
+    );
+    let payment = coin::mint_for_testing<TestCoin>(
+        quote_amount,
+        test_scenario::ctx(&mut scn),
+    );
     shared_shop.buy_item<OtherItem, TestCoin>(
         &price_info_obj,
         payment,

@@ -1,4 +1,4 @@
-/// This module defines the `ItemListing` struct, which represents a purchasable item in the oracle market.
+/// This module defines the `ItemListing` and `ShopItem` structs, which represents a purchasable item in the oracle market.
 module sui_oracle_market::listing;
 
 use std::string::String;
@@ -14,6 +14,8 @@ const EInvalidPrice: vector<u8> = "invalid price";
 const EZeroStock: vector<u8> = "zero stock";
 #[error(code = 3)]
 const EListingDiscountCountUnderflow: vector<u8> = "listing discount count underflow";
+#[error(code = 4)]
+const EItemTypeMismatch: vector<u8> = "item type mismatch";
 
 // === Structs ===
 
@@ -34,6 +36,23 @@ public struct ItemListing has drop, store {
     active_bound_discount_count: u64,
     /// Optional discount highlighted in storefront UIs.
     spotlight_discount_id: Option<ID>,
+}
+
+/// Shop item type for receipts. `TItem` is enforced at mint time so downstream
+/// Move code can depend on the type system instead of opaque metadata alone.
+public struct ShopItem<phantom TItem> has key, store {
+    /// Receipt object ID.
+    id: UID,
+    /// Shop that minted this item.
+    shop_id: ID,
+    /// Listing that produced this item.
+    item_listing_id: ID,
+    /// Type snapshot for downstream verification.
+    item_type: TypeName,
+    /// Listing name snapshot at purchase time.
+    name: String,
+    /// Timestamp seconds when purchase completed.
+    acquired_at: u64,
 }
 
 // === View Functions ===
@@ -86,6 +105,25 @@ public(package) fun create<T: store>(
         stock,
         active_bound_discount_count: 0,
         spotlight_discount_id,
+    }
+}
+
+/// Mints a `ShopItem` for a given `ItemListing`, enforcing the item type and associating it with the minting shop.
+public(package) fun mint_shop_item<TItem: store>(
+    item_listing: &ItemListing,
+    shop_id: ID,
+    now_sec: u64,
+    ctx: &mut TxContext,
+): ShopItem<TItem> {
+    assert!(item_listing.item_type() == type_name::with_defining_ids<TItem>(), EItemTypeMismatch);
+
+    ShopItem {
+        id: object::new(ctx),
+        shop_id,
+        item_listing_id: item_listing.id(),
+        item_type: item_listing.item_type(),
+        name: item_listing.name(),
+        acquired_at: now_sec,
     }
 }
 

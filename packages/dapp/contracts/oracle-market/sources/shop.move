@@ -79,7 +79,7 @@ use sui::table::{Self, Table};
 use sui_oracle_market::currency::{Self, AcceptedCurrency};
 use sui_oracle_market::discount::{Self, Discount};
 use sui_oracle_market::events;
-use sui_oracle_market::listing::{Self, ItemListing};
+use sui_oracle_market::listing::{Self, ItemListing, ShopItem};
 
 // === Errors ===
 
@@ -114,14 +114,12 @@ const EConfidenceExceedsPrice: vector<u8> = "confidence exceeds price";
 #[error(code = 14)]
 const ESpotlightDiscountListingMismatch: vector<u8> = "spotlight discount listing mismatch";
 #[error(code = 15)]
-const EItemTypeMismatch: vector<u8> = "item type mismatch";
-#[error(code = 16)]
 const EUnsupportedCurrencyDecimals: vector<u8> = "unsupported currency decimals";
-#[error(code = 17)]
+#[error(code = 16)]
 const EEmptyShopName: vector<u8> = "empty shop name";
-#[error(code = 18)]
+#[error(code = 17)]
 const EShopDisabled: vector<u8> = "shop disabled";
-#[error(code = 19)]
+#[error(code = 18)]
 const EPriceInvalidPublishTime: vector<u8> = "invalid publish timestamp";
 
 // === Constants ===
@@ -166,24 +164,6 @@ public struct Shop has key, store {
     listings: Table<ID, ItemListing>,
     /// Discounts keyed by discount ID.
     discounts: Table<ID, Discount>,
-}
-
-// TODO#q: move to listing module
-/// Shop item type for receipts. `TItem` is enforced at mint time so downstream
-/// Move code can depend on the type system instead of opaque metadata alone.
-public struct ShopItem<phantom TItem> has key, store {
-    /// Receipt object ID.
-    id: UID,
-    /// Shop that minted this item.
-    shop_id: ID,
-    /// Listing that produced this item.
-    item_listing_id: ID,
-    /// Type snapshot for downstream verification.
-    item_type: TypeName,
-    /// Listing name snapshot at purchase time.
-    name: String,
-    /// Timestamp seconds when purchase completed.
-    acquired_at: u64,
 }
 
 // TODO#q: drop this struct
@@ -1005,7 +985,6 @@ fun process_purchase<TItem: store, TCoin>(
     let shop_id = shop.id();
 
     let item_listing = shop.listing_mut(listing_id);
-    assert!(item_listing.item_type() == type_name::with_defining_ids<TItem>(), EItemTypeMismatch);
     assert!(item_listing.stock() > 0, EOutOfStock);
 
     let owed_coin_opt = split_payment(&mut payment, quote_amount, ctx);
@@ -1016,8 +995,8 @@ fun process_purchase<TItem: store, TCoin>(
 
     events::emit_item_listing_stock_updated(shop_id, item_listing.id(), previous_stock);
 
-    let minted_item = mint_shop_item<TItem>(item_listing, shop_id, clock, ctx);
-    let minted_item_id = minted_item.id.to_inner();
+    let minted_item = item_listing.mint_shop_item<TItem>(shop_id, now_secs(clock), ctx);
+    let minted_item_id = object::id(&minted_item);
 
     events::emit_purchase_completed(
         shop_id,
@@ -1087,25 +1066,6 @@ fun split_payment<TCoin>(
     assert!(available >= amount_due, EInsufficientPayment);
     let owed = payment.split(amount_due, ctx);
     option::some(owed)
-}
-
-// TODO#q: move to listing module
-fun mint_shop_item<TItem: store>(
-    item_listing: &ItemListing,
-    shop_id: ID,
-    clock: &Clock,
-    ctx: &mut TxContext,
-): ShopItem<TItem> {
-    assert!(item_listing.item_type() == type_name::with_defining_ids<TItem>(), EItemTypeMismatch);
-
-    ShopItem {
-        id: object::new(ctx),
-        shop_id,
-        item_listing_id: item_listing.id(),
-        item_type: item_listing.item_type(),
-        name: item_listing.name(),
-        acquired_at: now_secs(clock),
-    }
 }
 
 // TODO#q: move to currency module
