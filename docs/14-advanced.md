@@ -36,9 +36,8 @@ pnpm script buyer:buy --help
 3. **Blocks -> object DAG**: each object records the last transaction digest that mutated it, giving you causal history per object instead of global block history.
 
 ## 5. Concept deep dive: Move execution surface
-- **Entry vs public functions**: PTBs can call `entry` functions; other Move modules can call
-  `public` functions. Most mutating APIs in this module are plain `public` for maximum
-  composability, and `quote_amount_for_price_info_object`.
+- **Entry vs public functions**: PTBs can call `entry` and `public` functions; other Move modules can call
+  only `public` functions. This module keeps state-changing APIs and quote helpers as `public` for composition.
   Code: `packages/dapp/contracts/oracle-market/sources/shop.move` (`create_shop`, `buy_item`, `quote_amount_for_price_info_object`)
 - **PTB limits**: a PTB can include up to 1,024 commands, which shapes how much work you can bundle
   into a single transaction. This matters most when you try to batch “admin seeding” or enumerate
@@ -52,19 +51,19 @@ pnpm script buyer:buy --help
   Code: `packages/dapp/contracts/oracle-market/sources/shop.move` (helper functions and events)
 - **Transfers and sharing**: `transfer::public_transfer` moves owned resources, and `transfer::public_share_object`
   creates shared objects. This pattern replaces EVM-style factory deployments.
-  Code: `packages/dapp/contracts/oracle-market/sources/shop.move` (`create_shop`, `finalize_purchase_transfers`)
+  Code: `packages/dapp/contracts/oracle-market/sources/shop.move` (`create_shop_and_share`, `buy_item`)
 - **TxContext usage**: `TxContext` is needed for object creation (`object::new`) and coin splits.
   Code: `packages/dapp/contracts/oracle-market/sources/shop.move` (`split_payment`, `create_shop`)
 - **Fixed-point math**: prices are stored in USD cents; discounts use basis points; conversion uses
   u128 scaling with OZ decimal helpers to avoid floating-point math.
-  Code: `packages/dapp/contracts/oracle-market/sources/shop.move` (`decimals_pow10_u128`, `quote_amount_with_guardrails`)
+  Code: `packages/dapp/contracts/oracle-market/sources/currency.move` (`quote_amount_from_usd_cents`, `quote_amount_with_guardrails`)
 - **Fast path vs consensus**: owned-object transactions can execute without consensus ordering,
   while shared-object mutations require consensus. This is why checkout/admin listing writes mutate
-  `Shop` (shared), while ticket ownership/capabilities stay address-owned.
+  `Shop` (shared), while receipt ownership/capabilities stay address-owned.
   Code: `packages/dapp/contracts/oracle-market/sources/shop.move` (shared object types)
 - **Storage rebates**: destroying objects (e.g., zero-value coins) returns storage rebates, which is
-  why `finalize_purchase_transfers` explicitly calls `coin::destroy_zero`.
-  Code: `packages/dapp/contracts/oracle-market/sources/shop.move` (`finalize_purchase_transfers`)
+  why `buy_item` and `buy_item_with_discount` call `coin::destroy_zero` when change is zero.
+  Code: `packages/dapp/contracts/oracle-market/sources/shop.move` (`buy_item`, `buy_item_with_discount`)
 - **Test-only helpers**: `#[test_only]` APIs expose helpers for Move unit tests without shipping
   them as production entry points.
   Code: `packages/dapp/contracts/oracle-market/sources/shop.move` (test_* functions)
@@ -81,7 +80,7 @@ public fun listing_exists(shop: &Shop, listing_id: ID): bool {
   shop.listings.contains(listing_id)
 }
 
-public fun accepted_currency_exists(
+public fun currency_exists(
   shop: &Shop,
   coin_type: TypeName,
 ): bool {
@@ -91,7 +90,7 @@ public fun accepted_currency_exists(
 
 ## 7. Exercises
 1. Find `quote_amount_for_price_info_object` and identify which parts are “identity checks” vs “pricing math”. Expected outcome: you can point to the function that binds feed bytes + object IDs.
-2. Find `finalize_purchase_transfers` and explain why it destroys zero-value coins. Expected outcome: you can explain storage rebates at a high level.
+2. Find `buy_item` and explain why it destroys zero-value coins. Expected outcome: you can explain storage rebates at a high level.
 
 ## 8. Annotated diff: Solidity vs Move buy flow
 ```solidity
@@ -107,10 +106,10 @@ function buy(uint256 listingId, address payToken) external {
 ```
 ```move
 // Move (actual shape)
-public fun buy_item<TItem: store, TCoin>(
+public fun buy_item<T: store, C>(
   shop: &mut Shop,
   price_info: &PriceInfoObject,
-  payment_coin: Coin<TCoin>,
+  payment_coin: Coin<C>,
   listing_id: ID,
   mint_to: address,
   refund_to: address,
@@ -123,12 +122,12 @@ public fun buy_item<TItem: store, TCoin>(
   // oracle guardrails
   // payment coin moved in (convention prefers exact-amount coins; this repo may return change)
   // listing stock decremented inside Shop.listings
-  // receipt minted as ShopItem<TItem>
+  // receipt minted as ShopItem<T>
   // events emitted
 }
 ```
 **Key differences**
-1. Payment is a `Coin<TCoin>` object, not an allowance.
+1. Payment is a `Coin<C>` object, not an allowance.
 2. Oracle input is a `PriceInfoObject` object (its ID is verified on-chain), not a contract address.
 3. The receipt is a typed object, not an event-only proof.
 

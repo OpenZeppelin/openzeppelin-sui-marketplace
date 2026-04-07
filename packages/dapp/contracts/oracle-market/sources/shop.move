@@ -31,9 +31,8 @@
 /// - Option types: Option makes optional IDs and optional limits/expiry explicit instead of
 ///   sentinel values. Docs: docs/08-listings-receipts.md, docs/10-discounts-tickets.md
 /// - Entry vs public functions: PTBs can call `entry` and `public`, while other Move modules can only call
-///   `public`. Most state-changing transaction APIs in this module are `public` to maximize package
-///   composition, while quote-oriented endpoints stay `entry` when they are intended for dev-inspect/clients.
-/// - Events: event::emit writes typed events for indexers and UIs. Docs: docs/08-advanced.md,
+///   `public`. This module keeps transaction APIs as `public` to maximize package composition.
+/// - Events: event::emit writes typed events for indexers and UIs. Docs: docs/14-advanced.md,
 ///   docs/18-data-access.md
 /// - TxContext and sender: TxContext is required for object creation and coin splits; ctx.sender()
 ///   identifies the signer for access control and receipts. Docs: docs/14-advanced.md
@@ -45,7 +44,7 @@
 ///   transfer::public_share_object makes shared objects.
 ///   Docs: docs/07-shop-capabilities.md, docs/14-advanced.md
 /// - Coins and coin registry: Coin<T> is a resource, Currency<T> supplies metadata.
-///   coin::split and coin::destroy_zero manage payment/change. Docs: docs/05-currencies-oracles.md,
+///   coin::split and coin::destroy_zero manage payment/change. Docs: docs/09-currencies-oracles.md,
 ///   docs/09-currencies-oracles.md, docs/17-ptb-gas.md
 /// - Clock and time: Clock is a shared, read-only object with a consensus-set timestamp_ms.
 ///   It can only be read via immutable reference in transaction-invoked functions. This module converts it to
@@ -109,6 +108,7 @@ const EShopDisabled: vector<u8> = "shop disabled";
 /// Claims and returns the module's Publisher object during publish.
 public struct SHOP has drop {}
 
+/// Initializes publish-time metadata by claiming and keeping the package publisher object.
 fun init(publisher_witness: SHOP, ctx: &mut TxContext) {
     package::claim_and_keep<SHOP>(publisher_witness, ctx);
 }
@@ -196,7 +196,7 @@ public fun update_shop_owner(shop: &mut Shop, owner_cap: &ShopOwnerCap, new_owne
     events::emit_shop_owner_updated(shop.id(), owner_cap.id.to_inner(), previous_owner);
 }
 
-/// /// Adds a listing and returns the created listing ID.
+/// Adds a listing and returns the created listing ID.
 ///
 /// Add an `ItemListing` attached to the `Shop`. The generic `T` encodes what will eventually be
 /// minted when a buyer completes checkout. Prices are provided in USD cents (e.g. $12.50 -> 1_250)
@@ -709,6 +709,7 @@ public fun owner_cap_shop_id(owner_cap: &ShopOwnerCap): ID {
 
 // === Private Functions ===
 
+/// Builds a new shop with empty listings, currencies, and discounts tables.
 fun new(name: String, owner: address, ctx: &mut TxContext): Shop {
     assert!(!name.is_empty(), EEmptyShopName);
     Shop {
@@ -722,16 +723,19 @@ fun new(name: String, owner: address, ctx: &mut TxContext): Shop {
     }
 }
 
+/// Borrows a mutable listing by ID, aborting when the listing is missing.
 fun listing_mut(shop: &mut Shop, listing_id: ID): &mut ItemListing {
     assert!(shop.listings.contains(listing_id), EListingNotFound);
     shop.listings.borrow_mut(listing_id)
 }
 
+/// Borrows a mutable discount by ID, aborting when the discount is missing.
 fun discount_mut(shop: &mut Shop, discount_id: ID): &mut Discount {
     assert!(shop.discounts.contains(discount_id), EDiscountNotFound);
     shop.discounts.borrow_mut(discount_id)
 }
 
+/// Synchronizes a listing's active discount counter when discount active state changes.
 fun adjust_active_discount_count(
     shop: &mut Shop,
     applies_to_listing: Option<ID>,
@@ -748,6 +752,7 @@ fun adjust_active_discount_count(
     });
 }
 
+/// Executes checkout pricing, stock mutation, receipt minting, and purchase event emission.
 fun process_purchase<T: store, C>(
     shop: &mut Shop,
     price_info_object: &PriceInfoObject,
@@ -778,6 +783,7 @@ fun process_purchase<T: store, C>(
     let shop_id = shop.id();
 
     let item_listing = shop.listing_mut(listing_id);
+    // TODO#q: move this assertion to `decrement_stock` function.
     assert!(item_listing.stock() > 0, EOutOfStock);
 
     let owed_coin_opt = split_payment(&mut payment, quote_amount, ctx);
@@ -803,6 +809,7 @@ fun process_purchase<T: store, C>(
     (owed_coin_opt, payment, minted_item)
 }
 
+/// Splits and returns the owed payment amount, or `none` when nothing is due.
 fun split_payment<C>(payment: &mut Coin<C>, amount_due: u64, ctx: &mut TxContext): Option<Coin<C>> {
     if (amount_due == 0) {
         return option::none()

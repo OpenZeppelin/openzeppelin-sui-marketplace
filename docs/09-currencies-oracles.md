@@ -7,7 +7,7 @@ This chapter explains how the shop registers accepted currencies, ties them to P
 ## 1. Learning goals
 1. Register coin types as accepted currencies for a shop.
 2. Understand why currencies are stored in `Table<TypeName, AcceptedCurrency>`.
-3. Understand freshness/confidence/status-lag guardrails.
+3. Understand freshness and confidence guardrails.
 
 ## 2. Prerequisites
 1. Localnet running.
@@ -32,7 +32,7 @@ pnpm script buyer:currency:list --shop-id <shopId>
 ## 4. EVM -> Sui translation
 1. **ERC-20 metadata -> coin registry + typed storage**: metadata comes from `coin_registry::Currency<T>`, and registration writes `AcceptedCurrency` into `shop.accepted_currencies: Table<TypeName, AcceptedCurrency>`.
 2. **Oracle address -> PriceInfoObject ID**: feeds are objects, not addresses. `AcceptedCurrency` stores `pyth_object_id` + `feed_id` and checks both on-chain.
-3. **Off-chain checks -> on-chain guardrails**: `quote_amount_for_price_info_object` enforces age/confidence/status-lag.
+3. **Off-chain checks -> on-chain guardrails**: `quote_amount_for_price_info_object` enforces price age and confidence bounds.
 
 ## 5. Why `Table` over `Bag` / `TableVec`
 The shop now stores accepted currencies in `Table<TypeName, AcceptedCurrency>` instead of raw dynamic fields or a separate currency object graph.
@@ -49,10 +49,10 @@ The shop now stores accepted currencies in `Table<TypeName, AcceptedCurrency>` i
   Code: `packages/dapp/contracts/oracle-market/sources/shop.move` (`add_accepted_currency`)
 - **Strict oracle identity checks**: both `pyth_object_id` and `feed_id` must match the provided `PriceInfoObject`.
   Code: `packages/dapp/contracts/oracle-market/sources/shop.move` (`assert_price_info_identity`)
-- **Clock-based freshness**: age and status-lag are verified on-chain with `clock::Clock`.
+- **Clock-based freshness**: age is verified on-chain with `clock::Clock`.
   Code: `packages/dapp/contracts/oracle-market/sources/shop.move` (`quote_amount_for_price_info_object`)
 - **Guardrail caps**: sellers set per-currency caps and buyers may only tighten age/confidence.
-  Code: `packages/dapp/contracts/oracle-market/sources/shop.move` (`resolve_guardrail_cap`, `resolve_effective_guardrails`)
+  Code: `packages/dapp/contracts/oracle-market/sources/currency.move` (`resolve_guardrail_cap`, `quote_amount_with_guardrails`)
 
 ## 7. Code references
 1. `packages/dapp/contracts/oracle-market/sources/shop.move` (`AcceptedCurrency`, `add_accepted_currency`, `remove_accepted_currency`, `quote_amount_for_price_info_object`)
@@ -74,27 +74,22 @@ public fun add_accepted_currency<T>(
   max_price_age_secs_cap: Option<u64>,
   max_confidence_ratio_bps_cap: Option<u16>,
 ) {
-  assert_owner_cap!(shop, owner_cap);
+  assert!(owner_cap.shop_id == shop.id(), EInvalidOwnerCap);
 
-  let coin_type = currency_type<T>();
-  assert_accepted_currency_inputs!(
-    shop,
-    &coin_type,
-    &feed_id,
-    &pyth_object_id,
-    price_info_object,
-  );
+  let coin_type = type_name::with_defining_ids<T>();
+  assert!(!shop.accepted_currencies.contains(coin_type), EAcceptedCurrencyExists);
 
-  let accepted_currency = new_accepted_currency(
+  let accepted_currency = currency::create(
     feed_id,
     pyth_object_id,
-    coin_registry::decimals(currency),
-    coin_registry::symbol(currency),
-    resolve_guardrail_cap!(max_price_age_secs_cap, DEFAULT_MAX_PRICE_AGE_SECS),
-    resolve_guardrail_cap!(max_confidence_ratio_bps_cap, DEFAULT_MAX_CONFIDENCE_RATIO_BPS),
+    currency,
+    max_price_age_secs_cap,
+    max_confidence_ratio_bps_cap,
   );
 
   shop.accepted_currencies.add(coin_type, accepted_currency);
+
+  assert_price_info_identity!(feed_id, pyth_object_id, price_info_object);
 }
 ```
 

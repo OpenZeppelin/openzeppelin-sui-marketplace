@@ -66,7 +66,7 @@ runSuiScript(
         logAcceptedCurrencySummary(acceptedCurrency, index + 1)
       )
 
-    if (discounts.length === 0) logEmptyList("Discounts", "No disco found.")
+    if (discounts.length === 0) logEmptyList("Discounts", "No discount found.")
     else
       discounts.forEach((discount, index) =>
         logDiscountSummary(discount, index + 1)

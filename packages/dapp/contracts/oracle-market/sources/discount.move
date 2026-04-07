@@ -219,12 +219,14 @@ public(package) fun value(rule: DiscountRule): u64 {
     }
 }
 
+/// Sets the active status of a discount.
 public(package) fun set_active(discount: &mut Discount, active: bool) {
     discount.active = active;
 }
 
 // === Private Functions ===
 
+/// Parses primitive rule kind encoding into a typed rule kind.
 fun parse_kind(raw_kind: u8): DiscountRuleKind {
     if (raw_kind == 0) {
         DiscountRuleKind::Fixed
@@ -234,6 +236,7 @@ fun parse_kind(raw_kind: u8): DiscountRuleKind {
     }
 }
 
+/// Builds a rule payload from a parsed kind and primitive value.
 fun build(rule_kind: DiscountRuleKind, rule_value: u64): DiscountRule {
     match (rule_kind) {
         DiscountRuleKind::Fixed => DiscountRule::Fixed { amount_cents: rule_value },
@@ -244,6 +247,7 @@ fun build(rule_kind: DiscountRuleKind, rule_value: u64): DiscountRule {
     }
 }
 
+/// Applies a fixed or percent discount and returns the resulting USD-cent price.
 fun apply(rule: DiscountRule, base_price_usd_cents: u64): u64 {
     match (rule) {
         DiscountRule::Fixed { amount_cents } => {
@@ -266,6 +270,7 @@ fun apply(rule: DiscountRule, base_price_usd_cents: u64): u64 {
     }
 }
 
+/// Returns whether a discount can no longer be used due to expiry or cap exhaustion.
 fun finished(discount: &Discount, now_sec: u64): bool {
     let expired = discount
         .expires_at
@@ -275,6 +280,7 @@ fun finished(discount: &Discount, now_sec: u64): bool {
     expired || maxed_out
 }
 
+/// Returns whether the optional redemption cap has been reached.
 fun redemption_cap_reached(discount: &Discount): bool {
     discount
         .max_redemptions

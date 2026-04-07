@@ -12,7 +12,7 @@ Mental Model Shift
 - **Capabilities, not msg.sender:** Admin entry points require the owned `ShopOwnerCap`; buyers never handle capabilities during checkout. Payout rotation is explicit through `update_shop_owner`.
 - **Permissionless instantiation:** `create_shop` takes a shop name and mints the shared `Shop` plus the `ShopOwnerCap` for the caller.
 - **Objects over contract storage:** The shop is a shared object. Listings, currencies, and discounts all live in typed collections on `Shop` (`Shop.listings`, `Shop.accepted_currencies`, `Shop.discounts`). Edits touch targeted collection entries instead of append-only arrays.
-- **Typed coins and receipts:** Payment assets are `Coin<T>` resources with no approvals; receipts are `ShopItem<TItem>` whose type must match the listing to keep downstream logic strongly typed. These receipts can be exchanged in a separate fulfillment or on-chain redemption flow for the actual `TItem`.
+- **Typed coins and receipts:** Payment assets are `Coin<C>` resources with no approvals; receipts are `ShopItem<T>` whose type must match the listing to keep downstream logic strongly typed. These receipts can be exchanged in a separate fulfillment or on-chain redemption flow for the actual item type.
 - **Clocked, guarded pricing:** Callers pass a refreshed `PriceInfoObject`; the module checks identity, freshness, and confidence guardrails against the shared `Clock` before quoting.
 - **Events over historical arrays:** Lifecycle events (`PurchaseCompleted`, `DiscountRedeemed`, etc.) are emitted for indexers/UIs instead of storing growing arrays on-chain.
 
@@ -32,9 +32,9 @@ Entry Points At A Glance
 ------------------------
 - Shops: `create_shop` mints the shared `Shop` plus the owned `ShopOwnerCap`; `disable_shop` permanently disables buyer flows; `update_shop_owner` rotates the payout/owner fields without touching listings.
 - Listings: `add_item_listing<T>` inserts a listing row in `Shop.listings` with USD-cent price, stock, and optional `spotlight_discount_id`; `add_item_listing_with_discount<T>` atomically creates a listing plus a pinned spotlight discount; `update_item_listing_stock`/`remove_item_listing` mutate listing rows by `listing_id: ID`.
-- Accepted currencies: `add_accepted_currency<T>` stores an `AcceptedCurrency` value in `shop.accepted_currencies` keyed by `coin_type`, with feed metadata and guardrail caps; `remove_accepted_currency<TCoin>` removes the keyed entry.
+- Accepted currencies: `add_accepted_currency<C>` stores an `AcceptedCurrency` value in `shop.accepted_currencies` keyed by `coin_type`, with feed metadata and guardrail caps; `remove_accepted_currency<C>` removes the keyed entry.
 - Discounts: `create_discount`, `update_discount` (only before redemptions), and `toggle_discount` manage discounts; `attach_discount_to_listing`/`clear_discount_from_listing` surface a spotlight discount on a listing; `buy_item_with_discount` applies discount-based discounts during checkout.
-- Checkout: `buy_item<TItem, TCoin>` and `buy_item_with_discount<TItem, TCoin>` enforce listing/type matches, registered currency presence, oracle guardrails, and refund change in-line before minting a typed `ShopItem<TItem>` receipt (redemption for the underlying item happens elsewhere).
+- Checkout: `buy_item<T, C>` and `buy_item_with_discount<T, C>` enforce listing/type matches, registered currency presence, oracle guardrails, and refund change in-line before minting a typed `ShopItem<T>` receipt (redemption for the underlying item happens elsewhere).
 
 Oracle Guardrails
 -----------------
@@ -69,7 +69,7 @@ Sui Move Principles, Applied
 - Capability-based auth: every admin path requires `ShopOwnerCap`.
 - Shared-object composition: the `Shop` is shared; listings/currencies/discounts are table-backed collections under the shared root.
 - Strong typing over metadata: listings embed `TypeName` for runtime checks and UI metadata, while
-  checkout asserts the `TItem` type to mint the correct `ShopItem<TItem>` with no opaque "token type" ints.
+  checkout asserts the `T` type to mint the correct `ShopItem<T>` with no opaque "token type" ints.
 - Explicit data freshness: time comes from `Clock`, price data from `PriceInfoObject`, and both are validated inline so view-only RPC calls are unnecessary.
 - Event-driven observability: analytics and UIs follow events instead of reading append-only storage arrays, keeping state lean.
 
@@ -81,7 +81,7 @@ Sui Fundamentals (EVM contrasts)
 - **Shared vs owned paths:** Checkout mutates the shared `Shop` (listing row and optional discount entry state) while moving owned payment/refund coin objects. Sui’s fast path for owned objects has no consensus hop, unlike EVM where all state writes are sequenced in the same block. Docs: ownership and shared objects (https://docs.sui.io/guides/developer/objects/object-ownership).
 - **Packages are objects (immutable code):** Publishing creates an immutable package object. There is no mutable “contract code” slot like `delegatecall` proxies in Solidity. Docs: packages (https://docs.sui.io/concepts/sui-move-concepts/packages).
 - **Upgrading with UpgradeCap:** New versions are published alongside the old one; data migrations are explicit, gated by `UpgradeCap`, and callers opt into the new package ID. Solidity-style in-place proxy upgrades aren’t available. Docs: https://docs.sui.io/concepts/sui-move-concepts/packages/upgrade.
-- **No inheritance, compose with modules/generics:** Move has no inheritance or dynamic dispatch; reuse is via modules, functions, and type parameters (e.g., `ShopItem<phantom TItem>`). Docs: https://docs.sui.io/concepts/sui-move-concepts
+- **No inheritance, compose with modules/generics:** Move has no inheritance or dynamic dispatch; reuse is via modules, functions, and type parameters (e.g., `ShopItem<phantom T>`). Docs: https://docs.sui.io/concepts/sui-move-concepts
 - **Coin registry integration instead of ERC-20 metadata:** `add_accepted_currency` pulls decimals/symbol from the shared `coin_registry` and stores them on the `AcceptedCurrency` object, avoiding the spoofed-decimals risk of unverified ERC-20s. See registry calls inside `contracts/oracle-market/sources/shop.move`. Docs: https://docs.sui.io/references/framework/sui_sui/coin_registry.
 - **Oracle feeds as objects:** Prices come from a `price_info::PriceInfoObject` passed into the PTB;
   `quote_amount_with_guardrails` wraps `pyth::get_price_no_older_than` and enforces status/σ guards

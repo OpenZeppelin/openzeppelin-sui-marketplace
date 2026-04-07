@@ -82,7 +82,7 @@ const DiscountSummarySection = ({
     <div className="mt-4 flex flex-wrap items-center gap-3 text-xs">
       <CopyableId
         value={template.discountId}
-        label="Template ID"
+        label="Discount ID"
         explorerUrl={explorerUrl}
       />
       {template.appliesToListingId ? (

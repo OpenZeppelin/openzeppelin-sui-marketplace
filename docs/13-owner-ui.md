@@ -66,10 +66,11 @@ public fun update_shop_owner(
   owner_cap: &ShopOwnerCap,
   new_owner: address
 ) {
-  assert_owner_cap!(shop, owner_cap);
+   assert!(owner_cap.shop_id == shop.id(), EInvalidOwnerCap);
+   let previous_owner = shop.owner;
   shop.owner = new_owner;
 
-  event::emit(new_shop_owner_updated_event(shop.id.to_inner(), owner_cap.id.to_inner()));
+   events::emit_shop_owner_updated(shop.id(), owner_cap.id.to_inner(), previous_owner);
 }
 ```
 

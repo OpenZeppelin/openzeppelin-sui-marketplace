@@ -8,8 +8,8 @@ End-to-end example of a small on-chain market on **Sui**: items are priced in **
 
 This repo is a pnpm workspace containing:
 - a Move package `packages/dapp/contracts/oracle-market`,
-- a CLI/script layer for localnet + seeding + owner/buyer flows `dapp/scripts`
-- state artefact captured in (`packages/dapp/deployments`) 
+- a CLI/script layer for localnet + seeding + owner/buyer flows `packages/dapp/src/scripts`
+- state artifacts captured in `packages/dapp/deployments`
 - a Next.js UI `packages/ui`,
 - a docs site with learning path to help transition from EVM/Solidity to Sui/Move `packages/learn`.
 - a tooling layer with integration test harness `packages/tooling`

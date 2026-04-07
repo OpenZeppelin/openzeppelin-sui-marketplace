@@ -189,10 +189,10 @@ export const useStoreDashboardViewModel = ({
     }))
   }, [])
 
-  const openRemoveDiscountModal = useCallback((template: DiscountSummary) => {
+  const openRemoveDiscountModal = useCallback((discount: DiscountSummary) => {
     setModalState((previous) => ({
       ...previous,
-      activeDiscountToRemove: template,
+      activeDiscountToRemove: discount,
       isRemoveDiscountModalOpen: true
     }))
   }, [])

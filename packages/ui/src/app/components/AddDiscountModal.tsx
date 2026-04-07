@@ -135,7 +135,7 @@ const DiscountSummarySection = ({
       {summary.discountId ? (
         <CopyableId
           value={summary.discountId}
-          label="Template ID"
+          label="Discount ID"
           explorerUrl={explorerUrl}
         />
       ) : undefined}

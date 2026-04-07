@@ -30,15 +30,10 @@ If you build owner tooling or UI flows:
 
 Code anchor (capability check):
 
-From `assert_owner_cap` in `packages/dapp/contracts/oracle-market/sources/shop.move`:
+From admin functions in `packages/dapp/contracts/oracle-market/sources/shop.move`:
 
 ```move
-fun assert_owner_cap(shop: &Shop, owner_cap: &ShopOwnerCap) {
-   assert!(
-      owner_cap.shop_id == shop.id.to_inner(),
-      EInvalidOwnerCap,
-   );
-}
+assert!(owner_cap.shop_id == shop.id(), EInvalidOwnerCap);
 ```
 
 The important part is not “who signed” but “does this capability bind to this shop”.
@@ -50,7 +45,7 @@ Two recurring “Sui-native” checks show up throughout the module:
 Listings/discounts are stored in shop-owned tables and looked up by ID under the active `Shop`.
 Before any mutation, the module asserts that:
 - the object ID is registered under the current shop table, and
-- optional cross-links (discount-to-listing / ticket-to-shop / ticket-to-listing) match the active context.
+- optional cross-links (discount-to-listing) match the active context.
 
 This prevents a caller from mixing objects from different shops.
 
@@ -65,27 +60,13 @@ The module defends against this by binding two things:
 From `assert_price_info_identity` in `packages/dapp/contracts/oracle-market/sources/shop.move`:
 
 ```move
-fun assert_price_info_identity(
-   expected_feed_id: &vector<u8>,
-   expected_pyth_object_id: &ID,
-   price_info_object: &PriceInfoObject,
-) {
-   let confirmed_price_object = price_info::uid_to_inner(price_info_object);
-   assert!(
-      confirmed_price_object == *expected_pyth_object_id,
-      EPythObjectMismatch,
-   );
+let confirmed_price_object = price_info_object.uid_to_inner();
+assert!(confirmed_price_object == expected_pyth_object_id, EPythObjectMismatch);
 
-   let price_info = price_info::get_price_info_from_price_info_object(
-      price_info_object,
-   );
-   let identifier = price_info::get_price_identifier(&price_info);
-   let identifier_bytes = price_identifier::get_bytes(&identifier);
-   assert!(
-      bytes_equal(expected_feed_id, &identifier_bytes),
-      EFeedIdentifierMismatch,
-   );
-}
+let price_info = price_info::get_price_info_from_price_info_object(price_info_object);
+let identifier = price_info.get_price_identifier();
+let identifier_bytes = identifier.get_bytes();
+assert!(expected_feed_id == identifier_bytes, EFeedIdentifierMismatch);
 ```
 
 If you extend the oracle model (multiple feeds, fallback feeds, cross rates), keep this property:
@@ -97,47 +78,33 @@ Oracles are the main “external dependency” here. The shop enforces guardrail
 frontends cannot bypass them:
 - **Age**: max staleness allowed
 - **Confidence**: max $/ ratio (sigma/mu) to reject noisy feeds
-- **Status lag**: rejects feeds whose attestation is too far behind publish time
+
 
 Design detail worth keeping:
-- Sellers set **caps** per currency. Buyers can only tighten age/confidence; status-lag is enforced
-  using the seller cap. This is similar to slippage limits, but enforced with explicit caps.
+- Sellers set **caps** per currency. Buyers can only tighten age/confidence. This is similar to slippage limits, but enforced with explicit caps.
 
 If you build new checkout flows, don’t move these checks “off-chain for performance”.
 They are correctness checks.
 
 Code anchor (guardrail caps):
 
-From `resolve_effective_guardrails` in `packages/dapp/contracts/oracle-market/sources/shop.move`:
+From `quote_amount_with_guardrails` in `packages/dapp/contracts/oracle-market/sources/currency.move`:
 
 ```move
-fun resolve_effective_guardrails(
-   max_price_age_secs: Option<u64>,
-   max_confidence_ratio_bps: Option<u16>,
-   accepted_currency: &AcceptedCurrency,
-): (u64, u16) {
-   let requested_max_age = max_price_age_secs.destroy_or!(
-      accepted_currency.max_price_age_secs_cap
-   );
-   let requested_confidence_ratio = max_confidence_ratio_bps.destroy_or!(
-      accepted_currency.max_confidence_ratio_bps_cap
-   );
-   let effective_max_age =
-      requested_max_age.min(accepted_currency.max_price_age_secs_cap);
-   let effective_confidence_ratio =
-      requested_confidence_ratio.min(accepted_currency.max_confidence_ratio_bps_cap);
-   (effective_max_age, effective_confidence_ratio)
-}
+let requested_max_age = max_price_age_secs.destroy_or!(accepted_currency.max_price_age_secs_cap);
+let effective_max_age = requested_max_age.min(accepted_currency.max_price_age_secs_cap);
+
+let requested_confidence_ratio = max_confidence_ratio_bps.destroy_or!(accepted_currency.max_confidence_ratio_bps_cap);
+let effective_confidence_ratio = requested_confidence_ratio.min(accepted_currency.max_confidence_ratio_bps_cap);
 ```
 
 ## 5. Shared-object contention and DoS shape
 On Sui, shared objects are the concurrency boundary. If you put too much state behind a single
 shared object, you create a performance bottleneck and a DoS surface.
 
-This repo intentionally shards state:
-- `Shop` is shared, but most mutations happen on sibling shared objects (`ItemListing`,
-   `AcceptedCurrency`, `Discount`).
-- `Shop` mainly carries markers and small metadata.
+This repo intentionally keeps state under one shared root:
+- `Shop` is shared and stores listings/currencies/discounts in typed `Table` collections.
+- Mutations are scoped to table entries keyed by listing/currency/discount IDs.
 
 When you add new features, sanity-check:
 - “Does this force every transaction to touch the `Shop` object?”
@@ -145,9 +112,9 @@ When you add new features, sanity-check:
 
 If you need enumeration, prefer:
 - off-chain enumeration + on-chain membership checks, or
-- bounded admin-only maintenance functions (like pruning claims) that accept explicit lists.
+- bounded admin-only maintenance functions that accept explicit lists.
 
-## 6. Discount discounts: bounded redemption and listing scope
+## 6. Discounts: bounded redemption and listing scope
 Discount redemption is now discount-based (no separate ticket objects).
 The safety properties are enforced directly on the discount and checkout path:
 

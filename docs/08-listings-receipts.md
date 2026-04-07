@@ -2,7 +2,7 @@
 
 **Path:** [Learning Path](./) > 08 Listings + Typed Receipts
 
-Listings are stored inside the shared `Shop` via `Table<ID, ItemListing>`, and purchases mint typed receipts (`ShopItem<TItem>`).
+Listings are stored inside the shared `Shop` via `Table<ID, ItemListing>`, and purchases mint typed receipts (`ShopItem<T>`).
 
 ## 1. Learning goals
 1. Publish example item types.
@@ -27,83 +27,82 @@ pnpm script buyer:item-listing:list --shop-id <shopId>
 
 ## 4. EVM -> Sui translation
 1. **Mapping entries -> table entries under a shared object**: listings are rows in `Shop.listings: Table<ID, ItemListing>`, keyed by object `ID` listing IDs.
-2. **ERC-721 receipt -> typed resource**: the receipt is a `ShopItem<TItem>` whose type must match the listing. See `ShopItem` in `packages/dapp/contracts/oracle-market/sources/shop.move`.
+2. **ERC-721 receipt -> typed resource**: the receipt is a `ShopItem<T>` whose type must match the listing. See `ShopItem` in `packages/dapp/contracts/oracle-market/sources/listing.move`.
 
 ## 5. Concept deep dive: tables and type tags
 - **Table-backed listings**: listing create/update/remove paths mutate `Shop.listings` directly with `add`, `borrow_mut`, and `remove`.
-  Code: `packages/dapp/contracts/oracle-market/sources/shop.move` (`add_item_listing_core`, `borrow_listing_mut`, `remove_item_listing`)
+  Code: `packages/dapp/contracts/oracle-market/sources/shop.move` (`add_item_listing`, `listing_mut`, `remove_item_listing`)
 - **Listing IDs are object `ID`s**: IDs are allocated from `TxContext`, emitted in events, and reused by scripts/UI as stable primary keys.
-  Code: `packages/dapp/contracts/oracle-market/sources/shop.move` (`new_object_id`, `ItemListingAdded`)
+  Code: `packages/dapp/contracts/oracle-market/sources/listing.move` (`create`) and `packages/dapp/contracts/oracle-market/sources/events.move` (`ItemListingAdded`)
 - **Off-chain enumeration still reads dynamic-field table entries**: `Table` is backed by dynamic fields, so the SDK discovers rows by reading table entry objects.
   Code: `packages/domain/core/src/models/item-listing.ts` (`getItemListingSummaries`)
-- **TypeName and type tags**: listing types are stored as `TypeName` for runtime checks, events, and UI metadata. Compile-time safety still comes from generics (`ShopItem<TItem>`), not from the stored value.
-  Code: `packages/dapp/contracts/oracle-market/sources/shop.move` (`ItemListing.item_type`, `ShopItem`)
-- **Phantom types for receipts**: `ShopItem<phantom TItem>` records the item type without storing the item value.
-  Code: `packages/dapp/contracts/oracle-market/sources/shop.move` (`ShopItem`)
-- **Receipts are transferable, not the asset**: `ShopItem<TItem>` is an owned receipt object proving purchase.
-  Code: `packages/dapp/contracts/oracle-market/sources/shop.move` (`ShopItem`, `mint_shop_item`)
+- **TypeName and type tags**: listing types are stored as `TypeName` for runtime checks, events, and UI metadata. Compile-time safety still comes from generics (`ShopItem<T>`), not from the stored value.
+  Code: `packages/dapp/contracts/oracle-market/sources/listing.move` (`ItemListing.item_type`, `ShopItem`)
+- **Phantom types for receipts**: `ShopItem<phantom T>` records the item type without storing the item value.
+  Code: `packages/dapp/contracts/oracle-market/sources/listing.move` (`ShopItem`)
+- **Receipts are transferable, not the asset**: `ShopItem<T>` is an owned receipt object proving purchase.
+  Code: `packages/dapp/contracts/oracle-market/sources/listing.move` (`ShopItem`, `mint_shop_item`)
 
 ## 6. Code references
 1. `packages/dapp/contracts/item-examples/sources/items.move` (Car, Bike, ConcertTicket)
-2. `packages/dapp/contracts/oracle-market/sources/shop.move` (add_item_listing, buy_item, ShopItem)
-3. `packages/domain/core/src/models/item-listing.ts` (table entry discovery)
-4. `packages/domain/core/src/ptb/item-listing.ts` (listing PTB builders)
-5. `packages/dapp/src/scripts/owner/item-listing-add.ts` (owner script)
+2. `packages/dapp/contracts/oracle-market/sources/shop.move` (add_item_listing, buy_item)
+3. `packages/dapp/contracts/oracle-market/sources/listing.move` (ItemListing, ShopItem, mint_shop_item)
+4. `packages/domain/core/src/models/item-listing.ts` (table entry discovery)
+5. `packages/domain/core/src/ptb/item-listing.ts` (listing PTB builders)
+6. `packages/dapp/src/scripts/owner/item-listing-add.ts` (owner script)
 
 **Code spotlight: listing creation in `Shop.listings`**
 `packages/dapp/contracts/oracle-market/sources/shop.move`
 ```move
-fun add_item_listing_core<T: store>(
-  shop: &mut Shop,
-  owner_cap: &ShopOwnerCap,
-  name: String,
-  base_price_usd_cents: u64,
-  stock: u64,
-  spotlight_discount_id: Option<ID>,
-  ctx: &mut TxContext,
+public fun add_item_listing<T: store>(
+    shop: &mut Shop,
+    owner_cap: &ShopOwnerCap,
+    name: String,
+    base_price_usd_cents: u64,
+    stock: u64,
+    spotlight_discount_id: Option<ID>,
+    ctx: &mut TxContext,
 ): ID {
-  assert_owner_cap!(shop, owner_cap);
-  assert_listing_inputs!(
-    shop,
-    &name,
-    base_price_usd_cents,
-    stock,
-    spotlight_discount_id,
-  );
+    assert!(owner_cap.shop_id == shop.id(), EInvalidOwnerCap);
 
-  let shop_id = shop.id.to_inner();
-  let listing_id = new_object_id(ctx);
-  let listing = new_item_listing<T>(
-    listing_id,
-    name,
-    base_price_usd_cents,
-    stock,
-    spotlight_discount_id,
-  );
-  shop.listings.add(listing_id, listing);
-  event::emit(ItemListingAdded { shop_id, listing_id });
-  listing_id
+    spotlight_discount_id.do!(|discount_id| {
+        assert!(shop.discounts.contains(discount_id), EDiscountNotFound);
+    });
+
+    let listing = listing::create<T>(
+        name,
+        base_price_usd_cents,
+        stock,
+        spotlight_discount_id,
+        ctx,
+    );
+    let listing_id = listing.id();
+    shop.listings.add(listing_id, listing);
+
+    events::emit_item_listing_added(shop.id(), listing_id);
+
+    listing_id
 }
 ```
 
 **Code spotlight: typed receipt minting uses object listing ID**
-`packages/dapp/contracts/oracle-market/sources/shop.move`
+`packages/dapp/contracts/oracle-market/sources/listing.move`
 ```move
-fun mint_shop_item<TItem: store>(
+public(package) fun mint_shop_item<T: store>(
   item_listing: &ItemListing,
   shop_id: ID,
-  clock: &clock::Clock,
+  now_sec: u64,
   ctx: &mut TxContext,
-): ShopItem<TItem> {
-  assert_listing_type_matches<TItem>(item_listing);
+): ShopItem<T> {
+  assert!(item_listing.item_type == type_name::with_defining_ids<T>(), EItemTypeMismatch);
 
   ShopItem {
     id: object::new(ctx),
     shop_id,
-    item_listing_id: item_listing.listing_id,
+    item_listing_id: item_listing.id,
     item_type: item_listing.item_type,
     name: item_listing.name,
-    acquired_at: now_secs(clock),
+    acquired_at: now_sec,
   }
 }
 ```

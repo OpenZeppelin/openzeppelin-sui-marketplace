@@ -53,7 +53,7 @@ export const getShopItemReceiptSummaries = async ({
       filter: {
         MoveModule: {
           package: shopPackageId,
-          module: "shop"
+          module: "listing"
         }
       },
       options: { showContent: true, showType: true }

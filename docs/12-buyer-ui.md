@@ -59,7 +59,7 @@ pnpm ui dev
   to the PTB; for other networks it can be auto/skip. This keeps pricing deterministic and fresh.
   Code: `packages/ui/src/app/hooks/useBuyFlowModalState.ts`
 - **Shared vs owned reads in UI**: storefront data comes from shared objects (`Shop`, discounts)
-  plus `Shop` table entries (listings, currencies). Wallet data comes from owned objects (tickets, receipts).
+  plus `Shop` table entries (listings, currencies). Wallet data comes from owned objects (receipts, owner caps).
   Code: `packages/ui/src/app/hooks/useShopDashboardData.tsx`
 
 ## 7. UI map (buyer path)
@@ -76,28 +76,28 @@ pnpm ui dev
 5. `packages/ui/src/app/hooks/useShopDashboardData.tsx` (shared vs owned reads)
 6. PTB builder definition: `packages/domain/core/src/flows/buy.ts` (buildBuyTransaction)
 
-**Code spotlight: buy public functions infer currency from `TCoin`**
+**Code spotlight: buy public functions infer currency from `C`**
 `packages/dapp/contracts/oracle-market/sources/shop.move`
 ```move
-public fun buy_item<TItem: store, TCoin>(
+public fun buy_item<T: store, C>(
   shop: &mut Shop,
   price_info_object: &PriceInfoObject,
-  payment: Coin<TCoin>,
+  payment: Coin<C>,
   listing_id: ID,
   mint_to: address,
   refund_extra_to: address,
   max_price_age_secs: Option<u64>,
   max_confidence_ratio_bps: Option<u16>,
-  clock: &clock::Clock,
+  clock: &Clock,
   ctx: &mut TxContext,
 ) {
-  assert_shop_active!(shop);
-  assert_listing_registered!(shop, listing_id);
-  let base_price_usd_cents = shop.borrow_listing(listing_id).base_price_usd_cents;
-  let (owed_coin_opt, change_coin, minted_item) = shop.process_purchase<TItem, TCoin>(
-    listing_id,
+  assert!(!shop.disabled, EShopDisabled);
+
+  let base_price_usd_cents = shop.listing(listing_id).base_price_usd_cents();
+  let (owed_coin_opt, change_coin, minted_item) = shop.process_purchase<T, C>(
     price_info_object,
     payment,
+    listing_id,
     base_price_usd_cents,
     option::none(),
     max_price_age_secs,
@@ -108,7 +108,12 @@ public fun buy_item<TItem: store, TCoin>(
   owed_coin_opt.do!(|owed_coin| {
     transfer::public_transfer(owed_coin, shop.owner);
   });
-  // refund change and transfer minted item
+  if (change_coin.value() == 0) {
+    change_coin.destroy_zero();
+  } else {
+    transfer::public_transfer(change_coin, refund_extra_to);
+  };
+  transfer::public_transfer(minted_item, mint_to);
 }
 ```
 

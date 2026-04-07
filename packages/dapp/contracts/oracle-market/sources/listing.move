@@ -137,26 +137,32 @@ public(package) fun mint_shop_item<T: store>(
     }
 }
 
+/// Decrements listing stock after a successful purchase.
 public(package) fun decrement_stock(listing: &mut ItemListing) {
     listing.stock = listing.stock - 1;
 }
 
+/// Sets the listing spotlight discount reference.
 public(package) fun set_spotlight(listing: &mut ItemListing, discount_id: ID) {
     listing.spotlight_discount_id = option::some(discount_id);
 }
 
+/// Clears the listing spotlight discount reference.
 public(package) fun clear_spotlight(listing: &mut ItemListing) {
     listing.spotlight_discount_id = option::none();
 }
 
+/// Replaces the listing stock with a new value.
 public(package) fun set_stock(listing: &mut ItemListing, new_stock: u64) {
     listing.stock = new_stock;
 }
 
+/// Increments the number of active discounts attached to a listing.
 public(package) fun increment_active_bound_discount_count(listing: &mut ItemListing) {
     listing.active_bound_discount_count = listing.active_bound_discount_count + 1;
 }
 
+/// Decrements the number of active discounts attached to a listing.
 public(package) fun decrement_active_bound_discount_count(listing: &mut ItemListing) {
     assert!(listing.active_bound_discount_count > 0, EListingDiscountCountUnderflow);
 

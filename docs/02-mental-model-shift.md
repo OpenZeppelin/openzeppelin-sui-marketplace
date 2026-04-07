@@ -13,7 +13,7 @@ This repo assumes you already think in Solidity. The goal here is not to re-teac
 1. **Contract storage -> objects + tables**: your state lives in owned/shared objects and typed table entries, not in a single contract storage map. See `packages/dapp/contracts/oracle-market/sources/shop.move` (`Shop`, `Discount`, `Shop.listings`, `Shop.accepted_currencies`).
 2. **onlyOwner -> capability**: authority is proved by holding a capability object. See `ShopOwnerCap` in `packages/dapp/contracts/oracle-market/sources/shop.move`.
 3. **Deployment -> publish + instantiate**: publishing creates a package object; stateful instances are created later as shared objects. See publish flow in `packages/dapp/src/scripts/contracts/publish.ts` and shop creation in `packages/dapp/src/scripts/owner/shop-create.ts`.
-4. **Inheritance -> modules + generics**: Move has no inheritance or dynamic dispatch; reuse is done through modules, functions, and type parameters. This repo uses `ShopItem<phantom TItem>` and `Coin<T>` to keep types safe without polymorphism.
+4. **Inheritance -> modules + generics**: Move has no inheritance or dynamic dispatch; reuse is done through modules, functions, and type parameters. This repo uses `ShopItem<phantom T>` and `Coin<C>` to keep types safe without polymorphism.
 5. **Composability -> PTBs**: you compose calls at runtime in a programmable transaction block (PTB), rather than writing a single on-chain "router" contract for every workflow.
 6. **Upgrades -> new package + UpgradeCap**: upgrades publish a new package ID gated by an `UpgradeCap`. Callers opt into new package IDs explicitly.
 
@@ -91,20 +91,15 @@ await publishPackageToNetwork(
 )
 ```
 
-**Code spotlight: instantiate a Shop after publish**
+**Code spotlight: instantiate and share a Shop after publish**
 `packages/dapp/contracts/oracle-market/sources/shop.move`
 ```move
-public fun create_shop(name: String, ctx: &mut TxContext): (ID, ShopOwnerCap) {
-    let shop = new_shop(name, ctx.sender(), ctx);
-    let shop_id = shop.id.to_inner();
+public fun create_shop_and_share(name: String, ctx: &mut TxContext): (ID, ShopOwnerCap) {
+  let (shop, owner_cap) = create_shop(name, ctx);
+  let shop_id = shop.id();
 
-    let owner_cap = ShopOwnerCap {
-        id: object::new(ctx),
-        shop_id,
-    };
-
-    transfer::public_share_object(shop);
-    (shop_id, owner_cap)
+  transfer::public_share_object(shop);
+  (shop_id, owner_cap)
 }
 ```
 

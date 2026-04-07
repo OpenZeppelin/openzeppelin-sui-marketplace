@@ -30,16 +30,16 @@ pnpm script owner:shop:update-owner --new-owner <0x...>
   and shared objects become the concurrency boundary for transactions.
   Code: `packages/dapp/contracts/oracle-market/sources/shop.move` (`create_shop`, `Shop`)
 - **Ownership types in practice**: `ShopOwnerCap` is address-owned, the Shop is shared, and dynamic
-  field markers are object-owned under the Shop. Sui enforces access based on ownership and the
+  field table entries are object-owned under the Shop. Sui enforces access based on ownership and the
   object references you pass into a PTB.
-  Code: `packages/dapp/contracts/oracle-market/sources/shop.move` (ShopOwnerCap, markers)
+  Code: `packages/dapp/contracts/oracle-market/sources/shop.move` (ShopOwnerCap, listings/currencies/discounts tables)
 - **Capability-based auth**: `ShopOwnerCap` is an owned object that proves admin rights. Public
-  admin functions take it as a parameter and call `assert_owner_cap`. This keeps access control explicit,
+  admin functions take it as a parameter and compare `owner_cap.shop_id` with `shop.id()`. This keeps access control explicit,
   and it allows ownership rotation without changing code or global state.
-  Code: `packages/dapp/contracts/oracle-market/sources/shop.move` (`ShopOwnerCap`, `assert_owner_cap`)
+  Code: `packages/dapp/contracts/oracle-market/sources/shop.move` (`ShopOwnerCap`, `update_shop_owner`)
 - **TxContext and object creation**: `obj::new(ctx)` creates new objects and assigns IDs. The
   capability and the shop are minted in a single transaction.
-  Code: `packages/dapp/contracts/oracle-market/sources/shop.move` (`create_shop`, `new_shop`)
+  Code: `packages/dapp/contracts/oracle-market/sources/shop.move` (`create_shop`)
 - **Public transfer vs sharing**: `transfer::public_transfer` moves owned objects to an address; sharing
   creates a global shared object. This mirrors deploy + ownership transfer in a single PTB.
   Code: `packages/dapp/contracts/oracle-market/sources/shop.move` (`create_shop`)
@@ -53,17 +53,17 @@ pnpm script owner:shop:update-owner --new-owner <0x...>
 **Code spotlight: Shop creation + owner cap mint**
 `packages/dapp/contracts/oracle-market/sources/shop.move`
 ```move
-public fun create_shop(name: String, ctx: &mut TxContext) {
-  let owner = ctx.sender();
-  let shop = new_shop(name, owner, ctx);
+public fun create_shop(name: String, ctx: &mut TxContext): (Shop, ShopOwnerCap) {
+  let shop = new(name, ctx.sender(), ctx);
 
   let owner_cap = ShopOwnerCap {
-    id: obj::new(ctx),
-    shop_id: shop.id.to_inner(),
+    id: object::new(ctx),
+    shop_id: shop.id(),
   };
 
-  transfer::public_share_object(shop);
-  transfer::public_transfer(owner_cap, owner);
+  events::emit_shop_created(shop.id(), owner_cap.id.to_inner());
+
+  (shop, owner_cap)
 }
 ```
 
@@ -75,10 +75,11 @@ public fun update_shop_owner(
   owner_cap: &ShopOwnerCap,
   new_owner: address
 ) {
-  assert_owner_cap!(shop, owner_cap);
+  assert!(owner_cap.shop_id == shop.id(), EInvalidOwnerCap);
+  let previous_owner = shop.owner;
   shop.owner = new_owner;
 
-  event::emit(new_shop_owner_updated_event(shop.id.to_inner(), owner_cap.id.to_inner()));
+  events::emit_shop_owner_updated(shop.id(), owner_cap.id.to_inner(), previous_owner);
 }
 ```
 

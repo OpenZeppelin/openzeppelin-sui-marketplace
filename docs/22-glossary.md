@@ -7,7 +7,7 @@
 3. **Shared object**: Mutable through consensus by anyone who includes it in a transaction, but
    module checks still decide what can change. Example: `Shop`.
 4. **Capability**: An owned object that proves authority. Example: `ShopOwnerCap`.
-5. **Dynamic field**: A key-value table attached to an object. Used directly for claim markers, and indirectly under `Table` for listing/currency entries under `Shop`.
+5. **Dynamic field**: A key-value field attached to an object. In this repo, `Table` uses dynamic fields under the hood for listing/currency/discount entries under `Shop`.
 6. **PTB (Programmable Transaction Block)**: A multi-call transaction that sequences Move calls. See `packages/domain/core/src/flows/buy.ts`.
 7. **`Coin<T>`**: A Move resource representing fungible tokens. No allowances; the coin object is passed into transactions.
 8. **PriceInfoObject**: Pyth's on-chain price object. Identifies a feed + price data.

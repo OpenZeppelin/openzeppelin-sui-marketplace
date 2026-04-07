@@ -95,6 +95,7 @@ public fun max_confidence_ratio_bps_cap(currency: &AcceptedCurrency): u16 {
 
 // === Package Functions ===
 
+/// Creates accepted-currency metadata with validated feed and guardrail caps.
 public(package) fun create<C>(
     feed_id: vector<u8>,
     pyth_object_id: ID,
@@ -126,6 +127,7 @@ public(package) fun create<C>(
     }
 }
 
+/// Quotes required coin amount with seller caps and optional buyer-tightened guardrails.
 public(package) fun quote_amount_with_guardrails(
     accepted_currency: &AcceptedCurrency,
     price_info_object: &PriceInfoObject,
@@ -267,6 +269,7 @@ fun conservative_price_mantissa(
     mantissa - confidence
 }
 
+/// Converts a positive signed Pyth price component into `u128`.
 fun positive_price_to_u128(value: i64::I64): u128 {
     assert!(!value.get_is_negative(), EPriceNonPositive);
     value.get_magnitude_if_positive() as u128
