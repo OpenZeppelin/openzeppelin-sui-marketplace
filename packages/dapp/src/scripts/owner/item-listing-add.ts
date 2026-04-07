@@ -142,7 +142,7 @@ runSuiScript(
       alias: ["spotlight-discount-id", "discount-id"],
       type: "string",
       description:
-        "Optional discount ID to spotlight for this listing (Shop::Discount)"
+        "Optional discount ID to spotlight for this listing (discount::Discount)"
     })
     .option("createSpotlightRuleKind", {
       alias: ["create-spotlight-rule-kind", "spotlight-rule-kind"],

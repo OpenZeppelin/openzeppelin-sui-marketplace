@@ -51,7 +51,7 @@ const getListingLabel = (listing?: ItemListingSummary) =>
 
 const extractReceiptIds = (transactionBlock: SuiTransactionBlockResponse) =>
   extractCreatedObjects(transactionBlock)
-    .filter((change) => change.objectType.includes("::shop::ShopItem"))
+    .filter((change) => change.objectType.includes("::listing::ShopItem"))
     .map((change) => change.objectId)
 
 const TransactionRecap = ({

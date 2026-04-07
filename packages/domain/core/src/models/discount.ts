@@ -419,7 +419,7 @@ export const buildDiscountOptions = ({
   if (!listing || !shopId) return []
   const eligibleDiscounts = discounts
     .filter((discountSummary) => {
-      if (discountSummary.shopId !== shopId) return false
+      if (discountSummary.shopId !== normalizeSuiObjectId(shopId)) return false
       if (
         discountSummary.appliesToListingId &&
         discountSummary.appliesToListingId !== listing.itemListingId
