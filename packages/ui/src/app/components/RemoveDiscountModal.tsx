@@ -21,17 +21,17 @@ import Button from "./Button"
 import TransactionRecap from "./TransactionRecap"
 
 const DiscountSummarySection = ({
-  template,
+  discount,
   shopId,
   explorerUrl
 }: {
-  template: DiscountSummary
+  discount: DiscountSummary
   shopId?: string
   explorerUrl?: string
 }) => (
   <ModalSection
     title="Discount details"
-    subtitle="Template scheduled to be disabled"
+    subtitle="Discount scheduled to be disabled"
   >
     <div className="grid gap-3 text-xs sm:grid-cols-2">
       <div className="rounded-xl border border-slate-200/70 bg-white/80 p-3 dark:border-slate-50/15 dark:bg-slate-950/60">
@@ -39,7 +39,7 @@ const DiscountSummarySection = ({
           Rule
         </div>
         <div className="mt-1 text-sm font-semibold text-sds-dark dark:text-sds-light">
-          {template.ruleDescription}
+          {discount.ruleDescription}
         </div>
       </div>
       <div className="rounded-xl border border-slate-200/70 bg-white/80 p-3 dark:border-slate-50/15 dark:bg-slate-950/60">
@@ -47,7 +47,7 @@ const DiscountSummarySection = ({
           Status
         </div>
         <div className="mt-1 text-sm font-semibold text-sds-dark dark:text-sds-light">
-          {template.status}
+          {discount.status}
         </div>
       </div>
       <div className="rounded-xl border border-slate-200/70 bg-white/80 p-3 dark:border-slate-50/15 dark:bg-slate-950/60">
@@ -55,7 +55,7 @@ const DiscountSummarySection = ({
           Starts
         </div>
         <div className="mt-1 text-sm font-semibold text-sds-dark dark:text-sds-light">
-          {template.startsAt ? formatEpochSeconds(template.startsAt) : "Now"}
+          {discount.startsAt ? formatEpochSeconds(discount.startsAt) : "Now"}
         </div>
       </div>
       <div className="rounded-xl border border-slate-200/70 bg-white/80 p-3 dark:border-slate-50/15 dark:bg-slate-950/60">
@@ -63,31 +63,31 @@ const DiscountSummarySection = ({
           Expires
         </div>
         <div className="mt-1 text-sm font-semibold text-sds-dark dark:text-sds-light">
-          {template.expiresAt
-            ? formatEpochSeconds(template.expiresAt)
+          {discount.expiresAt
+            ? formatEpochSeconds(discount.expiresAt)
             : "Never"}
         </div>
       </div>
-      {template.appliesToListingId ? (
+      {discount.appliesToListingId ? (
         <div className="rounded-xl border border-slate-200/70 bg-white/80 p-3 sm:col-span-2 dark:border-slate-50/15 dark:bg-slate-950/60">
           <div className="text-[0.6rem] uppercase tracking-[0.18em] text-slate-500 dark:text-slate-200/60">
             Listing scope
           </div>
           <div className="mt-1 text-sm font-semibold text-sds-dark dark:text-sds-light">
-            Listing {shortenId(template.appliesToListingId)}
+            Listing {shortenId(discount.appliesToListingId)}
           </div>
         </div>
       ) : undefined}
     </div>
     <div className="mt-4 flex flex-wrap items-center gap-3 text-xs">
       <CopyableId
-        value={template.discountId}
+        value={discount.discountId}
         label="Discount ID"
         explorerUrl={explorerUrl}
       />
-      {template.appliesToListingId ? (
+      {discount.appliesToListingId ? (
         <CopyableId
-          value={template.appliesToListingId}
+          value={discount.appliesToListingId}
           label="Listing ID"
           showExplorer={false}
         />
@@ -102,7 +102,7 @@ const DiscountSummarySection = ({
 const RemovalImpactSection = () => (
   <ModalSection
     title="Removal impact"
-    subtitle="What changes after the template is disabled"
+    subtitle="What changes after the discount is disabled"
   >
     <div className="text-xs text-slate-500 dark:text-slate-200/70">
       Disabling a discount prevents it from applying to new purchases until it
@@ -126,13 +126,13 @@ const DiscountSuccessView = ({
     <ModalStatusHeader
       status="success"
       title="Discount disabled"
-      subtitle={summary.template.ruleDescription}
+      subtitle={summary.discount.ruleDescription}
       description="The discount has been disabled on chain."
       onClose={onClose}
     />
     <ModalBody>
       <DiscountSummarySection
-        template={summary.template}
+        discount={summary.discount}
         shopId={shopId}
         explorerUrl={explorerUrl}
       />
@@ -152,13 +152,13 @@ const DiscountSuccessView = ({
 const DiscountErrorView = ({
   error,
   details,
-  templateLabel,
+  discountLabel,
   onClose,
   onReset
 }: {
   error: string
   details?: string
-  templateLabel: string
+  discountLabel: string
   onClose: () => void
   onReset: () => void
 }) => (
@@ -166,7 +166,7 @@ const DiscountErrorView = ({
     <ModalStatusHeader
       status="error"
       title="Removal failed"
-      subtitle={templateLabel}
+      subtitle={discountLabel}
       description="Review the error details and try again."
       onClose={onClose}
     />
@@ -181,14 +181,14 @@ const RemoveDiscountModal = ({
   open,
   onClose,
   shopId,
-  template,
+  discount,
   onDiscountUpdated
 }: {
   open: boolean
   onClose: () => void
   shopId?: string
-  template?: DiscountSummary
-  onDiscountUpdated?: (template?: DiscountSummary) => void
+  discount?: DiscountSummary
+  onDiscountUpdated?: (discount?: DiscountSummary) => void
 }) => {
   const {
     transactionState,
@@ -202,13 +202,13 @@ const RemoveDiscountModal = ({
   } = useRemoveDiscountModalState({
     open,
     shopId,
-    template,
+    discount,
     onDiscountUpdated
   })
   const errorState =
     transactionState.status === "error" ? transactionState : undefined
 
-  if (!open || !template) return <></>
+  if (!open || !discount) return <></>
 
   return (
     <ModalFrame onClose={onClose}>
@@ -223,7 +223,7 @@ const RemoveDiscountModal = ({
         <DiscountErrorView
           error={errorState?.error ?? "Unknown error"}
           details={errorState?.details}
-          templateLabel={template.ruleDescription}
+          discountLabel={discount.ruleDescription}
           onClose={onClose}
           onReset={resetState}
         />
@@ -236,15 +236,15 @@ const RemoveDiscountModal = ({
             onClose={onClose}
             footer={
               <CopyableId
-                value={template.discountId}
-                label="Template"
+                value={discount.discountId}
+                label="Discount"
                 explorerUrl={explorerUrl}
               />
             }
           />
           <ModalBody>
             <DiscountSummarySection
-              template={template}
+              discount={discount}
               shopId={shopId}
               explorerUrl={explorerUrl}
             />

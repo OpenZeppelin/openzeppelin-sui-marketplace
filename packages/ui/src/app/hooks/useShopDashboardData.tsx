@@ -77,7 +77,7 @@ const getStorefrontData = async ({
   shopId: string
   suiClient: SuiClient
 }) => {
-  // Storefront reads shared objects (listings/currencies/templates), not wallet-owned objects.
+  // Storefront reads shared objects (listings/currencies/discounts), not wallet-owned objects.
   const [snapshot, clockTimestampMs] = await Promise.all([
     getShopSnapshot(shopId, suiClient),
     getClockTimestampMs({}, { suiClient })
@@ -310,28 +310,28 @@ export const useShopDashboardData = ({
     }))
   }, [])
 
-  const upsertDiscount = useCallback((template: DiscountSummary) => {
+  const upsertDiscount = useCallback((discount: DiscountSummary) => {
     setStorefrontState((previous) => {
       const existingIndex = previous.discounts.findIndex(
-        (item) => item.discountId === template.discountId
+        (item) => item.discountId === discount.discountId
       )
 
       if (existingIndex === -1) {
         return {
           ...previous,
-          discounts: [template, ...previous.discounts]
+          discounts: [discount, ...previous.discounts]
         }
       }
 
-      const nextTemplates = [...previous.discounts]
-      nextTemplates[existingIndex] = {
-        ...nextTemplates[existingIndex],
-        ...template
+      const nextDiscounts = [...previous.discounts]
+      nextDiscounts[existingIndex] = {
+        ...nextDiscounts[existingIndex],
+        ...discount
       }
 
       return {
         ...previous,
-        discounts: nextTemplates
+        discounts: nextDiscounts
       }
     })
   }, [])

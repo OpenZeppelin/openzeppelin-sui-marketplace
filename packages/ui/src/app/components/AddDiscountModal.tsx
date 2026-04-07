@@ -232,7 +232,7 @@ const AddDiscountModal = ({
   onClose: () => void
   shopId?: string
   itemListings: ItemListingSummary[]
-  onDiscountCreated?: (template?: DiscountSummary) => void
+  onDiscountCreated?: (discount?: DiscountSummary) => void
 }) => {
   const {
     formState,

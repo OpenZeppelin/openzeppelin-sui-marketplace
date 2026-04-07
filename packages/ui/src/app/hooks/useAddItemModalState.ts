@@ -68,7 +68,7 @@ type ListingFormState = {
   itemType: string
   basePrice: string
   stock: string
-  spotlightTemplateMode: "existing" | "create"
+  spotlightDiscountMode: "existing" | "create"
   spotlightDiscountId: string
   createSpotlightRuleKind: DiscountRuleKindLabel
   createSpotlightValue: string
@@ -117,7 +117,7 @@ const emptyFormState = (): ListingFormState => ({
   itemType: "",
   basePrice: "",
   stock: "",
-  spotlightTemplateMode: "existing",
+  spotlightDiscountMode: "existing",
   spotlightDiscountId: "",
   createSpotlightRuleKind: "fixed",
   createSpotlightValue: "",
@@ -169,7 +169,7 @@ const buildListingFieldErrors = (
     }
   }
 
-  if (formState.spotlightTemplateMode === "existing") {
+  if (formState.spotlightDiscountMode === "existing") {
     const spotlightError = validateOptionalSuiObjectId(
       formState.spotlightDiscountId,
       "Spotlight discount id"
@@ -263,7 +263,7 @@ const parseListingInputs = (formState: ListingFormState): ListingInputs => {
 
   const basePriceUsdCents = parseUsdToCents(formState.basePrice)
   const stock = parsePositiveU64(formState.stock, "stock")
-  if (formState.spotlightTemplateMode === "existing") {
+  if (formState.spotlightDiscountMode === "existing") {
     const spotlightDiscountId = normalizeOptionalId(
       formState.spotlightDiscountId.trim() || undefined
     )

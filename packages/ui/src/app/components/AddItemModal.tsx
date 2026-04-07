@@ -33,7 +33,7 @@ import {
 } from "./ModalPrimitives"
 import TransactionRecap from "./TransactionRecap"
 
-const spotlightTemplateStatusToneClassName: Record<string, string> = {
+const spotlightDiscountStatusToneClassName: Record<string, string> = {
   active:
     "border-emerald-300 bg-emerald-500/10 text-emerald-700 dark:border-emerald-400/50 dark:text-emerald-200",
   scheduled:
@@ -48,30 +48,30 @@ const spotlightTemplateStatusToneClassName: Record<string, string> = {
     "border-slate-300 bg-slate-500/10 text-slate-600 dark:border-slate-500/40 dark:text-slate-200/80"
 }
 
-const getSpotlightTemplateStatusTone = (status?: string) =>
-  spotlightTemplateStatusToneClassName[status ?? "default"] ??
-  spotlightTemplateStatusToneClassName.default
+const getSpotlightDiscountStatusTone = (status?: string) =>
+  spotlightDiscountStatusToneClassName[status ?? "default"] ??
+  spotlightDiscountStatusToneClassName.default
 
-const SpotlightTemplateStatusBadge = ({ status }: { status?: string }) => (
+const SpotlightDiscountStatusBadge = ({ status }: { status?: string }) => (
   <span
     className={clsx(
       "rounded-full border px-2 py-0.5 text-[0.6rem] font-semibold uppercase tracking-wide",
-      getSpotlightTemplateStatusTone(status)
+      getSpotlightDiscountStatusTone(status)
     )}
   >
     {status ?? "unknown"}
   </span>
 )
 
-const SpotlightTemplateCard = ({
-  template,
+const SpotlightDiscountCard = ({
+  discount,
   selected,
   onSelect,
   explorerUrl
 }: {
-  template: DiscountSummary
+  discount: DiscountSummary
   selected: boolean
-  onSelect: (templateId: string) => void
+  onSelect: (discountId: string) => void
   explorerUrl?: string
 }) => (
   <div
@@ -84,26 +84,26 @@ const SpotlightTemplateCard = ({
   >
     <button
       type="button"
-      onClick={() => onSelect(template.discountId)}
+      onClick={() => onSelect(discount.discountId)}
       aria-pressed={selected}
       className="focus-visible:ring-sds-blue/40 w-full text-left focus-visible:outline-none focus-visible:ring-2"
     >
       <div className="flex items-center justify-between text-[0.6rem] uppercase tracking-[0.18em] text-slate-500 dark:text-slate-200/60">
-        <span>{selected ? "Selected template" : "Template"}</span>
+        <span>{selected ? "Selected discount" : "Discount"}</span>
         <div className="flex items-center gap-2">
           {selected ? (
             <span className="border-sds-blue/60 bg-sds-blue/10 rounded-full border px-2 py-0.5 text-[0.6rem] font-semibold uppercase tracking-wide text-sds-dark dark:text-sds-light">
               Selected
             </span>
           ) : undefined}
-          <SpotlightTemplateStatusBadge status={template.status} />
+          <SpotlightDiscountStatusBadge status={discount.status} />
         </div>
       </div>
       <div className="mt-1 text-sm font-semibold text-sds-dark dark:text-sds-light">
-        {template.ruleDescription}
+        {discount.ruleDescription}
       </div>
       <div className="mt-2 text-[0.7rem] text-slate-500 dark:text-slate-200/60">
-        {template.appliesToListingId
+        {discount.appliesToListingId
           ? "Applies to a specific listing."
           : "Reusable across all listings."}
       </div>
@@ -111,8 +111,8 @@ const SpotlightTemplateCard = ({
     <div className="mt-3 border-t border-slate-200/70 pt-3 text-xs dark:border-slate-50/15">
       <div className="mt-2">
         <CopyableId
-          value={template.discountId}
-          label="Template"
+          value={discount.discountId}
+          label="Discount"
           explorerUrl={explorerUrl}
         />
       </div>
@@ -120,18 +120,18 @@ const SpotlightTemplateCard = ({
   </div>
 )
 
-const SpotlightTemplateSelector = ({
-  templates,
-  selectedTemplateId,
-  onSelectTemplate,
+const SpotlightDiscountSelector = ({
+  discounts,
+  selectedDiscountId,
+  onSelectDiscount,
   explorerUrl
 }: {
-  templates: DiscountSummary[]
-  selectedTemplateId?: string
-  onSelectTemplate: (templateId: string) => void
+  discounts: DiscountSummary[]
+  selectedDiscountId?: string
+  onSelectDiscount: (discountId: string) => void
   explorerUrl?: string
 }) => {
-  if (templates.length === 0)
+  if (discounts.length === 0)
     return (
       <div className="rounded-xl border border-dashed border-slate-200/70 bg-white/50 p-4 text-sm text-slate-500 dark:border-slate-50/20 dark:bg-slate-950/40 dark:text-slate-200/70">
         No discounts are available yet. Create one to highlight it on this
@@ -141,12 +141,12 @@ const SpotlightTemplateSelector = ({
 
   return (
     <div className="grid gap-3 sm:grid-cols-2">
-      {templates.map((template) => (
-        <SpotlightTemplateCard
-          key={template.discountId}
-          template={template}
-          selected={template.discountId === selectedTemplateId}
-          onSelect={onSelectTemplate}
+      {discounts.map((discount) => (
+        <SpotlightDiscountCard
+          key={discount.discountId}
+          discount={discount}
+          selected={discount.discountId === selectedDiscountId}
+          onSelect={onSelectDiscount}
           explorerUrl={explorerUrl}
         />
       ))}
@@ -154,27 +154,27 @@ const SpotlightTemplateSelector = ({
   )
 }
 
-const hasSpotlightTemplateId = ({
-  templates,
-  templateId
+const hasSpotlightDiscountId = ({
+  discounts,
+  discountId
 }: {
-  templates: DiscountSummary[]
-  templateId?: string
+  discounts: DiscountSummary[]
+  discountId?: string
 }): boolean =>
   Boolean(
-    templateId &&
-    templates.some((template) => template.discountId === templateId)
+    discountId &&
+    discounts.some((discount) => discount.discountId === discountId)
   )
 
-const getSelectedSpotlightTemplate = ({
-  templates,
-  templateId
+const getSelectedSpotlightDiscount = ({
+  discounts,
+  discountId
 }: {
-  templates: DiscountSummary[]
-  templateId?: string
+  discounts: DiscountSummary[]
+  discountId?: string
 }) =>
-  templateId
-    ? templates.find((template) => template.discountId === templateId)
+  discountId
+    ? discounts.find((discount) => discount.discountId === discountId)
     : undefined
 
 const ListingSummarySection = ({
@@ -236,7 +236,7 @@ const ListingSummarySection = ({
           <div className="mt-2">
             <CopyableId
               value={summary.spotlightDiscountId}
-              label="Template"
+              label="Discount"
               explorerUrl={explorerUrl}
             />
           </div>
@@ -358,47 +358,47 @@ const AddItemModal = ({
     shouldShowFieldError,
     resetForm
   } = useAddItemModalState({ open, shopId, onListingCreated })
-  const availableSpotlightTemplates = useMemo(
+  const availableSpotlightDiscounts = useMemo(
     () =>
       (discounts ?? [])
         .slice()
-        .sort((templateA, templateB) =>
-          templateA.ruleDescription.localeCompare(templateB.ruleDescription)
+        .sort((discountA, discountB) =>
+          discountA.ruleDescription.localeCompare(discountB.ruleDescription)
         ),
     [discounts]
   )
-  const selectedSpotlightTemplateId =
+  const selectedSpotlightDiscountId =
     formState.spotlightDiscountId.trim() || undefined
-  const selectedSpotlightTemplate = useMemo(
+  const selectedSpotlightDiscount = useMemo(
     () =>
-      getSelectedSpotlightTemplate({
-        templates: availableSpotlightTemplates,
-        templateId: selectedSpotlightTemplateId
+      getSelectedSpotlightDiscount({
+        discounts: availableSpotlightDiscounts,
+        discountId: selectedSpotlightDiscountId
       }),
-    [availableSpotlightTemplates, selectedSpotlightTemplateId]
+    [availableSpotlightDiscounts, selectedSpotlightDiscountId]
   )
-  const handleSpotlightTemplateCardSelect = useCallback(
-    (templateId: string) => {
-      const nextTemplateId =
-        selectedSpotlightTemplateId === templateId ? "" : templateId
-      handleInputChange("spotlightDiscountId", nextTemplateId)
+  const handleSpotlightDiscountCardSelect = useCallback(
+    (discountId: string) => {
+      const nextDiscountId =
+        selectedSpotlightDiscountId === discountId ? "" : discountId
+      handleInputChange("spotlightDiscountId", nextDiscountId)
     },
-    [handleInputChange, selectedSpotlightTemplateId]
+    [handleInputChange, selectedSpotlightDiscountId]
   )
   useEffect(() => {
-    if (!selectedSpotlightTemplateId) return
+    if (!selectedSpotlightDiscountId) return
     if (
-      hasSpotlightTemplateId({
-        templates: availableSpotlightTemplates,
-        templateId: selectedSpotlightTemplateId
+      hasSpotlightDiscountId({
+        discounts: availableSpotlightDiscounts,
+        discountId: selectedSpotlightDiscountId
       })
     )
       return
     handleInputChange("spotlightDiscountId", "")
   }, [
-    availableSpotlightTemplates,
+    availableSpotlightDiscounts,
     handleInputChange,
-    selectedSpotlightTemplateId
+    selectedSpotlightDiscountId
   ])
   const errorState =
     transactionState.status === "error" ? transactionState : undefined
@@ -570,21 +570,21 @@ const AddItemModal = ({
                       Spotlight discount (optional)
                     </span>
                     <span className={modalFieldDescriptionClassName}>
-                      Click a template to highlight it. Leave all templates
+                      Click a discount to highlight it. Leave all discounts
                       unselected to skip spotlighting.
                     </span>
                   </div>
                   <div className="mt-3">
-                    <SpotlightTemplateSelector
-                      templates={availableSpotlightTemplates}
-                      selectedTemplateId={selectedSpotlightTemplateId}
-                      onSelectTemplate={handleSpotlightTemplateCardSelect}
+                    <SpotlightDiscountSelector
+                      discounts={availableSpotlightDiscounts}
+                      selectedDiscountId={selectedSpotlightDiscountId}
+                      onSelectDiscount={handleSpotlightDiscountCardSelect}
                       explorerUrl={explorerUrl}
                     />
                   </div>
                   <p className="mt-3 text-[0.7rem] text-slate-500 dark:text-slate-200/70">
-                    {selectedSpotlightTemplate
-                      ? `Selected spotlight discount: ${selectedSpotlightTemplate.ruleDescription}`
+                    {selectedSpotlightDiscount
+                      ? `Selected spotlight discount: ${selectedSpotlightDiscount.ruleDescription}`
                       : "No spotlight discount selected."}
                   </p>
                 </div>

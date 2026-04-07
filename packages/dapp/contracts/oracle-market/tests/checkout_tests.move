@@ -214,7 +214,7 @@ fun discount_redemption_rejects_listing_mismatch() {
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::discount::EDiscountMaxedOut)]
-fun discount_discount_maxed_out_by_redemption() {
+fun discount_maxed_out_by_redemption() {
     let mut scn = test_scenario::begin(owner());
     let (shop_id, owner_cap_id) = test_helpers::create_default_shop_and_owner_cap_ids_for_sender(
         &mut scn,

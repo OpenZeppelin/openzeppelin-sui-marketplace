@@ -258,14 +258,14 @@ Where to find values:
 ```bash
 pnpm script owner:item-listing:attach-discount \
   --item-listing-id <ITEM_LISTING_ID_U64> \
-  --discount-id <DISCOUNT_TEMPLATE_ID>
+  --discount-id <DISCOUNT_ID>
 ```
 What it does:
 - Updates the listing to reference the discount so it is spotlighted.
 
 Where to find values:
 - `ITEM_LISTING_ID`: from step 6 (script output or `buyer:item-listing:list`)
-- `DISCOUNT_TEMPLATE_ID`: from step 7 (`objects.localnet.json` or script output)
+- `DISCOUNT_ID`: from step 7 (`objects.localnet.json` or script output)
 
 ### 9) Transfer mock coins from owner to buyer
 ```bash

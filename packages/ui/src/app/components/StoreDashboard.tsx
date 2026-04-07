@@ -48,20 +48,20 @@ const resolveClockNowSeconds = (clockTimestampMs?: number) => {
   return BigInt(seconds)
 }
 
-const deriveTemplateStatusFromClock = ({
-  template,
+const deriveDiscountStatusFromClock = ({
+  discount,
   nowSeconds
 }: {
-  template: DiscountSummary
+  discount: DiscountSummary
   nowSeconds?: bigint
 }): string => {
-  if (!nowSeconds) return template.status
-  if (!template.activeFlag) return "disabled"
+  if (!nowSeconds) return discount.status
+  if (!discount.activeFlag) return "disabled"
 
-  const startsAt = parseOptionalBigInt(template.startsAt)
-  const expiresAt = parseOptionalBigInt(template.expiresAt)
-  const maxRedemptions = parseOptionalBigInt(template.maxRedemptions)
-  const redemptions = parseOptionalBigInt(template.redemptions) ?? 0n
+  const startsAt = parseOptionalBigInt(discount.startsAt)
+  const expiresAt = parseOptionalBigInt(discount.expiresAt)
+  const maxRedemptions = parseOptionalBigInt(discount.maxRedemptions)
+  const redemptions = parseOptionalBigInt(discount.redemptions) ?? 0n
 
   if (expiresAt !== undefined && nowSeconds >= expiresAt) return "expired"
 
@@ -78,7 +78,7 @@ const deriveTemplateStatusFromClock = ({
   return "active"
 }
 
-const resolveTemplateStartLabel = ({
+const resolveDiscountStartLabel = ({
   startsAt,
   nowSeconds
 }: {
@@ -642,7 +642,7 @@ const DiscountsPanel = ({
   shopConfigured: boolean
   canManageDiscounts: boolean
   onAddDiscount?: () => void
-  onRemoveDiscount?: (template: DiscountSummary) => void
+  onRemoveDiscount?: (discount: DiscountSummary) => void
   explorerUrl?: string
 }) => {
   const nowSeconds = resolveClockNowSeconds(clockTimestampMs)
@@ -650,7 +650,7 @@ const DiscountsPanel = ({
   return (
     <Panel
       title="Discounts"
-      subtitle="Templates"
+      subtitle="Discounts"
       headerAction={
         canManageDiscounts ? (
           <Button variant="primary" size="compact" onClick={onAddDiscount}>
@@ -667,7 +667,7 @@ const DiscountsPanel = ({
         <div className="space-y-6">
           <div className="space-y-3">
             <div className="text-[0.6rem] font-semibold uppercase tracking-[0.22em] text-slate-500 dark:text-slate-200/60">
-              Templates
+              Discounts
             </div>
             {renderPanelBody({
               status: storefrontStatus,
@@ -676,9 +676,9 @@ const DiscountsPanel = ({
               emptyMessage: "No discounts available yet.",
               children: (
                 <div className="space-y-3">
-                  {discounts.map((template) => {
-                    const templateStatus = deriveTemplateStatusFromClock({
-                      template,
+                  {discounts.map((discount) => {
+                    const discountStatus = deriveDiscountStatusFromClock({
+                      discount,
                       nowSeconds
                     })
                     const showDisable = canManageDiscounts
@@ -687,23 +687,23 @@ const DiscountsPanel = ({
                       : "justify-end"
                     return (
                       <div
-                        key={template.discountId}
+                        key={discount.discountId}
                         className={clsx(
                           "flex h-full flex-col rounded-xl border border-slate-300/80 bg-white/95 p-4 shadow-[0_12px_30px_-22px_rgba(15,23,42,0.35)] transition dark:border-slate-50/25 dark:bg-slate-950/60",
-                          templateStatus === "active" ? "" : "opacity-75"
+                          discountStatus === "active" ? "" : "opacity-75"
                         )}
                       >
                         <div className="flex flex-1 flex-col gap-3">
                           <div className="flex items-start justify-between gap-3">
                             <div className="min-w-0">
                               <div className="text-lg font-semibold text-sds-dark dark:text-sds-light">
-                                {template.ruleDescription}
+                                {discount.ruleDescription}
                               </div>
-                              {template.appliesToListingId ? (
+                              {discount.appliesToListingId ? (
                                 <CopyableId
-                                  value={template.appliesToListingId}
+                                  value={discount.appliesToListingId}
                                   displayValue={`Applies to listing ${shortenId(
-                                    template.appliesToListingId
+                                    discount.appliesToListingId
                                   )}`}
                                   title="Copy listing id"
                                   className="mt-1 w-full justify-start text-sm font-semibold text-slate-500 dark:text-slate-200/70"
@@ -719,7 +719,7 @@ const DiscountsPanel = ({
                             <div className="flex items-center gap-3">
                               {!canManageDiscounts ? (
                                 <span className="text-xs uppercase tracking-[0.12em] text-slate-500 dark:text-slate-200/60">
-                                  {templateStatus}
+                                  {discountStatus}
                                 </span>
                               ) : undefined}
                             </div>
@@ -730,8 +730,8 @@ const DiscountsPanel = ({
                                 Starts
                               </div>
                               <div className="mt-1 text-sm font-semibold text-sds-dark dark:text-sds-light">
-                                {resolveTemplateStartLabel({
-                                  startsAt: template.startsAt,
+                                {resolveDiscountStartLabel({
+                                  startsAt: discount.startsAt,
                                   nowSeconds
                                 })}
                               </div>
@@ -741,16 +741,16 @@ const DiscountsPanel = ({
                                 Expires
                               </div>
                               <div className="mt-1 text-sm font-semibold text-sds-dark dark:text-sds-light">
-                                {template.expiresAt
-                                  ? formatEpochSeconds(template.expiresAt)
+                                {discount.expiresAt
+                                  ? formatEpochSeconds(discount.expiresAt)
                                   : "never"}
                               </div>
                             </div>
                           </div>
                           <div className="mt-4 flex flex-wrap items-center gap-3 text-[0.65rem]">
                             <CopyableId
-                              value={template.discountId}
-                              label="Template"
+                              value={discount.discountId}
+                              label="Discount"
                               explorerUrl={explorerUrl}
                             />
                           </div>
@@ -764,10 +764,10 @@ const DiscountsPanel = ({
                               <Button
                                 variant="danger"
                                 size="compact"
-                                onClick={() => onRemoveDiscount?.(template)}
-                                disabled={!template.activeFlag}
+                                onClick={() => onRemoveDiscount?.(discount)}
+                                disabled={!discount.activeFlag}
                               >
-                                {template.activeFlag ? "Disable" : "Disabled"}
+                                {discount.activeFlag ? "Disable" : "Disabled"}
                               </Button>
                             ) : undefined}
                           </div>
@@ -930,7 +930,7 @@ const StoreDashboard = ({
         open={modalState.isRemoveDiscountModalOpen}
         onClose={closeRemoveDiscountModal}
         shopId={resolvedShopId}
-        template={modalState.activeDiscountToRemove ?? undefined}
+        discount={modalState.activeDiscountToRemove ?? undefined}
         onDiscountUpdated={handleDiscountUpdated}
       />
 

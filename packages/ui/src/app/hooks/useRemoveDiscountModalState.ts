@@ -34,7 +34,7 @@ import { waitForTransactionBlock } from "../helpers/transactionWait"
 import useNetworkConfig from "./useNetworkConfig"
 
 export type RemoveDiscountTransactionSummary = {
-  template: DiscountSummary
+  discount: DiscountSummary
   digest: string
   transactionBlock: SuiTransactionBlockResponse
 }
@@ -57,10 +57,10 @@ type RemoveDiscountModalState = {
   resetState: () => void
 }
 
-const buildDisabledTemplateSnapshot = (
-  template: DiscountSummary
+const buildDisabledDiscountSnapshot = (
+  discount: DiscountSummary
 ): DiscountSummary => ({
-  ...template,
+  ...discount,
   activeFlag: false,
   status: "disabled"
 })
@@ -68,13 +68,13 @@ const buildDisabledTemplateSnapshot = (
 export const useRemoveDiscountModalState = ({
   open,
   shopId,
-  template,
+  discount,
   onDiscountUpdated
 }: {
   open: boolean
   shopId?: string
-  template?: DiscountSummary
-  onDiscountUpdated?: (template?: DiscountSummary) => void
+  discount?: DiscountSummary
+  onDiscountUpdated?: (discount?: DiscountSummary) => void
 }): RemoveDiscountModalState => {
   const currentAccount = useCurrentAccount()
   const { currentWallet } = useCurrentWallet()
@@ -106,7 +106,7 @@ export const useRemoveDiscountModalState = ({
 
   const canSubmit =
     Boolean(
-      walletAddress && shopId && template?.discountId && template?.activeFlag
+      walletAddress && shopId && discount?.discountId && discount?.activeFlag
     ) &&
     transactionState.status !== "processing" &&
     isSubmissionPending !== true
@@ -119,17 +119,17 @@ export const useRemoveDiscountModalState = ({
   useEffect(() => {
     if (!open) return
     resetState()
-  }, [open, template?.discountId, resetState])
+  }, [open, discount?.discountId, resetState])
 
   const handleDisableDiscount = useCallback(async () => {
-    if (!walletAddress || !shopId || !template) {
+    if (!walletAddress || !shopId || !discount) {
       setTransactionState({
         status: "error",
         error: "Wallet, shop, and discount details are required to remove."
       })
       return
     }
-    if (!template.activeFlag) {
+    if (!discount.activeFlag) {
       setTransactionState({
         status: "error",
         error: "This discount is already disabled."
@@ -205,7 +205,7 @@ export const useRemoveDiscountModalState = ({
       const disableDiscountTransaction = buildToggleDiscountTransaction({
         packageId: shopPackageId,
         shop: shopShared,
-        discountId: template.discountId,
+        discountId: discount.discountId,
         active: false,
         ownerCapId: ownerCapabilityId
       })
@@ -233,21 +233,21 @@ export const useRemoveDiscountModalState = ({
         transactionBlock = await waitForTransactionBlock(suiClient, digest)
       }
 
-      const disabledTemplate = buildDisabledTemplateSnapshot(template)
+      const disabledDiscount = buildDisabledDiscountSnapshot(discount)
       setTransactionState({
         status: "success",
         summary: {
-          template: disabledTemplate,
+          discount: disabledDiscount,
           digest,
           transactionBlock
         }
       })
 
-      onDiscountUpdated?.(disabledTemplate)
+      onDiscountUpdated?.(disabledDiscount)
 
       void getDiscountSummary(
         shopShared.object.objectId,
-        template.discountId,
+        discount.discountId,
         suiClient
       )
         .then((summary) => onDiscountUpdated?.(summary))
@@ -288,7 +288,7 @@ export const useRemoveDiscountModalState = ({
     shopId,
     signAndExecuteTransaction,
     suiClient,
-    template,
+    discount,
     walletAddress
   ])
 

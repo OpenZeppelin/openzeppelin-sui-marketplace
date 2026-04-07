@@ -243,7 +243,7 @@ export const useAddDiscountModalState = ({
 }: {
   open: boolean
   shopId?: string
-  onDiscountCreated?: (template?: DiscountSummary) => void
+  onDiscountCreated?: (discount?: DiscountSummary) => void
 }): AddDiscountModalState => {
   const currentAccount = useCurrentAccount()
   const { currentWallet } = useCurrentWallet()
@@ -454,7 +454,7 @@ export const useAddDiscountModalState = ({
           createdObjects: extractCreatedObjects(transactionBlock)
         })
 
-      const optimisticTemplate = discountId
+      const optimisticDiscount = discountId
         ? {
             discountId,
             tableEntryFieldId: discountTableEntryFieldId ?? discountId,
@@ -489,7 +489,7 @@ export const useAddDiscountModalState = ({
         }
       })
 
-      onDiscountCreated?.(optimisticTemplate)
+      onDiscountCreated?.(optimisticDiscount)
 
       if (discountId) {
         void getDiscountSummary(resolvedShopId, discountId, suiClient)

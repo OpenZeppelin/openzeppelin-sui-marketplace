@@ -218,9 +218,9 @@ export const useStoreDashboardViewModel = ({
   )
 
   const handleDiscountCreated = useCallback(
-    (template?: DiscountSummary) => {
-      if (template) {
-        upsertDiscount(template)
+    (discount?: DiscountSummary) => {
+      if (discount) {
+        upsertDiscount(discount)
         return
       }
 
@@ -266,10 +266,10 @@ export const useStoreDashboardViewModel = ({
   )
 
   const handleDiscountUpdated = useCallback(
-    (template?: DiscountSummary) => {
-      if (template) {
-        upsertDiscount(template)
-        if (!template.activeFlag) {
+    (discount?: DiscountSummary) => {
+      if (discount) {
+        upsertDiscount(discount)
+        if (!discount.activeFlag) {
           refreshStorefront()
         }
         return

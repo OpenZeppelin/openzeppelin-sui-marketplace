@@ -1340,7 +1340,7 @@ fun listing_rejects_foreign_shop() {
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::EDiscountNotFound)]
-fun discount_discount_rejects_foreign_shop() {
+fun discount_rejects_foreign_shop() {
     let mut ctx = tx_context::new_from_hint(owner(), 10003, 0, 0, 0);
     let (mut shop_a, owner_cap_a) = shop::test_setup_shop(owner(), &mut ctx);
     let (shop_b, _owner_cap_b) = shop::test_setup_shop(second_owner(), &mut ctx);

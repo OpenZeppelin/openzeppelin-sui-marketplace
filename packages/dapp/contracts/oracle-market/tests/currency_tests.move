@@ -293,6 +293,23 @@ fun remove_accepted_currency_removes_state_and_emits_event() {
     test_scenario::return_shared(shop_obj);
     std::unit_test::destroy(primary_currency);
     std::unit_test::destroy(secondary_currency);
+
+    let _ = scn.next_tx(owner());
+
+    let mut shared_shop = scn.take_shared_by_id<shop::Shop>(shop_id);
+    let owner_cap = scn.take_from_sender_by_id(owner_cap_id);
+
+    shared_shop.remove_accepted_currency<test_helpers::TestCoin>(&owner_cap);
+
+    assert_emitted!(
+        events::accepted_coin_removed(
+            shared_shop.id(),
+            first_price_id,
+        ),
+    );
+
+    scn.return_to_sender(owner_cap);
+    test_scenario::return_shared(shared_shop);
     let _ = scn.end();
 }
 
