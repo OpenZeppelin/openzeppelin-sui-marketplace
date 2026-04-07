@@ -272,5 +272,7 @@ fun conservative_price_mantissa(
 /// Converts a positive signed Pyth price component into `u128`.
 fun positive_price_to_u128(value: i64::I64): u128 {
     assert!(!value.get_is_negative(), EPriceNonPositive);
-    value.get_magnitude_if_positive() as u128
+    let magnitude = value.get_magnitude_if_positive() as u128;
+    assert!(magnitude > 0, EPriceNonPositive);
+    magnitude
 }
