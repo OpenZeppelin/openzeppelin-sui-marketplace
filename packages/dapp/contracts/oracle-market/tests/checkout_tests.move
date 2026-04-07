@@ -903,7 +903,7 @@ fun buy_item_emits_events_with_exact_payment_and_zero_change() {
     let _ = scn.end();
 }
 
-#[test, expected_failure(abort_code = ::sui_oracle_market::shop::EOutOfStock)]
+#[test, expected_failure(abort_code = ::sui_oracle_market::listing::EOutOfStock)]
 fun buy_item_rejects_out_of_stock_after_depletion() {
     let mut scn = test_scenario::begin(owner());
     let (shop_id, listing_id, price_info_id) = setup_shop_with_listing_and_price_info(

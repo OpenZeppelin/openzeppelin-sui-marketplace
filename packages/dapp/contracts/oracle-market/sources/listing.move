@@ -16,6 +16,8 @@ const EZeroStock: vector<u8> = "zero stock";
 const EListingDiscountCountUnderflow: vector<u8> = "listing discount count underflow";
 #[error(code = 4)]
 const EItemTypeMismatch: vector<u8> = "item type mismatch";
+#[error(code = 5)]
+const EOutOfStock: vector<u8> = "out of stock";
 
 // === Structs ===
 
@@ -139,6 +141,8 @@ public(package) fun mint_shop_item<T: store>(
 
 /// Decrements listing stock after a successful purchase.
 public(package) fun decrement_stock(listing: &mut ItemListing) {
+    assert!(listing.stock > 0, EOutOfStock);
+
     listing.stock = listing.stock - 1;
 }
 

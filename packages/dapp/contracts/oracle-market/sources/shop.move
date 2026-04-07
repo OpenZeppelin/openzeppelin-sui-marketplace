@@ -89,18 +89,16 @@ const EAcceptedCurrencyExists: vector<u8> = "accepted currency exists";
 #[error(code = 5)]
 const EAcceptedCurrencyMissing: vector<u8> = "accepted currency missing";
 #[error(code = 6)]
-const EOutOfStock: vector<u8> = "out of stock";
-#[error(code = 7)]
 const EPythObjectMismatch: vector<u8> = "pyth object mismatch";
-#[error(code = 8)]
+#[error(code = 7)]
 const EFeedIdentifierMismatch: vector<u8> = "feed identifier mismatch";
-#[error(code = 9)]
+#[error(code = 8)]
 const EInsufficientPayment: vector<u8> = "insufficient payment";
-#[error(code = 10)]
+#[error(code = 9)]
 const ESpotlightDiscountListingMismatch: vector<u8> = "spotlight discount listing mismatch";
-#[error(code = 11)]
+#[error(code = 10)]
 const EEmptyShopName: vector<u8> = "empty shop name";
-#[error(code = 12)]
+#[error(code = 11)]
 const EShopDisabled: vector<u8> = "shop disabled";
 
 // === Init ===
@@ -783,14 +781,12 @@ fun process_purchase<T: store, C>(
     let shop_id = shop.id();
 
     let item_listing = shop.listing_mut(listing_id);
-    // TODO#q: move this assertion to `decrement_stock` function.
-    assert!(item_listing.stock() > 0, EOutOfStock);
+    let previous_stock = item_listing.stock();
+    item_listing.decrement_stock();
 
     let owed_coin_opt = split_payment(&mut payment, quote_amount, ctx);
     let amount_paid = owed_coin_opt.map_ref!(|owed_coin| owed_coin.value()).destroy_or!(0);
 
-    let previous_stock = item_listing.stock();
-    item_listing.decrement_stock();
 
     events::emit_item_listing_stock_updated(shop_id, item_listing.id(), previous_stock);
 
