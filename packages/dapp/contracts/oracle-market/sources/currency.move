@@ -27,7 +27,7 @@ const EPriceInvalidPublishTime: vector<u8> = "invalid publish timestamp";
 #[error(code = 5)]
 const EPriceOverflow: vector<u8> = "price overflow";
 #[error(code = 6)]
-const EPriceNonPositive: vector<u8> = "price non-positive";
+const ENegativePrice: vector<u8> = "price should not be negative";
 #[error(code = 7)]
 const EConfidenceIntervalTooWide: vector<u8> = "confidence interval too wide";
 #[error(code = 8)]
@@ -271,6 +271,6 @@ fun conservative_price_mantissa(
 
 /// Converts a positive signed Pyth price component into `u128`.
 fun positive_price_to_u128(value: i64::I64): u128 {
-    assert!(!value.get_is_negative(), EPriceNonPositive);
+    assert!(!value.get_is_negative(), ENegativePrice);
     value.get_magnitude_if_positive() as u128
 }

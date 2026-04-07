@@ -1331,7 +1331,7 @@ fun buy_item_rejects_guardrail_override_above_cap() {
     abort
 }
 
-#[test, expected_failure(abort_code = ::sui_oracle_market::currency::EPriceNonPositive)]
+#[test, expected_failure(abort_code = ::sui_oracle_market::currency::ENegativePrice)]
 fun quote_amount_from_usd_cents_rejects_negative_price() {
     let price_value = i64::new(1, true);
     let expo = i64::new(0, false);
