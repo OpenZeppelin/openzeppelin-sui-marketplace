@@ -3,6 +3,8 @@ node_modules
 dist
 coverage
 .env
+packages/dapp/.env.owner
+packages/dapp/.env.buyer
 .DS_Store
 .vscode
 
