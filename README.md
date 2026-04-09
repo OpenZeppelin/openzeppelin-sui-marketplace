@@ -100,6 +100,14 @@ pnpm script mock:setup --buyer-address "$BUYER_ADDRESS" --network localnet
 > If oracle-market is re-published, re-run this step before seeding the shop.
 > mock:setup automatically aligns price feeds with the oracle-market package you just published.
 
+Then fund both addresses from the localnet faucet so they have SUI for gas and purchases:
+
+```bash
+OWNER_ADDRESS=$(grep SUI_ACCOUNT_ADDRESS packages/dapp/.env.owner | cut -d= -f2)
+sui client faucet --address "$OWNER_ADDRESS" --url http://127.0.0.1:9123
+sui client faucet --address "$BUYER_ADDRESS" --url http://127.0.0.1:9123
+```
+
 ### 8. Seed the shop
 
 ```bash
