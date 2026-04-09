@@ -632,6 +632,7 @@ const DiscountsPanel = ({
   shopConfigured,
   canManageDiscounts,
   onAddDiscount,
+  onToggleDiscount,
   onRemoveDiscount,
   explorerUrl
 }: {
@@ -642,6 +643,7 @@ const DiscountsPanel = ({
   shopConfigured: boolean
   canManageDiscounts: boolean
   onAddDiscount?: () => void
+  onToggleDiscount?: (discount: DiscountSummary) => void
   onRemoveDiscount?: (discount: DiscountSummary) => void
   explorerUrl?: string
 }) => {
@@ -681,10 +683,7 @@ const DiscountsPanel = ({
                       discount,
                       nowSeconds
                     })
-                    const showDisable = canManageDiscounts
-                    const actionAlignment = showDisable
-                      ? "justify-between"
-                      : "justify-end"
+                    const showDiscountActions = canManageDiscounts
                     return (
                       <div
                         key={discount.discountId}
@@ -757,18 +756,28 @@ const DiscountsPanel = ({
                           <div
                             className={clsx(
                               "mt-auto flex items-center pt-5",
-                              actionAlignment
+                              showDiscountActions
+                                ? "justify-between"
+                                : "justify-end"
                             )}
                           >
-                            {showDisable ? (
-                              <Button
-                                variant="danger"
-                                size="compact"
-                                onClick={() => onRemoveDiscount?.(discount)}
-                                disabled={!discount.activeFlag}
-                              >
-                                {discount.activeFlag ? "Disable" : "Disabled"}
-                              </Button>
+                            {showDiscountActions ? (
+                              <div className="flex flex-wrap items-center gap-3">
+                                <Button
+                                  variant="primary"
+                                  size="compact"
+                                  onClick={() => onToggleDiscount?.(discount)}
+                                >
+                                  {discount.activeFlag ? "Disable" : "Enable"}
+                                </Button>
+                                <Button
+                                  variant="danger"
+                                  size="compact"
+                                  onClick={() => onRemoveDiscount?.(discount)}
+                                >
+                                  Remove
+                                </Button>
+                              </div>
                             ) : undefined}
                           </div>
                         </div>
@@ -822,6 +831,7 @@ const StoreDashboard = ({
     closeRemoveItemModal,
     openRemoveCurrencyModal,
     closeRemoveCurrencyModal,
+    openToggleDiscountModal,
     openRemoveDiscountModal,
     closeRemoveDiscountModal,
     handleListingCreated,
@@ -829,7 +839,8 @@ const StoreDashboard = ({
     handleCurrencyCreated,
     handleListingRemoved,
     handleCurrencyRemoved,
-    handleDiscountUpdated
+    handleDiscountUpdated,
+    handleDiscountRemoved
   } = useStoreDashboardViewModel({ shopId, packageId })
   const explorerUrl = useExplorerUrl()
 
@@ -879,6 +890,7 @@ const StoreDashboard = ({
           shopConfigured={hasShopConfig}
           canManageDiscounts={canManageDiscounts}
           onAddDiscount={openAddDiscountModal}
+          onToggleDiscount={openToggleDiscountModal}
           onRemoveDiscount={openRemoveDiscountModal}
           explorerUrl={explorerUrl}
         />
@@ -928,10 +940,12 @@ const StoreDashboard = ({
 
       <RemoveDiscountModal
         open={modalState.isRemoveDiscountModalOpen}
+        action={modalState.activeDiscountAction ?? "toggle"}
         onClose={closeRemoveDiscountModal}
         shopId={resolvedShopId}
         discount={modalState.activeDiscountToRemove ?? undefined}
         onDiscountUpdated={handleDiscountUpdated}
+        onDiscountRemoved={handleDiscountRemoved}
       />
 
       <RemoveCurrencyModal

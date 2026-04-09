@@ -17,6 +17,7 @@ type DashboardModalState = {
   activeListingToRemove: ItemListingSummary | undefined
   activeCurrencyToRemove: AcceptedCurrencySummary | undefined
   activeDiscountToRemove: DiscountSummary | undefined
+  activeDiscountAction: "toggle" | "remove" | undefined
   isBuyModalOpen: boolean
   isAddItemModalOpen: boolean
   isAddDiscountModalOpen: boolean
@@ -31,6 +32,7 @@ const emptyModalState = (): DashboardModalState => ({
   activeListingToRemove: undefined,
   activeCurrencyToRemove: undefined,
   activeDiscountToRemove: undefined,
+  activeDiscountAction: undefined,
   isBuyModalOpen: false,
   isAddItemModalOpen: false,
   isAddDiscountModalOpen: false,
@@ -65,6 +67,7 @@ export const useStoreDashboardViewModel = ({
     upsertItemListing,
     upsertPurchasedItem,
     upsertDiscount,
+    removeDiscount,
     removeItemListing,
     removeAcceptedCurrency
   } = useShopDashboardData({
@@ -189,10 +192,20 @@ export const useStoreDashboardViewModel = ({
     }))
   }, [])
 
+  const openToggleDiscountModal = useCallback((discount: DiscountSummary) => {
+    setModalState((previous) => ({
+      ...previous,
+      activeDiscountToRemove: discount,
+      activeDiscountAction: "toggle",
+      isRemoveDiscountModalOpen: true
+    }))
+  }, [])
+
   const openRemoveDiscountModal = useCallback((discount: DiscountSummary) => {
     setModalState((previous) => ({
       ...previous,
       activeDiscountToRemove: discount,
+      activeDiscountAction: "remove",
       isRemoveDiscountModalOpen: true
     }))
   }, [])
@@ -201,6 +214,7 @@ export const useStoreDashboardViewModel = ({
     setModalState((previous) => ({
       ...previous,
       activeDiscountToRemove: undefined,
+      activeDiscountAction: undefined,
       isRemoveDiscountModalOpen: false
     }))
   }, [])
@@ -280,6 +294,17 @@ export const useStoreDashboardViewModel = ({
     [refreshStorefront, upsertDiscount]
   )
 
+  const handleDiscountRemoved = useCallback(
+    (discountId?: string) => {
+      if (discountId) {
+        removeDiscount(discountId)
+      }
+
+      refreshStorefront()
+    },
+    [refreshStorefront, removeDiscount]
+  )
+
   return {
     shopId,
     storefront,
@@ -305,6 +330,7 @@ export const useStoreDashboardViewModel = ({
     closeRemoveItemModal,
     openRemoveCurrencyModal,
     closeRemoveCurrencyModal,
+    openToggleDiscountModal,
     openRemoveDiscountModal,
     closeRemoveDiscountModal,
     handleListingCreated,
@@ -312,6 +338,7 @@ export const useStoreDashboardViewModel = ({
     handleCurrencyCreated,
     handleListingRemoved,
     handleCurrencyRemoved,
-    handleDiscountUpdated
+    handleDiscountUpdated,
+    handleDiscountRemoved
   }
 }

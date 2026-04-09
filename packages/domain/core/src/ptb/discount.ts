@@ -133,3 +133,33 @@ export const buildToggleDiscountTransaction = ({
 
   return transaction
 }
+
+export const buildRemoveDiscountTransaction = ({
+  packageId,
+  shop,
+  discountId,
+  ownerCapId
+}: {
+  packageId: string
+  shop: WrappedSuiSharedObject
+  discountId: string
+  ownerCapId: string
+}) => {
+  const { transaction, shopArgument, ownerCapabilityArgument } =
+    buildShopOwnerTransactionContext({
+      shop,
+      ownerCapId,
+      shopMutable: true
+    })
+
+  transaction.moveCall({
+    target: `${packageId}::shop::remove_discount`,
+    arguments: [
+      shopArgument,
+      ownerCapabilityArgument,
+      buildObjectIdArgument(transaction, discountId, "discountId")
+    ]
+  })
+
+  return transaction
+}

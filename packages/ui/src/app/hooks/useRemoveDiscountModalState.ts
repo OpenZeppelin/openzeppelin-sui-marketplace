@@ -12,7 +12,10 @@ import type { SuiTransactionBlockResponse } from "@mysten/sui/client"
 import type { IdentifierString } from "@mysten/wallet-standard"
 import type { DiscountSummary } from "@sui-oracle-market/domain-core/models/discount"
 import { getDiscountSummary } from "@sui-oracle-market/domain-core/models/discount"
-import { buildToggleDiscountTransaction } from "@sui-oracle-market/domain-core/ptb/discount"
+import {
+  buildRemoveDiscountTransaction,
+  buildToggleDiscountTransaction
+} from "@sui-oracle-market/domain-core/ptb/discount"
 import { deriveRelevantPackageId } from "@sui-oracle-market/tooling-core/object"
 import { getSuiSharedObject } from "@sui-oracle-market/tooling-core/shared-object"
 import { ENetwork } from "@sui-oracle-market/tooling-core/types"
@@ -33,7 +36,10 @@ import {
 import { waitForTransactionBlock } from "../helpers/transactionWait"
 import useNetworkConfig from "./useNetworkConfig"
 
+export type DiscountAction = "toggle" | "remove"
+
 export type RemoveDiscountTransactionSummary = {
+  action: DiscountAction
   discount: DiscountSummary
   digest: string
   transactionBlock: SuiTransactionBlockResponse
@@ -53,28 +59,33 @@ type RemoveDiscountModalState = {
   canSubmit: boolean
   walletConnected: boolean
   explorerUrl?: string
-  handleDisableDiscount: () => Promise<void>
+  handleDiscountAction: () => Promise<void>
   resetState: () => void
 }
 
-const buildDisabledDiscountSnapshot = (
-  discount: DiscountSummary
+const buildToggledDiscountSnapshot = (
+  discount: DiscountSummary,
+  active: boolean
 ): DiscountSummary => ({
   ...discount,
-  activeFlag: false,
-  status: "disabled"
+  activeFlag: active,
+  status: active ? "active" : "disabled"
 })
 
 export const useRemoveDiscountModalState = ({
   open,
+  action,
   shopId,
   discount,
-  onDiscountUpdated
+  onDiscountUpdated,
+  onDiscountRemoved
 }: {
   open: boolean
+  action: DiscountAction
   shopId?: string
   discount?: DiscountSummary
   onDiscountUpdated?: (discount?: DiscountSummary) => void
+  onDiscountRemoved?: (discountId?: string) => void
 }): RemoveDiscountModalState => {
   const currentAccount = useCurrentAccount()
   const { currentWallet } = useCurrentWallet()
@@ -105,9 +116,7 @@ export const useRemoveDiscountModalState = ({
     : signAndExecuteTransaction.isPending
 
   const canSubmit =
-    Boolean(
-      walletAddress && shopId && discount?.discountId && discount?.activeFlag
-    ) &&
+    Boolean(walletAddress && shopId && discount?.discountId) &&
     transactionState.status !== "processing" &&
     isSubmissionPending !== true
   const walletConnected = Boolean(walletAddress)
@@ -119,20 +128,13 @@ export const useRemoveDiscountModalState = ({
   useEffect(() => {
     if (!open) return
     resetState()
-  }, [open, discount?.discountId, resetState])
+  }, [open, action, discount?.discountId, resetState])
 
-  const handleDisableDiscount = useCallback(async () => {
+  const handleDiscountAction = useCallback(async () => {
     if (!walletAddress || !shopId || !discount) {
       setTransactionState({
         status: "error",
-        error: "Wallet, shop, and discount details are required to remove."
-      })
-      return
-    }
-    if (!discount.activeFlag) {
-      setTransactionState({
-        status: "error",
-        error: "This discount is already disabled."
+        error: "Wallet, shop, and discount details are required to continue."
       })
       return
     }
@@ -202,21 +204,30 @@ export const useRemoveDiscountModalState = ({
         suiClient
       })
 
-      const disableDiscountTransaction = buildToggleDiscountTransaction({
-        packageId: shopPackageId,
-        shop: shopShared,
-        discountId: discount.discountId,
-        active: false,
-        ownerCapId: ownerCapabilityId
-      })
-      disableDiscountTransaction.setSender(walletAddress)
+      const nextActiveFlag = !discount.activeFlag
+      const transaction =
+        action === "toggle"
+          ? buildToggleDiscountTransaction({
+              packageId: shopPackageId,
+              shop: shopShared,
+              discountId: discount.discountId,
+              active: nextActiveFlag,
+              ownerCapId: ownerCapabilityId
+            })
+          : buildRemoveDiscountTransaction({
+              packageId: shopPackageId,
+              shop: shopShared,
+              discountId: discount.discountId,
+              ownerCapId: ownerCapabilityId
+            })
+      transaction.setSender(walletAddress)
 
       let digest = ""
       let transactionBlock: SuiTransactionBlockResponse
 
       if (isLocalnet) {
         failureStage = "execute"
-        const result = await localnetExecutor(disableDiscountTransaction, {
+        const result = await localnetExecutor(transaction, {
           chain: expectedChain
         })
         digest = result.digest
@@ -224,7 +235,7 @@ export const useRemoveDiscountModalState = ({
       } else {
         failureStage = "execute"
         const result = await signAndExecuteTransaction.mutateAsync({
-          transaction: disableDiscountTransaction,
+          transaction,
           chain: expectedChain
         })
 
@@ -233,25 +244,36 @@ export const useRemoveDiscountModalState = ({
         transactionBlock = await waitForTransactionBlock(suiClient, digest)
       }
 
-      const disabledDiscount = buildDisabledDiscountSnapshot(discount)
+      const summaryDiscount =
+        action === "toggle"
+          ? buildToggledDiscountSnapshot(discount, nextActiveFlag)
+          : discount
+
       setTransactionState({
         status: "success",
         summary: {
-          discount: disabledDiscount,
+          action,
+          discount: summaryDiscount,
           digest,
           transactionBlock
         }
       })
 
-      onDiscountUpdated?.(disabledDiscount)
+      if (action === "toggle") {
+        onDiscountUpdated?.(summaryDiscount)
 
-      void getDiscountSummary(
-        shopShared.object.objectId,
-        discount.discountId,
-        suiClient
-      )
-        .then((summary) => onDiscountUpdated?.(summary))
-        .catch(() => {})
+        void getDiscountSummary(
+          shopShared.object.objectId,
+          discount.discountId,
+          suiClient
+        )
+          .then((summary) => onDiscountUpdated?.(summary))
+          .catch(() => {})
+
+        return
+      }
+
+      onDiscountRemoved?.(discount.discountId)
     } catch (error) {
       const errorDetails = extractErrorDetails(error)
       const localnetSupportNote =
@@ -279,16 +301,18 @@ export const useRemoveDiscountModalState = ({
       })
     }
   }, [
+    action,
     currentAccount,
     currentWallet,
+    discount,
     isLocalnet,
     localnetExecutor,
     network,
+    onDiscountRemoved,
     onDiscountUpdated,
     shopId,
     signAndExecuteTransaction,
     suiClient,
-    discount,
     walletAddress
   ])
 
@@ -306,7 +330,7 @@ export const useRemoveDiscountModalState = ({
     canSubmit,
     walletConnected,
     explorerUrl,
-    handleDisableDiscount,
+    handleDiscountAction,
     resetState
   }
 }

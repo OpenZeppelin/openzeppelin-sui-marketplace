@@ -465,8 +465,6 @@ public fun toggle_discount(
     };
 }
 
-// TODO#q: we should trigger from UI only remove discount
-
 /// Removes a discount from shop storage.
 /// Fails if discount doesn't exist.
 /// Fails if discount active and attached listing doesn't exists.
@@ -520,6 +518,8 @@ public fun clear_discount_from_listing(shop: &mut Shop, owner_cap: &ShopOwnerCap
     item_listing.clear_spotlight();
 }
 
+// TODO#q: Buy item should return Coin<C> + Item<T>
+
 /// Execute a purchase priced in USD cents but settled with any previously registered `AcceptedCurrency`.
 ///
 /// NOTE:
@@ -564,6 +564,8 @@ public fun buy_item<T: store, C>(
     };
     transfer::public_transfer(minted_item, mint_to);
 }
+
+// TODO#q: Buy item with discount should return Coin<C> + Item<T>
 
 /// Same as `buy_item` but also validates that discount is applicable.
 public fun buy_item_with_discount<T: store, C>(

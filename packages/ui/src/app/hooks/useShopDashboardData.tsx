@@ -336,6 +336,15 @@ export const useShopDashboardData = ({
     })
   }, [])
 
+  const removeDiscount = useCallback((discountId: string) => {
+    setStorefrontState((previous) => ({
+      ...previous,
+      discounts: previous.discounts.filter(
+        (discount) => discount.discountId !== discountId
+      )
+    }))
+  }, [])
+
   const upsertPurchasedItem = useCallback((receipt: ShopItemReceiptSummary) => {
     setWalletState((previous) => {
       const existingIndex = previous.purchasedItems.findIndex(
@@ -464,6 +473,7 @@ export const useShopDashboardData = ({
     upsertItemListing,
     upsertPurchasedItem,
     upsertDiscount,
+    removeDiscount,
     removeItemListing,
     removeAcceptedCurrency
   }

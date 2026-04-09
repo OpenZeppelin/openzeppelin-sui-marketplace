@@ -4,6 +4,7 @@ import type { DiscountSummary } from "@sui-oracle-market/domain-core/models/disc
 import { formatEpochSeconds, shortenId } from "../helpers/format"
 import {
   useRemoveDiscountModalState,
+  type DiscountAction,
   type RemoveDiscountTransactionSummary
 } from "../hooks/useRemoveDiscountModalState"
 import CopyableId from "./CopyableId"
@@ -20,6 +21,65 @@ import {
 import Button from "./Button"
 import TransactionRecap from "./TransactionRecap"
 
+const resolveActionLabel = ({
+  action,
+  activeFlag
+}: {
+  action: DiscountAction
+  activeFlag: boolean
+}) => {
+  if (action === "remove") return "Remove discount"
+  return activeFlag ? "Disable discount" : "Enable discount"
+}
+
+const resolveActionTitle = ({
+  action,
+  activeFlag
+}: {
+  action: DiscountAction
+  activeFlag: boolean
+}) => {
+  if (action === "remove") return "Remove Discount"
+  return activeFlag ? "Disable Discount" : "Enable Discount"
+}
+
+const resolveActionDescription = ({
+  action,
+  activeFlag
+}: {
+  action: DiscountAction
+  activeFlag: boolean
+}) => {
+  if (action === "remove") return "Permanently remove this discount from the shop."
+  return activeFlag
+    ? "Stop this discount from applying to new purchases."
+    : "Enable this discount so it can apply to new purchases."
+}
+
+const resolveSuccessTitle = ({
+  action,
+  activeFlag
+}: {
+  action: DiscountAction
+  activeFlag: boolean
+}) => {
+  if (action === "remove") return "Discount removed"
+  return activeFlag ? "Discount disabled" : "Discount enabled"
+}
+
+const resolveSuccessDescription = ({
+  action,
+  activeFlag
+}: {
+  action: DiscountAction
+  activeFlag: boolean
+}) => {
+  if (action === "remove") return "The discount has been removed from the shop."
+  return activeFlag
+    ? "The discount has been disabled on chain."
+    : "The discount has been enabled on chain."
+}
+
 const DiscountSummarySection = ({
   discount,
   shopId,
@@ -29,10 +89,7 @@ const DiscountSummarySection = ({
   shopId?: string
   explorerUrl?: string
 }) => (
-  <ModalSection
-    title="Discount details"
-    subtitle="Discount scheduled to be disabled"
-  >
+  <ModalSection title="Discount details" subtitle="Selected discount">
     <div className="grid gap-3 text-xs sm:grid-cols-2">
       <div className="rounded-xl border border-slate-200/70 bg-white/80 p-3 dark:border-slate-50/15 dark:bg-slate-950/60">
         <div className="text-[0.6rem] uppercase tracking-[0.18em] text-slate-500 dark:text-slate-200/60">
@@ -99,14 +156,16 @@ const DiscountSummarySection = ({
   </ModalSection>
 )
 
-const RemovalImpactSection = () => (
-  <ModalSection
-    title="Removal impact"
-    subtitle="What changes after the discount is disabled"
-  >
+const ActionImpactSection = ({
+  action
+}: {
+  action: DiscountAction
+}) => (
+  <ModalSection title="Action impact" subtitle="Expected storefront behavior">
     <div className="text-xs text-slate-500 dark:text-slate-200/70">
-      Disabling a discount prevents it from applying to new purchases until it
-      is enabled again.
+      {action === "remove"
+        ? "Removing a discount deletes it from shop storage and clears listing spotlight references if they point to this discount."
+        : "Toggling updates whether this discount can be selected for new purchases."}
     </div>
   </ModalSection>
 )
@@ -125,9 +184,15 @@ const DiscountSuccessView = ({
   <>
     <ModalStatusHeader
       status="success"
-      title="Discount disabled"
+      title={resolveSuccessTitle({
+        action: summary.action,
+        activeFlag: summary.discount.activeFlag
+      })}
       subtitle={summary.discount.ruleDescription}
-      description="The discount has been disabled on chain."
+      description={resolveSuccessDescription({
+        action: summary.action,
+        activeFlag: summary.discount.activeFlag
+      })}
       onClose={onClose}
     />
     <ModalBody>
@@ -143,7 +208,7 @@ const DiscountSuccessView = ({
       />
     </ModalBody>
     <ModalCloseFooter
-      message="Discount disablement confirmed."
+      message={summary.action === "remove" ? "Discount removal confirmed." : "Discount update confirmed."}
       onClose={onClose}
     />
   </>
@@ -165,7 +230,7 @@ const DiscountErrorView = ({
   <>
     <ModalStatusHeader
       status="error"
-      title="Removal failed"
+      title="Action failed"
       subtitle={discountLabel}
       description="Review the error details and try again."
       onClose={onClose}
@@ -179,16 +244,20 @@ const DiscountErrorView = ({
 
 const RemoveDiscountModal = ({
   open,
+  action,
   onClose,
   shopId,
   discount,
-  onDiscountUpdated
+  onDiscountUpdated,
+  onDiscountRemoved
 }: {
   open: boolean
+  action: DiscountAction
   onClose: () => void
   shopId?: string
   discount?: DiscountSummary
   onDiscountUpdated?: (discount?: DiscountSummary) => void
+  onDiscountRemoved?: (discountId?: string) => void
 }) => {
   const {
     transactionState,
@@ -197,18 +266,23 @@ const RemoveDiscountModal = ({
     isErrorState,
     canSubmit,
     explorerUrl,
-    handleDisableDiscount,
+    handleDiscountAction,
     resetState
   } = useRemoveDiscountModalState({
     open,
+    action,
     shopId,
     discount,
-    onDiscountUpdated
+    onDiscountUpdated,
+    onDiscountRemoved
   })
   const errorState =
     transactionState.status === "error" ? transactionState : undefined
 
   if (!open || !discount) return <></>
+
+  const submitLabel = resolveActionLabel({ action, activeFlag: discount.activeFlag })
+  const submitVariant = action === "remove" ? "danger" : "primary"
 
   return (
     <ModalFrame onClose={onClose}>
@@ -231,8 +305,11 @@ const RemoveDiscountModal = ({
         <>
           <ModalHeader
             eyebrow="Discounts"
-            title="Disable Discount"
-            description="Stop this discount from applying to new purchases."
+            title={resolveActionTitle({ action, activeFlag: discount.activeFlag })}
+            description={resolveActionDescription({
+              action,
+              activeFlag: discount.activeFlag
+            })}
             onClose={onClose}
             footer={
               <CopyableId
@@ -248,27 +325,27 @@ const RemoveDiscountModal = ({
               shopId={shopId}
               explorerUrl={explorerUrl}
             />
-            <RemovalImpactSection />
+            <ActionImpactSection action={action} />
           </ModalBody>
           <div className="border-t border-slate-200/70 px-6 py-4 dark:border-slate-50/15">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="text-xs uppercase tracking-[0.18em] text-slate-500 dark:text-slate-200/60">
                 {transactionState.status === "processing"
                   ? "Waiting for wallet confirmation..."
-                  : "Ready to disable the discount."}
+                  : "Ready to submit."}
               </div>
               <div className="flex flex-wrap items-center gap-3">
                 <Button variant="secondary" onClick={onClose}>
                   Cancel
                 </Button>
                 <Button
-                  variant="danger"
-                  onClick={handleDisableDiscount}
+                  variant={submitVariant}
+                  onClick={handleDiscountAction}
                   disabled={!canSubmit}
                 >
                   {transactionState.status === "processing"
                     ? "Processing..."
-                    : "Disable discount"}
+                    : submitLabel}
                 </Button>
               </div>
             </div>
