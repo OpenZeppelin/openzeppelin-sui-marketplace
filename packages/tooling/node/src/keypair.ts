@@ -147,6 +147,12 @@ const isBech32PrivateKey = (value: string): boolean =>
   value.startsWith("suiprivkey1")
 
 /**
+ * Detects a hex-encoded private key (plain or 0x-prefixed).
+ */
+const isHexPrivateKey = (value: string): boolean =>
+  /^(0x)?[0-9a-fA-F]+$/.test(value)
+
+/**
  * Builds an Ed25519 keypair from a bech32 Sui private key.
  */
 const keypairFromBech32 = (bech32Key: string): Ed25519Keypair => {
@@ -158,13 +164,42 @@ const keypairFromBech32 = (bech32Key: string): Ed25519Keypair => {
 }
 
 /**
- * Builds an Ed25519 keypair from either bech32 or base64 secret key material.
+ * Builds an Ed25519 keypair from a hex-encoded private key.
+ * Accepts 32-byte raw secret keys or 33-byte scheme+secret payloads.
+ */
+const keypairFromHex = (hexKey: string): Ed25519Keypair => {
+  const stripped = hexKey.startsWith("0x") ? hexKey.slice(2) : hexKey
+
+  if (stripped.length % 2 !== 0)
+    throw new Error(`Invalid hex private key length ${stripped.length}.`)
+
+  const bytes = Uint8Array.from(Buffer.from(stripped, "hex"))
+
+  if (bytes.length === 32) return Ed25519Keypair.fromSecretKey(bytes)
+
+  if (bytes.length === 33) {
+    if (bytes[0] !== SIGNATURE_SCHEME_TO_FLAG.ED25519)
+      throw new Error(`Unsupported key scheme ${bytes[0]}.`)
+
+    return Ed25519Keypair.fromSecretKey(bytes.slice(1))
+  }
+
+  throw new Error(
+    `Invalid hex private key length ${bytes.length}; expected 32 or 33 bytes.`
+  )
+}
+
+/**
+ * Builds an Ed25519 keypair from either bech32, hex, or base64 secret key material.
  */
 const keypairFromSecret = async (secret: string) => {
   const normalizedSecret = secret.trim()
 
   if (isBech32PrivateKey(normalizedSecret))
     return keypairFromBech32(normalizedSecret)
+
+  if (isHexPrivateKey(normalizedSecret))
+    return keypairFromHex(normalizedSecret)
 
   const decoded = fromBase64(normalizedSecret)
   const scheme = decoded[0]

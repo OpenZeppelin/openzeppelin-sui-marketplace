@@ -75,6 +75,57 @@ describe("loadKeypair", () => {
     ).rejects.toThrow("Unsupported key scheme")
   })
 
+  it("loads a keypair from a 32-byte hex private key", async () => {
+    const secretKey = new Uint8Array(32).fill(5)
+    const hexSecret = Buffer.from(secretKey).toString("hex")
+    const expectedAddress = Ed25519Keypair.fromSecretKey(secretKey).toSuiAddress()
+
+    const keypair = await loadKeypair({ accountPrivateKey: hexSecret })
+
+    expect(normalizeSuiAddress(keypair.toSuiAddress())).toBe(
+      normalizeSuiAddress(expectedAddress)
+    )
+  })
+
+  it("loads a keypair from a 0x-prefixed 32-byte hex private key", async () => {
+    const secretKey = new Uint8Array(32).fill(6)
+    const hexSecret = "0x" + Buffer.from(secretKey).toString("hex")
+    const expectedAddress = Ed25519Keypair.fromSecretKey(secretKey).toSuiAddress()
+
+    const keypair = await loadKeypair({ accountPrivateKey: hexSecret })
+
+    expect(normalizeSuiAddress(keypair.toSuiAddress())).toBe(
+      normalizeSuiAddress(expectedAddress)
+    )
+  })
+
+  it("loads a keypair from a 33-byte hex private key with Ed25519 scheme flag", async () => {
+    const secretKey = new Uint8Array(32).fill(8)
+    const payload = new Uint8Array(33)
+    payload[0] = SIGNATURE_SCHEME_TO_FLAG.ED25519
+    payload.set(secretKey, 1)
+    const hexSecret = Buffer.from(payload).toString("hex")
+    const expectedAddress = Ed25519Keypair.fromSecretKey(secretKey).toSuiAddress()
+
+    const keypair = await loadKeypair({ accountPrivateKey: hexSecret })
+
+    expect(normalizeSuiAddress(keypair.toSuiAddress())).toBe(
+      normalizeSuiAddress(expectedAddress)
+    )
+  })
+
+  it("throws when a 33-byte hex key has an unsupported scheme flag", async () => {
+    const secretKey = new Uint8Array(32).fill(2)
+    const payload = new Uint8Array(33)
+    payload[0] = 99
+    payload.set(secretKey, 1)
+    const hexSecret = Buffer.from(payload).toString("hex")
+
+    await expect(
+      loadKeypair({ accountPrivateKey: hexSecret })
+    ).rejects.toThrow("Unsupported key scheme")
+  })
+
   it("throws when the requested keystore address is missing", async () => {
     const { secretBase64 } = buildBase64Secret(11)
 
