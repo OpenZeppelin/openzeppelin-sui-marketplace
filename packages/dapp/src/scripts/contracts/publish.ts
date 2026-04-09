@@ -224,7 +224,7 @@ const derivePublishOptions = (
     withUnpublishedDependencies:
       cliArguments.withUnpublishedDependencies ?? targetingLocalnet,
     allowAutoUnpublishedDependencies: targetingLocalnet,
-    useCliPublish: cliArguments.useCliPublish ?? true
+    useCliPublish: cliArguments.useCliPublish ?? !targetingLocalnet
   }
 }
 
@@ -300,8 +300,8 @@ runSuiScript(
       alias: "use-cli-publish",
       type: "boolean",
       description:
-        "Publish with the Sui CLI instead of the SDK (use --no-use-cli-publish to force SDK)",
-      default: true
+        "Publish with the Sui CLI instead of the SDK. Defaults to SDK on localnet, CLI on other networks. Pass --use-cli-publish to force CLI or --no-use-cli-publish to force SDK.",
+      default: undefined
     })
     .option("clearStaleMoveLocks", {
       alias: "clear-stale-move-locks",

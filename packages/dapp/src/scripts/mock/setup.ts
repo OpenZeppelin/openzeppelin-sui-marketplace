@@ -327,8 +327,8 @@ runSuiScript(
       alias: "use-cli-publish",
       type: "boolean",
       description:
-        "Publish mock packages with the Sui CLI instead of the SDK (use --no-use-cli-publish to force SDK).",
-      default: true
+        "Publish mock packages with the Sui CLI instead of the SDK. Defaults to SDK. Pass --use-cli-publish to force CLI.",
+      default: false
     })
     .strict()
 )
