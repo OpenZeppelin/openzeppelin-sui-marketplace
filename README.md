@@ -20,6 +20,7 @@ More detail (workspace layering rules, folder layout): `docs/01-repo-layout.md`.
 - Node.js 22+ [Install](https://nodejs.org/en/download)
 - pnpm [Install](https://pnpm.io/installation)
 - Sui CLI [Install](https://docs.sui.io/guides/developer/getting-started/sui-install)
+- jq — used to extract IDs from deployment artifacts (`brew install jq` / `apt install jq`)
 
 
 ## Quickstart (Fresh Clone)
@@ -108,7 +109,6 @@ pnpm script owner:shop:seed --network localnet --json | tee /tmp/shop-seed.json
 ### 9. Capture package and shop IDs
 
 ```bash
-# jq is optional — copy the values manually from the files if preferred
 PACKAGE_ID=$(jq -r '.[-1].packageId' packages/dapp/deployments/deployment.localnet.json)
 SHOP_ID=$(jq -r '.shopOverview.shopId' /tmp/shop-seed.json)
 ```
