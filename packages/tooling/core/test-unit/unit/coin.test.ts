@@ -4,6 +4,7 @@ import {
   buildCoinTransferTransaction,
   findCreatedCoinObjectRefs,
   normalizeCoinType,
+  planSuiPaymentSplitTransaction,
   pickDedicatedGasPaymentRefFromSplit,
   resolveCoinOwnership
 } from "../../src/coin.ts"
@@ -151,5 +152,142 @@ describe("coin helpers", () => {
     })
 
     expect(dedicatedGasPaymentRef).toBeUndefined()
+  })
+
+  it("does not require split when multiple small gas coins together cover the gas budget", async () => {
+    // Mirrors the real-world pattern where each purchase leaves a small gas coin remainder
+    // (e.g. ~98M MIST); together two of them cover the 100M MIST gas budget.
+    const { client } = createSuiClientMock({
+      getCoins: vi.fn().mockResolvedValue({
+        data: [
+          { coinObjectId: "0x1", balance: "1150000000" },
+          { coinObjectId: "0x2", balance: "98000000" },
+          { coinObjectId: "0x3", balance: "98000000" }
+        ],
+        hasNextPage: false,
+        nextCursor: null
+      })
+    })
+
+    const plan = await planSuiPaymentSplitTransaction(
+      {
+        owner: "0xabc",
+        paymentMinimum: 500000000n,
+        gasBudget: 100000000n
+      },
+      { suiClient: client }
+    )
+
+    expect(plan.needsSplit).toBe(false)
+    expect(plan.paymentCoinObjectId).toBe(normalizeSuiObjectId("0x1"))
+    expect(plan.transaction).toBeUndefined()
+  })
+
+  it("does not require split when a distinct gas coin covers the gas budget", async () => {
+    const { client } = createSuiClientMock({
+      getCoins: vi.fn().mockResolvedValue({
+        data: [
+          {
+            coinObjectId: "0x1",
+            balance: "2000000000"
+          },
+          {
+            coinObjectId: "0x2",
+            balance: "200000000"
+          }
+        ],
+        hasNextPage: false,
+        nextCursor: null
+      })
+    })
+
+    const plan = await planSuiPaymentSplitTransaction(
+      {
+        owner: "0xabc",
+        paymentMinimum: 1500000000n,
+        gasBudget: 100000000n
+      },
+      { suiClient: client }
+    )
+
+    expect(plan.needsSplit).toBe(false)
+    expect(plan.paymentCoinObjectId).toBe(normalizeSuiObjectId("0x1"))
+    expect(plan.transaction).toBeUndefined()
+  })
+
+  it("plans a split when there are no non-payment coins", async () => {
+    const { client } = createSuiClientMock({
+      getCoins: vi.fn().mockResolvedValue({
+        data: [
+          {
+            coinObjectId: "0x1",
+            balance: "2500000000"
+          }
+        ],
+        hasNextPage: false,
+        nextCursor: null
+      }),
+      getObject: vi.fn().mockResolvedValue({
+        data: {
+          objectId: normalizeSuiObjectId("0x1"),
+          version: "1",
+          digest: "digest"
+        },
+        error: undefined
+      })
+    })
+
+    const plan = await planSuiPaymentSplitTransaction(
+      {
+        owner: "0xabc",
+        paymentMinimum: 1500000000n,
+        gasBudget: 100000000n
+      },
+      { suiClient: client }
+    )
+
+    expect(plan.needsSplit).toBe(true)
+    expect(plan.paymentCoinObjectId).toBe(normalizeSuiObjectId("0x1"))
+    expect(plan.transaction).toBeDefined()
+  })
+
+  it("plans a split when non-payment coins exist but do not cover the gas budget", async () => {
+    const { client } = createSuiClientMock({
+      getCoins: vi.fn().mockResolvedValue({
+        data: [
+          {
+            coinObjectId: "0x1",
+            balance: "1250000000"
+          },
+          {
+            coinObjectId: "0x2",
+            balance: "98000000"
+          }
+        ],
+        hasNextPage: false,
+        nextCursor: null
+      }),
+      getObject: vi.fn().mockResolvedValue({
+        data: {
+          objectId: normalizeSuiObjectId("0x1"),
+          version: "1",
+          digest: "digest"
+        },
+        error: undefined
+      })
+    })
+
+    const plan = await planSuiPaymentSplitTransaction(
+      {
+        owner: "0xabc",
+        paymentMinimum: 500000000n,
+        gasBudget: 100000000n
+      },
+      { suiClient: client }
+    )
+
+    expect(plan.needsSplit).toBe(true)
+    expect(plan.paymentCoinObjectId).toBe(normalizeSuiObjectId("0x1"))
+    expect(plan.transaction).toBeDefined()
   })
 })

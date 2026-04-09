@@ -9,6 +9,7 @@ import { normalizeSuiAddress, normalizeSuiObjectId } from "@mysten/sui/utils"
 import yargs from "yargs"
 
 import {
+  addExecutionQuoteBuffer,
   buildBuyTransaction,
   estimateRequiredAmount,
   resolveDiscountContext,
@@ -19,6 +20,10 @@ import {
   normalizeCoinType,
   requireAcceptedCurrencyByCoinType
 } from "@sui-oracle-market/domain-core/models/currency"
+import {
+  fetchPythBaseUpdateFee,
+  fetchPythPriceFeedUpdateData
+} from "@sui-oracle-market/domain-core/models/pyth-feeds"
 import {
   buildDiscountLookup,
   getDiscountSummary,
@@ -128,6 +133,25 @@ runSuiScript(
     let paymentCoinMinimumBalance: bigint | undefined = undefined
     let paymentCoinObjectId: string | undefined = undefined
     let dedicatedGasPaymentRef: SuiObjectRef | undefined
+    const pythBaseUpdateFee =
+      isSuiPayment && quotePriceUpdateMode === "pyth-update"
+        ? await fetchPythBaseUpdateFee({
+            networkName: tooling.network.networkName,
+            suiClient: tooling.suiClient,
+            pythConfigOverride: tooling.suiConfig.network.pyth
+          })
+        : undefined
+    const pythUpdateData =
+      isSuiPayment && quotePriceUpdateMode === "pyth-update"
+        ? await fetchPythPriceFeedUpdateData({
+            networkName: tooling.network.networkName,
+            feedIdHex: acceptedCurrencySummary.feedIdHex,
+            hermesUrlOverride: inputs.hermesUrl,
+            pythConfigOverride: tooling.suiConfig.network.pyth
+          })
+        : undefined
+    const requiredSuiGasBalance =
+      BigInt(DEFAULT_TX_GAS_BUDGET) + (pythBaseUpdateFee ?? 0n)
 
     if (isSuiPayment) {
       const discountedPriceUsdCents =
@@ -146,7 +170,7 @@ runSuiScript(
         objectId: SUI_CLOCK_ID
       })
 
-      paymentCoinMinimumBalance = await estimateRequiredAmount({
+      const requiredAmount = await estimateRequiredAmount({
         shopPackageId,
         shopShared,
         coinType: inputs.coinType,
@@ -161,18 +185,21 @@ runSuiScript(
         suiClient: tooling.suiClient,
         priceUpdateMode: quotePriceUpdateMode,
         hermesUrlOverride: inputs.hermesUrl,
-        pythConfigOverride: tooling.suiConfig.network.pyth
+        pythConfigOverride: tooling.suiConfig.network.pyth,
+        pythUpdateData
       })
 
-      if (paymentCoinMinimumBalance === undefined) {
+      if (requiredAmount === undefined) {
         throw new Error("Oracle quote unavailable for SUI payment.")
       }
+
+      paymentCoinMinimumBalance = addExecutionQuoteBuffer(requiredAmount)
 
       const splitPlan = await planSuiPaymentSplitTransaction(
         {
           owner: signerAddress,
           paymentMinimum: paymentCoinMinimumBalance,
-          gasBudget: BigInt(DEFAULT_TX_GAS_BUDGET),
+          gasBudget: requiredSuiGasBalance,
           splitGasBudget: DEFAULT_TX_GAS_BUDGET,
           paymentCoinObjectId: inputs.paymentCoinObjectId
         },
@@ -248,12 +275,13 @@ runSuiScript(
         refundTo,
         maxPriceAgeSecs: inputs.maxPriceAgeSecs,
         maxConfidenceRatioBps: inputs.maxConfidenceRatioBps,
-        gasBudget: DEFAULT_TX_GAS_BUDGET,
+        gasBudget: Number(requiredSuiGasBalance),
         discountContext,
         skipPriceUpdate: inputs.skipPriceUpdate,
         priceUpdatePolicy: inputs.priceUpdatePolicy,
         hermesUrlOverride: inputs.hermesUrl,
         pythConfigOverride: tooling.suiConfig.network.pyth,
+        pythUpdateData,
         networkName: tooling.suiConfig.network.networkName,
         signerAddress,
         onWarning: cliArguments.json

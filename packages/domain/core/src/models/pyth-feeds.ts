@@ -6,6 +6,8 @@ import {
 } from "@pythnetwork/pyth-sui-js"
 import type { CurrencyRegistryEntry } from "@sui-oracle-market/tooling-core/coin-registry"
 import { extractStructNameFromType } from "@sui-oracle-market/tooling-core/utils/type-name"
+import type { PythPullOracleConfig } from "./pyth.ts"
+import { resolvePythPullOracleConfig } from "./pyth.ts"
 
 export type HermesFeedMetadata = {
   id?: string
@@ -107,6 +109,81 @@ export const createPythClient = ({
   pythStateId: string
   wormholeStateId: string
 }) => new SuiPythClient(suiClient, pythStateId, wormholeStateId)
+
+export type PythPriceFeedUpdateData = Awaited<
+  ReturnType<SuiPriceServiceConnection["getPriceFeedsUpdateData"]>
+>
+
+export const normalizePythPriceFeedUpdateData = (
+  updateData: PythPriceFeedUpdateData
+): PythPriceFeedUpdateData =>
+  updateData.map((message) => {
+    const messageWithReads = message as Uint8Array & {
+      readUint8?: (offset: number) => number
+      readUint16BE?: (offset: number) => number
+    }
+
+    if (
+      typeof messageWithReads.readUint8 === "function" &&
+      typeof messageWithReads.readUint16BE === "function"
+    ) {
+      return message
+    }
+
+    const dataView = new DataView(
+      message.buffer,
+      message.byteOffset,
+      message.byteLength
+    )
+
+    messageWithReads.readUint8 = (offset: number) => dataView.getUint8(offset)
+    messageWithReads.readUint16BE = (offset: number) =>
+      dataView.getUint16(offset, false)
+
+    return message
+  }) as PythPriceFeedUpdateData
+
+export const fetchPythPriceFeedUpdateData = async ({
+  networkName,
+  feedIdHex,
+  hermesUrlOverride,
+  pythConfigOverride
+}: {
+  networkName: string
+  feedIdHex: string
+  hermesUrlOverride?: string
+  pythConfigOverride?: PythPullOracleConfig
+}): Promise<PythPriceFeedUpdateData | undefined> => {
+  const config = resolvePythPullOracleConfig(networkName, pythConfigOverride)
+  if (!config) return undefined
+
+  const hermesUrl = hermesUrlOverride ?? config.hermesUrl
+  const connection = new SuiPriceServiceConnection(hermesUrl)
+  const updateData = await connection.getPriceFeedsUpdateData([feedIdHex])
+
+  return normalizePythPriceFeedUpdateData(updateData)
+}
+
+export const fetchPythBaseUpdateFee = async ({
+  networkName,
+  suiClient,
+  pythConfigOverride
+}: {
+  networkName: string
+  suiClient: SuiClient
+  pythConfigOverride?: PythPullOracleConfig
+}): Promise<bigint | undefined> => {
+  const config = resolvePythPullOracleConfig(networkName, pythConfigOverride)
+  if (!config) return undefined
+
+  const pythClient = createPythClient({
+    suiClient,
+    pythStateId: config.pythStateId,
+    wormholeStateId: config.wormholeStateId
+  })
+
+  return BigInt(await pythClient.getBaseUpdateFee())
+}
 
 export const resolvePythPriceInfoObjectId = async ({
   pythClient,

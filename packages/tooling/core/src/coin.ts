@@ -6,7 +6,6 @@ import type { Transaction } from "@mysten/sui/transactions"
 import { normalizeSuiObjectId } from "@mysten/sui/utils"
 import {
   DEFAULT_TX_GAS_BUDGET,
-  MINIMUM_GAS_COIN_BALANCE,
   NORMALIZED_SUI_COIN_TYPE,
   SUI_COIN_TYPE
 } from "./constants.ts"
@@ -223,17 +222,12 @@ const hasDistinctGasCoin = ({
   )
   if (!paymentCoin || paymentCoin.balance < paymentMinimum) return false
 
-  return coins.some(
-    (gasCoin) =>
-      gasCoin.coinObjectId !== paymentCoinObjectId &&
-      gasCoin.balance >= gasCoinMinimumBalance
-  )
-}
+  const totalNonPaymentBalance = coins
+    .filter((coin) => coin.coinObjectId !== paymentCoinObjectId)
+    .reduce((total, coin) => total + coin.balance, 0n)
 
-const resolveGasCoinMinimumBalance = (desiredGasBudget: bigint) =>
-  desiredGasBudget > MINIMUM_GAS_COIN_BALANCE
-    ? desiredGasBudget
-    : MINIMUM_GAS_COIN_BALANCE
+  return totalNonPaymentBalance >= gasCoinMinimumBalance
+}
 
 const buildSplitSuiCoinsTransaction = ({
   owner,
@@ -301,7 +295,7 @@ export const planSuiPaymentSplitTransaction = async (
 
   const coins = await fetchSuiCoinBalances({ owner }, { suiClient })
   const totalBalance = coins.reduce((total, coin) => total + coin.balance, 0n)
-  const gasCoinMinimumBalance = resolveGasCoinMinimumBalance(gasBudget)
+  const gasCoinMinimumBalance = gasBudget
   const normalizedPaymentCoinObjectId = paymentCoinObjectId
     ? normalizeSuiObjectId(paymentCoinObjectId)
     : undefined
@@ -341,8 +335,7 @@ export const planSuiPaymentSplitTransaction = async (
     }
   }
 
-  const requiredBalance =
-    paymentMinimum + gasCoinMinimumBalance + BigInt(splitGasBudget)
+  const requiredBalance = paymentMinimum + gasBudget + BigInt(splitGasBudget)
   if (paymentCoin.balance < requiredBalance) {
     throw new Error(
       "Insufficient SUI balance to cover payment plus gas. Fund more SUI, then retry."
@@ -351,7 +344,7 @@ export const planSuiPaymentSplitTransaction = async (
 
   const transaction = buildSplitSuiCoinsTransaction({
     owner,
-    splitAmounts: [gasCoinMinimumBalance],
+    splitAmounts: [gasBudget],
     gasBudget: splitGasBudget
   })
   const { object: gasPaymentObject } = await getSuiObject(

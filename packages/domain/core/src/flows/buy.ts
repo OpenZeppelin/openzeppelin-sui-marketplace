@@ -2,10 +2,7 @@ import { bcs } from "@mysten/sui/bcs"
 import type { SuiClient, SuiObjectData, SuiObjectRef } from "@mysten/sui/client"
 import type { Transaction } from "@mysten/sui/transactions"
 import { fromB64, normalizeSuiObjectId } from "@mysten/sui/utils"
-import {
-  SuiPriceServiceConnection,
-  SuiPythClient
-} from "@pythnetwork/pyth-sui-js"
+import { SuiPythClient } from "@pythnetwork/pyth-sui-js"
 
 import {
   DEFAULT_TX_GAS_BUDGET,
@@ -32,6 +29,10 @@ import {
 } from "@sui-oracle-market/tooling-core/utils/utility"
 import { normalizeCoinType } from "../models/currency.ts"
 import type { DiscountContext, DiscountSummary } from "../models/discount.ts"
+import {
+  fetchPythPriceFeedUpdateData,
+  type PythPriceFeedUpdateData
+} from "../models/pyth-feeds.ts"
 import type { PriceUpdatePolicy, PythPullOracleConfig } from "../models/pyth.ts"
 import { resolvePythPullOracleConfig } from "../models/pyth.ts"
 import {
@@ -103,6 +104,7 @@ const parseMockPriceInfoUpdateFields = (
 }
 
 const BASIS_POINT_DENOMINATOR = 10_000n
+const DEFAULT_EXECUTION_QUOTE_BUFFER_BPS = 100n
 
 /**
  * Resolves a discounted USD price (in cents) based on a discount selection.
@@ -188,6 +190,7 @@ export const estimateRequiredAmount = async ({
   priceUpdateMode = "none",
   hermesUrlOverride,
   pythConfigOverride,
+  pythUpdateData,
   onPriceUpdateWarning
 }: {
   shopPackageId: string
@@ -205,6 +208,7 @@ export const estimateRequiredAmount = async ({
   priceUpdateMode?: EstimateRequiredAmountPriceUpdateMode
   hermesUrlOverride?: string
   pythConfigOverride?: PythPullOracleConfig
+  pythUpdateData?: PythPriceFeedUpdateData
   onPriceUpdateWarning?: (message: string) => void
 }): Promise<bigint | undefined> => {
   const quoteTransaction = newTransaction()
@@ -249,7 +253,8 @@ export const estimateRequiredAmount = async ({
         networkName,
         feedIdHex: pythFeedIdHex,
         hermesUrlOverride,
-        pythConfigOverride
+        pythConfigOverride,
+        pythUpdateData
       })
 
       if (!injectedPriceUpdate)
@@ -289,6 +294,22 @@ export const estimateRequiredAmount = async ({
   return parseU64ReturnValue(quoteResult?.returnValues)
 }
 
+export const addExecutionQuoteBuffer = (
+  amount: bigint,
+  bufferBps: bigint = DEFAULT_EXECUTION_QUOTE_BUFFER_BPS
+) => {
+  if (amount < 0n)
+    throw new Error("Quoted payment amount cannot be negative.")
+  if (bufferBps < 0n)
+    throw new Error("Execution quote buffer cannot be negative.")
+
+  return (
+    amount * (BASIS_POINT_DENOMINATOR + bufferBps) +
+    BASIS_POINT_DENOMINATOR -
+    1n
+  ) / BASIS_POINT_DENOMINATOR
+}
+
 const maybeSetDedicatedGasForSuiPayments = async ({
   transaction,
   signerAddress,
@@ -326,33 +347,29 @@ const maybeSetDedicatedGasForSuiPayments = async ({
     limit: 50
   })
 
-  const minimumGasBalance = BigInt(gasBudget ?? DEFAULT_TX_GAS_BUDGET)
-  const gasCandidate = coins.data
+  const gasCandidates = coins.data
     .map((coin) => ({
       coinObjectId: normalizeSuiObjectId(coin.coinObjectId),
       balance: parseBalance(coin.balance)
     }))
-    .filter(
-      (coin) =>
-        coin.coinObjectId !== normalizedPaymentCoinObjectId &&
-        coin.balance >= minimumGasBalance
-    )
-    .reduce<{
-      coinObjectId: string
-      balance: bigint
-    } | null>((current, coin) => {
-      if (!current) return coin
-      return coin.balance < current.balance ? coin : current
-    }, null)
+    .filter((coin) => coin.coinObjectId !== normalizedPaymentCoinObjectId)
 
-  if (!gasCandidate)
+  const minimumGasBalance = BigInt(gasBudget ?? DEFAULT_TX_GAS_BUDGET)
+  const totalGasBalance = gasCandidates.reduce(
+    (total, coin) => total + coin.balance,
+    0n
+  )
+
+  if (totalGasBalance < minimumGasBalance)
     throw new Error(
-      `Paying with SUI requires a non-payment SUI coin with at least ${minimumGasBalance}. Split a gas coin or fund a larger balance, then retry.`
+      `Paying with SUI requires non-payment SUI coins with a combined balance of at least ${minimumGasBalance}. Fund more SUI, then retry.`
     )
 
-  const gasRef = await getObjectRef(gasCandidate.coinObjectId, suiClient)
+  const gasRefs = await Promise.all(
+    gasCandidates.map((coin) => getObjectRef(coin.coinObjectId, suiClient))
+  )
   transaction.setGasOwner(signerAddress)
-  transaction.setGasPayment([gasRef])
+  transaction.setGasPayment(gasRefs)
 }
 
 const maybeUpdatePythPriceFeed = async ({
@@ -361,7 +378,8 @@ const maybeUpdatePythPriceFeed = async ({
   networkName,
   feedIdHex,
   hermesUrlOverride,
-  pythConfigOverride
+  pythConfigOverride,
+  pythUpdateData
 }: {
   transaction: Transaction
   suiClient: SuiClient
@@ -369,41 +387,21 @@ const maybeUpdatePythPriceFeed = async ({
   feedIdHex: string
   hermesUrlOverride?: string
   pythConfigOverride?: PythPullOracleConfig
+  pythUpdateData?: PythPriceFeedUpdateData
 }): Promise<boolean> => {
   const config = resolvePythPullOracleConfig(networkName, pythConfigOverride)
   if (!config) return false
 
-  const hermesUrl = hermesUrlOverride ?? config.hermesUrl
+  const normalizedUpdateData =
+    pythUpdateData ??
+    (await fetchPythPriceFeedUpdateData({
+      networkName,
+      feedIdHex,
+      hermesUrlOverride,
+      pythConfigOverride
+    }))
 
-  const connection = new SuiPriceServiceConnection(hermesUrl)
-
-  const updateData = await connection.getPriceFeedsUpdateData([feedIdHex])
-  // pyth-sui-js expects Buffer-style readUint* helpers; add shims for browser Uint8Array.
-  const normalizedUpdateData = updateData.map((message) => {
-    const messageWithReads = message as Uint8Array & {
-      readUint8?: (offset: number) => number
-      readUint16BE?: (offset: number) => number
-    }
-
-    if (
-      typeof messageWithReads.readUint8 === "function" &&
-      typeof messageWithReads.readUint16BE === "function"
-    ) {
-      return message
-    }
-
-    const dataView = new DataView(
-      message.buffer,
-      message.byteOffset,
-      message.byteLength
-    )
-
-    messageWithReads.readUint8 = (offset: number) => dataView.getUint8(offset)
-    messageWithReads.readUint16BE = (offset: number) =>
-      dataView.getUint16(offset, false)
-
-    return message
-  })
+  if (!normalizedUpdateData) return false
 
   const pythClient = new SuiPythClient(
     suiClient,
@@ -573,6 +571,7 @@ export const buildBuyTransaction = async (
     priceUpdatePolicy,
     hermesUrlOverride,
     pythConfigOverride,
+    pythUpdateData,
     networkName,
     signerAddress,
     onWarning
@@ -596,6 +595,7 @@ export const buildBuyTransaction = async (
     priceUpdatePolicy?: PriceUpdatePolicy
     hermesUrlOverride?: string
     pythConfigOverride?: PythPullOracleConfig
+    pythUpdateData?: PythPriceFeedUpdateData
     networkName: string
     signerAddress: string
     onWarning?: (message: string) => void
@@ -666,7 +666,8 @@ export const buildBuyTransaction = async (
       networkName,
       feedIdHex: pythFeedIdHex,
       hermesUrlOverride,
-      pythConfigOverride
+      pythConfigOverride,
+      pythUpdateData
     })
 
     if (!didPullUpdate) {

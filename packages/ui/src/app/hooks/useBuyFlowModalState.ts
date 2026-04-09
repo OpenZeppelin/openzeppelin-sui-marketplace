@@ -17,11 +17,16 @@ import { normalizeSuiAddress } from "@mysten/sui/utils"
 import type { IdentifierString } from "@mysten/wallet-standard"
 import type { EstimateRequiredAmountPriceUpdateMode } from "@sui-oracle-market/domain-core/flows/buy"
 import {
+  addExecutionQuoteBuffer,
   buildBuyTransaction,
   estimateRequiredAmount,
   resolveDiscountedPriceUsdCents,
   resolvePaymentCoinObjectId
 } from "@sui-oracle-market/domain-core/flows/buy"
+import {
+  fetchPythBaseUpdateFee,
+  fetchPythPriceFeedUpdateData
+} from "@sui-oracle-market/domain-core/models/pyth-feeds"
 import {
   normalizeCoinType,
   type AcceptedCurrencySummary
@@ -771,6 +776,25 @@ export const useBuyFlowModalState = ({
         discountLookup
       })
       let paymentCoinMinimumBalance: bigint | undefined = undefined
+      const isSuiPayment =
+        normalizeCoinType(currencySnapshot.coinType) ===
+        NORMALIZED_SUI_COIN_TYPE
+      const pythBaseUpdateFee =
+        isSuiPayment && quotePriceUpdateMode === "pyth-update"
+          ? await fetchPythBaseUpdateFee({
+              networkName: network,
+              suiClient
+            })
+          : undefined
+      const pythUpdateData =
+        isSuiPayment && quotePriceUpdateMode === "pyth-update"
+          ? await fetchPythPriceFeedUpdateData({
+              networkName: network,
+              feedIdHex: selectedCurrency.feedIdHex
+            })
+          : undefined
+      const requiredSuiGasBalance =
+        BigInt(DEFAULT_TX_GAS_BUDGET) + (pythBaseUpdateFee ?? 0n)
 
       if (discountedPriceUsdCents !== undefined) {
         try {
@@ -788,14 +812,16 @@ export const useBuyFlowModalState = ({
             signerAddress: walletAddress,
             suiClient,
             priceUpdateMode: quotePriceUpdateMode,
+            pythUpdateData,
             onPriceUpdateWarning: (message) => setOracleWarning(message)
           })
 
           if (requiredAmount !== undefined) {
-            paymentCoinMinimumBalance = requiredAmount
+            const bufferedRequiredAmount = addExecutionQuoteBuffer(requiredAmount)
+            paymentCoinMinimumBalance = bufferedRequiredAmount
             const balance = selectedCurrency.balance
-            if (balance < requiredAmount) {
-              const shortfall = requiredAmount - balance
+            if (balance < bufferedRequiredAmount) {
+              const shortfall = bufferedRequiredAmount - balance
               const symbolLabel =
                 selectedCurrency.symbol ??
                 getStructLabel(selectedCurrency.coinType)
@@ -810,8 +836,8 @@ export const useBuyFlowModalState = ({
                 status: "error",
                 error: `Insufficient ${symbolLabel || "balance"} to complete purchase. Balance: ${formatAmount(
                   balance
-                )}${suffix}. Required: ${formatAmount(
-                  requiredAmount
+                )}${suffix}. Required incl. execution buffer: ${formatAmount(
+                  bufferedRequiredAmount
                 )}${suffix}. Short by: ${formatAmount(shortfall)}${suffix}.`
               })
               return
@@ -821,11 +847,6 @@ export const useBuyFlowModalState = ({
           // Best-effort preflight; fall back to execution on inspection failure.
         }
       }
-
-      const isSuiPayment =
-        normalizeCoinType(currencySnapshot.coinType) ===
-        NORMALIZED_SUI_COIN_TYPE
-      const gasBudget = BigInt(DEFAULT_TX_GAS_BUDGET)
       if (isSuiPayment && paymentCoinMinimumBalance === undefined) {
         setTransactionState({
           status: "error",
@@ -880,7 +901,7 @@ export const useBuyFlowModalState = ({
           {
             owner: walletAddress,
             paymentMinimum,
-            gasBudget,
+            gasBudget: requiredSuiGasBalance,
             splitGasBudget: DEFAULT_TX_GAS_BUDGET,
             forceSplit: isLocalnet
           },
@@ -938,10 +959,11 @@ export const useBuyFlowModalState = ({
           refundTo: normalizedRefundTo,
           maxPriceAgeSecs: undefined,
           maxConfidenceRatioBps: undefined,
-          gasBudget: DEFAULT_TX_GAS_BUDGET,
+          gasBudget: Number(requiredSuiGasBalance),
           discountContext: discountSelection,
           priceUpdatePolicy,
           hermesUrlOverride: undefined,
+          pythUpdateData,
           networkName: network,
           signerAddress: walletAddress,
           onWarning: (message) => setOracleWarning(message)
