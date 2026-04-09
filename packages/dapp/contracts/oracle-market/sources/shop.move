@@ -465,6 +465,8 @@ public fun toggle_discount(
     };
 }
 
+// TODO#q: we should trigger from UI only remove discount
+
 /// Removes a discount from shop storage.
 /// Fails if discount doesn't exist.
 /// Fails if discount active and attached listing doesn't exists.

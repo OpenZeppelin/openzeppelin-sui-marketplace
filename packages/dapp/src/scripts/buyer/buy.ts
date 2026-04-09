@@ -4,7 +4,6 @@
  * The PTB can update Pyth and then call buy_item/buy_item_with_discount in one atomic flow.
  * Oracle freshness and confidence guardrails are enforced on-chain using PriceInfoObject + Clock.
  */
-import type { SuiObjectRef } from "@mysten/sui/client"
 import { normalizeSuiAddress, normalizeSuiObjectId } from "@mysten/sui/utils"
 import yargs from "yargs"
 
@@ -35,10 +34,6 @@ import {
 } from "@sui-oracle-market/domain-core/models/item-listing"
 import type { PriceUpdatePolicy } from "@sui-oracle-market/domain-core/models/pyth"
 import { findCreatedShopItemIds } from "@sui-oracle-market/domain-core/models/shop-item"
-import {
-  pickDedicatedGasPaymentRefFromSplit,
-  planSuiPaymentSplitTransaction
-} from "@sui-oracle-market/tooling-core/coin"
 import {
   DEFAULT_TX_GAS_BUDGET,
   NORMALIZED_SUI_COIN_TYPE,
@@ -132,7 +127,6 @@ runSuiScript(
           : "pyth-update"
     let paymentCoinMinimumBalance: bigint | undefined = undefined
     let paymentCoinObjectId: string | undefined = undefined
-    let dedicatedGasPaymentRef: SuiObjectRef | undefined
     const pythBaseUpdateFee =
       isSuiPayment && quotePriceUpdateMode === "pyth-update"
         ? await fetchPythBaseUpdateFee({
@@ -194,42 +188,13 @@ runSuiScript(
       }
 
       paymentCoinMinimumBalance = addExecutionQuoteBuffer(requiredAmount)
-
-      const splitPlan = await planSuiPaymentSplitTransaction(
-        {
-          owner: signerAddress,
-          paymentMinimum: paymentCoinMinimumBalance,
-          gasBudget: requiredSuiGasBalance,
-          splitGasBudget: DEFAULT_TX_GAS_BUDGET,
-          paymentCoinObjectId: inputs.paymentCoinObjectId
-        },
-        { suiClient: tooling.suiClient }
-      )
-
-      if (splitPlan.needsSplit && splitPlan.transaction) {
-        if (!cliArguments.json) {
-          logKeyValueYellow("SUI-split")(
-            "Creating payment and gas coins for SUI checkout."
-          )
-        }
-
-        const splitExecution = await tooling.executeTransactionWithSummary({
-          transaction: splitPlan.transaction,
-          signer: tooling.loadedEd25519KeyPair,
-          summaryLabel: "sui-split",
-          devInspect: cliArguments.devInspect,
-          dryRun: cliArguments.dryRun
-        })
-
-        if (cliArguments.dryRun || !splitExecution.execution) return
-
-        dedicatedGasPaymentRef = pickDedicatedGasPaymentRefFromSplit({
-          splitTransactionBlock: splitExecution.execution.transactionResult,
-          paymentCoinObjectId: splitPlan.paymentCoinObjectId
-        })
-      }
-
-      paymentCoinObjectId = splitPlan.paymentCoinObjectId
+      paymentCoinObjectId = await resolvePaymentCoinObjectId({
+        providedCoinObjectId: inputs.paymentCoinObjectId,
+        coinType: inputs.coinType,
+        signerAddress,
+        suiClient: tooling.suiClient,
+        minimumBalance: undefined
+      })
     }
 
     if (!paymentCoinObjectId) {
@@ -268,7 +233,7 @@ runSuiScript(
         pythPriceInfoShared,
         pythFeedIdHex: acceptedCurrencySummary.feedIdHex,
         paymentCoinObjectId,
-        dedicatedGasPaymentRef,
+        suiPaymentAmount: isSuiPayment ? paymentCoinMinimumBalance : undefined,
         coinType: inputs.coinType,
         itemType: listingSummary.itemType,
         mintTo,

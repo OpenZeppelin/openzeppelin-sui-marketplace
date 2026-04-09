@@ -1,6 +1,9 @@
 import { bcs } from "@mysten/sui/bcs"
-import type { SuiClient, SuiObjectData, SuiObjectRef } from "@mysten/sui/client"
-import type { Transaction } from "@mysten/sui/transactions"
+import type { SuiClient, SuiObjectData } from "@mysten/sui/client"
+import type {
+  Transaction,
+  TransactionObjectArgument
+} from "@mysten/sui/transactions"
 import { fromB64, normalizeSuiObjectId } from "@mysten/sui/utils"
 import { SuiPythClient } from "@pythnetwork/pyth-sui-js"
 
@@ -16,7 +19,10 @@ import {
   unwrapMoveObjectFields
 } from "@sui-oracle-market/tooling-core/object"
 import { getSuiSharedObject } from "@sui-oracle-market/tooling-core/shared-object"
-import { newTransaction } from "@sui-oracle-market/tooling-core/transactions"
+import {
+  newTransaction,
+  resolveSplitCoinResult
+} from "@sui-oracle-market/tooling-core/transactions"
 import {
   extractFieldValueByKeys,
   normalizeBigIntFromMoveValue,
@@ -58,11 +64,6 @@ const getObjectRef = async (objectId: string, suiClient: SuiClient) => {
     digest: response.data.digest
   }
 }
-
-const normalizeObjectRef = (objectRef: SuiObjectRef): SuiObjectRef => ({
-  ...objectRef,
-  objectId: normalizeSuiObjectId(objectRef.objectId)
-})
 
 const parseMockPriceInfoUpdateFields = (
   priceInfoObject: SuiObjectData
@@ -298,78 +299,91 @@ export const addExecutionQuoteBuffer = (
   amount: bigint,
   bufferBps: bigint = DEFAULT_EXECUTION_QUOTE_BUFFER_BPS
 ) => {
-  if (amount < 0n)
-    throw new Error("Quoted payment amount cannot be negative.")
+  if (amount < 0n) throw new Error("Quoted payment amount cannot be negative.")
   if (bufferBps < 0n)
     throw new Error("Execution quote buffer cannot be negative.")
 
   return (
-    amount * (BASIS_POINT_DENOMINATOR + bufferBps) +
-    BASIS_POINT_DENOMINATOR -
-    1n
-  ) / BASIS_POINT_DENOMINATOR
+    (amount * (BASIS_POINT_DENOMINATOR + bufferBps) +
+      BASIS_POINT_DENOMINATOR -
+      1n) /
+    BASIS_POINT_DENOMINATOR
+  )
 }
 
 const maybeSetDedicatedGasForSuiPayments = async ({
   transaction,
   signerAddress,
   paymentCoinObjectId,
-  dedicatedGasPaymentRef,
+  paymentAmount,
   gasBudget,
   suiClient
 }: {
   transaction: Transaction
   signerAddress: string
   paymentCoinObjectId: string
-  dedicatedGasPaymentRef?: SuiObjectRef
+  paymentAmount?: bigint
   gasBudget?: number
   suiClient: SuiClient
-}) => {
+}): Promise<TransactionObjectArgument | undefined> => {
   const normalizedPaymentCoinObjectId =
     normalizeSuiObjectId(paymentCoinObjectId)
 
-  if (dedicatedGasPaymentRef) {
-    const normalizedGasPaymentRef = normalizeObjectRef(dedicatedGasPaymentRef)
-    if (normalizedGasPaymentRef.objectId === normalizedPaymentCoinObjectId)
-      throw new Error(
-        "SUI payment coin cannot also be used as gas. Provide a different gas coin."
-      )
-
-    transaction.setGasOwner(signerAddress)
-    transaction.setGasPayment([normalizedGasPaymentRef])
-    return
-  }
-
-  // When paying with SUI, one coin must cover gas and a different coin must be the payment input.
+  // For SUI checkout, use all signer SUI coins as gas payment, then split the payment
+  // coin from tx.gas inside the final PTB after any oracle update commands are added.
   const coins = await suiClient.getCoins({
     owner: signerAddress,
     coinType: SUI_COIN_TYPE,
     limit: 50
   })
 
-  const gasCandidates = coins.data
-    .map((coin) => ({
-      coinObjectId: normalizeSuiObjectId(coin.coinObjectId),
-      balance: parseBalance(coin.balance)
-    }))
-    .filter((coin) => coin.coinObjectId !== normalizedPaymentCoinObjectId)
+  const allSuiCoins = coins.data.map((coin) => ({
+    coinObjectId: normalizeSuiObjectId(coin.coinObjectId),
+    balance: parseBalance(coin.balance)
+  }))
+
+  const preferredPrimaryCoin = allSuiCoins.find(
+    (coin) => coin.coinObjectId === normalizedPaymentCoinObjectId
+  )
+  const orderedGasCoins = [
+    ...(preferredPrimaryCoin ? [preferredPrimaryCoin] : []),
+    ...allSuiCoins.filter(
+      (coin) => coin.coinObjectId !== normalizedPaymentCoinObjectId
+    )
+  ]
 
   const minimumGasBalance = BigInt(gasBudget ?? DEFAULT_TX_GAS_BUDGET)
-  const totalGasBalance = gasCandidates.reduce(
+  const minimumPaymentAmount = requireValue(
+    paymentAmount,
+    "SUI checkout is missing its required payment amount."
+  )
+  const totalGasBalance = orderedGasCoins.reduce(
     (total, coin) => total + coin.balance,
     0n
   )
 
   if (totalGasBalance < minimumGasBalance)
     throw new Error(
-      `Paying with SUI requires non-payment SUI coins with a combined balance of at least ${minimumGasBalance}. Fund more SUI, then retry.`
+      `Paying with SUI requires a total SUI balance of at least ${minimumGasBalance} to cover gas. Fund more SUI, then retry.`
+    )
+
+  const minimumCombinedBalance = minimumGasBalance + minimumPaymentAmount
+  if (totalGasBalance < minimumCombinedBalance)
+    throw new Error(
+      `Paying with SUI requires a total SUI balance of at least ${minimumCombinedBalance} to cover payment plus gas. Fund more SUI, then retry.`
     )
 
   const gasRefs = await Promise.all(
-    gasCandidates.map((coin) => getObjectRef(coin.coinObjectId, suiClient))
+    orderedGasCoins.map((coin) => getObjectRef(coin.coinObjectId, suiClient))
   )
   transaction.setGasOwner(signerAddress)
   transaction.setGasPayment(gasRefs)
+  return resolveSplitCoinResult(
+    transaction.splitCoins(transaction.gas, [
+      transaction.pure.u64(minimumPaymentAmount)
+    ]),
+    0
+  )
 }
 
 const maybeUpdatePythPriceFeed = async ({
@@ -558,7 +572,7 @@ export const buildBuyTransaction = async (
     pythPriceInfoShared,
     pythFeedIdHex,
     paymentCoinObjectId,
-    dedicatedGasPaymentRef,
+    suiPaymentAmount,
     coinType,
     itemType,
     mintTo,
@@ -582,7 +596,7 @@ export const buildBuyTransaction = async (
     pythPriceInfoShared: Awaited<ReturnType<typeof getSuiSharedObject>>
     pythFeedIdHex: string
     paymentCoinObjectId: string
-    dedicatedGasPaymentRef?: SuiObjectRef
+    suiPaymentAmount?: bigint
     coinType: string
     itemType: string
     mintTo: string
@@ -606,15 +620,22 @@ export const buildBuyTransaction = async (
   const transaction = newTransaction()
   transaction.setSender(signerAddress)
 
+  let paymentArgument: TransactionObjectArgument
+
   if (isSuiCoinType(coinType)) {
-    await maybeSetDedicatedGasForSuiPayments({
+    const splitPaymentArgument = await maybeSetDedicatedGasForSuiPayments({
       transaction,
       signerAddress,
       paymentCoinObjectId,
-      dedicatedGasPaymentRef,
+      paymentAmount: suiPaymentAmount,
       gasBudget,
       suiClient
     })
+
+    paymentArgument =
+      splitPaymentArgument ?? transaction.object(paymentCoinObjectId)
+  } else {
+    paymentArgument = transaction.object(paymentCoinObjectId)
   }
 
   const shopArgument = transaction.sharedObjectRef(shopShared.sharedRef)
@@ -696,7 +717,6 @@ export const buildBuyTransaction = async (
     }
   }
 
-  const paymentArgument = transaction.object(paymentCoinObjectId)
   const typeArguments = [itemType, coinType]
   const buildCommonBuyArguments = () => [
     pythPriceInfoArgument,

@@ -2,7 +2,7 @@ import { normalizeSuiObjectId } from "@mysten/sui/utils"
 
 export const ONE_SUI = 1_000_000_000n
 export const MINIMUM_GAS_COIN_OBJECTS = 3
-export const DEFAULT_TX_GAS_BUDGET = 100_000_000
+export const DEFAULT_TX_GAS_BUDGET = 20_000_000
 export const DEFAULT_PUBLISH_GAS_BUDGET = 500_000_000
 export const SUI_COIN_TYPE = "0x2::sui::SUI"
 export const NORMALIZED_SUI_COIN_TYPE = `${normalizeSuiObjectId(

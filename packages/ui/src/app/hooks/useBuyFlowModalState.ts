@@ -8,10 +8,7 @@ import {
   useSuiClient,
   useSuiClientContext
 } from "@mysten/dapp-kit"
-import type {
-  SuiObjectRef,
-  SuiTransactionBlockResponse
-} from "@mysten/sui/client"
+import type { SuiTransactionBlockResponse } from "@mysten/sui/client"
 import type { Transaction } from "@mysten/sui/transactions"
 import { normalizeSuiAddress } from "@mysten/sui/utils"
 import type { IdentifierString } from "@mysten/wallet-standard"
@@ -48,10 +45,6 @@ import {
   parseShopItemReceiptFromObject
 } from "@sui-oracle-market/domain-core/models/shop-item"
 import {
-  pickDedicatedGasPaymentRefFromSplit,
-  planSuiPaymentSplitTransaction
-} from "@sui-oracle-market/tooling-core/coin"
-import {
   DEFAULT_TX_GAS_BUDGET,
   NORMALIZED_SUI_COIN_TYPE,
   SUI_CLOCK_ID
@@ -63,7 +56,6 @@ import {
 } from "@sui-oracle-market/tooling-core/object"
 import { getSuiSharedObject } from "@sui-oracle-market/tooling-core/shared-object"
 import { ENetwork } from "@sui-oracle-market/tooling-core/types"
-import { requireValue } from "@sui-oracle-market/tooling-core/utils/utility"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { EXPLORER_URL_VARIABLE_NAME } from "../config/network"
 import { parseBalance } from "../helpers/balance"
@@ -817,7 +809,8 @@ export const useBuyFlowModalState = ({
           })
 
           if (requiredAmount !== undefined) {
-            const bufferedRequiredAmount = addExecutionQuoteBuffer(requiredAmount)
+            const bufferedRequiredAmount =
+              addExecutionQuoteBuffer(requiredAmount)
             paymentCoinMinimumBalance = bufferedRequiredAmount
             const balance = selectedCurrency.balance
             if (balance < bufferedRequiredAmount) {
@@ -890,50 +883,15 @@ export const useBuyFlowModalState = ({
       }
 
       let paymentCoinObjectId: string
-      let dedicatedGasPaymentRef: SuiObjectRef | undefined
 
       if (isSuiPayment) {
-        const paymentMinimum = requireValue(
-          paymentCoinMinimumBalance,
-          "Missing payment amount."
-        )
-        const splitPlan = await planSuiPaymentSplitTransaction(
-          {
-            owner: walletAddress,
-            paymentMinimum,
-            gasBudget: requiredSuiGasBalance,
-            splitGasBudget: DEFAULT_TX_GAS_BUDGET,
-            forceSplit: isLocalnet
-          },
-          { suiClient }
-        )
-
-        debugContext = {
-          ...(debugContext ?? {}),
-          suiPaymentSplitPlan: {
-            needsSplit: splitPlan.needsSplit,
-            coinCount: splitPlan.coinCount,
-            totalBalance: splitPlan.totalBalance.toString(),
-            paymentCoinObjectId: splitPlan.paymentCoinObjectId
-          }
-        }
-
-        if (splitPlan.needsSplit && splitPlan.transaction) {
-          failureStage = "execute"
-          const splitExecution = await executeTransaction(splitPlan.transaction)
-          dedicatedGasPaymentRef = pickDedicatedGasPaymentRefFromSplit({
-            splitTransactionBlock: splitExecution.transactionBlock,
-            paymentCoinObjectId: splitPlan.paymentCoinObjectId
-          })
-
-          debugContext = {
-            ...(debugContext ?? {}),
-            suiSplitExecution: {
-              dedicatedGasCoinObjectId: dedicatedGasPaymentRef?.objectId
-            }
-          }
-        }
-        paymentCoinObjectId = splitPlan.paymentCoinObjectId
+        paymentCoinObjectId = await resolvePaymentCoinObjectId({
+          providedCoinObjectId: undefined,
+          coinType: currencySnapshot.coinType,
+          signerAddress: walletAddress,
+          suiClient,
+          minimumBalance: undefined
+        })
       } else {
         paymentCoinObjectId = await resolvePaymentCoinObjectId({
           providedCoinObjectId: undefined,
@@ -952,7 +910,9 @@ export const useBuyFlowModalState = ({
           pythPriceInfoShared,
           pythFeedIdHex: currencySnapshot.feedIdHex,
           paymentCoinObjectId,
-          dedicatedGasPaymentRef,
+          suiPaymentAmount: isSuiPayment
+            ? paymentCoinMinimumBalance
+            : undefined,
           coinType: currencySnapshot.coinType,
           itemType: listingSnapshot.itemType,
           mintTo: normalizedMintTo,
