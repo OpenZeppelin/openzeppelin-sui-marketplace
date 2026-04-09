@@ -19,6 +19,10 @@ import {
   SUI_CLOCK_ID,
   type LabeledMockPriceFeedConfig
 } from "@sui-oracle-market/domain-core/models/pyth"
+import {
+  resolveShopPackageId,
+  resolvePythPackageIdFromShopModule
+} from "@sui-oracle-market/domain-node/shop"
 import { buildCoinTransferTransaction } from "@sui-oracle-market/tooling-core/coin"
 import { deriveCurrencyObjectId } from "@sui-oracle-market/tooling-core/coin-registry"
 import { assertLocalnetNetwork } from "@sui-oracle-market/tooling-core/network"
@@ -152,6 +156,63 @@ const extendCliArguments = async (
   }
 }
 
+/**
+ * Ensures saved mock state stays aligned with the price_info package the published shop expects.
+ *
+ * When oracle-market is (re-)published it links against a specific pyth-mock package address.
+ * If saved mock artifacts point at a different pyth package, those PriceInfoObjects will cause
+ * a Move TypeMismatch when add_accepted_currency is called. This function detects that drift
+ * and discards stale price feeds so they are recreated against the correct package.
+ *
+ * The explicit --pyth-package-id override is always honored without modification.
+ */
+const alignExistingStateWithShopPythPackage = async ({
+  cliArguments,
+  existingState,
+  tooling
+}: {
+  cliArguments: SetupLocalCliArgs
+  existingState: ExistingState
+  tooling: Tooling
+}): Promise<ExistingState> => {
+  if (cliArguments.pythPackageId) return existingState
+
+  const shopPackageId = await resolveShopPackageId({
+    networkName: "localnet"
+  }).catch(() => undefined)
+
+  if (!shopPackageId) return existingState
+
+  const expectedPythPackageId = await resolvePythPackageIdFromShopModule({
+    shopPackageId,
+    suiClient: tooling.suiClient
+  }).catch(() => undefined)
+
+  if (!expectedPythPackageId) return existingState
+
+  const normalizedExpected = normalizeSuiObjectId(expectedPythPackageId)
+  const normalizedSaved = existingState.existingPythPackageId
+    ? normalizeSuiObjectId(existingState.existingPythPackageId)
+    : undefined
+
+  if (normalizedSaved === normalizedExpected) return existingState
+
+  if (normalizedSaved) {
+    logWarning(
+      `Saved mock Pyth package (${normalizedSaved}) differs from the price_info package expected by the published shop (${normalizedExpected}).`
+    )
+    logKeyValueBlue("Hint")(
+      "Discarding saved price feeds — they will be recreated against the correct package."
+    )
+  }
+
+  return {
+    ...existingState,
+    existingPythPackageId: normalizedExpected,
+    existingPriceFeeds: undefined
+  }
+}
+
 runSuiScript(
   async (tooling, cliArguments) => {
     const inputs = normalizeSetupInputs(cliArguments)
@@ -162,7 +223,15 @@ runSuiScript(
     assertLocalnetNetwork(network.networkName)
 
     // Load prior artifacts unless --re-publish was passed (idempotent runs).
-    const existingState = await extendCliArguments(inputs)
+    const rawExistingState = await extendCliArguments(inputs)
+
+    // Align saved Pyth package with what the published oracle-market expects.
+    // Discards stale price feeds when the packages diverge (e.g. after re-publishing oracle-market).
+    const existingState = await alignExistingStateWithShopPythPackage({
+      cliArguments: inputs,
+      existingState: rawExistingState,
+      tooling
+    })
 
     // Load signer (env/keystore) and derive address; Sui requires explicit key material for PTBs.
     // Ensure the account has gas coins (auto-faucet on localnet) to avoid funding errors downstream.

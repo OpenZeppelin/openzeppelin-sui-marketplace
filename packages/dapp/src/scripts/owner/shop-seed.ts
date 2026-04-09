@@ -61,6 +61,8 @@ import { resolveItemExamplesPackageId } from "@sui-oracle-market/domain-node/ite
 import {
   assertPriceInfoObjectDependency,
   resolveMaybeLatestShopIdentifiers,
+  resolvePriceInfoPackageId,
+  resolvePythPackageIdFromShopModule,
   resolveShopDependencyIds,
   resolveShopPackageId
 } from "@sui-oracle-market/domain-node/shop"
@@ -981,6 +983,33 @@ const runSequentially = async <TItem, TResult>(
     return [...results, nextResult]
   }, Promise.resolve([]))
 
+const assertLocalnetPriceInfoObjectMatchesShop = async ({
+  expectedPythPackageId,
+  priceInfoObjectId,
+  suiClient
+}: {
+  expectedPythPackageId: string
+  priceInfoObjectId: string
+  suiClient: SuiClient
+}) => {
+  const actualPythPackageId = await resolvePriceInfoPackageId({
+    priceInfoObjectId,
+    suiClient
+  })
+
+  const normalizedExpected = normalizeSuiObjectId(expectedPythPackageId)
+  const normalizedActual = normalizeSuiObjectId(actualPythPackageId)
+
+  if (normalizedExpected === normalizedActual) return
+
+  throw new Error(
+    `PriceInfoObject ${priceInfoObjectId} belongs to pyth package ${normalizedActual}, ` +
+      `but the published shop expects ${normalizedExpected}. ` +
+      `Re-run \`pnpm script mock:setup --network localnet\` to recreate price feeds ` +
+      `against the correct package, or pass --pyth-package-id ${normalizedExpected}.`
+  )
+}
+
 const ensureAcceptedCurrencies = async ({
   acceptedCurrencySeeds,
   cliArguments,
@@ -994,13 +1023,22 @@ const ensureAcceptedCurrencies = async ({
   tooling: Tooling
   suiClient: SuiClient
 }) => {
+  const expectedPythPackageId =
+    tooling.network.networkName === "localnet"
+      ? await resolvePythPackageIdFromShopModule({
+          shopPackageId: shopIdentifiers.packageId,
+          suiClient
+        }).catch(() => undefined)
+      : undefined
+
   await runSequentially(acceptedCurrencySeeds, (currencySeed) =>
     ensureAcceptedCurrency({
       currencySeed,
       cliArguments,
       shopIdentifiers,
       tooling,
-      suiClient
+      suiClient,
+      expectedPythPackageId
     })
   )
 }
@@ -1010,13 +1048,15 @@ const ensureAcceptedCurrency = async ({
   cliArguments,
   shopIdentifiers,
   tooling,
-  suiClient
+  suiClient,
+  expectedPythPackageId
 }: {
   currencySeed: AcceptedCurrencySeed
   cliArguments: ShopSeedArguments
   shopIdentifiers: { packageId: string; shopId: string; ownerCapId: string }
   tooling: Tooling
   suiClient: SuiClient
+  expectedPythPackageId?: string
 }) => {
   const coinType = normalizeCoinType(currencySeed.coinType)
 
@@ -1042,6 +1082,14 @@ const ensureAcceptedCurrency = async ({
     shopIdentifiers,
     tooling
   })
+
+  if (expectedPythPackageId) {
+    await assertLocalnetPriceInfoObjectMatchesShop({
+      expectedPythPackageId,
+      priceInfoObjectId: inputs.priceInfoObjectId,
+      suiClient
+    })
+  }
 
   const shopSharedObject = await tooling.getMutableSharedObject({
     objectId: inputs.shopId

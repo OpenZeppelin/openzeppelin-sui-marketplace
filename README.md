@@ -22,55 +22,134 @@ More detail (workspace layering rules, folder layout): `docs/01-repo-layout.md`.
 - Sui CLI [Install](https://docs.sui.io/guides/developer/getting-started/sui-install)
 
 
-## Environment Setup
-Set up your environment with an active address and a running localnet to publish and interact with the `oracle-market` package.
+## Quickstart (Fresh Clone)
 
 Full walkthrough: [docs/05-localnet-workflow.md](docs/05-localnet-workflow.md).
 
+### 1. Clone and install
+
 ```bash
-# 1) Clone and install
-git clone git@github.com:OpenZeppelin/openzeppelin-sui-marketplace.git && cd openzeppelin-sui-marketplace
-# (pnpm workspace install from the repo root)
+git clone git@github.com:OpenZeppelin/openzeppelin-sui-marketplace.git
+cd openzeppelin-sui-marketplace
 pnpm install
-
-# Create an address (it will be your shop owner address). Note the recovery phrase to import it later in your browser wallet.
-sui client new-address ed25519
-
-# Configure this address in ./packages/dapp/.env , Sui config file or export
-export SUI_NETWORK=localnet
-export SUI_ACCOUNT_ADDRESS=<0x...>
-export SUI_ACCOUNT_PRIVATE_KEY=<base64 or hex>
-
-# Optionally create a second address to represent the buyer (the owner address can also buy items) (take note of the recovery phrase)
-sui client new-address ed25519
-
-# Start localnet (new terminal) (--with-faucet is recommended as some script auto fund address if fund is missing, on first start it will fund your configured address)
-pnpm script chain:localnet:start --with-faucet
-
-# Seed mocks (coins + Pyth stub + price feeds) on localnet as there is no coins or published Pyth oracle on your blank localnet
-pnpm script mock:setup --buyer-address <0x...> --network localnet
 ```
 
-
-## Publish and Seed
-Load some shop data
+### 2. Create owner and buyer accounts
 
 ```bash
-# Publish oracle-market
-pnpm script move:publish --package-path oracle-market
+sui client new-address ed25519 owner
+sui client new-address ed25519 buyer
+```
 
-# In the output of the above command, after the success message, you will find the packageId for the shop contract.
-# You can set the value as an environment variable:
-export NEXT_PUBLIC_LOCALNET_CONTRACT_PACKAGE_ID=<0x...>
+Note the printed address and `recoveryPhrase` for each — you will need them in the next step and for importing into your browser wallet.
 
-# or you can make it more permanent by adding it to ./packages/ui/.env file (there's a ./packages/ui/.env.example for reference)
+### 3. Set up environment profile files
 
-# To continue setting up the shop, listings, discounts, accepted currencies follow appropriate scripts (find the list here docs/06-scripts-reference.md) or run the seed script that will load data for each model
-pnpm script owner:shop:seed
+```bash
+cp packages/dapp/.env.owner.example packages/dapp/.env.owner
+cp packages/dapp/.env.buyer.example packages/dapp/.env.buyer
+```
 
-# Run the UI
+Edit each file:
+
+```
+SUI_NETWORK=localnet
+SUI_ACCOUNT_ADDRESS=<printed address>
+# Leave SUI_ACCOUNT_PRIVATE_KEY blank when using a mnemonic
+SUI_ACCOUNT_PRIVATE_KEY=
+SUI_ACCOUNT_MNEMONIC="<printed recoveryPhrase>"
+```
+
+> **Note:** `pnpm script ...` automatically loads `packages/dapp/.env`.
+> `pnpm env:owner` / `pnpm env:buyer` copy the named profile file into `packages/dapp/.env`.
+
+### 4. Activate the owner profile
+
+```bash
+pnpm env:owner
+pnpm env:status   # verify network + address
+```
+
+### 5. Start localnet
+
+In a separate terminal:
+
+```bash
+pnpm script chain:localnet:start --with-faucet
+```
+
+`--with-faucet` is recommended; scripts auto-fund addresses when balance is low.
+
+### 6. Publish oracle-market
+
+```bash
+pnpm script move:publish --package-path oracle-market --network localnet
+```
+
+> Localnet publish defaults to the SDK path in this repo's scripted bootstrap.
+> Pass `--use-cli-publish` to use the Sui CLI instead.
+
+### 7. Seed localnet mocks
+
+```bash
+BUYER_ADDRESS=$(grep SUI_ACCOUNT_ADDRESS packages/dapp/.env.buyer | cut -d= -f2)
+pnpm script mock:setup --buyer-address "$BUYER_ADDRESS" --network localnet
+```
+
+> If oracle-market is re-published, re-run this step before seeding the shop.
+> mock:setup automatically aligns price feeds with the oracle-market package you just published.
+
+### 8. Seed the shop
+
+```bash
+pnpm script owner:shop:seed --network localnet --json | tee /tmp/shop-seed.json
+```
+
+### 9. Capture package and shop IDs
+
+```bash
+# jq is optional — copy the values manually from the files if preferred
+PACKAGE_ID=$(jq -r '.[-1].packageId' packages/dapp/deployments/deployment.localnet.json)
+SHOP_ID=$(jq -r '.shopOverview.shopId' /tmp/shop-seed.json)
+```
+
+### 10. Configure the UI
+
+Create `packages/ui/.env.local` (see `packages/ui/.env.example` for all variables):
+
+```bash
+cat > packages/ui/.env.local <<EOF
+NEXT_PUBLIC_APP_NAME="Sui Oracle Market"
+NEXT_PUBLIC_APP_DESCRIPTION="Local dev instance"
+NEXT_PUBLIC_LOCALNET_CONTRACT_PACKAGE_ID=$PACKAGE_ID
+NEXT_PUBLIC_LOCALNET_SHOP_ID=$SHOP_ID
+EOF
+```
+
+### 11. Optional: buyer sanity check
+
+```bash
+pnpm env:buyer
+pnpm script buyer:shop:view --network localnet --shop-id "$SHOP_ID" --json
+pnpm env:owner   # switch back when done
+```
+
+### 12. Run the UI
+
+```bash
 pnpm ui dev
+```
 
+Open: `http://localhost:3000/?network=localnet&shopId=<SHOP_ID>`
+
+
+## Existing Setup Migration
+
+If you have a legacy single-account `packages/dapp/.env`, split it into profiles with:
+
+```bash
+pnpm env:bootstrap   # creates .env.owner and .env.buyer, then activates owner
+pnpm env:status      # confirm active network + address
 ```
 
 ## Learning path
