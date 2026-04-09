@@ -103,7 +103,7 @@ pnpm script mock:setup --buyer-address "$BUYER_ADDRESS" --network localnet
 ### 8. Seed the shop
 
 ```bash
-pnpm script owner:shop:seed --network localnet --json | tee /tmp/shop-seed.json
+pnpm -s script owner:shop:seed --network localnet --json | tee /tmp/shop-seed.json
 ```
 
 ### 9. Capture package and shop IDs
@@ -122,9 +122,10 @@ cat > packages/ui/.env.local <<EOF
 NEXT_PUBLIC_APP_NAME="Sui Oracle Market"
 NEXT_PUBLIC_APP_DESCRIPTION="Local dev instance"
 NEXT_PUBLIC_LOCALNET_CONTRACT_PACKAGE_ID=$PACKAGE_ID
-NEXT_PUBLIC_LOCALNET_SHOP_ID=$SHOP_ID
 EOF
 ```
+
+> The shop ID is passed via the URL query parameter, not an env variable.
 
 ### 11. Optional: buyer sanity check
 
@@ -140,7 +141,11 @@ pnpm env:owner   # switch back when done
 pnpm ui dev
 ```
 
-Open: `http://localhost:3000/?network=localnet&shopId=<SHOP_ID>`
+Then open the URL printed by:
+
+```bash
+echo "http://localhost:3000/?network=localnet&shopId=${SHOP_ID}"
+```
 
 
 ## Existing Setup Migration
