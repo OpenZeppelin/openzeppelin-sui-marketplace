@@ -109,7 +109,7 @@ pnpm -s script owner:shop:seed --network localnet --json | tee /tmp/shop-seed.js
 ### 9. Capture package and shop IDs
 
 ```bash
-PACKAGE_ID=$(jq -r '.[-1].packageId' packages/dapp/deployments/deployment.localnet.json)
+PACKAGE_ID=$(jq -r '[.[] | select(.packageName == "sui_oracle_market")] | last | .packageId' packages/dapp/deployments/deployment.localnet.json)
 SHOP_ID=$(jq -r '.shopOverview.shopId' /tmp/shop-seed.json)
 ```
 
