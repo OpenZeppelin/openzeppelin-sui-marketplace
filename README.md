@@ -104,8 +104,10 @@ Then fund both addresses from the localnet faucet so they have SUI for gas and p
 
 ```bash
 OWNER_ADDRESS=$(grep SUI_ACCOUNT_ADDRESS packages/dapp/.env.owner | cut -d= -f2)
-sui client faucet --address "$OWNER_ADDRESS" --url http://127.0.0.1:9123
-sui client faucet --address "$BUYER_ADDRESS" --url http://127.0.0.1:9123
+curl -X POST http://127.0.0.1:9123/gas -H "Content-Type: application/json" \
+  -d "{\"FixedAmountRequest\":{\"recipient\":\"$OWNER_ADDRESS\"}}"
+curl -X POST http://127.0.0.1:9123/gas -H "Content-Type: application/json" \
+  -d "{\"FixedAmountRequest\":{\"recipient\":\"$BUYER_ADDRESS\"}}"
 ```
 
 ### 8. Seed the shop
