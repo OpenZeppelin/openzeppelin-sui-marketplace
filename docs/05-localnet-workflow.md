@@ -11,6 +11,7 @@ If you’re brand new, start with [00 Setup + Quickstart](./00-setup.md) and the
 ## Environment Setup (from scratch)
 
 ### 1) Clone and install deps
+
 ```bash
 git clone git@github.com:OpenZeppelin/openzeppelin-sui-marketplace.git
 cd openzeppelin-sui-marketplace
@@ -18,6 +19,7 @@ pnpm install
 ```
 
 ### 2) Configure Sui CLI and config file
+
 - Create or reuse an address (note the recovery phrase to import it later in your browser wallet):
   ```bash
   sui client new-address ed25519
@@ -56,6 +58,7 @@ pnpm install
     - `artifacts`: alias for deployments (kept for compatibility).
 
 Move environments (localnet/devnet/testnet/mainnet):
+
 - All Move packages include `[environments]` so `--build-env <name>` resolves chain IDs consistently.
 - For localnet, we use `dep-replacements.test-publish` to swap Pyth to the mock package without dev-mode flags.
 - Chain IDs should match `sui client chain-identifier` for each CLI env. If you regenesis localnet, update its entry:
@@ -66,27 +69,31 @@ Move environments (localnet/devnet/testnet/mainnet):
   Then update `localnet = "<chain-id>"` in `packages/dapp/contracts/oracle-market/Move.toml` if it changed.
 
 Environment overrides (optional):
+
 - Network selection precedence: `--network` > `SUI_NETWORK` > `defaultNetwork` > `localnet`.
 - `SUI_KEYSTORE_PATH`, `SUI_ACCOUNT_INDEX`, `SUI_ACCOUNT_ADDRESS`, `SUI_ACCOUNT_PRIVATE_KEY`, `SUI_ACCOUNT_MNEMONIC`: override the `account` fields above.
 
 How it’s used:
+
 - Scripts load `sui.config.ts` to decide RPC URL, account, and artifact paths.
 - `--network <name>` switches networks without editing files; `SUI_NETWORK` applies when `--network` is omitted.
 - Deploy artifacts are written under `packages/dapp/deployments`.
 
 Quick decision table:
 
-| Goal | Example command | Resulting network |
-| --- | --- | --- |
-| Local dev (default) | `pnpm script chain:localnet:start --with-faucet` | `localnet` |
-| Local publish | `pnpm script move:publish --package-path oracle-market` | `localnet` |
-| Testnet publish | `pnpm script move:publish --network testnet --package-path oracle-market` | `testnet` |
-| Testnet scripts | `pnpm script buyer:shop:view --network testnet` | `testnet` |
+| Goal                | Example command                                                           | Resulting network |
+| ------------------- | ------------------------------------------------------------------------- | ----------------- |
+| Local dev (default) | `pnpm script chain:localnet:start --with-faucet`                          | `localnet`        |
+| Local publish       | `pnpm script move:publish --package-path oracle-market`                   | `localnet`        |
+| Testnet publish     | `pnpm script move:publish --network testnet --package-path oracle-market` | `testnet`         |
+| Testnet scripts     | `pnpm script buyer:shop:view --network testnet`                           | `testnet`         |
 
 ### 3) Start localnet
+
 ```bash
 pnpm script chain:localnet:start --with-faucet
 ```
+
 - Spawns `sui start --with-faucet` and waits for RPC readiness.
 - Uses the `localnet` RPC from `sui.config.ts` (or `--network localnet`).
 - Initializes/uses a persistent localnet config dir (default `~/.sui/localnet`) so state survives restarts.
@@ -98,20 +105,26 @@ pnpm script chain:localnet:start --with-faucet
 Note: running `sui start` without a stable config dir can regenesis and wipe local state; the script now deletes and recreates the config dir when you pass `--force-regenesis` or when a CLI version change is detected on the default config dir.
 
 ### 4) Seed mocks (coins + Pyth)
+
 ```bash
 pnpm script mock:setup --buyer-address <0x...> --network localnet
 ```
+
 What it does:
+
 - Publishes `packages/dapp/contracts/pyth-mock` and `packages/dapp/contracts/coin-mock` if needed.
 - Mints mock coins via the coin registry, funds your signer, and transfers half of each minted coin to the buyer address.
 - Publishes mock Pyth price feeds with fresh timestamps.
 - Writes artifacts to `packages/dapp/deployments/mock.localnet.json` for reuse.
 
 ### 5) Publish oracle-market (localnet)
+
 ```bash
 pnpm script move:publish --package-path oracle-market
 ```
+
 What it does:
+
 - Builds against the localnet dependency replacements and unpublished deps.
 - Publishes via the Sui CLI.
 - Writes results to `packages/dapp/deployments/deployment.localnet.json`.
@@ -123,10 +136,12 @@ What it does:
 All commands are run from the repo root. These steps create a fully working local environment with mocks, a shop, listings, discounts, and buyer funding. Each script records artifacts so you can re-run without retyping IDs.
 
 Defaults and artifacts:
+
 - Owner scripts auto-fill `--shop-package-id`, `--shop-id`, and `--owner-cap-id` from `packages/dapp/deployments/deployment.<network>.json` and `packages/dapp/deployments/objects.<network>.json`.
 - Buyer scripts that take `--shop-id` will default to the latest Shop object in `packages/dapp/deployments/objects.<network>.json`.
 
 ### 0) Prepare owner and buyer accounts
+
 The scripts sign transactions with the configured account in `packages/dapp/sui.config.ts` (or `SUI_ACCOUNT_ADDRESS` / `SUI_ACCOUNT_PRIVATE_KEY` env vars). Use one address as the shop owner and another as the buyer.
 
 ```bash
@@ -144,62 +159,75 @@ sui client faucet --address <0x...>
 If you want to run buyer scripts as the buyer account, switch your active address or update sui.config file before running buyer scripts.
 
 ### 1) Start localnet
+
 ```bash
 pnpm script chain:localnet:start --with-faucet
 ```
 
 What it does:
+
 - Starts `sui start` with a local config directory (default `~/.sui/localnet`) and waits for RPC readiness.
 - The signer will get funded after any regenesis.
 - Use `--force-regenesis` to reset the chain (clears `packages/dapp/deployments/*.localnet*` and recreates the localnet config dir before starting).
 - If the default config dir is used and the Sui CLI version changes, the script warns and recreates localnet state automatically.
 
 ### 2) Seed local mocks (coins, Pyth feeds, example item types)
+
 ```bash
 pnpm script mock:setup --buyer-address <0x...> --network localnet
 ```
 
 What it does:
+
 - Publishes mock Move packages (`pyth-mock`, `coin-mock`, and `item-examples`) on localnet.
 - Mints mock coins to the signer, transfers half of each minted coin to the buyer address, and creates two mock Pyth `PriceInfoObject`s.
 - Writes mock artifacts to `packages/dapp/deployments/mock.localnet.json`.
 
 Where to find values:
+
 - `pythPackageId`, `coinPackageId`, `itemPackageId`: top-level fields in `mock.localnet.json`.
 - `priceFeeds[].feedIdHex` and `priceFeeds[].priceInfoObjectId`: use these for `owner:currency:add`.
 - `coins[].coinType`, `coins[].currencyObjectId`, `coins[].mintedCoinObjectId`: coin types and a mint for transfers.
 - `itemTypes[].itemType`: sample item types (e.g., `...::items::Car`) for listings.
 
 ### 3) Publish the oracle-market package
+
 ```bash
 pnpm script move:publish --package-path oracle-market
 ```
 
 What it does:
+
 - Publishes the main `sui_oracle_market` Move package to localnet using dep replacements (no dev-mode flags).
 - Records publish artifacts in `packages/dapp/deployments/deployment.localnet.json`.
 
 Where to find values:
+
 - `deployment.localnet.json` entries include `packageId`, `packagePath`, and `packageName`.
 
 ### 4) Create the shop (shared Shop + ShopOwnerCap)
+
 ```bash
 pnpm script owner:shop:create
 ```
 
 Optional:
+
 - `--name "Your Shop"` sets the on-chain shop name (defaults to `Shop`).
 
 What it does:
+
 - Calls `shop::create_shop` and creates a shared `Shop` plus a `ShopOwnerCap` capability.
 - Records object artifacts in `packages/dapp/deployments/objects.localnet.json`.
 
 Where to find values:
+
 - `shopId`: look for `objectType` ending in `::shop::Shop` in `objects.localnet.json`.
 - `ownerCapId`: look for `objectType` ending in `::shop::ShopOwnerCap` in the same file.
 - The script logs the Shop ID, name, and owner address on success.
 
 Optional shortcut (localnet + testnet):
+
 ```bash
 pnpm script owner:shop:seed
 ```
@@ -207,17 +235,21 @@ pnpm script owner:shop:seed
 This seeds accepted currencies, listings, and discounts in one run. On testnet it registers USDC + WAL with fixed Pyth feed IDs; on localnet it uses `mock.localnet.json`. If you use this, you can skip steps 5–8 below.
 
 ### 5) Register an accepted currency (link coin type to Pyth feed)
+
 ```bash
 pnpm script owner:currency:add \
   --coin-type <COIN_TYPE> \
   --feed-id <FEED_ID_HEX> \
   --price-info-object-id <PRICE_INFO_OBJECT_ID>
 ```
+
 What it does:
+
 - Registers an `AcceptedCurrency` entry in `Shop.accepted_currencies`.
 - Links your coin type to a Pyth `PriceInfoObject` for oracle pricing.
 
 Where to find values:
+
 - `COIN_TYPE`: `packages/dapp/deployments/mock.localnet.json` -> `coins[].coinType`
 - `FEED_ID_HEX`: `mock.localnet.json` -> `priceFeeds[].feedIdHex`
 - `PRICE_INFO_OBJECT_ID`: `mock.localnet.json` -> `priceFeeds[].priceInfoObjectId`
@@ -225,6 +257,7 @@ Where to find values:
 - Verify registration with `pnpm script buyer:currency:list --shop-id <SHOP_ID>`.
 
 ### 6) Create a listing
+
 ```bash
 pnpm script owner:item-listing:add \
   --name "Example Item" \
@@ -232,76 +265,98 @@ pnpm script owner:item-listing:add \
   --stock 10 \
   --item-type <ITEM_TYPE>
 ```
+
 What it does:
+
 - Creates a new table-backed `ItemListing` entry (`Shop.listings`) with price (USD cents), stock, and item type metadata.
 
 Where to find values:
+
 - `ITEM_TYPE`: `packages/dapp/deployments/mock.localnet.json` -> `itemTypes[].itemType`
 - `itemListingId`: emitted in `ItemListingAdded` and printed by the script.
 - You can list all current IDs with `pnpm script buyer:item-listing:list --shop-id <SHOP_ID>`.
 
 ### 7) Create a discount
+
 ```bash
 pnpm script owner:discount:create \
   --rule-kind fixed \
   --value 5.00
 ```
+
 What it does:
+
 - Creates a reusable `Discount` object with schedule and rule settings.
 - Optionally scope it to a listing with `--listing-id <ITEM_LISTING_ID_U64>`.
 
 Where to find values:
+
 - `discountId`: `objects.localnet.json` entry with `objectType` ending in `::discount::Discount`
 - If you scoped the discount, `--listing-id` should be the `itemListingId` from step 6.
 
 ### 8) Attach the discount to a listing (spotlight)
+
 ```bash
 pnpm script owner:item-listing:attach-discount \
   --item-listing-id <ITEM_LISTING_ID_U64> \
   --discount-id <DISCOUNT_ID>
 ```
+
 What it does:
+
 - Updates the listing to reference the discount so it is spotlighted.
 
 Where to find values:
+
 - `ITEM_LISTING_ID`: from step 6 (script output or `buyer:item-listing:list`)
 - `DISCOUNT_ID`: from step 7 (`objects.localnet.json` or script output)
 
 ### 9) Transfer mock coins from owner to buyer
+
 ```bash
 pnpm script owner:coin:transfer \
   --coin-id <COIN_OBJECT_ID> \
   --amount <U64_AMOUNT> \
   --recipient <BUYER_ADDRESS>
 ```
+
 What it does:
+
 - Splits a coin object owned by the signer and transfers the requested amount to the buyer address.
 
 Where to find values:
+
 - `COIN_OBJECT_ID`: `mock.localnet.json` -> `coins[].mintedCoinObjectId`, or run `pnpm script chain:describe-address --address <OWNER_ADDRESS>` and look for `::coin::Coin<...>` objects.
 - `BUYER_ADDRESS`: output of `sui client new-address ed25519` (or any existing address).
 
 ### 10) Refresh mock prices (recommended before buys)
+
 ```bash
 pnpm script mock:update-prices
 ```
+
 What it does:
+
 - Updates the mock Pyth `PriceInfoObject` timestamps so oracle freshness checks pass.
 - Uses `packages/dapp/deployments/mock.localnet.json` to locate feeds.
 
 ### 11) View the full shop snapshot
+
 ```bash
 pnpm script buyer:shop:view
 ```
 
 What it does:
+
 - Prints the shop overview plus listings, accepted currencies, and discounts in one read-only snapshot.
 - Uses the latest Shop artifact if `--shop-id` is omitted.
 
 Where to find values:
+
 - `shopId`: `packages/dapp/deployments/objects.localnet.json` entry with `objectType` ending in `::shop::Shop`
 
 ### Other useful scripts while iterating
+
 For a full script list and flags, see [06 Scripts reference (CLI)](./06-scripts-reference.md).
 
 ---
@@ -318,12 +373,14 @@ All commands are designed to run from the repo root.
   - This is a wrapper for `pnpm --filter ui <script-name>`.
 
 Example:
+
 ```bash
 pnpm script chain:localnet:start --with-faucet
 pnpm ui dev
 ```
 
 ## 10. Navigation
+
 1. Previous: [04 Localnet + Publish](./04-localnet-publish.md)
 2. Next: [06 Scripts reference (CLI)](./06-scripts-reference.md)
 3. Back to map: [Learning Path Map](./)

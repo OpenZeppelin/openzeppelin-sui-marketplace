@@ -5,11 +5,13 @@
 This repo assumes you already think in Solidity. The goal here is not to re-teach smart contracts, but to rewire a few instincts so Sui feels natural.
 
 ## 1. Learning goals
+
 1. Understand what changes (objects, ownership, capabilities, packages).
 2. Know how this repo is laid out for a linear learning path.
 3. Run a quick environment sanity check before touching code.
 
 ## 2. EVM -> Sui translation
+
 1. **Contract storage -> objects + tables**: your state lives in owned/shared objects and typed table entries, not in a single contract storage map. See `packages/dapp/contracts/oracle-market/sources/shop.move` (`Shop`, `Discount`, `Shop.listings`, `Shop.accepted_currencies`).
 2. **onlyOwner -> capability**: authority is proved by holding a capability object. See `ShopOwnerCap` in `packages/dapp/contracts/oracle-market/sources/shop.move`.
 3. **Deployment -> publish + instantiate**: publishing creates a package object; stateful instances are created later as shared objects. See publish flow in `packages/dapp/src/scripts/contracts/publish.ts` and shop creation in `packages/dapp/src/scripts/owner/shop-create.ts`.
@@ -18,6 +20,7 @@ This repo assumes you already think in Solidity. The goal here is not to re-teac
 6. **Upgrades -> new package + UpgradeCap**: upgrades publish a new package ID gated by an `UpgradeCap`. Callers opt into new package IDs explicitly.
 
 ## 3. Concept deep dive: abilities and resources
+
 - **Abilities (`key`, `store`, `copy`, `drop`)**: abilities declare how values can be stored and
   moved. `key` turns a struct into an object with identity. `store` lets it live on-chain. `copy`
   and `drop` opt into value semantics. In this repo, objects like `Shop` and `ShopOwnerCap` are
@@ -38,12 +41,14 @@ This repo assumes you already think in Solidity. The goal here is not to re-teac
   Code: `packages/dapp/contracts/oracle-market/sources/shop.move` (Option fields)
 
 ## 4. Code references
+
 1. `packages/dapp/contracts/oracle-market/sources/shop.move` (Shop, ShopOwnerCap, entry functions)
 2. `packages/dapp/src/scripts/contracts/publish.ts` (publish flow + artifacts)
 3. `packages/dapp/src/scripts/owner/shop-create.ts` (shop instantiation)
 
 **Code spotlight: object-first state + capability auth**
 `packages/dapp/contracts/oracle-market/sources/shop.move`
+
 ```move
 public struct ShopOwnerCap has key, store {
   id: UID,
@@ -62,6 +67,7 @@ public struct Shop has key, store {
 
 **Code spotlight: publish flow resolves package + artifacts**
 `packages/dapp/src/scripts/contracts/publish.ts`
+
 ```ts
 const fullPackagePath = resolveFullPackagePath(
   path.resolve(tooling.suiConfig.paths.move),
@@ -93,6 +99,7 @@ await publishPackageToNetwork(
 
 **Code spotlight: instantiate and share a Shop after publish**
 `packages/dapp/contracts/oracle-market/sources/shop.move`
+
 ```move
 public fun create_shop_and_share(name: String, ctx: &mut TxContext): (ID, ShopOwnerCap) {
   let (shop, owner_cap) = create_shop(name, ctx);
@@ -104,10 +111,12 @@ public fun create_shop_and_share(name: String, ctx: &mut TxContext): (ID, ShopOw
 ```
 
 ## 7. Exercises
+
 1. Open `packages/dapp/contracts/oracle-market/sources/shop.move` and find `ShopOwnerCap`. Expected outcome: you can explain why it replaces `onlyOwner`.
 2. Skim `packages/dapp/src/scripts/contracts/publish.ts` and list the artifacts it writes. Expected outcome: you can point to `packages/dapp/deployments/deployment.<network>.json`.
 
 ## 8. Diagram: object-centric state
+
 ```
 EVM: contract storage
   Contract
@@ -121,12 +130,14 @@ Sui: shared objects + typed tables
 ```
 
 ## 9. Further reading (Sui docs)
+
 - https://docs.sui.io/concepts/sui-move-concepts
 - https://docs.sui.io/guides/developer/objects/object-model
 - https://docs.sui.io/references/sui-move
 - https://docs.sui.io/concepts/sui-for-ethereum
 
 ## 10. Navigation
+
 1. Previous: [01 Repo Layout + How to Navigate](./01-repo-layout.md)
 2. Next: [03 EVM → Sui Cheatsheet](./03-evm-to-sui.md)
 3. Back to map: [Learning Path Map](./)

@@ -28,6 +28,7 @@
 
 **Code spotlight: objects are structs with `key`**
 `packages/dapp/contracts/oracle-market/sources/shop.move`
+
 ```move
 public struct Shop has key, store {
   id: UID,
@@ -38,6 +39,7 @@ public struct Shop has key, store {
 ```
 
 ## Navigation
+
 1. Previous: [21 Troubleshooting](./21-troubleshooting.md)
 2. Start the path: [00 Setup + Quickstart](./00-setup.md)
 3. Back to map: [Learning Path Map](./)

@@ -520,13 +520,13 @@ public fun attach_spotlight_discount(
         assert!(applies_to_listing == listing_id, ESpotlightDiscountListingMismatch);
     });
 
-    // Apply discount to listing.
+    // Attach discount to listing.
     if (discount.applies_to_listing().is_none()) {
+        // Link to listing and increment discount count,
+        // if it wasn't linked before.
         discount.set_applies_to_listing(listing_id);
         shop.listing_mut(listing_id).increment_discount_count();
     };
-
-    // Attach discount to listing.
     shop.listing_mut(listing_id).set_spotlight(discount_id);
 }
 

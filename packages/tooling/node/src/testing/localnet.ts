@@ -353,26 +353,25 @@ const isPortAvailable = async (port: number): Promise<boolean> =>
     })
   })
 
-const getAvailablePort = async (): Promise<number> =>
-  new Promise((resolve, reject) => {
-    const server = net.createServer()
-    server.unref()
-    server.on("error", (error) => {
-      if (isPortPermissionError(error)) {
-        reject(createLocalnetPortPermissionError("open", error))
-        return
-      }
-      reject(error)
-    })
-    server.listen(0, "127.0.0.1", () => {
-      const address = server.address()
-      if (!address || typeof address === "string") {
-        server.close(() => reject(new Error("Unable to resolve local port")))
-        return
-      }
-      server.close(() => resolve(address.port))
-    })
-  })
+// Use a port range below the OS ephemeral range (Linux: 32768–60999, macOS: 49152–65535)
+// to avoid TOCTOU races where the kernel recycles a "free" port as a source port for an
+// outbound connection between our availability check and the actual bind by the sui process.
+const NON_EPHEMERAL_PORT_MIN = 10_000
+const NON_EPHEMERAL_PORT_MAX = 31_999
+
+const getAvailablePort = async (): Promise<number> => {
+  const range = NON_EPHEMERAL_PORT_MAX - NON_EPHEMERAL_PORT_MIN + 1
+  const startOffset = Math.floor(Math.random() * range)
+  for (let attempt = 0; attempt < range; attempt++) {
+    const port = NON_EPHEMERAL_PORT_MIN + ((startOffset + attempt) % range)
+    const available = await isPortAvailable(port)
+    if (available) return port
+  }
+  throw new Error(
+    `No available port found in range ${NON_EPHEMERAL_PORT_MIN}–${NON_EPHEMERAL_PORT_MAX}. ` +
+      `All ${range} candidate ports appear to be in use.`
+  )
+}
 
 const resolveAvailablePortExcluding = async (allocatedPorts: Set<number>) => {
   let port = await getAvailablePort()

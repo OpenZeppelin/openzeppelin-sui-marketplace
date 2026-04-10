@@ -3,11 +3,13 @@
 **Path:** [Learning Path](./) > 21 Troubleshooting
 
 ## Localnet refuses to start or keeps regenesis
+
 - Check `pnpm script chain:localnet:start --check-only`.
 - Localnet version handling is in `packages/dapp/src/scripts/chain/localnet-start.ts`.
 
 **Code spotlight: localnet health check**
 `packages/dapp/src/scripts/chain/localnet-start.ts`
+
 ```ts
 if (checkOnly) {
   if (probeResult.status === "running") {
@@ -23,6 +25,7 @@ if (checkOnly) {
 ```
 
 ## Auto-funding fails on localnet ("Faucet request failed" / "Failed to execute transaction after 2 retries")
+
 - This means the local faucet cannot execute its funding transaction, so auto-funding will fail too.
 - Fix by regenesis (resets faucet treasury objects):
   - `pnpm script chain:localnet:stop`
@@ -38,6 +41,7 @@ if (checkOnly) {
   ```
 
 ## "Failed to publish the Move module(s), reason: No modules found in the package" on publish
+
 - Cause: the package path resolves to a folder without Move sources (or stale build metadata after regenesis).
 - Fix:
   1. Ensure you are targeting the Move package directory (for localnet: `--package-path oracle-market`).
@@ -45,6 +49,7 @@ if (checkOnly) {
      - `pnpm dapp move:publish --package-path oracle-market --network localnet --re-publish`.
 
 ## "Failed to fetch package Pyth" / "Object ... does not exist" on publish (localnet)
+
 - Cause: localnet regenesis reset on-chain objects, but local artifacts still point at an old mock Pyth package ID.
 - Fix (localnet):
   1. (optional) Delete `packages/dapp/deployments/mock.localnet.json`.
@@ -53,20 +58,36 @@ if (checkOnly) {
   4. Re-publish the oracle package: `pnpm dapp move:publish --package-path oracle-market --network localnet --re-publish`.
 
 ## "No ShopOwnerCap found"
+
 - Ensure the owner cap is in your wallet. See `packages/domain/core/src/models/shop.ts`.
 
 ## "No accepted currency registered for coin type ..."
+
 - Register with `pnpm script owner:currency:add` or re-run `pnpm script owner:shop:seed`.
 
+## UI buy fails: "No valid gas coins found for the transaction"
+
+- Cause: the connected buyer wallet has no spendable `0x2::sui::SUI` coin objects, so the transaction builder cannot auto-select gas payment.
+- Quick recovery: disconnect and reconnect Slush (or switch account away and back) to refresh wallet/account state in the app before deeper debugging.
+- Common localnet pitfall: `mock:setup --buyer-address` funded mock coins for one address, but your UI wallet is connected to a different address.
+- Verify balances for the exact connected wallet address:
+  - `pnpm script chain:describe-coin-balances --address <0x...> --network localnet`
+  - If `0x2::sui::SUI` is missing, fund the same address from local faucet:
+    - `curl -s -X POST http://127.0.0.1:9123/v2/gas -H 'Content-Type: application/json' -d '{"FixedAmountRequest":{"recipient":"<0x...>"}}'`
+- After funding, reconnect wallet or reload the UI and retry purchase.
+
 ## Buying with SUI fails: "requires at least two SUI coin objects"
+
 - This repo's buy flow expects a dedicated payment coin when paying with SUI. Split a SUI coin so you have one for gas and one for payment (or adjust the flow to split from gas). See `packages/domain/core/src/flows/buy.ts`.
 
 ## Price feed mismatch or stale price
+
 - Re-run `pnpm script mock:update-prices` on localnet.
 - Guardrails are implemented in `packages/dapp/contracts/oracle-market/sources/currency.move`.
 
 **Code spotlight: guardrails clamp buyer overrides**
 `packages/dapp/contracts/oracle-market/sources/currency.move`
+
 ```move
 let requested_max_age = max_price_age_secs.destroy_or!(
   accepted_currency.max_price_age_secs_cap,
@@ -80,6 +101,7 @@ let effective_confidence_ratio = requested_confidence_ratio.min(accepted_currenc
 ```
 
 ## 2. Navigation
+
 1. Previous: [20 Security & Gotchas](./20-security.md)
 2. Next: [22 Glossary](./22-glossary.md)
 3. Back to map: [Learning Path Map](./)

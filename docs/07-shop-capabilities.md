@@ -5,15 +5,18 @@
 This chapter creates a Shop and ties authority to a capability object.
 
 ## 1. Learning goals
+
 1. Create a Shop shared object.
 2. Understand `ShopOwnerCap` as the authorization token.
 3. Rotate the shop owner address without touching listings.
 
 ## 2. Prerequisites
+
 1. Localnet running.
 2. `sui_oracle_market` published.
 
 ## 3. Run it
+
 ```bash
 pnpm script owner:shop:create --name "Oracle Shop"
 pnpm script buyer:shop:view
@@ -21,10 +24,12 @@ pnpm script owner:shop:update-owner --new-owner <0x...>
 ```
 
 ## 4. EVM -> Sui translation
+
 1. **onlyOwner -> capability**: authority is proved by owning `ShopOwnerCap`, not by `msg.sender`. See `ShopOwnerCap` and `update_shop_owner` in `packages/dapp/contracts/oracle-market/sources/shop.move`.
 2. **Constructor -> public function**: `create_shop` mints both the shared Shop and the owner capability. See `create_shop` in `packages/dapp/contracts/oracle-market/sources/shop.move` and the script in `packages/dapp/src/scripts/owner/shop-create.ts`.
 
 ## 5. Concept deep dive: shared objects and capabilities
+
 - **Shared objects**: `Shop` is shared so anyone can read it and anyone can submit a transaction that
   touches it, but only the right capability can mutate it. Sharing is explicit via `transfer::public_share_object`,
   and shared objects become the concurrency boundary for transactions.
@@ -45,6 +50,7 @@ pnpm script owner:shop:update-owner --new-owner <0x...>
   Code: `packages/dapp/contracts/oracle-market/sources/shop.move` (`create_shop`)
 
 ## 6. Code references
+
 1. `packages/dapp/contracts/oracle-market/sources/shop.move` (Shop, ShopOwnerCap, create_shop, update_shop_owner)
 2. `packages/domain/core/src/ptb/shop.ts` (buildCreateShopTransaction, buildUpdateShopOwnerTransaction)
 3. `packages/dapp/src/scripts/owner/shop-update-owner.ts` (owner rotation)
@@ -52,6 +58,7 @@ pnpm script owner:shop:update-owner --new-owner <0x...>
 
 **Code spotlight: Shop creation + owner cap mint**
 `packages/dapp/contracts/oracle-market/sources/shop.move`
+
 ```move
 public fun create_shop(name: String, ctx: &mut TxContext): (Shop, ShopOwnerCap) {
   let shop = new(name, ctx.sender(), ctx);
@@ -69,6 +76,7 @@ public fun create_shop(name: String, ctx: &mut TxContext): (Shop, ShopOwnerCap) 
 
 **Code spotlight: rotate shop ownership on-chain**
 `packages/dapp/contracts/oracle-market/sources/shop.move`
+
 ```move
 public fun update_shop_owner(
   shop: &mut Shop,
@@ -84,10 +92,12 @@ public fun update_shop_owner(
 ```
 
 ## 7. Exercises
+
 1. Create two shops back to back and list them with `pnpm script buyer:shop:view`. Expected outcome: two distinct Shop IDs.
 2. Rotate ownership and verify `owner` changes in the shop overview. Expected outcome: the shop shows the new owner address.
 
 ## 8. Diagram: capability-based admin
+
 ```
 ShopOwnerCap (owned)
     |
@@ -99,11 +109,13 @@ Shop.owner = new_owner
 ```
 
 ## 9. Further reading (Sui docs)
+
 - https://docs.sui.io/guides/developer/objects/object-model
 - https://docs.sui.io/concepts/sui-move-concepts
 - https://docs.sui.io/references/framework/sui_sui/tx_context
 
 ## 10. Navigation
+
 1. Previous: [06 Scripts reference (CLI)](./06-scripts-reference.md)
 2. Next: [08 Listings + Typed Receipts](./08-listings-receipts.md)
 3. Back to map: [Learning Path Map](./)
