@@ -128,6 +128,7 @@ export type TransactionSummary = {
 export type PurchaseSuccessPayload = {
   receipts: ShopItemReceiptSummary[]
   receiptIds: string[]
+  purchasedListingId?: string
 }
 
 type TransactionState =
@@ -967,7 +968,8 @@ export const useBuyFlowModalState = ({
 
       onPurchaseSuccess?.({
         receiptIds,
-        receipts: hydratedReceipts
+        receipts: hydratedReceipts,
+        purchasedListingId: listing?.itemListingId
       })
     } catch (error) {
       const errorDetails = extractErrorDetails(error)

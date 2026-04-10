@@ -116,9 +116,11 @@ export const useStoreDashboardViewModel = ({
       if (receipts.length > 0) {
         receipts.forEach(upsertPurchasedItem)
       }
+
+      refreshStorefront()
       refreshWallet()
     },
-    [refreshWallet, upsertPurchasedItem]
+    [refreshStorefront, refreshWallet, upsertPurchasedItem]
   )
 
   const openAddItemModal = useCallback(() => {
