@@ -113,7 +113,6 @@ public fun active(discount: &Discount): bool {
 
 /// Creates a discount from primitive rule inputs and allocates a fresh ID.
 public(package) fun create(
-    applies_to_listing: Option<ID>,
     rule_kind: u8,
     rule_value: u64,
     starts_at: u64,
@@ -133,7 +132,7 @@ public(package) fun create(
 
     Discount {
         id,
-        applies_to_listing,
+        applies_to_listing: option::none(),
         rule,
         starts_at,
         expires_at,

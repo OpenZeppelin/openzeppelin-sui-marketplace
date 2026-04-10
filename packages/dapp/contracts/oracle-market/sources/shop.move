@@ -220,18 +220,24 @@ public fun add_item_listing<T: store>(
     let listing_id = listing.id();
 
     // Check that spotlight discount id exist.
-    // Update listing discount count and set spotlight, 
-    // Set discount's `applies_to_listing` 
-    let previous_listing_id = spotlight_discount_id.and!(|discount_id| {
+    // Update listing discount count and set spotlight,
+    spotlight_discount_id.do!(|discount_id| {
         listing.increment_active_bound_discount_count();
         listing.set_spotlight(discount_id);
-        shop.discount_mut(discount_id).set_applies_to_listing(listing_id)
-    });
-    // and clear that listing from spotlight discount if any.
-    previous_listing_id.do!(|previous_listing_id| {
-        let listing = shop.listing_mut(previous_listing_id);
-        listing.clear_spotlight();
-        listing.decrement_active_bound_discount_count();
+
+        // set discount's `applies_to_listing`,
+        shop
+            .discount_mut(discount_id)
+            .set_applies_to_listing(listing_id)
+            .do!(|previous_listing_id| {
+                let listing = shop.listing_mut(previous_listing_id);
+
+                // and clear the previous listing from spotlight discount if matches the discount id.
+                if (listing.spotlight_discount_id().contains(&discount_id)) {
+                    listing.clear_spotlight();
+                };
+                listing.decrement_active_bound_discount_count();
+            });
     });
 
     shop.listings.add(listing_id, listing);
@@ -381,6 +387,7 @@ public fun remove_accepted_currency<C>(shop: &mut Shop, owner_cap: &ShopOwnerCap
 /// NOTE:
 /// - `max_redemptions`: if set, must be greater than 0. If not set (`None`), there is no cap on
 ///   total redemptions and the counter is not protected from overflow.
+/// - `applies_to_listing`: if set, will link discount to listing as a spotlight.
 public fun create_discount(
     shop: &mut Shop,
     owner_cap: &ShopOwnerCap,
@@ -394,14 +401,8 @@ public fun create_discount(
 ): ID {
     assert!(owner_cap.shop_id == shop.id(), EInvalidOwnerCap);
 
-    // Check that attached listing exists and update discount count if any listing is attached.
-    applies_to_listing.do!(|listing_id| {
-        shop.listing_mut(listing_id).increment_active_bound_discount_count();
-    });
-
-    // Create discount object and add to storage.
-    let discount = discount::create(
-        applies_to_listing,
+    // Create discount object.
+    let mut discount = discount::create(
         rule_kind,
         rule_value,
         starts_at,
@@ -410,6 +411,16 @@ public fun create_discount(
         ctx,
     );
     let discount_id = discount.id();
+
+    // Check that attached listing exists.
+    // Set discount as a spotlight for listing and link discount to listing.
+    applies_to_listing.do!(|listing_id| {
+        let listing = shop.listing_mut(listing_id);
+        listing.increment_active_bound_discount_count();
+        listing.set_spotlight(discount_id);
+        discount.set_applies_to_listing(listing_id);
+    });
+
     shop.discounts.add(discount_id, discount);
 
     events::emit_discount_created(
