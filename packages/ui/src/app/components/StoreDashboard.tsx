@@ -1,7 +1,7 @@
 "use client"
 
 import type { AcceptedCurrencySummary } from "@sui-oracle-market/domain-core/models/currency"
-import type { DiscountTemplateSummary } from "@sui-oracle-market/domain-core/models/discount"
+import type { DiscountSummary } from "@sui-oracle-market/domain-core/models/discount"
 import type { ItemListingSummary } from "@sui-oracle-market/domain-core/models/item-listing"
 import type { ShopItemReceiptSummary } from "@sui-oracle-market/domain-core/models/shop-item"
 import clsx from "clsx"
@@ -48,20 +48,20 @@ const resolveClockNowSeconds = (clockTimestampMs?: number) => {
   return BigInt(seconds)
 }
 
-const deriveTemplateStatusFromClock = ({
-  template,
+const deriveDiscountStatusFromClock = ({
+  discount,
   nowSeconds
 }: {
-  template: DiscountTemplateSummary
+  discount: DiscountSummary
   nowSeconds?: bigint
 }): string => {
-  if (!nowSeconds) return template.status
-  if (!template.activeFlag) return "disabled"
+  if (!nowSeconds) return discount.status
+  if (!discount.activeFlag) return "disabled"
 
-  const startsAt = parseOptionalBigInt(template.startsAt)
-  const expiresAt = parseOptionalBigInt(template.expiresAt)
-  const maxRedemptions = parseOptionalBigInt(template.maxRedemptions)
-  const redemptions = parseOptionalBigInt(template.redemptions) ?? 0n
+  const startsAt = parseOptionalBigInt(discount.startsAt)
+  const expiresAt = parseOptionalBigInt(discount.expiresAt)
+  const maxRedemptions = parseOptionalBigInt(discount.maxRedemptions)
+  const redemptions = parseOptionalBigInt(discount.redemptions) ?? 0n
 
   if (expiresAt !== undefined && nowSeconds >= expiresAt) return "expired"
 
@@ -78,7 +78,7 @@ const deriveTemplateStatusFromClock = ({
   return "active"
 }
 
-const resolveTemplateStartLabel = ({
+const resolveDiscountStartLabel = ({
   startsAt,
   nowSeconds
 }: {
@@ -185,10 +185,11 @@ const resolveListingActionAlignment = ({
 
 const ItemListingsPanel = ({
   itemListings,
-  templateLookup,
+  discountLookup,
   status,
   error,
   shopConfigured,
+  shopActive,
   canBuy,
   onBuy,
   canManageListings,
@@ -197,10 +198,11 @@ const ItemListingsPanel = ({
   explorerUrl
 }: {
   itemListings: ItemListingSummary[]
-  templateLookup: Record<string, DiscountTemplateSummary>
+  discountLookup: Record<string, DiscountSummary>
   status: PanelStatus["status"]
   error?: string
   shopConfigured: boolean
+  shopActive?: boolean
   canBuy: boolean
   onBuy?: (listing: ItemListingSummary) => void
   canManageListings: boolean
@@ -226,6 +228,12 @@ const ItemListingsPanel = ({
         </div>
       ) : (
         <>
+          {shopActive === false ? (
+            <div className="mb-4 rounded-xl border border-amber-300/70 bg-amber-50/70 p-4 text-sm text-amber-800 dark:border-amber-400/30 dark:bg-amber-500/10 dark:text-amber-100">
+              This shop is currently disabled. Buyers can browse listings, but
+              purchases are paused until the owner enables the shop.
+            </div>
+          ) : undefined}
           {status === "loading" ? (
             <Loading />
           ) : status === "error" ? (
@@ -239,11 +247,11 @@ const ItemListingsPanel = ({
           ) : (
             <div className="grid gap-4 lg:grid-cols-2">
               {itemListings.map((listing) => {
-                const spotlightTemplate = listing.spotlightTemplateId
-                  ? templateLookup[listing.spotlightTemplateId]
+                const spotlightDiscount = listing.spotlightDiscountId
+                  ? discountLookup[listing.spotlightDiscountId]
                   : undefined
-                const spotlightLabel = spotlightTemplate
-                  ? spotlightTemplate.ruleDescription
+                const spotlightLabel = spotlightDiscount
+                  ? spotlightDiscount.ruleDescription
                   : undefined
                 const stockValue = listing.stock
                   ? BigInt(listing.stock)
@@ -265,6 +273,7 @@ const ItemListingsPanel = ({
                       : "text-emerald-700 dark:text-emerald-100"
                 const showRemove = canManageListings
                 const showBuy = canBuy
+                const isShopDisabled = shopActive === false
                 const actionLabel = resolveListingActionLabel({
                   canBuy,
                   isOutOfStock
@@ -323,10 +332,10 @@ const ItemListingsPanel = ({
                         </div>
                       </div>
                     </div>
-                    {listing.spotlightTemplateId ? (
+                    {listing.spotlightDiscountId ? (
                       <div className="mt-2 flex flex-col gap-2 text-[0.65rem]">
                         <CopyableId
-                          value={listing.spotlightTemplateId}
+                          value={listing.spotlightDiscountId}
                           label="Discount"
                           className="w-full justify-start"
                           explorerUrl={explorerUrl}
@@ -350,7 +359,7 @@ const ItemListingsPanel = ({
                     {canBuy || canManageListings ? (
                       <div className="mt-auto space-y-3 pt-5">
                         <div className="text-[0.6rem] uppercase tracking-[0.18em] text-slate-500 dark:text-slate-200/60">
-                          {actionLabel}
+                          {isShopDisabled ? "Shop disabled" : actionLabel}
                         </div>
                         <div
                           className={clsx(
@@ -372,12 +381,16 @@ const ItemListingsPanel = ({
                               variant="primary"
                               size="compact"
                               onClick={() => onBuy?.(listing)}
-                              disabled={isOutOfStock}
+                              disabled={isOutOfStock || isShopDisabled}
                               className="group"
                             >
                               <span>Buy</span>
                               <span className="text-[0.6rem] text-slate-500 transition group-hover:text-slate-700 dark:text-slate-200/60 dark:group-hover:text-slate-100">
-                                {isOutOfStock ? "Unavailable" : "Now"}
+                                {isOutOfStock
+                                  ? "Unavailable"
+                                  : isShopDisabled
+                                    ? "Paused"
+                                    : "Now"}
                               </span>
                             </Button>
                           ) : undefined}
@@ -625,24 +638,26 @@ const PurchasedItemsPanel = ({
 )
 
 const DiscountsPanel = ({
-  discountTemplates,
+  discounts,
   storefrontStatus,
   storefrontError,
   clockTimestampMs,
   shopConfigured,
   canManageDiscounts,
   onAddDiscount,
+  onToggleDiscount,
   onRemoveDiscount,
   explorerUrl
 }: {
-  discountTemplates: DiscountTemplateSummary[]
+  discounts: DiscountSummary[]
   storefrontStatus: PanelStatus["status"]
   storefrontError?: string
   clockTimestampMs?: number
   shopConfigured: boolean
   canManageDiscounts: boolean
   onAddDiscount?: () => void
-  onRemoveDiscount?: (template: DiscountTemplateSummary) => void
+  onToggleDiscount?: (discount: DiscountSummary) => void
+  onRemoveDiscount?: (discount: DiscountSummary) => void
   explorerUrl?: string
 }) => {
   const nowSeconds = resolveClockNowSeconds(clockTimestampMs)
@@ -650,7 +665,7 @@ const DiscountsPanel = ({
   return (
     <Panel
       title="Discounts"
-      subtitle="Templates"
+      subtitle="Discounts"
       headerAction={
         canManageDiscounts ? (
           <Button variant="primary" size="compact" onClick={onAddDiscount}>
@@ -661,49 +676,46 @@ const DiscountsPanel = ({
     >
       {!shopConfigured ? (
         <div className="text-sm text-slate-500 dark:text-slate-200/70">
-          Select a shop to load discount templates.
+          Select a shop to load discounts.
         </div>
       ) : (
         <div className="space-y-6">
           <div className="space-y-3">
             <div className="text-[0.6rem] font-semibold uppercase tracking-[0.22em] text-slate-500 dark:text-slate-200/60">
-              Templates
+              Discounts
             </div>
             {renderPanelBody({
               status: storefrontStatus,
               error: storefrontError,
-              isEmpty: discountTemplates.length === 0,
-              emptyMessage: "No discount templates available yet.",
+              isEmpty: discounts.length === 0,
+              emptyMessage: "No discounts available yet.",
               children: (
                 <div className="space-y-3">
-                  {discountTemplates.map((template) => {
-                    const templateStatus = deriveTemplateStatusFromClock({
-                      template,
+                  {discounts.map((discount) => {
+                    const discountStatus = deriveDiscountStatusFromClock({
+                      discount,
                       nowSeconds
                     })
-                    const showDisable = canManageDiscounts
-                    const actionAlignment = showDisable
-                      ? "justify-between"
-                      : "justify-end"
+                    const showDiscountActions = canManageDiscounts
                     return (
                       <div
-                        key={template.discountTemplateId}
+                        key={discount.discountId}
                         className={clsx(
                           "flex h-full flex-col rounded-xl border border-slate-300/80 bg-white/95 p-4 shadow-[0_12px_30px_-22px_rgba(15,23,42,0.35)] transition dark:border-slate-50/25 dark:bg-slate-950/60",
-                          templateStatus === "active" ? "" : "opacity-75"
+                          discountStatus === "active" ? "" : "opacity-75"
                         )}
                       >
                         <div className="flex flex-1 flex-col gap-3">
                           <div className="flex items-start justify-between gap-3">
                             <div className="min-w-0">
                               <div className="text-lg font-semibold text-sds-dark dark:text-sds-light">
-                                {template.ruleDescription}
+                                {discount.ruleDescription}
                               </div>
-                              {template.appliesToListingId ? (
+                              {discount.appliesToListingId ? (
                                 <CopyableId
-                                  value={template.appliesToListingId}
+                                  value={discount.appliesToListingId}
                                   displayValue={`Applies to listing ${shortenId(
-                                    template.appliesToListingId
+                                    discount.appliesToListingId
                                   )}`}
                                   title="Copy listing id"
                                   className="mt-1 w-full justify-start text-sm font-semibold text-slate-500 dark:text-slate-200/70"
@@ -719,7 +731,7 @@ const DiscountsPanel = ({
                             <div className="flex items-center gap-3">
                               {!canManageDiscounts ? (
                                 <span className="text-xs uppercase tracking-[0.12em] text-slate-500 dark:text-slate-200/60">
-                                  {templateStatus}
+                                  {discountStatus}
                                 </span>
                               ) : undefined}
                             </div>
@@ -730,8 +742,8 @@ const DiscountsPanel = ({
                                 Starts
                               </div>
                               <div className="mt-1 text-sm font-semibold text-sds-dark dark:text-sds-light">
-                                {resolveTemplateStartLabel({
-                                  startsAt: template.startsAt,
+                                {resolveDiscountStartLabel({
+                                  startsAt: discount.startsAt,
                                   nowSeconds
                                 })}
                               </div>
@@ -741,34 +753,44 @@ const DiscountsPanel = ({
                                 Expires
                               </div>
                               <div className="mt-1 text-sm font-semibold text-sds-dark dark:text-sds-light">
-                                {template.expiresAt
-                                  ? formatEpochSeconds(template.expiresAt)
+                                {discount.expiresAt
+                                  ? formatEpochSeconds(discount.expiresAt)
                                   : "never"}
                               </div>
                             </div>
                           </div>
                           <div className="mt-4 flex flex-wrap items-center gap-3 text-[0.65rem]">
                             <CopyableId
-                              value={template.discountTemplateId}
-                              label="Template"
+                              value={discount.discountId}
+                              label="Discount"
                               explorerUrl={explorerUrl}
                             />
                           </div>
                           <div
                             className={clsx(
                               "mt-auto flex items-center pt-5",
-                              actionAlignment
+                              showDiscountActions
+                                ? "justify-between"
+                                : "justify-end"
                             )}
                           >
-                            {showDisable ? (
-                              <Button
-                                variant="danger"
-                                size="compact"
-                                onClick={() => onRemoveDiscount?.(template)}
-                                disabled={!template.activeFlag}
-                              >
-                                {template.activeFlag ? "Disable" : "Disabled"}
-                              </Button>
+                            {showDiscountActions ? (
+                              <div className="flex flex-wrap items-center gap-3">
+                                <Button
+                                  variant="primary"
+                                  size="compact"
+                                  onClick={() => onToggleDiscount?.(discount)}
+                                >
+                                  {discount.activeFlag ? "Disable" : "Enable"}
+                                </Button>
+                                <Button
+                                  variant="danger"
+                                  size="compact"
+                                  onClick={() => onRemoveDiscount?.(discount)}
+                                >
+                                  Remove
+                                </Button>
+                              </div>
                             ) : undefined}
                           </div>
                         </div>
@@ -804,10 +826,11 @@ const StoreDashboard = ({
     hasShopConfig,
     hasWalletConfig,
     canBuy,
+    shopActive,
     canManageListings,
     canManageCurrencies,
     canManageDiscounts,
-    discountTemplateLookup,
+    discountLookup,
     modalState,
     openBuyModal,
     closeBuyModal,
@@ -822,6 +845,7 @@ const StoreDashboard = ({
     closeRemoveItemModal,
     openRemoveCurrencyModal,
     closeRemoveCurrencyModal,
+    openToggleDiscountModal,
     openRemoveDiscountModal,
     closeRemoveDiscountModal,
     handleListingCreated,
@@ -829,7 +853,8 @@ const StoreDashboard = ({
     handleCurrencyCreated,
     handleListingRemoved,
     handleCurrencyRemoved,
-    handleDiscountUpdated
+    handleDiscountUpdated,
+    handleDiscountRemoved
   } = useStoreDashboardViewModel({ shopId, packageId })
   const explorerUrl = useExplorerUrl()
 
@@ -839,10 +864,11 @@ const StoreDashboard = ({
         <div className="flex flex-col gap-6">
           <ItemListingsPanel
             itemListings={storefront.itemListings}
-            templateLookup={discountTemplateLookup}
+            discountLookup={discountLookup}
             status={storefront.status}
             error={storefront.error}
             shopConfigured={hasShopConfig}
+            shopActive={shopActive}
             canBuy={canBuy}
             onBuy={openBuyModal}
             canManageListings={canManageListings}
@@ -872,13 +898,14 @@ const StoreDashboard = ({
           explorerUrl={explorerUrl}
         />
         <DiscountsPanel
-          discountTemplates={storefront.discountTemplates}
+          discounts={storefront.discounts}
           storefrontStatus={storefront.status}
           storefrontError={storefront.error}
           clockTimestampMs={storefront.clockTimestampMs}
           shopConfigured={hasShopConfig}
           canManageDiscounts={canManageDiscounts}
           onAddDiscount={openAddDiscountModal}
+          onToggleDiscount={openToggleDiscountModal}
           onRemoveDiscount={openRemoveDiscountModal}
           explorerUrl={explorerUrl}
         />
@@ -891,14 +918,14 @@ const StoreDashboard = ({
         shopId={resolvedShopId}
         listing={modalState.activeListing ?? undefined}
         acceptedCurrencies={storefront.acceptedCurrencies}
-        discountTemplates={storefront.discountTemplates}
+        discounts={storefront.discounts}
       />
 
       <AddItemModal
         open={modalState.isAddItemModalOpen}
         onClose={closeAddItemModal}
         shopId={resolvedShopId}
-        discountTemplates={storefront.discountTemplates}
+        discounts={storefront.discounts}
         onListingCreated={handleListingCreated}
       />
 
@@ -928,10 +955,12 @@ const StoreDashboard = ({
 
       <RemoveDiscountModal
         open={modalState.isRemoveDiscountModalOpen}
+        action={modalState.activeDiscountAction ?? "toggle"}
         onClose={closeRemoveDiscountModal}
         shopId={resolvedShopId}
-        template={modalState.activeDiscountToRemove ?? undefined}
+        discount={modalState.activeDiscountToRemove ?? undefined}
         onDiscountUpdated={handleDiscountUpdated}
+        onDiscountRemoved={handleDiscountRemoved}
       />
 
       <RemoveCurrencyModal

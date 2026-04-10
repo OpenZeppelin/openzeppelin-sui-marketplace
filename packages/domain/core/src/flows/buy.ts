@@ -1,11 +1,11 @@
 import { bcs } from "@mysten/sui/bcs"
-import type { SuiClient, SuiObjectData, SuiObjectRef } from "@mysten/sui/client"
-import type { Transaction } from "@mysten/sui/transactions"
+import type { SuiClient, SuiObjectData } from "@mysten/sui/client"
+import type {
+  Transaction,
+  TransactionObjectArgument
+} from "@mysten/sui/transactions"
 import { fromB64, normalizeSuiObjectId } from "@mysten/sui/utils"
-import {
-  SuiPriceServiceConnection,
-  SuiPythClient
-} from "@pythnetwork/pyth-sui-js"
+import { SuiPythClient } from "@pythnetwork/pyth-sui-js"
 
 import {
   DEFAULT_TX_GAS_BUDGET,
@@ -19,7 +19,10 @@ import {
   unwrapMoveObjectFields
 } from "@sui-oracle-market/tooling-core/object"
 import { getSuiSharedObject } from "@sui-oracle-market/tooling-core/shared-object"
-import { newTransaction } from "@sui-oracle-market/tooling-core/transactions"
+import {
+  newTransaction,
+  resolveSplitCoinResult
+} from "@sui-oracle-market/tooling-core/transactions"
 import {
   extractFieldValueByKeys,
   normalizeBigIntFromMoveValue,
@@ -31,10 +34,11 @@ import {
   requireValue
 } from "@sui-oracle-market/tooling-core/utils/utility"
 import { normalizeCoinType } from "../models/currency.ts"
-import type {
-  DiscountContext,
-  DiscountTemplateSummary
-} from "../models/discount.ts"
+import type { DiscountContext, DiscountSummary } from "../models/discount.ts"
+import {
+  fetchPythPriceFeedUpdateData,
+  type PythPriceFeedUpdateData
+} from "../models/pyth-feeds.ts"
 import type { PriceUpdatePolicy, PythPullOracleConfig } from "../models/pyth.ts"
 import { resolvePythPullOracleConfig } from "../models/pyth.ts"
 import {
@@ -60,11 +64,6 @@ const getObjectRef = async (objectId: string, suiClient: SuiClient) => {
     digest: response.data.digest
   }
 }
-
-const normalizeObjectRef = (objectRef: SuiObjectRef): SuiObjectRef => ({
-  ...objectRef,
-  objectId: normalizeSuiObjectId(objectRef.objectId)
-})
 
 const parseMockPriceInfoUpdateFields = (
   priceInfoObject: SuiObjectData
@@ -106,6 +105,7 @@ const parseMockPriceInfoUpdateFields = (
 }
 
 const BASIS_POINT_DENOMINATOR = 10_000n
+const DEFAULT_EXECUTION_QUOTE_BUFFER_BPS = 100n
 
 /**
  * Resolves a discounted USD price (in cents) based on a discount selection.
@@ -113,22 +113,25 @@ const BASIS_POINT_DENOMINATOR = 10_000n
 export const resolveDiscountedPriceUsdCents = ({
   basePriceUsdCents,
   discountSelection,
-  discountTemplateLookup
+  discountLookup
 }: {
   basePriceUsdCents?: string
   discountSelection: DiscountContext
-  discountTemplateLookup: Record<string, DiscountTemplateSummary>
+  discountLookup: Record<string, DiscountSummary>
 }): bigint | undefined => {
   if (!basePriceUsdCents) return undefined
 
   const basePrice = BigInt(basePriceUsdCents)
   if (discountSelection.mode === "none") return basePrice
 
-  const template = discountTemplateLookup[discountSelection.discountTemplateId]
-  if (!template) return basePrice
+  const selectedDiscount = discountLookup[discountSelection.discountId]
+  if (!selectedDiscount) return basePrice
+  if (!selectedDiscount.activeFlag) return basePrice
 
-  const ruleKind = template.ruleKind
-  const ruleValue = template.ruleValue ? BigInt(template.ruleValue) : undefined
+  const ruleKind = selectedDiscount.ruleKind
+  const ruleValue = selectedDiscount.ruleValue
+    ? BigInt(selectedDiscount.ruleValue)
+    : undefined
   if (!ruleKind || ruleKind === "unknown" || ruleValue === undefined)
     return basePrice
 
@@ -189,6 +192,7 @@ export const estimateRequiredAmount = async ({
   priceUpdateMode = "none",
   hermesUrlOverride,
   pythConfigOverride,
+  pythUpdateData,
   onPriceUpdateWarning
 }: {
   shopPackageId: string
@@ -206,6 +210,7 @@ export const estimateRequiredAmount = async ({
   priceUpdateMode?: EstimateRequiredAmountPriceUpdateMode
   hermesUrlOverride?: string
   pythConfigOverride?: PythPullOracleConfig
+  pythUpdateData?: PythPriceFeedUpdateData
   onPriceUpdateWarning?: (message: string) => void
 }): Promise<bigint | undefined> => {
   const quoteTransaction = newTransaction()
@@ -250,7 +255,8 @@ export const estimateRequiredAmount = async ({
         networkName,
         feedIdHex: pythFeedIdHex,
         hermesUrlOverride,
-        pythConfigOverride
+        pythConfigOverride,
+        pythUpdateData
       })
 
       if (!injectedPriceUpdate)
@@ -290,70 +296,95 @@ export const estimateRequiredAmount = async ({
   return parseU64ReturnValue(quoteResult?.returnValues)
 }
 
+export const addExecutionQuoteBuffer = (
+  amount: bigint,
+  bufferBps: bigint = DEFAULT_EXECUTION_QUOTE_BUFFER_BPS
+) => {
+  if (amount < 0n) throw new Error("Quoted payment amount cannot be negative.")
+  if (bufferBps < 0n)
+    throw new Error("Execution quote buffer cannot be negative.")
+
+  return (
+    (amount * (BASIS_POINT_DENOMINATOR + bufferBps) +
+      BASIS_POINT_DENOMINATOR -
+      1n) /
+    BASIS_POINT_DENOMINATOR
+  )
+}
+
 const maybeSetDedicatedGasForSuiPayments = async ({
   transaction,
   signerAddress,
   paymentCoinObjectId,
-  dedicatedGasPaymentRef,
+  paymentAmount,
   gasBudget,
   suiClient
 }: {
   transaction: Transaction
   signerAddress: string
   paymentCoinObjectId: string
-  dedicatedGasPaymentRef?: SuiObjectRef
+  paymentAmount?: bigint
   gasBudget?: number
   suiClient: SuiClient
-}) => {
+}): Promise<TransactionObjectArgument | undefined> => {
   const normalizedPaymentCoinObjectId =
     normalizeSuiObjectId(paymentCoinObjectId)
 
-  if (dedicatedGasPaymentRef) {
-    const normalizedGasPaymentRef = normalizeObjectRef(dedicatedGasPaymentRef)
-    if (normalizedGasPaymentRef.objectId === normalizedPaymentCoinObjectId)
-      throw new Error(
-        "SUI payment coin cannot also be used as gas. Provide a different gas coin."
-      )
-
-    transaction.setGasOwner(signerAddress)
-    transaction.setGasPayment([normalizedGasPaymentRef])
-    return
-  }
-
-  // When paying with SUI, one coin must cover gas and a different coin must be the payment input.
+  // For SUI checkout, use all signer SUI coins as gas payment, then split the payment
+  // coin from tx.gas inside the final PTB after any oracle update commands are added.
   const coins = await suiClient.getCoins({
     owner: signerAddress,
     coinType: SUI_COIN_TYPE,
     limit: 50
   })
 
+  const allSuiCoins = coins.data.map((coin) => ({
+    coinObjectId: normalizeSuiObjectId(coin.coinObjectId),
+    balance: parseBalance(coin.balance)
+  }))
+
+  const preferredPrimaryCoin = allSuiCoins.find(
+    (coin) => coin.coinObjectId === normalizedPaymentCoinObjectId
+  )
+  const orderedGasCoins = [
+    ...(preferredPrimaryCoin ? [preferredPrimaryCoin] : []),
+    ...allSuiCoins.filter(
+      (coin) => coin.coinObjectId !== normalizedPaymentCoinObjectId
+    )
+  ]
+
   const minimumGasBalance = BigInt(gasBudget ?? DEFAULT_TX_GAS_BUDGET)
-  const gasCandidate = coins.data
-    .map((coin) => ({
-      coinObjectId: normalizeSuiObjectId(coin.coinObjectId),
-      balance: parseBalance(coin.balance)
-    }))
-    .filter(
-      (coin) =>
-        coin.coinObjectId !== normalizedPaymentCoinObjectId &&
-        coin.balance >= minimumGasBalance
-    )
-    .reduce<{
-      coinObjectId: string
-      balance: bigint
-    } | null>((current, coin) => {
-      if (!current) return coin
-      return coin.balance < current.balance ? coin : current
-    }, null)
+  const minimumPaymentAmount = requireValue(
+    paymentAmount,
+    "SUI checkout is missing its required payment amount."
+  )
+  const totalGasBalance = orderedGasCoins.reduce(
+    (total, coin) => total + coin.balance,
+    0n
+  )
 
-  if (!gasCandidate)
+  if (totalGasBalance < minimumGasBalance)
     throw new Error(
-      `Paying with SUI requires a non-payment SUI coin with at least ${minimumGasBalance}. Split a gas coin or fund a larger balance, then retry.`
+      `Paying with SUI requires a total SUI balance of at least ${minimumGasBalance} to cover gas. Fund more SUI, then retry.`
     )
 
-  const gasRef = await getObjectRef(gasCandidate.coinObjectId, suiClient)
+  const minimumCombinedBalance = minimumGasBalance + minimumPaymentAmount
+  if (totalGasBalance < minimumCombinedBalance)
+    throw new Error(
+      `Paying with SUI requires a total SUI balance of at least ${minimumCombinedBalance} to cover payment plus gas. Fund more SUI, then retry.`
+    )
+
+  const gasRefs = await Promise.all(
+    orderedGasCoins.map((coin) => getObjectRef(coin.coinObjectId, suiClient))
+  )
   transaction.setGasOwner(signerAddress)
-  transaction.setGasPayment([gasRef])
+  transaction.setGasPayment(gasRefs)
+  return resolveSplitCoinResult(
+    transaction.splitCoins(transaction.gas, [
+      transaction.pure.u64(minimumPaymentAmount)
+    ]),
+    0
+  )
 }
 
 const maybeUpdatePythPriceFeed = async ({
@@ -362,7 +393,8 @@ const maybeUpdatePythPriceFeed = async ({
   networkName,
   feedIdHex,
   hermesUrlOverride,
-  pythConfigOverride
+  pythConfigOverride,
+  pythUpdateData
 }: {
   transaction: Transaction
   suiClient: SuiClient
@@ -370,41 +402,21 @@ const maybeUpdatePythPriceFeed = async ({
   feedIdHex: string
   hermesUrlOverride?: string
   pythConfigOverride?: PythPullOracleConfig
+  pythUpdateData?: PythPriceFeedUpdateData
 }): Promise<boolean> => {
   const config = resolvePythPullOracleConfig(networkName, pythConfigOverride)
   if (!config) return false
 
-  const hermesUrl = hermesUrlOverride ?? config.hermesUrl
+  const normalizedUpdateData =
+    pythUpdateData ??
+    (await fetchPythPriceFeedUpdateData({
+      networkName,
+      feedIdHex,
+      hermesUrlOverride,
+      pythConfigOverride
+    }))
 
-  const connection = new SuiPriceServiceConnection(hermesUrl)
-
-  const updateData = await connection.getPriceFeedsUpdateData([feedIdHex])
-  // pyth-sui-js expects Buffer-style readUint* helpers; add shims for browser Uint8Array.
-  const normalizedUpdateData = updateData.map((message) => {
-    const messageWithReads = message as Uint8Array & {
-      readUint8?: (offset: number) => number
-      readUint16BE?: (offset: number) => number
-    }
-
-    if (
-      typeof messageWithReads.readUint8 === "function" &&
-      typeof messageWithReads.readUint16BE === "function"
-    ) {
-      return message
-    }
-
-    const dataView = new DataView(
-      message.buffer,
-      message.byteOffset,
-      message.byteLength
-    )
-
-    messageWithReads.readUint8 = (offset: number) => dataView.getUint8(offset)
-    messageWithReads.readUint16BE = (offset: number) =>
-      dataView.getUint16(offset, false)
-
-    return message
-  })
+  if (!normalizedUpdateData) return false
 
   const pythClient = new SuiPythClient(
     suiClient,
@@ -469,23 +481,23 @@ const maybeUpdateMockPriceFeed = ({
 
 export const resolveDiscountContext = async ({
   claimDiscount,
-  discountTemplateId,
+  discountId,
   suiClient: _suiClient
 }: {
   claimDiscount: boolean
-  discountTemplateId?: string
+  discountId?: string
   suiClient: SuiClient
 }): Promise<DiscountContext> => {
-  if (claimDiscount || discountTemplateId) {
-    const templateId = requireValue(
-      discountTemplateId,
-      "--discount-template-id is required when using discount checkout."
+  if (claimDiscount || discountId) {
+    const selectedDiscountId = requireValue(
+      discountId,
+      "--discount-id is required when using discount checkout."
     )
     return {
-      mode: "template",
-      discountTemplateId: normalizeIdOrThrow(
-        templateId,
-        "Invalid discount template id provided for checkout."
+      mode: "discount",
+      discountId: normalizeIdOrThrow(
+        selectedDiscountId,
+        "Invalid discount id provided for checkout."
       )
     }
   }
@@ -561,7 +573,7 @@ export const buildBuyTransaction = async (
     pythPriceInfoShared,
     pythFeedIdHex,
     paymentCoinObjectId,
-    dedicatedGasPaymentRef,
+    suiPaymentAmount,
     coinType,
     itemType,
     mintTo,
@@ -574,6 +586,7 @@ export const buildBuyTransaction = async (
     priceUpdatePolicy,
     hermesUrlOverride,
     pythConfigOverride,
+    pythUpdateData,
     networkName,
     signerAddress,
     onWarning
@@ -584,7 +597,7 @@ export const buildBuyTransaction = async (
     pythPriceInfoShared: Awaited<ReturnType<typeof getSuiSharedObject>>
     pythFeedIdHex: string
     paymentCoinObjectId: string
-    dedicatedGasPaymentRef?: SuiObjectRef
+    suiPaymentAmount?: bigint
     coinType: string
     itemType: string
     mintTo: string
@@ -597,6 +610,7 @@ export const buildBuyTransaction = async (
     priceUpdatePolicy?: PriceUpdatePolicy
     hermesUrlOverride?: string
     pythConfigOverride?: PythPullOracleConfig
+    pythUpdateData?: PythPriceFeedUpdateData
     networkName: string
     signerAddress: string
     onWarning?: (message: string) => void
@@ -607,15 +621,22 @@ export const buildBuyTransaction = async (
   const transaction = newTransaction()
   transaction.setSender(signerAddress)
 
+  let paymentArgument: TransactionObjectArgument
+
   if (isSuiCoinType(coinType)) {
-    await maybeSetDedicatedGasForSuiPayments({
+    const splitPaymentArgument = await maybeSetDedicatedGasForSuiPayments({
       transaction,
       signerAddress,
       paymentCoinObjectId,
-      dedicatedGasPaymentRef,
+      paymentAmount: suiPaymentAmount,
       gasBudget,
       suiClient
     })
+
+    paymentArgument =
+      splitPaymentArgument ?? transaction.object(paymentCoinObjectId)
+  } else {
+    paymentArgument = transaction.object(paymentCoinObjectId)
   }
 
   const shopArgument = transaction.sharedObjectRef(shopShared.sharedRef)
@@ -667,7 +688,8 @@ export const buildBuyTransaction = async (
       networkName,
       feedIdHex: pythFeedIdHex,
       hermesUrlOverride,
-      pythConfigOverride
+      pythConfigOverride,
+      pythUpdateData
     })
 
     if (!didPullUpdate) {
@@ -696,42 +718,46 @@ export const buildBuyTransaction = async (
     }
   }
 
-  const paymentArgument = transaction.object(paymentCoinObjectId)
   const typeArguments = [itemType, coinType]
   const buildCommonBuyArguments = () => [
     pythPriceInfoArgument,
     paymentArgument,
     listingIdArgument,
-    transaction.pure.address(mintTo),
-    transaction.pure.address(refundTo),
     transaction.pure.option("u64", maxPriceAgeSecs ?? null),
     transaction.pure.option("u16", maxConfidenceRatioBps ?? null),
     clockArgument
   ]
 
-  if (discountContext.mode === "template") {
-    transaction.moveCall({
+  if (discountContext.mode === "discount") {
+    const [mintedItem, changeCoin] = transaction.moveCall({
       target: `${shopPackageId}::shop::buy_item_with_discount`,
       typeArguments,
       arguments: [
         shopArgument,
         buildObjectIdArgument(
           transaction,
-          discountContext.discountTemplateId,
-          "discountTemplateId"
+          discountContext.discountId,
+          "discountId"
         ),
         ...buildCommonBuyArguments()
       ]
     })
+    transaction.transferObjects([mintedItem], transaction.pure.address(mintTo))
+    transaction.transferObjects(
+      [changeCoin],
+      transaction.pure.address(refundTo)
+    )
 
     return transaction
   }
 
-  transaction.moveCall({
+  const [mintedItem, changeCoin] = transaction.moveCall({
     target: `${shopPackageId}::shop::buy_item`,
     typeArguments,
     arguments: [shopArgument, ...buildCommonBuyArguments()]
   })
+  transaction.transferObjects([mintedItem], transaction.pure.address(mintTo))
+  transaction.transferObjects([changeCoin], transaction.pure.address(refundTo))
 
   return transaction
 }

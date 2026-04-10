@@ -8,20 +8,22 @@ import {
   useSuiClient,
   useSuiClientContext
 } from "@mysten/dapp-kit"
-import type {
-  SuiObjectRef,
-  SuiTransactionBlockResponse
-} from "@mysten/sui/client"
+import type { SuiTransactionBlockResponse } from "@mysten/sui/client"
 import type { Transaction } from "@mysten/sui/transactions"
 import { normalizeSuiAddress } from "@mysten/sui/utils"
 import type { IdentifierString } from "@mysten/wallet-standard"
 import type { EstimateRequiredAmountPriceUpdateMode } from "@sui-oracle-market/domain-core/flows/buy"
 import {
+  addExecutionQuoteBuffer,
   buildBuyTransaction,
   estimateRequiredAmount,
   resolveDiscountedPriceUsdCents,
   resolvePaymentCoinObjectId
 } from "@sui-oracle-market/domain-core/flows/buy"
+import {
+  fetchPythBaseUpdateFee,
+  fetchPythPriceFeedUpdateData
+} from "@sui-oracle-market/domain-core/models/pyth-feeds"
 import {
   normalizeCoinType,
   type AcceptedCurrencySummary
@@ -29,7 +31,7 @@ import {
 import type {
   DiscountContext,
   DiscountOption,
-  DiscountTemplateSummary
+  DiscountSummary
 } from "@sui-oracle-market/domain-core/models/discount"
 import {
   buildDiscountOptions,
@@ -43,10 +45,6 @@ import {
   parseShopItemReceiptFromObject
 } from "@sui-oracle-market/domain-core/models/shop-item"
 import {
-  pickDedicatedGasPaymentRefFromSplit,
-  planSuiPaymentSplitTransaction
-} from "@sui-oracle-market/tooling-core/coin"
-import {
   DEFAULT_TX_GAS_BUDGET,
   NORMALIZED_SUI_COIN_TYPE,
   SUI_CLOCK_ID
@@ -58,11 +56,10 @@ import {
 } from "@sui-oracle-market/tooling-core/object"
 import { getSuiSharedObject } from "@sui-oracle-market/tooling-core/shared-object"
 import { ENetwork } from "@sui-oracle-market/tooling-core/types"
-import { requireValue } from "@sui-oracle-market/tooling-core/utils/utility"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { EXPLORER_URL_VARIABLE_NAME } from "../config/network"
 import { parseBalance } from "../helpers/balance"
-import { buildDiscountTemplateLookup } from "../helpers/discountTemplates"
+import { buildDiscountLookup } from "../helpers/discounts"
 import { formatCoinBalance, getStructLabel } from "../helpers/format"
 import { validateOptionalSuiAddress } from "../helpers/inputValidation"
 import {
@@ -131,6 +128,7 @@ export type TransactionSummary = {
 export type PurchaseSuccessPayload = {
   receipts: ShopItemReceiptSummary[]
   receiptIds: string[]
+  purchasedListingId?: string
 }
 
 type TransactionState =
@@ -198,7 +196,7 @@ export const useBuyFlowModalState = ({
   shopId,
   listing,
   acceptedCurrencies,
-  discountTemplates
+  discounts
 }: {
   open: boolean
   onClose: () => void
@@ -206,7 +204,7 @@ export const useBuyFlowModalState = ({
   shopId?: string
   listing?: ItemListingSummary
   acceptedCurrencies: AcceptedCurrencySummary[]
-  discountTemplates: DiscountTemplateSummary[]
+  discounts: DiscountSummary[]
 }): BuyFlowModalState => {
   const currentAccount = useCurrentAccount()
   const { currentWallet } = useCurrentWallet()
@@ -316,9 +314,9 @@ export const useBuyFlowModalState = ({
     [currencyBalances]
   )
 
-  const discountTemplateLookup = useMemo(
-    () => buildDiscountTemplateLookup(discountTemplates),
-    [discountTemplates]
+  const discountLookup = useMemo(
+    () => buildDiscountLookup(discounts),
+    [discounts]
   )
 
   const discountOptions = useMemo(
@@ -326,9 +324,9 @@ export const useBuyFlowModalState = ({
       buildDiscountOptions({
         listing,
         shopId,
-        discountTemplates
+        discounts
       }),
-    [listing, shopId, discountTemplates]
+    [listing, shopId, discounts]
   )
   const hasDiscountOptions = discountOptions.some(
     (option) => option.id !== "none"
@@ -512,7 +510,7 @@ export const useBuyFlowModalState = ({
     const discountedPriceUsdCents = resolveDiscountedPriceUsdCents({
       basePriceUsdCents: listing.basePriceUsdCents,
       discountSelection: selectedDiscount.selection,
-      discountTemplateLookup
+      discountLookup
     })
 
     if (discountedPriceUsdCents === undefined) {
@@ -595,7 +593,7 @@ export const useBuyFlowModalState = ({
       oracleQuoteRequestInFlight.current = false
     }
   }, [
-    discountTemplateLookup,
+    discountLookup,
     listing,
     open,
     oracleQuoteRefreshIndex,
@@ -768,9 +766,28 @@ export const useBuyFlowModalState = ({
       const discountedPriceUsdCents = resolveDiscountedPriceUsdCents({
         basePriceUsdCents: listingSnapshot.basePriceUsdCents,
         discountSelection,
-        discountTemplateLookup
+        discountLookup
       })
       let paymentCoinMinimumBalance: bigint | undefined = undefined
+      const isSuiPayment =
+        normalizeCoinType(currencySnapshot.coinType) ===
+        NORMALIZED_SUI_COIN_TYPE
+      const pythBaseUpdateFee =
+        isSuiPayment && quotePriceUpdateMode === "pyth-update"
+          ? await fetchPythBaseUpdateFee({
+              networkName: network,
+              suiClient
+            })
+          : undefined
+      const pythUpdateData =
+        isSuiPayment && quotePriceUpdateMode === "pyth-update"
+          ? await fetchPythPriceFeedUpdateData({
+              networkName: network,
+              feedIdHex: selectedCurrency.feedIdHex
+            })
+          : undefined
+      const requiredSuiGasBalance =
+        BigInt(DEFAULT_TX_GAS_BUDGET) + (pythBaseUpdateFee ?? 0n)
 
       if (discountedPriceUsdCents !== undefined) {
         try {
@@ -788,14 +805,17 @@ export const useBuyFlowModalState = ({
             signerAddress: walletAddress,
             suiClient,
             priceUpdateMode: quotePriceUpdateMode,
+            pythUpdateData,
             onPriceUpdateWarning: (message) => setOracleWarning(message)
           })
 
           if (requiredAmount !== undefined) {
-            paymentCoinMinimumBalance = requiredAmount
+            const bufferedRequiredAmount =
+              addExecutionQuoteBuffer(requiredAmount)
+            paymentCoinMinimumBalance = bufferedRequiredAmount
             const balance = selectedCurrency.balance
-            if (balance < requiredAmount) {
-              const shortfall = requiredAmount - balance
+            if (balance < bufferedRequiredAmount) {
+              const shortfall = bufferedRequiredAmount - balance
               const symbolLabel =
                 selectedCurrency.symbol ??
                 getStructLabel(selectedCurrency.coinType)
@@ -810,8 +830,8 @@ export const useBuyFlowModalState = ({
                 status: "error",
                 error: `Insufficient ${symbolLabel || "balance"} to complete purchase. Balance: ${formatAmount(
                   balance
-                )}${suffix}. Required: ${formatAmount(
-                  requiredAmount
+                )}${suffix}. Required incl. execution buffer: ${formatAmount(
+                  bufferedRequiredAmount
                 )}${suffix}. Short by: ${formatAmount(shortfall)}${suffix}.`
               })
               return
@@ -821,11 +841,6 @@ export const useBuyFlowModalState = ({
           // Best-effort preflight; fall back to execution on inspection failure.
         }
       }
-
-      const isSuiPayment =
-        normalizeCoinType(currencySnapshot.coinType) ===
-        NORMALIZED_SUI_COIN_TYPE
-      const gasBudget = BigInt(DEFAULT_TX_GAS_BUDGET)
       if (isSuiPayment && paymentCoinMinimumBalance === undefined) {
         setTransactionState({
           status: "error",
@@ -869,50 +884,15 @@ export const useBuyFlowModalState = ({
       }
 
       let paymentCoinObjectId: string
-      let dedicatedGasPaymentRef: SuiObjectRef | undefined
 
       if (isSuiPayment) {
-        const paymentMinimum = requireValue(
-          paymentCoinMinimumBalance,
-          "Missing payment amount."
-        )
-        const splitPlan = await planSuiPaymentSplitTransaction(
-          {
-            owner: walletAddress,
-            paymentMinimum,
-            gasBudget,
-            splitGasBudget: DEFAULT_TX_GAS_BUDGET,
-            forceSplit: isLocalnet
-          },
-          { suiClient }
-        )
-
-        debugContext = {
-          ...(debugContext ?? {}),
-          suiPaymentSplitPlan: {
-            needsSplit: splitPlan.needsSplit,
-            coinCount: splitPlan.coinCount,
-            totalBalance: splitPlan.totalBalance.toString(),
-            paymentCoinObjectId: splitPlan.paymentCoinObjectId
-          }
-        }
-
-        if (splitPlan.needsSplit && splitPlan.transaction) {
-          failureStage = "execute"
-          const splitExecution = await executeTransaction(splitPlan.transaction)
-          dedicatedGasPaymentRef = pickDedicatedGasPaymentRefFromSplit({
-            splitTransactionBlock: splitExecution.transactionBlock,
-            paymentCoinObjectId: splitPlan.paymentCoinObjectId
-          })
-
-          debugContext = {
-            ...(debugContext ?? {}),
-            suiSplitExecution: {
-              dedicatedGasCoinObjectId: dedicatedGasPaymentRef?.objectId
-            }
-          }
-        }
-        paymentCoinObjectId = splitPlan.paymentCoinObjectId
+        paymentCoinObjectId = await resolvePaymentCoinObjectId({
+          providedCoinObjectId: undefined,
+          coinType: currencySnapshot.coinType,
+          signerAddress: walletAddress,
+          suiClient,
+          minimumBalance: undefined
+        })
       } else {
         paymentCoinObjectId = await resolvePaymentCoinObjectId({
           providedCoinObjectId: undefined,
@@ -931,17 +911,20 @@ export const useBuyFlowModalState = ({
           pythPriceInfoShared,
           pythFeedIdHex: currencySnapshot.feedIdHex,
           paymentCoinObjectId,
-          dedicatedGasPaymentRef,
+          suiPaymentAmount: isSuiPayment
+            ? paymentCoinMinimumBalance
+            : undefined,
           coinType: currencySnapshot.coinType,
           itemType: listingSnapshot.itemType,
           mintTo: normalizedMintTo,
           refundTo: normalizedRefundTo,
           maxPriceAgeSecs: undefined,
           maxConfidenceRatioBps: undefined,
-          gasBudget: DEFAULT_TX_GAS_BUDGET,
+          gasBudget: Number(requiredSuiGasBalance),
           discountContext: discountSelection,
           priceUpdatePolicy,
           hermesUrlOverride: undefined,
+          pythUpdateData,
           networkName: network,
           signerAddress: walletAddress,
           onWarning: (message) => setOracleWarning(message)
@@ -985,7 +968,8 @@ export const useBuyFlowModalState = ({
 
       onPurchaseSuccess?.({
         receiptIds,
-        receipts: hydratedReceipts
+        receipts: hydratedReceipts,
+        purchasedListingId: listing?.itemListingId
       })
     } catch (error) {
       const errorDetails = extractErrorDetails(error)
@@ -1017,7 +1001,7 @@ export const useBuyFlowModalState = ({
   }, [
     currentAccount,
     currentWallet,
-    discountTemplateLookup,
+    discountLookup,
     hasFieldErrors,
     isLocalnet,
     lastWalletContext,

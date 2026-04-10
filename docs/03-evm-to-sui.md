@@ -18,19 +18,20 @@ This is a compact reference for common EVM-to-Sui translation points, plus a che
 
 ## 2. Deep dive: how it maps to EVM mental models
 
-| Topic | EVM | Sui |
-| --- | --- | --- |
+| Topic            | EVM                                             | Sui                                                                   |
+| ---------------- | ----------------------------------------------- | --------------------------------------------------------------------- |
 | Package/contract | Immutable bytecode at an address, often proxied | Immutable package object; upgrades publish new package + `UpgradeCap` |
-| Auth | `msg.sender` + modifiers | Capability objects (e.g., `ShopOwnerCap`) must be presented |
-| State | Contract storage slots | Owned/shared objects + dynamic fields |
-| Tokens | ERC-20 approvals | `Coin<T>` types; no approvals |
-| Oracles | Chainlink contracts queried by address | Pyth `PriceInfoObject` passed into tx + clock guardrails |
-| Local dev | Hardhat/Anvil | `sui start` localnet + mocks as packages |
-| Migrations | Scripts calling contracts | Publish + seed scripts that create objects |
-| Inheritance | Multiple inheritance + polymorphism | Modules + generics |
-| Composition | On-chain router contracts | Client-side PTBs chain calls atomically |
+| Auth             | `msg.sender` + modifiers                        | Capability objects (e.g., `ShopOwnerCap`) must be presented           |
+| State            | Contract storage slots                          | Owned/shared objects + dynamic fields                                 |
+| Tokens           | ERC-20 approvals                                | `Coin<T>` types; no approvals                                         |
+| Oracles          | Chainlink contracts queried by address          | Pyth `PriceInfoObject` passed into tx + clock guardrails              |
+| Local dev        | Hardhat/Anvil                                   | `sui start` localnet + mocks as packages                              |
+| Migrations       | Scripts calling contracts                       | Publish + seed scripts that create objects                            |
+| Inheritance      | Multiple inheritance + polymorphism             | Modules + generics                                                    |
+| Composition      | On-chain router contracts                       | Client-side PTBs chain calls atomically                               |
 
 ## 3. Further reading
+
 - https://docs.sui.io
 - https://docs.sui.io/concepts/sui-move-concepts
 - https://docs.sui.io/guides/developer/objects/object-model
@@ -39,6 +40,7 @@ This is a compact reference for common EVM-to-Sui translation points, plus a che
 - https://docs.sui.io/concepts/sui-for-ethereum
 
 ## 4. Navigation
+
 1. Previous: [02 Mental Model Shift](./02-mental-model-shift.md)
 2. Next: [16 Object Ownership + Versioning](./16-object-ownership.md)
 3. Back to map: [Learning Path Map](./)

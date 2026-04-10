@@ -29,10 +29,9 @@ import type { ItemListingSummary } from "./item-listing.ts"
 import { normalizeOptionalListingIdFromValue } from "./item-listing.ts"
 import { parseUsdToCents } from "./shop.ts"
 
-export const DISCOUNT_TEMPLATE_TYPE_FRAGMENT = "::shop::DiscountTemplate"
-export const DISCOUNT_TEMPLATE_CREATED_EVENT_TYPE_FRAGMENT =
-  "::events::DiscountTemplateCreated"
-const SHOP_DISCOUNT_TEMPLATES_FIELD = "discount_templates"
+export const DISCOUNT_TYPE_FRAGMENT = "::discount::Discount"
+export const DISCOUNT_CREATED_EVENT_TYPE_FRAGMENT = "::events::DiscountCreated"
+const SHOP_DISCOUNTS_FIELD = "discounts"
 
 export const discountRuleChoices = ["fixed", "percent"] as const
 
@@ -42,7 +41,7 @@ export type NormalizedRuleKind = 0 | 1
 
 export type DiscountContext =
   | { mode: "none" }
-  | { mode: "template"; discountTemplateId: string }
+  | { mode: "discount"; discountId: string }
 
 export const defaultStartTimestampSeconds = () => Math.floor(Date.now() / 1000)
 
@@ -150,7 +149,7 @@ export const normalizeOptionalU64FromValue = (
   value: unknown
 ): bigint | undefined => normalizeBigIntFromMoveValue(value)
 
-export const extractDiscountTemplateIdFromCreatedEvents = ({
+export const extractDiscountIdFromCreatedEvents = ({
   events,
   shopId
 }: {
@@ -158,9 +157,8 @@ export const extractDiscountTemplateIdFromCreatedEvents = ({
   shopId: string
 }): string | undefined => {
   const normalizedShopId = normalizeSuiObjectId(shopId)
-  const discountTemplateCreatedEvent = events?.find((event) => {
-    if (!event.type.endsWith(DISCOUNT_TEMPLATE_CREATED_EVENT_TYPE_FRAGMENT))
-      return false
+  const discountCreatedEvent = events?.find((event) => {
+    if (!event.type.endsWith(DISCOUNT_CREATED_EVENT_TYPE_FRAGMENT)) return false
     if (
       !event.parsedJson ||
       typeof event.parsedJson !== "object" ||
@@ -175,20 +173,17 @@ export const extractDiscountTemplateIdFromCreatedEvents = ({
   })
 
   if (
-    !discountTemplateCreatedEvent?.parsedJson ||
-    typeof discountTemplateCreatedEvent.parsedJson !== "object" ||
-    Array.isArray(discountTemplateCreatedEvent.parsedJson)
+    !discountCreatedEvent?.parsedJson ||
+    typeof discountCreatedEvent.parsedJson !== "object" ||
+    Array.isArray(discountCreatedEvent.parsedJson)
   )
     return undefined
 
-  const eventFields = discountTemplateCreatedEvent.parsedJson as Record<
-    string,
-    unknown
-  >
-  return normalizeOptionalIdFromValue(eventFields.discount_template_id)
+  const eventFields = discountCreatedEvent.parsedJson as Record<string, unknown>
+  return normalizeOptionalIdFromValue(eventFields.discount_id)
 }
 
-export const extractDiscountTemplateTableEntryFieldIdFromCreatedObjects = ({
+export const extractDiscountTableEntryFieldIdFromCreatedObjects = ({
   createdObjects
 }: {
   createdObjects:
@@ -203,27 +198,27 @@ export const extractDiscountTemplateTableEntryFieldIdFromCreatedObjects = ({
     createdObjects?.find(
       (createdObject) =>
         createdObject.objectType.includes("::Field<0x2::object::ID,") &&
-        createdObject.objectType.includes(DISCOUNT_TEMPLATE_TYPE_FRAGMENT)
+        createdObject.objectType.includes(DISCOUNT_TYPE_FRAGMENT)
     )?.objectId
   )
 
-export const requireDiscountTemplateIdFromCreatedEvents = ({
+export const requireDiscountIdFromCreatedEvents = ({
   events,
   shopId
 }: {
   events: { type: string; parsedJson?: unknown }[] | null | undefined
   shopId: string
 }): string => {
-  const discountTemplateId = extractDiscountTemplateIdFromCreatedEvents({
+  const discountId = extractDiscountIdFromCreatedEvents({
     events,
     shopId
   })
-  if (!discountTemplateId)
+  if (!discountId)
     throw new Error(
-      "Expected a DiscountTemplateCreatedEvent for this shop, but it was not found."
+      "Expected a DiscountCreated event for this shop, but it was not found."
     )
 
-  return discountTemplateId
+  return discountId
 }
 
 export type DiscountRuleOnChain =
@@ -330,7 +325,7 @@ export const formatOnChainDiscountRule = (
   return "Unknown rule"
 }
 
-export const deriveTemplateStatus = ({
+export const deriveDiscountStatus = ({
   activeFlag,
   startsAt,
   expiresAt,
@@ -360,8 +355,8 @@ export const deriveTemplateStatus = ({
   return "active"
 }
 
-export type DiscountTemplateSummary = {
-  discountTemplateId: string
+export type DiscountSummary = {
+  discountId: string
   tableEntryFieldId: string
   shopId: string
   appliesToListingId?: string
@@ -376,23 +371,26 @@ export type DiscountTemplateSummary = {
   status: string
 }
 
-type DiscountTemplateTableEntryField = Awaited<
+type DiscountTableEntryField = Awaited<
   ReturnType<typeof getTableEntryDynamicFields>
 >[number]
 
-type OrderedDiscountTemplateTableEntry = {
-  tableEntryField: DiscountTemplateTableEntryField
-  discountTemplateId: string
+type OrderedDiscountTableEntry = {
+  tableEntryField: DiscountTableEntryField
+  discountId: string
 }
 
 /**
- * Builds a lookup map for discount templates by ID.
+ * Builds a lookup map for discounts by ID.
  */
-export const buildDiscountTemplateLookup = (
-  templates: DiscountTemplateSummary[]
-): Record<string, DiscountTemplateSummary> =>
+export const buildDiscountLookup = (
+  discountSummaries: DiscountSummary[]
+): Record<string, DiscountSummary> =>
   Object.fromEntries(
-    templates.map((template) => [template.discountTemplateId, template])
+    discountSummaries.map((discountSummary) => [
+      discountSummary.discountId,
+      discountSummary
+    ])
   )
 
 export type DiscountOption = {
@@ -412,43 +410,41 @@ export const pickDefaultDiscountOptionId = (options: DiscountOption[]) => {
 export const buildDiscountOptions = ({
   listing,
   shopId,
-  discountTemplates
+  discounts
 }: {
   listing?: ItemListingSummary
   shopId?: string
-  discountTemplates: DiscountTemplateSummary[]
+  discounts: DiscountSummary[]
 }): DiscountOption[] => {
   if (!listing || !shopId) return []
-  const eligibleTemplates = discountTemplates
-    .filter((template) => {
-      if (template.shopId !== shopId) return false
+  const eligibleDiscounts = discounts
+    .filter((discountSummary) => {
+      if (discountSummary.shopId !== normalizeSuiObjectId(shopId)) return false
       if (
-        template.appliesToListingId &&
-        template.appliesToListingId !== listing.itemListingId
+        discountSummary.appliesToListingId &&
+        discountSummary.appliesToListingId !== listing.itemListingId
       )
         return false
       return true
     })
-    .sort((leftTemplate, rightTemplate) =>
-      leftTemplate.discountTemplateId.localeCompare(
-        rightTemplate.discountTemplateId
-      )
+    .sort((leftDiscount, rightDiscount) =>
+      leftDiscount.discountId.localeCompare(rightDiscount.discountId)
     )
 
-  const templateOptions: DiscountOption[] = eligibleTemplates.map(
-    (template) => {
-      const isActive = template.status === "active"
+  const discountOptions: DiscountOption[] = eligibleDiscounts.map(
+    (discountSummary) => {
+      const isActive = discountSummary.status === "active"
       return {
-        id: `template:${template.discountTemplateId}`,
-        label: template.ruleDescription,
-        description: template.appliesToListingId
-          ? `Applies to listing ${shortenId(template.appliesToListingId)}.`
+        id: `discount:${discountSummary.discountId}`,
+        label: discountSummary.ruleDescription,
+        description: discountSummary.appliesToListingId
+          ? `Applies to listing ${shortenId(discountSummary.appliesToListingId)}.`
           : "Applies to all listings.",
-        status: template.status,
+        status: discountSummary.status,
         disabled: !isActive,
         selection: {
-          mode: "template",
-          discountTemplateId: template.discountTemplateId
+          mode: "discount",
+          discountId: discountSummary.discountId
         }
       }
     }
@@ -458,50 +454,48 @@ export const buildDiscountOptions = ({
     {
       id: "none",
       label: "No discount",
-      description: "Checkout without a discount template.",
+      description: "Checkout without a discount.",
       selection: { mode: "none" }
     },
-    ...templateOptions
+    ...discountOptions
   ]
 }
 
-export const getDiscountTemplateSummaries = async (
+export const getDiscountSummaries = async (
   shopId: string,
   suiClient: SuiClient
-): Promise<DiscountTemplateSummary[]> => {
-  const { normalizedShopId, discountTemplatesTableObjectId } =
-    await getDiscountTemplatesTableObjectId({
+): Promise<DiscountSummary[]> => {
+  const { normalizedShopId, discountsTableObjectId } =
+    await getDiscountsTableObjectId({
       shopId,
       suiClient
     })
-  const discountTemplateTableEntryFields = await getTableEntryDynamicFields(
+  const discountTableEntryFields = await getTableEntryDynamicFields(
     {
-      tableObjectId: discountTemplatesTableObjectId,
-      objectTypeFilter: DISCOUNT_TEMPLATE_TYPE_FRAGMENT
+      tableObjectId: discountsTableObjectId,
+      objectTypeFilter: DISCOUNT_TYPE_FRAGMENT
     },
     { suiClient }
   )
 
-  if (discountTemplateTableEntryFields.length === 0) return []
+  if (discountTableEntryFields.length === 0) return []
 
-  const orderedTableEntries: OrderedDiscountTemplateTableEntry[] =
-    discountTemplateTableEntryFields
+  const orderedTableEntries: OrderedDiscountTableEntry[] =
+    discountTableEntryFields
       .map((tableEntryField) => ({
         tableEntryField,
-        discountTemplateId: normalizeIdOrThrow(
+        discountId: normalizeIdOrThrow(
           normalizeOptionalIdFromValue(tableEntryField.name.value),
-          `Missing DiscountTemplate id for table entry ${tableEntryField.objectId}.`
+          `Missing Discount id for table entry ${tableEntryField.objectId}.`
         )
       }))
       .sort((leftEntry, rightEntry) =>
-        leftEntry.discountTemplateId.localeCompare(
-          rightEntry.discountTemplateId
-        )
+        leftEntry.discountId.localeCompare(rightEntry.discountId)
       )
 
   return Promise.all(
     orderedTableEntries.map((orderedTableEntry) =>
-      getDiscountTemplateSummaryFromOrderedTableEntry({
+      getDiscountSummaryFromOrderedTableEntry({
         orderedTableEntry,
         shopId: normalizedShopId,
         suiClient
@@ -510,44 +504,43 @@ export const getDiscountTemplateSummaries = async (
   )
 }
 
-export const getDiscountTemplateSummary = async (
+export const getDiscountSummary = async (
   shopId: string,
-  discountTemplateId: string,
+  discountId: string,
   suiClient: SuiClient
-): Promise<DiscountTemplateSummary> => {
-  const { normalizedShopId, discountTemplatesTableObjectId } =
-    await getDiscountTemplatesTableObjectId({
+): Promise<DiscountSummary> => {
+  const { normalizedShopId, discountsTableObjectId } =
+    await getDiscountsTableObjectId({
       shopId,
       suiClient
     })
-  const normalizedDiscountTemplateId = normalizeSuiObjectId(discountTemplateId)
-  const discountTemplateTableEntryObject =
-    await getTableEntryDynamicFieldObject(
-      {
-        tableObjectId: discountTemplatesTableObjectId,
-        keyType: TABLE_KEY_TYPE_OBJECT_ID,
-        keyValue: normalizedDiscountTemplateId
-      },
-      { suiClient }
-    )
+  const normalizedDiscountId = normalizeSuiObjectId(discountId)
+  const discountTableEntryObject = await getTableEntryDynamicFieldObject(
+    {
+      tableObjectId: discountsTableObjectId,
+      keyType: TABLE_KEY_TYPE_OBJECT_ID,
+      keyValue: normalizedDiscountId
+    },
+    { suiClient }
+  )
 
-  if (!discountTemplateTableEntryObject)
+  if (!discountTableEntryObject)
     throw new Error(
-      `No DiscountTemplate ${normalizedDiscountTemplateId} found for shop ${normalizedShopId}.`
+      `No Discount ${normalizedDiscountId} found for shop ${normalizedShopId}.`
     )
 
-  return buildDiscountTemplateSummary(
-    discountTemplateTableEntryObject,
-    normalizedDiscountTemplateId,
+  return buildDiscountSummary(
+    discountTableEntryObject,
+    normalizedDiscountId,
     normalizeIdOrThrow(
-      discountTemplateTableEntryObject.objectId,
-      `Missing table entry id for DiscountTemplate ${normalizedDiscountTemplateId}.`
+      discountTableEntryObject.objectId,
+      `Missing table entry id for Discount ${normalizedDiscountId}.`
     ),
     normalizedShopId
   )
 }
 
-const getDiscountTemplatesTableObjectId = async ({
+const getDiscountsTableObjectId = async ({
   shopId,
   suiClient
 }: {
@@ -555,7 +548,7 @@ const getDiscountTemplatesTableObjectId = async ({
   suiClient: SuiClient
 }): Promise<{
   normalizedShopId: string
-  discountTemplatesTableObjectId: string
+  discountsTableObjectId: string
 }> => {
   const normalizedShopId = normalizeSuiObjectId(shopId)
   const { object: shopObject } = await getSuiObject(
@@ -568,22 +561,22 @@ const getDiscountTemplatesTableObjectId = async ({
 
   return {
     normalizedShopId,
-    discountTemplatesTableObjectId: resolveTableObjectIdFromField({
+    discountsTableObjectId: resolveTableObjectIdFromField({
       object: shopObject,
-      fieldName: SHOP_DISCOUNT_TEMPLATES_FIELD
+      fieldName: SHOP_DISCOUNTS_FIELD
     })
   }
 }
 
-const getDiscountTemplateSummaryFromOrderedTableEntry = async ({
+const getDiscountSummaryFromOrderedTableEntry = async ({
   orderedTableEntry,
   shopId,
   suiClient
 }: {
-  orderedTableEntry: OrderedDiscountTemplateTableEntry
+  orderedTableEntry: OrderedDiscountTableEntry
   shopId: string
   suiClient: SuiClient
-}): Promise<DiscountTemplateSummary> => {
+}): Promise<DiscountSummary> => {
   const { object } = await getSuiObject(
     {
       objectId: orderedTableEntry.tableEntryField.objectId,
@@ -592,44 +585,36 @@ const getDiscountTemplateSummaryFromOrderedTableEntry = async ({
     { suiClient }
   )
 
-  return buildDiscountTemplateSummary(
+  return buildDiscountSummary(
     object,
-    orderedTableEntry.discountTemplateId,
+    orderedTableEntry.discountId,
     orderedTableEntry.tableEntryField.objectId,
     shopId
   )
 }
 
-const buildDiscountTemplateSummary = (
-  discountTemplateTableEntryObject: SuiObjectData,
-  discountTemplateId: string,
+const buildDiscountSummary = (
+  discountTableEntryObject: SuiObjectData,
+  discountId: string,
   tableEntryFieldId: string,
   shopId: string
-): DiscountTemplateSummary => {
-  const discountTemplateFields = unwrapMoveObjectFields(
-    discountTemplateTableEntryObject
-  )
+): DiscountSummary => {
+  const discountFields = unwrapMoveObjectFields(discountTableEntryObject)
   const appliesToListingId = normalizeOptionalListingIdFromValue(
-    discountTemplateFields.applies_to_listing
+    discountFields.applies_to_listing
   )
 
-  const rule = parseDiscountRuleFromField(discountTemplateFields.rule)
-  const startsAt = normalizeOptionalU64FromValue(
-    discountTemplateFields.starts_at
-  )
-  const expiresAt = normalizeOptionalU64FromValue(
-    discountTemplateFields.expires_at
-  )
+  const rule = parseDiscountRuleFromField(discountFields.rule)
+  const startsAt = normalizeOptionalU64FromValue(discountFields.starts_at)
+  const expiresAt = normalizeOptionalU64FromValue(discountFields.expires_at)
   const maxRedemptions = normalizeOptionalU64FromValue(
-    discountTemplateFields.max_redemptions
+    discountFields.max_redemptions
   )
-  const redemptions = normalizeOptionalU64FromValue(
-    discountTemplateFields.redemptions
-  )
-  const activeFlag = Boolean(discountTemplateFields.active)
+  const redemptions = normalizeOptionalU64FromValue(discountFields.redemptions)
+  const activeFlag = Boolean(discountFields.active)
 
   return {
-    discountTemplateId,
+    discountId,
     tableEntryFieldId,
     shopId,
     appliesToListingId,
@@ -649,7 +634,7 @@ const buildDiscountTemplateSummary = (
         : formatOptionalNumericValue(maxRedemptions),
     redemptions: formatOptionalNumericValue(redemptions),
     activeFlag,
-    status: deriveTemplateStatus({
+    status: deriveDiscountStatus({
       activeFlag,
       startsAt,
       expiresAt,

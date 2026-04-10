@@ -1,14 +1,14 @@
 /**
- * Builds and executes a buy PTB for a listing, optionally applying a discount template.
+ * Builds and executes a buy PTB for a listing, optionally applying a discount.
  * Payments are Coin<T> objects (no approvals); if paying with SUI you need a separate SUI coin for gas.
  * The PTB can update Pyth and then call buy_item/buy_item_with_discount in one atomic flow.
  * Oracle freshness and confidence guardrails are enforced on-chain using PriceInfoObject + Clock.
  */
-import type { SuiObjectRef } from "@mysten/sui/client"
 import { normalizeSuiAddress, normalizeSuiObjectId } from "@mysten/sui/utils"
 import yargs from "yargs"
 
 import {
+  addExecutionQuoteBuffer,
   buildBuyTransaction,
   estimateRequiredAmount,
   resolveDiscountContext,
@@ -20,8 +20,12 @@ import {
   requireAcceptedCurrencyByCoinType
 } from "@sui-oracle-market/domain-core/models/currency"
 import {
-  buildDiscountTemplateLookup,
-  getDiscountTemplateSummary,
+  fetchPythBaseUpdateFee,
+  fetchPythPriceFeedUpdateData
+} from "@sui-oracle-market/domain-core/models/pyth-feeds"
+import {
+  buildDiscountLookup,
+  getDiscountSummary,
   type DiscountContext
 } from "@sui-oracle-market/domain-core/models/discount"
 import {
@@ -30,10 +34,6 @@ import {
 } from "@sui-oracle-market/domain-core/models/item-listing"
 import type { PriceUpdatePolicy } from "@sui-oracle-market/domain-core/models/pyth"
 import { findCreatedShopItemIds } from "@sui-oracle-market/domain-core/models/shop-item"
-import {
-  pickDedicatedGasPaymentRefFromSplit,
-  planSuiPaymentSplitTransaction
-} from "@sui-oracle-market/tooling-core/coin"
 import {
   DEFAULT_TX_GAS_BUDGET,
   NORMALIZED_SUI_COIN_TYPE,
@@ -64,7 +64,7 @@ type BuyArguments = {
   paymentCoinObjectId?: string
   mintTo?: string
   refundTo?: string
-  discountTemplateId?: string
+  discountId?: string
   maxPriceAgeSecs?: string
   maxConfidenceRatioBps?: string
   skipPriceUpdate?: boolean
@@ -114,7 +114,7 @@ runSuiScript(
 
     const discountContext = await resolveDiscountContext({
       claimDiscount: false,
-      discountTemplateId: inputs.discountTemplateId,
+      discountId: inputs.discountId,
       suiClient: tooling.suiClient
     })
 
@@ -127,7 +127,25 @@ runSuiScript(
           : "pyth-update"
     let paymentCoinMinimumBalance: bigint | undefined = undefined
     let paymentCoinObjectId: string | undefined = undefined
-    let dedicatedGasPaymentRef: SuiObjectRef | undefined
+    const pythBaseUpdateFee =
+      isSuiPayment && quotePriceUpdateMode === "pyth-update"
+        ? await fetchPythBaseUpdateFee({
+            networkName: tooling.network.networkName,
+            suiClient: tooling.suiClient,
+            pythConfigOverride: tooling.suiConfig.network.pyth
+          })
+        : undefined
+    const pythUpdateData =
+      isSuiPayment && quotePriceUpdateMode === "pyth-update"
+        ? await fetchPythPriceFeedUpdateData({
+            networkName: tooling.network.networkName,
+            feedIdHex: acceptedCurrencySummary.feedIdHex,
+            hermesUrlOverride: inputs.hermesUrl,
+            pythConfigOverride: tooling.suiConfig.network.pyth
+          })
+        : undefined
+    const requiredSuiGasBalance =
+      BigInt(DEFAULT_TX_GAS_BUDGET) + (pythBaseUpdateFee ?? 0n)
 
     if (isSuiPayment) {
       const discountedPriceUsdCents =
@@ -146,7 +164,7 @@ runSuiScript(
         objectId: SUI_CLOCK_ID
       })
 
-      paymentCoinMinimumBalance = await estimateRequiredAmount({
+      const requiredAmount = await estimateRequiredAmount({
         shopPackageId,
         shopShared,
         coinType: inputs.coinType,
@@ -161,48 +179,22 @@ runSuiScript(
         suiClient: tooling.suiClient,
         priceUpdateMode: quotePriceUpdateMode,
         hermesUrlOverride: inputs.hermesUrl,
-        pythConfigOverride: tooling.suiConfig.network.pyth
+        pythConfigOverride: tooling.suiConfig.network.pyth,
+        pythUpdateData
       })
 
-      if (paymentCoinMinimumBalance === undefined) {
+      if (requiredAmount === undefined) {
         throw new Error("Oracle quote unavailable for SUI payment.")
       }
 
-      const splitPlan = await planSuiPaymentSplitTransaction(
-        {
-          owner: signerAddress,
-          paymentMinimum: paymentCoinMinimumBalance,
-          gasBudget: BigInt(DEFAULT_TX_GAS_BUDGET),
-          splitGasBudget: DEFAULT_TX_GAS_BUDGET,
-          paymentCoinObjectId: inputs.paymentCoinObjectId
-        },
-        { suiClient: tooling.suiClient }
-      )
-
-      if (splitPlan.needsSplit && splitPlan.transaction) {
-        if (!cliArguments.json) {
-          logKeyValueYellow("SUI-split")(
-            "Creating payment and gas coins for SUI checkout."
-          )
-        }
-
-        const splitExecution = await tooling.executeTransactionWithSummary({
-          transaction: splitPlan.transaction,
-          signer: tooling.loadedEd25519KeyPair,
-          summaryLabel: "sui-split",
-          devInspect: cliArguments.devInspect,
-          dryRun: cliArguments.dryRun
-        })
-
-        if (cliArguments.dryRun || !splitExecution.execution) return
-
-        dedicatedGasPaymentRef = pickDedicatedGasPaymentRefFromSplit({
-          splitTransactionBlock: splitExecution.execution.transactionResult,
-          paymentCoinObjectId: splitPlan.paymentCoinObjectId
-        })
-      }
-
-      paymentCoinObjectId = splitPlan.paymentCoinObjectId
+      paymentCoinMinimumBalance = addExecutionQuoteBuffer(requiredAmount)
+      paymentCoinObjectId = await resolvePaymentCoinObjectId({
+        providedCoinObjectId: inputs.paymentCoinObjectId,
+        coinType: inputs.coinType,
+        signerAddress,
+        suiClient: tooling.suiClient,
+        minimumBalance: undefined
+      })
     }
 
     if (!paymentCoinObjectId) {
@@ -241,19 +233,20 @@ runSuiScript(
         pythPriceInfoShared,
         pythFeedIdHex: acceptedCurrencySummary.feedIdHex,
         paymentCoinObjectId,
-        dedicatedGasPaymentRef,
+        suiPaymentAmount: isSuiPayment ? paymentCoinMinimumBalance : undefined,
         coinType: inputs.coinType,
         itemType: listingSummary.itemType,
         mintTo,
         refundTo,
         maxPriceAgeSecs: inputs.maxPriceAgeSecs,
         maxConfidenceRatioBps: inputs.maxConfidenceRatioBps,
-        gasBudget: DEFAULT_TX_GAS_BUDGET,
+        gasBudget: Number(requiredSuiGasBalance),
         discountContext,
         skipPriceUpdate: inputs.skipPriceUpdate,
         priceUpdatePolicy: inputs.priceUpdatePolicy,
         hermesUrlOverride: inputs.hermesUrl,
         pythConfigOverride: tooling.suiConfig.network.pyth,
+        pythUpdateData,
         networkName: tooling.suiConfig.network.networkName,
         signerAddress,
         onWarning: cliArguments.json
@@ -340,10 +333,10 @@ runSuiScript(
       description:
         "Address that receives any refunded change (defaults to the signer address)."
     })
-    .option("discountTemplateId", {
-      alias: ["discount-template-id", "template-id"],
+    .option("discountId", {
+      alias: ["discount-id"],
       type: "string",
-      description: "Optional discount template ID to apply during checkout."
+      description: "Optional discount ID to apply during checkout."
     })
     .option("maxPriceAgeSecs", {
       alias: ["max-price-age-secs"],
@@ -410,22 +403,18 @@ const resolveDiscountedPriceUsdCentsForPurchase = async ({
 }): Promise<bigint | undefined> => {
   if (!listingSummary.basePriceUsdCents) return undefined
 
-  const templateSummary =
+  const discountSummary =
     discountContext.mode === "none"
       ? undefined
-      : await getDiscountTemplateSummary(
-          shopId,
-          discountContext.discountTemplateId,
-          suiClient
-        )
-  const discountTemplateLookup = templateSummary
-    ? buildDiscountTemplateLookup([templateSummary])
+      : await getDiscountSummary(shopId, discountContext.discountId, suiClient)
+  const discountLookup = discountSummary
+    ? buildDiscountLookup([discountSummary])
     : {}
 
   return resolveDiscountedPriceUsdCents({
     basePriceUsdCents: listingSummary.basePriceUsdCents,
     discountSelection: discountContext,
-    discountTemplateLookup
+    discountLookup
   })
 }
 
@@ -460,8 +449,8 @@ const normalizeInputs = async (
     refundTo: cliArguments.refundTo
       ? normalizeSuiAddress(cliArguments.refundTo)
       : undefined,
-    discountTemplateId: cliArguments.discountTemplateId
-      ? normalizeSuiObjectId(cliArguments.discountTemplateId)
+    discountId: cliArguments.discountId
+      ? normalizeSuiObjectId(cliArguments.discountId)
       : undefined,
     maxPriceAgeSecs: parseOptionalU64(
       cliArguments.maxPriceAgeSecs,
@@ -530,9 +519,9 @@ const logBuyContext = ({
   logKeyValueBlue("Pyth-price-info")(pythObjectId)
   logKeyValueBlue("Payment-coin")(paymentCoinObjectId)
 
-  if (discountContext.mode === "template") {
-    logKeyValueBlue("Discount")("template")
-    logKeyValueBlue("Template")(discountContext.discountTemplateId)
+  if (discountContext.mode === "discount") {
+    logKeyValueBlue("Discount")("discount")
+    logKeyValueBlue("Discount-id")(discountContext.discountId)
   } else {
     logKeyValueBlue("Discount")("none")
   }

@@ -41,21 +41,28 @@ export const logLocalnetMoveEnvironmentSyncResult = ({
 const resolveLineEnding = (contents: string) =>
   contents.includes("\r\n") ? "\r\n" : "\n"
 
-export const listMoveTomlFiles = async (
-  rootPath: string
+const listTomlFilesByName = async (
+  rootPath: string,
+  fileName: string
 ): Promise<string[]> => {
   const entries = await fs.readdir(rootPath, { withFileTypes: true })
   const filesByEntry = await Promise.all(
     entries.map(async (entry): Promise<string[]> => {
       const fullPath = path.join(rootPath, entry.name)
-      if (entry.isDirectory()) return listMoveTomlFiles(fullPath)
-      if (entry.isFile() && entry.name === "Move.toml") return [fullPath]
+      if (entry.isDirectory()) return listTomlFilesByName(fullPath, fileName)
+      if (entry.isFile() && entry.name === fileName) return [fullPath]
       return []
     })
   )
 
   return filesByEntry.flat()
 }
+
+export const listMoveTomlFiles = async (rootPath: string): Promise<string[]> =>
+  listTomlFilesByName(rootPath, "Move.toml")
+
+const listPublishedTomlFiles = async (rootPath: string): Promise<string[]> =>
+  listTomlFilesByName(rootPath, "Published.toml")
 
 const trimLeadingEmptyLines = (contents: string) =>
   contents.replace(/^(?:\s*\r?\n)+/, "")
@@ -420,4 +427,39 @@ export const clearPublishedEntryForNetwork = async ({
 
   await fs.writeFile(publishedTomlPath, updatedContents)
   return { publishedTomlPath, didUpdate: true }
+}
+
+export const clearPublishedEntriesForNetwork = async ({
+  rootPath,
+  networkName
+}: {
+  rootPath: string
+  networkName: string | undefined
+}): Promise<{ updatedPublishedTomlPaths: string[] }> => {
+  if (!networkName) return { updatedPublishedTomlPaths: [] }
+
+  let publishedTomlPaths: string[]
+  try {
+    publishedTomlPaths = await listPublishedTomlFiles(rootPath)
+  } catch (error) {
+    if (isErrnoWithCode(error, "ENOENT"))
+      return { updatedPublishedTomlPaths: [] }
+    throw error
+  }
+
+  const updatedPublishedTomlPaths = (
+    await Promise.all(
+      publishedTomlPaths.map(async (publishedTomlPath) => {
+        const clearResult = await clearPublishedEntryForNetwork({
+          packagePath: path.dirname(publishedTomlPath),
+          networkName
+        })
+        return clearResult.didUpdate ? clearResult.publishedTomlPath : undefined
+      })
+    )
+  ).filter((publishedTomlPath): publishedTomlPath is string =>
+    Boolean(publishedTomlPath)
+  )
+
+  return { updatedPublishedTomlPaths }
 }

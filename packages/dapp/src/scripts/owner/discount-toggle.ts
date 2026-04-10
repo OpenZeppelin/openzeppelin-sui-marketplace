@@ -1,17 +1,17 @@
 /**
- * Enables or disables a DiscountTemplate (active flag).
+ * Enables or disables a Discount (active flag).
  * Requires the ShopOwnerCap capability.
  */
 import yargs from "yargs"
 
-import { buildToggleDiscountTemplateTransaction } from "@sui-oracle-market/domain-core/ptb/discount-template"
+import { buildToggleDiscountTransaction } from "@sui-oracle-market/domain-core/ptb/discount"
 import { runSuiScript } from "@sui-oracle-market/tooling-node/process"
 import {
-  emitOrLogDiscountTemplateMutationResult,
-  executeDiscountTemplateMutation,
-  fetchDiscountTemplateSummaryForMutation,
-  resolveOwnerTemplateMutationContext
-} from "./discount-template-script-helpers.ts"
+  emitOrLogDiscountMutationResult,
+  executeDiscountMutation,
+  fetchDiscountSummaryForMutation,
+  resolveOwnerDiscountMutationContext
+} from "./discount-script-helpers.ts"
 
 runSuiScript(
   async (tooling, cliArguments) => {
@@ -23,48 +23,46 @@ runSuiScript(
       objectId: inputs.shopId
     })
 
-    const toggleDiscountTemplateTransaction =
-      buildToggleDiscountTemplateTransaction({
-        packageId: inputs.packageId,
-        shop: shopSharedObject,
-        discountTemplateId: inputs.discountTemplateId,
-        active: inputs.active,
-        ownerCapId: inputs.ownerCapId
-      })
+    const toggleDiscountTransaction = buildToggleDiscountTransaction({
+      packageId: inputs.packageId,
+      shop: shopSharedObject,
+      discountId: inputs.discountId,
+      active: inputs.active,
+      ownerCapId: inputs.ownerCapId
+    })
 
-    const mutationResult = await executeDiscountTemplateMutation({
+    const mutationResult = await executeDiscountMutation({
       tooling,
-      transaction: toggleDiscountTemplateTransaction,
-      summaryLabel: "toggle-discount-template",
+      transaction: toggleDiscountTransaction,
+      summaryLabel: "toggle-discount",
       devInspect: cliArguments.devInspect,
       dryRun: cliArguments.dryRun
     })
 
     if (!mutationResult) return
-    const discountTemplateSummary =
-      await fetchDiscountTemplateSummaryForMutation({
-        shopId: inputs.shopId,
-        discountTemplateId: inputs.discountTemplateId,
-        tooling
-      })
-    emitOrLogDiscountTemplateMutationResult({
-      discountTemplateSummary,
+    const discountSummary = await fetchDiscountSummaryForMutation({
+      shopId: inputs.shopId,
+      discountId: inputs.discountId,
+      tooling
+    })
+    emitOrLogDiscountMutationResult({
+      discountSummary,
       digest: mutationResult.execution.transactionResult.digest,
       transactionSummary: mutationResult.summary,
       json: cliArguments.json
     })
   },
   yargs()
-    .option("discountTemplateId", {
-      alias: ["discount-template-id", "template-id"],
+    .option("discountId", {
+      alias: ["discount-id"],
       type: "string",
-      description: "Discount template ID to toggle.",
+      description: "Discount ID to toggle.",
       demandOption: true
     })
     .option("active", {
       type: "boolean",
       description:
-        "Target active status. Use --active to enable or --no-active to disable the template.",
+        "Target active status. Use --active to enable or --no-active to disable the discount.",
       demandOption: true
     })
     .option("shopPackageId", {
@@ -110,22 +108,22 @@ const normalizeInputs = async (
     shopPackageId?: string
     shopId?: string
     ownerCapId?: string
-    discountTemplateId: string
+    discountId: string
     active: boolean
   },
   networkName: string
 ) => {
-  const ownerTemplateMutationContext =
-    await resolveOwnerTemplateMutationContext({
+  const ownerDiscountMutationContext =
+    await resolveOwnerDiscountMutationContext({
       networkName,
       shopPackageId: cliArguments.shopPackageId,
       shopId: cliArguments.shopId,
       ownerCapId: cliArguments.ownerCapId,
-      discountTemplateId: cliArguments.discountTemplateId
+      discountId: cliArguments.discountId
     })
 
   return {
-    ...ownerTemplateMutationContext,
+    ...ownerDiscountMutationContext,
     active: cliArguments.active
   }
 }

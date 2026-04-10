@@ -12,20 +12,20 @@ import type { SuiTransactionBlockResponse } from "@mysten/sui/client"
 import type { IdentifierString } from "@mysten/wallet-standard"
 import {
   defaultStartTimestampSeconds,
-  deriveTemplateStatus,
-  extractDiscountTemplateIdFromCreatedEvents,
-  extractDiscountTemplateTableEntryFieldIdFromCreatedObjects,
-  getDiscountTemplateSummary,
+  deriveDiscountStatus,
+  extractDiscountIdFromCreatedEvents,
+  extractDiscountTableEntryFieldIdFromCreatedObjects,
+  getDiscountSummary,
   parseDiscountRuleScheduleStringInputs,
   parseDiscountRuleKind,
   parseDiscountRuleValue,
   validateDiscountSchedule,
   type DiscountRuleKindLabel,
-  type DiscountTemplateSummary,
+  type DiscountSummary,
   type NormalizedRuleKind
 } from "@sui-oracle-market/domain-core/models/discount"
 import { normalizeListingId } from "@sui-oracle-market/domain-core/models/item-listing"
-import { buildCreateDiscountTemplateTransaction } from "@sui-oracle-market/domain-core/ptb/discount-template"
+import { buildCreateDiscountTransaction } from "@sui-oracle-market/domain-core/ptb/discount"
 import { deriveRelevantPackageId } from "@sui-oracle-market/tooling-core/object"
 import { getSuiSharedObject } from "@sui-oracle-market/tooling-core/shared-object"
 import { ENetwork } from "@sui-oracle-market/tooling-core/types"
@@ -75,7 +75,7 @@ type DiscountInputs = {
 export type DiscountTransactionSummary = DiscountInputs & {
   digest: string
   transactionBlock: SuiTransactionBlockResponse
-  discountTemplateId?: string
+  discountId?: string
 }
 
 type TransactionState =
@@ -243,7 +243,7 @@ export const useAddDiscountModalState = ({
 }: {
   open: boolean
   shopId?: string
-  onDiscountCreated?: (template?: DiscountTemplateSummary) => void
+  onDiscountCreated?: (discount?: DiscountSummary) => void
 }): AddDiscountModalState => {
   const currentAccount = useCurrentAccount()
   const { currentWallet } = useCurrentWallet()
@@ -410,7 +410,7 @@ export const useAddDiscountModalState = ({
         suiClient
       })
 
-      const createDiscountTransaction = buildCreateDiscountTemplateTransaction({
+      const createDiscountTransaction = buildCreateDiscountTransaction({
         packageId: shopPackageId,
         shop: shopShared,
         appliesToListingId: discountInputs.appliesToListingId,
@@ -445,20 +445,19 @@ export const useAddDiscountModalState = ({
         transactionBlock = await waitForTransactionBlock(suiClient, digest)
       }
 
-      const discountTemplateId = extractDiscountTemplateIdFromCreatedEvents({
+      const discountId = extractDiscountIdFromCreatedEvents({
         events: transactionBlock.events,
         shopId: resolvedShopId
       })
-      const discountTemplateTableEntryFieldId =
-        extractDiscountTemplateTableEntryFieldIdFromCreatedObjects({
+      const discountTableEntryFieldId =
+        extractDiscountTableEntryFieldIdFromCreatedObjects({
           createdObjects: extractCreatedObjects(transactionBlock)
         })
 
-      const optimisticTemplate = discountTemplateId
+      const optimisticDiscount = discountId
         ? {
-            discountTemplateId,
-            tableEntryFieldId:
-              discountTemplateTableEntryFieldId ?? discountTemplateId,
+            discountId,
+            tableEntryFieldId: discountTableEntryFieldId ?? discountId,
             shopId: resolvedShopId,
             appliesToListingId: discountInputs.appliesToListingId,
             ruleDescription: formatDiscountRulePreview({
@@ -470,7 +469,7 @@ export const useAddDiscountModalState = ({
             maxRedemptions: discountInputs.maxRedemptions?.toString(),
             redemptions: "0",
             activeFlag: true,
-            status: deriveTemplateStatus({
+            status: deriveDiscountStatus({
               activeFlag: true,
               startsAt: discountInputs.startsAt,
               expiresAt: discountInputs.expiresAt,
@@ -486,18 +485,14 @@ export const useAddDiscountModalState = ({
           ...discountInputs,
           digest,
           transactionBlock,
-          discountTemplateId
+          discountId
         }
       })
 
-      onDiscountCreated?.(optimisticTemplate)
+      onDiscountCreated?.(optimisticDiscount)
 
-      if (discountTemplateId) {
-        void getDiscountTemplateSummary(
-          resolvedShopId,
-          discountTemplateId,
-          suiClient
-        )
+      if (discountId) {
+        void getDiscountSummary(resolvedShopId, discountId, suiClient)
           .then((summary) => onDiscountCreated?.(summary))
           .catch(() => {})
       }

@@ -1,41 +1,35 @@
 /**
- * Fetches DiscountTemplate objects for a Shop so buyers can see current offers.
- * Templates are table-backed entries stored under the shared Shop.
+ * Fetches Discount objects for a Shop so buyers can see current offers.
+ * Discounts are table-backed entries stored under the shared Shop.
  * Read-only: no transaction is submitted.
  */
 import yargs from "yargs"
 
-import { getDiscountTemplateSummaries } from "@sui-oracle-market/domain-core/models/discount"
+import { getDiscountSummaries } from "@sui-oracle-market/domain-core/models/discount"
 import { emitJsonOutput } from "@sui-oracle-market/tooling-node/json"
 import { runSuiScript } from "@sui-oracle-market/tooling-node/process"
 import { logListContextWithHeader } from "../../utils/context.ts"
-import {
-  logDiscountTemplateSummary,
-  logEmptyList
-} from "../../utils/log-summaries.ts"
+import { logDiscountSummary, logEmptyList } from "../../utils/log-summaries.ts"
 import { resolveShopIdOrLatest } from "../../utils/shop-context.ts"
 
-type ListDiscountTemplatesArguments = {
+type ListDiscountsArguments = {
   shopId?: string
   json?: boolean
 }
 
 runSuiScript(
-  async (tooling, cliArguments: ListDiscountTemplatesArguments) => {
+  async (tooling, cliArguments: ListDiscountsArguments) => {
     const shopId = await resolveShopIdOrLatest(
       cliArguments.shopId,
       tooling.network.networkName
     )
 
-    const discountTemplates = await getDiscountTemplateSummaries(
-      shopId,
-      tooling.suiClient
-    )
+    const discounts = await getDiscountSummaries(shopId, tooling.suiClient)
     if (
       emitJsonOutput(
         {
           shopId,
-          discountTemplates
+          discounts
         },
         cliArguments.json
       )
@@ -48,13 +42,13 @@ runSuiScript(
         rpcUrl: tooling.network.url,
         networkName: tooling.network.networkName
       },
-      { label: "Discount-templates", count: discountTemplates.length }
+      { label: "Discounts", count: discounts.length }
     )
-    if (discountTemplates.length === 0)
-      return logEmptyList("Discount-templates", "No templates found.")
+    if (discounts.length === 0)
+      return logEmptyList("Discounts", "No discounts found.")
 
-    discountTemplates.forEach((template, index) =>
-      logDiscountTemplateSummary(template, index + 1)
+    discounts.forEach((discount, index) =>
+      logDiscountSummary(discount, index + 1)
     )
   },
   yargs()

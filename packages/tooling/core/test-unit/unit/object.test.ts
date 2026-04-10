@@ -3,7 +3,7 @@ import { normalizeSuiAddress, normalizeSuiObjectId } from "@mysten/sui/utils"
 import {
   createSuiClientMock,
   buildSuiObjectResponse
-} from "../../../tests-integration/helpers/sui.ts"
+} from "../../../test-helpers/helpers/sui.ts"
 import {
   deriveRelevantPackageId,
   extractOwnerAddress,

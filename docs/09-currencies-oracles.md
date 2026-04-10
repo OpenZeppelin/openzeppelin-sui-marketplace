@@ -5,15 +5,18 @@
 This chapter explains how the shop registers accepted currencies, ties them to Pyth feeds, and enforces oracle guardrails.
 
 ## 1. Learning goals
+
 1. Register coin types as accepted currencies for a shop.
 2. Understand why currencies are stored in `Table<TypeName, AcceptedCurrency>`.
-3. Understand freshness/confidence/status-lag guardrails.
+3. Understand freshness and confidence guardrails.
 
 ## 2. Prerequisites
+
 1. Localnet running.
 2. `sui_oracle_market` published.
 
 ## 3. Run it
+
 ```bash
 # Localnet mock artifacts
 pnpm script mock:setup --buyer-address <0x...> --network localnet
@@ -30,11 +33,13 @@ pnpm script buyer:currency:list --shop-id <shopId>
 ```
 
 ## 4. EVM -> Sui translation
+
 1. **ERC-20 metadata -> coin registry + typed storage**: metadata comes from `coin_registry::Currency<T>`, and registration writes `AcceptedCurrency` into `shop.accepted_currencies: Table<TypeName, AcceptedCurrency>`.
 2. **Oracle address -> PriceInfoObject ID**: feeds are objects, not addresses. `AcceptedCurrency` stores `pyth_object_id` + `feed_id` and checks both on-chain.
-3. **Off-chain checks -> on-chain guardrails**: `quote_amount_for_price_info_object` enforces age/confidence/status-lag.
+3. **Off-chain checks -> on-chain guardrails**: `quote_amount_for_price_info_object` enforces price age and confidence bounds.
 
 ## 5. Why `Table` over `Bag` / `TableVec`
+
 The shop now stores accepted currencies in `Table<TypeName, AcceptedCurrency>` instead of raw dynamic fields or a separate currency object graph.
 
 1. **Keyed lookup is the core operation**: checkout and removal need `coin type -> currency config` directly. `Table` gives typed `contains/borrow/remove` by key.
@@ -43,18 +48,20 @@ The shop now stores accepted currencies in `Table<TypeName, AcceptedCurrency>` i
 4. **Still dynamic-field backed under the hood**: `Table` is implemented with dynamic fields but exposes a safer, clearer API in Move.
 
 ## 6. Concept deep dive: coins, registry, and oracles
+
 - **`Coin<T>` as payment resource**: checkout consumes `Coin<T>` inputs; no `approve/transferFrom` model.
   Code: `packages/dapp/contracts/oracle-market/sources/shop.move` (`buy_item`, `process_purchase`, `split_payment`)
 - **Coin registry metadata**: `coin_registry::Currency<T>` provides symbol/decimals copied into `AcceptedCurrency` during registration.
   Code: `packages/dapp/contracts/oracle-market/sources/shop.move` (`add_accepted_currency`)
 - **Strict oracle identity checks**: both `pyth_object_id` and `feed_id` must match the provided `PriceInfoObject`.
   Code: `packages/dapp/contracts/oracle-market/sources/shop.move` (`assert_price_info_identity`)
-- **Clock-based freshness**: age and status-lag are verified on-chain with `clock::Clock`.
+- **Clock-based freshness**: age is verified on-chain with `clock::Clock`.
   Code: `packages/dapp/contracts/oracle-market/sources/shop.move` (`quote_amount_for_price_info_object`)
 - **Guardrail caps**: sellers set per-currency caps and buyers may only tighten age/confidence.
-  Code: `packages/dapp/contracts/oracle-market/sources/shop.move` (`resolve_guardrail_cap`, `resolve_effective_guardrails`)
+  Code: `packages/dapp/contracts/oracle-market/sources/currency.move` (`resolve_guardrail_cap`, `quote_amount_with_guardrails`)
 
 ## 7. Code references
+
 1. `packages/dapp/contracts/oracle-market/sources/shop.move` (`AcceptedCurrency`, `add_accepted_currency`, `remove_accepted_currency`, `quote_amount_for_price_info_object`)
 2. `packages/domain/core/src/models/currency.ts` (table enumeration + currency summaries)
 3. `packages/tooling/core/src/table.ts` (table helpers)
@@ -63,43 +70,40 @@ The shop now stores accepted currencies in `Table<TypeName, AcceptedCurrency>` i
 
 **Code spotlight: register an accepted currency into the table**
 `packages/dapp/contracts/oracle-market/sources/shop.move`
+
 ```move
 public fun add_accepted_currency<T>(
   shop: &mut Shop,
   owner_cap: &ShopOwnerCap,
   currency: &coin_registry::Currency<T>,
-  price_info_object: &price_info::PriceInfoObject,
+  price_info_object: &PriceInfoObject,
   feed_id: vector<u8>,
   pyth_object_id: ID,
   max_price_age_secs_cap: Option<u64>,
   max_confidence_ratio_bps_cap: Option<u16>,
 ) {
-  assert_owner_cap!(shop, owner_cap);
+  assert!(owner_cap.shop_id == shop.id(), EInvalidOwnerCap);
 
-  let coin_type = currency_type<T>();
-  assert_accepted_currency_inputs!(
-    shop,
-    &coin_type,
-    &feed_id,
-    &pyth_object_id,
-    price_info_object,
-  );
+  let coin_type = type_name::with_defining_ids<T>();
+  assert!(!shop.accepted_currencies.contains(coin_type), EAcceptedCurrencyExists);
 
-  let accepted_currency = new_accepted_currency(
+  let accepted_currency = currency::create(
     feed_id,
     pyth_object_id,
-    coin_registry::decimals(currency),
-    coin_registry::symbol(currency),
-    resolve_guardrail_cap!(max_price_age_secs_cap, DEFAULT_MAX_PRICE_AGE_SECS),
-    resolve_guardrail_cap!(max_confidence_ratio_bps_cap, DEFAULT_MAX_CONFIDENCE_RATIO_BPS),
+    currency,
+    max_price_age_secs_cap,
+    max_confidence_ratio_bps_cap,
   );
 
   shop.accepted_currencies.add(coin_type, accepted_currency);
+
+  assert_price_info_identity!(feed_id, pyth_object_id, price_info_object);
 }
 ```
 
 **Code spotlight: owner script removes by coin type**
 `packages/dapp/src/scripts/owner/currency-remove.ts`
+
 ```ts
 const acceptedCurrency = await requireAcceptedCurrencyByCoinType({
   coinType: inputs.coinType,
@@ -116,21 +120,26 @@ const removeCurrencyTransaction = buildRemoveAcceptedCurrencyTransaction({
 ```
 
 ## 8. Worked example: localnet mock USD registration
+
 1. Open `packages/dapp/deployments/mock.localnet.json` and find `LocalMockUsd`.
 2. Use its `coinType`, `feedIdHex`, and `priceInfoObjectId`:
+
 ```bash
 pnpm script owner:currency:add \
   --coin-type <coinType> \
   --feed-id <feedIdHex> \
   --price-info-object-id <priceInfoObjectId>
 ```
+
 Expected outcome: `buyer:currency:list` shows the registered currency for your shop.
 
 ## 9. Exercises
+
 1. Add a currency with `--max-price-age-secs-cap 1`, wait >1s, then buy. Expected outcome: stale-price abort.
 2. Run `pnpm script mock:update-prices` and retry. Expected outcome: buy succeeds with fresh price data.
 
 ## 10. Diagram: accepted currency storage
+
 ```text
 Shop (shared)
   accepted_currencies: Table<TypeName, AcceptedCurrency>
@@ -139,6 +148,7 @@ Shop (shared)
 ```
 
 ## 11. Further reading (Sui and Pyth docs)
+
 - https://docs.sui.io/guides/developer/currency
 - https://docs.sui.io/references/framework/sui_sui/coin_registry
 - https://docs.sui.io/references/framework/sui/table
@@ -146,6 +156,7 @@ Shop (shared)
 - https://docs.pyth.network/price-feeds/core/use-real-time-data/pull-integration/sui
 
 ## 12. Navigation
+
 1. Previous: [08 Listings + Typed Receipts](./08-listings-receipts.md)
 2. Next: [10 Discounts + Tickets](./10-discounts-tickets.md)
 3. Back to map: [Learning Path Map](./)

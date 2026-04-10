@@ -18,14 +18,14 @@ import {
 } from "@sui-oracle-market/domain-core/models/currency"
 import {
   defaultStartTimestampSeconds,
-  getDiscountTemplateSummaries,
-  getDiscountTemplateSummary,
+  getDiscountSummaries,
+  getDiscountSummary,
   parseDiscountRuleKind,
   parseDiscountRuleValue,
-  requireDiscountTemplateIdFromCreatedEvents,
+  requireDiscountIdFromCreatedEvents,
   validateDiscountSchedule,
   type DiscountRuleKindLabel,
-  type DiscountTemplateSummary
+  type DiscountSummary
 } from "@sui-oracle-market/domain-core/models/discount"
 import {
   getItemListingSummaries,
@@ -50,11 +50,11 @@ import {
   parseUsdToCents
 } from "@sui-oracle-market/domain-core/models/shop"
 import { buildAddAcceptedCurrencyTransaction } from "@sui-oracle-market/domain-core/ptb/currency"
-import { buildCreateDiscountTemplateTransaction } from "@sui-oracle-market/domain-core/ptb/discount-template"
+import { buildCreateDiscountTransaction } from "@sui-oracle-market/domain-core/ptb/discount"
 import {
   buildAddItemListingTransaction,
-  buildAttachDiscountTemplateTransaction,
-  validateTemplateAndListing
+  buildAttachDiscountTransaction,
+  validateDiscountAndListing
 } from "@sui-oracle-market/domain-core/ptb/item-listing"
 import { buildCreateShopTransaction } from "@sui-oracle-market/domain-core/ptb/shop"
 import { resolveItemExamplesPackageId } from "@sui-oracle-market/domain-node/item-example"
@@ -101,7 +101,7 @@ import { requireCreatedArtifactIdBySuffix } from "@sui-oracle-market/tooling-nod
 import { ensureNativeSuiCurrencyRegistration } from "../../utils/coin-registry.ts"
 import {
   logAcceptedCurrencySummary,
-  logDiscountTemplateSummary,
+  logDiscountSummary,
   logItemListingSummary,
   logShopOverview
 } from "../../utils/log-summaries.ts"
@@ -187,9 +187,9 @@ type DiscountSeedDefinition = {
   maxRedemptions?: string
 }
 
-type DiscountTemplateMap = Record<
+type DiscountMap = Record<
   "fixed" | "percent",
-  { discountTemplateId: string } | undefined
+  { discountId: string } | undefined
 >
 
 type AcceptedCurrencySeedInput = {
@@ -209,9 +209,7 @@ const ACCEPTED_CURRENCY_SEEDS: AcceptedCurrencySeedInput[] = [
   { coinType: DEFAULT_WAL_COIN_TYPE }
 ]
 
-type DiscountTemplateEntry = Awaited<
-  ReturnType<typeof getDiscountTemplateSummaries>
->[number]
+type DiscountEntry = Awaited<ReturnType<typeof getDiscountSummaries>>[number]
 
 const LISTING_SEEDS: ItemListingSeedDefinition[] = [
   {
@@ -299,7 +297,7 @@ runSuiScript(
         suiClient
       })
 
-      const discountTemplateSummaries = await ensureDiscountTemplates({
+      const discountSummaries = await ensureDiscounts({
         discountSeeds: DISCOUNT_SEEDS,
         shopIdentifiers,
         tooling,
@@ -307,7 +305,7 @@ runSuiScript(
       })
 
       await ensureFixedDiscountSpotlight({
-        fixedTemplateSummary: discountTemplateSummaries.fixed,
+        fixedDiscountSummary: discountSummaries.fixed,
         preferredListingName: FIXED_DISCOUNT_LISTING_NAME,
         itemListingSummaries,
         shopIdentifiers,
@@ -323,9 +321,8 @@ runSuiScript(
         shopOverview,
         acceptedCurrencies,
         itemListings: itemListingSummaries,
-        discountTemplates: Object.values(discountTemplateSummaries).filter(
-          (template): template is DiscountTemplateSummary =>
-            template !== undefined
+        discounts: Object.values(discountSummaries).filter(
+          (discount): discount is DiscountSummary => discount !== undefined
         )
       }
     }
@@ -1237,7 +1234,7 @@ const ensureItemListing = async ({
   return listingSummary
 }
 
-const ensureDiscountTemplates = async ({
+const ensureDiscounts = async ({
   discountSeeds,
   shopIdentifiers,
   tooling,
@@ -1247,73 +1244,72 @@ const ensureDiscountTemplates = async ({
   shopIdentifiers: { packageId: string; shopId: string; ownerCapId: string }
   tooling: Tooling
   suiClient: SuiClient
-}): Promise<DiscountTemplateMap> => {
-  const existingTemplates = await getDiscountTemplateSummaries(
+}): Promise<DiscountMap> => {
+  const existingDiscounts = await getDiscountSummaries(
     shopIdentifiers.shopId,
     suiClient
   )
-  const existingTemplateIndex =
-    indexDiscountTemplateSummaries(existingTemplates)
+  const existingDiscountIndex = indexDiscountSummaries(existingDiscounts)
 
   const shopSharedObject = await tooling.getMutableSharedObject({
     objectId: shopIdentifiers.shopId
   })
 
-  const initialTemplates: DiscountTemplateMap = {
+  const initialDiscounts: DiscountMap = {
     fixed: undefined,
     percent: undefined
   }
 
   return discountSeeds.reduce(
-    async (pendingTemplates, seed) =>
-      ensureDiscountTemplate({
+    async (pendingDiscounts, seed) =>
+      ensureDiscount({
         seed,
-        existingTemplateIndex,
-        currentTemplates: await pendingTemplates,
+        existingDiscountIndex,
+        currentDiscounts: await pendingDiscounts,
         shopIdentifiers,
         shopSharedObject,
         tooling,
         suiClient
       }),
-    Promise.resolve(initialTemplates)
+    Promise.resolve(initialDiscounts)
   )
 }
 
-const ensureDiscountTemplate = async ({
+const ensureDiscount = async ({
   seed,
-  existingTemplateIndex,
-  currentTemplates,
+  existingDiscountIndex,
+  currentDiscounts,
   shopIdentifiers,
   shopSharedObject,
   tooling,
   suiClient
 }: {
   seed: DiscountSeedDefinition
-  existingTemplateIndex: Map<string, DiscountTemplateEntry>
-  currentTemplates: DiscountTemplateMap
+  existingDiscountIndex: Map<string, DiscountEntry>
+  currentDiscounts: DiscountMap
   shopIdentifiers: { packageId: string; shopId: string; ownerCapId: string }
   shopSharedObject: Awaited<ReturnType<Tooling["getSuiSharedObject"]>>
   tooling: Tooling
   suiClient: SuiClient
-}): Promise<DiscountTemplateMap> => {
+}): Promise<DiscountMap> => {
   const normalizedRuleKind = parseDiscountRuleKind(seed.ruleKind)
   const ruleValue = parseDiscountRuleValue(normalizedRuleKind, seed.value)
   const ruleValueKey = ruleValue.toString()
-  const templateKey = buildDiscountTemplateKey({
+  const discountKey = buildDiscountKey({
     ruleKind: seed.ruleKind,
     ruleValue: ruleValueKey,
     appliesToListingId: undefined
   })
 
-  const existingTemplate = existingTemplateIndex.get(templateKey)
+  const existingDiscount = existingDiscountIndex.get(discountKey)
 
-  if (existingTemplate) {
-    logKeyValueYellow("Discount")(`Using existing ${seed.ruleKind} template.`)
-    logDiscountTemplateSummary(existingTemplate)
+  if (existingDiscount) {
+    logKeyValueYellow("Discount")(`Using existing ${seed.ruleKind} discount.`)
+    logDiscountSummary(existingDiscount)
     return {
-      ...currentTemplates,
+      ...currentDiscounts,
       [seed.ruleKind]: {
-        discountTemplateId: existingTemplate.discountTemplateId
+        discountId: existingDiscount.discountId
       }
     }
   }
@@ -1330,7 +1326,7 @@ const ensureDiscountTemplate = async ({
   const { transactionResult } = await signAndExecuteWithRetry({
     tooling,
     buildTransaction: () =>
-      buildCreateDiscountTemplateTransaction({
+      buildCreateDiscountTransaction({
         packageId: shopIdentifiers.packageId,
         shop: shopSharedObject,
         appliesToListingId: undefined,
@@ -1343,42 +1339,42 @@ const ensureDiscountTemplate = async ({
       })
   })
 
-  const createdTemplateId = requireDiscountTemplateIdFromCreatedEvents({
+  const createdDiscountId = requireDiscountIdFromCreatedEvents({
     events: transactionResult.events,
     shopId: shopIdentifiers.shopId
   })
 
-  const discountTemplateSummary = await getDiscountTemplateSummary(
+  const discountSummary = await getDiscountSummary(
     shopIdentifiers.shopId,
-    createdTemplateId,
+    createdDiscountId,
     suiClient
   )
 
-  logDiscountTemplateSummary(discountTemplateSummary)
+  logDiscountSummary(discountSummary)
   return {
-    ...currentTemplates,
+    ...currentDiscounts,
     [seed.ruleKind]: {
-      discountTemplateId: createdTemplateId
+      discountId: createdDiscountId
     }
   }
 }
 
 const ensureFixedDiscountSpotlight = async ({
-  fixedTemplateSummary,
+  fixedDiscountSummary,
   preferredListingName,
   itemListingSummaries,
   shopIdentifiers,
   tooling,
   suiClient
 }: {
-  fixedTemplateSummary?: { discountTemplateId: string }
+  fixedDiscountSummary?: { discountId: string }
   preferredListingName: string
   itemListingSummaries: ItemListingSummary[]
   shopIdentifiers: { packageId: string; shopId: string; ownerCapId: string }
   tooling: Tooling
   suiClient: SuiClient
 }) => {
-  if (!fixedTemplateSummary) return
+  if (!fixedDiscountSummary) return
 
   const listing =
     itemListingSummaries.find(
@@ -1387,13 +1383,13 @@ const ensureFixedDiscountSpotlight = async ({
 
   if (!listing) return
 
-  if (listing.spotlightTemplateId === fixedTemplateSummary.discountTemplateId) {
+  if (listing.spotlightDiscountId === fixedDiscountSummary.discountId) {
     logKeyValueYellow("Spotlight")("Fixed discount already attached.")
     return
   }
   if (
-    listing.spotlightTemplateId &&
-    listing.spotlightTemplateId !== fixedTemplateSummary.discountTemplateId
+    listing.spotlightDiscountId &&
+    listing.spotlightDiscountId !== fixedDiscountSummary.discountId
   ) {
     logKeyValueYellow("Spotlight")(
       "Listing already has a spotlight discount; skipping attach."
@@ -1401,10 +1397,10 @@ const ensureFixedDiscountSpotlight = async ({
     return
   }
 
-  const resolvedIds = await validateTemplateAndListing({
+  const resolvedIds = await validateDiscountAndListing({
     shopId: shopIdentifiers.shopId,
     itemListingId: listing.itemListingId,
-    discountTemplateId: fixedTemplateSummary.discountTemplateId,
+    discountId: fixedDiscountSummary.discountId,
     suiClient
   })
 
@@ -1415,30 +1411,30 @@ const ensureFixedDiscountSpotlight = async ({
   await signAndExecuteWithRetry({
     tooling,
     buildTransaction: () =>
-      buildAttachDiscountTemplateTransaction({
+      buildAttachDiscountTransaction({
         packageId: shopIdentifiers.packageId,
         shop: shopSharedObject,
         itemListingId: resolvedIds.itemListingId,
-        discountTemplateId: resolvedIds.discountTemplateId,
+        discountId: resolvedIds.discountId,
         ownerCapId: shopIdentifiers.ownerCapId
       })
   })
 
-  const [listingSummary, discountTemplateSummary] = await Promise.all([
+  const [listingSummary, discountSummary] = await Promise.all([
     getItemListingSummary(
       shopIdentifiers.shopId,
       resolvedIds.itemListingId,
       suiClient
     ),
-    getDiscountTemplateSummary(
+    getDiscountSummary(
       shopIdentifiers.shopId,
-      resolvedIds.discountTemplateId,
+      resolvedIds.discountId,
       suiClient
     )
   ])
 
   logItemListingSummary(listingSummary)
-  logDiscountTemplateSummary(discountTemplateSummary)
+  logDiscountSummary(discountSummary)
 }
 
 const buildListingKey = (listing: ItemListingSeed) => {
@@ -1455,7 +1451,7 @@ const indexListingSummaries = (summaries: ItemListingSummary[]) =>
     return index
   }, new Map())
 
-const buildDiscountTemplateKey = ({
+const buildDiscountKey = ({
   ruleKind,
   ruleValue,
   appliesToListingId
@@ -1465,15 +1461,15 @@ const buildDiscountTemplateKey = ({
   appliesToListingId?: string
 }) => `${ruleKind}:${ruleValue}:${appliesToListingId ?? "global"}`
 
-const indexDiscountTemplateSummaries = (
-  summaries: Awaited<ReturnType<typeof getDiscountTemplateSummaries>>
+const indexDiscountSummaries = (
+  summaries: Awaited<ReturnType<typeof getDiscountSummaries>>
 ) =>
   summaries.reduce<Map<string, (typeof summaries)[number]>>(
     (index, summary) => {
       if (!summary.ruleValue) return index
       if (summary.ruleKind !== "fixed" && summary.ruleKind !== "percent")
         return index
-      const key = buildDiscountTemplateKey({
+      const key = buildDiscountKey({
         ruleKind: summary.ruleKind,
         ruleValue: summary.ruleValue,
         appliesToListingId: summary.appliesToListingId

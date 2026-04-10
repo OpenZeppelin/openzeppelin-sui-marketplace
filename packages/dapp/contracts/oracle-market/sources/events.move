@@ -1,6 +1,10 @@
+/// Events for the marketplace.
+
 module sui_oracle_market::events;
 
 use sui::event;
+
+// === Events ===
 
 /// Event emitted when a shop is created.
 public struct ShopCreated has copy, drop {
@@ -20,12 +24,14 @@ public struct ShopOwnerUpdated has copy, drop {
     previous_owner: address,
 }
 
-/// Event emitted when a shop is disabled.
-public struct ShopDisabled has copy, drop {
-    /// Shop that was disabled.
+/// Event emitted when a shop is toggled active or inactive.
+public struct ShopToggled has copy, drop {
+    /// Shop that was toggled.
     shop_id: ID,
-    /// Owner capability used for disable.
+    /// Owner capability used for the toggle.
     owner_cap_id: ID,
+    /// New shop active status.
+    active: bool,
 }
 
 /// Event emitted when an item listing is added.
@@ -54,29 +60,29 @@ public struct ItemListingRemoved has copy, drop {
     listing_id: ID,
 }
 
-/// Event emitted when a discount template is created.
-public struct DiscountTemplateCreated has copy, drop {
-    /// Shop that created the template.
+/// Event emitted when a discount is created.
+public struct DiscountCreated has copy, drop {
+    /// Shop that created the discount.
     shop_id: ID,
-    /// Created template ID.
-    discount_template_id: ID,
+    /// Created discount ID.
+    discount_id: ID,
 }
 
-/// Event emitted when a discount template is updated.
-public struct DiscountTemplateUpdated has copy, drop {
-    /// Shop that owns the updated template.
+/// Event emitted when a discount is updated.
+public struct DiscountUpdated has copy, drop {
+    /// Shop that owns the updated discount.
     shop_id: ID,
-    /// Updated template ID.
-    discount_template_id: ID,
+    /// Updated discount ID.
+    discount_id: ID,
 }
 
-/// Event emitted when a discount template is toggled.
-public struct DiscountTemplateToggled has copy, drop {
-    /// Shop that owns the toggled template.
+/// Event emitted when a discount is toggled.
+public struct DiscountToggled has copy, drop {
+    /// Shop that owns the toggled discount.
     shop_id: ID,
-    /// Toggled template ID.
-    discount_template_id: ID,
-    /// New template status.
+    /// Toggled discount ID.
+    discount_id: ID,
+    /// New discount status.
     active: bool,
 }
 
@@ -100,8 +106,8 @@ public struct AcceptedCoinRemoved has copy, drop {
 public struct DiscountRedeemed has copy, drop {
     /// Shop where redemption occurred.
     shop_id: ID,
-    /// Template used for redemption.
-    discount_template_id: ID,
+    /// Discount used for redemption.
+    discount_id: ID,
 }
 
 /// Event emitted when a purchase completes.
@@ -112,8 +118,8 @@ public struct PurchaseCompleted has copy, drop {
     listing_id: ID,
     /// Accepted currency entry used for pricing.
     pyth_price_info_object_id: ID,
-    /// Template applied to the purchase, if any.
-    discount_template_id: Option<ID>,
+    /// Discount applied to the purchase, if any.
+    discount_id: Option<ID>,
     /// Newly minted `ShopItem` receipt ID.
     minted_item_id: ID,
     /// These checkout values are not persisted on any object and must remain in the event.
@@ -121,6 +127,8 @@ public struct PurchaseCompleted has copy, drop {
     /// Final price in USD cents after discounts, used for analytics and indexing.
     discounted_price_usd_cents: u64,
 }
+
+// === Package Functions ===
 
 /// Emits a `ShopCreated` payload.
 public(package) fun emit_shop_created(shop_id: ID, owner_cap_id: ID) {
@@ -143,11 +151,12 @@ public(package) fun emit_shop_owner_updated(
     });
 }
 
-/// Emits a `ShopDisabled` payload.
-public(package) fun emit_shop_disabled(shop_id: ID, owner_cap_id: ID) {
-    event::emit(ShopDisabled {
+/// Emits a `ShopToggled` payload.
+public(package) fun emit_shop_toggled(shop_id: ID, owner_cap_id: ID, active: bool) {
+    event::emit(ShopToggled {
         shop_id,
         owner_cap_id,
+        active,
     });
 }
 
@@ -180,31 +189,31 @@ public(package) fun emit_item_listing_removed(shop_id: ID, listing_id: ID) {
     });
 }
 
-/// Emits a `DiscountTemplateCreated` payload.
-public(package) fun emit_discount_template_created(shop_id: ID, discount_template_id: ID) {
-    event::emit(DiscountTemplateCreated {
+/// Emits a `DiscountCreated` payload.
+public(package) fun emit_discount_created(shop_id: ID, discount_id: ID) {
+    event::emit(DiscountCreated {
         shop_id,
-        discount_template_id,
+        discount_id,
     });
 }
 
-/// Emits a `DiscountTemplateUpdated` payload.
-public(package) fun emit_discount_template_updated(shop_id: ID, discount_template_id: ID) {
-    event::emit(DiscountTemplateUpdated {
+/// Emits a `DiscountUpdated` payload.
+public(package) fun emit_discount_updated(shop_id: ID, discount_id: ID) {
+    event::emit(DiscountUpdated {
         shop_id,
-        discount_template_id,
+        discount_id,
     });
 }
 
-/// Emits a `DiscountTemplateToggled` payload.
-public(package) fun emit_discount_template_toggled(
+/// Emits a `DiscountToggled` payload.
+public(package) fun emit_discount_toggled(
     shop_id: ID,
-    discount_template_id: ID,
+    discount_id: ID,
     active: bool,
 ) {
-    event::emit(DiscountTemplateToggled {
+    event::emit(DiscountToggled {
         shop_id,
-        discount_template_id,
+        discount_id,
         active,
     });
 }
@@ -226,10 +235,10 @@ public(package) fun emit_accepted_coin_removed(shop_id: ID, pyth_price_info_obje
 }
 
 /// Emits a `DiscountRedeemed` payload.
-public(package) fun emit_discount_redeemed(shop_id: ID, discount_template_id: ID) {
+public(package) fun emit_discount_redeemed(shop_id: ID, discount_id: ID) {
     event::emit(DiscountRedeemed {
         shop_id,
-        discount_template_id,
+        discount_id,
     });
 }
 
@@ -238,7 +247,7 @@ public(package) fun emit_purchase_completed(
     shop_id: ID,
     listing_id: ID,
     pyth_price_info_object_id: ID,
-    discount_template_id: Option<ID>,
+    discount_id: Option<ID>,
     minted_item_id: ID,
     amount_paid: u64,
     discounted_price_usd_cents: u64,
@@ -247,14 +256,14 @@ public(package) fun emit_purchase_completed(
         shop_id,
         listing_id,
         pyth_price_info_object_id,
-        discount_template_id,
+        discount_id,
         minted_item_id,
         amount_paid,
         discounted_price_usd_cents,
     });
 }
 
-// === #[test_only] API ===
+// === Test Functions ===
 
 /// Builds a `ShopCreated` payload.
 #[test_only]
@@ -279,12 +288,13 @@ public(package) fun shop_owner_updated(
     }
 }
 
-/// Builds a `ShopDisabled` payload.
+/// Builds a `ShopToggled` payload.
 #[test_only]
-public(package) fun shop_disabled(shop_id: ID, owner_cap_id: ID): ShopDisabled {
-    ShopDisabled {
+public(package) fun shop_toggled(shop_id: ID, owner_cap_id: ID, active: bool): ShopToggled {
+    ShopToggled {
         shop_id,
         owner_cap_id,
+        active,
     }
 }
 
@@ -320,40 +330,40 @@ public(package) fun item_listing_removed(shop_id: ID, listing_id: ID): ItemListi
     }
 }
 
-/// Builds a `DiscountTemplateCreated` payload.
+/// Builds a `DiscountCreated` payload.
 #[test_only]
-public(package) fun discount_template_created(
+public(package) fun discount_created(
     shop_id: ID,
-    discount_template_id: ID,
-): DiscountTemplateCreated {
-    DiscountTemplateCreated {
+    discount_id: ID,
+): DiscountCreated {
+    DiscountCreated {
         shop_id,
-        discount_template_id,
+        discount_id,
     }
 }
 
-/// Builds a `DiscountTemplateUpdated` payload.
+/// Builds a `DiscountUpdated` payload.
 #[test_only]
-public(package) fun discount_template_updated(
+public(package) fun discount_updated(
     shop_id: ID,
-    discount_template_id: ID,
-): DiscountTemplateUpdated {
-    DiscountTemplateUpdated {
+    discount_id: ID,
+): DiscountUpdated {
+    DiscountUpdated {
         shop_id,
-        discount_template_id,
+        discount_id,
     }
 }
 
-/// Builds a `DiscountTemplateToggled` payload.
+/// Builds a `DiscountToggled` payload.
 #[test_only]
-public(package) fun discount_template_toggled(
+public(package) fun discount_toggled(
     shop_id: ID,
-    discount_template_id: ID,
+    discount_id: ID,
     active: bool,
-): DiscountTemplateToggled {
-    DiscountTemplateToggled {
+): DiscountToggled {
+    DiscountToggled {
         shop_id,
-        discount_template_id,
+        discount_id,
         active,
     }
 }
@@ -384,10 +394,10 @@ public(package) fun accepted_coin_removed(
 
 /// Builds a `DiscountRedeemed` payload.
 #[test_only]
-public(package) fun discount_redeemed(shop_id: ID, discount_template_id: ID): DiscountRedeemed {
+public(package) fun discount_redeemed(shop_id: ID, discount_id: ID): DiscountRedeemed {
     DiscountRedeemed {
         shop_id,
-        discount_template_id,
+        discount_id,
     }
 }
 
@@ -397,7 +407,7 @@ public(package) fun purchase_completed(
     shop_id: ID,
     listing_id: ID,
     pyth_price_info_object_id: ID,
-    discount_template_id: Option<ID>,
+    discount_id: Option<ID>,
     minted_item_id: ID,
     amount_paid: u64,
     discounted_price_usd_cents: u64,
@@ -406,7 +416,7 @@ public(package) fun purchase_completed(
         shop_id,
         listing_id,
         pyth_price_info_object_id,
-        discount_template_id,
+        discount_id,
         minted_item_id,
         amount_paid,
         discounted_price_usd_cents,

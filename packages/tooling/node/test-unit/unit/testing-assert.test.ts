@@ -58,28 +58,28 @@ describe("testing assert helpers", () => {
 
   it("asserts move abort details", () => {
     const error =
-      'MoveAbort(MoveLocation { module: "shop", function: 1, instruction: 0, function_name: "create_shop" }, 42)'
+      'MoveAbort(MoveLocation { module: "shop", function: 1, instruction: 0, function_name: "create_shop_and_share" }, 42)'
 
     const details = assertMoveAbort(
       {
         effects: { status: { status: "failure", error } }
       } as never,
-      { module: "shop", functionName: "create_shop", abortCode: 42 }
+      { module: "shop", functionName: "create_shop_and_share", abortCode: 42 }
     )
 
     expect(details.abortCode).toBe(42)
-    expect(details.functionName).toBe("create_shop")
+    expect(details.functionName).toBe("create_shop_and_share")
   })
 
   it("asserts move abort details with address-qualified modules", () => {
     const error =
-      "MoveAbort(AbortLocation { module: 0x2::shop, function: create_shop }, abort_code: 7)"
+      "MoveAbort(AbortLocation { module: 0x2::shop, function: create_shop_and_share }, abort_code: 7)"
 
     const details = assertMoveAbort(
       {
         effects: { status: { status: "failure", error } }
       } as never,
-      { module: "shop", functionName: "create_shop", abortCode: 7 }
+      { module: "shop", functionName: "create_shop_and_share", abortCode: 7 }
     )
 
     expect(details.abortCode).toBe(7)

@@ -42,8 +42,8 @@ type ShopSeedPayload = {
   itemListings?: Array<{
     itemListingId?: string
   }>
-  discountTemplates?: Array<{
-    discountTemplateId?: string
+  discounts?: Array<{
+    discountId?: string
   }>
 }
 
@@ -416,9 +416,7 @@ describe("owner scripts integration", () => {
         }
 
         expect((shopSeedPayload.itemListings ?? []).length).toBeGreaterThan(0)
-        expect(
-          (shopSeedPayload.discountTemplates ?? []).length
-        ).toBeGreaterThan(0)
+        expect((shopSeedPayload.discounts ?? []).length).toBeGreaterThan(0)
       }
     )
   })

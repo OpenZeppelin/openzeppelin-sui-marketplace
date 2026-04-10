@@ -15,8 +15,8 @@ import {
 } from "@sui-oracle-market/tooling-core/utils/utility"
 import type { AcceptedCurrencySummary } from "./currency.ts"
 import { getAcceptedCurrencySummaries } from "./currency.ts"
-import type { DiscountTemplateSummary } from "./discount.ts"
-import { getDiscountTemplateSummaries } from "./discount.ts"
+import type { DiscountSummary } from "./discount.ts"
+import { getDiscountSummaries } from "./discount.ts"
 import type { ItemListingSummary } from "./item-listing.ts"
 import { getItemListingSummaries } from "./item-listing.ts"
 
@@ -68,7 +68,7 @@ export type ShopOverview = {
   shopId: string
   ownerAddress: string
   name: string
-  disabled: boolean
+  active: boolean
 }
 
 export type ShopCreatedSummary = {
@@ -328,13 +328,13 @@ export const getShopOverview = async (
   )
   const ownerAddress = getShopOwnerAddressFromObject(object)
   const name = getShopNameFromObject(object)
-  const disabled = getShopDisabledFlagFromObject(object)
+  const active = getShopActiveFlagFromObject(object)
 
   return {
     shopId,
     ownerAddress,
     name,
-    disabled
+    active
   }
 }
 
@@ -343,12 +343,10 @@ export const getShopNameFromObject = (object: SuiObjectData): string => {
   return readMoveStringOrVector(shopFields.name) ?? "Unnamed Shop"
 }
 
-export const getShopDisabledFlagFromObject = (
-  object: SuiObjectData
-): boolean => {
-  const shopFields = unwrapMoveObjectFields<{ disabled?: unknown }>(object)
-  const rawDisabled = shopFields.disabled
-  return Boolean(rawDisabled as boolean)
+export const getShopActiveFlagFromObject = (object: SuiObjectData): boolean => {
+  const shopFields = unwrapMoveObjectFields<{ active?: unknown }>(object)
+  const rawActive = shopFields.active
+  return Boolean(rawActive as boolean)
 }
 
 /**
@@ -428,25 +426,25 @@ export type ShopSnapshot = {
   shopOverview: ShopOverview
   itemListings: ItemListingSummary[]
   acceptedCurrencies: AcceptedCurrencySummary[]
-  discountTemplates: DiscountTemplateSummary[]
+  discounts: DiscountSummary[]
 }
 
 export const getShopSnapshot = async (
   shopId: string,
   suiClient: SuiClient
 ): Promise<ShopSnapshot> => {
-  const [shopOverview, itemListings, acceptedCurrencies, discountTemplates] =
+  const [shopOverview, itemListings, acceptedCurrencies, discounts] =
     await Promise.all([
       getShopOverview(shopId, suiClient),
       getItemListingSummaries(shopId, suiClient),
       getAcceptedCurrencySummaries(shopId, suiClient),
-      getDiscountTemplateSummaries(shopId, suiClient)
+      getDiscountSummaries(shopId, suiClient)
     ])
 
   return {
     shopOverview,
     itemListings,
     acceptedCurrencies,
-    discountTemplates
+    discounts
   }
 }

@@ -7,85 +7,77 @@ Sui security checklist; it’s the set of mistakes that become likely once you s
 the shop.
 
 ## 1. Threat model (what to assume)
+
 When you write Move for Sui, you should assume:
+
 - The **caller controls the client** (UI/scripts) and can send any PTB they want.
 - The caller can pass **any object IDs they own** (and any shared objects they can reference).
 - The caller can lie in **pure arguments** (numbers, bytes) and can reorder commands.
 - The caller cannot forge ownership: they cannot pass you an object they don’t control, and they
-   cannot mutate objects without including the correct object references.
+  cannot mutate objects without including the correct object references.
 
 So your safety boundaries are not “which endpoint called this” but:
+
 - which objects the transaction includes, and
 - what invariants you enforce before mutating.
 
 ## 2. Capabilities are real authority (treat them like keys)
+
 In this repo, admin power is represented by owned objects:
+
 - `ShopOwnerCap`: authorizes shop administration
 - `UpgradeCap`: authorizes package upgrades (created at publish time)
 
 If you build owner tooling or UI flows:
+
 - Avoid keeping these objects in a hot wallet used for day-to-day browsing.
 - Prefer a dedicated owner key (or multisig) and treat capability transfers as key rotation.
 - Never rely on “UI gating” as security. The chain only respects object inputs.
 
 Code anchor (capability check):
 
-From `assert_owner_cap` in `packages/dapp/contracts/oracle-market/sources/shop.move`:
+From admin functions in `packages/dapp/contracts/oracle-market/sources/shop.move`:
 
 ```move
-fun assert_owner_cap(shop: &Shop, owner_cap: &ShopOwnerCap) {
-   assert!(
-      owner_cap.shop_id == shop.id.to_inner(),
-      EInvalidOwnerCap,
-   );
-}
+assert!(owner_cap.shop_id == shop.id(), EInvalidOwnerCap);
 ```
 
 The important part is not “who signed” but “does this capability bind to this shop”.
 
 ## 3. Object identity checks (anti-spoofing)
+
 Two recurring “Sui-native” checks show up throughout the module:
 
 ### 3.1 Cross-object linkage checks
-Listings/templates are stored in shop-owned tables and looked up by ID under the active `Shop`.
+
+Listings/discounts are stored in shop-owned tables and looked up by ID under the active `Shop`.
 Before any mutation, the module asserts that:
+
 - the object ID is registered under the current shop table, and
-- optional cross-links (template-to-listing / ticket-to-shop / ticket-to-listing) match the active context.
+- optional cross-links (discount-to-listing) match the active context.
 
 This prevents a caller from mixing objects from different shops.
 
 ### 3.2 Oracle object identity checks
+
 The oracle input is a shared object (`PriceInfoObject`) supplied by the caller.
 You must assume the caller will try to pass the wrong object.
 
 The module defends against this by binding two things:
+
 - the expected Pyth object ID, and
 - the expected feed identifier bytes.
 
 From `assert_price_info_identity` in `packages/dapp/contracts/oracle-market/sources/shop.move`:
 
 ```move
-fun assert_price_info_identity(
-   expected_feed_id: &vector<u8>,
-   expected_pyth_object_id: &ID,
-   price_info_object: &price_info::PriceInfoObject,
-) {
-   let confirmed_price_object = price_info::uid_to_inner(price_info_object);
-   assert!(
-      confirmed_price_object == *expected_pyth_object_id,
-      EPythObjectMismatch,
-   );
+let confirmed_price_object = price_info_object.uid_to_inner();
+assert!(confirmed_price_object == expected_pyth_object_id, EPythObjectMismatch);
 
-   let price_info = price_info::get_price_info_from_price_info_object(
-      price_info_object,
-   );
-   let identifier = price_info::get_price_identifier(&price_info);
-   let identifier_bytes = price_identifier::get_bytes(&identifier);
-   assert!(
-      bytes_equal(expected_feed_id, &identifier_bytes),
-      EFeedIdentifierMismatch,
-   );
-}
+let price_info = price_info::get_price_info_from_price_info_object(price_info_object);
+let identifier = price_info.get_price_identifier();
+let identifier_bytes = identifier.get_bytes();
+assert!(expected_feed_id == identifier_bytes, EFeedIdentifierMismatch);
 ```
 
 If you extend the oracle model (multiple feeds, fallback feeds, cross rates), keep this property:
@@ -93,98 +85,98 @@ your on-chain code should be able to prove “this object is the feed we intende
 the RPC, the UI, or scripts.
 
 ## 4. Oracle guardrails (freshness, confidence, status)
+
 Oracles are the main “external dependency” here. The shop enforces guardrails on-chain so
 frontends cannot bypass them:
+
 - **Age**: max staleness allowed
 - **Confidence**: max $/ ratio (sigma/mu) to reject noisy feeds
-- **Status lag**: rejects feeds whose attestation is too far behind publish time
 
 Design detail worth keeping:
-- Sellers set **caps** per currency. Buyers can only tighten age/confidence; status-lag is enforced
-  using the seller cap. This is similar to slippage limits, but enforced with explicit caps.
+
+- Sellers set **caps** per currency. Buyers can only tighten age/confidence. This is similar to slippage limits, but enforced with explicit caps.
 
 If you build new checkout flows, don’t move these checks “off-chain for performance”.
 They are correctness checks.
 
 Code anchor (guardrail caps):
 
-From `resolve_effective_guardrails` in `packages/dapp/contracts/oracle-market/sources/shop.move`:
+From `quote_amount_with_guardrails` in `packages/dapp/contracts/oracle-market/sources/currency.move`:
 
 ```move
-fun resolve_effective_guardrails(
-   max_price_age_secs: Option<u64>,
-   max_confidence_ratio_bps: Option<u16>,
-   accepted_currency: &AcceptedCurrency,
-): (u64, u16) {
-   let requested_max_age = max_price_age_secs.destroy_or!(
-      accepted_currency.max_price_age_secs_cap
-   );
-   let requested_confidence_ratio = max_confidence_ratio_bps.destroy_or!(
-      accepted_currency.max_confidence_ratio_bps_cap
-   );
-   let effective_max_age =
-      requested_max_age.min(accepted_currency.max_price_age_secs_cap);
-   let effective_confidence_ratio =
-      requested_confidence_ratio.min(accepted_currency.max_confidence_ratio_bps_cap);
-   (effective_max_age, effective_confidence_ratio)
-}
+let requested_max_age = max_price_age_secs.destroy_or!(accepted_currency.max_price_age_secs_cap);
+let effective_max_age = requested_max_age.min(accepted_currency.max_price_age_secs_cap);
+
+let requested_confidence_ratio = max_confidence_ratio_bps.destroy_or!(accepted_currency.max_confidence_ratio_bps_cap);
+let effective_confidence_ratio = requested_confidence_ratio.min(accepted_currency.max_confidence_ratio_bps_cap);
 ```
 
 ## 5. Shared-object contention and DoS shape
+
 On Sui, shared objects are the concurrency boundary. If you put too much state behind a single
 shared object, you create a performance bottleneck and a DoS surface.
 
-This repo intentionally shards state:
-- `Shop` is shared, but most mutations happen on sibling shared objects (`ItemListing`,
-   `AcceptedCurrency`, `DiscountTemplate`).
-- `Shop` mainly carries markers and small metadata.
+This repo intentionally keeps state under one shared root:
+
+- `Shop` is shared and stores listings/currencies/discounts in typed `Table` collections.
+- Mutations are scoped to table entries keyed by listing/currency/discount IDs.
 
 When you add new features, sanity-check:
+
 - “Does this force every transaction to touch the `Shop` object?”
 - “Does this introduce loops over unbounded dynamic fields in an entry function?”
 
 If you need enumeration, prefer:
+
 - off-chain enumeration + on-chain membership checks, or
-- bounded admin-only maintenance functions (like pruning claims) that accept explicit lists.
+- bounded admin-only maintenance functions that accept explicit lists.
 
-## 6. Discount templates: bounded redemption and listing scope
-Discount redemption is now template-based (no separate ticket objects).
-The safety properties are enforced directly on the template and checkout path:
+## 6. Discounts: bounded redemption and listing scope
 
-- template must be active;
-- template must be within its time window;
-- listing-scoped templates must match the purchased listing;
+Discount redemption is now discount-based (no separate ticket objects).
+The safety properties are enforced directly on the discount and checkout path:
+
+- discount must be active;
+- discount must be within its time window;
+- listing-scoped discounts must match the purchased listing;
 - `max_redemptions`, when present, must be greater than `0` and is enforced against `redemptions`.
 
 This keeps discount rules auditable and deterministic without introducing extra owned claim objects.
 
 ## 7. Package IDs, upgrades, and environment drift
+
 Two gotchas that bite teams coming from EVM:
 
-1) **New code means new package IDs.**
+1. **New code means new package IDs.**
+
 - Deploy artifacts (`packages/dapp/deployments/deployment.<network>.json`) are the source of truth.
 - The UI and scripts must be pinned to the correct package ID for the network.
 
-2) **Localnet regenesis changes every object ID.**
+2. **Localnet regenesis changes every object ID.**
+
 - If you regenesis, all object IDs change and artifacts must be regenerated.
 
 Treat this as part of your operational security: “wrong package ID” is not just a UX bug; it can
 turn into signing transactions against a different contract instance than intended.
 
 ## 8. Extension checklist (quick)
+
 Before you ship a modification to the Move module:
+
 - Check every entry function for: (a) shop disabled enforcement where appropriate, (b) shop/object
-   linkage checks, (c) coin type checks when handling payment.
+  linkage checks, (c) coin type checks when handling payment.
 - Avoid unbounded loops in entry functions.
 - Keep oracle identity + guardrails on-chain.
 - Decide transfer semantics for any new owned object (is it a receipt? a right? a credential?).
 
 ## 9. Code references
+
 1. `packages/dapp/contracts/oracle-market/sources/shop.move` (cap checks, oracle identity, guardrails)
 2. `packages/domain/core/src/flows/buy.ts` (dev-inspect quote, PTB composition, SUI gas rules)
 3. `docs/16-object-ownership.md` (ownership types and how they affect execution)
 
 ## 10. Navigation
+
 1. Previous: [19 Moving to Testnet/Mainnet](./19-moving-to-testnet.md)
 2. Next: [21 Troubleshooting](./21-troubleshooting.md)
 3. Back to map: [Learning Path Map](./)

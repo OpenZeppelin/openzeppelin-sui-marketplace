@@ -27,7 +27,7 @@ import {
 } from "@sui-oracle-market/tooling-core/utils/utility"
 import { resolveValidationMessage } from "@sui-oracle-market/tooling-core/utils/validation"
 
-export const ACCEPTED_CURRENCY_TYPE_FRAGMENT = "::shop::AcceptedCurrency"
+export const ACCEPTED_CURRENCY_TYPE_FRAGMENT = "::currency::AcceptedCurrency"
 export const TYPE_NAME_STRUCT = "0x1::type_name::TypeName"
 const SHOP_ACCEPTED_CURRENCIES_FIELD = "accepted_currencies"
 

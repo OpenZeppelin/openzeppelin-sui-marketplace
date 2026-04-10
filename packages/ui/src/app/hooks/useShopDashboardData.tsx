@@ -3,7 +3,7 @@
 import { useSuiClient } from "@mysten/dapp-kit"
 import type { SuiClient } from "@mysten/sui/client"
 import type { AcceptedCurrencySummary } from "@sui-oracle-market/domain-core/models/currency"
-import type { DiscountTemplateSummary } from "@sui-oracle-market/domain-core/models/discount"
+import type { DiscountSummary } from "@sui-oracle-market/domain-core/models/discount"
 import type { ItemListingSummary } from "@sui-oracle-market/domain-core/models/item-listing"
 import { getShopSnapshot } from "@sui-oracle-market/domain-core/models/shop"
 import type { ShopItemReceiptSummary } from "@sui-oracle-market/domain-core/models/shop-item"
@@ -23,8 +23,9 @@ type StorefrontState = {
   error?: string
   acceptedCurrencies: AcceptedCurrencySummary[]
   itemListings: ItemListingSummary[]
-  discountTemplates: DiscountTemplateSummary[]
+  discounts: DiscountSummary[]
   shopOwnerAddress?: string
+  shopActive?: boolean
   clockTimestampMs?: number
 }
 
@@ -44,8 +45,9 @@ const emptyStorefrontState = (): StorefrontState => ({
   status: "idle",
   acceptedCurrencies: [],
   itemListings: [],
-  discountTemplates: [],
+  discounts: [],
   shopOwnerAddress: undefined,
+  shopActive: undefined,
   clockTimestampMs: undefined
 })
 
@@ -77,7 +79,7 @@ const getStorefrontData = async ({
   shopId: string
   suiClient: SuiClient
 }) => {
-  // Storefront reads shared objects (listings/currencies/templates), not wallet-owned objects.
+  // Storefront reads shared objects (listings/currencies/discounts), not wallet-owned objects.
   const [snapshot, clockTimestampMs] = await Promise.all([
     getShopSnapshot(shopId, suiClient),
     getClockTimestampMs({}, { suiClient })
@@ -86,8 +88,9 @@ const getStorefrontData = async ({
   return {
     itemListings: snapshot.itemListings,
     acceptedCurrencies: snapshot.acceptedCurrencies,
-    discountTemplates: snapshot.discountTemplates,
+    discounts: snapshot.discounts,
     shopOwnerAddress: snapshot.shopOverview.ownerAddress,
+    shopActive: snapshot.shopOverview.active,
     clockTimestampMs
   }
 }
@@ -207,7 +210,7 @@ const sortPurchasedItemsLatestFirst = (items: ShopItemReceiptSummary[]) =>
  * Fetches storefront + wallet data from Sui for the dashboard.
  * Sui state lives in objects, so we query object summaries and owned objects
  * instead of reading contract storage or event logs. The hook separates:
- * - storefront: shared objects like listings, currencies, discount templates
+ * - storefront: shared objects like listings, currencies, discounts
  * - wallet: owned objects like ShopItem receipts
  * Package ID is resolved from the shop object's type so upgrades stay aligned.
  */
@@ -310,34 +313,40 @@ export const useShopDashboardData = ({
     }))
   }, [])
 
-  const upsertDiscountTemplate = useCallback(
-    (template: DiscountTemplateSummary) => {
-      setStorefrontState((previous) => {
-        const existingIndex = previous.discountTemplates.findIndex(
-          (item) => item.discountTemplateId === template.discountTemplateId
-        )
+  const upsertDiscount = useCallback((discount: DiscountSummary) => {
+    setStorefrontState((previous) => {
+      const existingIndex = previous.discounts.findIndex(
+        (item) => item.discountId === discount.discountId
+      )
 
-        if (existingIndex === -1) {
-          return {
-            ...previous,
-            discountTemplates: [template, ...previous.discountTemplates]
-          }
-        }
-
-        const nextTemplates = [...previous.discountTemplates]
-        nextTemplates[existingIndex] = {
-          ...nextTemplates[existingIndex],
-          ...template
-        }
-
+      if (existingIndex === -1) {
         return {
           ...previous,
-          discountTemplates: nextTemplates
+          discounts: [discount, ...previous.discounts]
         }
-      })
-    },
-    []
-  )
+      }
+
+      const nextDiscounts = [...previous.discounts]
+      nextDiscounts[existingIndex] = {
+        ...nextDiscounts[existingIndex],
+        ...discount
+      }
+
+      return {
+        ...previous,
+        discounts: nextDiscounts
+      }
+    })
+  }, [])
+
+  const removeDiscount = useCallback((discountId: string) => {
+    setStorefrontState((previous) => ({
+      ...previous,
+      discounts: previous.discounts.filter(
+        (discount) => discount.discountId !== discountId
+      )
+    }))
+  }, [])
 
   const upsertPurchasedItem = useCallback((receipt: ShopItemReceiptSummary) => {
     setWalletState((previous) => {
@@ -392,8 +401,9 @@ export const useShopDashboardData = ({
           error: undefined,
           acceptedCurrencies: data.acceptedCurrencies,
           itemListings: data.itemListings,
-          discountTemplates: data.discountTemplates,
+          discounts: data.discounts,
           shopOwnerAddress: data.shopOwnerAddress,
+          shopActive: data.shopActive,
           clockTimestampMs: data.clockTimestampMs
         })
       } catch (error) {
@@ -466,7 +476,8 @@ export const useShopDashboardData = ({
     upsertAcceptedCurrency,
     upsertItemListing,
     upsertPurchasedItem,
-    upsertDiscountTemplate,
+    upsertDiscount,
+    removeDiscount,
     removeItemListing,
     removeAcceptedCurrency
   }

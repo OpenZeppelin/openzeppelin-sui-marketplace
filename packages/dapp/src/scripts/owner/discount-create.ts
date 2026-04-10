@@ -1,6 +1,6 @@
 /**
- * Creates a DiscountTemplate entry in the Shop's template table.
- * Templates can be global or scoped to a listing; the Clock enforces time windows.
+ * Creates a Discount entry in the Shop's discount table.
+ * Discounts can be global or scoped to a listing; the Clock enforces time windows.
  * Requires the ShopOwnerCap capability.
  */
 import { normalizeSuiObjectId } from "@mysten/sui/utils"
@@ -9,18 +9,18 @@ import yargs from "yargs"
 import {
   defaultStartTimestampSeconds,
   discountRuleChoices,
-  requireDiscountTemplateIdFromCreatedEvents,
+  requireDiscountIdFromCreatedEvents,
   type DiscountRuleKindLabel
 } from "@sui-oracle-market/domain-core/models/discount"
 import { normalizeListingId } from "@sui-oracle-market/domain-core/models/item-listing"
-import { buildCreateDiscountTemplateTransaction } from "@sui-oracle-market/domain-core/ptb/discount-template"
+import { buildCreateDiscountTransaction } from "@sui-oracle-market/domain-core/ptb/discount"
 import { runSuiScript } from "@sui-oracle-market/tooling-node/process"
 import {
-  emitOrLogDiscountTemplateMutationResult,
-  executeDiscountTemplateMutation,
-  fetchDiscountTemplateSummaryForMutation,
-  parseDiscountTemplateRuleScheduleInputs
-} from "./discount-template-script-helpers.ts"
+  emitOrLogDiscountMutationResult,
+  executeDiscountMutation,
+  fetchDiscountSummaryForMutation,
+  parseDiscountRuleScheduleInputs
+} from "./discount-script-helpers.ts"
 import { resolveOwnerShopIdentifiers } from "../../utils/shop-context.ts"
 
 runSuiScript(
@@ -34,23 +34,22 @@ runSuiScript(
       objectId: inputs.shopId
     })
 
-    const createDiscountTemplateTransaction =
-      buildCreateDiscountTemplateTransaction({
-        packageId: inputs.packageId,
-        shop: shopSharedObject,
-        appliesToListingId: inputs.appliesToListingId,
-        ruleKind: inputs.ruleKind,
-        ruleValue: inputs.ruleValue,
-        startsAt: inputs.startsAt,
-        expiresAt: inputs.expiresAt,
-        maxRedemptions: inputs.maxRedemptions,
-        ownerCapId: inputs.ownerCapId
-      })
+    const createDiscountTransaction = buildCreateDiscountTransaction({
+      packageId: inputs.packageId,
+      shop: shopSharedObject,
+      appliesToListingId: inputs.appliesToListingId,
+      ruleKind: inputs.ruleKind,
+      ruleValue: inputs.ruleValue,
+      startsAt: inputs.startsAt,
+      expiresAt: inputs.expiresAt,
+      maxRedemptions: inputs.maxRedemptions,
+      ownerCapId: inputs.ownerCapId
+    })
 
-    const mutationResult = await executeDiscountTemplateMutation({
+    const mutationResult = await executeDiscountMutation({
       tooling,
-      transaction: createDiscountTemplateTransaction,
-      summaryLabel: "create-discount-template",
+      transaction: createDiscountTransaction,
+      summaryLabel: "create-discount",
       devInspect: cliArguments.devInspect,
       dryRun: cliArguments.dryRun
     })
@@ -58,19 +57,18 @@ runSuiScript(
     if (!mutationResult) return
     const { execution, summary } = mutationResult
 
-    const discountTemplateId = requireDiscountTemplateIdFromCreatedEvents({
+    const discountId = requireDiscountIdFromCreatedEvents({
       events: execution.transactionResult.events,
       shopId: inputs.shopId
     })
-    const discountTemplateSummary =
-      await fetchDiscountTemplateSummaryForMutation({
-        shopId: inputs.shopId,
-        discountTemplateId,
-        tooling
-      })
+    const discountSummary = await fetchDiscountSummaryForMutation({
+      shopId: inputs.shopId,
+      discountId,
+      tooling
+    })
 
-    emitOrLogDiscountTemplateMutationResult({
-      discountTemplateSummary,
+    emitOrLogDiscountMutationResult({
+      discountSummary,
       digest: execution.transactionResult.digest,
       transactionSummary: summary,
       json: cliArguments.json
@@ -114,7 +112,7 @@ runSuiScript(
       alias: ["listing-id", "applies-to"],
       type: "string",
       description:
-        "Optional item listing ID to pin this template to a single SKU."
+        "Optional item listing ID to pin this discount to a single SKU."
     })
     .option("shopPackageId", {
       alias: "shop-package-id",
@@ -182,7 +180,7 @@ const normalizeInputs = async (
     ownerCapId: cliArguments.ownerCapId
   })
 
-  const parsedRuleScheduleInputs = parseDiscountTemplateRuleScheduleInputs({
+  const parsedRuleScheduleInputs = parseDiscountRuleScheduleInputs({
     ruleKind: cliArguments.ruleKind,
     value: cliArguments.value,
     startsAt: cliArguments.startsAt,

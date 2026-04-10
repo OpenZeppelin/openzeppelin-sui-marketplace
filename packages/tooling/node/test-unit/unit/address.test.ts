@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import { Ed25519Keypair } from "@mysten/sui/keypairs/ed25519"
 import type { SuiResolvedConfig } from "../../src/config.ts"
-import { createSuiClientMock } from "../../../tests-integration/helpers/sui.ts"
+import { createSuiClientMock } from "../../../test-helpers/helpers/sui.ts"
 
 const faucetMocks = vi.hoisted(() => ({
   requestSuiFromFaucetV2: vi.fn(),

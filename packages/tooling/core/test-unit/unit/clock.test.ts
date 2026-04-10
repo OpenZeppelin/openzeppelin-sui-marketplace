@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest"
-import { createSuiClientMock } from "../../../tests-integration/helpers/sui.ts"
+import { createSuiClientMock } from "../../../test-helpers/helpers/sui.ts"
 import { getClockTimestampMs } from "../../src/clock.ts"
 
 const buildClockObject = (timestamp: number | string | bigint) => ({

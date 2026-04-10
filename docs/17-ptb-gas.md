@@ -42,34 +42,40 @@ Code: `packages/domain/core/src/flows/buy.ts` (`maybeSetDedicatedGasForSuiPaymen
 
 - **Storage fees**: object creation and mutation carry storage cost.
 - **Storage rebates**: deleting objects returns part of the storage cost.
-- **Why it matters here**: `finalize_purchase_transfers` explicitly destroys zero-value coins to reclaim storage.
+- **Why it matters here**: `buy_item` and `buy_item_with_discount` now return `(ShopItem<T>, Coin<C>)`, so callers can transfer change coins (or destroy zero-value change) explicitly in the PTB.
 
-Code: `packages/dapp/contracts/oracle-market/sources/shop.move` (`finalize_purchase_transfers`)
+Code: `packages/dapp/contracts/oracle-market/sources/shop.move` (`buy_item`, `buy_item_with_discount`)
 
 **Code spotlight: refund or destroy change**
 `packages/dapp/contracts/oracle-market/sources/shop.move`
 
 ```move
-fun finalize_purchase_transfers<TItem: store, TCoin>(
-  owed_coin_opt: Option<coin::Coin<TCoin>>,
-  change_coin: coin::Coin<TCoin>,
-  minted_item: ShopItem<TItem>,
-  payout_to: address,
-  refund_extra_to: address,
-  mint_to: address,
-) {
-  if (option::is_some(&owed_coin_opt)) {
-    let owed_coin = option::destroy_some(owed_coin_opt);
-    transfer::public_transfer(owed_coin, payout_to);
-  } else {
-    option::destroy_none(owed_coin_opt);
-  };
-  if (change_coin.value() == 0) {
-    change_coin.destroy_zero();
-  } else {
-    transfer::public_transfer(change_coin, refund_extra_to);
-  };
-  transfer::public_transfer(minted_item, mint_to);
+public fun buy_item<T: store, C>(
+  shop: &mut Shop,
+  price_info_object: &PriceInfoObject,
+  payment: Coin<C>,
+  listing_id: ID,
+  max_price_age_secs: Option<u64>,
+  max_confidence_ratio_bps: Option<u16>,
+  clock: &Clock,
+  ctx: &mut TxContext,
+): (ShopItem<T>, Coin<C>) {
+  let (owed_coin_opt, change_coin, minted_item) = shop.process_purchase<T, C>(
+    price_info_object,
+    payment,
+    listing_id,
+    shop.listing(listing_id).base_price_usd_cents(),
+    option::none(),
+    max_price_age_secs,
+    max_confidence_ratio_bps,
+    clock,
+    ctx,
+  );
+  owed_coin_opt.do!(|owed_coin| {
+    transfer::public_transfer(owed_coin, shop.owner);
+  });
+
+  (minted_item, change_coin)
 }
 ```
 
@@ -84,7 +90,7 @@ fun finalize_purchase_transfers<TItem: store, TCoin>(
 PTB
   1) update Pyth price feed (optional)
   2) buy_item or buy_item_with_discount
-  3) pay owner (convention prefers exact-amount coin; this repo may split and return change)
+  3) transfer returned item/change (or destroy zero change)
 ```
 
 ## 9. Further reading (Sui docs)

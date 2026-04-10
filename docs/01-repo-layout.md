@@ -41,6 +41,7 @@ Understand where Move code lives, how the CLI/scripts are organized, and how the
 ```
 
 What this means in practice:
+
 - **`packages/dapp`** owns Move packages, CLI scripts, and generated state artifacts under `packages/dapp/deployments`.
 - **`packages/domain/*`** is the domain SDK split into browser-safe `core` and Node-only `node`.
 - **`packages/tooling/*`** is shared infra, script and integration test helpers split into browser-safe `core` and Node-only `node`.
@@ -61,6 +62,7 @@ This workspace is intentionally layered so browser code stays browser-safe.
   - `packages/ui`: browser-only app. Must depend only on `@sui-oracle-market/tooling-core` and `@sui-oracle-market/domain-core`.
 
 ## 3. Navigation
+
 1. Previous: [00 Setup + Quickstart](./00-setup.md)
 2. Next: [02 Mental Model Shift](./02-mental-model-shift.md)
 3. Back to map: [Learning Path Map](./)

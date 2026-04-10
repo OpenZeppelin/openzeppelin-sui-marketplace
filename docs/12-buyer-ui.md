@@ -5,17 +5,20 @@
 This chapter shows the PTB buy flow and the UI path that mirrors it.
 
 ## 1. Learning goals
+
 1. Build a buy transaction that updates Pyth and purchases in one PTB.
 2. Understand coin objects as payment inputs.
 3. Run the UI and see shared vs owned data in the dashboard.
 
 ## 2. Prerequisites
+
 1. Localnet running.
 2. `sui_oracle_market` published.
 3. A Shop with listings and at least one accepted currency.
-4. Optionally, a discount template to test the discount path.
+4. Optionally, a discount to test the discount path.
 
 ## 3. Run it (CLI buy)
+
 ```bash
 pnpm script buyer:buy \
   --shop-id <shopId> \
@@ -26,11 +29,12 @@ pnpm script buyer:buy \
   --shop-id <shopId> \
   --item-listing-id <listingId> \
   --coin-type <coinType> \
-  --discount-template-id <templateId> \
+  --discount-id <discountId> \
   --claim-discount
 ```
 
 ## 4. Run it (UI)
+
 ```bash
 # packages/ui/.env.local
 # NEXT_PUBLIC_LOCALNET_CONTRACT_PACKAGE_ID=0x...
@@ -40,11 +44,13 @@ pnpm ui dev
 ```
 
 ## 5. EVM -> Sui translation
+
 1. **approve + transferFrom -> move a `Coin<T>`**: Move conventions prefer passing a coin with the exact amount by value. This repo instead splits a payment coin and returns change (SUI payments also keep a dedicated SUI coin for gas). See `buildBuyTransaction` in `packages/domain/core/src/flows/buy.ts`.
 2. **Oracle update + buy -> single PTB**: the transaction updates Pyth and buys in one block. See `maybeUpdatePythPriceFeed` in `packages/domain/core/src/flows/buy.ts`.
 3. **Localnet signing**: the UI signs in the wallet but executes through the app RPC client to avoid network mismatches. See `packages/ui/src/app/hooks/useBuyFlowModalState.ts`.
 
 ## 6. Concept deep dive: PTB and wallet execution
+
 - **Programmable Transaction Blocks (PTBs)**: a PTB is a single transaction that chains multiple
   Move calls. Here, the PTB updates the oracle and then calls `buy_item` in the same block.
   Code: `packages/domain/core/src/flows/buy.ts` (`buildBuyTransaction`)
@@ -58,17 +64,19 @@ pnpm ui dev
 - **Price update policy**: for localnet/testnet/mainnet, the UI requires a Pyth update to be added
   to the PTB; for other networks it can be auto/skip. This keeps pricing deterministic and fresh.
   Code: `packages/ui/src/app/hooks/useBuyFlowModalState.ts`
-- **Shared vs owned reads in UI**: storefront data comes from shared objects (`Shop`, templates)
-  plus `Shop` table entries (listings, currencies). Wallet data comes from owned objects (tickets, receipts).
+- **Shared vs owned reads in UI**: storefront data comes from shared objects (`Shop`, discounts)
+  plus `Shop` table entries (listings, currencies). Wallet data comes from owned objects (receipts, owner caps).
   Code: `packages/ui/src/app/hooks/useShopDashboardData.tsx`
 
 ## 7. UI map (buyer path)
+
 1. **Storefront view**: `packages/ui/src/app/components/StoreDashboard.tsx`
 2. **Buy flow modal**: `packages/ui/src/app/components/BuyFlowModal.tsx`
 3. **Shop selection**: `packages/ui/src/app/components/ShopSelection.tsx`
 4. **Owner flows**: see `docs/13-owner-ui.md`
 
 ## 8. Code references
+
 1. `packages/domain/core/src/flows/buy.ts` (buy transaction builder + Pyth update)
 2. `packages/dapp/contracts/oracle-market/sources/shop.move` (buy_item, buy_item_with_discount)
 3. `packages/dapp/src/scripts/buyer/buy.ts` (CLI buy flow)
@@ -76,28 +84,27 @@ pnpm ui dev
 5. `packages/ui/src/app/hooks/useShopDashboardData.tsx` (shared vs owned reads)
 6. PTB builder definition: `packages/domain/core/src/flows/buy.ts` (buildBuyTransaction)
 
-**Code spotlight: buy public functions infer currency from `TCoin`**
+**Code spotlight: buy public functions infer currency from `C`**
 `packages/dapp/contracts/oracle-market/sources/shop.move`
+
 ```move
-public fun buy_item<TItem: store, TCoin>(
+public fun buy_item<T: store, C>(
   shop: &mut Shop,
-  price_info_object: &price_info::PriceInfoObject,
-  payment: coin::Coin<TCoin>,
+  price_info_object: &PriceInfoObject,
+  payment: Coin<C>,
   listing_id: ID,
-  mint_to: address,
-  refund_extra_to: address,
   max_price_age_secs: Option<u64>,
   max_confidence_ratio_bps: Option<u16>,
-  clock: &clock::Clock,
+  clock: &Clock,
   ctx: &mut TxContext,
-) {
-  assert_shop_active!(shop);
-  assert_listing_registered!(shop, listing_id);
-  let base_price_usd_cents = shop.borrow_listing(listing_id).base_price_usd_cents;
-  let (owed_coin_opt, change_coin, minted_item) = shop.process_purchase<TItem, TCoin>(
-    listing_id,
+): (ShopItem<T>, Coin<C>) {
+  assert!(shop.active, EShopDisabled);
+
+  let base_price_usd_cents = shop.listing(listing_id).base_price_usd_cents();
+  let (owed_coin_opt, change_coin, minted_item) = shop.process_purchase<T, C>(
     price_info_object,
     payment,
+    listing_id,
     base_price_usd_cents,
     option::none(),
     max_price_age_secs,
@@ -108,12 +115,14 @@ public fun buy_item<TItem: store, TCoin>(
   owed_coin_opt.do!(|owed_coin| {
     transfer::public_transfer(owed_coin, shop.owner);
   });
-  // refund change and transfer minted item
+
+  (minted_item, change_coin)
 }
 ```
 
 **Code spotlight: CLI buy flow resolves pricing + payment inputs**
 `packages/dapp/src/scripts/buyer/buy.ts`
+
 ```ts
 const acceptedCurrencySummary = await requireAcceptedCurrencyByCoinType({
   coinType: inputs.coinType,
@@ -141,28 +150,32 @@ const paymentCoinObjectId = await resolvePaymentCoinObjectId({
 
 const discountContext = await resolveDiscountContext({
   claimDiscount: inputs.claimDiscount,
-  discountTemplateId: inputs.discountTemplateId,
+  discountId: inputs.discountId,
   suiClient: tooling.suiClient
 })
 ```
 
 ## 9. Exercises
+
 1. Pay with SUI while you only have one SUI coin object. Expected outcome: error explaining you need a second coin for gas in `packages/domain/core/src/flows/buy.ts`.
 2. Buy an item from the UI and verify a `ShopItem` receipt appears in the wallet panel. Expected outcome: receipt IDs listed in the UI.
 
 ## 10. Diagram: buy PTB
+
 ```
 PTB
   1) pyth::update_price_feeds
   2) shop::buy_item (or buy_item_with_discount)
-  3) emit events + mint ShopItem
+  3) transfer returned ShopItem + change coin to recipients
 ```
 
 ## 11. Further reading (Sui docs)
+
 - https://docs.sui.io/concepts/transactions/prog-txn-blocks
 - https://docs.sui.io/guides/developer/objects/object-ownership
 
 ## 12. Navigation
+
 1. Previous: [11 UI reference (setup + localnet execution)](./11-ui-reference.md)
 2. Next: [13 Owner Console + Admin Flows](./13-owner-ui.md)
 3. Back to map: [Learning Path Map](./)

@@ -1,6 +1,0 @@
-[package]
-name = "simple_contract"
-edition = "2024"
-
-[environments]
-test-publish = "58157b31"

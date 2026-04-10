@@ -4,8 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test:unit": "vitest --config ./vitest.config.ts",
-    "test:integration": "pnpm --filter ./tests-integration test"
+    "test:unit": "vitest --config ./vitest.config.ts"
   },
   "devDependencies": {
     "@types/node": "^22.19.2",

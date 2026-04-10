@@ -15,7 +15,7 @@ export const buildCreateShopTransaction = ({
   if (!normalizedShopName) throw new Error("Shop name cannot be empty.")
 
   const [, ownerCapability] = transaction.moveCall({
-    target: `${packageId}::shop::create_shop`,
+    target: `${packageId}::shop::create_shop_and_share`,
     arguments: [transaction.pure.string(normalizedShopName)]
   })
 
@@ -47,6 +47,32 @@ export const buildUpdateShopOwnerTransaction = ({
       shopArgument,
       transaction.object(ownerCapId),
       transaction.pure.address(newOwner)
+    ]
+  })
+
+  return transaction
+}
+
+export const buildToggleShopTransaction = ({
+  packageId,
+  shop,
+  ownerCapId,
+  active
+}: {
+  packageId: string
+  shop: WrappedSuiSharedObject
+  ownerCapId: string
+  active: boolean
+}) => {
+  const transaction = newTransaction()
+  const shopArgument = transaction.sharedObjectRef(shop.sharedRef)
+
+  transaction.moveCall({
+    target: `${packageId}::shop::toggle_shop`,
+    arguments: [
+      shopArgument,
+      transaction.object(ownerCapId),
+      transaction.pure.bool(active)
     ]
   })
 

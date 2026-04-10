@@ -6,7 +6,7 @@ import {
 } from "./id-arguments.ts"
 import { buildShopOwnerTransactionContext } from "./shop-owner-arguments.ts"
 
-export const buildCreateDiscountTemplateTransaction = ({
+export const buildCreateDiscountTransaction = ({
   packageId,
   shop,
   appliesToListingId,
@@ -34,7 +34,7 @@ export const buildCreateDiscountTemplateTransaction = ({
     })
 
   transaction.moveCall({
-    target: `${packageId}::shop::create_discount_template`,
+    target: `${packageId}::shop::create_discount`,
     arguments: [
       shopArgument,
       ownerCapabilityArgument,
@@ -54,10 +54,10 @@ export const buildCreateDiscountTemplateTransaction = ({
   return transaction
 }
 
-export const buildUpdateDiscountTemplateTransaction = ({
+export const buildUpdateDiscountTransaction = ({
   packageId,
   shop,
-  discountTemplateId,
+  discountId,
   ruleKind,
   ruleValue,
   startsAt,
@@ -68,7 +68,7 @@ export const buildUpdateDiscountTemplateTransaction = ({
 }: {
   packageId: string
   shop: WrappedSuiSharedObject
-  discountTemplateId: string
+  discountId: string
   ruleKind: NormalizedRuleKind
   ruleValue: bigint
   startsAt: bigint
@@ -85,15 +85,11 @@ export const buildUpdateDiscountTemplateTransaction = ({
   const clockArgument = transaction.sharedObjectRef(sharedClockObject.sharedRef)
 
   transaction.moveCall({
-    target: `${packageId}::shop::update_discount_template`,
+    target: `${packageId}::shop::update_discount`,
     arguments: [
       shopArgument,
       ownerCapabilityArgument,
-      buildObjectIdArgument(
-        transaction,
-        discountTemplateId,
-        "discountTemplateId"
-      ),
+      buildObjectIdArgument(transaction, discountId, "discountId"),
       transaction.pure.u8(ruleKind),
       transaction.pure.u64(ruleValue),
       transaction.pure.u64(startsAt),
@@ -106,16 +102,16 @@ export const buildUpdateDiscountTemplateTransaction = ({
   return transaction
 }
 
-export const buildToggleDiscountTemplateTransaction = ({
+export const buildToggleDiscountTransaction = ({
   packageId,
   shop,
-  discountTemplateId,
+  discountId,
   active,
   ownerCapId
 }: {
   packageId: string
   shop: WrappedSuiSharedObject
-  discountTemplateId: string
+  discountId: string
   active: boolean
   ownerCapId: string
 }) => {
@@ -126,16 +122,42 @@ export const buildToggleDiscountTemplateTransaction = ({
       shopMutable: true
     })
   transaction.moveCall({
-    target: `${packageId}::shop::toggle_discount_template`,
+    target: `${packageId}::shop::toggle_discount`,
     arguments: [
       shopArgument,
       ownerCapabilityArgument,
-      buildObjectIdArgument(
-        transaction,
-        discountTemplateId,
-        "discountTemplateId"
-      ),
+      buildObjectIdArgument(transaction, discountId, "discountId"),
       transaction.pure.bool(active)
+    ]
+  })
+
+  return transaction
+}
+
+export const buildRemoveDiscountTransaction = ({
+  packageId,
+  shop,
+  discountId,
+  ownerCapId
+}: {
+  packageId: string
+  shop: WrappedSuiSharedObject
+  discountId: string
+  ownerCapId: string
+}) => {
+  const { transaction, shopArgument, ownerCapabilityArgument } =
+    buildShopOwnerTransactionContext({
+      shop,
+      ownerCapId,
+      shopMutable: true
+    })
+
+  transaction.moveCall({
+    target: `${packageId}::shop::remove_discount`,
+    arguments: [
+      shopArgument,
+      ownerCapabilityArgument,
+      buildObjectIdArgument(transaction, discountId, "discountId")
     ]
   })
 

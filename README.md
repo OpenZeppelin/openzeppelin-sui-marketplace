@@ -1,4 +1,3 @@
-
 > [!Warning]
 > This is experimental UN-AUDITED code
 
@@ -7,9 +6,10 @@
 End-to-end example of a small on-chain market on **Sui**: items are priced in **USD cents** (stablecoin-style), while buyers can pay in **multiple currencies** using **oracle prices**.
 
 This repo is a pnpm workspace containing:
+
 - a Move package `packages/dapp/contracts/oracle-market`,
-- a CLI/script layer for localnet + seeding + owner/buyer flows `dapp/scripts`
-- state artefact captured in (`packages/dapp/deployments`) 
+- a CLI/script layer for localnet + seeding + owner/buyer flows `packages/dapp/src/scripts`
+- state artifacts captured in `packages/dapp/deployments`
 - a Next.js UI `packages/ui`,
 - a docs site with learning path to help transition from EVM/Solidity to Sui/Move `packages/learn`.
 - a tooling layer with integration test harness `packages/tooling`
@@ -17,12 +17,13 @@ This repo is a pnpm workspace containing:
 More detail (workspace layering rules, folder layout): `docs/01-repo-layout.md`.
 
 ## Prerequisites
+
 - Node.js 22+ [Install](https://nodejs.org/en/download)
 - pnpm [Install](https://pnpm.io/installation)
 - Sui CLI [Install](https://docs.sui.io/guides/developer/getting-started/sui-install)
 
-
 ## Environment Setup
+
 Set up your environment with an active address and a running localnet to publish and interact with the `oracle-market` package.
 
 Full walkthrough: [docs/05-localnet-workflow.md](docs/05-localnet-workflow.md).
@@ -47,28 +48,52 @@ sui client new-address ed25519
 # Start localnet (new terminal) (--with-faucet is recommended as some script auto fund address if fund is missing, on first start it will fund your configured address)
 pnpm script chain:localnet:start --with-faucet
 
-# Seed mocks (coins + Pyth stub + price feeds) on localnet as there is no coins or published Pyth oracle on your blank localnet
+# Optionally fund any address
+sui client faucet --address <0x...>
+
+# Seed mocks (coins + Pyth stub + price feeds) on localnet as there is no coins or published Pyth oracle on your blank localnet.
+# Important to provide correct buyer address to execute purchase flow.
 pnpm script mock:setup --buyer-address <0x...> --network localnet
+# Run with --re-publish flag to publish anew (if fails to publish again)
+# pnpm script mock:setup --buyer-address <0x...> --network localnet --re-publish
+
 ```
 
-
 ## Publish and Seed
-Load some shop data
+
+### Localnet
 
 ```bash
 # Publish oracle-market
-pnpm script move:publish --package-path oracle-market
+pnpm script move:publish --package-path oracle-market --network localnet
+# Run with --re-publish flag to publish anew (if fails to publish again)
+# pnpm script move:publish --package-path oracle-market --network localnet --re-publish
 
-# In the output of the above command, after the success message, you will find the packageId for the shop contract.
+# In the output of the above command, after the success message, you will find the `packageId` for the shop contract.
 # You can set the value as an environment variable:
 export NEXT_PUBLIC_LOCALNET_CONTRACT_PACKAGE_ID=<0x...>
-
 # or you can make it more permanent by adding it to ./packages/ui/.env file (there's a ./packages/ui/.env.example for reference)
 
-# To continue setting up the shop, listings, discounts, accepted currencies follow appropriate scripts (find the list here docs/06-scripts-reference.md) or run the seed script that will load data for each model
-pnpm script owner:shop:seed
+# To continue setting up the shop, listings, discounts, accepted currencies follow appropriate scripts (find the list here docs/06-scripts-reference.md) or run the seed script that create shop and will load data for each model
+pnpm script owner:shop:seed --network localnet
 
 # Run the UI
+pnpm ui dev
+
+```
+
+### Testnet
+
+```bash
+# Oracle market already published on the testnet.
+# You can set the value as an environment variable:
+export NEXT_PUBLIC_TESTNET_CONTRACT_PACKAGE_ID=0x2c1bfd7e255adc2170ca1e8adfc93c094881acd8ec7e80e4686b686f432b4a07
+# or you can make it more permanent by adding it to ./packages/ui/.env file (there's a ./packages/ui/.env.example for reference)
+
+# To continue setting up the shop, listings, discounts, accepted currencies follow appropriate scripts (find the list here docs/06-scripts-reference.md) or run the seed script that will create shop and load data for each model
+pnpm script owner:shop:seed --shop-package-id $NEXT_PUBLIC_TESTNET_CONTRACT_PACKAGE_ID
+
+# Run the UI (choose testnet in UI)
 pnpm ui dev
 
 ```
@@ -76,33 +101,33 @@ pnpm ui dev
 ## Learning path
 
 Start the docs website and follow along based on your goal:
+
 ```bash
 pnpm --filter learn dev
 ```
+
 and navigate to `localhost:30006` on your browser
 
 Quick gotos:
+
 - **Learning path hub:** [docs/README.md](docs/README.md)
 - **Setup + quickstart:** [docs/00-setup.md](docs/00-setup.md)
 - **Glossary:** [docs/22-glossary.md](docs/22-glossary.md)
 
-
 ## Frontend UI
 
-- UI setup + localnet execution notes: [/reading/ui-readme](/reading/ui-readme)
 - UI docs chapters: [docs/12-buyer-ui.md](docs/12-buyer-ui.md) and [docs/13-owner-ui.md](docs/13-owner-ui.md)
 - Additional UI reference notes: [docs/11-ui-reference.md](docs/11-ui-reference.md)
-
 
 ## Tests
 
 - Integration (localnet): `pnpm dapp test:integration`
 - Full testing guide: [docs/15-testing.md](docs/15-testing.md)
 
-
 ## Docs (detailed)
 
 The detailed docs live under `docs/`:
+
 - Localnet end-to-end: [docs/05-localnet-workflow.md](docs/05-localnet-workflow.md)
 - Script/CLI reference + artifacts: [docs/06-scripts-reference.md](docs/06-scripts-reference.md)
 - UI reference notes: [docs/11-ui-reference.md](docs/11-ui-reference.md)
@@ -149,6 +174,7 @@ The detailed docs live under `docs/`:
 ```
 
 What this means in practice:
+
 - **`packages/dapp`** owns Move packages, CLI scripts, and generated artifacts under `packages/dapp/deployments`.
 - **`packages/domain/*`** is the domain SDK split into browser-safe `core` and Node-only `node`.
 - **`packages/tooling/*`** is shared infra helpers split into browser-safe `core` and Node-only `node`.

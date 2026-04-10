@@ -44,7 +44,7 @@ runSuiScript(
       basePriceUsdCents: inputs.priceCents,
       stock: inputs.stock,
       spotlightDiscountId: inputs.spotlightDiscountId,
-      createSpotlightDiscountTemplate: inputs.createSpotlightDiscountTemplate
+      createSpotlightDiscount: inputs.createSpotlightDiscount
     })
 
     const mutationResult = await executeItemListingMutation({
@@ -142,37 +142,37 @@ runSuiScript(
       alias: ["spotlight-discount-id", "discount-id"],
       type: "string",
       description:
-        "Optional discount template ID to spotlight for this listing (Shop::DiscountTemplate)"
+        "Optional discount ID to spotlight for this listing (discount::Discount)"
     })
     .option("createSpotlightRuleKind", {
       alias: ["create-spotlight-rule-kind", "spotlight-rule-kind"],
       choices: discountRuleChoices,
       description:
-        "Create and attach a new spotlight template atomically: rule kind (fixed or percent)."
+        "Create and attach a new spotlight discount atomically: rule kind (fixed or percent)."
     })
     .option("createSpotlightValue", {
       alias: ["create-spotlight-value", "spotlight-value"],
       type: "string",
       description:
-        "Rule value for the atomically created spotlight template. fixed expects USD (e.g., 5.25), percent expects percentage (e.g., 12.5)."
+        "Rule value for the atomically created spotlight discount. fixed expects USD (e.g., 5.25), percent expects percentage (e.g., 12.5)."
     })
     .option("createSpotlightStartsAt", {
       alias: ["create-spotlight-starts-at", "spotlight-starts-at"],
       type: "string",
       description:
-        "Optional start epoch seconds for the atomically created spotlight template. Defaults to now when createSpotlightRuleKind is set."
+        "Optional start epoch seconds for the atomically created spotlight discount. Defaults to now when createSpotlightRuleKind is set."
     })
     .option("createSpotlightExpiresAt", {
       alias: ["create-spotlight-expires-at", "spotlight-expires-at"],
       type: "string",
       description:
-        "Optional expiry epoch seconds for the atomically created spotlight template."
+        "Optional expiry epoch seconds for the atomically created spotlight discount."
     })
     .option("createSpotlightMaxRedemptions", {
       alias: ["create-spotlight-max-redemptions", "spotlight-max-redemptions"],
       type: "string",
       description:
-        "Optional max redemptions for the atomically created spotlight template. If set, must be greater than zero."
+        "Optional max redemptions for the atomically created spotlight discount. If set, must be greater than zero."
     })
     .option("publisherId", {
       alias: "publisher-id",
@@ -213,8 +213,8 @@ const normalizeInputs = async (
   const spotlightDiscountId = normalizeOptionalId(
     cliArguments.spotlightDiscountId
   )
-  const createSpotlightDiscountTemplate =
-    normalizeCreateSpotlightTemplateInput(cliArguments)
+  const createSpotlightDiscount =
+    normalizeCreateSpotlightDiscountInput(cliArguments)
   const itemType = cliArguments.itemType.trim()
 
   if (!itemType)
@@ -225,7 +225,7 @@ const normalizeInputs = async (
     shopId,
     ownerCapId,
     spotlightDiscountId,
-    createSpotlightDiscountTemplate,
+    createSpotlightDiscount,
     itemType,
     name: cliArguments.name,
     priceCents: parseUsdToCents(cliArguments.price),
@@ -236,7 +236,7 @@ const normalizeInputs = async (
   }
 }
 
-const normalizeCreateSpotlightTemplateInput = (cliArguments: {
+const normalizeCreateSpotlightDiscountInput = (cliArguments: {
   spotlightDiscountId?: string
   createSpotlightRuleKind?: DiscountRuleKindLabel
   createSpotlightValue?: string
@@ -244,7 +244,7 @@ const normalizeCreateSpotlightTemplateInput = (cliArguments: {
   createSpotlightExpiresAt?: string
   createSpotlightMaxRedemptions?: string
 }) => {
-  const hasAnyCreateTemplateInput = [
+  const hasAnyCreateDiscountInput = [
     cliArguments.createSpotlightRuleKind,
     cliArguments.createSpotlightValue,
     cliArguments.createSpotlightStartsAt,
@@ -252,7 +252,7 @@ const normalizeCreateSpotlightTemplateInput = (cliArguments: {
     cliArguments.createSpotlightMaxRedemptions
   ].some((value) => value !== undefined)
 
-  if (!hasAnyCreateTemplateInput) return undefined
+  if (!hasAnyCreateDiscountInput) return undefined
 
   if (normalizeOptionalId(cliArguments.spotlightDiscountId))
     throw new Error(

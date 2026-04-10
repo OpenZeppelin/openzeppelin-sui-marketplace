@@ -5,11 +5,13 @@
 This chapter is the detailed testing reference (commands, env toggles, and the script testing framework).
 
 ## 1. Integration tests (localnet)
+
 ```bash
 pnpm test:integration
 ```
 
 Optional toggles:
+
 - `SUI_IT_KEEP_TEMP=1` keeps temp dirs + logs for debugging.
 - `SUI_IT_WITH_FAUCET=0` disables the local faucet (default on; tests fund via the local faucet unless a funded treasury account is available).
 - `SUI_IT_TREASURY_INDEX=<n>` forces which localnet keystore entry to use for funding.
@@ -21,18 +23,22 @@ Note: integration tests run single-threaded to avoid localnet port conflicts.
 Localnet used by tests is isolated in a temp dir and does not reuse `~/.sui` or any running localnet.
 
 ## 2. Unit tests
+
 Note: the UI package does not currently expose a `test:unit` script.
+
 ```bash
 pnpm --filter @sui-oracle-market/domain-core test:unit
 pnpm ui lint
 ```
 
 ### 2.1 Pyth mock helper for Move unit tests
+
 Use `new_price_info_object_for_test` from the Pyth mock to build a `PriceInfoObject` that behaves
 like the real oracle object but is safe for tests. This keeps oracle guardrail tests deterministic
 without requiring on-chain Pyth state.
 
 `packages/dapp/contracts/oracle-market/tests/shop_tests.move`
+
 ```move
 let price_info = pyth_price_info::new_price_info(
   attestation_time,
@@ -47,6 +53,7 @@ let price_info_id = pyth_price_info::uid_to_inner(&price_info_object);
 ```
 
 `packages/dapp/contracts/pyth-mock/sources/price_info.move`
+
 ```move
 #[test_only]
 public fun new_price_info_object_for_test(
@@ -61,11 +68,13 @@ Note: the mock package does not ship a test-only destroy helper. If you need cle
 object in your test (for example, by extracting its `UID` and calling `delete()`).
 
 ## 3. Script testing framework
+
 This repo ships a reusable testing layer in `@sui-oracle-market/tooling-node/testing` designed for scripts built on `runSuiScript`.
 
 The goal is to keep script tests fast, deterministic, and production-grade while exercising the same code paths as real users.
 
 ### 3.1 What you get
+
 - **Localnet harness** with deterministic ports, temp dirs, and cleanup.
 - **Script runner** that executes buyer/owner scripts with `ts-node` and a fully wired environment.
 - **JSON output parsing** for stable assertions.
@@ -73,12 +82,15 @@ The goal is to keep script tests fast, deterministic, and production-grade while
 - **Observability utilities** to capture logs and inspect failures without ad-hoc console hacks.
 
 ### 3.2 Directory layout (dapp)
+
 - `packages/dapp/src/scripts/owner/test-integration/` → owner script integration tests and helpers.
 - `packages/dapp/src/scripts/buyer/test-integration/` → buyer script integration tests and helpers.
 - `packages/dapp/src/utils/test-utils/helpers.ts` → shared test utilities and fixtures used by both owner/buyer suites.
 
 ### 3.2.1 Code spotlight: buyer script integration test
+
 `packages/dapp/src/scripts/buyer/test-integration/buyer-scripts.test.ts`
+
 ```ts
 it("lists item listings created by owner scripts", async () => {
   await testEnv.withTestContext("buyer-item-listings", async (context) => {
@@ -112,26 +124,31 @@ it("lists item listings created by owner scripts", async () => {
   })
 })
 ```
+
 ### 3.3 Vitest configuration
+
 Use the tooling Vitest plugin to keep test defaults consistent across packages. Example config:
+
 ```ts
 import { defineConfig } from "vitest/config"
 import { toolingVitestPlugin } from "@sui-oracle-market/tooling-node/testing/vitest-plugin"
 
 export default defineConfig({
-	plugins: [toolingVitestPlugin()],
-	test: {
-		include: ["src/scripts/**/test-integration/**/*.test.ts"],
-		testTimeout: 600_000,
-		hookTimeout: 600_000,
-		pool: "threads",
-		poolOptions: { threads: { singleThread: true } }
-	}
+  plugins: [toolingVitestPlugin()],
+  test: {
+    include: ["src/scripts/**/test-integration/**/*.test.ts"],
+    testTimeout: 600_000,
+    hookTimeout: 600_000,
+    pool: "threads",
+    poolOptions: { threads: { singleThread: true } }
+  }
 })
 ```
 
 ### 3.4 Localnet lifecycle (test mode)
+
 Each test file can share a lazily created harness, but every `withTestContext` call now starts its own fully isolated localnet + temp directory. No suite hooks or shared artifacts are required:
+
 ```ts
 import { it } from "vitest"
 import { createDappIntegrationTestEnv } from "packages/dapp/src/utils/test-utils/helpers"
@@ -139,122 +156,132 @@ import { createDappIntegrationTestEnv } from "packages/dapp/src/utils/test-utils
 const testEnv = createDappIntegrationTestEnv()
 
 it("runs a script with a clean context", async () => {
-	await testEnv.withTestContext("example", async (context) => {
-		const account = context.createAccount("publisher")
-		await context.fundAccount(account, { minimumCoinObjects: 2 })
-		// run script...
-	})
+  await testEnv.withTestContext("example", async (context) => {
+    const account = context.createAccount("publisher")
+    await context.fundAccount(account, { minimumCoinObjects: 2 })
+    // run script...
+  })
 })
 ```
 
 ### 3.5 Running scripts from tests
+
 Use the script runner to execute scripts exactly as a user would, but with stable inputs:
+
 ```ts
 import {
-	createScriptRunner,
-	publishMovePackage,
-	runScriptJson
+  createScriptRunner,
+  publishMovePackage,
+  runScriptJson
 } from "packages/dapp/src/utils/test-utils/helpers"
 
 const scriptRunner = createScriptRunner(context)
 const oracleMarketArtifact = await publishMovePackage(
-	context,
-	publisher,
-	"oracle-market"
+  context,
+  publisher,
+  "oracle-market"
 )
 
 const result = await runScriptJson<{
-	shopOverview?: { shopId?: string }
+  shopOverview?: { shopId?: string }
 }>(
-	(name, options) => scriptRunner.runOwnerScript(name, options),
-	"shop-create",
-	{
-		account: publisher,
-		args: {
-			shopPackageId: oracleMarketArtifact.packageId,
-			name: "Integration Shop"
-		}
-	}
+  (name, options) => scriptRunner.runOwnerScript(name, options),
+  "shop-create",
+  {
+    account: publisher,
+    args: {
+      shopPackageId: oracleMarketArtifact.packageId,
+      name: "Integration Shop"
+    }
+  }
 )
 ```
 
 ### 3.6 Dapp integration fixtures (recommended)
+
 Use dapp-scoped fixtures to keep setup DRY and consistent across tests:
+
 ```ts
 import {
-	createShopWithItemExamplesFixture,
-	resolveItemType,
-	seedShopWithListingAndDiscount,
-	runBuyerScriptJson
+  createShopWithItemExamplesFixture,
+  resolveItemType,
+  seedShopWithListingAndDiscount,
+  runBuyerScriptJson
 } from "packages/dapp/src/utils/test-utils/helpers"
 
 const { publisher, scriptRunner, shopId, itemExamplesPackageId } =
-	await createShopWithItemExamplesFixture(context, {
-		shopName: "Shop View Integration"
-	})
+  await createShopWithItemExamplesFixture(context, {
+    shopName: "Shop View Integration"
+  })
 
 const itemType = resolveItemType(itemExamplesPackageId, "Car")
 await seedShopWithListingAndDiscount({
-	scriptRunner,
-	publisher,
-	shopId,
-	itemType,
-	listingName: "Roadster",
-	price: "1250",
-	stock: "4",
-	ruleKind: "percent",
-	value: "10"
+  scriptRunner,
+  publisher,
+  shopId,
+  itemType,
+  listingName: "Roadster",
+  price: "1250",
+  stock: "4",
+  ruleKind: "percent",
+  value: "10"
 })
 
 const viewPayload = await runBuyerScriptJson(scriptRunner, "shop-view", {
-	account: publisher,
-	args: { shopId }
+  account: publisher,
+  args: { shopId }
 })
 ```
 
 Key points:
+
 - Use the **args map** format; it is converted to kebab-case flags.
 - Always pass `json: true` (handled by `runScriptJson`) for deterministic output parsing.
 - Prefer `createShopFixture`/`createShopWithItemExamplesFixture` to keep base setup consistent and isolated.
 
 ### 3.7 Assertions and deterministic waits
+
 Use tooling helpers for clean, deterministic checks:
+
 ```ts
 import {
-	assertTransactionSucceeded,
-	assertMoveAbort,
-	assertEventByDigest,
-	assertObjectOwnerById
+  assertTransactionSucceeded,
+  assertMoveAbort,
+  assertEventByDigest,
+  assertObjectOwnerById
 } from "@sui-oracle-market/tooling-node/testing/assert"
 import { waitForObjectState } from "@sui-oracle-market/tooling-node/testing/objects"
 
 // Example: wait for object state instead of sleeping.
 const object = await waitForObjectState({
-	suiClient: context.suiClient,
-	objectId,
-	predicate: (response) => response.data?.owner !== undefined
+  suiClient: context.suiClient,
+  objectId,
+  predicate: (response) => response.data?.owner !== undefined
 })
 
 assertObjectOwnerById({
-	suiClient: context.suiClient,
-	objectId,
-	expectedOwner: account.address
+  suiClient: context.suiClient,
+  objectId,
+  expectedOwner: account.address
 })
 ```
 
 ### 3.8 Observability
+
 Capture logs in tests without global console overrides:
+
 ```ts
 import { withCapturedConsole } from "@sui-oracle-market/tooling-node/testing/observability"
 
 const { records } = await withCapturedConsole(async () => {
-	// run script and assertions
+  // run script and assertions
 })
 
 expect(records.warn.join(" ")).toContain("warning")
 ```
 
 ### 3.9 Environment toggles for localnet tests
+
 - `SUI_IT_KEEP_TEMP=1` keep temp dirs/logs for debugging.
 - `SUI_IT_WITH_FAUCET=0` disable local faucet.
 - `SUI_IT_TREASURY_INDEX=<n>` choose the keystore entry used for funding.
@@ -264,6 +291,7 @@ expect(records.warn.join(" ")).toContain("warning")
 - `SUI_IT_SKIP_LOCALNET=1` or `SKIP_LOCALNET=1` skip localnet tests entirely (localnet guard).
 
 ### 3.10 Best practices checklist
+
 - Use `createSuiLocalnetTestEnv` for deterministic lifecycle and cleanup.
 - Avoid shared mutable state; create new accounts per test.
 - Prefer JSON output and stable parsing over log scraping.
@@ -271,6 +299,7 @@ expect(records.warn.join(" ")).toContain("warning")
 - Assert on effects, ownership, and events rather than only digests.
 
 ## 4. Navigation
+
 1. Previous: [14 Advanced (execution model + upgrades)](./14-advanced.md)
 2. Next: [18 Data Access + Indexing](./18-data-access.md)
 3. Back to map: [Learning Path Map](./)

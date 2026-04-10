@@ -4,7 +4,7 @@ import { beforeAll, beforeEach, describe, expect, it } from "vitest"
 import {
   clearExecFileQueue,
   queueExecFileResult
-} from "../../../tests-integration/helpers/child-process.ts"
+} from "../../../test-helpers/helpers/child-process.ts"
 
 let suiCli: typeof import("../../src/suiCli.ts")
 

@@ -10,7 +10,7 @@ import {
   buildTransferredObjectChange,
   buildWrappedObjectChange,
   createSuiClientMock
-} from "../../../tests-integration/helpers/sui.ts"
+} from "../../../test-helpers/helpers/sui.ts"
 import type { SuiResolvedConfig } from "../../src/config.ts"
 
 const artifactMocks = vi.hoisted(() => ({

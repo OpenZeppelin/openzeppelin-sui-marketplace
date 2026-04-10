@@ -1,6 +1,6 @@
 /**
  * Aggregates a Shop snapshot: metadata, listings, currencies, discounts, and receipts/tickets.
- * The Shop is shared; listings, currencies, and discount templates are all table-backed.
+ * The Shop is shared; listings, currencies, and discounts are all table-backed.
  * This script composes multiple reads into a single human-friendly view.
  */
 import { getShopSnapshot } from "@sui-oracle-market/domain-core/models/shop"
@@ -10,7 +10,7 @@ import yargs from "yargs"
 import { logListContextWithHeader } from "../../utils/context.ts"
 import {
   logAcceptedCurrencySummary,
-  logDiscountTemplateSummary,
+  logDiscountSummary,
   logEmptyList,
   logItemListingSummary,
   logShopOverview
@@ -24,12 +24,8 @@ runSuiScript(
       tooling.network.networkName
     )
 
-    const {
-      shopOverview,
-      itemListings,
-      acceptedCurrencies,
-      discountTemplates
-    } = await getShopSnapshot(shopId, tooling.suiClient)
+    const { shopOverview, itemListings, acceptedCurrencies, discounts } =
+      await getShopSnapshot(shopId, tooling.suiClient)
 
     if (
       emitJsonOutput(
@@ -37,7 +33,7 @@ runSuiScript(
           shopOverview,
           itemListings,
           acceptedCurrencies,
-          discountTemplates
+          discounts
         },
         cliArguments.json
       )
@@ -70,11 +66,10 @@ runSuiScript(
         logAcceptedCurrencySummary(acceptedCurrency, index + 1)
       )
 
-    if (discountTemplates.length === 0)
-      logEmptyList("Discount-templates", "No templates found.")
+    if (discounts.length === 0) logEmptyList("Discounts", "No discount found.")
     else
-      discountTemplates.forEach((discountTemplate, index) =>
-        logDiscountTemplateSummary(discountTemplate, index + 1)
+      discounts.forEach((discount, index) =>
+        logDiscountSummary(discount, index + 1)
       )
   },
   yargs()

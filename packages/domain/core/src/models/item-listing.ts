@@ -17,7 +17,7 @@ import {
 } from "@sui-oracle-market/tooling-core/utils/formatters"
 import { formatTypeNameFromFieldValue } from "@sui-oracle-market/tooling-core/utils/type-name"
 
-export const ITEM_LISTING_TYPE_FRAGMENT = "::shop::ItemListing"
+export const ITEM_LISTING_TYPE_FRAGMENT = "::listing::ItemListing"
 export const ITEM_LISTING_ADDED_EVENT_TYPE_FRAGMENT =
   "::events::ItemListingAdded"
 const SHOP_LISTINGS_FIELD = "listings"
@@ -29,7 +29,7 @@ export type ItemListingDetails = {
   itemType: string
   basePriceUsdCents?: string
   stock?: string
-  spotlightTemplateId?: string
+  spotlightDiscountId?: string
 }
 
 export type ItemListingSummary = ItemListingDetails & {
@@ -357,8 +357,8 @@ const buildItemListingDetails = (
       itemListingFields.base_price_usd_cents
     ),
     stock: formatOptionalNumericValue(itemListingFields.stock),
-    spotlightTemplateId: normalizeOptionalIdFromValue(
-      itemListingFields.spotlight_discount_template_id
+    spotlightDiscountId: normalizeOptionalIdFromValue(
+      itemListingFields.spotlight_discount_id
     )
   }
 }

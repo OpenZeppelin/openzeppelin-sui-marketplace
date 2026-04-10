@@ -1,16 +1,16 @@
 import type { Transaction } from "@mysten/sui/transactions"
 import { normalizeSuiObjectId } from "@mysten/sui/utils"
 import {
-  getDiscountTemplateSummary,
+  getDiscountSummary,
   parseDiscountRuleScheduleStringInputs,
   type DiscountRuleKindLabel,
-  type DiscountTemplateSummary,
+  type DiscountSummary,
   type NormalizedRuleKind
 } from "@sui-oracle-market/domain-core/models/discount"
 import type { Tooling } from "@sui-oracle-market/tooling-node/factory"
 import { emitJsonOutput } from "@sui-oracle-market/tooling-node/json"
 import { logKeyValueGreen } from "@sui-oracle-market/tooling-node/log"
-import { logDiscountTemplateSummary } from "../../utils/log-summaries.ts"
+import { logDiscountSummary } from "../../utils/log-summaries.ts"
 import { resolveOwnerShopIdentifiers } from "../../utils/shop-context.ts"
 
 type ToolingExecutionResult = Awaited<
@@ -18,18 +18,18 @@ type ToolingExecutionResult = Awaited<
 >
 type ExecutedTransaction = NonNullable<ToolingExecutionResult["execution"]>
 
-export const resolveOwnerTemplateMutationContext = async ({
+export const resolveOwnerDiscountMutationContext = async ({
   networkName,
   shopPackageId,
   shopId,
   ownerCapId,
-  discountTemplateId
+  discountId
 }: {
   networkName: string
   shopPackageId?: string
   shopId?: string
   ownerCapId?: string
-  discountTemplateId: string
+  discountId: string
 }) => {
   const {
     packageId,
@@ -46,11 +46,11 @@ export const resolveOwnerTemplateMutationContext = async ({
     packageId,
     shopId: resolvedShopId,
     ownerCapId: resolvedOwnerCapId,
-    discountTemplateId: normalizeSuiObjectId(discountTemplateId)
+    discountId: normalizeSuiObjectId(discountId)
   }
 }
 
-export const parseDiscountTemplateRuleScheduleInputs = ({
+export const parseDiscountRuleScheduleInputs = ({
   ruleKind,
   value,
   startsAt,
@@ -80,7 +80,7 @@ export const parseDiscountTemplateRuleScheduleInputs = ({
     maxRedemptionsLabel: "maxRedemptions"
   })
 
-export const executeDiscountTemplateMutation = async ({
+export const executeDiscountMutation = async ({
   tooling,
   transaction,
   summaryLabel,
@@ -111,26 +111,26 @@ export const executeDiscountTemplateMutation = async ({
   return { execution, summary }
 }
 
-export const fetchDiscountTemplateSummaryForMutation = async ({
+export const fetchDiscountSummaryForMutation = async ({
   shopId,
-  discountTemplateId,
+  discountId,
   tooling
 }: {
   shopId: string
-  discountTemplateId: string
+  discountId: string
   tooling: Tooling
-}): Promise<DiscountTemplateSummary> =>
-  getDiscountTemplateSummary(shopId, discountTemplateId, tooling.suiClient)
+}): Promise<DiscountSummary> =>
+  getDiscountSummary(shopId, discountId, tooling.suiClient)
 
-export const emitOrLogDiscountTemplateMutationResult = ({
-  discountTemplateSummary,
+export const emitOrLogDiscountMutationResult = ({
+  discountSummary,
   digest,
   transactionSummary,
   json,
   extraJsonFields = {},
   extraLogFields = []
 }: {
-  discountTemplateSummary: DiscountTemplateSummary
+  discountSummary: DiscountSummary
   digest?: string
   transactionSummary: ToolingExecutionResult["summary"]
   json?: boolean
@@ -140,7 +140,7 @@ export const emitOrLogDiscountTemplateMutationResult = ({
   if (
     emitJsonOutput(
       {
-        discountTemplate: discountTemplateSummary,
+        discount: discountSummary,
         ...extraJsonFields,
         digest,
         transactionSummary
@@ -150,7 +150,7 @@ export const emitOrLogDiscountTemplateMutationResult = ({
   )
     return true
 
-  logDiscountTemplateSummary(discountTemplateSummary)
+  logDiscountSummary(discountSummary)
   for (const extraLogField of extraLogFields) {
     const normalizedLogFieldValue =
       typeof extraLogField.value === "bigint"
