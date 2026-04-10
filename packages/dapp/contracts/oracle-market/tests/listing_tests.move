@@ -522,44 +522,6 @@ fun remove_item_listing_rejects_listing_with_active_bound_discount() {
 }
 
 #[test]
-fun remove_item_listing_allows_listing_with_inactive_bound_discount() {
-    let mut ctx = tx_context::dummy();
-    let (mut shop, owner_cap) = shop::test_setup_shop(owner(), &mut ctx);
-    let listing_id = shop.add_item_listing<test_helpers::TestItem>(
-        &owner_cap,
-        b"Discount Paused Listing".to_string(),
-        45_00,
-        2,
-        option::none(),
-        &mut ctx,
-    );
-    let discount_id = shop.create_discount(
-        &owner_cap,
-        option::some(listing_id),
-        0,
-        500,
-        0,
-        option::none(),
-        option::none(),
-        &mut ctx,
-    );
-
-    shop.toggle_discount(
-        &owner_cap,
-        discount_id,
-        false,
-    );
-    shop.remove_item_listing(
-        &owner_cap,
-        listing_id,
-    );
-
-    assert!(!shop.listing_exists(listing_id));
-    std::unit_test::destroy(owner_cap);
-    std::unit_test::destroy(shop);
-}
-
-#[test]
 fun update_item_listing_stock_accept_zero_stock() {
     let mut ctx = tx_context::dummy();
     let (mut shop, owner_cap) = shop::test_setup_shop(owner(), &mut ctx);

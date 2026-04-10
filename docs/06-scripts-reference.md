@@ -221,7 +221,7 @@ Owner scripts default `--shop-package-id`, `--shop-id`, and `--owner-cap-id` fro
 	- `--shop-package-id <id>` / `--shop-id <id>` / `--owner-cap-id <id>`: override artifact defaults.
 
 ### `pnpm script owner:item-listing:remove`
-- Delists the item by removing its row from `Shop.listings` (fails if active listing-bound discounts still target that listing).
+- Delists the item by removing its row from `Shop.listings` (fails if listing-bound discounts are still counted against that listing).
 - Flags:
 	- `--item-listing-id <id>`: listing ID to remove (required).
 	- `--shop-package-id <id>` / `--shop-id <id>` / `--owner-cap-id <id>`: override artifact defaults.

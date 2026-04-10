@@ -737,7 +737,7 @@ fun toggle_discount_on_listing_sets_and_clears_spotlight() {
     assert!(option::is_none(&spotlight_before));
     assert_eq!(event::events_by_type<events::DiscountToggled>().length(), 0);
 
-    shop.add_spotlight_discount(
+    shop.attach_spotlight_discount(
         &owner_cap,
         discount_id,
         listing_id,
@@ -794,7 +794,7 @@ fun toggle_discount_on_listing_rejects_foreign_owner_cap() {
         &mut ctx,
     );
 
-    shop.add_spotlight_discount(
+    shop.attach_spotlight_discount(
         &other_cap,
         discount_id,
         listing_id,
@@ -831,7 +831,7 @@ fun toggle_discount_on_listing_rejects_foreign_listing() {
         &mut ctx,
     );
 
-    shop.add_spotlight_discount(
+    shop.attach_spotlight_discount(
         &owner_cap,
         discount_id,
         foreign_listing_id,
@@ -868,7 +868,7 @@ fun toggle_discount_on_listing_rejects_foreign_discount() {
         &mut ctx,
     );
 
-    shop.add_spotlight_discount(
+    shop.attach_spotlight_discount(
         &owner_cap,
         foreign_discount,
         listing_id,
@@ -902,7 +902,7 @@ fun toggle_discount_on_listing_rejects_unknown_discount() {
     );
     shop.remove_discount(&owner_cap, stray_discount_id);
 
-    shop.add_spotlight_discount(
+    shop.attach_spotlight_discount(
         &owner_cap,
         stray_discount_id,
         listing_id,
@@ -912,7 +912,7 @@ fun toggle_discount_on_listing_rejects_unknown_discount() {
 }
 
 #[test]
-fun add_spotlight_discount_sets_spotlight_without_emitting_events() {
+fun attach_spotlight_discount_sets_spotlight_without_emitting_events() {
     let mut ctx = tx_context::dummy();
     let (mut shop, owner_cap) = shop::test_setup_shop(owner(), &mut ctx);
 
@@ -931,7 +931,7 @@ fun add_spotlight_discount_sets_spotlight_without_emitting_events() {
     );
     let ids_before = tx_context::get_ids_created(&ctx);
 
-    shop.add_spotlight_discount(
+    shop.attach_spotlight_discount(
         &owner_cap,
         discount_id,
         listing_id,
@@ -954,7 +954,7 @@ fun add_spotlight_discount_sets_spotlight_without_emitting_events() {
 }
 
 #[test]
-fun add_spotlight_discount_overwrites_existing_spotlight() {
+fun attach_spotlight_discount_overwrites_existing_spotlight() {
     let mut ctx = tx_context::dummy();
     let (mut shop, owner_cap) = shop::test_setup_shop(owner(), &mut ctx);
 
@@ -985,7 +985,7 @@ fun add_spotlight_discount_overwrites_existing_spotlight() {
         assert_eq!(*value, first_discount);
     });
 
-    shop.add_spotlight_discount(
+    shop.attach_spotlight_discount(
         &owner_cap,
         second_discount,
         listing_id,
@@ -1010,7 +1010,7 @@ fun add_spotlight_discount_overwrites_existing_spotlight() {
 }
 
 #[test]
-fun add_spotlight_discount_accepts_matching_listing() {
+fun attach_spotlight_discount_accepts_matching_listing() {
     let mut ctx = tx_context::dummy();
     let (mut shop, owner_cap) = shop::test_setup_shop(owner(), &mut ctx);
 
@@ -1033,7 +1033,7 @@ fun add_spotlight_discount_accepts_matching_listing() {
         &mut ctx,
     );
 
-    shop.add_spotlight_discount(
+    shop.attach_spotlight_discount(
         &owner_cap,
         discount_id,
         listing_id,
@@ -1050,7 +1050,7 @@ fun add_spotlight_discount_accepts_matching_listing() {
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::EInvalidOwnerCap)]
-fun add_spotlight_discount_rejects_foreign_owner_cap() {
+fun attach_spotlight_discount_rejects_foreign_owner_cap() {
     let mut ctx = tx_context::dummy();
     let (mut shop, owner_cap) = shop::test_setup_shop(owner(), &mut ctx);
     let (_other_shop, other_cap) = shop::test_setup_shop(second_owner(), &mut ctx);
@@ -1069,7 +1069,7 @@ fun add_spotlight_discount_rejects_foreign_owner_cap() {
         &mut ctx,
     );
 
-    shop.add_spotlight_discount(
+    shop.attach_spotlight_discount(
         &other_cap,
         discount_id,
         listing_id,
@@ -1079,7 +1079,7 @@ fun add_spotlight_discount_rejects_foreign_owner_cap() {
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::EListingNotFound)]
-fun add_spotlight_discount_rejects_foreign_listing() {
+fun attach_spotlight_discount_rejects_foreign_listing() {
     let mut ctx = tx_context::dummy();
     let (mut shop, owner_cap) = shop::test_setup_shop(owner(), &mut ctx);
     let (mut other_shop, other_cap) = shop::test_setup_shop(
@@ -1101,7 +1101,7 @@ fun add_spotlight_discount_rejects_foreign_listing() {
         &mut ctx,
     );
 
-    shop.add_spotlight_discount(
+    shop.attach_spotlight_discount(
         &owner_cap,
         discount_id,
         foreign_listing_id,
@@ -1111,7 +1111,7 @@ fun add_spotlight_discount_rejects_foreign_listing() {
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::EDiscountNotFound)]
-fun add_spotlight_discount_rejects_foreign_discount() {
+fun attach_spotlight_discount_rejects_foreign_discount() {
     let mut ctx = tx_context::dummy();
     let (mut shop, owner_cap) = shop::test_setup_shop(owner(), &mut ctx);
     let (mut other_shop, other_cap) = shop::test_setup_shop(
@@ -1133,7 +1133,7 @@ fun add_spotlight_discount_rejects_foreign_discount() {
         &mut ctx,
     );
 
-    shop.add_spotlight_discount(
+    shop.attach_spotlight_discount(
         &owner_cap,
         foreign_discount,
         listing_id,
@@ -1143,7 +1143,7 @@ fun add_spotlight_discount_rejects_foreign_discount() {
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::EDiscountNotFound)]
-fun add_spotlight_discount_rejects_unknown_discount() {
+fun attach_spotlight_discount_rejects_unknown_discount() {
     let mut ctx = tx_context::dummy();
     let (mut shop, owner_cap) = shop::test_setup_shop(owner(), &mut ctx);
 
@@ -1167,7 +1167,7 @@ fun add_spotlight_discount_rejects_unknown_discount() {
     );
     shop.remove_discount(&owner_cap, stray_discount_id);
 
-    shop.add_spotlight_discount(
+    shop.attach_spotlight_discount(
         &owner_cap,
         stray_discount_id,
         listing_id,
@@ -1194,7 +1194,7 @@ fun clear_spotlight_discount_removes_spotlight_without_side_effects() {
         &owner_cap,
         &mut ctx,
     );
-    shop.add_spotlight_discount(
+    shop.attach_spotlight_discount(
         &owner_cap,
         discount_id,
         listing_id,
@@ -1398,7 +1398,7 @@ fun remove_discount_drops_discount_and_clears_spotlight() {
         &mut ctx,
     );
 
-    shop_obj.add_spotlight_discount(
+    shop_obj.attach_spotlight_discount(
         &owner_cap,
         discount_id,
         listing_id,

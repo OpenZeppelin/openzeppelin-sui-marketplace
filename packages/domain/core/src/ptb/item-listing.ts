@@ -282,7 +282,7 @@ export const buildAttachDiscountTransaction = ({
     })
 
   transaction.moveCall({
-    target: `${packageId}::shop::add_spotlight_discount`,
+    target: `${packageId}::shop::attach_spotlight_discount`,
     arguments: [
       shopArgument,
       ownerCapabilityArgument,

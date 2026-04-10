@@ -25,7 +25,7 @@ Shop (shared)
 └─ discounts: Table<ID, Discount>
   └─ Discount (table value)
 ItemListing (table value under Shop.listings)
-└─ fields: listing_id (ID), item_type, base_price_usd_cents, stock, spotlight_discount_id, active_bound_discount_count
+└─ fields: listing_id (ID), item_type, base_price_usd_cents, stock, spotlight_discount_id, discount_count
 ```
 
 Entry Points At A Glance
@@ -33,7 +33,7 @@ Entry Points At A Glance
 - Shops: `create_shop` mints the shared `Shop` plus the owned `ShopOwnerCap`; `disable_shop` permanently disables buyer flows; `update_shop_owner` rotates the payout/owner fields without touching listings.
 - Listings: `add_item_listing<T>` inserts a listing row in `Shop.listings` with USD-cent price, stock, and optional `spotlight_discount_id`; `add_item_listing_with_discount<T>` atomically creates a listing plus a pinned spotlight discount; `update_item_listing_stock`/`remove_item_listing` mutate listing rows by `listing_id: ID`.
 - Accepted currencies: `add_accepted_currency<C>` stores an `AcceptedCurrency` value in `shop.accepted_currencies` keyed by `coin_type`, with feed metadata and guardrail caps; `remove_accepted_currency<C>` removes the keyed entry.
-- Discounts: `create_discount`, `update_discount` (only before redemptions), and `toggle_discount` manage discounts; `add_spotlight_discount`/`clear_spotlight_discount` surface a spotlight discount on a listing; `buy_item_with_discount` applies discount-based discounts during checkout.
+- Discounts: `create_discount`, `update_discount` (only before redemptions), and `toggle_discount` manage discounts; `attach_spotlight_discount`/`clear_spotlight_discount` surface a spotlight discount on a listing; `buy_item_with_discount` applies discount-based discounts during checkout.
 - Checkout: `buy_item<T, C>` and `buy_item_with_discount<T, C>` enforce listing/type matches, registered currency presence, oracle guardrails, mint a typed `ShopItem<T>` receipt, and return `(ShopItem<T>, Coin<C>)` so callers can transfer item/change explicitly (redemption for the underlying item happens elsewhere).
 
 Oracle Guardrails
@@ -56,7 +56,7 @@ Shared Object + Table Pattern (deep dive)
   - Discovery: UIs enumerate listing/currency/discount table entries. Table keys prove membership without storing large arrays under the shop.
   - Auth: entry functions assert table membership and shop linkage. Foreign rows/discounts are rejected.
   - Writes: listing, currency, and discount admin ops mutate shop-backed collections. Buyer flows mutate the touched listing and optional discount entry state.
-  - Delisting: removing a listing row unregisters that listing ID for checkout, but only when no active listing-bound discounts remain for that listing.
+  - Delisting: removing a listing row unregisters that listing ID for checkout, but only when no listing-bound discounts are still counted against that listing.
 - Why it helps:
   - Structured state: tables keep lookup and validation logic explicit and typed instead of ad-hoc dynamic marker sets.
   - Stable primary keys: listings and discounts use object IDs, both indexer/UI-friendly.
@@ -172,7 +172,7 @@ transfer::public_transfer(change_coin, payer);
 Reference
 ---------
 - Module: `sui_oracle_market::shop`
-- Entry functions: `create_shop`, `disable_shop`, `update_shop_owner`, `add_item_listing`, `add_item_listing_with_discount`, `update_item_listing_stock`, `remove_item_listing`, `add_accepted_currency`, `remove_accepted_currency`, `create_discount`, `update_discount`, `toggle_discount`, `add_spotlight_discount`, `clear_spotlight_discount`, `buy_item`, `buy_item_with_discount`.
+- Entry functions: `create_shop`, `disable_shop`, `update_shop_owner`, `add_item_listing`, `add_item_listing_with_discount`, `update_item_listing_stock`, `remove_item_listing`, `add_accepted_currency`, `remove_accepted_currency`, `create_discount`, `update_discount`, `toggle_discount`, `attach_spotlight_discount`, `clear_spotlight_discount`, `buy_item`, `buy_item_with_discount`.
 - Key types: `Shop`, `ShopOwnerCap`, `ItemListing`, `AcceptedCurrency`, `Discount`, `ShopItem`
 - Events: `ShopCreated`, `ShopOwnerUpdated`, `ShopDisabled`, `ItemListingAdded`, `ItemListingStockUpdated`, `ItemListingRemoved`, `DiscountCreated`, `DiscountUpdated`, `DiscountToggled`, `AcceptedCoinAdded`, `AcceptedCoinRemoved`, `DiscountRedeemed`, `PurchaseCompleted`.
 

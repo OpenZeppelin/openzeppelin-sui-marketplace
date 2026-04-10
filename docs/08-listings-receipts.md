@@ -84,7 +84,7 @@ public fun add_item_listing<T: store>(
     // Check that spotlight discount id exist.
     // Update listing discount count and set spotlight,
     spotlight_discount_id.do!(|discount_id| {
-        listing.increment_active_bound_discount_count();
+      listing.increment_discount_count();
         listing.set_spotlight(discount_id);
 
         // set discount's `applies_to_listing`,
@@ -98,7 +98,7 @@ public fun add_item_listing<T: store>(
                 if (listing.spotlight_discount_id().contains(&discount_id)) {
                     listing.clear_spotlight();
                 };
-                listing.decrement_active_bound_discount_count();
+                listing.decrement_discount_count();
             });
     });
 

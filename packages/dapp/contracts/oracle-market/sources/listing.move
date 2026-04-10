@@ -34,8 +34,8 @@ public struct ItemListing has drop, store {
     base_price_usd_cents: u64,
     /// Remaining inventory for this listing.
     stock: u64,
-    /// Number of active discounts pinned to this listing.
-    active_bound_discount_count: u64,
+    /// Number of discounts currently counted against this listing.
+    discount_count: u64,
     /// Optional discount highlighted in storefront UIs.
     spotlight_discount_id: Option<ID>,
 }
@@ -84,9 +84,9 @@ public fun stock(listing: &ItemListing): u64 {
     listing.stock
 }
 
-/// Returns how many active discounts are currently bound to this listing.
-public fun active_bound_discount_count(listing: &ItemListing): u64 {
-    listing.active_bound_discount_count
+/// Returns how many discounts are currently counted against this listing.
+public fun discount_count(listing: &ItemListing): u64 {
+    listing.discount_count
 }
 
 /// Returns the spotlight discount ID attached to the listing, if any.
@@ -114,7 +114,7 @@ public(package) fun create<T: store>(
         name,
         base_price_usd_cents,
         stock,
-        active_bound_discount_count: 0,
+        discount_count: 0,
         spotlight_discount_id: option::none(),
     }
 }
@@ -160,14 +160,14 @@ public(package) fun set_stock(listing: &mut ItemListing, new_stock: u64) {
     listing.stock = new_stock;
 }
 
-/// Increments the number of active discounts attached to a listing.
-public(package) fun increment_active_bound_discount_count(listing: &mut ItemListing) {
-    listing.active_bound_discount_count = listing.active_bound_discount_count + 1;
+/// Increments the discount count tracked for a listing.
+public(package) fun increment_discount_count(listing: &mut ItemListing) {
+    listing.discount_count = listing.discount_count + 1;
 }
 
-/// Decrements the number of active discounts attached to a listing.
-public(package) fun decrement_active_bound_discount_count(listing: &mut ItemListing) {
-    assert!(listing.active_bound_discount_count > 0, EListingDiscountCountUnderflow);
+/// Decrements the discount count tracked for a listing.
+public(package) fun decrement_discount_count(listing: &mut ItemListing) {
+    assert!(listing.discount_count > 0, EListingDiscountCountUnderflow);
 
-    listing.active_bound_discount_count = listing.active_bound_discount_count - 1;
+    listing.discount_count = listing.discount_count - 1;
 }

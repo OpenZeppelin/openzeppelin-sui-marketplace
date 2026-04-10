@@ -195,6 +195,8 @@ public fun update_shop_owner(shop: &mut Shop, owner_cap: &ShopOwnerCap, new_owne
 }
 
 /// Adds a listing and returns the created listing ID.
+/// Attaches `spotlight_discount_id` as spotlight discount,
+/// and removes that discount from any other associated listing.
 ///
 /// Add an `ItemListing` attached to the `Shop`. The generic `T` encodes what will eventually be
 /// minted when a buyer completes checkout. Prices are provided in USD cents (e.g. $12.50 -> 1_250)
@@ -222,7 +224,7 @@ public fun add_item_listing<T: store>(
     // Check that spotlight discount id exist.
     // Update listing discount count and set spotlight,
     spotlight_discount_id.do!(|discount_id| {
-        listing.increment_active_bound_discount_count();
+        listing.increment_discount_count();
         listing.set_spotlight(discount_id);
 
         // set discount's `applies_to_listing`,
@@ -236,7 +238,7 @@ public fun add_item_listing<T: store>(
                 if (listing.spotlight_discount_id().contains(&discount_id)) {
                     listing.clear_spotlight();
                 };
-                listing.decrement_active_bound_discount_count();
+                listing.decrement_discount_count();
             });
     });
 
@@ -308,13 +310,13 @@ public fun update_item_listing_stock(
 /// Remove an item listing.
 ///
 /// Fails if listing doesn't exist.
-/// Listings with any active listing-bound discounts must pause those discounts first.
+/// Listings with any attached discounts must remove them first.
 public fun remove_item_listing(shop: &mut Shop, owner_cap: &ShopOwnerCap, listing_id: ID) {
     assert!(owner_cap.shop_id == shop.id(), EInvalidOwnerCap);
 
     // Will fail if listing doesn't exist.
     let listing = shop.listing(listing_id);
-    assert!(listing.active_bound_discount_count() == 0, EListingHasActiveDiscounts);
+    assert!(listing.discount_count() == 0, EListingHasActiveDiscounts);
     let _listing = shop.listings.remove(listing_id);
 
     events::emit_item_listing_removed(shop.id(), listing_id);
@@ -416,7 +418,7 @@ public fun create_discount(
     // Set discount as a spotlight for listing and link discount to listing.
     applies_to_listing.do!(|listing_id| {
         let listing = shop.listing_mut(listing_id);
-        listing.increment_active_bound_discount_count();
+        listing.increment_discount_count();
         listing.set_spotlight(discount_id);
         discount.set_applies_to_listing(listing_id);
     });
@@ -451,15 +453,14 @@ public fun update_discount(
     let shop_id = shop.id();
     assert!(owner_cap.shop_id == shop_id, EInvalidOwnerCap);
 
-    let now_sec = now_secs(clock);
     let discount = shop.discount_mut(discount_id);
-    discount.update(rule_kind, rule_value, starts_at, expires_at, max_redemptions, now_sec);
+    discount.update(rule_kind, rule_value, starts_at, expires_at, max_redemptions, now_secs(clock));
 
     events::emit_discount_updated(shop_id, discount.id());
 }
 
 /// Quickly enable/disable a coupon without deleting it.
-/// Listing-scoped discounts also update shop-level active counters used by delist checks.
+/// Listing-scoped discounts also update the shop-level discount counters used by delist checks.
 public fun toggle_discount(
     shop: &mut Shop,
     owner_cap: &ShopOwnerCap,
@@ -468,46 +469,34 @@ public fun toggle_discount(
 ) {
     assert!(owner_cap.shop_id == shop.id(), EInvalidOwnerCap);
 
-    let discount = shop.discount(discount_id);
     if (active) {
-        discount.applies_to_listing().do!(|listing_id| {
+        shop.discount(discount_id).applies_to_listing().do!(|listing_id| {
             assert!(shop.listings.contains(listing_id), EListingNotFound);
         });
     };
-    shop.adjust_active_discount_count(
-        discount.applies_to_listing(),
-        discount.active(),
-        active,
-    );
 
     let discount = shop.discount_mut(discount_id);
-
     if (discount.active() != active) {
         discount.set_active(active);
         events::emit_discount_toggled(shop.id(), discount_id, active);
     };
 }
 
-/// Removes a discount from shop storage.
+/// Removes a discount from shop storage and spotlight from associated listing (if attached to `discount_id`).
 /// Fails if discount doesn't exist.
-/// Fails if discount active and attached listing doesn't exists.
 public fun remove_discount(shop: &mut Shop, owner_cap: &ShopOwnerCap, discount_id: ID) {
     assert!(owner_cap.shop_id == shop.id(), EInvalidOwnerCap);
 
     // Fails when discount doesn't exist.
-    let discount = shop.discount(discount_id);
-    let applies_to_listing = discount.applies_to_listing();
-    let was_active = discount.active();
-
-    shop.adjust_active_discount_count(applies_to_listing, was_active, false);
-
-    // Clear listing spotlight if it matches discount.
-    applies_to_listing.do!(|listing_id| {
+    shop.discount(discount_id).applies_to_listing().do!(|listing_id| {
         if (shop.listings.contains(listing_id)) {
             let listing = shop.listing_mut(listing_id);
-            if (listing.spotlight_discount_id() == option::some(discount_id)) {
+
+            // Clear listing spotlight if it matches discount.
+            if (listing.spotlight_discount_id().contains(&discount_id)) {
                 listing.clear_spotlight();
             };
+            listing.decrement_discount_count();
         };
     });
 
@@ -515,7 +504,7 @@ public fun remove_discount(shop: &mut Shop, owner_cap: &ShopOwnerCap, discount_i
 }
 
 /// Surface a discount alongside a listing so UIs can highlight the promotion.
-public fun add_spotlight_discount(
+public fun attach_spotlight_discount(
     shop: &mut Shop,
     owner_cap: &ShopOwnerCap,
     discount_id: ID,
@@ -559,6 +548,7 @@ public fun buy_item<T: store, C>(
     assert!(!shop.disabled, EShopDisabled);
 
     let base_price_usd_cents = shop.listing(listing_id).base_price_usd_cents();
+
     // Payment is a Coin<T> object; process_purchase splits the payment and returns change.
     let (owed_coin_opt, change_coin, minted_item) = shop.process_purchase<T, C>(
         price_info_object,
@@ -571,6 +561,9 @@ public fun buy_item<T: store, C>(
         clock,
         ctx,
     );
+
+    // TODO#q: why we return opt coin. We can handle zero here as none.
+    // And transfer owed coin to the shop owner.
     owed_coin_opt.do!(|owed_coin| {
         transfer::public_transfer(owed_coin, shop.owner);
     });
@@ -740,23 +733,6 @@ fun listing_mut(shop: &mut Shop, listing_id: ID): &mut ItemListing {
 fun discount_mut(shop: &mut Shop, discount_id: ID): &mut Discount {
     assert!(shop.discounts.contains(discount_id), EDiscountNotFound);
     shop.discounts.borrow_mut(discount_id)
-}
-
-/// Synchronizes a listing's active discount counter when discount active state changes.
-fun adjust_active_discount_count(
-    shop: &mut Shop,
-    applies_to_listing: Option<ID>,
-    was_active: bool,
-    is_active: bool,
-) {
-    if (was_active == is_active) return;
-    applies_to_listing.do!(|listing_id| {
-        if (is_active) {
-            shop.listing_mut(listing_id).increment_active_bound_discount_count();
-        } else {
-            shop.listing_mut(listing_id).decrement_active_bound_discount_count();
-        };
-    });
 }
 
 /// Executes checkout pricing, stock mutation, receipt minting, and purchase event emission.
