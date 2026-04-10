@@ -1460,3 +1460,207 @@ fun quote_amount_rejects_large_exponent() {
     );
     abort
 }
+
+// === toggle_discount spotlight interaction tests ===
+
+#[test]
+fun toggle_discount_activate_sets_spotlight_when_listing_has_none() {
+    let mut ctx = tx_context::dummy();
+    let (mut shop, owner_cap) = shop::test_setup_shop(owner(), &mut ctx);
+
+    let listing_id = shop.add_item_listing<test_helpers::TestItem>(
+        &owner_cap,
+        b"Promo Gloves".to_string(),
+        45_00,
+        8,
+        option::none(),
+        &mut ctx,
+    );
+    // Create a listing-scoped discount; it starts active.
+    let discount_id = shop.create_discount(
+        &owner_cap,
+        option::some(listing_id),
+        0,
+        1_000,
+        0,
+        option::none(),
+        option::none(),
+        &mut ctx,
+    );
+
+    // Deactivate first so we can re-activate and observe the spotlight side effect.
+    shop.toggle_discount(&owner_cap, discount_id, false);
+
+    // Precondition: no spotlight yet.
+    assert!(option::is_none(&shop.listing(listing_id).spotlight_discount_id()));
+
+    shop.toggle_discount(&owner_cap, discount_id, true);
+
+    // Activation should have set this discount as spotlight.
+    let spotlight = shop.listing(listing_id).spotlight_discount_id();
+    assert!(option::is_some(&spotlight));
+    spotlight.do_ref!(|value| assert_eq!(*value, discount_id));
+
+    shop.remove_discount(&owner_cap, discount_id);
+    test_helpers::remove_listing_if_exists(&mut shop, &owner_cap, listing_id);
+    std::unit_test::destroy(owner_cap);
+    std::unit_test::destroy(shop);
+}
+
+#[test]
+fun toggle_discount_activate_preserves_existing_spotlight() {
+    let mut ctx = tx_context::dummy();
+    let (mut shop, owner_cap) = shop::test_setup_shop(owner(), &mut ctx);
+
+    let listing_id = shop.add_item_listing<test_helpers::TestItem>(
+        &owner_cap,
+        b"Promo Helmet".to_string(),
+        120_00,
+        5,
+        option::none(),
+        &mut ctx,
+    );
+    // First discount: scoped to the listing; create_discount sets it as spotlight.
+    let first_discount = shop.create_discount(
+        &owner_cap,
+        option::some(listing_id),
+        0,
+        500,
+        0,
+        option::none(),
+        option::none(),
+        &mut ctx,
+    );
+    // Second discount: also scoped to the listing.
+    // create_discount unconditionally sets spotlight, so it now points to second_discount.
+    let second_discount = shop.create_discount(
+        &owner_cap,
+        option::some(listing_id),
+        0,
+        750,
+        0,
+        option::none(),
+        option::none(),
+        &mut ctx,
+    );
+    // Restore first_discount as the intended spotlight.
+    shop.attach_spotlight_discount(&owner_cap, first_discount, listing_id);
+    // Deactivate second_discount so we can re-activate it in the assertion step.
+    shop.toggle_discount(&owner_cap, second_discount, false);
+
+    // Precondition: first_discount is the spotlight.
+    let spotlight_before = shop.listing(listing_id).spotlight_discount_id();
+    assert!(option::is_some(&spotlight_before));
+    spotlight_before.do_ref!(|value| assert_eq!(*value, first_discount));
+
+    // Activating the second discount must NOT overwrite the existing spotlight.
+    shop.toggle_discount(&owner_cap, second_discount, true);
+
+    let spotlight_after = shop.listing(listing_id).spotlight_discount_id();
+    assert!(option::is_some(&spotlight_after));
+    spotlight_after.do_ref!(|value| assert_eq!(*value, first_discount));
+
+    shop.remove_discount(&owner_cap, second_discount);
+    shop.remove_discount(&owner_cap, first_discount);
+    test_helpers::remove_listing_if_exists(&mut shop, &owner_cap, listing_id);
+    std::unit_test::destroy(owner_cap);
+    std::unit_test::destroy(shop);
+}
+
+#[test]
+fun toggle_discount_deactivate_clears_spotlight_when_matches() {
+    let mut ctx = tx_context::dummy();
+    let (mut shop, owner_cap) = shop::test_setup_shop(owner(), &mut ctx);
+
+    let listing_id = shop.add_item_listing<test_helpers::TestItem>(
+        &owner_cap,
+        b"Promo Jersey".to_string(),
+        65_00,
+        10,
+        option::none(),
+        &mut ctx,
+    );
+    let discount_id = shop.create_discount(
+        &owner_cap,
+        option::some(listing_id),
+        0,
+        1_000,
+        0,
+        option::none(),
+        option::none(),
+        &mut ctx,
+    );
+    shop.attach_spotlight_discount(&owner_cap, discount_id, listing_id);
+
+    // Precondition: spotlight is set to this discount.
+    let spotlight_before = shop.listing(listing_id).spotlight_discount_id();
+    spotlight_before.do_ref!(|value| assert_eq!(*value, discount_id));
+
+    shop.toggle_discount(&owner_cap, discount_id, false);
+
+    // Deactivating the spotlighted discount must clear the spotlight.
+    assert!(option::is_none(&shop.listing(listing_id).spotlight_discount_id()));
+
+    shop.remove_discount(&owner_cap, discount_id);
+    test_helpers::remove_listing_if_exists(&mut shop, &owner_cap, listing_id);
+    std::unit_test::destroy(owner_cap);
+    std::unit_test::destroy(shop);
+}
+
+#[test]
+fun toggle_discount_deactivate_preserves_spotlight_belonging_to_different_discount() {
+    let mut ctx = tx_context::dummy();
+    let (mut shop, owner_cap) = shop::test_setup_shop(owner(), &mut ctx);
+
+    let listing_id = shop.add_item_listing<test_helpers::TestItem>(
+        &owner_cap,
+        b"Promo Shorts".to_string(),
+        55_00,
+        12,
+        option::none(),
+        &mut ctx,
+    );
+    // first_discount: scoped to listing; create_discount sets it as spotlight.
+    let first_discount = shop.create_discount(
+        &owner_cap,
+        option::some(listing_id),
+        0,
+        500,
+        0,
+        option::none(),
+        option::none(),
+        &mut ctx,
+    );
+    // second_discount: also scoped to the listing.
+    // create_discount unconditionally sets spotlight, so it now points to second_discount.
+    let second_discount = shop.create_discount(
+        &owner_cap,
+        option::some(listing_id),
+        0,
+        250,
+        0,
+        option::none(),
+        option::none(),
+        &mut ctx,
+    );
+    // Restore first_discount as the intended spotlighted discount.
+    shop.attach_spotlight_discount(&owner_cap, first_discount, listing_id);
+
+    // Precondition: first_discount is the spotlight, second_discount is merely scoped.
+    let spotlight_before = shop.listing(listing_id).spotlight_discount_id();
+    assert!(option::is_some(&spotlight_before));
+    spotlight_before.do_ref!(|value| assert_eq!(*value, first_discount));
+
+    // Deactivating second_discount must NOT touch the spotlight of first_discount.
+    shop.toggle_discount(&owner_cap, second_discount, false);
+
+    let spotlight_after = shop.listing(listing_id).spotlight_discount_id();
+    assert!(option::is_some(&spotlight_after));
+    spotlight_after.do_ref!(|value| assert_eq!(*value, first_discount));
+
+    shop.remove_discount(&owner_cap, second_discount);
+    shop.remove_discount(&owner_cap, first_discount);
+    test_helpers::remove_listing_if_exists(&mut shop, &owner_cap, listing_id);
+    std::unit_test::destroy(owner_cap);
+    std::unit_test::destroy(shop);
+}

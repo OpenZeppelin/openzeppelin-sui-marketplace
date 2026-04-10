@@ -285,9 +285,6 @@ export const useStoreDashboardViewModel = ({
     (discount?: DiscountSummary) => {
       if (discount) {
         upsertDiscount(discount)
-        if (!discount.activeFlag) {
-          refreshStorefront()
-        }
         return
       }
 

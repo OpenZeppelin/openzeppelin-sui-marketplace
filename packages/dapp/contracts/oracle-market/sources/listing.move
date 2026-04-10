@@ -155,6 +155,13 @@ public(package) fun clear_spotlight(listing: &mut ItemListing) {
     listing.spotlight_discount_id = option::none();
 }
 
+/// Clears the listing spotlight discount reference if it matches the provided discount ID.
+public(package) fun try_clear_matching_spotlight(listing: &mut ItemListing, discount_id: &ID) {
+    if (listing.spotlight_discount_id.contains(discount_id)) {
+        listing.spotlight_discount_id = option::none();
+    };
+}
+
 /// Replaces the listing stock with a new value.
 public(package) fun set_stock(listing: &mut ItemListing, new_stock: u64) {
     listing.stock = new_stock;

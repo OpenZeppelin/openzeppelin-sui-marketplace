@@ -11,7 +11,6 @@ import {
 import type { SuiTransactionBlockResponse } from "@mysten/sui/client"
 import type { IdentifierString } from "@mysten/wallet-standard"
 import type { DiscountSummary } from "@sui-oracle-market/domain-core/models/discount"
-import { getDiscountSummary } from "@sui-oracle-market/domain-core/models/discount"
 import {
   buildRemoveDiscountTransaction,
   buildToggleDiscountTransaction
@@ -261,14 +260,6 @@ export const useRemoveDiscountModalState = ({
 
       if (action === "toggle") {
         onDiscountUpdated?.(summaryDiscount)
-
-        void getDiscountSummary(
-          shopShared.object.objectId,
-          discount.discountId,
-          suiClient
-        )
-          .then((summary) => onDiscountUpdated?.(summary))
-          .catch(() => {})
 
         return
       }

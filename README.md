@@ -54,6 +54,9 @@ sui client faucet --address <0x...>
 # Seed mocks (coins + Pyth stub + price feeds) on localnet as there is no coins or published Pyth oracle on your blank localnet.
 # Important to provide correct buyer address to execute purchase flow.
 pnpm script mock:setup --buyer-address <0x...> --network localnet
+# Run with --re-publish flag to publish anew (if fails to publish again)
+# pnpm script mock:setup --buyer-address <0x...> --network localnet --re-publish
+
 ```
 
 ## Publish and Seed
@@ -63,10 +66,10 @@ pnpm script mock:setup --buyer-address <0x...> --network localnet
 ```bash
 # Publish oracle-market
 pnpm script move:publish --package-path oracle-market --network localnet
-# Run with --re-publish flag to publish anew
+# Run with --re-publish flag to publish anew (if fails to publish again)
 # pnpm script move:publish --package-path oracle-market --network localnet --re-publish
 
-# In the output of the above command, after the success message, you will find the packageId for the shop contract.
+# In the output of the above command, after the success message, you will find the `packageId` for the shop contract.
 # You can set the value as an environment variable:
 export NEXT_PUBLIC_LOCALNET_CONTRACT_PACKAGE_ID=<0x...>
 # or you can make it more permanent by adding it to ./packages/ui/.env file (there's a ./packages/ui/.env.example for reference)
@@ -84,7 +87,7 @@ pnpm ui dev
 ```bash
 # Oracle market already published on the testnet.
 # You can set the value as an environment variable:
-export NEXT_PUBLIC_TESTNET_CONTRACT_PACKAGE_ID=0x065888d3ffa6101b7cb1b8772216ac6ee3721d0f187756f65a6a598f61700902
+export NEXT_PUBLIC_TESTNET_CONTRACT_PACKAGE_ID=0x2c1bfd7e255adc2170ca1e8adfc93c094881acd8ec7e80e4686b686f432b4a07
 # or you can make it more permanent by adding it to ./packages/ui/.env file (there's a ./packages/ui/.env.example for reference)
 
 # To continue setting up the shop, listings, discounts, accepted currencies follow appropriate scripts (find the list here docs/06-scripts-reference.md) or run the seed script that will create shop and load data for each model

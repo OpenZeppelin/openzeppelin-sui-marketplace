@@ -95,9 +95,7 @@ public fun add_item_listing<T: store>(
                 let listing = shop.listing_mut(previous_listing_id);
 
                 // and clear the previous listing from spotlight discount if matches the discount id.
-                if (listing.spotlight_discount_id().contains(&discount_id)) {
-                    listing.clear_spotlight();
-                };
+                listing.try_clear_matching_spotlight(&discount_id);
                 listing.decrement_discount_count();
             });
     });

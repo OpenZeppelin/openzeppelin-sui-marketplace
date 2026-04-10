@@ -52,6 +52,7 @@ public struct Discount has drop, store {
     /// Discount identifier and key in `Shop.discounts`.
     id: ID,
     /// Optional listing scope restriction.
+    /// `None` means discount applies to all listings.
     applies_to_listing: Option<ID>,
     /// Fixed/percent discount payload.
     rule: DiscountRule,
@@ -231,6 +232,16 @@ public(package) fun set_applies_to_listing(
     discount.applies_to_listing.swap_or_fill(applies_to_listing)
 }
 
+/// Returns whether a discount can no longer be used due to expiry or cap exhaustion.
+public(package) fun finished(discount: &Discount, now_sec: u64): bool {
+    let expired = discount
+        .expires_at
+        .map_ref!(|expires_at| now_sec >= *expires_at)
+        .destroy_or!(false);
+    let maxed_out = discount.redemption_cap_reached();
+    expired || maxed_out
+}
+
 // === Private Functions ===
 
 /// Parses primitive rule kind encoding into a typed rule kind.
@@ -276,16 +287,6 @@ fun apply(rule: DiscountRule, base_price_usd_cents: u64): u64 {
             maybe_discounted.destroy_or!(abort EPriceOverflow)
         },
     }
-}
-
-/// Returns whether a discount can no longer be used due to expiry or cap exhaustion.
-fun finished(discount: &Discount, now_sec: u64): bool {
-    let expired = discount
-        .expires_at
-        .map_ref!(|expires_at| now_sec >= *expires_at)
-        .destroy_or!(false);
-    let maxed_out = discount.redemption_cap_reached();
-    expired || maxed_out
 }
 
 /// Returns whether the optional redemption cap has been reached.

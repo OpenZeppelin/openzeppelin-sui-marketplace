@@ -234,9 +234,7 @@ public fun add_item_listing<T: store>(
                 let listing = shop.listing_mut(previous_listing_id);
 
                 // and clear the previous listing from spotlight discount if matches the discount id.
-                if (listing.spotlight_discount_id().contains(&discount_id)) {
-                    listing.clear_spotlight();
-                };
+                listing.try_clear_matching_spotlight(&discount_id);
                 listing.decrement_discount_count();
             });
     });
@@ -460,6 +458,9 @@ public fun update_discount(
 
 /// Quickly enable/disable a coupon without deleting it.
 /// Listing-scoped discounts also update the shop-level discount counters used by delist checks.
+/// If listing don't have a spotlight discount when activating discount,
+/// set current discount as spotlight.
+/// Clear listing spotlight (if matches discount) when discount is deactivated.
 public fun toggle_discount(
     shop: &mut Shop,
     owner_cap: &ShopOwnerCap,
@@ -468,12 +469,22 @@ public fun toggle_discount(
 ) {
     assert!(owner_cap.shop_id == shop.id(), EInvalidOwnerCap);
 
-    // Assert that listing exist when we activate discount.
-    if (active) {
-        shop.discount(discount_id).applies_to_listing().do!(|listing_id| {
-            assert!(shop.listings.contains(listing_id), EListingNotFound);
-        });
-    };
+    shop.discount(discount_id).applies_to_listing().do!(|listing_id| {
+        // Assert that listing exist,
+        let listing = shop.listing_mut(listing_id);
+
+        // and when we activate discount,
+        if (active) {
+            // set current discount as a spotlight,
+            // if there is no another spotlight discount.
+            if (listing.spotlight_discount_id().is_none()) {
+                listing.set_spotlight(discount_id);
+            };
+        } else {
+            // When we deactivate discount that matches listing's spotlight clear it.
+            listing.try_clear_matching_spotlight(&discount_id)
+        }
+    });
 
     // Emit event only when state changes.
     let discount = shop.discount_mut(discount_id);
@@ -493,10 +504,8 @@ public fun remove_discount(shop: &mut Shop, owner_cap: &ShopOwnerCap, discount_i
         if (shop.listings.contains(listing_id)) {
             let listing = shop.listing_mut(listing_id);
 
-            // Clear listing spotlight if it matches discount.
-            if (listing.spotlight_discount_id().contains(&discount_id)) {
-                listing.clear_spotlight();
-            };
+            // Clear listing spotlight if it matches discount and decrement listing count.
+            listing.try_clear_matching_spotlight(&discount_id);
             listing.decrement_discount_count();
         };
     });
@@ -592,10 +601,16 @@ public fun buy_item_with_discount<T: store, C>(
     let shop_id = shop.id();
     let discount = shop.discount_mut(discount_id);
     let discounted_price_usd_cents = discount.redeem(listing_id, listing_price_usd_cents, now_sec);
+    let discount_id = discount.id();
+
+    if (discount.finished(now_sec)) {
+        let listing = shop.listing_mut(listing_id);
+        listing.try_clear_matching_spotlight(&discount_id);
+    };
 
     events::emit_discount_redeemed(
         shop_id,
-        discount.id(),
+        discount_id,
     );
 
     // Payment is a Coin<T> object; process_purchase splits the payment and returns change.
@@ -604,7 +619,7 @@ public fun buy_item_with_discount<T: store, C>(
         payment,
         listing_id,
         discounted_price_usd_cents,
-        option::some(discount.id()),
+        option::some(discount_id),
         max_price_age_secs,
         max_confidence_ratio_bps,
         clock,
