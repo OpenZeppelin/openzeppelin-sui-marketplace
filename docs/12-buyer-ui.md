@@ -84,13 +84,11 @@ public fun buy_item<T: store, C>(
   price_info_object: &PriceInfoObject,
   payment: Coin<C>,
   listing_id: ID,
-  mint_to: address,
-  refund_extra_to: address,
   max_price_age_secs: Option<u64>,
   max_confidence_ratio_bps: Option<u16>,
   clock: &Clock,
   ctx: &mut TxContext,
-) {
+): (ShopItem<T>, Coin<C>) {
   assert!(!shop.disabled, EShopDisabled);
 
   let base_price_usd_cents = shop.listing(listing_id).base_price_usd_cents();
@@ -108,12 +106,8 @@ public fun buy_item<T: store, C>(
   owed_coin_opt.do!(|owed_coin| {
     transfer::public_transfer(owed_coin, shop.owner);
   });
-  if (change_coin.value() == 0) {
-    change_coin.destroy_zero();
-  } else {
-    transfer::public_transfer(change_coin, refund_extra_to);
-  };
-  transfer::public_transfer(minted_item, mint_to);
+
+  (minted_item, change_coin)
 }
 ```
 
@@ -160,7 +154,7 @@ const discountContext = await resolveDiscountContext({
 PTB
   1) pyth::update_price_feeds
   2) shop::buy_item (or buy_item_with_discount)
-  3) emit events + mint ShopItem
+  3) transfer returned ShopItem + change coin to recipients
 ```
 
 ## 11. Further reading (Sui docs)

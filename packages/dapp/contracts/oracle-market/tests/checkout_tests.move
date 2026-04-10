@@ -10,7 +10,14 @@ use sui::test_scenario;
 use sui_oracle_market::currency;
 use sui_oracle_market::events;
 use sui_oracle_market::shop;
-use sui_oracle_market::test_helpers::{Self, assert_emitted, owner, second_owner, third_owner};
+use sui_oracle_market::test_helpers::{
+    Self,
+    assert_emitted,
+    owner,
+    second_owner,
+    third_owner,
+    settle_purchase_outputs
+};
 
 // === Tests ===
 
@@ -81,18 +88,20 @@ fun discount_redemption_without_listing_restriction_allows_zero_price() {
     let clock_obj = test_helpers::create_test_clock_at(scn.ctx(), 10);
 
     let payment = coin::mint_for_testing<test_helpers::TestCoin>(1, scn.ctx());
-    shared_shop.buy_item_with_discount<test_helpers::TestItem, test_helpers::TestCoin>(
+    let (minted_item, change_coin) = shared_shop.buy_item_with_discount<
+        test_helpers::TestItem,
+        test_helpers::TestCoin,
+    >(
         discount_id,
         &price_info_obj,
         payment,
         listing_id,
-        second_owner(),
-        second_owner(),
         option::none(),
         option::none(),
         &clock_obj,
         scn.ctx(),
     );
+    settle_purchase_outputs(minted_item, change_coin, second_owner(), second_owner());
     let minted_item_id = tx_context::last_created_object_id(scn.ctx()).to_id();
     assert_emitted!(
         events::purchase_completed(
@@ -197,13 +206,14 @@ fun discount_redemption_rejects_listing_mismatch() {
         scn.ctx(),
     );
 
-    shared_shop.buy_item_with_discount<test_helpers::TestItem, test_helpers::TestCoin>(
+    let (_minted_item, _change_coin) = shared_shop.buy_item_with_discount<
+        test_helpers::TestItem,
+        test_helpers::TestCoin,
+    >(
         discount_id,
         &price_info_obj,
         payment,
         listing_b_id,
-        second_owner(),
-        second_owner(),
         option::none(),
         option::none(),
         &clock_obj,
@@ -290,30 +300,33 @@ fun discount_maxed_out_by_redemption() {
         scn.ctx(),
     );
 
-    shared_shop.buy_item_with_discount<test_helpers::TestItem, test_helpers::TestCoin>(
+    let (minted_item, change_coin) = shared_shop.buy_item_with_discount<
+        test_helpers::TestItem,
+        test_helpers::TestCoin,
+    >(
         discount_id,
         &price_info_obj,
         payment,
         listing_id,
-        second_owner(),
-        second_owner(),
         option::none(),
         option::none(),
         &clock_obj,
         scn.ctx(),
     );
+    settle_purchase_outputs(minted_item, change_coin, second_owner(), second_owner());
 
     let payment_again = coin::mint_for_testing<test_helpers::TestCoin>(
         quote_amount,
         scn.ctx(),
     );
-    shared_shop.buy_item_with_discount<test_helpers::TestItem, test_helpers::TestCoin>(
+    let (_minted_item, _change_coin) = shared_shop.buy_item_with_discount<
+        test_helpers::TestItem,
+        test_helpers::TestCoin,
+    >(
         discount_id,
         &price_info_obj,
         payment_again,
         listing_id,
-        second_owner(),
-        second_owner(),
         option::none(),
         option::none(),
         &clock_obj,
@@ -348,12 +361,13 @@ fun checkout_rejects_price_info_object_from_other_shop() {
     let clock_obj = test_helpers::create_test_clock_at(scn.ctx(), 10);
     let payment = coin::mint_for_testing<test_helpers::TestCoin>(1, scn.ctx());
 
-    shared_shop_b.buy_item<test_helpers::TestItem, test_helpers::TestCoin>(
+    let (_minted_item, _change_coin) = shared_shop_b.buy_item<
+        test_helpers::TestItem,
+        test_helpers::TestCoin,
+    >(
         &price_info_a,
         payment,
         listing_b_id,
-        second_owner(),
-        second_owner(),
         option::none(),
         option::none(),
         &clock_obj,
@@ -382,12 +396,13 @@ fun checkout_rejects_listing_not_registered_in_shop() {
     let clock_obj = test_helpers::create_test_clock_at(scn.ctx(), 10);
     let payment = coin::mint_for_testing<test_helpers::TestCoin>(1, scn.ctx());
 
-    shared_shop.buy_item<test_helpers::TestItem, test_helpers::TestCoin>(
+    let (_minted_item, _change_coin) = shared_shop.buy_item<
+        test_helpers::TestItem,
+        test_helpers::TestCoin,
+    >(
         &price_info,
         payment,
         test_helpers::missing_listing_id(),
-        second_owner(),
-        second_owner(),
         option::none(),
         option::none(),
         &clock_obj,
@@ -422,12 +437,13 @@ fun checkout_rejects_currency_from_other_shop() {
     let clock_obj = test_helpers::create_test_clock_at(scn.ctx(), 10);
     let payment = coin::mint_for_testing<test_helpers::TestCoin>(1, scn.ctx());
 
-    shared_shop_a.buy_item<test_helpers::TestItem, test_helpers::TestCoin>(
+    let (_minted_item, _change_coin) = shared_shop_a.buy_item<
+        test_helpers::TestItem,
+        test_helpers::TestCoin,
+    >(
         &price_info_b,
         payment,
         listing_a_id,
-        second_owner(),
-        second_owner(),
         option::none(),
         option::none(),
         &clock_obj,
@@ -676,17 +692,19 @@ fun buy_item_emits_events_decrements_stock_and_refunds_change() {
         scn.ctx(),
     );
 
-    shared_shop.buy_item<test_helpers::TestItem, test_helpers::TestCoin>(
+    let (minted_item, change_coin) = shared_shop.buy_item<
+        test_helpers::TestItem,
+        test_helpers::TestCoin,
+    >(
         &price_info_obj,
         payment,
         listing_id,
-        second_owner(),
-        second_owner(),
         option::none(),
         option::none(),
         &clock_obj,
         scn.ctx(),
     );
+    settle_purchase_outputs(minted_item, change_coin, second_owner(), second_owner());
 
     let minted_item_id = tx_context::last_created_object_id(scn.ctx()).to_id();
     assert_emitted!(
@@ -749,17 +767,19 @@ fun buy_item_supports_example_car_receipts() {
         scn.ctx(),
     );
 
-    shared_shop.buy_item<test_helpers::Car, test_helpers::TestCoin>(
+    let (minted_item, change_coin) = shared_shop.buy_item<
+        test_helpers::Car,
+        test_helpers::TestCoin,
+    >(
         &price_info_obj,
         payment,
         listing_id,
-        second_owner(),
-        second_owner(),
         option::none(),
         option::none(),
         &clock_obj,
         scn.ctx(),
     );
+    settle_purchase_outputs(minted_item, change_coin, second_owner(), second_owner());
 
     let minted_item_id = tx_context::last_created_object_id(scn.ctx()).to_id();
     assert_emitted!(
@@ -814,17 +834,19 @@ fun buy_item_supports_example_bike_receipts() {
         scn.ctx(),
     );
 
-    shared_shop.buy_item<test_helpers::Bike, test_helpers::TestCoin>(
+    let (minted_item, change_coin) = shared_shop.buy_item<
+        test_helpers::Bike,
+        test_helpers::TestCoin,
+    >(
         &price_info_obj,
         payment,
         listing_id,
-        second_owner(),
-        second_owner(),
         option::none(),
         option::none(),
         &clock_obj,
         scn.ctx(),
     );
+    settle_purchase_outputs(minted_item, change_coin, second_owner(), second_owner());
 
     let minted_item_id = tx_context::last_created_object_id(scn.ctx()).to_id();
     assert_emitted!(
@@ -874,17 +896,19 @@ fun buy_item_emits_events_with_exact_payment_and_zero_change() {
         scn.ctx(),
     );
 
-    shared_shop.buy_item<test_helpers::TestItem, test_helpers::TestCoin>(
+    let (minted_item, change_coin) = shared_shop.buy_item<
+        test_helpers::TestItem,
+        test_helpers::TestCoin,
+    >(
         &price_info_obj,
         payment,
         listing_id,
-        second_owner(),
-        third_owner(),
         option::none(),
         option::none(),
         &clock_obj,
         scn.ctx(),
     );
+    settle_purchase_outputs(minted_item, change_coin, second_owner(), third_owner());
 
     let minted_item_id = tx_context::last_created_object_id(scn.ctx()).to_id();
     assert_emitted!(
@@ -932,17 +956,19 @@ fun buy_item_rejects_out_of_stock_after_depletion() {
         quote_amount,
         scn.ctx(),
     );
-    shared_shop.buy_item<test_helpers::TestItem, test_helpers::TestCoin>(
+    let (minted_item, change_coin) = shared_shop.buy_item<
+        test_helpers::TestItem,
+        test_helpers::TestCoin,
+    >(
         &price_info_obj,
         payment,
         listing_id,
-        second_owner(),
-        second_owner(),
         option::none(),
         option::none(),
         &clock_obj,
         scn.ctx(),
     );
+    settle_purchase_outputs(minted_item, change_coin, second_owner(), second_owner());
 
     test_scenario::return_shared(shared_shop);
     test_scenario::return_shared(price_info_obj);
@@ -961,12 +987,13 @@ fun buy_item_rejects_out_of_stock_after_depletion() {
         scn.ctx(),
     );
 
-    shared_shop.buy_item<test_helpers::TestItem, test_helpers::TestCoin>(
+    let (_minted_item, _change_coin) = shared_shop.buy_item<
+        test_helpers::TestItem,
+        test_helpers::TestCoin,
+    >(
         &price_info_obj,
         payment,
         listing_id,
-        second_owner(),
-        second_owner(),
         option::none(),
         option::none(),
         &clock_obj,
@@ -1035,12 +1062,13 @@ fun buy_item_rejects_price_info_object_id_mismatch() {
     let clock_obj = test_helpers::create_test_clock_at(scn.ctx(), 10);
     let payment = coin::mint_for_testing<test_helpers::TestCoin>(1, scn.ctx());
 
-    shared_shop.buy_item<test_helpers::TestItem, test_helpers::TestCoin>(
+    let (_minted_item, _change_coin) = shared_shop.buy_item<
+        test_helpers::TestItem,
+        test_helpers::TestCoin,
+    >(
         &other_price_info_obj,
         payment,
         listing_id,
-        second_owner(),
-        second_owner(),
         option::none(),
         option::none(),
         &clock_obj,
@@ -1130,18 +1158,20 @@ fun buy_item_with_discount_emits_discount_redeemed_and_records_discount_id() {
         quote_amount,
         scn.ctx(),
     );
-    shared_shop.buy_item_with_discount<test_helpers::TestItem, test_helpers::TestCoin>(
+    let (minted_item, change_coin) = shared_shop.buy_item_with_discount<
+        test_helpers::TestItem,
+        test_helpers::TestCoin,
+    >(
         discount_id,
         &price_info_obj,
         payment,
         listing_id,
-        second_owner(),
-        second_owner(),
         option::none(),
         option::none(),
         &clock_obj,
         scn.ctx(),
     );
+    settle_purchase_outputs(minted_item, change_coin, second_owner(), second_owner());
 
     let minted_item_id = tx_context::last_created_object_id(scn.ctx()).to_id();
     assert_emitted!(
@@ -1201,12 +1231,13 @@ fun buy_item_rejects_insufficient_payment() {
         scn.ctx(),
     );
 
-    shared_shop.buy_item<test_helpers::TestItem, test_helpers::TestCoin>(
+    let (_minted_item, _change_coin) = shared_shop.buy_item<
+        test_helpers::TestItem,
+        test_helpers::TestCoin,
+    >(
         &price_info_obj,
         payment,
         listing_id,
-        second_owner(),
-        second_owner(),
         option::none(),
         option::none(),
         &clock_obj,
@@ -1237,12 +1268,13 @@ fun buy_item_rejects_wrong_coin_type() {
         1,
         scn.ctx(),
     );
-    shared_shop.buy_item<test_helpers::TestItem, test_helpers::AltTestCoin>(
+    let (_minted_item, _change_coin) = shared_shop.buy_item<
+        test_helpers::TestItem,
+        test_helpers::AltTestCoin,
+    >(
         &price_info_obj,
         payment,
         listing_id,
-        second_owner(),
-        second_owner(),
         option::none(),
         option::none(),
         &clock_obj,
@@ -1280,12 +1312,13 @@ fun buy_item_rejects_item_type_mismatch() {
         quote_amount,
         scn.ctx(),
     );
-    shared_shop.buy_item<test_helpers::OtherItem, test_helpers::TestCoin>(
+    let (_minted_item, _change_coin) = shared_shop.buy_item<
+        test_helpers::OtherItem,
+        test_helpers::TestCoin,
+    >(
         &price_info_obj,
         payment,
         listing_id,
-        second_owner(),
-        second_owner(),
         option::none(),
         option::none(),
         &clock_obj,
@@ -1437,13 +1470,14 @@ fun buy_item_with_discount_rejects_inactive_discount() {
         scn.ctx(),
     );
 
-    shared_shop.buy_item_with_discount<test_helpers::TestItem, test_helpers::TestCoin>(
+    let (_minted_item, _change_coin) = shared_shop.buy_item_with_discount<
+        test_helpers::TestItem,
+        test_helpers::TestCoin,
+    >(
         discount_id,
         &price_info_obj,
         payment,
         listing_id,
-        second_owner(),
-        second_owner(),
         option::none(),
         option::none(),
         &clock_obj,

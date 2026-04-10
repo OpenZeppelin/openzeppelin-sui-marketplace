@@ -50,7 +50,8 @@ const resolveActionDescription = ({
   action: DiscountAction
   activeFlag: boolean
 }) => {
-  if (action === "remove") return "Permanently remove this discount from the shop."
+  if (action === "remove")
+    return "Permanently remove this discount from the shop."
   return activeFlag
     ? "Stop this discount from applying to new purchases."
     : "Enable this discount so it can apply to new purchases."
@@ -156,11 +157,7 @@ const DiscountSummarySection = ({
   </ModalSection>
 )
 
-const ActionImpactSection = ({
-  action
-}: {
-  action: DiscountAction
-}) => (
+const ActionImpactSection = ({ action }: { action: DiscountAction }) => (
   <ModalSection title="Action impact" subtitle="Expected storefront behavior">
     <div className="text-xs text-slate-500 dark:text-slate-200/70">
       {action === "remove"
@@ -208,7 +205,11 @@ const DiscountSuccessView = ({
       />
     </ModalBody>
     <ModalCloseFooter
-      message={summary.action === "remove" ? "Discount removal confirmed." : "Discount update confirmed."}
+      message={
+        summary.action === "remove"
+          ? "Discount removal confirmed."
+          : "Discount update confirmed."
+      }
       onClose={onClose}
     />
   </>
@@ -281,7 +282,10 @@ const RemoveDiscountModal = ({
 
   if (!open || !discount) return <></>
 
-  const submitLabel = resolveActionLabel({ action, activeFlag: discount.activeFlag })
+  const submitLabel = resolveActionLabel({
+    action,
+    activeFlag: discount.activeFlag
+  })
   const submitVariant = action === "remove" ? "danger" : "primary"
 
   return (
@@ -305,7 +309,10 @@ const RemoveDiscountModal = ({
         <>
           <ModalHeader
             eyebrow="Discounts"
-            title={resolveActionTitle({ action, activeFlag: discount.activeFlag })}
+            title={resolveActionTitle({
+              action,
+              activeFlag: discount.activeFlag
+            })}
             description={resolveActionDescription({
               action,
               activeFlag: discount.activeFlag

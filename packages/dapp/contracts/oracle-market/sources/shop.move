@@ -539,8 +539,6 @@ public fun clear_spotlight_discount(shop: &mut Shop, owner_cap: &ShopOwnerCap, l
     shop.listing_mut(listing_id).clear_spotlight();
 }
 
-// TODO#q: Buy item should return Coin<C> + Item<T>
-
 /// Execute a purchase priced in USD cents but settled with any previously registered `AcceptedCurrency`.
 ///
 /// NOTE:
@@ -553,13 +551,11 @@ public fun buy_item<T: store, C>(
     price_info_object: &PriceInfoObject,
     payment: Coin<C>,
     listing_id: ID,
-    mint_to: address,
-    refund_extra_to: address,
     max_price_age_secs: Option<u64>,
     max_confidence_ratio_bps: Option<u16>,
     clock: &Clock,
     ctx: &mut TxContext,
-) {
+): (ShopItem<T>, Coin<C>) {
     assert!(!shop.disabled, EShopDisabled);
 
     let base_price_usd_cents = shop.listing(listing_id).base_price_usd_cents();
@@ -578,15 +574,9 @@ public fun buy_item<T: store, C>(
     owed_coin_opt.do!(|owed_coin| {
         transfer::public_transfer(owed_coin, shop.owner);
     });
-    if (change_coin.value() == 0) {
-        change_coin.destroy_zero();
-    } else {
-        transfer::public_transfer(change_coin, refund_extra_to);
-    };
-    transfer::public_transfer(minted_item, mint_to);
-}
 
-// TODO#q: Buy item with discount should return Coin<C> + Item<T>
+    (minted_item, change_coin)
+}
 
 /// Same as `buy_item` but also validates that discount is applicable.
 public fun buy_item_with_discount<T: store, C>(
@@ -595,13 +585,11 @@ public fun buy_item_with_discount<T: store, C>(
     price_info_object: &PriceInfoObject,
     payment: Coin<C>,
     listing_id: ID,
-    mint_to: address,
-    refund_extra_to: address,
     max_price_age_secs: Option<u64>,
     max_confidence_ratio_bps: Option<u16>,
     clock: &Clock,
     ctx: &mut TxContext,
-) {
+): (ShopItem<T>, Coin<C>) {
     assert!(!shop.disabled, EShopDisabled);
 
     let now_sec = now_secs(clock);
@@ -630,12 +618,8 @@ public fun buy_item_with_discount<T: store, C>(
     owed_coin_opt.do!(|owed_coin| {
         transfer::public_transfer(owed_coin, shop.owner);
     });
-    if (change_coin.value() == 0) {
-        change_coin.destroy_zero();
-    } else {
-        transfer::public_transfer(change_coin, refund_extra_to);
-    };
-    transfer::public_transfer(minted_item, mint_to);
+
+    (minted_item, change_coin)
 }
 
 // === View Functions ===

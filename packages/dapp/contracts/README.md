@@ -34,7 +34,7 @@ Entry Points At A Glance
 - Listings: `add_item_listing<T>` inserts a listing row in `Shop.listings` with USD-cent price, stock, and optional `spotlight_discount_id`; `add_item_listing_with_discount<T>` atomically creates a listing plus a pinned spotlight discount; `update_item_listing_stock`/`remove_item_listing` mutate listing rows by `listing_id: ID`.
 - Accepted currencies: `add_accepted_currency<C>` stores an `AcceptedCurrency` value in `shop.accepted_currencies` keyed by `coin_type`, with feed metadata and guardrail caps; `remove_accepted_currency<C>` removes the keyed entry.
 - Discounts: `create_discount`, `update_discount` (only before redemptions), and `toggle_discount` manage discounts; `add_spotlight_discount`/`clear_spotlight_discount` surface a spotlight discount on a listing; `buy_item_with_discount` applies discount-based discounts during checkout.
-- Checkout: `buy_item<T, C>` and `buy_item_with_discount<T, C>` enforce listing/type matches, registered currency presence, oracle guardrails, and refund change in-line before minting a typed `ShopItem<T>` receipt (redemption for the underlying item happens elsewhere).
+- Checkout: `buy_item<T, C>` and `buy_item_with_discount<T, C>` enforce listing/type matches, registered currency presence, oracle guardrails, mint a typed `ShopItem<T>` receipt, and return `(ShopItem<T>, Coin<C>)` so callers can transfer item/change explicitly (redemption for the underlying item happens elsewhere).
 
 Oracle Guardrails
 -----------------
@@ -138,35 +138,35 @@ add_accepted_currency<USDC>(
 
 **Buy with price guardrails**
 ```move
-buy_item<ItemType, USDC>(
+let (receipt, change_coin) = buy_item<ItemType, USDC>(
     &mut shop,
     &price_info_object,
     payment_coin,
     /* listing_id */ listing_id,
-    /* mint_to */ recipient,
-    /* refund_extra_to */ payer,
     /* max_price_age_secs */ some(60),
     /* max_confidence_ratio_bps */ some(1_000),
     &clock,
     &mut ctx
 );
+transfer::public_transfer(receipt, recipient);
+transfer::public_transfer(change_coin, payer);
 ```
 
 **Buy with a discount**
 ```move
-buy_item_with_discount<ItemType, USDC>(
+let (receipt, change_coin) = buy_item_with_discount<ItemType, USDC>(
     &mut shop,
     /* discount_id */ discount_id,
     &price_info_object,
     payment_coin,
     /* listing_id */ listing_id,
-    /* mint_to */ recipient,
-    /* refund_extra_to */ payer,
     /* max_price_age_secs */ none,
     /* max_confidence_ratio_bps */ none,
     &clock,
     &mut ctx
 );
+transfer::public_transfer(receipt, recipient);
+transfer::public_transfer(change_coin, payer);
 ```
 
 Reference

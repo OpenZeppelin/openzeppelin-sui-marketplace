@@ -722,15 +722,13 @@ export const buildBuyTransaction = async (
     pythPriceInfoArgument,
     paymentArgument,
     listingIdArgument,
-    transaction.pure.address(mintTo),
-    transaction.pure.address(refundTo),
     transaction.pure.option("u64", maxPriceAgeSecs ?? null),
     transaction.pure.option("u16", maxConfidenceRatioBps ?? null),
     clockArgument
   ]
 
   if (discountContext.mode === "discount") {
-    transaction.moveCall({
+    const [mintedItem, changeCoin] = transaction.moveCall({
       target: `${shopPackageId}::shop::buy_item_with_discount`,
       typeArguments,
       arguments: [
@@ -743,15 +741,22 @@ export const buildBuyTransaction = async (
         ...buildCommonBuyArguments()
       ]
     })
+    transaction.transferObjects([mintedItem], transaction.pure.address(mintTo))
+    transaction.transferObjects(
+      [changeCoin],
+      transaction.pure.address(refundTo)
+    )
 
     return transaction
   }
 
-  transaction.moveCall({
+  const [mintedItem, changeCoin] = transaction.moveCall({
     target: `${shopPackageId}::shop::buy_item`,
     typeArguments,
     arguments: [shopArgument, ...buildCommonBuyArguments()]
   })
+  transaction.transferObjects([mintedItem], transaction.pure.address(mintTo))
+  transaction.transferObjects([changeCoin], transaction.pure.address(refundTo))
 
   return transaction
 }

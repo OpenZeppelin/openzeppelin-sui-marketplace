@@ -61,8 +61,8 @@ pnpm script buyer:buy --help
   while shared-object mutations require consensus. This is why checkout/admin listing writes mutate
   `Shop` (shared), while receipt ownership/capabilities stay address-owned.
   Code: `packages/dapp/contracts/oracle-market/sources/shop.move` (shared object types)
-- **Storage rebates**: destroying objects (e.g., zero-value coins) returns storage rebates, which is
-  why `buy_item` and `buy_item_with_discount` call `coin::destroy_zero` when change is zero.
+- **Storage rebates**: destroying objects (e.g., zero-value coins) returns storage rebates. Because
+  checkout now returns the change coin, callers can run `coin::destroy_zero` on zero-value change.
   Code: `packages/dapp/contracts/oracle-market/sources/shop.move` (`buy_item`, `buy_item_with_discount`)
 - **Test-only helpers**: `#[test_only]` APIs expose helpers for Move unit tests without shipping
   them as production entry points.
@@ -90,7 +90,7 @@ public fun currency_exists(
 
 ## 7. Exercises
 1. Find `quote_amount_for_price_info_object` and identify which parts are “identity checks” vs “pricing math”. Expected outcome: you can point to the function that binds feed bytes + object IDs.
-2. Find `buy_item` and explain why it destroys zero-value coins. Expected outcome: you can explain storage rebates at a high level.
+2. Find `buy_item` and explain why it returns `(ShopItem<T>, Coin<C>)`. Expected outcome: you can explain why PTBs transfer result objects explicitly after checkout.
 
 ## 8. Annotated diff: Solidity vs Move buy flow
 ```solidity
@@ -111,19 +111,17 @@ public fun buy_item<T: store, C>(
   price_info: &PriceInfoObject,
   payment_coin: Coin<C>,
   listing_id: ID,
-  mint_to: address,
-  refund_to: address,
   max_price_age_secs: Option<u64>,
   max_confidence_ratio_bps: Option<u16>,
   clock: &clock::Clock,
   ctx: &mut TxContext
-) {
+): (ShopItem<T>, Coin<C>) {
   // listing lookup + currency checks
   // oracle guardrails
-  // payment coin moved in (convention prefers exact-amount coins; this repo may return change)
   // listing stock decremented inside Shop.listings
   // receipt minted as ShopItem<T>
   // events emitted
+  // returns (minted_item, change_coin); caller transfers/destroys as needed
 }
 ```
 **Key differences**

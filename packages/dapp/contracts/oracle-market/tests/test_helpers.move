@@ -9,10 +9,12 @@ use pyth::price_info;
 use std::type_name;
 use std::unit_test::assert_eq;
 use sui::clock::{Self, Clock};
+use sui::coin::Coin;
 use sui::coin_registry::{Self, Currency};
 use sui::event;
 use sui::test_scenario;
 use sui_oracle_market::events;
+use sui_oracle_market::listing::ShopItem;
 use sui_oracle_market::shop;
 
 // === Constants ===
@@ -478,4 +480,18 @@ public(package) fun setup_shop_with_currency_listing_and_price_info_for_item<TIt
     transfer::public_transfer(owner_cap, @0x0);
 
     (shop_id, pyth_object_id, listing_id, price_info_id)
+}
+
+public(package) fun settle_purchase_outputs<T: store, C>(
+    minted_item: ShopItem<T>,
+    change_coin: Coin<C>,
+    mint_to: address,
+    refund_extra_to: address,
+) {
+    if (change_coin.value() == 0) {
+        change_coin.destroy_zero();
+    } else {
+        transfer::public_transfer(change_coin, refund_extra_to);
+    };
+    transfer::public_transfer(minted_item, mint_to);
 }

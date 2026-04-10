@@ -42,7 +42,7 @@ Code: `packages/domain/core/src/flows/buy.ts` (`maybeSetDedicatedGasForSuiPaymen
 
 - **Storage fees**: object creation and mutation carry storage cost.
 - **Storage rebates**: deleting objects returns part of the storage cost.
-- **Why it matters here**: `buy_item` and `buy_item_with_discount` explicitly destroy zero-value change coins to reclaim storage.
+- **Why it matters here**: `buy_item` and `buy_item_with_discount` now return `(ShopItem<T>, Coin<C>)`, so callers can transfer change coins (or destroy zero-value change) explicitly in the PTB.
 
 Code: `packages/dapp/contracts/oracle-market/sources/shop.move` (`buy_item`, `buy_item_with_discount`)
 
@@ -55,13 +55,11 @@ public fun buy_item<T: store, C>(
   price_info_object: &PriceInfoObject,
   payment: Coin<C>,
   listing_id: ID,
-  mint_to: address,
-  refund_extra_to: address,
   max_price_age_secs: Option<u64>,
   max_confidence_ratio_bps: Option<u16>,
   clock: &Clock,
   ctx: &mut TxContext,
-) {
+): (ShopItem<T>, Coin<C>) {
   let (owed_coin_opt, change_coin, minted_item) = shop.process_purchase<T, C>(
     price_info_object,
     payment,
@@ -76,12 +74,8 @@ public fun buy_item<T: store, C>(
   owed_coin_opt.do!(|owed_coin| {
     transfer::public_transfer(owed_coin, shop.owner);
   });
-  if (change_coin.value() == 0) {
-    change_coin.destroy_zero();
-  } else {
-    transfer::public_transfer(change_coin, refund_extra_to);
-  };
-  transfer::public_transfer(minted_item, mint_to);
+
+  (minted_item, change_coin)
 }
 ```
 
@@ -96,7 +90,7 @@ public fun buy_item<T: store, C>(
 PTB
   1) update Pyth price feed (optional)
   2) buy_item or buy_item_with_discount
-  3) pay owner (convention prefers exact-amount coin; this repo may split and return change)
+  3) transfer returned item/change (or destroy zero change)
 ```
 
 ## 9. Further reading (Sui docs)
