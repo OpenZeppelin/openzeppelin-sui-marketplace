@@ -82,12 +82,9 @@ pnpm ui dev
 ### Testnet
 
 ```bash
-# Publish oracle-market
-pnpm script move:publish --package-path oracle-market --network testnet
-
-# In the output of the above command, after the success message, you will find the packageId for the shop contract.
+# Oracle market already published on the testnet.
 # You can set the value as an environment variable:
-export NEXT_PUBLIC_TESTNET_CONTRACT_PACKAGE_ID=<0x...>
+export NEXT_PUBLIC_TESTNET_CONTRACT_PACKAGE_ID=0x065888d3ffa6101b7cb1b8772216ac6ee3721d0f187756f65a6a598f61700902
 # or you can make it more permanent by adding it to ./packages/ui/.env file (there's a ./packages/ui/.env.example for reference)
 
 # To continue setting up the shop, listings, discounts, accepted currencies follow appropriate scripts (find the list here docs/06-scripts-reference.md) or run the seed script that will load data for each model
