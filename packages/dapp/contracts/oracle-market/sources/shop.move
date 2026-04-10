@@ -131,7 +131,7 @@ public struct Shop has key, store {
     /// Human-readable storefront name.
     name: String,
     /// Hard stop for buyer-facing purchase/claim flows.
-    disabled: bool,
+    active: bool,
     /// Registered coin metadata by `TypeName`.
     accepted_currencies: Table<TypeName, AcceptedCurrency>,
     /// Listings keyed by stable object `ID` identifiers.
@@ -171,15 +171,14 @@ public fun create_shop_and_share(name: String, ctx: &mut TxContext): (ID, ShopOw
     (shop_id, owner_cap)
 }
 
-/// Disable a shop permanently (buyer flows will reject new checkouts).
-public fun disable_shop(shop: &mut Shop, owner_cap: &ShopOwnerCap) {
+/// Disable/enable a shop (buyer flows will reject new checkouts).
+public fun toggle_shop(shop: &mut Shop, owner_cap: &ShopOwnerCap, active: bool) {
     assert!(owner_cap.shop_id == shop.id(), EInvalidOwnerCap);
 
-    // TODO#q: we only disable shop but never enable it
-    shop.disabled = true;
-
-    // TODO#q: emit shop disabled should be emitted when only state changes
-    events::emit_shop_disabled(shop.id(), owner_cap.id.to_inner());
+    if (shop.active() != active) {
+        shop.active = active;
+        events::emit_shop_toggled(shop.id(), owner_cap.id.to_inner(), active);
+    };
 }
 
 /// Rotate the payout recipient for a shop.
@@ -547,7 +546,7 @@ public fun buy_item<T: store, C>(
     clock: &Clock,
     ctx: &mut TxContext,
 ): (ShopItem<T>, Coin<C>) {
-    assert!(!shop.disabled, EShopDisabled);
+    assert!(shop.active, EShopDisabled);
 
     let base_price_usd_cents = shop.listing(listing_id).base_price_usd_cents();
 
@@ -577,7 +576,7 @@ public fun buy_item_with_discount<T: store, C>(
     clock: &Clock,
     ctx: &mut TxContext,
 ): (ShopItem<T>, Coin<C>) {
-    assert!(!shop.disabled, EShopDisabled);
+    assert!(shop.active, EShopDisabled);
 
     let now_sec = now_secs(clock);
     let listing_price_usd_cents = shop.listing(listing_id).base_price_usd_cents();
@@ -682,9 +681,9 @@ public fun name(shop: &Shop): String {
     shop.name
 }
 
-/// Returns `disabled` from the provided value.
-public fun disabled(shop: &Shop): bool {
-    shop.disabled
+/// Returns `active` from the provided value.
+public fun active(shop: &Shop): bool {
+    shop.active
 }
 
 /// Returns `owner_cap_id` from the provided value.
@@ -706,7 +705,7 @@ fun new(name: String, owner: address, ctx: &mut TxContext): Shop {
         id: object::new(ctx),
         owner,
         name,
-        disabled: false,
+        active: true,
         accepted_currencies: table::new<TypeName, AcceptedCurrency>(ctx),
         listings: table::new<ID, ItemListing>(ctx),
         discounts: table::new<ID, Discount>(ctx),

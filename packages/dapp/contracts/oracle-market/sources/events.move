@@ -24,12 +24,14 @@ public struct ShopOwnerUpdated has copy, drop {
     previous_owner: address,
 }
 
-/// Event emitted when a shop is disabled.
-public struct ShopDisabled has copy, drop {
-    /// Shop that was disabled.
+/// Event emitted when a shop is toggled active or inactive.
+public struct ShopToggled has copy, drop {
+    /// Shop that was toggled.
     shop_id: ID,
-    /// Owner capability used for disable.
+    /// Owner capability used for the toggle.
     owner_cap_id: ID,
+    /// New shop active status.
+    active: bool,
 }
 
 /// Event emitted when an item listing is added.
@@ -149,11 +151,12 @@ public(package) fun emit_shop_owner_updated(
     });
 }
 
-/// Emits a `ShopDisabled` payload.
-public(package) fun emit_shop_disabled(shop_id: ID, owner_cap_id: ID) {
-    event::emit(ShopDisabled {
+/// Emits a `ShopToggled` payload.
+public(package) fun emit_shop_toggled(shop_id: ID, owner_cap_id: ID, active: bool) {
+    event::emit(ShopToggled {
         shop_id,
         owner_cap_id,
+        active,
     });
 }
 
@@ -285,12 +288,13 @@ public(package) fun shop_owner_updated(
     }
 }
 
-/// Builds a `ShopDisabled` payload.
+/// Builds a `ShopToggled` payload.
 #[test_only]
-public(package) fun shop_disabled(shop_id: ID, owner_cap_id: ID): ShopDisabled {
-    ShopDisabled {
+public(package) fun shop_toggled(shop_id: ID, owner_cap_id: ID, active: bool): ShopToggled {
+    ShopToggled {
         shop_id,
         owner_cap_id,
+        active,
     }
 }
 

@@ -89,7 +89,7 @@ public fun buy_item<T: store, C>(
   clock: &Clock,
   ctx: &mut TxContext,
 ): (ShopItem<T>, Coin<C>) {
-  assert!(!shop.disabled, EShopDisabled);
+  assert!(shop.active, EShopDisabled);
 
   let base_price_usd_cents = shop.listing(listing_id).base_price_usd_cents();
   let (owed_coin_opt, change_coin, minted_item) = shop.process_purchase<T, C>(

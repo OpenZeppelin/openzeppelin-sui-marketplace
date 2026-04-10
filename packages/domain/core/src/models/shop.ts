@@ -68,7 +68,7 @@ export type ShopOverview = {
   shopId: string
   ownerAddress: string
   name: string
-  disabled: boolean
+  active: boolean
 }
 
 export type ShopCreatedSummary = {
@@ -328,13 +328,13 @@ export const getShopOverview = async (
   )
   const ownerAddress = getShopOwnerAddressFromObject(object)
   const name = getShopNameFromObject(object)
-  const disabled = getShopDisabledFlagFromObject(object)
+  const active = getShopActiveFlagFromObject(object)
 
   return {
     shopId,
     ownerAddress,
     name,
-    disabled
+    active
   }
 }
 
@@ -343,12 +343,10 @@ export const getShopNameFromObject = (object: SuiObjectData): string => {
   return readMoveStringOrVector(shopFields.name) ?? "Unnamed Shop"
 }
 
-export const getShopDisabledFlagFromObject = (
-  object: SuiObjectData
-): boolean => {
-  const shopFields = unwrapMoveObjectFields<{ disabled?: unknown }>(object)
-  const rawDisabled = shopFields.disabled
-  return Boolean(rawDisabled as boolean)
+export const getShopActiveFlagFromObject = (object: SuiObjectData): boolean => {
+  const shopFields = unwrapMoveObjectFields<{ active?: unknown }>(object)
+  const rawActive = shopFields.active
+  return Boolean(rawActive as boolean)
 }
 
 /**

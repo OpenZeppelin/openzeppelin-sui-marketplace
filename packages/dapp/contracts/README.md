@@ -174,7 +174,7 @@ Reference
 - Module: `sui_oracle_market::shop`
 - Entry functions: `create_shop`, `disable_shop`, `update_shop_owner`, `add_item_listing`, `add_item_listing_with_discount`, `update_item_listing_stock`, `remove_item_listing`, `add_accepted_currency`, `remove_accepted_currency`, `create_discount`, `update_discount`, `toggle_discount`, `attach_spotlight_discount`, `clear_spotlight_discount`, `buy_item`, `buy_item_with_discount`.
 - Key types: `Shop`, `ShopOwnerCap`, `ItemListing`, `AcceptedCurrency`, `Discount`, `ShopItem`
-- Events: `ShopCreated`, `ShopOwnerUpdated`, `ShopDisabled`, `ItemListingAdded`, `ItemListingStockUpdated`, `ItemListingRemoved`, `DiscountCreated`, `DiscountUpdated`, `DiscountToggled`, `AcceptedCoinAdded`, `AcceptedCoinRemoved`, `DiscountRedeemed`, `PurchaseCompleted`.
+- Events: `ShopCreated`, `ShopOwnerUpdated`, `ShopToggled`, `ItemListingAdded`, `ItemListingStockUpdated`, `ItemListingRemoved`, `DiscountCreated`, `DiscountUpdated`, `DiscountToggled`, `AcceptedCoinAdded`, `AcceptedCoinRemoved`, `DiscountRedeemed`, `PurchaseCompleted`.
 
 Oracle Dependencies
 -------------------
