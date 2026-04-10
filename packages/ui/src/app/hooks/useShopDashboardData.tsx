@@ -25,6 +25,7 @@ type StorefrontState = {
   itemListings: ItemListingSummary[]
   discounts: DiscountSummary[]
   shopOwnerAddress?: string
+  shopActive?: boolean
   clockTimestampMs?: number
 }
 
@@ -46,6 +47,7 @@ const emptyStorefrontState = (): StorefrontState => ({
   itemListings: [],
   discounts: [],
   shopOwnerAddress: undefined,
+  shopActive: undefined,
   clockTimestampMs: undefined
 })
 
@@ -88,6 +90,7 @@ const getStorefrontData = async ({
     acceptedCurrencies: snapshot.acceptedCurrencies,
     discounts: snapshot.discounts,
     shopOwnerAddress: snapshot.shopOverview.ownerAddress,
+    shopActive: snapshot.shopOverview.active,
     clockTimestampMs
   }
 }
@@ -400,6 +403,7 @@ export const useShopDashboardData = ({
           itemListings: data.itemListings,
           discounts: data.discounts,
           shopOwnerAddress: data.shopOwnerAddress,
+          shopActive: data.shopActive,
           clockTimestampMs: data.clockTimestampMs
         })
       } catch (error) {

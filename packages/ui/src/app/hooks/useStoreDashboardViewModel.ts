@@ -308,6 +308,7 @@ export const useStoreDashboardViewModel = ({
   return {
     shopId,
     storefront,
+    shopActive: storefront.shopActive,
     wallet,
     hasShopConfig,
     hasWalletConfig,

@@ -189,6 +189,7 @@ const ItemListingsPanel = ({
   status,
   error,
   shopConfigured,
+  shopActive,
   canBuy,
   onBuy,
   canManageListings,
@@ -201,6 +202,7 @@ const ItemListingsPanel = ({
   status: PanelStatus["status"]
   error?: string
   shopConfigured: boolean
+  shopActive?: boolean
   canBuy: boolean
   onBuy?: (listing: ItemListingSummary) => void
   canManageListings: boolean
@@ -226,6 +228,12 @@ const ItemListingsPanel = ({
         </div>
       ) : (
         <>
+          {shopActive === false ? (
+            <div className="mb-4 rounded-xl border border-amber-300/70 bg-amber-50/70 p-4 text-sm text-amber-800 dark:border-amber-400/30 dark:bg-amber-500/10 dark:text-amber-100">
+              This shop is currently disabled. Buyers can browse listings, but
+              purchases are paused until the owner enables the shop.
+            </div>
+          ) : undefined}
           {status === "loading" ? (
             <Loading />
           ) : status === "error" ? (
@@ -265,6 +273,7 @@ const ItemListingsPanel = ({
                       : "text-emerald-700 dark:text-emerald-100"
                 const showRemove = canManageListings
                 const showBuy = canBuy
+                const isShopDisabled = shopActive === false
                 const actionLabel = resolveListingActionLabel({
                   canBuy,
                   isOutOfStock
@@ -350,7 +359,7 @@ const ItemListingsPanel = ({
                     {canBuy || canManageListings ? (
                       <div className="mt-auto space-y-3 pt-5">
                         <div className="text-[0.6rem] uppercase tracking-[0.18em] text-slate-500 dark:text-slate-200/60">
-                          {actionLabel}
+                          {isShopDisabled ? "Shop disabled" : actionLabel}
                         </div>
                         <div
                           className={clsx(
@@ -372,12 +381,16 @@ const ItemListingsPanel = ({
                               variant="primary"
                               size="compact"
                               onClick={() => onBuy?.(listing)}
-                              disabled={isOutOfStock}
+                              disabled={isOutOfStock || isShopDisabled}
                               className="group"
                             >
                               <span>Buy</span>
                               <span className="text-[0.6rem] text-slate-500 transition group-hover:text-slate-700 dark:text-slate-200/60 dark:group-hover:text-slate-100">
-                                {isOutOfStock ? "Unavailable" : "Now"}
+                                {isOutOfStock
+                                  ? "Unavailable"
+                                  : isShopDisabled
+                                    ? "Paused"
+                                    : "Now"}
                               </span>
                             </Button>
                           ) : undefined}
@@ -813,6 +826,7 @@ const StoreDashboard = ({
     hasShopConfig,
     hasWalletConfig,
     canBuy,
+    shopActive,
     canManageListings,
     canManageCurrencies,
     canManageDiscounts,
@@ -854,6 +868,7 @@ const StoreDashboard = ({
             status={storefront.status}
             error={storefront.error}
             shopConfigured={hasShopConfig}
+            shopActive={shopActive}
             canBuy={canBuy}
             onBuy={openBuyModal}
             canManageListings={canManageListings}

@@ -505,6 +505,7 @@ public fun remove_discount(shop: &mut Shop, owner_cap: &ShopOwnerCap, discount_i
 }
 
 /// Surface a discount alongside a listing so UIs can highlight the promotion.
+/// Fails when discount `applies_to_listing` doesn't match listing.
 public fun attach_spotlight_discount(
     shop: &mut Shop,
     owner_cap: &ShopOwnerCap,
@@ -514,9 +515,11 @@ public fun attach_spotlight_discount(
     assert!(owner_cap.shop_id == shop.id(), EInvalidOwnerCap);
 
     // Assert discount matches to listing.
-    shop.discount(discount_id).applies_to_listing().do!(|applies_to_listing| {
-        assert!(applies_to_listing == listing_id, ESpotlightDiscountListingMismatch);
-    });
+    let applies_to_listing = shop
+        .discount(discount_id)
+        .applies_to_listing()
+        .destroy_or!(abort ESpotlightDiscountListingMismatch);
+    assert!(applies_to_listing == listing_id, ESpotlightDiscountListingMismatch);
 
     // Attach discount to listing.
     shop.listing_mut(listing_id).set_spotlight(discount_id);

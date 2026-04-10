@@ -9,11 +9,19 @@ import CopyableId from "./CopyableId"
 const SelectedShopHeader = ({
   shopId,
   shop,
-  onChangeShop
+  onChangeShop,
+  shopActive,
+  canToggleShop,
+  onToggleShop,
+  isToggleShopPending
 }: {
   shopId: string
   shop?: ShopCreatedSummary
   onChangeShop: () => void
+  shopActive?: boolean
+  canToggleShop?: boolean
+  onToggleShop?: () => void
+  isToggleShopPending?: boolean
 }) => {
   const title = shop?.name ? shop.name : `Shop ${shortenId(shopId)}`
   const ownerAddress = shop?.ownerAddress
@@ -31,6 +39,11 @@ const SelectedShopHeader = ({
             <div className="text-base font-semibold text-sds-dark dark:text-sds-light">
               {title}
             </div>
+            {shopActive !== undefined ? (
+              <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-200/60">
+                Status: {shopActive ? "Enabled" : "Disabled"}
+              </div>
+            ) : undefined}
             <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500 dark:text-slate-200/70">
               <CopyableId
                 value={shopId}
@@ -51,7 +64,21 @@ const SelectedShopHeader = ({
               ) : undefined}
             </div>
           </div>
-          <div className="ml-auto flex items-center">
+          <div className="ml-auto flex items-center gap-3">
+            {canToggleShop ? (
+              <Button
+                variant={shopActive === false ? "primary" : "danger"}
+                size="compact"
+                onClick={onToggleShop}
+                disabled={isToggleShopPending}
+              >
+                {isToggleShopPending
+                  ? "Processing..."
+                  : shopActive === false
+                    ? "Enable shop"
+                    : "Disable shop"}
+              </Button>
+            ) : undefined}
             <Button variant="secondary" size="compact" onClick={onChangeShop}>
               Change shop
             </Button>

@@ -5,19 +5,15 @@ settings:
   excludeLinksFromLockfile: false
 
 overrides:
-  axios: 1.13.5
+  axios: 1.15.0
   '@isaacs/brace-expansion': 5.0.1
   minimatch: 10.2.4
-  lodash-es@>=4.0.0 <=4.17.22: 4.17.23
   next@>=16.0.0-beta.0 <16.1.7: 16.1.7
-  next@>=16.0.1 <16.1.7: 16.1.7
   picomatch@<2.3.2: 2.3.2
   picomatch@>=4.0.0 <4.0.4: 4.0.4
   yaml@>=2.0.0 <2.8.3: 2.8.3
   '@xmldom/xmldom@>=0.9.0 <0.9.9': 0.9.9
   lodash-es@>=4.0.0 <=4.17.23: 4.18.0
-  lodash-es@<=4.17.23: 4.18.0
-  vite@>=7.0.0 <=7.3.1: 7.3.2
   vite@>=7.1.0 <=7.3.1: 7.3.2
 
 importers:
@@ -68,7 +64,7 @@ importers:
         version: 1.45.2(typescript@5.9.3)
       '@pythnetwork/pyth-sui-js':
         specifier: ^2.4.0
-        version: 2.4.0(axios@1.13.6)(typescript@5.9.3)
+        version: 2.4.0(axios@1.15.0)(typescript@5.9.3)
       '@sui-oracle-market/domain-core':
         specifier: workspace:*
         version: link:../domain/core
@@ -105,7 +101,7 @@ importers:
         version: 1.45.2(typescript@5.9.3)
       '@pythnetwork/pyth-sui-js':
         specifier: ^2.4.0
-        version: 2.4.0(axios@1.13.6)(typescript@5.9.3)
+        version: 2.4.0(axios@1.15.0)(typescript@5.9.3)
       '@sui-oracle-market/tooling-core':
         specifier: workspace:*
         version: link:../../tooling/core
@@ -2469,7 +2465,7 @@ packages:
   '@zodios/core@10.9.6':
     resolution: {integrity: sha512-aH4rOdb3AcezN7ws8vDgBfGboZMk2JGGzEq/DtW65MhnRxyTGRuLJRWVQ/2KxDgWvV2F5oTkAS+5pnjKbl0n+A==}
     peerDependencies:
-      axios: 1.13.5
+      axios: 1.15.0
       zod: ^3.x
 
   acorn-jsx@5.3.2:
@@ -2565,13 +2561,10 @@ packages:
   axios-retry@4.5.0:
     resolution: {integrity: sha512-aR99oXhpEDGo0UuAlYcn2iGRds30k366Zfa05XWScR9QaQD4JYiP3/1Qt1u7YlefUOK+cn0CcwoL1oefavQUlQ==}
     peerDependencies:
-      axios: 1.13.5
+      axios: 1.15.0
 
-  axios@1.13.5:
-    resolution: {integrity: sha512-cz4ur7Vb0xS4/KUN0tPWe44eqxrIu31me+fbang3ijiNscE129POzipJJA6zniq2C/Z6sJCjMimjS8Lc/GAs8Q==}
-
-  axios@1.13.6:
-    resolution: {integrity: sha512-ChTCHMouEe2kn713WHbQGcuYrr6fXTBiu460OTwWrWob16g1bXn4vtz07Ope7ewMozJAnEquLk5lWQWtBig9DQ==}
+  axios@1.15.0:
+    resolution: {integrity: sha512-wWyJDlAatxk30ZJer+GeCWS209sA42X+N5jU2jy6oHTp7ufw8uzUTVFBX9+wTfAlhiJXGS0Bq7X6efruWjuK9Q==}
 
   bail@2.0.2:
     resolution: {integrity: sha512-0xO6mYd7JB2YesxDKplafRpsiOzPt9V02ddPCLbY1xYGPOX24NTyN50qnUxgCPcSoYMhKpAuBTjQoRZCAkUDRw==}
@@ -4346,8 +4339,9 @@ packages:
   property-information@7.1.0:
     resolution: {integrity: sha512-TwEZ+X+yCJmYfL7TPUOcvBZ4QfoT5YenQiJuX//0th53DE6w0xxLEtfK3iyryQFddXuvkIk51EEgrJQ0WJkOmQ==}
 
-  proxy-from-env@1.1.0:
-    resolution: {integrity: sha512-D+zkORCbA9f1tdWRK0RaCR3GPv50cMxcrz4X8k5LTSUD1Dkw47mKJEZQNunItRTkWwgtaUSo1RVFRIG9ZXiFYg==}
+  proxy-from-env@2.1.0:
+    resolution: {integrity: sha512-cJ+oHTW1VAEa8cJslgmUZrc+sjRKgAKl3Zyse6+PV38hZe/V6Z14TbCuXcan9F9ghlz4QrFr2c92TNF82UkYHA==}
+    engines: {node: '>=10'}
 
   ps-list@6.3.0:
     resolution: {integrity: sha512-qau0czUSB0fzSlBOQt0bo+I2v6R+xiQdj78e1BR/Qjfl5OHWJ/urXi8+ilw1eHe+5hSeDI1wrwVTgDp2wst4oA==}
@@ -5814,8 +5808,8 @@ snapshots:
   '@mysten/suins@0.9.13(typescript@5.9.3)':
     dependencies:
       '@mysten/sui': 1.45.2(typescript@5.9.3)
-      axios: 1.13.5
-      axios-retry: 4.5.0(axios@1.13.5)
+      axios: 1.15.0
+      axios-retry: 4.5.0(axios@1.15.0)
     transitivePeerDependencies:
       - '@gql.tada/svelte-support'
       - '@gql.tada/vue-support'
@@ -5984,18 +5978,18 @@ snapshots:
 
   '@protobuf-ts/runtime@2.11.1': {}
 
-  '@pythnetwork/hermes-client@2.1.0(axios@1.13.6)':
+  '@pythnetwork/hermes-client@2.1.0(axios@1.15.0)':
     dependencies:
-      '@zodios/core': 10.9.6(axios@1.13.6)(zod@3.25.76)
+      '@zodios/core': 10.9.6(axios@1.15.0)(zod@3.25.76)
       eventsource: 3.0.7
       zod: 3.25.76
     transitivePeerDependencies:
       - axios
 
-  '@pythnetwork/pyth-sui-js@2.4.0(axios@1.13.6)(typescript@5.9.3)':
+  '@pythnetwork/pyth-sui-js@2.4.0(axios@1.15.0)(typescript@5.9.3)':
     dependencies:
       '@mysten/sui': 1.45.2(typescript@5.9.3)
-      '@pythnetwork/hermes-client': 2.1.0(axios@1.13.6)
+      '@pythnetwork/hermes-client': 2.1.0(axios@1.15.0)
       buffer: 6.0.3
     transitivePeerDependencies:
       - '@gql.tada/svelte-support'
@@ -7512,9 +7506,9 @@ snapshots:
 
   '@xobotyi/scrollbar-width@1.9.5': {}
 
-  '@zodios/core@10.9.6(axios@1.13.6)(zod@3.25.76)':
+  '@zodios/core@10.9.6(axios@1.15.0)(zod@3.25.76)':
     dependencies:
-      axios: 1.13.6
+      axios: 1.15.0
       zod: 3.25.76
 
   acorn-jsx@5.3.2(acorn@8.15.0):
@@ -7597,24 +7591,16 @@ snapshots:
       postcss: 8.5.6
       postcss-value-parser: 4.2.0
 
-  axios-retry@4.5.0(axios@1.13.5):
+  axios-retry@4.5.0(axios@1.15.0):
     dependencies:
-      axios: 1.13.5
+      axios: 1.15.0
       is-retry-allowed: 2.2.0
 
-  axios@1.13.5:
+  axios@1.15.0:
     dependencies:
       follow-redirects: 1.15.11
       form-data: 4.0.5
-      proxy-from-env: 1.1.0
-    transitivePeerDependencies:
-      - debug
-
-  axios@1.13.6:
-    dependencies:
-      follow-redirects: 1.15.11
-      form-data: 4.0.5
-      proxy-from-env: 1.1.0
+      proxy-from-env: 2.1.0
     transitivePeerDependencies:
       - debug
 
@@ -9774,7 +9760,7 @@ snapshots:
 
   property-information@7.1.0: {}
 
-  proxy-from-env@1.1.0: {}
+  proxy-from-env@2.1.0: {}
 
   ps-list@6.3.0: {}
 

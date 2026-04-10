@@ -266,6 +266,7 @@ fun apply(rule: DiscountRule, base_price_usd_cents: u64): u64 {
         },
         DiscountRule::Percent { bps } => {
             let remaining_bps = BASIS_POINT_DENOMINATOR - (bps as u64);
+            // Round UP to ensure sellers don't lose fractional cents.
             let maybe_discounted = u64::mul_div(
                 base_price_usd_cents,
                 remaining_bps,

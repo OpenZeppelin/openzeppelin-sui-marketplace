@@ -52,3 +52,29 @@ export const buildUpdateShopOwnerTransaction = ({
 
   return transaction
 }
+
+export const buildToggleShopTransaction = ({
+  packageId,
+  shop,
+  ownerCapId,
+  active
+}: {
+  packageId: string
+  shop: WrappedSuiSharedObject
+  ownerCapId: string
+  active: boolean
+}) => {
+  const transaction = newTransaction()
+  const shopArgument = transaction.sharedObjectRef(shop.sharedRef)
+
+  transaction.moveCall({
+    target: `${packageId}::shop::toggle_shop`,
+    arguments: [
+      shopArgument,
+      transaction.object(ownerCapId),
+      transaction.pure.bool(active)
+    ]
+  })
+
+  return transaction
+}

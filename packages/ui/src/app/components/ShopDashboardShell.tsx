@@ -4,6 +4,7 @@ import { useCurrentAccount, useSuiClientContext } from "@mysten/dapp-kit"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import { useCallback, useEffect, useRef, useState } from "react"
 import useResolvedPackageId from "../hooks/useResolvedPackageId"
+import { useShopStatusToggle } from "../hooks/useShopStatusToggle"
 import { useShopSelectionViewModel } from "../hooks/useShopSelectionViewModel"
 import CreateShopModal from "./CreateShopModal"
 import NetworkSupportChecker from "./NetworkSupportChecker"
@@ -45,6 +46,17 @@ const ShopDashboardShell = () => {
     selectShop,
     clearSelection
   } = useShopSelectionViewModel({ packageId })
+  const {
+    shopActive,
+    shopOwnerAddress,
+    canToggleShop,
+    isProcessing,
+    toggleShopStatus,
+    refreshShopOverview
+  } = useShopStatusToggle({
+    shopId: selectedShopId,
+    selectedShopOwnerAddress: selectedShop?.ownerAddress
+  })
 
   const updateShopIdInUrl = useCallback(
     (shopId?: string, mode: "push" | "replace" = "push") => {
@@ -153,6 +165,11 @@ const ShopDashboardShell = () => {
     [handleSelectShop, refresh]
   )
 
+  const handleToggleShopStatus = useCallback(async () => {
+    await toggleShopStatus()
+    refreshShopOverview()
+  }, [refreshShopOverview, toggleShopStatus])
+
   const walletConnected = Boolean(currentAccount?.address)
 
   return (
@@ -163,10 +180,26 @@ const ShopDashboardShell = () => {
           <div className="flex w-full flex-col items-center gap-6">
             <SelectedShopHeader
               shopId={selectedShopId}
-              shop={selectedShop}
+              shop={
+                selectedShop
+                  ? {
+                      ...selectedShop,
+                      ownerAddress:
+                        shopOwnerAddress ?? selectedShop.ownerAddress
+                    }
+                  : undefined
+              }
               onChangeShop={handleClearSelection}
+              shopActive={shopActive}
+              canToggleShop={canToggleShop}
+              onToggleShop={handleToggleShopStatus}
+              isToggleShopPending={isProcessing}
             />
-            <StoreDashboard shopId={selectedShopId} packageId={packageId} />
+            <StoreDashboard
+              key={`${selectedShopId}:${String(shopActive)}`}
+              shopId={selectedShopId}
+              packageId={packageId}
+            />
           </div>
         ) : (
           <ShopSelection
