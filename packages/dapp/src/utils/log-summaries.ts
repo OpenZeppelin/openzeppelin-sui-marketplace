@@ -15,12 +15,12 @@ export const logShopOverview = ({
   shopId,
   ownerAddress,
   name,
-  disabled
+  active
 }: ShopOverview) => {
   logKeyValueGreen("Shop")(shopId)
   logKeyValueGreen("Name")(name ?? "Unknown")
   logKeyValueGreen("Owner")(ownerAddress)
-  logKeyValueGreen("Disabled")(disabled ? "Yes" : "No")
+  logKeyValueGreen("Status")(active ? "Enabled" : "Disabled")
   console.log("")
 }
 
