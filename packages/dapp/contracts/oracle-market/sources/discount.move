@@ -246,11 +246,10 @@ public(package) fun finished(discount: &Discount, now_sec: u64): bool {
 
 /// Parses primitive rule kind encoding into a typed rule kind.
 fun parse_kind(raw_kind: u8): DiscountRuleKind {
-    if (raw_kind == 0) {
-        DiscountRuleKind::Fixed
-    } else {
-        assert!(raw_kind == 1, EInvalidRuleKind);
-        DiscountRuleKind::Percent
+    match (raw_kind) {
+        0 => DiscountRuleKind::Fixed,
+        1 => DiscountRuleKind::Percent,
+        _ => abort EInvalidRuleKind,
     }
 }
 
