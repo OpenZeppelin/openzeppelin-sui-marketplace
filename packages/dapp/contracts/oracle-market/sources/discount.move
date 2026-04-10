@@ -224,6 +224,14 @@ public(package) fun set_active(discount: &mut Discount, active: bool) {
     discount.active = active;
 }
 
+/// Set applies to listing and returns previously set value if any.
+public(package) fun set_applies_to_listing(
+    discount: &mut Discount,
+    applies_to_listing: ID,
+): Option<ID> {
+    discount.applies_to_listing.swap_or_fill(applies_to_listing)
+}
+
 // === Private Functions ===
 
 /// Parses primitive rule kind encoding into a typed rule kind.

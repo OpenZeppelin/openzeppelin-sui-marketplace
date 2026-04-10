@@ -102,7 +102,6 @@ public(package) fun create<T: store>(
     name: String,
     base_price_usd_cents: u64,
     stock: u64,
-    spotlight_discount_id: Option<ID>,
     ctx: &mut TxContext,
 ): ItemListing {
     assert!(stock > 0, EZeroStock);
@@ -116,7 +115,7 @@ public(package) fun create<T: store>(
         base_price_usd_cents,
         stock,
         active_bound_discount_count: 0,
-        spotlight_discount_id,
+        spotlight_discount_id: option::none(),
     }
 }
 

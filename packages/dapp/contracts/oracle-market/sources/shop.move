@@ -210,18 +210,30 @@ public fun add_item_listing<T: store>(
 ): ID {
     assert!(owner_cap.shop_id == shop.id(), EInvalidOwnerCap);
 
-    spotlight_discount_id.do!(|discount_id| {
-        assert!(shop.discounts.contains(discount_id), EDiscountNotFound);
-    });
-
-    let listing = listing::create<T>(
+    // Create an item listing.
+    let mut listing = listing::create<T>(
         name,
         base_price_usd_cents,
         stock,
-        spotlight_discount_id,
         ctx,
     );
     let listing_id = listing.id();
+
+    // Check that spotlight discount id exist.
+    // Update listing discount count and set spotlight, 
+    // Set discount's `applies_to_listing` 
+    let previous_listing_id = spotlight_discount_id.and!(|discount_id| {
+        listing.increment_active_bound_discount_count();
+        listing.set_spotlight(discount_id);
+        shop.discount_mut(discount_id).set_applies_to_listing(listing_id)
+    });
+    // and clear that listing from spotlight discount if any.
+    previous_listing_id.do!(|previous_listing_id| {
+        let listing = shop.listing_mut(previous_listing_id);
+        listing.clear_spotlight();
+        listing.decrement_active_bound_discount_count();
+    });
+
     shop.listings.add(listing_id, listing);
 
     events::emit_item_listing_added(shop.id(), listing_id);
@@ -790,7 +802,6 @@ fun process_purchase<T: store, C>(
 
     let owed_coin_opt = split_payment(&mut payment, quote_amount, ctx);
     let amount_paid = owed_coin_opt.map_ref!(|owed_coin| owed_coin.value()).destroy_or!(0);
-
 
     events::emit_item_listing_stock_updated(shop_id, item_listing.id(), previous_stock);
 
