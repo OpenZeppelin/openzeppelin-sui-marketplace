@@ -93,12 +93,10 @@ const EPythObjectMismatch: vector<u8> = "pyth object mismatch";
 #[error(code = 7)]
 const EFeedIdentifierMismatch: vector<u8> = "feed identifier mismatch";
 #[error(code = 8)]
-const EInsufficientPayment: vector<u8> = "insufficient payment";
-#[error(code = 9)]
 const ESpotlightDiscountListingMismatch: vector<u8> = "spotlight discount listing mismatch";
-#[error(code = 10)]
+#[error(code = 9)]
 const EEmptyShopName: vector<u8> = "empty shop name";
-#[error(code = 11)]
+#[error(code = 10)]
 const EShopDisabled: vector<u8> = "shop disabled";
 
 // === Init ===
@@ -786,8 +784,7 @@ fun process_purchase<T: store, C>(
 
     events::emit_item_listing_stock_updated(shop_id, item_listing.id(), previous_stock);
 
-    // Check payment is enough, and split amount due.
-    assert!(payment.value() >= quote_amount, EInsufficientPayment);
+    // Split amount due (`split` should handle insufficient amount).
     let amount_due = payment.split(quote_amount, ctx);
 
     // Mint purchased item.

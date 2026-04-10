@@ -1201,7 +1201,7 @@ fun buy_item_with_discount_emits_discount_redeemed_and_records_discount_id() {
     let _ = scn.end();
 }
 
-#[test, expected_failure(abort_code = ::sui_oracle_market::shop::EInsufficientPayment)]
+#[test, expected_failure(abort_code = ::sui::balance::ENotEnough)]
 fun buy_item_rejects_insufficient_payment() {
     let mut scn = test_scenario::begin(owner());
     let (shop_id, listing_id, price_info_id) = setup_shop_with_listing_and_price_info(
