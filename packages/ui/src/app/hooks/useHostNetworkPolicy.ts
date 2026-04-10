@@ -1,16 +1,16 @@
 "use client"
 
-import { useMemo } from "react"
+import { useEffect, useState } from "react"
 import { ENetwork } from "@sui-oracle-market/tooling-core/types"
 import { isLocalhostHost } from "../helpers/host"
 
-const resolveHostname = () => {
-  if (typeof window === "undefined") return undefined
-  return window.location.hostname
-}
-
 const useHostNetworkPolicy = () => {
-  const hostname = useMemo(() => resolveHostname(), [])
+  const [hostname, setHostname] = useState<string | undefined>(undefined)
+
+  useEffect(() => {
+    setHostname(window.location.hostname)
+  }, [])
+
   const isLocalhost = isLocalhostHost(hostname)
 
   return {
