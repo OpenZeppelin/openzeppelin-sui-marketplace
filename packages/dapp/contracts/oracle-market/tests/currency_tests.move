@@ -42,17 +42,17 @@ fun add_accepted_currency_rejects_duplicate_coin_type() {
 
     let _ = test_helpers::add_currency_with_feed<test_helpers::TestCoin>(
         &mut shop,
+        &owner_cap,
         &currency,
         test_helpers::primary_feed_id(),
-        &owner_cap,
         &mut ctx,
     );
 
     let _ = test_helpers::add_currency_with_feed<test_helpers::TestCoin>(
         &mut shop,
+        &owner_cap,
         &currency,
         test_helpers::secondary_feed_id(),
-        &owner_cap,
         &mut ctx,
     );
 

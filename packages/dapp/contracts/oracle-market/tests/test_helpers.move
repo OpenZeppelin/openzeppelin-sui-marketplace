@@ -152,9 +152,9 @@ public(package) fun create_price_info_object_for_feed_with_price_and_times(
 
 public(package) fun add_currency_with_feed<T>(
     shop_obj: &mut shop::Shop,
+    owner_cap: &shop::ShopOwnerCap,
     accepted_currency: &Currency<T>,
     feed_id: vector<u8>,
-    owner_cap: &shop::ShopOwnerCap,
     ctx: &mut tx_context::TxContext,
 ): ID {
     let price_info_object = create_price_info_object_for_feed(feed_id, ctx);
