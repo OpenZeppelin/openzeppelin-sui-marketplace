@@ -469,12 +469,14 @@ public fun toggle_discount(
 ) {
     assert!(owner_cap.shop_id == shop.id(), EInvalidOwnerCap);
 
+    // Assert that listing exist when we activate discount.
     if (active) {
         shop.discount(discount_id).applies_to_listing().do!(|listing_id| {
             assert!(shop.listings.contains(listing_id), EListingNotFound);
         });
     };
 
+    // Emit event only when state changes.
     let discount = shop.discount_mut(discount_id);
     if (discount.active() != active) {
         discount.set_active(active);
@@ -550,7 +552,7 @@ public fun buy_item<T: store, C>(
     let base_price_usd_cents = shop.listing(listing_id).base_price_usd_cents();
 
     // Payment is a Coin<T> object; process_purchase splits the payment and returns change.
-    let (owed_coin_opt, change_coin, minted_item) = shop.process_purchase<T, C>(
+    shop.process_purchase<T, C>(
         price_info_object,
         payment,
         listing_id,
@@ -560,15 +562,7 @@ public fun buy_item<T: store, C>(
         max_confidence_ratio_bps,
         clock,
         ctx,
-    );
-
-    // TODO#q: why we return opt coin. We can handle zero here as none.
-    // And transfer owed coin to the shop owner.
-    owed_coin_opt.do!(|owed_coin| {
-        transfer::public_transfer(owed_coin, shop.owner);
-    });
-
-    (minted_item, change_coin)
+    )
 }
 
 /// Same as `buy_item` but also validates that discount is applicable.
@@ -597,7 +591,8 @@ public fun buy_item_with_discount<T: store, C>(
         discount.id(),
     );
 
-    let (owed_coin_opt, change_coin, minted_item) = shop.process_purchase<T, C>(
+    // Payment is a Coin<T> object; process_purchase splits the payment and returns change.
+    shop.process_purchase<T, C>(
         price_info_object,
         payment,
         listing_id,
@@ -607,12 +602,7 @@ public fun buy_item_with_discount<T: store, C>(
         max_confidence_ratio_bps,
         clock,
         ctx,
-    );
-    owed_coin_opt.do!(|owed_coin| {
-        transfer::public_transfer(owed_coin, shop.owner);
-    });
-
-    (minted_item, change_coin)
+    )
 }
 
 // === View Functions ===
@@ -747,7 +737,8 @@ fun process_purchase<T: store, C>(
     max_confidence_ratio_bps: Option<u16>,
     clock: &Clock,
     ctx: &mut TxContext,
-): (Option<Coin<C>>, Coin<C>, ShopItem<T>) {
+): (ShopItem<T>, Coin<C>) {
+    // Assert pyt price info object validity.
     let accepted_currency = shop.currency<C>();
     assert_price_info_identity!(
         accepted_currency.feed_id(),
@@ -755,6 +746,7 @@ fun process_purchase<T: store, C>(
         price_info_object,
     );
 
+    // Quote amount due.
     let quote_amount = accepted_currency.quote_amount_with_guardrails(
         price_info_object,
         discounted_price_usd_cents,
@@ -765,15 +757,18 @@ fun process_purchase<T: store, C>(
     let pyth_price_info_object_id = accepted_currency.pyth_object_id();
     let shop_id = shop.id();
 
+    // Decrement stock and emit previous stock in event.
     let item_listing = shop.listing_mut(listing_id);
     let previous_stock = item_listing.stock();
     item_listing.decrement_stock();
 
-    let owed_coin_opt = split_payment(&mut payment, quote_amount, ctx);
-    let amount_paid = owed_coin_opt.map_ref!(|owed_coin| owed_coin.value()).destroy_or!(0);
-
     events::emit_item_listing_stock_updated(shop_id, item_listing.id(), previous_stock);
 
+    // Check payment is enough, and split amount due.
+    assert!(payment.value() >= quote_amount, EInsufficientPayment);
+    let amount_due = payment.split(quote_amount, ctx);
+
+    // Mint purchased item.
     let minted_item = item_listing.mint_shop_item<T>(shop_id, now_secs(clock), ctx);
     let minted_item_id = object::id(&minted_item);
 
@@ -783,22 +778,18 @@ fun process_purchase<T: store, C>(
         pyth_price_info_object_id,
         discount_id,
         minted_item_id,
-        amount_paid,
+        amount_due.value(),
         discounted_price_usd_cents,
     );
-    (owed_coin_opt, payment, minted_item)
-}
 
-/// Splits and returns the owed payment amount, or `none` when nothing is due.
-fun split_payment<C>(payment: &mut Coin<C>, amount_due: u64, ctx: &mut TxContext): Option<Coin<C>> {
-    if (amount_due == 0) {
-        return option::none()
+    // Transfer owed coin to the shop owner if any.
+    if (amount_due.value() == 0) {
+        amount_due.destroy_zero();
+    } else {
+        transfer::public_transfer(amount_due, shop.owner);
     };
 
-    let available = payment.value();
-    assert!(available >= amount_due, EInsufficientPayment);
-    let owed = payment.split(amount_due, ctx);
-    option::some(owed)
+    (minted_item, payment)
 }
 
 macro fun assert_price_info_identity(
