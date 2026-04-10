@@ -71,7 +71,7 @@ pnpm script move:publish --package-path oracle-market --network localnet
 export NEXT_PUBLIC_LOCALNET_CONTRACT_PACKAGE_ID=<0x...>
 # or you can make it more permanent by adding it to ./packages/ui/.env file (there's a ./packages/ui/.env.example for reference)
 
-# To continue setting up the shop, listings, discounts, accepted currencies follow appropriate scripts (find the list here docs/06-scripts-reference.md) or run the seed script that will load data for each model
+# To continue setting up the shop, listings, discounts, accepted currencies follow appropriate scripts (find the list here docs/06-scripts-reference.md) or run the seed script that create shop and will load data for each model
 pnpm script owner:shop:seed --network localnet
 
 # Run the UI
@@ -87,10 +87,10 @@ pnpm ui dev
 export NEXT_PUBLIC_TESTNET_CONTRACT_PACKAGE_ID=0x065888d3ffa6101b7cb1b8772216ac6ee3721d0f187756f65a6a598f61700902
 # or you can make it more permanent by adding it to ./packages/ui/.env file (there's a ./packages/ui/.env.example for reference)
 
-# To continue setting up the shop, listings, discounts, accepted currencies follow appropriate scripts (find the list here docs/06-scripts-reference.md) or run the seed script that will load data for each model
-pnpm script owner:shop:seed --network testnet
+# To continue setting up the shop, listings, discounts, accepted currencies follow appropriate scripts (find the list here docs/06-scripts-reference.md) or run the seed script that will create shop and load data for each model
+pnpm script owner:shop:seed --shop-package-id $NEXT_PUBLIC_TESTNET_CONTRACT_PACKAGE_ID
 
-# Run the UI
+# Run the UI (choose testnet in UI)
 pnpm ui dev
 
 ```
