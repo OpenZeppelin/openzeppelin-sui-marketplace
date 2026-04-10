@@ -126,6 +126,7 @@ export const resolveDiscountedPriceUsdCents = ({
 
   const selectedDiscount = discountLookup[discountSelection.discountId]
   if (!selectedDiscount) return basePrice
+  if (!selectedDiscount.activeFlag) return basePrice
 
   const ruleKind = selectedDiscount.ruleKind
   const ruleValue = selectedDiscount.ruleValue
