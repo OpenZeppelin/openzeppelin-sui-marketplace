@@ -282,7 +282,7 @@ export const buildAttachDiscountTransaction = ({
     })
 
   transaction.moveCall({
-    target: `${packageId}::shop::attach_discount_to_listing`,
+    target: `${packageId}::shop::add_spotlight_discount`,
     arguments: [
       shopArgument,
       ownerCapabilityArgument,
@@ -312,7 +312,7 @@ export const buildClearDiscountTransaction = ({
     })
 
   transaction.moveCall({
-    target: `${packageId}::shop::clear_discount_from_listing`,
+    target: `${packageId}::shop::clear_spotlight_discount`,
     arguments: [
       shopArgument,
       ownerCapabilityArgument,

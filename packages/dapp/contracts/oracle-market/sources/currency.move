@@ -8,7 +8,6 @@ use pyth::price::Price;
 use pyth::price_info::{Self, PriceInfoObject};
 use pyth::pyth;
 use std::string::String;
-use std::u128;
 use sui::clock::Clock;
 use sui::coin_registry::Currency;
 
@@ -196,13 +195,13 @@ public(package) fun quote_amount_from_usd_cents(
     );
 
     assert!(decimals as u64 <= MAX_DECIMAL_POWER, EUnsupportedCurrencyDecimals);
-    let coin_decimals_pow10 = u128::pow(10, decimals);
+    let coin_decimals_pow10 = 10u128.pow(decimals);
     assert!(exponent_magnitude <= MAX_DECIMAL_POWER, EPriceOverflow);
-    let exponent_pow10 = u128::pow(10, exponent_magnitude as u8);
+    let exponent_pow10 = 10u128.pow(exponent_magnitude as u8);
 
     let mut numerator_multiplier = coin_decimals_pow10;
     if (exponent_is_negative) {
-        numerator_multiplier = // TODO#q: try checked_mul and remove wormhole dep.
+        numerator_multiplier =
             oz_u128::mul_div(
                 numerator_multiplier,
                 exponent_pow10,

@@ -514,9 +514,8 @@ public fun remove_discount(shop: &mut Shop, owner_cap: &ShopOwnerCap, discount_i
     let _ = shop.discounts.remove(discount_id);
 }
 
-// TODO#q: rename to link_discount_and_listing and change logic for discount and listing creation.
 /// Surface a discount alongside a listing so UIs can highlight the promotion.
-public fun attach_discount_to_listing(
+public fun add_spotlight_discount(
     shop: &mut Shop,
     owner_cap: &ShopOwnerCap,
     discount_id: ID,
@@ -534,11 +533,10 @@ public fun attach_discount_to_listing(
 }
 
 /// Remove the promotion banner from a listing.
-public fun clear_discount_from_listing(shop: &mut Shop, owner_cap: &ShopOwnerCap, listing_id: ID) {
+public fun clear_spotlight_discount(shop: &mut Shop, owner_cap: &ShopOwnerCap, listing_id: ID) {
     assert!(owner_cap.shop_id == shop.id(), EInvalidOwnerCap);
 
-    let item_listing = shop.listing_mut(listing_id);
-    item_listing.clear_spotlight();
+    shop.listing_mut(listing_id).clear_spotlight();
 }
 
 // TODO#q: Buy item should return Coin<C> + Item<T>

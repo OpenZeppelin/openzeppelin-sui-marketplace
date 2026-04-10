@@ -33,7 +33,7 @@ Entry Points At A Glance
 - Shops: `create_shop` mints the shared `Shop` plus the owned `ShopOwnerCap`; `disable_shop` permanently disables buyer flows; `update_shop_owner` rotates the payout/owner fields without touching listings.
 - Listings: `add_item_listing<T>` inserts a listing row in `Shop.listings` with USD-cent price, stock, and optional `spotlight_discount_id`; `add_item_listing_with_discount<T>` atomically creates a listing plus a pinned spotlight discount; `update_item_listing_stock`/`remove_item_listing` mutate listing rows by `listing_id: ID`.
 - Accepted currencies: `add_accepted_currency<C>` stores an `AcceptedCurrency` value in `shop.accepted_currencies` keyed by `coin_type`, with feed metadata and guardrail caps; `remove_accepted_currency<C>` removes the keyed entry.
-- Discounts: `create_discount`, `update_discount` (only before redemptions), and `toggle_discount` manage discounts; `attach_discount_to_listing`/`clear_discount_from_listing` surface a spotlight discount on a listing; `buy_item_with_discount` applies discount-based discounts during checkout.
+- Discounts: `create_discount`, `update_discount` (only before redemptions), and `toggle_discount` manage discounts; `add_spotlight_discount`/`clear_spotlight_discount` surface a spotlight discount on a listing; `buy_item_with_discount` applies discount-based discounts during checkout.
 - Checkout: `buy_item<T, C>` and `buy_item_with_discount<T, C>` enforce listing/type matches, registered currency presence, oracle guardrails, and refund change in-line before minting a typed `ShopItem<T>` receipt (redemption for the underlying item happens elsewhere).
 
 Oracle Guardrails
@@ -172,7 +172,7 @@ buy_item_with_discount<ItemType, USDC>(
 Reference
 ---------
 - Module: `sui_oracle_market::shop`
-- Entry functions: `create_shop`, `disable_shop`, `update_shop_owner`, `add_item_listing`, `add_item_listing_with_discount`, `update_item_listing_stock`, `remove_item_listing`, `add_accepted_currency`, `remove_accepted_currency`, `create_discount`, `update_discount`, `toggle_discount`, `attach_discount_to_listing`, `clear_discount_from_listing`, `buy_item`, `buy_item_with_discount`.
+- Entry functions: `create_shop`, `disable_shop`, `update_shop_owner`, `add_item_listing`, `add_item_listing_with_discount`, `update_item_listing_stock`, `remove_item_listing`, `add_accepted_currency`, `remove_accepted_currency`, `create_discount`, `update_discount`, `toggle_discount`, `add_spotlight_discount`, `clear_spotlight_discount`, `buy_item`, `buy_item_with_discount`.
 - Key types: `Shop`, `ShopOwnerCap`, `ItemListing`, `AcceptedCurrency`, `Discount`, `ShopItem`
 - Events: `ShopCreated`, `ShopOwnerUpdated`, `ShopDisabled`, `ItemListingAdded`, `ItemListingStockUpdated`, `ItemListingRemoved`, `DiscountCreated`, `DiscountUpdated`, `DiscountToggled`, `AcceptedCoinAdded`, `AcceptedCoinRemoved`, `DiscountRedeemed`, `PurchaseCompleted`.
 

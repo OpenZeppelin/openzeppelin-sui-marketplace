@@ -5,15 +5,18 @@
 Listings are stored inside the shared `Shop` via `Table<ID, ItemListing>`, and purchases mint typed receipts (`ShopItem<T>`).
 
 ## 1. Learning goals
+
 1. Publish example item types.
 2. Add listings with type metadata and inventory.
 3. Understand typed receipts as Move resources.
 
 ## 2. Prerequisites
+
 1. Localnet running.
 2. `sui_oracle_market` published.
 
 ## 3. Run it
+
 ```bash
 pnpm script move:publish --package-path item-examples
 # Use the packageId from packages/dapp/deployments/deployment.localnet.json
@@ -26,10 +29,12 @@ pnpm script buyer:item-listing:list --shop-id <shopId>
 ```
 
 ## 4. EVM -> Sui translation
+
 1. **Mapping entries -> table entries under a shared object**: listings are rows in `Shop.listings: Table<ID, ItemListing>`, keyed by object `ID` listing IDs.
 2. **ERC-721 receipt -> typed resource**: the receipt is a `ShopItem<T>` whose type must match the listing. See `ShopItem` in `packages/dapp/contracts/oracle-market/sources/listing.move`.
 
 ## 5. Concept deep dive: tables and type tags
+
 - **Table-backed listings**: listing create/update/remove paths mutate `Shop.listings` directly with `add`, `borrow_mut`, and `remove`.
   Code: `packages/dapp/contracts/oracle-market/sources/shop.move` (`add_item_listing`, `listing_mut`, `remove_item_listing`)
 - **Listing IDs are object `ID`s**: IDs are allocated from `TxContext`, emitted in events, and reused by scripts/UI as stable primary keys.
@@ -44,6 +49,7 @@ pnpm script buyer:item-listing:list --shop-id <shopId>
   Code: `packages/dapp/contracts/oracle-market/sources/listing.move` (`ShopItem`, `mint_shop_item`)
 
 ## 6. Code references
+
 1. `packages/dapp/contracts/item-examples/sources/items.move` (Car, Bike, ConcertTicket)
 2. `packages/dapp/contracts/oracle-market/sources/shop.move` (add_item_listing, buy_item)
 3. `packages/dapp/contracts/oracle-market/sources/listing.move` (ItemListing, ShopItem, mint_shop_item)
@@ -53,6 +59,7 @@ pnpm script buyer:item-listing:list --shop-id <shopId>
 
 **Code spotlight: listing creation in `Shop.listings`**
 `packages/dapp/contracts/oracle-market/sources/shop.move`
+
 ```move
 public fun add_item_listing<T: store>(
     shop: &mut Shop,
@@ -65,18 +72,36 @@ public fun add_item_listing<T: store>(
 ): ID {
     assert!(owner_cap.shop_id == shop.id(), EInvalidOwnerCap);
 
-    spotlight_discount_id.do!(|discount_id| {
-        assert!(shop.discounts.contains(discount_id), EDiscountNotFound);
-    });
-
-    let listing = listing::create<T>(
+    // Create an item listing.
+    let mut listing = listing::create<T>(
         name,
         base_price_usd_cents,
         stock,
-        spotlight_discount_id,
         ctx,
     );
     let listing_id = listing.id();
+
+    // Check that spotlight discount id exist.
+    // Update listing discount count and set spotlight,
+    spotlight_discount_id.do!(|discount_id| {
+        listing.increment_active_bound_discount_count();
+        listing.set_spotlight(discount_id);
+
+        // set discount's `applies_to_listing`,
+        shop
+            .discount_mut(discount_id)
+            .set_applies_to_listing(listing_id)
+            .do!(|previous_listing_id| {
+                let listing = shop.listing_mut(previous_listing_id);
+
+                // and clear the previous listing from spotlight discount if matches the discount id.
+                if (listing.spotlight_discount_id().contains(&discount_id)) {
+                    listing.clear_spotlight();
+                };
+                listing.decrement_active_bound_discount_count();
+            });
+    });
+
     shop.listings.add(listing_id, listing);
 
     events::emit_item_listing_added(shop.id(), listing_id);
@@ -87,6 +112,7 @@ public fun add_item_listing<T: store>(
 
 **Code spotlight: typed receipt minting uses object listing ID**
 `packages/dapp/contracts/oracle-market/sources/listing.move`
+
 ```move
 public(package) fun mint_shop_item<T: store>(
   item_listing: &ItemListing,
@@ -109,6 +135,7 @@ public(package) fun mint_shop_item<T: store>(
 
 **Code spotlight: owner script parses listing ID from events**
 `packages/dapp/src/scripts/owner/item-listing-add.ts`
+
 ```ts
 const listingId = requireListingIdFromItemListingAddedEvents({
   events: transactionResult.events,
@@ -123,13 +150,16 @@ const listingSummary = await getItemListingSummary(
 ```
 
 ## 6.1 Read this next (deep dive)
+
 - [/reading/move-readme](/reading/move-readme) -> "Shared Object + Marker Pattern (deep dive)"
 
 ## 7. Exercises
+
 1. Update stock with `pnpm script owner:item-listing:update-stock --item-listing-id <id> --stock 1`. Expected outcome: stock changes on-chain.
 2. Remove a listing with `pnpm script owner:item-listing:remove --item-listing-id <id>`. Expected outcome: it disappears from list output and cannot be fetched by that listing ID.
 
 ## 8. Diagram: table-backed listings
+
 ```
 Shop (shared)
   table listings: listing_id (ID) -> ItemListing
@@ -137,11 +167,13 @@ Shop (shared)
 ```
 
 ## 9. Further reading (Sui docs)
+
 - https://docs.sui.io/concepts/dynamic-fields
 - https://docs.sui.io/guides/developer/objects/object-model
 - https://docs.sui.io/concepts/sui-move-concepts
 
 ## 10. Navigation
+
 1. Previous: [07 Shop Object + Capability Auth](./07-shop-capabilities.md)
 2. Next: [09 Currencies + Oracles](./09-currencies-oracles.md)
 3. Back to map: [Learning Path Map](./)
