@@ -29,8 +29,7 @@ pnpm script buyer:buy \
   --shop-id <shopId> \
   --item-listing-id <listingId> \
   --coin-type <coinType> \
-  --discount-id <discountId> \
-  --claim-discount
+  --discount-id <discountId>
 ```
 
 ## 4. Run it (UI)
