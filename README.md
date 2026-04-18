@@ -21,6 +21,7 @@ More detail (workspace layering rules, folder layout): `docs/01-repo-layout.md`.
 - Node.js 22+ [Install](https://nodejs.org/en/download)
 - pnpm [Install](https://pnpm.io/installation)
 - Sui CLI [Install](https://docs.sui.io/guides/developer/getting-started/sui-install)
+- Browser wallet — [Slush](https://slush.app/) (or any Sui-compatible wallet extension) for connecting to the UI
 
 ## Environment Setup
 
@@ -85,15 +86,23 @@ pnpm ui dev
 ### Testnet
 
 ```bash
-# Oracle market already published on the testnet.
-# You can set the value as an environment variable:
+# Oracle market already published on testnet.
+# Set the package ID as an environment variable (or add to ./packages/ui/.env.local):
 export NEXT_PUBLIC_TESTNET_CONTRACT_PACKAGE_ID=0x2c1bfd7e255adc2170ca1e8adfc93c094881acd8ec7e80e4686b686f432b4a07
-# or you can make it more permanent by adding it to ./packages/ui/.env file (there's a ./packages/ui/.env.example for reference)
 
-# To continue setting up the shop, listings, discounts, accepted currencies follow appropriate scripts (find the list here docs/06-scripts-reference.md) or run the seed script that will create shop and load data for each model
+# Configure your signing account in ./packages/dapp/.env (copy from .env.example):
+# SUI_ACCOUNT_ADDRESS=<0x...>
+# SUI_ACCOUNT_PRIVATE_KEY=<base64 or hex>
+# Fund your address with testnet SUI from https://faucet.testnet.sui.io
+
+# Seed a shop with listings, currencies (SUI, USDC, WAL), and discounts:
 pnpm script owner:shop:seed --shop-package-id $NEXT_PUBLIC_TESTNET_CONTRACT_PACKAGE_ID
 
-# Run the UI (choose testnet in UI)
+# The seed script prints the Shop ID in the output. Copy it and set it:
+export NEXT_PUBLIC_TESTNET_SHOP_ID=<0x...>
+# or add NEXT_PUBLIC_TESTNET_SHOP_ID=<0x...> to ./packages/ui/.env.local
+
+# Run the UI — select Testnet in the network selector
 pnpm ui dev
 
 ```
