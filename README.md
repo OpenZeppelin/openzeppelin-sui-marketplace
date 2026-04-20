@@ -47,6 +47,9 @@ sui client new-address ed25519
 
 # Start localnet (new terminal) (--with-faucet is recommended as some script auto fund address if fund is missing, on first start it will fund your configured address)
 pnpm script chain:localnet:start --with-faucet
+# If mock publishing doesn't succeed, restart node and force regenesis:
+# pnpm script chain:localnet:stop
+# pnpm script chain:localnet:start --with-faucet --force-regenesis
 
 # Optionally fund any address
 sui client faucet --address <0x...>
@@ -54,7 +57,7 @@ sui client faucet --address <0x...>
 # Seed mocks (coins + Pyth stub + price feeds) on localnet as there is no coins or published Pyth oracle on your blank localnet.
 # Important to provide correct buyer address to execute purchase flow.
 pnpm script mock:setup --buyer-address <0x...> --network localnet
-# Run with --re-publish flag to publish anew (if fails to publish again)
+# Run with --re-publish flag to publish anew (if fails to publish again):
 # pnpm script mock:setup --buyer-address <0x...> --network localnet --re-publish
 
 ```
@@ -66,7 +69,7 @@ pnpm script mock:setup --buyer-address <0x...> --network localnet
 ```bash
 # Publish oracle-market
 pnpm script move:publish --package-path oracle-market --network localnet
-# Run with --re-publish flag to publish anew (if fails to publish again)
+# Run with --re-publish flag to publish anew (if fails to publish again):
 # pnpm script move:publish --package-path oracle-market --network localnet --re-publish
 
 # In the output of the above command, after the success message, you will find the `packageId` for the shop contract.
