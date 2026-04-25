@@ -5,6 +5,8 @@
   "private": true,
   "description": "Oracle Market",
   "scripts": {
+    "bootstrap:localnet": "./scripts/bootstrap-localnet.sh",
+    "bootstrap:testnet": "./scripts/bootstrap-testnet.sh",
     "ui": "pnpm --filter ui",
     "script": "pnpm --filter dapp",
     "dapp": "pnpm --filter dapp",

@@ -3,7 +3,7 @@
 
 # Sui Oracle Market
 
-End-to-end example of a small on-chain market on **Sui**: items are priced in **USD cents** (stablecoin-style), while buyers can pay in **multiple currencies** using **oracle prices**.
+End-to-end example of a small on-chain market on **Sui**: items are priced in **USD cents** (stablecoin-style), while buyers can pay in **multiple currencies** using **oracle prices**. Clone it to explore five core Sui patterns hands-on: the capability pattern, phantom types, Programmable Transaction Blocks (PTBs), Pyth oracle integration, and on-chain enforced limits.
 
 This repo is a pnpm workspace containing:
 
@@ -20,92 +20,109 @@ More detail (workspace layering rules, folder layout): `docs/01-repo-layout.md`.
 
 - Node.js 22+ [Install](https://nodejs.org/en/download)
 - pnpm [Install](https://pnpm.io/installation)
-- Sui CLI [Install](https://docs.sui.io/guides/developer/getting-started/sui-install)
+- Sui CLI 1.67.x [Install](https://docs.sui.io/guides/developer/getting-started/sui-install)
 - Browser wallet — [Slush](https://slush.app/) (or any Sui-compatible wallet extension) for connecting to the UI
 
-## Environment Setup
-
-Set up your environment with an active address and a running localnet to publish and interact with the `oracle-market` package.
+## Localnet Quickstart
 
 Full walkthrough: [docs/05-localnet-workflow.md](docs/05-localnet-workflow.md).
 
 ```bash
 # 1) Clone and install
 git clone git@github.com:OpenZeppelin/openzeppelin-sui-marketplace.git && cd openzeppelin-sui-marketplace
-# (pnpm workspace install from the repo root)
 pnpm install
 
-# Create an address (it will be your shop owner address). Note the recovery phrase to import it later in your browser wallet.
-sui client new-address ed25519
+# 2) Create two addresses — one owner, one buyer (save the 12-word recovery phrases; you'll import them into Slush later)
+sui client new-address ed25519   # owner
+sui client new-address ed25519   # buyer
 
-# Configure this address in ./packages/dapp/.env , Sui config file or export
-export SUI_NETWORK=localnet
-export SUI_ACCOUNT_ADDRESS=<0x...>
-export SUI_ACCOUNT_PRIVATE_KEY=<base64 or hex>
-
-# Optionally create a second address to represent the buyer (the owner address can also buy items) (take note of the recovery phrase)
-sui client new-address ed25519
-
-# Start localnet (new terminal) (--with-faucet is recommended as some script auto fund address if fund is missing, on first start it will fund your configured address)
+# 3) Start localnet (new terminal; leave it running)
 pnpm script chain:localnet:start --with-faucet
 
-# Optionally fund any address
-sui client faucet --address <0x...>
+# 4) Configure packages/dapp/.env
+cp packages/dapp/.env.example packages/dapp/.env
+# Then edit packages/dapp/.env and fill in:
+#   SUI_NETWORK=localnet
+#   SUI_ACCOUNT_ADDRESS=<owner-0x...>
+#   SUI_BUYER_ACCOUNT_ADDRESS=<buyer-0x...>
+#
+# AND supply credentials for each account — choose ONE of:
+#   (a) Simplest — paste the 12-word recovery phrase from step 2:
+#         SUI_ACCOUNT_MNEMONIC="word1 word2 ... word12"
+#         SUI_BUYER_ACCOUNT_MNEMONIC="word1 word2 ... word12"
+#       (uncomment those lines in .env)
+#   (b) Or export the private keys:
+#         sui keytool export --key-identity <owner-0x...>
+#         sui keytool export --key-identity <buyer-0x...>
+#       then paste into SUI_ACCOUNT_PRIVATE_KEY= and SUI_BUYER_ACCOUNT_PRIVATE_KEY=
 
-# Seed mocks (coins + Pyth stub + price feeds) on localnet as there is no coins or published Pyth oracle on your blank localnet.
-# Important to provide correct buyer address to execute purchase flow.
-pnpm script mock:setup --buyer-address <0x...> --network localnet
-# Run with --re-publish flag to publish anew (if fails to publish again)
-# pnpm script mock:setup --buyer-address <0x...> --network localnet --re-publish
+# 5) Bootstrap — one command. Seeds mocks, publishes oracle-market, seeds the shop,
+#    and writes packages/ui/.env.local with the package + shop IDs automatically.
+pnpm bootstrap:localnet
 
+# 6) Run the UI
+pnpm ui dev
+# Open http://localhost:3000 and select 'Localnet' in the network selector
 ```
 
-## Publish and Seed
-
-### Localnet
+<details>
+<summary>Prefer the manual flow? (what <code>pnpm bootstrap:localnet</code> does under the hood)</summary>
 
 ```bash
-# Publish oracle-market
+# Replaces step 5 above:
+pnpm script mock:setup --network localnet
 pnpm script move:publish --package-path oracle-market --network localnet
-# Run with --re-publish flag to publish anew (if fails to publish again)
-# pnpm script move:publish --package-path oracle-market --network localnet --re-publish
-
-# In the output of the above command, after the success message, you will find the `packageId` for the shop contract.
-# You can set the value as an environment variable:
-export NEXT_PUBLIC_LOCALNET_CONTRACT_PACKAGE_ID=<0x...>
-# or you can make it more permanent by adding it to ./packages/ui/.env file (there's a ./packages/ui/.env.example for reference)
-
-# To continue setting up the shop, listings, discounts, accepted currencies follow appropriate scripts (find the list here docs/06-scripts-reference.md) or run the seed script that create shop and will load data for each model
 pnpm script owner:shop:seed --network localnet
 
-# Run the UI
-pnpm ui dev
-
+# Then edit packages/ui/.env.local:
+#   NEXT_PUBLIC_LOCALNET_CONTRACT_PACKAGE_ID=<packageId from packages/dapp/deployments/deployment.localnet.json — the entry where packageName is "sui_oracle_market">
+#   NEXT_PUBLIC_LOCALNET_SHOP_ID=<objectId from packages/dapp/deployments/objects.localnet.json — the entry whose objectType ends with "::shop::Shop">
 ```
 
-### Testnet
+</details>
+
+## Testnet
+
+The contract is already deployed on testnet — no publish step needed. Only the owner account is required; the buyer plays via the browser wallet.
 
 ```bash
-# Oracle market already published on testnet.
-# Set the package ID as an environment variable (or add to ./packages/ui/.env.local):
-export NEXT_PUBLIC_TESTNET_CONTRACT_PACKAGE_ID=0x2c1bfd7e255adc2170ca1e8adfc93c094881acd8ec7e80e4686b686f432b4a07
+# 1) Create and fund an owner address
+sui client new-address ed25519   # save the recovery phrase
+# Then fund it: https://faucet.testnet.sui.io
 
-# Configure your signing account in ./packages/dapp/.env (copy from .env.example):
-# SUI_ACCOUNT_ADDRESS=<0x...>
-# SUI_ACCOUNT_PRIVATE_KEY=<base64 or hex>
-# Fund your address with testnet SUI from https://faucet.testnet.sui.io
+# 2) Configure packages/dapp/.env
+cp packages/dapp/.env.example packages/dapp/.env
+# Edit packages/dapp/.env and fill in:
+#   SUI_NETWORK=testnet
+#   SUI_ACCOUNT_ADDRESS=<owner-0x...>
+#
+# Supply owner credentials — choose ONE of:
+#   (a) Simplest — paste the recovery phrase from step 1:
+#         SUI_ACCOUNT_MNEMONIC="word1 word2 ... word12"
+#       (uncomment that line in .env)
+#   (b) Or export the private key:
+#         sui keytool export --key-identity <owner-0x...>
+#       then paste into SUI_ACCOUNT_PRIVATE_KEY=
+#
+# Leave SUI_BUYER_ACCOUNT_* empty — the buyer uses Slush in the browser.
 
-# Seed a shop with listings, currencies (SUI, USDC, WAL), and discounts:
-pnpm script owner:shop:seed --shop-package-id $NEXT_PUBLIC_TESTNET_CONTRACT_PACKAGE_ID
+# 3) Bootstrap — seeds the shop and writes packages/ui/.env.local automatically
+pnpm bootstrap:testnet
 
-# The seed script prints the Shop ID in the output. Copy it and set it:
-export NEXT_PUBLIC_TESTNET_SHOP_ID=<0x...>
-# or add NEXT_PUBLIC_TESTNET_SHOP_ID=<0x...> to ./packages/ui/.env.local
-
-# Run the UI — select Testnet in the network selector
+# 4) Run the UI — select Testnet in the network selector
 pnpm ui dev
-
+# Open http://localhost:3000
 ```
+
+To play as a buyer, create a second Slush account in the browser, fund it from the faucet, and connect it to the UI.
+
+> **Want to deploy your own package instead of using the canonical one?**
+> ```bash
+> PUBLISH_OWN=1 pnpm bootstrap:testnet
+> ```
+> Publishes a fresh `oracle-market` package under your owner account (~0.5–1 testnet SUI in gas), then seeds a shop against YOUR package ID and wires it into `packages/ui/.env.local`. Useful for testing Move-code changes on testnet or running an isolated copy of the contract.
+
+> Running localnet AND testnet? That's fine. After running both `pnpm bootstrap:localnet` and `pnpm bootstrap:testnet`, your `packages/ui/.env.local` has both blocks populated and the UI network selector toggles between them freely — no UI restart needed. Just remember to switch Slush to the matching network when toggling.
 
 ## Learning path
 
@@ -119,8 +136,11 @@ and navigate to `localhost:30006` on your browser
 
 Quick gotos:
 
+- **Hands-on challenge (6 checkpoints):** [CHALLENGE.md](CHALLENGE.md)
 - **Learning path hub:** [docs/README.md](docs/README.md)
 - **Setup + quickstart:** [docs/00-setup.md](docs/00-setup.md)
+- **EVM → Sui cheatsheet:** [docs/03-evm-to-sui.md](docs/03-evm-to-sui.md)
+- **Troubleshooting:** [docs/21-troubleshooting.md](docs/21-troubleshooting.md)
 - **Glossary:** [docs/22-glossary.md](docs/22-glossary.md)
 
 ## Frontend UI

@@ -19,7 +19,7 @@ This chapter explains how the shop registers accepted currencies, ties them to P
 
 ```bash
 # Localnet mock artifacts
-pnpm script mock:setup --buyer-address <0x...> --network localnet
+pnpm script mock:setup --network localnet
 cat packages/dapp/deployments/mock.localnet.json
 
 # Register a currency

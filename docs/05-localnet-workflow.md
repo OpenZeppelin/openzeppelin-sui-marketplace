@@ -70,8 +70,10 @@ Move environments (localnet/devnet/testnet/mainnet):
 
 Environment overrides (optional):
 
-- Network selection precedence: `--network` > `SUI_NETWORK` > `defaultNetwork` > `localnet`.
-- `SUI_KEYSTORE_PATH`, `SUI_ACCOUNT_INDEX`, `SUI_ACCOUNT_ADDRESS`, `SUI_ACCOUNT_PRIVATE_KEY`, `SUI_ACCOUNT_MNEMONIC`: override the `account` fields above.
+- Network selection precedence: `--network` > `SUI_NETWORK` > `defaultNetwork` (set to `"testnet"` in `sui.config.ts`).
+- For localnet dev, always pass `--network localnet` or export `SUI_NETWORK=localnet` — without it, scripts default to testnet.
+- `SUI_KEYSTORE_PATH`, `SUI_ACCOUNT_INDEX`, `SUI_ACCOUNT_ADDRESS`, `SUI_ACCOUNT_PRIVATE_KEY`, `SUI_ACCOUNT_MNEMONIC`: override the owner `account` fields above.
+- `SUI_BUYER_ACCOUNT_ADDRESS`, `SUI_BUYER_ACCOUNT_PRIVATE_KEY`, `SUI_BUYER_ACCOUNT_MNEMONIC`: set a separate buyer account for localnet. Buyer scripts (`buyer:buy`) sign with this keypair automatically; if unset they fall back to the owner account with a warning.
 
 How it’s used:
 
@@ -107,7 +109,9 @@ Note: running `sui start` without a stable config dir can regenesis and wipe loc
 ### 4) Seed mocks (coins + Pyth)
 
 ```bash
-pnpm script mock:setup --buyer-address <0x...> --network localnet
+pnpm script mock:setup --network localnet
+# Buyer address is read from SUI_BUYER_ACCOUNT_ADDRESS automatically.
+# Override with --buyer-address <0x...> if needed.
 ```
 
 What it does:
@@ -142,21 +146,34 @@ Defaults and artifacts:
 
 ### 0) Prepare owner and buyer accounts
 
-The scripts sign transactions with the configured account in `packages/dapp/sui.config.ts` (or `SUI_ACCOUNT_ADDRESS` / `SUI_ACCOUNT_PRIVATE_KEY` env vars). Use one address as the shop owner and another as the buyer.
+The localnet workflow uses two identities: an **owner** (deploys contracts, seeds the shop) and a **buyer** (purchases items via CLI). Configure both in `packages/dapp/.env` so scripts switch roles automatically — no manual address switching needed.
 
 ```bash
-# Create two addresses in the Sui CLI keystore (owner + buyer) (note the private keys to import them later in your browser wallet).
-sui client new-address ed25519
-sui client new-address ed25519
+# Create two addresses in the Sui CLI keystore (note the private keys to import into Slush later)
+sui client new-address ed25519   # owner
+sui client new-address ed25519   # buyer
 
-# Check which one is active (the active address is the signer for scripts).
-sui client active-address
-
-# Fund the 2 addresses (ensure your localnet is started with faucet)
-sui client faucet --address <0x...>
+# Fund both (ensure localnet is started with faucet — see step 1)
+sui client faucet --address <owner-0x...>
+sui client faucet --address <buyer-0x...>
 ```
 
-If you want to run buyer scripts as the buyer account, switch your active address or update sui.config file before running buyer scripts.
+Then set both accounts in `packages/dapp/.env`:
+
+```bash
+SUI_NETWORK=localnet
+
+# Owner account — signs owner scripts (move:publish, mock:setup, owner:*)
+SUI_ACCOUNT_ADDRESS=<owner-0x...>
+SUI_ACCOUNT_PRIVATE_KEY=<owner-key>
+
+# Buyer account — signs buyer CLI scripts automatically (buyer:buy)
+# On testnet the buyer uses the browser wallet (Slush) — leave these empty there
+SUI_BUYER_ACCOUNT_ADDRESS=<buyer-0x...>
+SUI_BUYER_ACCOUNT_PRIVATE_KEY=<buyer-key>
+```
+
+When both are set, owner scripts (`owner:*`, `mock:setup`) sign as the owner and buyer scripts (`buyer:buy`) sign as the buyer automatically. If `SUI_BUYER_ACCOUNT_*` is not set, buyer scripts fall back to the owner account with a printed warning.
 
 ### 1) Start localnet
 
@@ -174,7 +191,9 @@ What it does:
 ### 2) Seed local mocks (coins, Pyth feeds, example item types)
 
 ```bash
-pnpm script mock:setup --buyer-address <0x...> --network localnet
+pnpm script mock:setup --network localnet
+# Buyer address is read from SUI_BUYER_ACCOUNT_ADDRESS automatically.
+# Override with --buyer-address <0x...> if needed.
 ```
 
 What it does:

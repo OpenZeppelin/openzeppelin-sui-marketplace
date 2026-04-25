@@ -32,6 +32,8 @@ export type SuiNetworkConfig = {
   url: string
   faucetUrl?: string
   account: SuiAccountConfig
+  /** Separate buyer account for localnet CLI testing. Falls back to `account` when not set. */
+  buyerAccount?: SuiAccountConfig
   accounts?: Record<string, SuiAccountConfig>
   gasBudget?: number
   move?: SuiMoveConfig
@@ -105,6 +107,13 @@ const withDefault = (
       networkName,
       rpcUrlOverride ?? networkConfig?.url
     )
+    const buyerAccountOverrides = {
+      accountAddress: process.env.SUI_BUYER_ACCOUNT_ADDRESS,
+      accountPrivateKey: process.env.SUI_BUYER_ACCOUNT_PRIVATE_KEY,
+      accountMnemonic: process.env.SUI_BUYER_ACCOUNT_MNEMONIC
+    }
+    const hasBuyerAccountConfig = Object.values(buyerAccountOverrides).some(Boolean)
+
     const resolvedConfig = mergeDeepObjects(
       {
         url: resolvedUrl,
@@ -115,7 +124,14 @@ const withDefault = (
           accountAddress: process.env.SUI_ACCOUNT_ADDRESS,
           accountPrivateKey: process.env.SUI_ACCOUNT_PRIVATE_KEY,
           accountMnemonic: process.env.SUI_ACCOUNT_MNEMONIC
-        }
+        },
+        ...(hasBuyerAccountConfig && {
+          buyerAccount: {
+            keystorePath: process.env.SUI_KEYSTORE_PATH || DEFAULT_KEYSTORE_PATH,
+            accountIndex: Number(process.env.SUI_BUYER_ACCOUNT_INDEX ?? 0),
+            ...buyerAccountOverrides
+          }
+        })
       },
       networkConfig || {}
     )

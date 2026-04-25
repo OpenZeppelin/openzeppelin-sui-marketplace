@@ -43,6 +43,8 @@ type WithTestnetFaucetRetryArgs = Parameters<typeof withTestnetFaucetRetry>[0]
 
 export type Tooling = ToolingContext & {
   loadedEd25519KeyPair: Ed25519Keypair
+  /** Buyer keypair for localnet CLI testing. Falls back to loadedEd25519KeyPair when SUI_BUYER_ACCOUNT_* is not set. */
+  loadedBuyerEd25519KeyPair: Ed25519Keypair
   network: SuiNetworkConfig
   toJSON: () => SanitizedTooling
   getSuiObject: (
@@ -192,6 +194,9 @@ export const createTooling = async ({
   suiConfig
 }: ToolingContext): Promise<Tooling> => {
   const loadedEd25519KeyPair = await loadKeypair(suiConfig.network.account)
+  const loadedBuyerEd25519KeyPair = suiConfig.network.buyerAccount
+    ? await loadKeypair(suiConfig.network.buyerAccount)
+    : loadedEd25519KeyPair
   const toJSON = (): SanitizedTooling => ({
     network: sanitizeNetwork(suiConfig.network),
     suiConfig: {
@@ -209,6 +214,7 @@ export const createTooling = async ({
     suiClient,
     suiConfig,
     loadedEd25519KeyPair,
+    loadedBuyerEd25519KeyPair,
     network: suiConfig.network,
     toJSON,
     getSuiObject: async (args) => getSuiObject(args, { suiClient }),

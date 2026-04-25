@@ -82,7 +82,7 @@ runSuiScript(
       tooling.suiConfig.network.networkName
     )
 
-    const signerAddress = tooling.loadedEd25519KeyPair.toSuiAddress()
+    const signerAddress = tooling.loadedBuyerEd25519KeyPair.toSuiAddress()
     const mintTo = inputs.mintTo ?? signerAddress
     const refundTo = inputs.refundTo ?? signerAddress
 
@@ -260,7 +260,7 @@ runSuiScript(
 
     const { execution, summary } = await tooling.executeTransactionWithSummary({
       transaction: buyTransaction,
-      signer: tooling.loadedEd25519KeyPair,
+      signer: tooling.loadedBuyerEd25519KeyPair,
       summaryLabel: "buy",
       devInspect: cliArguments.devInspect,
       dryRun: cliArguments.dryRun
