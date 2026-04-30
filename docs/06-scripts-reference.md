@@ -20,6 +20,24 @@ Exceptions:
 - `pnpm script chain:localnet:stop` has no CLI flags.
 - `pnpm script mock:get-currency` does not accept `--network` and is localnet-only.
 
+## Bootstrap scripts (one-command setup)
+
+Two wrappers in `scripts/` chain the underlying scripts together for a clean fresh-clone experience. They are the recommended path for first-time setup; the chained scripts they call are documented in the sections below if you want to run them individually.
+
+### `pnpm bootstrap:localnet`
+
+- Verifies localnet is reachable, funds owner + buyer from the localnet faucet, runs `mock:setup`, `move:publish` for `oracle-market`, and `owner:shop:seed`. Writes `NEXT_PUBLIC_LOCALNET_*` IDs into `packages/ui/.env.local` automatically.
+- Requires `packages/dapp/.env` configured with owner + buyer addresses and credentials (mnemonic or private key).
+- Idempotent — safe to re-run after partial failures.
+
+### `pnpm bootstrap:testnet`
+
+- Runs `owner:shop:seed --shop-package-id <canonical> --network testnet` against the canonical OpenZeppelin testnet deploy (resolved from `packages/ui/.env.example`). Writes `NEXT_PUBLIC_TESTNET_*` IDs into `packages/ui/.env.local`.
+- Owner credentials are required in `.env`. Buyer credentials are not — testnet buyers connect through the browser wallet.
+- Variants:
+  - `PUBLISH_OWN=1 pnpm bootstrap:testnet` — publishes a fresh `oracle-market` package under your owner account before seeding. Costs ~0.5–1 testnet SUI in gas.
+  - `TESTNET_PACKAGE_ID=0x... pnpm bootstrap:testnet` — pins a specific pre-existing package ID (e.g. your previously-published copy).
+
 ---
 
 **Code spotlight: standard script runner flow**
@@ -67,7 +85,7 @@ await tooling.executeTransactionWithSummary({
 
 - Localnet-only seeding. Publishes/reuses `pyth-mock`, `coin-mock`, and `item-examples`, mints mock coins, transfers half of each minted coin to the buyer address, and creates two mock Pyth price feeds. Writes artifacts to `packages/dapp/deployments/mock.localnet.json`.
 - Flags:
-  - `--buyer-address <0x...>`: buyer address to receive half of each minted mock coin (required; alias `--buyer`).
+  - `--buyer-address <0x...>`: buyer address to receive half of each minted mock coin (optional; alias `--buyer`). Defaults to `SUI_BUYER_ACCOUNT_ADDRESS` env var if set.
   - `--coin-package-id <id>` / `--pyth-package-id <id>`: reuse existing mock package IDs instead of publishing.
   - `--coin-contract-path <path>` / `--pyth-contract-path <path>`: override Move package paths.
   - `--re-publish`: ignore existing artifacts; republish mocks and recreate feeds.
@@ -142,7 +160,7 @@ Owner scripts default `--shop-package-id`, `--shop-id`, and `--owner-cap-id` fro
     - USDC PriceInfoObject: `0x9c4dd4008297ffa5e480684b8100ec21cc934405ed9a25d4e4d7b6259aad9c81`
     - WAL feed: `0xa6ba0195b5364be116059e401fb71484ed3400d4d9bfbdf46bd11eab4f9b7cea`
     - WAL PriceInfoObject: `0x52e5fb291bd86ca8bdd3e6d89ef61d860ea02e009a64bcc287bc703907ff3e8a`
-  - **Localnet**: reads `packages/dapp/deployments/mock.localnet.json` for mock coins + feeds (requires `pnpm script mock:setup --buyer-address <0x...> --network localnet`).
+  - **Localnet**: reads `packages/dapp/deployments/mock.localnet.json` for mock coins + feeds (requires `pnpm script mock:setup --network localnet`).
 - Seeded data:
   - 4 low-price listings (Car, Bike, ConcertTicket, DigitalPass).
   - 2 discounts (10% percent + $2 fixed) and attaches the fixed discount to the Bike listing ID.

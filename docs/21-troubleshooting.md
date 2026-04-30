@@ -30,7 +30,7 @@ if (checkOnly) {
 - Fix by regenesis (resets faucet treasury objects):
   - `pnpm script chain:localnet:stop`
   - `pnpm script chain:localnet:start --with-faucet --force-regenesis`
-  - Re-run your script (e.g. `pnpm script mock:setup --buyer-address <0x...> --network localnet`).
+  - Re-run your script (e.g. `pnpm script mock:setup --network localnet`).
 - If you need to preserve state, start localnet with a fresh config dir instead:
   - `SUI_LOCALNET_CONFIG_DIR=~/.sui/localnet-fresh pnpm script chain:localnet:start --with-faucet`
 - Optional sanity check for the local faucet endpoint:
@@ -46,7 +46,7 @@ if (checkOnly) {
 - Fix:
   1. Ensure you are targeting the Move package directory (for localnet: `--package-path oracle-market`).
   2. Re-publish with `--re-publish`:
-     - `pnpm dapp move:publish --package-path oracle-market --network localnet --re-publish`.
+     - `pnpm script move:publish --package-path oracle-market --network localnet --re-publish`.
 
 ## "Failed to fetch package Pyth" / "Object ... does not exist" on publish (localnet)
 
@@ -54,8 +54,8 @@ if (checkOnly) {
 - Fix (localnet):
   1. (optional) Delete `packages/dapp/deployments/mock.localnet.json`.
   2. (optional) Delete `packages/dapp/contracts/pyth-mock/Published.toml`.
-  3. Re-publish mocks: `pnpm dapp mock:setup --re-publish`.
-  4. Re-publish the oracle package: `pnpm dapp move:publish --package-path oracle-market --network localnet --re-publish`.
+  3. Re-publish mocks: `pnpm script mock:setup --re-publish`.
+  4. Re-publish the oracle package: `pnpm script move:publish --package-path oracle-market --network localnet --re-publish`.
 
 ## "No ShopOwnerCap found"
 
@@ -69,7 +69,7 @@ if (checkOnly) {
 
 - Cause: the connected buyer wallet has no spendable `0x2::sui::SUI` coin objects, so the transaction builder cannot auto-select gas payment.
 - Quick recovery: disconnect and reconnect Slush (or switch account away and back) to refresh wallet/account state in the app before deeper debugging.
-- Common localnet pitfall: `mock:setup --buyer-address` funded mock coins for one address, but your UI wallet is connected to a different address.
+- Common localnet pitfall: `mock:setup` funded mock coins for the address in `SUI_BUYER_ACCOUNT_ADDRESS`, but your UI wallet is connected to a different address.
 - Verify balances for the exact connected wallet address:
   - `pnpm script chain:describe-coin-balances --address <0x...> --network localnet`
   - If `0x2::sui::SUI` is missing, fund the same address from local faucet:

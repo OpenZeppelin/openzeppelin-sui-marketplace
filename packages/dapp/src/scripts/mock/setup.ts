@@ -217,17 +217,26 @@ runSuiScript(
       .filter((seeded) => seeded.wasCreated)
       .map((seeded) => seeded.coin)
 
-    if (inputs.buyerAddress)
+    const buyerAddress =
+      inputs.buyerAddress ??
+      (tooling.suiConfig.network.buyerAccount
+        ? tooling.loadedBuyerEd25519KeyPair.toSuiAddress()
+        : undefined)
+
+    if (buyerAddress)
       await transferHalfTreasuryToBuyer(
         {
           coins: createdCoins,
-          buyerAddress: inputs.buyerAddress,
+          buyerAddress,
           signer: tooling.loadedEd25519KeyPair,
           signerAddress: tooling.loadedEd25519KeyPair.toSuiAddress()
         },
         tooling
       )
-    else logWarning("--buyer-address not supplied skipping fund transfer")
+    else
+      logWarning(
+        "--buyer-address not supplied and SUI_BUYER_ACCOUNT_* not set; skipping fund transfer"
+      )
 
     // Ensure mock price feeds exist with fresh timestamps; reuse if valid objects already present.
     const priceFeeds =

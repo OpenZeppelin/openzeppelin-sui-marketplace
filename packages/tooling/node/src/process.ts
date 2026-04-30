@@ -256,6 +256,19 @@ const logScriptStart = (
   console.log("")
 }
 
+const logSignerInfo = (tooling: Tooling) => {
+  const ownerAddress = tooling.loadedEd25519KeyPair.toSuiAddress()
+  const buyerAddress = tooling.loadedBuyerEd25519KeyPair.toSuiAddress()
+  const hasSeparateBuyer = ownerAddress !== buyerAddress
+  logKeyValueBlue("Signer (owner)")(ownerAddress)
+  if (hasSeparateBuyer) logKeyValueBlue("Signer (buyer)")(buyerAddress)
+  else
+    logWarning(
+      "SUI_BUYER_ACCOUNT_* not set — buyer scripts will sign as owner. Set buyer vars to separate roles."
+    )
+  console.log("")
+}
+
 const logScriptFailure = (error: unknown) => {
   console.log("")
   logError("Script failed ❌")
@@ -590,6 +603,8 @@ const runScriptAndCaptureExitCode = async <TCliArgument>(
           context.networkConfig,
           context.suiConfig
         )
+
+        logSignerInfo(tooling)
 
         await syncLocalnetMoveEnvironmentChainIdForTooling(tooling)
 

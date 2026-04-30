@@ -119,6 +119,12 @@ describe("runSuiScript", () => {
       updatedFiles: [],
       didAttempt: false
     })
+    const ownerKeyPairStub = {
+      toSuiAddress: () => "0xowner"
+    }
+    const buyerKeyPairStub = {
+      toSuiAddress: () => "0xowner"
+    }
 
     configMocks.loadSuiConfig.mockResolvedValue(resolvedConfig)
     configMocks.getNetworkConfig.mockReturnValue(resolvedNetwork)
@@ -126,7 +132,9 @@ describe("runSuiScript", () => {
     factoryMocks.createTooling.mockImplementation(async (input) => ({
       suiClient: input.suiClient,
       suiConfig: input.suiConfig,
-      syncLocalnetMoveEnvironmentChainId
+      syncLocalnetMoveEnvironmentChainId,
+      loadedEd25519KeyPair: ownerKeyPairStub,
+      loadedBuyerEd25519KeyPair: buyerKeyPairStub
     }))
     suiCliMocks.ensureSuiCli.mockResolvedValue(undefined)
     suiCliMocks.getSuiCliVersion.mockResolvedValue("1.2.3")

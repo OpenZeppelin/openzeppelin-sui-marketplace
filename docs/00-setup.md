@@ -37,40 +37,41 @@ cd openzeppelin-sui-marketplace
 pnpm install
 ```
 
-## 5. Create or reuse an address (note the recovery phrase to import it later in your browser wallet)
+## 5. Create two addresses — owner and buyer
+
+The localnet workflow uses two identities: an **owner** (deploys contracts, seeds the shop) and a **buyer** (purchases items via CLI). On testnet the buyer uses the browser wallet instead — no buyer key needed there.
 
 ```bash
-sui client new-address ed25519
+sui client new-address ed25519   # owner — note the recovery phrase; import into Slush later
+sui client new-address ed25519   # buyer (localnet only) — same
 ```
 
-Validate the active address
+Validate and list addresses:
 
 ```bash
-sui client active-address
-```
-
-To switch address when you have multiple ones:
-
-```bash
-sui client switch --address <0x...>
+sui client addresses
 ```
 
 ## 6. Configure account env
 
-Add address info in either dapp/.env, Sui config file or export
+Copy `packages/dapp/.env.example` to `packages/dapp/.env` and fill in both accounts:
 
 ```bash
-export SUI_ACCOUNT_ADDRESS=<0x...>
-export SUI_ACCOUNT_PRIVATE_KEY=<base64 or hex>
+SUI_NETWORK=localnet
+
+# Owner — signs owner scripts (deploy, seed, manage shop)
+SUI_ACCOUNT_ADDRESS=<owner-0x...>
+SUI_ACCOUNT_PRIVATE_KEY=<owner-key>
+
+# Buyer — signs buyer CLI scripts automatically (buyer:buy)
+# Leave empty on testnet; the buyer uses the browser wallet there
+SUI_BUYER_ACCOUNT_ADDRESS=<buyer-0x...>
+SUI_BUYER_ACCOUNT_PRIVATE_KEY=<buyer-key>
 ```
 
-If you do not set these, scripts fall back to the Sui CLI keystore.
+If `SUI_BUYER_ACCOUNT_*` is not set, buyer scripts fall back to the owner account (a warning is printed at startup).
 
-You can also configure default network in dapp/.env, Sui config file or export
-
-```bash
-export SUI_NETWORK=localnet
-```
+> Sections 7–11 below walk through the underlying scripts step by step. For a one-command path that runs steps 8–11 in sequence and writes the UI env automatically, run `pnpm bootstrap:localnet` after starting localnet (step 7). See [`docs/06-scripts-reference.md`](06-scripts-reference.md#bootstrap-scripts-one-command-setup) for what it does internally.
 
 ## 7. Start localnet (localnet only)
 
@@ -91,7 +92,9 @@ pnpm script chain:localnet:start --with-faucet --force-regenesis
 This publishes mock coins and Pyth packages, then seeds price feeds. As there are no coins or published Pyth oracle on your blank localnet
 
 ```bash
-pnpm script mock:setup --buyer-address <0x...> --network localnet
+pnpm script mock:setup --network localnet
+# Buyer address is read from SUI_BUYER_ACCOUNT_ADDRESS automatically.
+# Override with --buyer-address <0x...> if needed.
 ```
 
 ## 9. Publish the Move package
@@ -162,7 +165,10 @@ The created objects are saved in:
 
 ## 11. Run the UI to see the shop
 
-Create `packages/ui/.env.local` with IDs from your deployments artifacts (`packageId`):
+If you ran `pnpm bootstrap:localnet`, `packages/ui/.env.local` was already written. Skip ahead to `pnpm ui dev`. Otherwise, create the file manually with IDs from your deployment artifacts:
+
+- `NEXT_PUBLIC_LOCALNET_CONTRACT_PACKAGE_ID` — `packageId` from the `sui_oracle_market` entry in `packages/dapp/deployments/deployment.localnet.json`
+- `NEXT_PUBLIC_LOCALNET_SHOP_ID` — `objectId` from the entry whose `objectType` ends with `::shop::Shop` in `packages/dapp/deployments/objects.localnet.json`
 
 ```bash
 NEXT_PUBLIC_LOCALNET_CONTRACT_PACKAGE_ID=0x...

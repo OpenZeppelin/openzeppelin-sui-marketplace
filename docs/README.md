@@ -2,6 +2,8 @@
 
 Use this page as the navigation hub for the docs. Each chapter ends with Prev/Next links.
 
+> The public docs page at [docs.openzeppelin.com/contracts-sui/1.x/learn/dapp-1-marketplace](https://docs.openzeppelin.com/contracts-sui/1.x/learn/dapp-1-marketplace) is a shorter overview that points back here. This folder is the in-repo source of truth for the deep walkthrough.
+
 ## 1. Start here (linear path)
 
 1. [00 Setup + Quickstart](00-setup.md)
@@ -42,8 +44,8 @@ Use this page as the navigation hub for the docs. Each chapter ends with Prev/Ne
 
 ## 3. Related repo guides
 
-1. [/reading/move-readme](/reading/move-readme) (shared object + marker deep dive)
-2. [/reading/ui-readme](/reading/ui-readme) (UI setup and localnet execution)
+1. [docs/07-shop-capabilities.md](07-shop-capabilities.md) (shared object + capability deep dive)
+2. [docs/11-ui-reference.md](11-ui-reference.md) (UI setup and localnet execution)
 3. `README.md` (repo overview + scripts)
 
 ## 4. Concept map (where concepts show up in code)

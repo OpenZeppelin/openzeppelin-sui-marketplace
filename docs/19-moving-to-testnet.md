@@ -12,9 +12,13 @@ This chapter is the checklist for leaving localnet. It covers how to harden your
 
 ## 2. Pre-flight prerequisites
 
-1. Deploy the package on testnet `pnpm script move:publish --package-path oracle-market --network testnet`
-2. Optionally run the seeds `pnpm script owner:shop:seed --network testnet`
-3. Update UI + domain config: set `NEXT_PUBLIC_LOCALNET_CONTRACT_PACKAGE_ID`
+The simplest path is `pnpm bootstrap:testnet`, which seeds a shop against the canonical OpenZeppelin testnet deploy and writes the `NEXT_PUBLIC_TESTNET_*` IDs to `packages/ui/.env.local`. Set `PUBLISH_OWN=1 pnpm bootstrap:testnet` to publish your own copy of `oracle-market` first. See [`docs/06-scripts-reference.md`](06-scripts-reference.md#bootstrap-scripts-one-command-setup).
+
+If running the underlying scripts manually:
+
+1. Deploy the package on testnet: `pnpm script move:publish --package-path oracle-market --network testnet`
+2. Seed the shop: `pnpm script owner:shop:seed --network testnet`
+3. Update UI config: set `NEXT_PUBLIC_TESTNET_CONTRACT_PACKAGE_ID` and `NEXT_PUBLIC_TESTNET_SHOP_ID` in `packages/ui/.env.local`.
 4. Gather owner/buyer addresses: make sure the wallet that will hold `ShopOwnerCap` is ready and funded with some SUI.
 
 ## 3. (Only testnet) Acquire some SUI
