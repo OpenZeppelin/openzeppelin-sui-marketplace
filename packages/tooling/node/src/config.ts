@@ -112,7 +112,9 @@ const withDefault = (
       accountPrivateKey: process.env.SUI_BUYER_ACCOUNT_PRIVATE_KEY,
       accountMnemonic: process.env.SUI_BUYER_ACCOUNT_MNEMONIC
     }
-    const hasBuyerAccountConfig = Object.values(buyerAccountOverrides).some(Boolean)
+    const hasBuyerAccountConfig = Object.values(buyerAccountOverrides).some(
+      Boolean
+    )
 
     const resolvedConfig = mergeDeepObjects(
       {
@@ -127,7 +129,8 @@ const withDefault = (
         },
         ...(hasBuyerAccountConfig && {
           buyerAccount: {
-            keystorePath: process.env.SUI_KEYSTORE_PATH || DEFAULT_KEYSTORE_PATH,
+            keystorePath:
+              process.env.SUI_KEYSTORE_PATH || DEFAULT_KEYSTORE_PATH,
             accountIndex: Number(process.env.SUI_BUYER_ACCOUNT_INDEX ?? 0),
             ...buyerAccountOverrides
           }

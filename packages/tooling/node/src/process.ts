@@ -262,7 +262,10 @@ const logSignerInfo = (tooling: Tooling) => {
   const hasSeparateBuyer = ownerAddress !== buyerAddress
   logKeyValueBlue("Signer (owner)")(ownerAddress)
   if (hasSeparateBuyer) logKeyValueBlue("Signer (buyer)")(buyerAddress)
-  else logWarning("SUI_BUYER_ACCOUNT_* not set — buyer scripts will sign as owner. Set buyer vars to separate roles.")
+  else
+    logWarning(
+      "SUI_BUYER_ACCOUNT_* not set — buyer scripts will sign as owner. Set buyer vars to separate roles."
+    )
   console.log("")
 }
 
