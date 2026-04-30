@@ -71,6 +71,8 @@ SUI_BUYER_ACCOUNT_PRIVATE_KEY=<buyer-key>
 
 If `SUI_BUYER_ACCOUNT_*` is not set, buyer scripts fall back to the owner account (a warning is printed at startup).
 
+> Sections 7–11 below walk through the underlying scripts step by step. For a one-command path that runs steps 8–11 in sequence and writes the UI env automatically, run `pnpm bootstrap:localnet` after starting localnet (step 7). See [`docs/06-scripts-reference.md`](06-scripts-reference.md#bootstrap-scripts-one-command-setup) for what it does internally.
+
 ## 7. Start localnet (localnet only)
 
 ```bash
@@ -163,7 +165,10 @@ The created objects are saved in:
 
 ## 11. Run the UI to see the shop
 
-Create `packages/ui/.env.local` with IDs from your deployments artifacts (`packageId`):
+If you ran `pnpm bootstrap:localnet`, `packages/ui/.env.local` was already written. Skip ahead to `pnpm ui dev`. Otherwise, create the file manually with IDs from your deployment artifacts:
+
+- `NEXT_PUBLIC_LOCALNET_CONTRACT_PACKAGE_ID` — `packageId` from the `sui_oracle_market` entry in `packages/dapp/deployments/deployment.localnet.json`
+- `NEXT_PUBLIC_LOCALNET_SHOP_ID` — `objectId` from the entry whose `objectType` ends with `::shop::Shop` in `packages/dapp/deployments/objects.localnet.json`
 
 ```bash
 NEXT_PUBLIC_LOCALNET_CONTRACT_PACKAGE_ID=0x...

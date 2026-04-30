@@ -20,6 +20,24 @@ Exceptions:
 - `pnpm script chain:localnet:stop` has no CLI flags.
 - `pnpm script mock:get-currency` does not accept `--network` and is localnet-only.
 
+## Bootstrap scripts (one-command setup)
+
+Two wrappers in `scripts/` chain the underlying scripts together for a clean fresh-clone experience. They are the recommended path for first-time setup; the chained scripts they call are documented in the sections below if you want to run them individually.
+
+### `pnpm bootstrap:localnet`
+
+- Verifies localnet is reachable, funds owner + buyer from the localnet faucet, runs `mock:setup`, `move:publish` for `oracle-market`, and `owner:shop:seed`. Writes `NEXT_PUBLIC_LOCALNET_*` IDs into `packages/ui/.env.local` automatically.
+- Requires `packages/dapp/.env` configured with owner + buyer addresses and credentials (mnemonic or private key).
+- Idempotent — safe to re-run after partial failures.
+
+### `pnpm bootstrap:testnet`
+
+- Runs `owner:shop:seed --shop-package-id <canonical> --network testnet` against the canonical OpenZeppelin testnet deploy (resolved from `packages/ui/.env.example`). Writes `NEXT_PUBLIC_TESTNET_*` IDs into `packages/ui/.env.local`.
+- Owner credentials are required in `.env`. Buyer credentials are not — testnet buyers connect through the browser wallet.
+- Variants:
+  - `PUBLISH_OWN=1 pnpm bootstrap:testnet` — publishes a fresh `oracle-market` package under your owner account before seeding. Costs ~0.5–1 testnet SUI in gas.
+  - `TESTNET_PACKAGE_ID=0x... pnpm bootstrap:testnet` — pins a specific pre-existing package ID (e.g. your previously-published copy).
+
 ---
 
 **Code spotlight: standard script runner flow**

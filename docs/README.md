@@ -2,6 +2,8 @@
 
 Use this page as the navigation hub for the docs. Each chapter ends with Prev/Next links.
 
+> The public docs page at [docs.openzeppelin.com/contracts-sui/1.x/learn/dapp-1-marketplace](https://docs.openzeppelin.com/contracts-sui/1.x/learn/dapp-1-marketplace) is a shorter overview that points back here. This folder is the in-repo source of truth for the deep walkthrough.
+
 ## 1. Start here (linear path)
 
 1. [00 Setup + Quickstart](00-setup.md)

@@ -6,6 +6,8 @@ This chapter holds the “how to run it locally” content that is too detailed 
 
 If you’re brand new, start with [00 Setup + Quickstart](./00-setup.md) and then follow the linear chapters in [Learning Path Map](./README.md).
 
+> Most of the steps below are bundled into `pnpm bootstrap:localnet`, which seeds mocks, publishes `oracle-market`, seeds the shop, and writes UI env vars in one command. The chapter here documents what happens under the hood; reach for the bootstrap script when you don't need to step through it. See [`docs/06-scripts-reference.md`](06-scripts-reference.md#bootstrap-scripts-one-command-setup).
+
 ---
 
 ## Environment Setup (from scratch)

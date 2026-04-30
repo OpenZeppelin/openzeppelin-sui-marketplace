@@ -3,18 +3,28 @@
 
 # Sui Oracle Market
 
-End-to-end example of a small on-chain market on **Sui**: items are priced in **USD cents** (stablecoin-style), while buyers can pay in **multiple currencies** using **oracle prices**. Clone it to explore five core Sui patterns hands-on: the capability pattern, phantom types, Programmable Transaction Blocks (PTBs), Pyth oracle integration, and on-chain enforced limits.
+End-to-end example of a small on-chain market on **Sui**. Items are priced in **USD cents** (stablecoin-style), buyers pay in **multiple currencies** using **oracle prices** from [Pyth](https://pyth.network/), and the contract layer uses [`openzeppelin_math`](https://docs.openzeppelin.com/contracts-sui/1.x/math) for safe `mul_div` with explicit rounding and overflow handling.
 
-This repo is a pnpm workspace containing:
+The repo demonstrates five core Sui patterns: the capability pattern, phantom types, Programmable Transaction Blocks (PTBs), Pyth oracle integration, and on-chain enforced limits.
 
-- a Move package `packages/dapp/contracts/oracle-market`,
-- a CLI/script layer for localnet + seeding + owner/buyer flows `packages/dapp/src/scripts`
-- state artifacts captured in `packages/dapp/deployments`
-- a Next.js UI `packages/ui`,
-- a docs site with learning path to help transition from EVM/Solidity to Sui/Move `packages/learn`.
-- a tooling layer with integration test harness `packages/tooling`
+## Resources
 
-More detail (workspace layering rules, folder layout): `docs/01-repo-layout.md`.
+- Video walkthrough: *Sui Marketplace Fullstack Example: Move, Pyth, and OpenZeppelin Math Libraries* (link to be added once published)
+- Public docs page (overview): [Sui Marketplace dApp Walkthrough](https://docs.openzeppelin.com/contracts-sui/1.x/learn/dapp-1-marketplace)
+- In-repo walkthrough (this README's deep counterpart): [`docs/README.md`](docs/README.md) — 23-chapter linear path covering contracts, scripts, UI, testing, and troubleshooting
+
+## Repo layout
+
+This is a pnpm workspace containing:
+
+- `packages/dapp/contracts/oracle-market` — the Move package
+- `packages/dapp/src/scripts` — CLI scripts for localnet, seeding, and owner/buyer flows
+- `packages/dapp/deployments` — generated artifacts from scripts
+- `packages/domain/*` — browser-safe domain models and Node-only helpers
+- `packages/tooling/*` — shared infra helpers (browser-safe + Node-only)
+- `packages/ui` — Next.js UI
+
+Workspace layering rules and folder layout: [`docs/01-repo-layout.md`](docs/01-repo-layout.md).
 
 ## Prerequisites
 
@@ -116,55 +126,39 @@ pnpm ui dev
 
 To play as a buyer, create a second Slush account in the browser, fund it from the faucet, and connect it to the UI.
 
-> **Want to deploy your own package instead of using the canonical one?**
-> ```bash
-> PUBLISH_OWN=1 pnpm bootstrap:testnet
-> ```
-> Publishes a fresh `oracle-market` package under your owner account (~0.5–1 testnet SUI in gas), then seeds a shop against YOUR package ID and wires it into `packages/ui/.env.local`. Useful for testing Move-code changes on testnet or running an isolated copy of the contract.
+To publish your own copy of the package on testnet (rather than using the canonical OpenZeppelin deploy), run `PUBLISH_OWN=1 pnpm bootstrap:testnet`. The script publishes a fresh `oracle-market` package under your owner account (~0.5–1 testnet SUI in gas), seeds a shop against it, and writes the resulting IDs to `packages/ui/.env.local`. Useful when testing Move-code changes on testnet or running an isolated copy of the contract.
 
-> Running localnet AND testnet? That's fine. After running both `pnpm bootstrap:localnet` and `pnpm bootstrap:testnet`, your `packages/ui/.env.local` has both blocks populated and the UI network selector toggles between them freely — no UI restart needed. Just remember to switch Slush to the matching network when toggling.
+To run both localnet and testnet, run both bootstrap scripts. `packages/ui/.env.local` will carry both blocks. The UI's network selector toggles between them; switch Slush to match.
 
-## Learning path
+## Walkthrough
 
-Start the docs website and follow along based on your goal:
+The deep walkthrough lives in [`docs/`](docs/), starting with [`docs/README.md`](docs/README.md) — a 23-chapter linear path covering the mental model, contracts, oracle integration, UI flows, testing, security, and troubleshooting.
 
-```bash
-pnpm --filter learn dev
-```
+Direct jumps:
 
-and navigate to `localhost:30006` on your browser
+- Setup + quickstart: [`docs/00-setup.md`](docs/00-setup.md)
+- Localnet end-to-end: [`docs/05-localnet-workflow.md`](docs/05-localnet-workflow.md)
+- Script/CLI reference: [`docs/06-scripts-reference.md`](docs/06-scripts-reference.md)
+- UI reference: [`docs/11-ui-reference.md`](docs/11-ui-reference.md)
+- Moving to testnet/mainnet: [`docs/19-moving-to-testnet.md`](docs/19-moving-to-testnet.md)
+- Security + gotchas: [`docs/20-security.md`](docs/20-security.md)
+- Troubleshooting: [`docs/21-troubleshooting.md`](docs/21-troubleshooting.md)
+- Glossary: [`docs/22-glossary.md`](docs/22-glossary.md)
 
-Quick gotos:
+Companion overview on the public docs site: [Sui Marketplace dApp Walkthrough](https://docs.openzeppelin.com/contracts-sui/1.x/learn/dapp-1-marketplace). The public page is a shorter overview that points back to this folder for depth.
 
-- **Hands-on challenge (6 checkpoints):** [CHALLENGE.md](CHALLENGE.md)
-- **Learning path hub:** [docs/README.md](docs/README.md)
-- **Setup + quickstart:** [docs/00-setup.md](docs/00-setup.md)
-- **EVM → Sui cheatsheet:** [docs/03-evm-to-sui.md](docs/03-evm-to-sui.md)
-- **Troubleshooting:** [docs/21-troubleshooting.md](docs/21-troubleshooting.md)
-- **Glossary:** [docs/22-glossary.md](docs/22-glossary.md)
+Move and Sui language references for newcomers:
 
-## Frontend UI
-
-- UI docs chapters: [docs/12-buyer-ui.md](docs/12-buyer-ui.md) and [docs/13-owner-ui.md](docs/13-owner-ui.md)
-- Additional UI reference notes: [docs/11-ui-reference.md](docs/11-ui-reference.md)
+- [Sui Move Concepts](https://docs.sui.io/concepts/sui-move-concepts) — official Sui-flavored Move primer
+- [The Move Book](https://move-book.com/) — language reference, abilities, generics, phantom types
+- [Programmable Transaction Blocks](https://docs.sui.io/concepts/transactions/prog-txn-blocks) — PTB structure on Sui
+- [Pyth on Sui](https://docs.pyth.network/price-feeds/use-real-time-data/sui) — oracle feed integration
+- [OpenZeppelin Sui Contracts](https://docs.openzeppelin.com/contracts-sui) — `openzeppelin_math`, `openzeppelin_access`
 
 ## Tests
 
 - Integration (localnet): `pnpm dapp test:integration`
-- Full testing guide: [docs/15-testing.md](docs/15-testing.md)
-
-## Docs (detailed)
-
-The detailed docs live under `docs/`:
-
-- Localnet end-to-end: [docs/05-localnet-workflow.md](docs/05-localnet-workflow.md)
-- Script/CLI reference + artifacts: [docs/06-scripts-reference.md](docs/06-scripts-reference.md)
-- UI reference notes: [docs/11-ui-reference.md](docs/11-ui-reference.md)
-- Testing + script testing framework: [docs/15-testing.md](docs/15-testing.md)
-- Troubleshooting: [docs/21-troubleshooting.md](docs/21-troubleshooting.md)
-- Security & gotchas: [docs/20-security.md](docs/20-security.md)
-- Moving to testnet/mainnet: [docs/19-moving-to-testnet.md](docs/19-moving-to-testnet.md)
-- EVM → Sui cheatsheet: [docs/03-evm-to-sui.md](docs/03-evm-to-sui.md)
+- Testing guide: [`docs/15-testing.md`](docs/15-testing.md)
 
 ## Repository layout
 
