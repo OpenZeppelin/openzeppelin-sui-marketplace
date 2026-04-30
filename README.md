@@ -48,6 +48,9 @@ sui client new-address ed25519   # buyer
 
 # 3) Start localnet (new terminal; leave it running)
 pnpm script chain:localnet:start --with-faucet
+# If mock publishing doesn't succeed, restart node and force regenesis:
+# pnpm script chain:localnet:stop
+# pnpm script chain:localnet:start --with-faucet --force-regenesis
 
 # 4) Configure packages/dapp/.env
 cp packages/dapp/.env.example packages/dapp/.env
