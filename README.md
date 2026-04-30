@@ -9,7 +9,7 @@ The repo demonstrates five core Sui patterns: the capability pattern, phantom ty
 
 ## Resources
 
-- Video walkthrough: *Sui Marketplace Fullstack Example: Move, Pyth, and OpenZeppelin Math Libraries* (link to be added once published)
+- Video walkthrough: [*Sui Marketplace Fullstack Example: Move, Pyth, and OpenZeppelin Math Libraries*](https://youtu.be/n53w3IGLnf8) — ~18 min covering architecture, code, and a live transaction flow on testnet
 - Public docs page (overview): [Sui Marketplace dApp Walkthrough](https://docs.openzeppelin.com/contracts-sui/1.x/learn/dapp-1-marketplace)
 - In-repo walkthrough (this README's deep counterpart): [`docs/README.md`](docs/README.md) — 23-chapter linear path covering contracts, scripts, UI, testing, and troubleshooting
 
