@@ -1,6 +1,3 @@
-> [!Warning]
-> This is experimental UN-AUDITED code
-
 # Sui Oracle Market
 
 End-to-end example of a small on-chain market on **Sui**. Items are priced in **USD cents** (stablecoin-style), buyers pay in **multiple currencies** using **oracle prices** from [Pyth](https://pyth.network/), and the contract layer uses [`openzeppelin_math`](https://docs.openzeppelin.com/contracts-sui/1.x/math) for safe `mul_div` with explicit rounding and overflow handling.
