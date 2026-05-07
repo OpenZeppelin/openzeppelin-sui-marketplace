@@ -10,6 +10,7 @@ import {
 } from "@mysten/dapp-kit"
 import type { SuiTransactionBlockResponse } from "@mysten/sui/client"
 import type { IdentifierString } from "@mysten/wallet-standard"
+import type { DiscountSummary } from "@sui-oracle-market/domain-core/models/discount"
 import type { ItemListingSummary } from "@sui-oracle-market/domain-core/models/item-listing"
 import { buildRemoveItemListingTransaction } from "@sui-oracle-market/domain-core/ptb/item-listing"
 import { deriveRelevantPackageId } from "@sui-oracle-market/tooling-core/object"
@@ -52,6 +53,8 @@ type RemoveItemModalState = {
   canSubmit: boolean
   walletConnected: boolean
   explorerUrl?: string
+  attachedDiscounts: DiscountSummary[]
+  hasAttachedDiscounts: boolean
   handleRemoveListing: () => Promise<void>
   resetState: () => void
 }
@@ -60,11 +63,13 @@ export const useRemoveItemModalState = ({
   open,
   shopId,
   listing,
+  discounts,
   onListingRemoved
 }: {
   open: boolean
   shopId?: string
   listing?: ItemListingSummary
+  discounts?: DiscountSummary[]
   onListingRemoved?: (listingId?: string) => void
 }): RemoveItemModalState => {
   const currentAccount = useCurrentAccount()
@@ -99,8 +104,20 @@ export const useRemoveItemModalState = ({
     ? signTransaction.isPending
     : signAndExecuteTransaction.isPending
 
+  const attachedDiscounts = useMemo(
+    () =>
+      listing?.itemListingId
+        ? (discounts ?? []).filter(
+            (discount) => discount.appliesToListingId === listing.itemListingId
+          )
+        : [],
+    [discounts, listing?.itemListingId]
+  )
+  const hasAttachedDiscounts = attachedDiscounts.length > 0
+
   const canSubmit =
     Boolean(walletAddress && shopId && listing?.itemListingId) &&
+    !hasAttachedDiscounts &&
     transactionState.status !== "processing" &&
     isSubmissionPending !== true
   const walletConnected = Boolean(walletAddress)
@@ -282,6 +299,8 @@ export const useRemoveItemModalState = ({
     canSubmit,
     walletConnected,
     explorerUrl,
+    attachedDiscounts,
+    hasAttachedDiscounts,
     handleRemoveListing,
     resetState
   }

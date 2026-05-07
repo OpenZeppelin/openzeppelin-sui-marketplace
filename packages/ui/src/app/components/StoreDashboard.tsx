@@ -950,6 +950,7 @@ const StoreDashboard = ({
         onClose={closeRemoveItemModal}
         shopId={resolvedShopId}
         listing={modalState.activeListingToRemove ?? undefined}
+        discounts={storefront.discounts}
         onListingRemoved={handleListingRemoved}
       />
 
