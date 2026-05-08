@@ -38,7 +38,7 @@
   ],
   "pnpm": {
     "overrides": {
-      "axios": "1.15.0",
+      "axios": "1.16.0",
       "@isaacs/brace-expansion": "5.0.1",
       "minimatch": "10.2.4",
       "next@>=16.0.0-beta.0 <16.2.3": "16.2.3",
