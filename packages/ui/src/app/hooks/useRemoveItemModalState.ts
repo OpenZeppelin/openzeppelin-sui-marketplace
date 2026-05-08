@@ -132,6 +132,14 @@ export const useRemoveItemModalState = ({
   }, [open, listing?.itemListingId, resetState])
 
   const handleRemoveListing = useCallback(async () => {
+    if (hasAttachedDiscounts) {
+      setTransactionState({
+        status: "error",
+        error: "Detach attached discounts before removing this listing."
+      })
+      return
+    }
+
     if (!walletAddress || !shopId || !listing) {
       setTransactionState({
         status: "error",
@@ -274,6 +282,7 @@ export const useRemoveItemModalState = ({
   }, [
     currentAccount,
     currentWallet,
+    hasAttachedDiscounts,
     isLocalnet,
     listing,
     localnetExecutor,
