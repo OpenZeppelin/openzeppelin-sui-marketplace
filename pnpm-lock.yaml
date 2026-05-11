@@ -5,7 +5,8 @@ settings:
   excludeLinksFromLockfile: false
 
 overrides:
-  axios: 1.15.0
+  axios: 1.16.0
+  axios@<1.16.0: 1.16.0
   '@isaacs/brace-expansion': 5.0.1
   minimatch: 10.2.4
   next@>=16.0.0-beta.0 <16.2.3: 16.2.3
@@ -72,7 +73,7 @@ importers:
         version: 1.45.2(typescript@5.9.3)
       '@pythnetwork/pyth-sui-js':
         specifier: ^2.4.0
-        version: 2.4.0(axios@1.15.0)(typescript@5.9.3)
+        version: 2.4.0(axios@1.16.0)(typescript@5.9.3)
       '@sui-oracle-market/domain-core':
         specifier: workspace:*
         version: link:../domain/core
@@ -109,7 +110,7 @@ importers:
         version: 1.45.2(typescript@5.9.3)
       '@pythnetwork/pyth-sui-js':
         specifier: ^2.4.0
-        version: 2.4.0(axios@1.15.0)(typescript@5.9.3)
+        version: 2.4.0(axios@1.16.0)(typescript@5.9.3)
       '@sui-oracle-market/tooling-core':
         specifier: workspace:*
         version: link:../../tooling/core
@@ -2473,7 +2474,7 @@ packages:
   '@zodios/core@10.9.6':
     resolution: {integrity: sha512-aH4rOdb3AcezN7ws8vDgBfGboZMk2JGGzEq/DtW65MhnRxyTGRuLJRWVQ/2KxDgWvV2F5oTkAS+5pnjKbl0n+A==}
     peerDependencies:
-      axios: 1.15.0
+      axios: 1.16.0
       zod: ^3.x
 
   acorn-jsx@5.3.2:
@@ -2569,10 +2570,10 @@ packages:
   axios-retry@4.5.0:
     resolution: {integrity: sha512-aR99oXhpEDGo0UuAlYcn2iGRds30k366Zfa05XWScR9QaQD4JYiP3/1Qt1u7YlefUOK+cn0CcwoL1oefavQUlQ==}
     peerDependencies:
-      axios: 1.15.0
+      axios: 1.16.0
 
-  axios@1.15.0:
-    resolution: {integrity: sha512-wWyJDlAatxk30ZJer+GeCWS209sA42X+N5jU2jy6oHTp7ufw8uzUTVFBX9+wTfAlhiJXGS0Bq7X6efruWjuK9Q==}
+  axios@1.16.0:
+    resolution: {integrity: sha512-6hp5CwvTPlN2A31g5dxnwAX0orzM7pmCRDLnZSX772mv8WDqICwFjowHuPs04Mc8deIld1+ejhtaMn5vp6b+1w==}
 
   bail@2.0.2:
     resolution: {integrity: sha512-0xO6mYd7JB2YesxDKplafRpsiOzPt9V02ddPCLbY1xYGPOX24NTyN50qnUxgCPcSoYMhKpAuBTjQoRZCAkUDRw==}
@@ -5811,8 +5812,8 @@ snapshots:
   '@mysten/suins@0.9.13(typescript@5.9.3)':
     dependencies:
       '@mysten/sui': 1.45.2(typescript@5.9.3)
-      axios: 1.15.0
-      axios-retry: 4.5.0(axios@1.15.0)
+      axios: 1.16.0
+      axios-retry: 4.5.0(axios@1.16.0)
     transitivePeerDependencies:
       - '@gql.tada/svelte-support'
       - '@gql.tada/vue-support'
@@ -5981,18 +5982,18 @@ snapshots:
 
   '@protobuf-ts/runtime@2.11.1': {}
 
-  '@pythnetwork/hermes-client@2.1.0(axios@1.15.0)':
+  '@pythnetwork/hermes-client@2.1.0(axios@1.16.0)':
     dependencies:
-      '@zodios/core': 10.9.6(axios@1.15.0)(zod@3.25.76)
+      '@zodios/core': 10.9.6(axios@1.16.0)(zod@3.25.76)
       eventsource: 3.0.7
       zod: 3.25.76
     transitivePeerDependencies:
       - axios
 
-  '@pythnetwork/pyth-sui-js@2.4.0(axios@1.15.0)(typescript@5.9.3)':
+  '@pythnetwork/pyth-sui-js@2.4.0(axios@1.16.0)(typescript@5.9.3)':
     dependencies:
       '@mysten/sui': 1.45.2(typescript@5.9.3)
-      '@pythnetwork/hermes-client': 2.1.0(axios@1.15.0)
+      '@pythnetwork/hermes-client': 2.1.0(axios@1.16.0)
       buffer: 6.0.3
     transitivePeerDependencies:
       - '@gql.tada/svelte-support'
@@ -7509,9 +7510,9 @@ snapshots:
 
   '@xobotyi/scrollbar-width@1.9.5': {}
 
-  '@zodios/core@10.9.6(axios@1.15.0)(zod@3.25.76)':
+  '@zodios/core@10.9.6(axios@1.16.0)(zod@3.25.76)':
     dependencies:
-      axios: 1.15.0
+      axios: 1.16.0
       zod: 3.25.76
 
   acorn-jsx@5.3.2(acorn@8.15.0):
@@ -7594,12 +7595,12 @@ snapshots:
       postcss: 8.5.12
       postcss-value-parser: 4.2.0
 
-  axios-retry@4.5.0(axios@1.15.0):
+  axios-retry@4.5.0(axios@1.16.0):
     dependencies:
-      axios: 1.15.0
+      axios: 1.16.0
       is-retry-allowed: 2.2.0
 
-  axios@1.15.0:
+  axios@1.16.0:
     dependencies:
       follow-redirects: 1.16.0
       form-data: 4.0.5

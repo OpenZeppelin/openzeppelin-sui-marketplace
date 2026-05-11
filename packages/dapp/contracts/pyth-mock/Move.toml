@@ -3,4 +3,4 @@ name = "pyth"
 edition = "2024"
 
 [environments]
-test-publish = "2e7db31b"
+test-publish = "b1a6def4"
