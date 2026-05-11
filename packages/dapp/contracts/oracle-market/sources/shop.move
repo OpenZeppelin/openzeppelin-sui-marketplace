@@ -760,7 +760,6 @@ fun process_purchase<T: store, C>(
 ): (ShopItem<T>, Coin<C>) {
     // Assert pyt price info object validity.
     let accepted_currency = shop.currency<C>();
-    // TODO#q: remove pyth feed id assertion and remove feed id from the storage
     assert_price_info_identity!(
         accepted_currency.feed_id(),
         accepted_currency.pyth_object_id(),
