@@ -60,7 +60,7 @@
   "devDependencies": {
     "@types/node": "^22.19.2",
     "@types/yargs": "^17.0.35",
-    "vitest": "^3.2.4"
+    "vitest": "^4.1.0"
   },
   "engines": {
     "node": ">=22.19.2"
