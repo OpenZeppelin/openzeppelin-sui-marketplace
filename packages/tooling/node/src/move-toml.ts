@@ -79,6 +79,82 @@ const ensureTrailingNewline = (
   return contents.endsWith("\n") ? contents : `${contents}${lineEnding}`
 }
 
+const getLineStartOffsets = (contents: string) => {
+  const offsets = [0]
+  for (let index = 0; index < contents.length; index += 1) {
+    if (contents[index] === "\n") offsets.push(index + 1)
+  }
+  return offsets
+}
+
+/**
+ * Strips `[[published]]` blocks whose `source.local = "<packagePath>"` from a
+ * `Pub.<network>.toml` file, leaving entries for other (dep) packages intact.
+ * Used to wipe a stale "already published" entry (e.g. a chain-id from a
+ * previous localnet genesis) before a `test-publish` retry.
+ */
+const removePublishedArrayEntriesForPackagePath = (
+  contents: string,
+  packagePath: string
+): { updatedContents: string; didUpdate: boolean } => {
+  const lineEnding = resolveLineEnding(contents)
+  const shouldPreserveTrailingNewline = contents.endsWith("\n")
+  const lines = contents.split(/\r?\n/)
+  const lineOffsets = getLineStartOffsets(contents)
+  const headerRegex = /^\s*\[\[published\]\]\s*(#.*)?$/
+  const anyHeaderRegex = /^\s*\[(?:\[[^\]]+\]|[^\]]+)\]\s*(#.*)?$/
+  // Match `source = { local = "/abs/path" }` regardless of inner whitespace.
+  const sourceLocalRegex =
+    /^\s*source\s*=\s*\{\s*local\s*=\s*"([^"]*)"\s*\}\s*(#.*)?$/
+
+  const ranges: Array<{ start: number; end: number }> = []
+  let didUpdate = false
+
+  for (let index = 0; index < lines.length; index += 1) {
+    if (!headerRegex.test(lines[index] ?? "")) continue
+    const blockStart = lineOffsets[index] ?? 0
+    let blockEnd = contents.length
+    let matchesPath = false
+    for (let inner = index + 1; inner < lines.length; inner += 1) {
+      const line = lines[inner] ?? ""
+      if (anyHeaderRegex.test(line)) {
+        blockEnd = lineOffsets[inner] ?? contents.length
+        break
+      }
+      const sourceMatch = line.match(sourceLocalRegex)
+      if (sourceMatch && sourceMatch[1] === packagePath) matchesPath = true
+    }
+    if (matchesPath) {
+      ranges.push({ start: blockStart, end: blockEnd })
+      didUpdate = true
+    }
+  }
+
+  if (!didUpdate) return { updatedContents: contents, didUpdate: false }
+
+  // Remove ranges back-to-front so earlier offsets stay valid.
+  let updated = contents
+  for (let index = ranges.length - 1; index >= 0; index -= 1) {
+    const range = ranges[index]
+    if (!range) continue
+    updated = updated.slice(0, range.start) + updated.slice(range.end)
+  }
+
+  // Collapse triple+ newlines that the splice may have introduced.
+  updated = updated.replace(/(\r?\n){3,}/g, `${lineEnding}${lineEnding}`)
+  updated = ensureTrailingNewline(
+    trimTrailingEmptyLines(updated) +
+      (shouldPreserveTrailingNewline ? lineEnding : ""),
+    lineEnding,
+    shouldPreserveTrailingNewline
+  )
+
+  return { updatedContents: updated, didUpdate: true }
+}
+
+const hasPublishedArrayEntries = (contents: string): boolean =>
+  /^\s*\[\[published\]\]/m.test(contents)
+
 const removePublishedSectionForNetwork = (
   contents: string,
   networkName: string
@@ -400,19 +476,44 @@ export const clearPublishedEntryForNetwork = async ({
   const publishedTomlPath = path.join(packagePath, "Published.toml")
   if (!networkName) return { publishedTomlPath, didUpdate: false }
 
+  // Sui CLI ≥ 1.70 writes ephemeral publish state to `Pub.<networkName>.toml`
+  // alongside `Published.toml`. Strip the `[[published]]` block whose
+  // `source.local` matches this package; if none remain, unlink the file. A
+  // stale entry (e.g. a chain-id from a previous localnet genesis) otherwise
+  // makes `sui client test-publish` abort with a chain-id mismatch.
+  const ephemeralPubPath = path.join(packagePath, `Pub.${networkName}.toml`)
+  let didUpdate = false
+  try {
+    const ephemeralContents = await fs.readFile(ephemeralPubPath, "utf8")
+    const result = removePublishedArrayEntriesForPackagePath(
+      ephemeralContents,
+      packagePath
+    )
+    didUpdate = result.didUpdate
+    if (hasPublishedArrayEntries(result.updatedContents)) {
+      if (result.didUpdate) {
+        await fs.writeFile(ephemeralPubPath, result.updatedContents)
+      }
+    } else {
+      await fs.unlink(ephemeralPubPath)
+      didUpdate = true
+    }
+  } catch (error) {
+    if (!isErrnoWithCode(error, "ENOENT")) throw error
+  }
+
   let contents: string
   try {
     contents = await fs.readFile(publishedTomlPath, "utf8")
   } catch (error) {
     if (isErrnoWithCode(error, "ENOENT"))
-      return { publishedTomlPath, didUpdate: false }
+      return { publishedTomlPath, didUpdate }
     throw error
   }
 
   const targetNetworks =
     networkName === "localnet" ? ["localnet", "test-publish"] : [networkName]
   let updatedContents = contents
-  let didUpdate = false
 
   for (const targetNetwork of targetNetworks) {
     const result = removePublishedSectionForNetwork(
@@ -423,10 +524,10 @@ export const clearPublishedEntryForNetwork = async ({
     if (result.didUpdate) didUpdate = true
   }
 
-  if (!didUpdate) return { publishedTomlPath, didUpdate: false }
-
-  await fs.writeFile(publishedTomlPath, updatedContents)
-  return { publishedTomlPath, didUpdate: true }
+  if (updatedContents !== contents) {
+    await fs.writeFile(publishedTomlPath, updatedContents)
+  }
+  return { publishedTomlPath, didUpdate }
 }
 
 export const clearPublishedEntriesForNetwork = async ({

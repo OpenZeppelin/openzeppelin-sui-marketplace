@@ -307,6 +307,11 @@ const createPublishTransaction = (
  * CLI runner for `sui client publish`.
  */
 export const runClientPublish = runSuiCli(["client", "publish"])
+
+/**
+ * CLI runner for `sui client test-publish`.
+ */
+export const runClientTestPublish = runSuiCli(["client", "test-publish"])
 /**
  * Builds the full plan for a publish, including flags, dependency strategy, and package naming.
  */
@@ -515,6 +520,32 @@ const buildCliPublishArguments = (plan: PublishPlan): string[] => {
   return args
 }
 
+const shouldRetryViaTestPublish = ({
+  plan,
+  stdout,
+  stderr
+}: {
+  plan: PublishPlan
+  stdout?: string | Buffer
+  stderr?: string | Buffer
+}) => {
+  const combined = `${stdout ?? ""}\n${stderr ?? ""}`
+  // Sui CLI ≤ 1.69: `sui client publish` failed because an unpublished
+  // dependency's Move.toml had no entry for the build env we passed.
+  if (
+    plan.shouldUseUnpublishedDependencies &&
+    combined.includes("Environment `") &&
+    combined.includes("is not present in Move.toml")
+  )
+    return true
+  // Sui CLI ≥ 1.70: persistent `sui client publish` rejects ephemeral build
+  // envs. The `[environments] test-publish = "..."` entry we use on localnet
+  // is meant to flow through `sui client test-publish`, so retry there.
+  if (combined.includes("does not define an")) return true
+  if (combined.includes("--build-env` argument is not allowed")) return true
+  return false
+}
+
 /**
  * Publishes using `sui client publish` to mirror CLI behavior.
  */
@@ -528,12 +559,76 @@ const publishViaCli = async (plan: PublishPlan): Promise<PublishResult> => {
       ? { ...process.env, SUI_KEYSTORE_PATH: plan.keystorePath }
       : undefined
 
+  // Run with cwd = package path so the CLI's ephemeral `Pub.<env>.toml` lands
+  // alongside the package (Sui CLI ≥ 1.70 writes it relative to the caller's
+  // cwd, even when an absolute package path is passed).
+  const cliCwd = plan.packagePath
+
   const { stdout, stderr, exitCode } = await runClientPublish(args, {
-    env: cliEnv
+    env: cliEnv,
+    cwd: cliCwd
   })
   if (stderr?.toString().trim()) logWarning(stderr.toString().trim())
 
   if (exitCode && exitCode !== 0) {
+    if (shouldRetryViaTestPublish({ plan, stdout, stderr })) {
+      logWarning(
+        "`sui client publish` failed; retrying with `sui client test-publish` (ephemeral) for local/unpublished dependencies."
+      )
+
+      // The failed `sui client publish` may have left an ephemeral
+      // `Pub.<env>.toml` behind that would make `test-publish` abort with
+      // "already published". Wipe it before retrying.
+      await clearPublishedEntryForNetwork({
+        packagePath: plan.packagePath,
+        networkName: plan.network.networkName
+      })
+
+      // `sui client test-publish` (Sui CLI ≥ 1.70) rejects
+      // `--skip-dependency-verification` (it always builds from source).
+      const TEST_PUBLISH_INCOMPATIBLE_FLAGS = new Set([
+        "--skip-dependency-verification"
+      ])
+      const filteredArgs = args.filter(
+        (arg) => !TEST_PUBLISH_INCOMPATIBLE_FLAGS.has(arg)
+      )
+      // Ephemeral publishes naturally chain through other unpublished local
+      // deps, so always opt in. The CLI is fine with this flag appearing twice
+      // if the original args already had it.
+      const testPublishArgs = filteredArgs.includes(
+        "--with-unpublished-dependencies"
+      )
+        ? filteredArgs
+        : [...filteredArgs, "--with-unpublished-dependencies"]
+
+      const retry = await runClientTestPublish(testPublishArgs, {
+        env: cliEnv,
+        cwd: cliCwd
+      })
+      if (retry.stderr?.toString().trim())
+        logWarning(retry.stderr.toString().trim())
+
+      if (retry.exitCode && retry.exitCode !== 0) {
+        const retryTail = [retry.stdout, retry.stderr]
+          .filter(Boolean)
+          .map((chunk) => chunk.toString().trim())
+          .filter(Boolean)
+          .join("\n")
+        throw new Error(
+          `Sui CLI test-publish exited with code ${retry.exitCode}${
+            retryTail ? `:\n${retryTail}` : ""
+          }`
+        )
+      }
+
+      const retriedParsed = parseCliJson(retry.stdout.toString())
+      const retriedResult = extractPublishResult(
+        retriedParsed as SuiTransactionBlockResponse
+      )
+
+      return labelPublishResult(retriedResult, plan.packageNames)
+    }
+
     const outputTail = [stdout, stderr]
       .filter(Boolean)
       .map((chunk) => chunk.toString().trim())

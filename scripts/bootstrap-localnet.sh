@@ -155,15 +155,19 @@ info "Funding owner and buyer from localnet faucet…"
 fund_address "$OWNER_ADDR" "owner"
 fund_address "$BUYER_ADDR" "buyer"
 
-# ── 4. Seed mocks ────────────────────────────────────────────────────────────
-info "Seeding mocks (coins + Pyth stub + price feeds)…"
-pnpm script mock:setup --network localnet
-ok "Mocks seeded."
-
-# ── 5. Publish oracle-market ─────────────────────────────────────────────────
+# ── 4. Publish oracle-market ─────────────────────────────────────────────────
+# Published before mock:setup: with --with-unpublished-dependencies the CLI
+# inlines pyth-mock into the oracle-market package address, and mock:setup
+# points the price feeds at that address so their PriceInfoObject type matches
+# the shop.
 info "Publishing oracle-market…"
 pnpm script move:publish --package-path oracle-market --network localnet
 ok "oracle-market published."
+
+# ── 5. Seed mocks ────────────────────────────────────────────────────────────
+info "Seeding mocks (coins + Pyth feeds + example item types)…"
+pnpm script mock:setup --network localnet
+ok "Mocks seeded."
 
 # ── 6. Seed shop ─────────────────────────────────────────────────────────────
 info "Seeding shop (listings + currencies + discounts)…"

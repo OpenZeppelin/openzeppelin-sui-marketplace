@@ -45,7 +45,11 @@ import { formatErrorMessage } from "@sui-oracle-market/tooling-core/utils/errors
 import { withArtifactsRoot } from "../artifacts.ts"
 import type { SuiResolvedConfig } from "../config.ts"
 import { loadSuiConfig } from "../config.ts"
-import { DEFAULT_TX_GAS_BUDGET, SUI_COIN_TYPE } from "../constants.ts"
+import {
+  DEFAULT_PUBLISH_GAS_BUDGET,
+  DEFAULT_TX_GAS_BUDGET,
+  SUI_COIN_TYPE
+} from "../constants.ts"
 import {
   buildKeystoreEntry,
   loadKeypair,
@@ -151,7 +155,9 @@ const DEFAULT_RPC_PORT = 9000
 const DEFAULT_WEBSOCKET_PORT = 9001
 const DEFAULT_FAUCET_PORT = 9123
 const DEFAULT_MINIMUM_COIN_OBJECTS = 2
-const DEFAULT_MINIMUM_GAS_COIN_BALANCE = 500_000_000n
+// Size funded gas coins to the publish budget so a single funded coin can
+// cover an oracle-market publish (which bundles pyth/wormhole/math).
+const DEFAULT_MINIMUM_GAS_COIN_BALANCE = BigInt(DEFAULT_PUBLISH_GAS_BUDGET)
 const DEFAULT_FAUCET_REQUEST_ATTEMPTS = 1
 const DEFAULT_FAUCET_REQUEST_DELAY_MS = 50
 
@@ -1223,7 +1229,13 @@ const copyMoveSources = async (
   sourceRoot?: string
 ) => {
   const resolvedSourceRoot = await resolveMoveSourceRootPath(sourceRoot)
-  await cp(resolvedSourceRoot, destinationRoot, { recursive: true })
+  // Skip ephemeral `Pub.<env>.toml` files: they record a specific localnet
+  // chain-id and, if a developer ran the bootstrap locally, would be copied
+  // into the temp env and make `test-publish` abort on a chain-id mismatch.
+  await cp(resolvedSourceRoot, destinationRoot, {
+    recursive: true,
+    filter: (source) => !/[/\\]Pub\.[^/\\]*\.toml$/.test(source)
+  })
   await removeMoveBuildArtifacts(destinationRoot)
 }
 
