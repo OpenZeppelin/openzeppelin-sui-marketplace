@@ -404,6 +404,25 @@ public(package) fun create_discount(
     )
 }
 
+/// Creates a discount already scoped to `listing_id`, which also spotlights it on that listing.
+public(package) fun create_discount_for_listing(
+    shop_obj: &mut shop::Shop,
+    owner_cap: &shop::ShopOwnerCap,
+    listing_id: ID,
+    ctx: &mut tx_context::TxContext,
+): ID {
+    shop_obj.create_discount(
+        owner_cap,
+        option::some(listing_id),
+        0,
+        500,
+        0,
+        option::none(),
+        option::some(5),
+        ctx,
+    )
+}
+
 public(package) fun setup_shop_with_currency_listing_and_price_info(
     scn: &mut test_scenario::Scenario,
     base_price_usd_cents: u64,

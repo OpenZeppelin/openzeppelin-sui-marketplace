@@ -52,9 +52,20 @@ fun add_item_listing_stores_metadata() {
 fun add_item_listing_links_spotlight_discount() {
     let mut ctx = tx_context::new_from_hint(owner(), 44, 0, 0, 0);
     let (mut shop, owner_cap) = shop::test_setup_shop(owner(), &mut ctx);
-    let discount_id = test_helpers::create_discount(
+
+    // A discount scoped to an initial listing can be re-pointed (stolen) onto a new listing.
+    let initial_listing_id = shop.add_item_listing<test_helpers::TestItem>(
+        &owner_cap,
+        b"Initial Listing".to_string(),
+        150_00,
+        4,
+        option::none(),
+        &mut ctx,
+    );
+    let discount_id = test_helpers::create_discount_for_listing(
         &mut shop,
         &owner_cap,
+        initial_listing_id,
         &mut ctx,
     );
 
@@ -73,6 +84,8 @@ fun add_item_listing_links_spotlight_discount() {
     spotlight_discount_id.do_ref!(|value| {
         assert_eq!(*value, discount_id);
     });
+    // Re-pointing clears the spotlight and discount count on the initial listing.
+    assert!(option::is_none(&shop.listing(initial_listing_id).spotlight_discount_id()));
     assert_emitted!(
         events::item_listing_added(
             shop.id(),
@@ -82,6 +95,7 @@ fun add_item_listing_links_spotlight_discount() {
 
     shop.remove_discount(&owner_cap, discount_id);
     test_helpers::remove_listing_if_exists(&mut shop, &owner_cap, listing_id);
+    test_helpers::remove_listing_if_exists(&mut shop, &owner_cap, initial_listing_id);
     std::unit_test::destroy(owner_cap);
     std::unit_test::destroy(shop);
 }
