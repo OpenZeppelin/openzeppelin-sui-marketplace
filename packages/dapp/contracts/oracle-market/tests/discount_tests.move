@@ -543,7 +543,7 @@ fun update_discount_rejects_after_expiry() {
 }
 
 #[test]
-fun toggle_discount_updates_active_and_emits_events() {
+fun set_discount_status_updates_active_and_emits_events() {
     let mut ctx = tx_context::dummy();
     let (mut shop, owner_cap) = shop::test_setup_shop(owner(), &mut ctx);
 
@@ -568,7 +568,7 @@ fun toggle_discount_updates_active_and_emits_events() {
     let active = discount.active();
 
     assert!(active);
-    shop.toggle_discount(
+    shop.set_discount_status(
         &owner_cap,
         discount_id,
         false,
@@ -596,7 +596,7 @@ fun toggle_discount_updates_active_and_emits_events() {
     assert_eq!(redemptions_after_first, redemptions);
     assert!(!active_after_first);
 
-    shop.toggle_discount(
+    shop.set_discount_status(
         &owner_cap,
         discount_id,
         true,
@@ -621,8 +621,8 @@ fun toggle_discount_updates_active_and_emits_events() {
     assert_eq!(redemptions_after_second, redemptions);
     assert!(active_after_second);
 
-    assert_emitted!(events::discount_toggled(shop.id(), discount_id, false));
-    assert_emitted!(events::discount_toggled(shop.id(), discount_id, true));
+    assert_emitted!(events::discount_status_changed(shop.id(), discount_id, false));
+    assert_emitted!(events::discount_status_changed(shop.id(), discount_id, true));
 
     shop.remove_discount(&owner_cap, discount_id);
     std::unit_test::destroy(owner_cap);
@@ -630,7 +630,7 @@ fun toggle_discount_updates_active_and_emits_events() {
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::EInvalidOwnerCap)]
-fun toggle_discount_rejects_foreign_owner_cap() {
+fun set_discount_status_rejects_foreign_owner_cap() {
     let mut ctx = tx_context::dummy();
     let (mut shop, owner_cap) = shop::test_setup_shop(owner(), &mut ctx);
     let (_other_shop, other_cap) = shop::test_setup_shop(second_owner(), &mut ctx);
@@ -645,7 +645,7 @@ fun toggle_discount_rejects_foreign_owner_cap() {
         &mut ctx,
     );
 
-    shop.toggle_discount(
+    shop.set_discount_status(
         &other_cap,
         discount_id,
         false,
@@ -655,7 +655,7 @@ fun toggle_discount_rejects_foreign_owner_cap() {
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::EDiscountNotFound)]
-fun toggle_discount_rejects_foreign_discount() {
+fun set_discount_status_rejects_foreign_discount() {
     let mut ctx = tx_context::dummy();
     let (mut shop, owner_cap) = shop::test_setup_shop(owner(), &mut ctx);
     let (mut other_shop, other_cap) = shop::test_setup_shop(
@@ -673,7 +673,7 @@ fun toggle_discount_rejects_foreign_discount() {
         &mut ctx,
     );
 
-    shop.toggle_discount(
+    shop.set_discount_status(
         &owner_cap,
         foreign_discount,
         false,
@@ -683,7 +683,7 @@ fun toggle_discount_rejects_foreign_discount() {
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::EDiscountNotFound)]
-fun toggle_discount_rejects_unknown_discount() {
+fun set_discount_status_rejects_unknown_discount() {
     let mut ctx = tx_context::dummy();
     let (mut shop, owner_cap) = shop::test_setup_shop(owner(), &mut ctx);
     let stray_discount_id = shop.create_discount(
@@ -698,7 +698,7 @@ fun toggle_discount_rejects_unknown_discount() {
     );
     shop.remove_discount(&owner_cap, stray_discount_id);
 
-    shop.toggle_discount(
+    shop.set_discount_status(
         &owner_cap,
         stray_discount_id,
         false,
@@ -707,8 +707,34 @@ fun toggle_discount_rejects_unknown_discount() {
     abort
 }
 
+#[test, expected_failure(abort_code = ::sui_oracle_market::shop::EDiscountActiveStateUnchanged)]
+fun set_discount_status_rejects_unchanged_state() {
+    let mut ctx = tx_context::dummy();
+    let (mut shop, owner_cap) = shop::test_setup_shop(owner(), &mut ctx);
+    let discount_id = shop.create_discount(
+        &owner_cap,
+        option::none(),
+        0,
+        500,
+        0,
+        option::none(),
+        option::some(5),
+        &mut ctx,
+    );
+
+    // Discount is created active; setting it active again is a state-preserving no-op and must abort.
+    assert!(shop.discount(discount_id).active());
+    shop.set_discount_status(
+        &owner_cap,
+        discount_id,
+        true,
+    );
+
+    abort
+}
+
 #[test]
-fun toggle_discount_on_listing_sets_and_clears_spotlight() {
+fun set_discount_status_on_listing_sets_and_clears_spotlight() {
     let mut ctx = tx_context::dummy();
     let (mut shop, owner_cap) = shop::test_setup_shop(owner(), &mut ctx);
 
@@ -735,7 +761,7 @@ fun toggle_discount_on_listing_sets_and_clears_spotlight() {
     let listing_before = shop.listing(listing_id);
     let spotlight_before = listing_before.spotlight_discount_id();
     assert!(option::is_none(&spotlight_before));
-    assert_eq!(event::events_by_type<events::DiscountToggled>().length(), 0);
+    assert_eq!(event::events_by_type<events::DiscountStatusChanged>().length(), 0);
 
     shop.attach_spotlight_discount(
         &owner_cap,
@@ -750,7 +776,7 @@ fun toggle_discount_on_listing_sets_and_clears_spotlight() {
         assert_eq!(*value, discount_id);
     });
     assert_eq!(tx_context::get_ids_created(&ctx), ids_before_toggle);
-    assert_eq!(event::events_by_type<events::DiscountToggled>().length(), 0);
+    assert_eq!(event::events_by_type<events::DiscountStatusChanged>().length(), 0);
 
     shop.clear_spotlight_discount(
         &owner_cap,
@@ -761,7 +787,7 @@ fun toggle_discount_on_listing_sets_and_clears_spotlight() {
     let spotlight_after_clear = listing_after_clear.spotlight_discount_id();
     assert!(option::is_none(&spotlight_after_clear));
     assert_eq!(tx_context::get_ids_created(&ctx), ids_before_toggle);
-    assert_eq!(event::events_by_type<events::DiscountToggled>().length(), 0);
+    assert_eq!(event::events_by_type<events::DiscountStatusChanged>().length(), 0);
 
     shop.remove_discount(&owner_cap, discount_id);
     test_helpers::remove_listing_if_exists(&mut shop, &owner_cap, listing_id);
@@ -770,7 +796,7 @@ fun toggle_discount_on_listing_sets_and_clears_spotlight() {
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::EInvalidOwnerCap)]
-fun toggle_discount_on_listing_rejects_foreign_owner_cap() {
+fun set_discount_status_on_listing_rejects_foreign_owner_cap() {
     let mut ctx = tx_context::dummy();
     let (mut shop, owner_cap) = shop::test_setup_shop(owner(), &mut ctx);
     let (_other_shop, other_cap) = shop::test_setup_shop(second_owner(), &mut ctx);
@@ -804,7 +830,7 @@ fun toggle_discount_on_listing_rejects_foreign_owner_cap() {
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::EListingNotFound)]
-fun toggle_discount_on_listing_rejects_foreign_listing() {
+fun set_discount_status_on_listing_rejects_foreign_listing() {
     let mut ctx = tx_context::dummy();
     let (mut shop, owner_cap) = shop::test_setup_shop(owner(), &mut ctx);
     let (mut other_shop, other_cap) = shop::test_setup_shop(
@@ -841,7 +867,7 @@ fun toggle_discount_on_listing_rejects_foreign_listing() {
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::EDiscountNotFound)]
-fun toggle_discount_on_listing_rejects_foreign_discount() {
+fun set_discount_status_on_listing_rejects_foreign_discount() {
     let mut ctx = tx_context::dummy();
     let (mut shop, owner_cap) = shop::test_setup_shop(owner(), &mut ctx);
     let (mut other_shop, _other_cap) = shop::test_setup_shop(
@@ -878,7 +904,7 @@ fun toggle_discount_on_listing_rejects_foreign_discount() {
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::EDiscountNotFound)]
-fun toggle_discount_on_listing_rejects_unknown_discount() {
+fun set_discount_status_on_listing_rejects_unknown_discount() {
     let mut ctx = tx_context::dummy();
     let (mut shop, owner_cap) = shop::test_setup_shop(owner(), &mut ctx);
 
@@ -944,7 +970,7 @@ fun attach_spotlight_discount_sets_spotlight_without_emitting_events() {
         assert_eq!(*value, discount_id);
     });
     assert_eq!(tx_context::get_ids_created(&ctx), ids_before);
-    assert_eq!(event::events_by_type<events::DiscountToggled>().length(), 0);
+    assert_eq!(event::events_by_type<events::DiscountStatusChanged>().length(), 0);
     assert!(shop.discount_exists(discount_id));
 
     shop.remove_discount(&owner_cap, discount_id);
@@ -1000,7 +1026,7 @@ fun attach_spotlight_discount_overwrites_existing_spotlight() {
     assert_eq!(tx_context::get_ids_created(&ctx), ids_before);
     assert!(shop.discount_exists(first_discount));
     assert!(shop.discount_exists(second_discount));
-    assert_eq!(event::events_by_type<events::DiscountToggled>().length(), 0);
+    assert_eq!(event::events_by_type<events::DiscountStatusChanged>().length(), 0);
 
     shop.remove_discount(&owner_cap, second_discount);
     shop.remove_discount(&owner_cap, first_discount);
@@ -1217,7 +1243,7 @@ fun clear_spotlight_discount_removes_spotlight_without_side_effects() {
     let spotlight_after = listing_after.spotlight_discount_id();
     assert!(option::is_none(&spotlight_after));
     assert_eq!(tx_context::get_ids_created(&ctx), created_before);
-    assert_eq!(event::events_by_type<events::DiscountToggled>().length(), 0);
+    assert_eq!(event::events_by_type<events::DiscountStatusChanged>().length(), 0);
     assert!(shop.discount_exists(discount_id));
 
     shop.remove_discount(&owner_cap, discount_id);
@@ -1250,7 +1276,7 @@ fun clear_spotlight_discount_is_noop_when_no_spotlight_set() {
     let spotlight_after = listing_after.spotlight_discount_id();
     assert!(option::is_none(&spotlight_after));
     assert_eq!(tx_context::get_ids_created(&ctx), created_before);
-    assert_eq!(event::events_by_type<events::DiscountToggled>().length(), 0);
+    assert_eq!(event::events_by_type<events::DiscountStatusChanged>().length(), 0);
 
     test_helpers::remove_listing_if_exists(&mut shop, &owner_cap, listing_id);
     std::unit_test::destroy(owner_cap);
@@ -1461,10 +1487,10 @@ fun quote_amount_rejects_large_exponent() {
     abort
 }
 
-// === toggle_discount spotlight interaction tests ===
+// === set_discount_status spotlight interaction tests ===
 
 #[test]
-fun toggle_discount_activate_sets_spotlight_when_listing_has_none() {
+fun set_discount_status_activate_sets_spotlight_when_listing_has_none() {
     let mut ctx = tx_context::dummy();
     let (mut shop, owner_cap) = shop::test_setup_shop(owner(), &mut ctx);
 
@@ -1489,12 +1515,12 @@ fun toggle_discount_activate_sets_spotlight_when_listing_has_none() {
     );
 
     // Deactivate first so we can re-activate and observe the spotlight side effect.
-    shop.toggle_discount(&owner_cap, discount_id, false);
+    shop.set_discount_status(&owner_cap, discount_id, false);
 
     // Precondition: no spotlight yet.
     assert!(option::is_none(&shop.listing(listing_id).spotlight_discount_id()));
 
-    shop.toggle_discount(&owner_cap, discount_id, true);
+    shop.set_discount_status(&owner_cap, discount_id, true);
 
     // Activation should have set this discount as spotlight.
     let spotlight = shop.listing(listing_id).spotlight_discount_id();
@@ -1508,7 +1534,7 @@ fun toggle_discount_activate_sets_spotlight_when_listing_has_none() {
 }
 
 #[test]
-fun toggle_discount_activate_preserves_existing_spotlight() {
+fun set_discount_status_activate_preserves_existing_spotlight() {
     let mut ctx = tx_context::dummy();
     let (mut shop, owner_cap) = shop::test_setup_shop(owner(), &mut ctx);
 
@@ -1546,7 +1572,7 @@ fun toggle_discount_activate_preserves_existing_spotlight() {
     // Restore first_discount as the intended spotlight.
     shop.attach_spotlight_discount(&owner_cap, first_discount, listing_id);
     // Deactivate second_discount so we can re-activate it in the assertion step.
-    shop.toggle_discount(&owner_cap, second_discount, false);
+    shop.set_discount_status(&owner_cap, second_discount, false);
 
     // Precondition: first_discount is the spotlight.
     let spotlight_before = shop.listing(listing_id).spotlight_discount_id();
@@ -1554,7 +1580,7 @@ fun toggle_discount_activate_preserves_existing_spotlight() {
     spotlight_before.do_ref!(|value| assert_eq!(*value, first_discount));
 
     // Activating the second discount must NOT overwrite the existing spotlight.
-    shop.toggle_discount(&owner_cap, second_discount, true);
+    shop.set_discount_status(&owner_cap, second_discount, true);
 
     let spotlight_after = shop.listing(listing_id).spotlight_discount_id();
     assert!(option::is_some(&spotlight_after));
@@ -1568,7 +1594,7 @@ fun toggle_discount_activate_preserves_existing_spotlight() {
 }
 
 #[test]
-fun toggle_discount_deactivate_clears_spotlight_when_matches() {
+fun set_discount_status_deactivate_clears_spotlight_when_matches() {
     let mut ctx = tx_context::dummy();
     let (mut shop, owner_cap) = shop::test_setup_shop(owner(), &mut ctx);
 
@@ -1596,7 +1622,7 @@ fun toggle_discount_deactivate_clears_spotlight_when_matches() {
     let spotlight_before = shop.listing(listing_id).spotlight_discount_id();
     spotlight_before.do_ref!(|value| assert_eq!(*value, discount_id));
 
-    shop.toggle_discount(&owner_cap, discount_id, false);
+    shop.set_discount_status(&owner_cap, discount_id, false);
 
     // Deactivating the spotlighted discount must clear the spotlight.
     assert!(option::is_none(&shop.listing(listing_id).spotlight_discount_id()));
@@ -1608,7 +1634,7 @@ fun toggle_discount_deactivate_clears_spotlight_when_matches() {
 }
 
 #[test]
-fun toggle_discount_deactivate_preserves_spotlight_belonging_to_different_discount() {
+fun set_discount_status_deactivate_preserves_spotlight_belonging_to_different_discount() {
     let mut ctx = tx_context::dummy();
     let (mut shop, owner_cap) = shop::test_setup_shop(owner(), &mut ctx);
 
@@ -1652,7 +1678,7 @@ fun toggle_discount_deactivate_preserves_spotlight_belonging_to_different_discou
     spotlight_before.do_ref!(|value| assert_eq!(*value, first_discount));
 
     // Deactivating second_discount must NOT touch the spotlight of first_discount.
-    shop.toggle_discount(&owner_cap, second_discount, false);
+    shop.set_discount_status(&owner_cap, second_discount, false);
 
     let spotlight_after = shop.listing(listing_id).spotlight_discount_id();
     assert!(option::is_some(&spotlight_after));

@@ -16,7 +16,7 @@ use sui_oracle_market::test_helpers::{
     owner,
     second_owner,
     third_owner,
-    settle_purchase_outputs
+    settle_purchase_outputs,
 };
 
 // === Tests ===
@@ -1443,7 +1443,7 @@ fun buy_item_with_discount_rejects_inactive_discount() {
         owner_cap_id,
     );
     let mut shared_shop = scn.take_shared_by_id<shop::Shop>(shop_id);
-    shared_shop.toggle_discount(
+    shared_shop.set_discount_status(
         &owner_cap_obj,
         discount_id,
         false,

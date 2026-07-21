@@ -98,6 +98,10 @@ const ESpotlightDiscountListingMismatch: vector<u8> = "spotlight discount listin
 const EEmptyShopName: vector<u8> = "empty shop name";
 #[error(code = 10)]
 const EShopDisabled: vector<u8> = "shop disabled";
+#[error(code = 11)]
+const EDiscountActiveStateUnchanged: vector<u8> = "discount active state unchanged";
+#[error(code = 12)]
+const EShopActiveStateUnchanged: vector<u8> = "shop active state unchanged";
 
 // === Init ===
 
@@ -170,13 +174,15 @@ public fun create_shop_and_share(name: String, ctx: &mut TxContext): (ID, ShopOw
 }
 
 /// Disable/enable a shop (buyer flows will reject new checkouts).
-public fun toggle_shop(shop: &mut Shop, owner_cap: &ShopOwnerCap, active: bool) {
+/// Sets the shop's active flag to `active` rather than flipping the current value, and aborts with
+/// `EShopActiveStateUnchanged` when the shop already holds the requested state, so a state-preserving
+/// call surfaces as an error instead of silently doing nothing.
+public fun set_shop_status(shop: &mut Shop, owner_cap: &ShopOwnerCap, active: bool) {
     assert!(owner_cap.shop_id == shop.id(), EInvalidOwnerCap);
+    assert!(shop.active() != active, EShopActiveStateUnchanged);
 
-    if (shop.active() != active) {
-        shop.active = active;
-        events::emit_shop_toggled(shop.id(), owner_cap.id.to_inner(), active);
-    };
+    shop.active = active;
+    events::emit_shop_status_changed(shop.id(), owner_cap.id.to_inner(), active);
 }
 
 /// Rotate the payout recipient for a shop.
@@ -455,17 +461,19 @@ public fun update_discount(
 }
 
 /// Quickly enable/disable a coupon without deleting it.
-/// Listing-scoped discounts also update the shop-level discount counters used by delist checks.
-/// If listing don't have a spotlight discount when activating discount,
-/// set current discount as spotlight.
-/// Clear listing spotlight (if matches discount) when discount is deactivated.
-public fun toggle_discount(
+/// Sets the discount's active flag to `active` rather than flipping the current value, and aborts
+/// with `EDiscountActiveStateUnchanged` when the discount already holds the requested state, so a
+/// state-preserving call surfaces as an error instead of silently doing nothing.
+/// For listing-scoped discounts, activation installs the discount as the listing spotlight when the
+/// listing has none, and deactivation clears the listing spotlight when it matches this discount.
+public fun set_discount_status(
     shop: &mut Shop,
     owner_cap: &ShopOwnerCap,
     discount_id: ID,
     active: bool,
 ) {
     assert!(owner_cap.shop_id == shop.id(), EInvalidOwnerCap);
+    assert!(shop.discount(discount_id).active() != active, EDiscountActiveStateUnchanged);
 
     shop.discount(discount_id).applies_to_listing().do!(|listing_id| {
         // Assert that listing exist,
@@ -484,12 +492,8 @@ public fun toggle_discount(
         }
     });
 
-    // Emit event only when state changes.
-    let discount = shop.discount_mut(discount_id);
-    if (discount.active() != active) {
-        discount.set_active(active);
-        events::emit_discount_toggled(shop.id(), discount_id, active);
-    };
+    shop.discount_mut(discount_id).set_active(active);
+    events::emit_discount_status_changed(shop.id(), discount_id, active);
 }
 
 /// Removes a discount from shop storage and spotlight from associated listing (if attached to `discount_id`).

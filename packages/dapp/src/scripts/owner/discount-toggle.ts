@@ -4,7 +4,7 @@
  */
 import yargs from "yargs"
 
-import { buildToggleDiscountTransaction } from "@sui-oracle-market/domain-core/ptb/discount"
+import { buildSetDiscountStatusTransaction } from "@sui-oracle-market/domain-core/ptb/discount"
 import { runSuiScript } from "@sui-oracle-market/tooling-node/process"
 import {
   emitOrLogDiscountMutationResult,
@@ -23,7 +23,7 @@ runSuiScript(
       objectId: inputs.shopId
     })
 
-    const toggleDiscountTransaction = buildToggleDiscountTransaction({
+    const setDiscountStatusTransaction = buildSetDiscountStatusTransaction({
       packageId: inputs.packageId,
       shop: shopSharedObject,
       discountId: inputs.discountId,
@@ -33,7 +33,7 @@ runSuiScript(
 
     const mutationResult = await executeDiscountMutation({
       tooling,
-      transaction: toggleDiscountTransaction,
+      transaction: setDiscountStatusTransaction,
       summaryLabel: "toggle-discount",
       devInspect: cliArguments.devInspect,
       dryRun: cliArguments.dryRun

@@ -102,7 +102,7 @@ export const buildUpdateDiscountTransaction = ({
   return transaction
 }
 
-export const buildToggleDiscountTransaction = ({
+export const buildSetDiscountStatusTransaction = ({
   packageId,
   shop,
   discountId,
@@ -122,7 +122,7 @@ export const buildToggleDiscountTransaction = ({
       shopMutable: true
     })
   transaction.moveCall({
-    target: `${packageId}::shop::toggle_discount`,
+    target: `${packageId}::shop::set_discount_status`,
     arguments: [
       shopArgument,
       ownerCapabilityArgument,

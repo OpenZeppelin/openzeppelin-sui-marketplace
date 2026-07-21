@@ -11,7 +11,7 @@ import {
 import { normalizeSuiAddress } from "@mysten/sui/utils"
 import type { IdentifierString } from "@mysten/wallet-standard"
 import { getShopOverview } from "@sui-oracle-market/domain-core/models/shop"
-import { buildToggleShopTransaction } from "@sui-oracle-market/domain-core/ptb/shop"
+import { buildSetShopStatusTransaction } from "@sui-oracle-market/domain-core/ptb/shop"
 import { deriveRelevantPackageId } from "@sui-oracle-market/tooling-core/object"
 import { getSuiSharedObject } from "@sui-oracle-market/tooling-core/shared-object"
 import { ENetwork } from "@sui-oracle-market/tooling-core/types"
@@ -161,7 +161,7 @@ export const useShopStatusToggle = ({
       })
 
       const nextActive = !shopActive
-      const transaction = buildToggleShopTransaction({
+      const transaction = buildSetShopStatusTransaction({
         packageId: shopPackageId,
         shop: shopShared,
         ownerCapId: ownerCapabilityId,

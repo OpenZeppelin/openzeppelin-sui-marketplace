@@ -44,7 +44,7 @@ pnpm ui dev
 6. **Create discount** -> `shop::create_discount`
    - UI: `packages/ui/src/app/components/AddDiscountModal.tsx`
    - Hook: `packages/ui/src/app/hooks/useAddDiscountModalState.ts`
-7. **Remove/disable discount** -> `shop::remove_discount` / `shop::toggle_discount`
+7. **Remove/disable discount** -> `shop::remove_discount` / `shop::set_discount_status`
    - UI: `packages/ui/src/app/components/RemoveDiscountModal.tsx`
    - Hook: `packages/ui/src/app/hooks/useRemoveDiscountModalState.ts`
 

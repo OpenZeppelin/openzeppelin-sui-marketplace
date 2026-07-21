@@ -53,7 +53,7 @@ export const buildUpdateShopOwnerTransaction = ({
   return transaction
 }
 
-export const buildToggleShopTransaction = ({
+export const buildSetShopStatusTransaction = ({
   packageId,
   shop,
   ownerCapId,
@@ -68,7 +68,7 @@ export const buildToggleShopTransaction = ({
   const shopArgument = transaction.sharedObjectRef(shop.sharedRef)
 
   transaction.moveCall({
-    target: `${packageId}::shop::toggle_shop`,
+    target: `${packageId}::shop::set_shop_status`,
     arguments: [
       shopArgument,
       transaction.object(ownerCapId),

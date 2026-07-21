@@ -13,7 +13,7 @@ import type { IdentifierString } from "@mysten/wallet-standard"
 import type { DiscountSummary } from "@sui-oracle-market/domain-core/models/discount"
 import {
   buildRemoveDiscountTransaction,
-  buildToggleDiscountTransaction
+  buildSetDiscountStatusTransaction
 } from "@sui-oracle-market/domain-core/ptb/discount"
 import { deriveRelevantPackageId } from "@sui-oracle-market/tooling-core/object"
 import { getSuiSharedObject } from "@sui-oracle-market/tooling-core/shared-object"
@@ -206,7 +206,7 @@ export const useRemoveDiscountModalState = ({
       const nextActiveFlag = !discount.activeFlag
       const transaction =
         action === "toggle"
-          ? buildToggleDiscountTransaction({
+          ? buildSetDiscountStatusTransaction({
               packageId: shopPackageId,
               shop: shopShared,
               discountId: discount.discountId,
