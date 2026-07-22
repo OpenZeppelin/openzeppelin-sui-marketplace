@@ -529,11 +529,16 @@ const shouldRetryViaTestPublish = ({
   stdout?: string | Buffer
   stderr?: string | Buffer
 }) => {
+  // The ephemeral `sui client test-publish` fallback only applies to localnet
+  // publishes that bundle unpublished local dependencies. Gate every branch on
+  // this so unrelated failures (or shared-network publishes) that happen to
+  // contain one of the substrings below never trigger a spurious retry.
+  if (!plan.shouldUseUnpublishedDependencies) return false
+
   const combined = `${stdout ?? ""}\n${stderr ?? ""}`
   // Sui CLI ≤ 1.69: `sui client publish` failed because an unpublished
   // dependency's Move.toml had no entry for the build env we passed.
   if (
-    plan.shouldUseUnpublishedDependencies &&
     combined.includes("Environment `") &&
     combined.includes("is not present in Move.toml")
   )
