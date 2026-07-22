@@ -46,7 +46,7 @@ None. This is a conceptual chapter that builds on earlier examples.
 `packages/dapp/contracts/oracle-market/sources/shop.move`
 
 ```move
-public struct ShopOwnerCap has key, store {
+public struct ShopOwnerCap has key {
   id: UID,
   shop_id: ID,
 }

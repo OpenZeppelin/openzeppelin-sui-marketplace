@@ -50,7 +50,7 @@ This repo assumes you already think in Solidity. The goal here is not to re-teac
 `packages/dapp/contracts/oracle-market/sources/shop.move`
 
 ```move
-public struct ShopOwnerCap has key, store {
+public struct ShopOwnerCap has key {
   id: UID,
   shop_id: ID,
 }
