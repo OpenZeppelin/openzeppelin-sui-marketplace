@@ -156,12 +156,23 @@ describe("owner item listing scripts integration", () => {
         const { publisher, scriptRunner, shopId, itemType } =
           await createShopWithItemType(context, "Item Listing Spotlight Shop")
 
+        // A spotlight discount must already be scoped to a listing. Create an initial
+        // listing and a discount scoped to it, then re-point (steal) it onto the new listing.
+        const initialListing = await createItemListingFixture({
+          scriptRunner,
+          publisher,
+          shopId,
+          itemType,
+          name: "Initial Spotlight Listing"
+        })
+
         const discount = await createDiscountFixture({
           scriptRunner,
           publisher,
           shopId,
           ruleKind: "percent",
-          value: "10"
+          value: "10",
+          listingId: initialListing.itemListingId
         })
 
         const listingOutput = await runOwnerScriptJson<ItemListingOutput>(
