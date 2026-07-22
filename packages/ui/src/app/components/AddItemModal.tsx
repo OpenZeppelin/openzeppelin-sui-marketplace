@@ -1,9 +1,13 @@
 "use client"
 
-import type { DiscountSummary } from "@sui-oracle-market/domain-core/models/discount"
+import {
+  describeRuleKind,
+  discountRuleChoices,
+  parseDiscountRuleKind,
+  type DiscountRuleKindLabel
+} from "@sui-oracle-market/domain-core/models/discount"
 import type { ItemListingSummary } from "@sui-oracle-market/domain-core/models/item-listing"
 import clsx from "clsx"
-import { useCallback, useEffect, useMemo } from "react"
 import {
   formatUsdFromCents,
   getStructLabel,
@@ -33,149 +37,20 @@ import {
 } from "./ModalPrimitives"
 import TransactionRecap from "./TransactionRecap"
 
-const spotlightDiscountStatusToneClassName: Record<string, string> = {
-  active:
-    "border-emerald-300 bg-emerald-500/10 text-emerald-700 dark:border-emerald-400/50 dark:text-emerald-200",
-  scheduled:
-    "border-amber-300 bg-amber-500/10 text-amber-700 dark:border-amber-300/50 dark:text-amber-200",
-  expired:
-    "border-rose-300 bg-rose-500/10 text-rose-700 dark:border-rose-300/50 dark:text-rose-200",
-  maxed:
-    "border-indigo-300 bg-indigo-500/10 text-indigo-700 dark:border-indigo-300/50 dark:text-indigo-200",
-  disabled:
-    "border-slate-300 bg-slate-500/5 text-slate-600 dark:border-slate-500/40 dark:text-slate-200/70",
-  default:
-    "border-slate-300 bg-slate-500/10 text-slate-600 dark:border-slate-500/40 dark:text-slate-200/80"
+const describeCreateSpotlightDiscount = (
+  createSpotlightDiscount?: ListingTransactionSummary["createSpotlightDiscount"]
+): string => {
+  if (!createSpotlightDiscount) return "None"
+  try {
+    const ruleValueLabel =
+      createSpotlightDiscount.ruleKind === 0
+        ? `$${(Number(createSpotlightDiscount.ruleValue) / 100).toFixed(2)} off`
+        : `${(Number(createSpotlightDiscount.ruleValue) / 100).toFixed(2)}% off`
+    return `${describeRuleKind(createSpotlightDiscount.ruleKind)} (${ruleValueLabel})`
+  } catch {
+    return describeRuleKind(createSpotlightDiscount.ruleKind)
+  }
 }
-
-const getSpotlightDiscountStatusTone = (status?: string) =>
-  spotlightDiscountStatusToneClassName[status ?? "default"] ??
-  spotlightDiscountStatusToneClassName.default
-
-const SpotlightDiscountStatusBadge = ({ status }: { status?: string }) => (
-  <span
-    className={clsx(
-      "rounded-full border px-2 py-0.5 text-[0.6rem] font-semibold uppercase tracking-wide",
-      getSpotlightDiscountStatusTone(status)
-    )}
-  >
-    {status ?? "unknown"}
-  </span>
-)
-
-const SpotlightDiscountCard = ({
-  discount,
-  selected,
-  onSelect,
-  explorerUrl
-}: {
-  discount: DiscountSummary
-  selected: boolean
-  onSelect: (discountId: string) => void
-  explorerUrl?: string
-}) => (
-  <div
-    className={clsx(
-      "rounded-2xl border border-slate-200/80 bg-white/85 p-3 text-left transition dark:border-slate-50/20 dark:bg-slate-900/40",
-      selected
-        ? "border-sds-blue/60 bg-sds-blue/10 dark:border-sds-blue/60 dark:bg-sds-blue/20 shadow-lg"
-        : "hover:border-slate-300/80 dark:hover:border-slate-50/30"
-    )}
-  >
-    <button
-      type="button"
-      onClick={() => onSelect(discount.discountId)}
-      aria-pressed={selected}
-      className="focus-visible:ring-sds-blue/40 w-full text-left focus-visible:outline-none focus-visible:ring-2"
-    >
-      <div className="flex items-center justify-between text-[0.6rem] uppercase tracking-[0.18em] text-slate-500 dark:text-slate-200/60">
-        <span>{selected ? "Selected discount" : "Discount"}</span>
-        <div className="flex items-center gap-2">
-          {selected ? (
-            <span className="border-sds-blue/60 bg-sds-blue/10 rounded-full border px-2 py-0.5 text-[0.6rem] font-semibold uppercase tracking-wide text-sds-dark dark:text-sds-light">
-              Selected
-            </span>
-          ) : undefined}
-          <SpotlightDiscountStatusBadge status={discount.status} />
-        </div>
-      </div>
-      <div className="mt-1 text-sm font-semibold text-sds-dark dark:text-sds-light">
-        {discount.ruleDescription}
-      </div>
-      <div className="mt-2 text-[0.7rem] text-slate-500 dark:text-slate-200/60">
-        {discount.appliesToListingId
-          ? "Applies to a specific listing."
-          : "Reusable across all listings."}
-      </div>
-    </button>
-    <div className="mt-3 border-t border-slate-200/70 pt-3 text-xs dark:border-slate-50/15">
-      <div className="mt-2">
-        <CopyableId
-          value={discount.discountId}
-          label="Discount"
-          explorerUrl={explorerUrl}
-        />
-      </div>
-    </div>
-  </div>
-)
-
-const SpotlightDiscountSelector = ({
-  discounts,
-  selectedDiscountId,
-  onSelectDiscount,
-  explorerUrl
-}: {
-  discounts: DiscountSummary[]
-  selectedDiscountId?: string
-  onSelectDiscount: (discountId: string) => void
-  explorerUrl?: string
-}) => {
-  if (discounts.length === 0)
-    return (
-      <div className="rounded-xl border border-dashed border-slate-200/70 bg-white/50 p-4 text-sm text-slate-500 dark:border-slate-50/20 dark:bg-slate-950/40 dark:text-slate-200/70">
-        No discounts are available yet. Create one to highlight it on this
-        listing.
-      </div>
-    )
-
-  return (
-    <div className="grid gap-3 sm:grid-cols-2">
-      {discounts.map((discount) => (
-        <SpotlightDiscountCard
-          key={discount.discountId}
-          discount={discount}
-          selected={discount.discountId === selectedDiscountId}
-          onSelect={onSelectDiscount}
-          explorerUrl={explorerUrl}
-        />
-      ))}
-    </div>
-  )
-}
-
-const hasSpotlightDiscountId = ({
-  discounts,
-  discountId
-}: {
-  discounts: DiscountSummary[]
-  discountId?: string
-}): boolean =>
-  Boolean(
-    discountId &&
-    discounts.some((discount) => discount.discountId === discountId)
-  )
-
-const getSelectedSpotlightDiscount = ({
-  discounts,
-  discountId
-}: {
-  discounts: DiscountSummary[]
-  discountId?: string
-}) =>
-  discountId
-    ? discounts.find((discount) => discount.discountId === discountId)
-    : undefined
 
 const ListingSummarySection = ({
   summary,
@@ -228,19 +103,8 @@ const ListingSummarySection = ({
           Spotlight discount
         </div>
         <div className="mt-1 text-sm font-semibold text-sds-dark dark:text-sds-light">
-          {summary.spotlightDiscountId
-            ? shortenId(summary.spotlightDiscountId)
-            : "None"}
+          {describeCreateSpotlightDiscount(summary.createSpotlightDiscount)}
         </div>
-        {summary.spotlightDiscountId ? (
-          <div className="mt-2">
-            <CopyableId
-              value={summary.spotlightDiscountId}
-              label="Discount"
-              explorerUrl={explorerUrl}
-            />
-          </div>
-        ) : undefined}
       </div>
     </div>
     <div className="mt-4 flex flex-wrap items-center gap-3 text-xs">
@@ -331,13 +195,11 @@ const AddItemModal = ({
   open,
   onClose,
   shopId,
-  discounts,
   onListingCreated
 }: {
   open: boolean
   onClose: () => void
   shopId?: string
-  discounts?: DiscountSummary[]
   onListingCreated?: (listing?: ItemListingSummary) => void
 }) => {
   const {
@@ -358,50 +220,9 @@ const AddItemModal = ({
     shouldShowFieldError,
     resetForm
   } = useAddItemModalState({ open, shopId, onListingCreated })
-  const availableSpotlightDiscounts = useMemo(
-    () =>
-      (discounts ?? [])
-        .slice()
-        .sort((discountA, discountB) =>
-          discountA.ruleDescription.localeCompare(discountB.ruleDescription)
-        ),
-    [discounts]
-  )
-  const selectedSpotlightDiscountId =
-    formState.spotlightDiscountId.trim() || undefined
-  const selectedSpotlightDiscount = useMemo(
-    () =>
-      getSelectedSpotlightDiscount({
-        discounts: availableSpotlightDiscounts,
-        discountId: selectedSpotlightDiscountId
-      }),
-    [availableSpotlightDiscounts, selectedSpotlightDiscountId]
-  )
-  const handleSpotlightDiscountCardSelect = useCallback(
-    (discountId: string) => {
-      const nextDiscountId =
-        selectedSpotlightDiscountId === discountId ? "" : discountId
-      handleInputChange("spotlightDiscountId", nextDiscountId)
-    },
-    [handleInputChange, selectedSpotlightDiscountId]
-  )
-  useEffect(() => {
-    if (!selectedSpotlightDiscountId) return
-    if (
-      hasSpotlightDiscountId({
-        discounts: availableSpotlightDiscounts,
-        discountId: selectedSpotlightDiscountId
-      })
-    )
-      return
-    handleInputChange("spotlightDiscountId", "")
-  }, [
-    availableSpotlightDiscounts,
-    handleInputChange,
-    selectedSpotlightDiscountId
-  ])
   const errorState =
     transactionState.status === "error" ? transactionState : undefined
+  const createSpotlightEnabled = formState.spotlightDiscountMode === "create"
 
   if (!open) return <></>
 
@@ -562,33 +383,205 @@ const AddItemModal = ({
                     </span>
                   ) : undefined}
                 </label>
-                <div
-                  className={clsx(modalFieldLabelClassName, "md:col-span-2")}
-                >
-                  <div>
+              </div>
+            </ModalSection>
+
+            <ModalSection
+              title="Spotlight discount (optional)"
+              subtitle="Create a listing-scoped discount alongside this listing."
+            >
+              <label className="flex items-center gap-3 text-sm text-sds-dark dark:text-sds-light">
+                <input
+                  type="checkbox"
+                  checked={createSpotlightEnabled}
+                  onChange={(event) =>
+                    handleInputChange(
+                      "spotlightDiscountMode",
+                      event.target.checked ? "create" : "none"
+                    )
+                  }
+                />
+                <span>
+                  Create a spotlight discount scoped to this listing. It is
+                  featured automatically once the listing is created.
+                </span>
+              </label>
+
+              {createSpotlightEnabled ? (
+                <div className="mt-4 grid gap-4 md:grid-cols-2">
+                  <label className={modalFieldLabelClassName}>
+                    <span className={modalFieldTitleClassName}>Rule type</span>
+                    <span className={modalFieldDescriptionClassName}>
+                      Choose a fixed dollar discount or a percent-off promotion.
+                    </span>
+                    <select
+                      value={formState.createSpotlightRuleKind}
+                      onChange={(event) =>
+                        handleInputChange(
+                          "createSpotlightRuleKind",
+                          event.target.value as DiscountRuleKindLabel
+                        )
+                      }
+                      className={modalFieldInputClassName}
+                    >
+                      {discountRuleChoices.map((rule) => (
+                        <option key={rule} value={rule}>
+                          {rule === "fixed" ? "Fixed amount" : "Percent off"}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className={modalFieldLabelClassName}>
+                    <span className={modalFieldTitleClassName}>Rule value</span>
+                    <span className={modalFieldDescriptionClassName}>
+                      {formState.createSpotlightRuleKind === "fixed"
+                        ? "USD amount to subtract (e.g. 5.25)."
+                        : "Percent off (e.g. 12.5)."}
+                    </span>
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      value={formState.createSpotlightValue}
+                      onChange={(event) =>
+                        handleInputChange(
+                          "createSpotlightValue",
+                          event.target.value
+                        )
+                      }
+                      onBlur={() => markFieldBlur("createSpotlightValue")}
+                      placeholder={
+                        formState.createSpotlightRuleKind === "fixed"
+                          ? "5.25"
+                          : "12.5"
+                      }
+                      className={clsx(
+                        modalFieldInputClassName,
+                        shouldShowFieldError(
+                          "createSpotlightValue",
+                          fieldErrors.createSpotlightValue
+                        ) && modalFieldInputErrorClassName
+                      )}
+                    />
+                    {shouldShowFieldError(
+                      "createSpotlightValue",
+                      fieldErrors.createSpotlightValue
+                    ) ? (
+                      <span className={modalFieldErrorTextClassName}>
+                        {fieldErrors.createSpotlightValue}
+                      </span>
+                    ) : undefined}
+                  </label>
+                  <label className={modalFieldLabelClassName}>
                     <span className={modalFieldTitleClassName}>
-                      Spotlight discount (optional)
+                      Starts at (epoch seconds)
                     </span>
                     <span className={modalFieldDescriptionClassName}>
-                      Click a discount to highlight it. Leave all discounts
-                      unselected to skip spotlighting.
+                      When the discount becomes active. Default is now.
                     </span>
-                  </div>
-                  <div className="mt-3">
-                    <SpotlightDiscountSelector
-                      discounts={availableSpotlightDiscounts}
-                      selectedDiscountId={selectedSpotlightDiscountId}
-                      onSelectDiscount={handleSpotlightDiscountCardSelect}
-                      explorerUrl={explorerUrl}
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      value={formState.createSpotlightStartsAt}
+                      onChange={(event) =>
+                        handleInputChange(
+                          "createSpotlightStartsAt",
+                          event.target.value
+                        )
+                      }
+                      onBlur={() => markFieldBlur("createSpotlightStartsAt")}
+                      className={clsx(
+                        modalFieldInputClassName,
+                        shouldShowFieldError(
+                          "createSpotlightStartsAt",
+                          fieldErrors.createSpotlightStartsAt
+                        ) && modalFieldInputErrorClassName
+                      )}
                     />
-                  </div>
-                  <p className="mt-3 text-[0.7rem] text-slate-500 dark:text-slate-200/70">
-                    {selectedSpotlightDiscount
-                      ? `Selected spotlight discount: ${selectedSpotlightDiscount.ruleDescription}`
-                      : "No spotlight discount selected."}
-                  </p>
+                    {shouldShowFieldError(
+                      "createSpotlightStartsAt",
+                      fieldErrors.createSpotlightStartsAt
+                    ) ? (
+                      <span className={modalFieldErrorTextClassName}>
+                        {fieldErrors.createSpotlightStartsAt}
+                      </span>
+                    ) : undefined}
+                  </label>
+                  <label className={modalFieldLabelClassName}>
+                    <span className={modalFieldTitleClassName}>
+                      Expires at (optional)
+                    </span>
+                    <span className={modalFieldDescriptionClassName}>
+                      Leave blank for no expiry. Must be after starts at.
+                    </span>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      value={formState.createSpotlightExpiresAt}
+                      onChange={(event) =>
+                        handleInputChange(
+                          "createSpotlightExpiresAt",
+                          event.target.value
+                        )
+                      }
+                      onBlur={() => markFieldBlur("createSpotlightExpiresAt")}
+                      className={clsx(
+                        modalFieldInputClassName,
+                        shouldShowFieldError(
+                          "createSpotlightExpiresAt",
+                          fieldErrors.createSpotlightExpiresAt
+                        ) && modalFieldInputErrorClassName
+                      )}
+                    />
+                    {shouldShowFieldError(
+                      "createSpotlightExpiresAt",
+                      fieldErrors.createSpotlightExpiresAt
+                    ) ? (
+                      <span className={modalFieldErrorTextClassName}>
+                        {fieldErrors.createSpotlightExpiresAt}
+                      </span>
+                    ) : undefined}
+                  </label>
+                  <label
+                    className={clsx(modalFieldLabelClassName, "md:col-span-2")}
+                  >
+                    <span className={modalFieldTitleClassName}>
+                      Max redemptions (optional)
+                    </span>
+                    <span className={modalFieldDescriptionClassName}>
+                      Leave blank for unlimited redemptions.
+                    </span>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      value={formState.createSpotlightMaxRedemptions}
+                      onChange={(event) =>
+                        handleInputChange(
+                          "createSpotlightMaxRedemptions",
+                          event.target.value
+                        )
+                      }
+                      onBlur={() =>
+                        markFieldBlur("createSpotlightMaxRedemptions")
+                      }
+                      className={clsx(
+                        modalFieldInputClassName,
+                        shouldShowFieldError(
+                          "createSpotlightMaxRedemptions",
+                          fieldErrors.createSpotlightMaxRedemptions
+                        ) && modalFieldInputErrorClassName
+                      )}
+                    />
+                    {shouldShowFieldError(
+                      "createSpotlightMaxRedemptions",
+                      fieldErrors.createSpotlightMaxRedemptions
+                    ) ? (
+                      <span className={modalFieldErrorTextClassName}>
+                        {fieldErrors.createSpotlightMaxRedemptions}
+                      </span>
+                    ) : undefined}
+                  </label>
                 </div>
-              </div>
+              ) : undefined}
             </ModalSection>
 
             <ModalSection
@@ -638,8 +631,12 @@ const AddItemModal = ({
                     Spotlight discount
                   </div>
                   <div className="mt-1 text-sm font-semibold text-sds-dark dark:text-sds-light">
-                    {formState.spotlightDiscountId
-                      ? shortenId(formState.spotlightDiscountId)
+                    {createSpotlightEnabled
+                      ? `Create ${describeRuleKind(
+                          parseDiscountRuleKind(
+                            formState.createSpotlightRuleKind
+                          )
+                        )} discount`
                       : "None"}
                   </div>
                 </div>

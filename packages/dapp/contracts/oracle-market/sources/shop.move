@@ -93,15 +93,15 @@ const EPythObjectMismatch: vector<u8> = "pyth object mismatch";
 #[error(code = 7)]
 const EFeedIdentifierMismatch: vector<u8> = "feed identifier mismatch";
 #[error(code = 8)]
-const ESpotlightDiscountListingMismatch: vector<u8> = "spotlight discount listing mismatch";
-#[error(code = 9)]
 const EEmptyShopName: vector<u8> = "empty shop name";
-#[error(code = 10)]
+#[error(code = 9)]
 const EShopDisabled: vector<u8> = "shop disabled";
-#[error(code = 11)]
+#[error(code = 10)]
 const EDiscountActiveStateUnchanged: vector<u8> = "discount active state unchanged";
-#[error(code = 12)]
+#[error(code = 11)]
 const EShopActiveStateUnchanged: vector<u8> = "shop active state unchanged";
+#[error(code = 12)]
+const EDiscountSpotlightUnchanged: vector<u8> = "discount spotlight state unchanged";
 
 // === Init ===
 
@@ -198,50 +198,29 @@ public fun update_shop_owner(shop: &mut Shop, owner_cap: &ShopOwnerCap, new_owne
 }
 
 /// Adds a listing and returns the created listing ID.
-/// Attaches `spotlight_discount_id` as spotlight discount,
-/// and removes that discount from any other associated listing.
 ///
 /// Add an `ItemListing` attached to the `Shop`. The generic `T` encodes what will eventually be
 /// minted when a buyer completes checkout. Prices are provided in USD cents (e.g. $12.50 -> 1_250)
-/// to avoid floating point math.
+/// to avoid floating point math. Spotlighting is a discount-level concern (`set_discount_spotlight`),
+/// so a listing carries no spotlight reference.
 public fun add_item_listing<T: store>(
     shop: &mut Shop,
     owner_cap: &ShopOwnerCap,
     name: String,
     base_price_usd_cents: u64,
     stock: u64,
-    spotlight_discount_id: Option<ID>,
     ctx: &mut TxContext,
 ): ID {
     assert!(owner_cap.shop_id == shop.id(), EInvalidOwnerCap);
 
     // Create an item listing.
-    let mut listing = listing::create<T>(
+    let listing = listing::create<T>(
         name,
         base_price_usd_cents,
         stock,
         ctx,
     );
     let listing_id = listing.id();
-
-    // Check that spotlight discount id exist.
-    // Update listing discount count and set spotlight,
-    spotlight_discount_id.do!(|discount_id| {
-        listing.increment_discount_count();
-        listing.set_spotlight(discount_id);
-
-        // set discount's `applies_to_listing`,
-        shop
-            .discount_mut(discount_id)
-            .set_applies_to_listing(listing_id)
-            .do!(|previous_listing_id| {
-                let listing = shop.listing_mut(previous_listing_id);
-
-                // and clear the previous listing from spotlight discount if matches the discount id.
-                listing.try_clear_matching_spotlight(&discount_id);
-                listing.decrement_discount_count();
-            });
-    });
 
     shop.listings.add(listing_id, listing);
 
@@ -253,7 +232,7 @@ public fun add_item_listing<T: store>(
 /// Add an item listing and atomically create a listing-scoped discount in one transaction.
 ///
 /// This is useful when callers want a listing-specific discount without requiring a pre-existing
-/// listing ID. The new discount is automatically attached as the listing's spotlight discount.
+/// listing ID. The new discount is created scoped to the listing and flagged as a spotlight.
 public fun add_item_listing_with_discount<T: store>(
     shop: &mut Shop,
     owner_cap: &ShopOwnerCap,
@@ -272,7 +251,6 @@ public fun add_item_listing_with_discount<T: store>(
         name,
         base_price_usd_cents,
         stock,
-        option::none(),
         ctx,
     );
     let discount_id = shop.create_discount(
@@ -286,8 +264,8 @@ public fun add_item_listing_with_discount<T: store>(
         ctx,
     );
 
-    // Link listing to spotlight discount.
-    shop.listing_mut(listing_id).set_spotlight(discount_id);
+    // Feature the freshly created listing-scoped discount.
+    shop.set_discount_spotlight(owner_cap, discount_id, true);
 
     (listing_id, discount_id)
 }
@@ -390,7 +368,9 @@ public fun remove_accepted_currency<C>(shop: &mut Shop, owner_cap: &ShopOwnerCap
 /// NOTE:
 /// - `max_redemptions`: if set, must be greater than 0. If not set (`None`), there is no cap on
 ///   total redemptions and the counter is not protected from overflow.
-/// - `applies_to_listing`: if set, will link discount to listing as a spotlight.
+/// - `applies_to_listing`: if set, scopes the discount to that listing (immutable) and counts it
+///   against the listing's `discount_count`. The discount starts un-spotlighted; call
+///   `set_discount_spotlight` to feature it.
 public fun create_discount(
     shop: &mut Shop,
     owner_cap: &ShopOwnerCap,
@@ -404,8 +384,9 @@ public fun create_discount(
 ): ID {
     assert!(owner_cap.shop_id == shop.id(), EInvalidOwnerCap);
 
-    // Create discount object.
-    let mut discount = discount::create(
+    // Create discount object with its immutable listing scope baked in.
+    let discount = discount::create(
+        applies_to_listing,
         rule_kind,
         rule_value,
         starts_at,
@@ -415,13 +396,9 @@ public fun create_discount(
     );
     let discount_id = discount.id();
 
-    // Check that attached listing exists.
-    // Set discount as a spotlight for listing and link discount to listing.
+    // For listing-scoped discounts, assert the listing exists and count it against that listing.
     applies_to_listing.do!(|listing_id| {
-        let listing = shop.listing_mut(listing_id);
-        listing.increment_discount_count();
-        listing.set_spotlight(discount_id);
-        discount.set_applies_to_listing(listing_id);
+        shop.listing_mut(listing_id).increment_discount_count();
     });
 
     shop.discounts.add(discount_id, discount);
@@ -464,8 +441,7 @@ public fun update_discount(
 /// Sets the discount's active flag to `active` rather than flipping the current value, and aborts
 /// with `EDiscountActiveStateUnchanged` when the discount already holds the requested state, so a
 /// state-preserving call surfaces as an error instead of silently doing nothing.
-/// For listing-scoped discounts, activation installs the discount as the listing spotlight when the
-/// listing has none, and deactivation clears the listing spotlight when it matches this discount.
+/// The spotlight flag is independent and unaffected (see `set_discount_spotlight`).
 public fun set_discount_status(
     shop: &mut Shop,
     owner_cap: &ShopOwnerCap,
@@ -475,77 +451,41 @@ public fun set_discount_status(
     assert!(owner_cap.shop_id == shop.id(), EInvalidOwnerCap);
     assert!(shop.discount(discount_id).active() != active, EDiscountActiveStateUnchanged);
 
-    shop.discount(discount_id).applies_to_listing().do!(|listing_id| {
-        // Assert that listing exist,
-        let listing = shop.listing_mut(listing_id);
-
-        // and when we activate discount,
-        if (active) {
-            // set current discount as a spotlight,
-            // if there is no another spotlight discount.
-            if (listing.spotlight_discount_id().is_none()) {
-                listing.set_spotlight(discount_id);
-            };
-        } else {
-            // When we deactivate discount that matches listing's spotlight clear it.
-            listing.try_clear_matching_spotlight(&discount_id)
-        }
-    });
-
     shop.discount_mut(discount_id).set_active(active);
     events::emit_discount_status_changed(shop.id(), discount_id, active);
 }
 
-/// Removes a discount from shop storage and spotlight from associated listing (if attached to `discount_id`).
-/// Fails if discount doesn't exist.
+/// Enable or disable the storefront spotlight flag on a discount.
+/// Sets the flag to `is_spotlight` rather than flipping it, and aborts with
+/// `EDiscountSpotlightUnchanged` when the discount already holds the requested value. Spotlighting is
+/// advisory: storefronts feature, per listing, the oldest-starting active discount whose spotlight
+/// flag is set (a listing-scoped match takes precedence over a generic one).
+public fun set_discount_spotlight(
+    shop: &mut Shop,
+    owner_cap: &ShopOwnerCap,
+    discount_id: ID,
+    is_spotlight: bool,
+) {
+    assert!(owner_cap.shop_id == shop.id(), EInvalidOwnerCap);
+    assert!(shop.discount(discount_id).is_spotlight() != is_spotlight, EDiscountSpotlightUnchanged);
+
+    shop.discount_mut(discount_id).set_spotlight(is_spotlight);
+    events::emit_discount_spotlight_changed(shop.id(), discount_id, is_spotlight);
+}
+
+/// Removes a discount from shop storage.
+/// Fails if discount doesn't exist. A listing-scoped discount is uncounted from its listing.
 public fun remove_discount(shop: &mut Shop, owner_cap: &ShopOwnerCap, discount_id: ID) {
     assert!(owner_cap.shop_id == shop.id(), EInvalidOwnerCap);
 
     // Fails when discount doesn't exist.
     shop.discount(discount_id).applies_to_listing().do!(|listing_id| {
         if (shop.listings.contains(listing_id)) {
-            let listing = shop.listing_mut(listing_id);
-
-            // Clear listing spotlight if it matches discount and decrement listing count.
-            listing.try_clear_matching_spotlight(&discount_id);
-            listing.decrement_discount_count();
+            shop.listing_mut(listing_id).decrement_discount_count();
         };
     });
 
     let _ = shop.discounts.remove(discount_id);
-}
-
-/// Surface a discount alongside a listing so UIs can highlight the promotion.
-/// Fails when discount `applies_to_listing` has value that doesn't match `listing_id`.
-public fun attach_spotlight_discount(
-    shop: &mut Shop,
-    owner_cap: &ShopOwnerCap,
-    discount_id: ID,
-    listing_id: ID,
-) {
-    assert!(owner_cap.shop_id == shop.id(), EInvalidOwnerCap);
-
-    // Assert discount matches to listing if listing exists.
-    let discount = shop.discount_mut(discount_id);
-    discount.applies_to_listing().do!(|applies_to_listing| {
-        assert!(applies_to_listing == listing_id, ESpotlightDiscountListingMismatch);
-    });
-
-    // Attach discount to listing.
-    if (discount.applies_to_listing().is_none()) {
-        // Link to listing and increment discount count,
-        // if it wasn't linked before.
-        discount.set_applies_to_listing(listing_id);
-        shop.listing_mut(listing_id).increment_discount_count();
-    };
-    shop.listing_mut(listing_id).set_spotlight(discount_id);
-}
-
-/// Remove the promotion banner from a listing.
-public fun clear_spotlight_discount(shop: &mut Shop, owner_cap: &ShopOwnerCap, listing_id: ID) {
-    assert!(owner_cap.shop_id == shop.id(), EInvalidOwnerCap);
-
-    shop.listing_mut(listing_id).clear_spotlight();
 }
 
 /// Execute a purchase priced in USD cents but settled with any previously registered `AcceptedCurrency`.
@@ -604,11 +544,6 @@ public fun buy_item_with_discount<T: store, C>(
     let discount = shop.discount_mut(discount_id);
     let discounted_price_usd_cents = discount.redeem(listing_id, listing_price_usd_cents, now_sec);
     let discount_id = discount.id();
-
-    if (discount.finished(now_sec)) {
-        let listing = shop.listing_mut(listing_id);
-        listing.try_clear_matching_spotlight(&discount_id);
-    };
 
     events::emit_discount_redeemed(
         shop_id,

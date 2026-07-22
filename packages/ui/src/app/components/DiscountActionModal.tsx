@@ -3,10 +3,10 @@
 import type { DiscountSummary } from "@sui-oracle-market/domain-core/models/discount"
 import { formatEpochSeconds, shortenId } from "../helpers/format"
 import {
-  useRemoveDiscountModalState,
+  useDiscountActionModalState,
   type DiscountAction,
-  type RemoveDiscountTransactionSummary
-} from "../hooks/useRemoveDiscountModalState"
+  type DiscountActionTransactionSummary
+} from "../hooks/useDiscountActionModalState"
 import CopyableId from "./CopyableId"
 import {
   ModalBody,
@@ -23,35 +23,49 @@ import TransactionRecap from "./TransactionRecap"
 
 const resolveActionLabel = ({
   action,
-  activeFlag
+  activeFlag,
+  isSpotlight
 }: {
   action: DiscountAction
   activeFlag: boolean
+  isSpotlight: boolean
 }) => {
   if (action === "remove") return "Remove discount"
+  if (action === "spotlight")
+    return isSpotlight ? "Unspotlight discount" : "Spotlight discount"
   return activeFlag ? "Disable discount" : "Enable discount"
 }
 
 const resolveActionTitle = ({
   action,
-  activeFlag
+  activeFlag,
+  isSpotlight
 }: {
   action: DiscountAction
   activeFlag: boolean
+  isSpotlight: boolean
 }) => {
   if (action === "remove") return "Remove Discount"
+  if (action === "spotlight")
+    return isSpotlight ? "Unspotlight Discount" : "Spotlight Discount"
   return activeFlag ? "Disable Discount" : "Enable Discount"
 }
 
 const resolveActionDescription = ({
   action,
-  activeFlag
+  activeFlag,
+  isSpotlight
 }: {
   action: DiscountAction
   activeFlag: boolean
+  isSpotlight: boolean
 }) => {
   if (action === "remove")
     return "Permanently remove this discount from the shop."
+  if (action === "spotlight")
+    return isSpotlight
+      ? "Stop featuring this discount on its listings."
+      : "Feature this discount on its listings."
   return activeFlag
     ? "Stop this discount from applying to new purchases."
     : "Enable this discount so it can apply to new purchases."
@@ -59,23 +73,33 @@ const resolveActionDescription = ({
 
 const resolveSuccessTitle = ({
   action,
-  activeFlag
+  activeFlag,
+  isSpotlight
 }: {
   action: DiscountAction
   activeFlag: boolean
+  isSpotlight: boolean
 }) => {
   if (action === "remove") return "Discount removed"
+  if (action === "spotlight")
+    return isSpotlight ? "Discount spotlighted" : "Discount unspotlighted"
   return activeFlag ? "Discount disabled" : "Discount enabled"
 }
 
 const resolveSuccessDescription = ({
   action,
-  activeFlag
+  activeFlag,
+  isSpotlight
 }: {
   action: DiscountAction
   activeFlag: boolean
+  isSpotlight: boolean
 }) => {
   if (action === "remove") return "The discount has been removed from the shop."
+  if (action === "spotlight")
+    return isSpotlight
+      ? "The discount is now featured on its listings."
+      : "The discount is no longer featured on its listings."
   return activeFlag
     ? "The discount has been disabled on chain."
     : "The discount has been enabled on chain."
@@ -157,12 +181,18 @@ const DiscountSummarySection = ({
   </ModalSection>
 )
 
+const resolveActionImpact = (action: DiscountAction) => {
+  if (action === "remove")
+    return "Removing a discount deletes it from shop storage."
+  if (action === "spotlight")
+    return "Spotlighting controls whether this discount is featured on its listings in the storefront."
+  return "Toggling updates whether this discount can be selected for new purchases."
+}
+
 const ActionImpactSection = ({ action }: { action: DiscountAction }) => (
   <ModalSection title="Action impact" subtitle="Expected storefront behavior">
     <div className="text-xs text-slate-500 dark:text-slate-200/70">
-      {action === "remove"
-        ? "Removing a discount deletes it from shop storage and clears listing spotlight references if they point to this discount."
-        : "Toggling updates whether this discount can be selected for new purchases."}
+      {resolveActionImpact(action)}
     </div>
   </ModalSection>
 )
@@ -173,7 +203,7 @@ const DiscountSuccessView = ({
   explorerUrl,
   onClose
 }: {
-  summary: RemoveDiscountTransactionSummary
+  summary: DiscountActionTransactionSummary
   shopId?: string
   explorerUrl?: string
   onClose: () => void
@@ -183,12 +213,14 @@ const DiscountSuccessView = ({
       status="success"
       title={resolveSuccessTitle({
         action: summary.action,
-        activeFlag: summary.discount.activeFlag
+        activeFlag: summary.discount.activeFlag,
+        isSpotlight: summary.discount.isSpotlight
       })}
       subtitle={summary.discount.ruleDescription}
       description={resolveSuccessDescription({
         action: summary.action,
-        activeFlag: summary.discount.activeFlag
+        activeFlag: summary.discount.activeFlag,
+        isSpotlight: summary.discount.isSpotlight
       })}
       onClose={onClose}
     />
@@ -243,7 +275,7 @@ const DiscountErrorView = ({
   </>
 )
 
-const RemoveDiscountModal = ({
+const DiscountActionModal = ({
   open,
   action,
   onClose,
@@ -269,7 +301,7 @@ const RemoveDiscountModal = ({
     explorerUrl,
     handleDiscountAction,
     resetState
-  } = useRemoveDiscountModalState({
+  } = useDiscountActionModalState({
     open,
     action,
     shopId,
@@ -284,7 +316,8 @@ const RemoveDiscountModal = ({
 
   const submitLabel = resolveActionLabel({
     action,
-    activeFlag: discount.activeFlag
+    activeFlag: discount.activeFlag,
+    isSpotlight: discount.isSpotlight
   })
   const submitVariant = action === "remove" ? "danger" : "primary"
 
@@ -311,11 +344,13 @@ const RemoveDiscountModal = ({
             eyebrow="Discounts"
             title={resolveActionTitle({
               action,
-              activeFlag: discount.activeFlag
+              activeFlag: discount.activeFlag,
+              isSpotlight: discount.isSpotlight
             })}
             description={resolveActionDescription({
               action,
-              activeFlag: discount.activeFlag
+              activeFlag: discount.activeFlag,
+              isSpotlight: discount.isSpotlight
             })}
             onClose={onClose}
             footer={
@@ -363,4 +398,4 @@ const RemoveDiscountModal = ({
   )
 }
 
-export default RemoveDiscountModal
+export default DiscountActionModal

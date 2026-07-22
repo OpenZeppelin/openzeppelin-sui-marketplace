@@ -50,12 +50,11 @@ import {
   parseUsdToCents
 } from "@sui-oracle-market/domain-core/models/shop"
 import { buildAddAcceptedCurrencyTransaction } from "@sui-oracle-market/domain-core/ptb/currency"
-import { buildCreateDiscountTransaction } from "@sui-oracle-market/domain-core/ptb/discount"
 import {
-  buildAddItemListingTransaction,
-  buildAttachDiscountTransaction,
-  validateDiscountAndListing
-} from "@sui-oracle-market/domain-core/ptb/item-listing"
+  buildCreateDiscountTransaction,
+  buildSetDiscountSpotlightTransaction
+} from "@sui-oracle-market/domain-core/ptb/discount"
+import { buildAddItemListingTransaction } from "@sui-oracle-market/domain-core/ptb/item-listing"
 import { buildCreateShopTransaction } from "@sui-oracle-market/domain-core/ptb/shop"
 import { resolveItemExamplesPackageId } from "@sui-oracle-market/domain-node/item-example"
 import {
@@ -250,8 +249,6 @@ const DISCOUNT_SEEDS: DiscountSeedDefinition[] = [
   }
 ]
 
-const FIXED_DISCOUNT_LISTING_NAME = "Metro Bike"
-
 runSuiScript(
   async (tooling, cliArguments: ShopSeedArguments) => {
     const seedShop = async () => {
@@ -306,8 +303,6 @@ runSuiScript(
 
       await ensureFixedDiscountSpotlight({
         fixedDiscountSummary: discountSummaries.fixed,
-        preferredListingName: FIXED_DISCOUNT_LISTING_NAME,
-        itemListingSummaries,
         shopIdentifiers,
         tooling,
         suiClient
@@ -1215,8 +1210,7 @@ const ensureItemListing = async ({
         ownerCapId: shopIdentifiers.ownerCapId,
         itemName: listing.name,
         basePriceUsdCents: parseUsdToCents(listing.priceUsd),
-        stock: parsePositiveU64(listing.stock, "stock"),
-        spotlightDiscountId: undefined
+        stock: parsePositiveU64(listing.stock, "stock")
       })
   })
 
@@ -1361,48 +1355,27 @@ const ensureDiscount = async ({
 
 const ensureFixedDiscountSpotlight = async ({
   fixedDiscountSummary,
-  preferredListingName,
-  itemListingSummaries,
   shopIdentifiers,
   tooling,
   suiClient
 }: {
   fixedDiscountSummary?: { discountId: string }
-  preferredListingName: string
-  itemListingSummaries: ItemListingSummary[]
   shopIdentifiers: { packageId: string; shopId: string; ownerCapId: string }
   tooling: Tooling
   suiClient: SuiClient
 }) => {
   if (!fixedDiscountSummary) return
 
-  const listing =
-    itemListingSummaries.find(
-      (summary) => summary.name === preferredListingName
-    ) ?? itemListingSummaries[0]
-
-  if (!listing) return
-
-  if (listing.spotlightDiscountId === fixedDiscountSummary.discountId) {
-    logKeyValueYellow("Spotlight")("Fixed discount already attached.")
-    return
-  }
-  if (
-    listing.spotlightDiscountId &&
-    listing.spotlightDiscountId !== fixedDiscountSummary.discountId
-  ) {
-    logKeyValueYellow("Spotlight")(
-      "Listing already has a spotlight discount; skipping attach."
-    )
-    return
-  }
-
-  const resolvedIds = await validateDiscountAndListing({
-    shopId: shopIdentifiers.shopId,
-    itemListingId: listing.itemListingId,
-    discountId: fixedDiscountSummary.discountId,
+  const existingDiscount = await getDiscountSummary(
+    shopIdentifiers.shopId,
+    fixedDiscountSummary.discountId,
     suiClient
-  })
+  )
+
+  if (existingDiscount.isSpotlight) {
+    logKeyValueYellow("Spotlight")("Fixed discount already spotlighted.")
+    return
+  }
 
   const shopSharedObject = await tooling.getMutableSharedObject({
     objectId: shopIdentifiers.shopId
@@ -1411,29 +1384,21 @@ const ensureFixedDiscountSpotlight = async ({
   await signAndExecuteWithRetry({
     tooling,
     buildTransaction: () =>
-      buildAttachDiscountTransaction({
+      buildSetDiscountSpotlightTransaction({
         packageId: shopIdentifiers.packageId,
         shop: shopSharedObject,
-        itemListingId: resolvedIds.itemListingId,
-        discountId: resolvedIds.discountId,
+        discountId: fixedDiscountSummary.discountId,
+        isSpotlight: true,
         ownerCapId: shopIdentifiers.ownerCapId
       })
   })
 
-  const [listingSummary, discountSummary] = await Promise.all([
-    getItemListingSummary(
-      shopIdentifiers.shopId,
-      resolvedIds.itemListingId,
-      suiClient
-    ),
-    getDiscountSummary(
-      shopIdentifiers.shopId,
-      resolvedIds.discountId,
-      suiClient
-    )
-  ])
+  const discountSummary = await getDiscountSummary(
+    shopIdentifiers.shopId,
+    fixedDiscountSummary.discountId,
+    suiClient
+  )
 
-  logItemListingSummary(listingSummary)
   logDiscountSummary(discountSummary)
 }
 

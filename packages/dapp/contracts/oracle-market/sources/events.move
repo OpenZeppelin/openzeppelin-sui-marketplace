@@ -86,6 +86,16 @@ public struct DiscountStatusChanged has copy, drop {
     active: bool,
 }
 
+/// Event emitted when a discount's spotlight flag changes.
+public struct DiscountSpotlightChanged has copy, drop {
+    /// Shop that owns the discount.
+    shop_id: ID,
+    /// Discount ID whose spotlight flag changed.
+    discount_id: ID,
+    /// New spotlight flag.
+    is_spotlight: bool,
+}
+
 /// Event emitted when an accepted coin is added.
 public struct AcceptedCoinAdded has copy, drop {
     /// Shop that registered the accepted currency.
@@ -211,6 +221,19 @@ public(package) fun emit_discount_status_changed(shop_id: ID, discount_id: ID, a
         shop_id,
         discount_id,
         active,
+    });
+}
+
+/// Emits a `DiscountSpotlightChanged` payload.
+public(package) fun emit_discount_spotlight_changed(
+    shop_id: ID,
+    discount_id: ID,
+    is_spotlight: bool,
+) {
+    event::emit(DiscountSpotlightChanged {
+        shop_id,
+        discount_id,
+        is_spotlight,
     });
 }
 
@@ -359,6 +382,20 @@ public(package) fun discount_status_changed(
         shop_id,
         discount_id,
         active,
+    }
+}
+
+/// Builds a `DiscountSpotlightChanged` payload.
+#[test_only]
+public(package) fun discount_spotlight_changed(
+    shop_id: ID,
+    discount_id: ID,
+    is_spotlight: bool,
+): DiscountSpotlightChanged {
+    DiscountSpotlightChanged {
+        shop_id,
+        discount_id,
+        is_spotlight,
     }
 }
 

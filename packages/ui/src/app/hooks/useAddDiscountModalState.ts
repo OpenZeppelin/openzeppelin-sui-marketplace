@@ -469,6 +469,7 @@ export const useAddDiscountModalState = ({
             maxRedemptions: discountInputs.maxRedemptions?.toString(),
             redemptions: "0",
             activeFlag: true,
+            isSpotlight: false,
             status: deriveDiscountStatus({
               activeFlag: true,
               startsAt: discountInputs.startsAt,

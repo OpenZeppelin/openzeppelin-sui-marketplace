@@ -7,7 +7,6 @@ import type { DiscountSummary } from "@sui-oracle-market/domain-core/models/disc
 import type { ItemListingSummary } from "@sui-oracle-market/domain-core/models/item-listing"
 import { useCallback, useMemo, useState } from "react"
 import { CONTRACT_PACKAGE_ID_NOT_DEFINED } from "../config/network"
-import { buildDiscountLookup } from "../helpers/discounts"
 import { resolveConfiguredId } from "../helpers/network"
 import type { PurchaseSuccessPayload } from "./useBuyFlowModalState"
 import { useShopDashboardData } from "./useShopDashboardData"
@@ -16,22 +15,22 @@ type DashboardModalState = {
   activeListing: ItemListingSummary | undefined
   activeListingToRemove: ItemListingSummary | undefined
   activeCurrencyToRemove: AcceptedCurrencySummary | undefined
-  activeDiscountToRemove: DiscountSummary | undefined
-  activeDiscountAction: "toggle" | "remove" | undefined
+  activeDiscount: DiscountSummary | undefined
+  activeDiscountAction: "toggle" | "remove" | "spotlight" | undefined
   isBuyModalOpen: boolean
   isAddItemModalOpen: boolean
   isAddDiscountModalOpen: boolean
   isAddCurrencyModalOpen: boolean
   isRemoveItemModalOpen: boolean
   isRemoveCurrencyModalOpen: boolean
-  isRemoveDiscountModalOpen: boolean
+  isDiscountActionModalOpen: boolean
 }
 
 const emptyModalState = (): DashboardModalState => ({
   activeListing: undefined,
   activeListingToRemove: undefined,
   activeCurrencyToRemove: undefined,
-  activeDiscountToRemove: undefined,
+  activeDiscount: undefined,
   activeDiscountAction: undefined,
   isBuyModalOpen: false,
   isAddItemModalOpen: false,
@@ -39,7 +38,7 @@ const emptyModalState = (): DashboardModalState => ({
   isAddCurrencyModalOpen: false,
   isRemoveItemModalOpen: false,
   isRemoveCurrencyModalOpen: false,
-  isRemoveDiscountModalOpen: false
+  isDiscountActionModalOpen: false
 })
 
 export const useStoreDashboardViewModel = ({
@@ -88,11 +87,6 @@ export const useStoreDashboardViewModel = ({
     normalizedOwnerAddress &&
     normalizedWalletAddress &&
     normalizedOwnerAddress === normalizedWalletAddress
-  )
-
-  const discountLookup = useMemo(
-    () => buildDiscountLookup(storefront.discounts),
-    [storefront.discounts]
   )
 
   const openBuyModal = useCallback((listing: ItemListingSummary) => {
@@ -197,27 +191,39 @@ export const useStoreDashboardViewModel = ({
   const openToggleDiscountModal = useCallback((discount: DiscountSummary) => {
     setModalState((previous) => ({
       ...previous,
-      activeDiscountToRemove: discount,
+      activeDiscount: discount,
       activeDiscountAction: "toggle",
-      isRemoveDiscountModalOpen: true
+      isDiscountActionModalOpen: true
     }))
   }, [])
+
+  const openSpotlightDiscountModal = useCallback(
+    (discount: DiscountSummary) => {
+      setModalState((previous) => ({
+        ...previous,
+        activeDiscount: discount,
+        activeDiscountAction: "spotlight",
+        isDiscountActionModalOpen: true
+      }))
+    },
+    []
+  )
 
   const openRemoveDiscountModal = useCallback((discount: DiscountSummary) => {
     setModalState((previous) => ({
       ...previous,
-      activeDiscountToRemove: discount,
+      activeDiscount: discount,
       activeDiscountAction: "remove",
-      isRemoveDiscountModalOpen: true
+      isDiscountActionModalOpen: true
     }))
   }, [])
 
-  const closeRemoveDiscountModal = useCallback(() => {
+  const closeDiscountActionModal = useCallback(() => {
     setModalState((previous) => ({
       ...previous,
-      activeDiscountToRemove: undefined,
+      activeDiscount: undefined,
       activeDiscountAction: undefined,
-      isRemoveDiscountModalOpen: false
+      isDiscountActionModalOpen: false
     }))
   }, [])
 
@@ -297,6 +303,7 @@ export const useStoreDashboardViewModel = ({
     (discountId?: string) => {
       if (discountId) {
         removeDiscount(discountId)
+        return
       }
 
       refreshStorefront()
@@ -315,7 +322,6 @@ export const useStoreDashboardViewModel = ({
     canManageListings: Boolean(hasShopConfig && isShopOwner),
     canManageCurrencies: Boolean(hasShopConfig && isShopOwner),
     canManageDiscounts: Boolean(hasShopConfig && isShopOwner),
-    discountLookup,
     modalState,
     openBuyModal,
     closeBuyModal,
@@ -331,8 +337,9 @@ export const useStoreDashboardViewModel = ({
     openRemoveCurrencyModal,
     closeRemoveCurrencyModal,
     openToggleDiscountModal,
+    openSpotlightDiscountModal,
     openRemoveDiscountModal,
-    closeRemoveDiscountModal,
+    closeDiscountActionModal,
     handleListingCreated,
     handleDiscountCreated,
     handleCurrencyCreated,

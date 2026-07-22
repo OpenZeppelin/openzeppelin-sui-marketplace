@@ -51,8 +51,8 @@ public enum DiscountRuleKind has copy, drop {
 public struct Discount has drop, store {
     /// Discount identifier and key in `Shop.discounts`.
     id: ID,
-    /// Optional listing scope restriction.
-    /// `None` means discount applies to all listings.
+    /// Optional listing scope restriction, fixed at creation and immutable.
+    /// `None` means the discount is generic and applies to all listings.
     applies_to_listing: Option<ID>,
     /// Fixed/percent discount payload.
     rule: DiscountRule,
@@ -66,6 +66,8 @@ public struct Discount has drop, store {
     redemptions: u64,
     /// Owner-controlled enable/disable flag.
     active: bool,
+    /// Owner-controlled hint that storefront UIs may feature this discount.
+    is_spotlight: bool,
 }
 
 // === View Functions ===
@@ -110,10 +112,18 @@ public fun active(discount: &Discount): bool {
     discount.active
 }
 
+/// Returns whether a discount is flagged for storefront spotlighting.
+public fun is_spotlight(discount: &Discount): bool {
+    discount.is_spotlight
+}
+
 // === Package Functions ===
 
 /// Creates a discount from primitive rule inputs and allocates a fresh ID.
+/// `applies_to_listing` is fixed here and immutable thereafter: `Some(listing)` scopes the discount
+/// to that listing, `None` makes it generic. The discount starts active and not spotlighted.
 public(package) fun create(
+    applies_to_listing: Option<ID>,
     rule_kind: u8,
     rule_value: u64,
     starts_at: u64,
@@ -133,13 +143,14 @@ public(package) fun create(
 
     Discount {
         id,
-        applies_to_listing: option::none(),
+        applies_to_listing,
         rule,
         starts_at,
         expires_at,
         max_redemptions,
         redemptions: 0,
         active: true,
+        is_spotlight: false,
     }
 }
 
@@ -224,12 +235,9 @@ public(package) fun set_active(discount: &mut Discount, active: bool) {
     discount.active = active;
 }
 
-/// Set applies to listing and returns previously set value if any.
-public(package) fun set_applies_to_listing(
-    discount: &mut Discount,
-    applies_to_listing: ID,
-): Option<ID> {
-    discount.applies_to_listing.swap_or_fill(applies_to_listing)
+/// Sets the spotlight flag of a discount.
+public(package) fun set_spotlight(discount: &mut Discount, is_spotlight: bool) {
+    discount.is_spotlight = is_spotlight;
 }
 
 /// Returns whether a discount can no longer be used due to expiry or cap exhaustion.

@@ -2,6 +2,7 @@
 
 import type { AcceptedCurrencySummary } from "@sui-oracle-market/domain-core/models/currency"
 import type { DiscountSummary } from "@sui-oracle-market/domain-core/models/discount"
+import { resolveSpotlightDiscountForListing } from "@sui-oracle-market/domain-core/models/discount"
 import type { ItemListingSummary } from "@sui-oracle-market/domain-core/models/item-listing"
 import type { ShopItemReceiptSummary } from "@sui-oracle-market/domain-core/models/shop-item"
 import clsx from "clsx"
@@ -24,7 +25,7 @@ import BuyFlowModal from "./BuyFlowModal"
 import CopyableId from "./CopyableId"
 import Loading from "./Loading"
 import RemoveCurrencyModal from "./RemoveCurrencyModal"
-import RemoveDiscountModal from "./RemoveDiscountModal"
+import DiscountActionModal from "./DiscountActionModal"
 import RemoveItemModal from "./RemoveItemModal"
 
 type PanelStatus = {
@@ -185,7 +186,7 @@ const resolveListingActionAlignment = ({
 
 const ItemListingsPanel = ({
   itemListings,
-  discountLookup,
+  discounts,
   status,
   error,
   shopConfigured,
@@ -198,7 +199,7 @@ const ItemListingsPanel = ({
   explorerUrl
 }: {
   itemListings: ItemListingSummary[]
-  discountLookup: Record<string, DiscountSummary>
+  discounts: DiscountSummary[]
   status: PanelStatus["status"]
   error?: string
   shopConfigured: boolean
@@ -247,9 +248,10 @@ const ItemListingsPanel = ({
           ) : (
             <div className="grid gap-4 lg:grid-cols-2">
               {itemListings.map((listing) => {
-                const spotlightDiscount = listing.spotlightDiscountId
-                  ? discountLookup[listing.spotlightDiscountId]
-                  : undefined
+                const spotlightDiscount = resolveSpotlightDiscountForListing(
+                  listing.itemListingId,
+                  discounts
+                )
                 const spotlightLabel = spotlightDiscount
                   ? spotlightDiscount.ruleDescription
                   : undefined
@@ -332,10 +334,10 @@ const ItemListingsPanel = ({
                         </div>
                       </div>
                     </div>
-                    {listing.spotlightDiscountId ? (
+                    {spotlightDiscount ? (
                       <div className="mt-2 flex flex-col gap-2 text-[0.65rem]">
                         <CopyableId
-                          value={listing.spotlightDiscountId}
+                          value={spotlightDiscount.discountId}
                           label="Discount"
                           className="w-full justify-start"
                           explorerUrl={explorerUrl}
@@ -646,6 +648,7 @@ const DiscountsPanel = ({
   canManageDiscounts,
   onAddDiscount,
   onToggleDiscount,
+  onSpotlightDiscount,
   onRemoveDiscount,
   explorerUrl
 }: {
@@ -657,6 +660,7 @@ const DiscountsPanel = ({
   canManageDiscounts: boolean
   onAddDiscount?: () => void
   onToggleDiscount?: (discount: DiscountSummary) => void
+  onSpotlightDiscount?: (discount: DiscountSummary) => void
   onRemoveDiscount?: (discount: DiscountSummary) => void
   explorerUrl?: string
 }) => {
@@ -784,6 +788,17 @@ const DiscountsPanel = ({
                                   {discount.activeFlag ? "Disable" : "Enable"}
                                 </Button>
                                 <Button
+                                  variant="secondary"
+                                  size="compact"
+                                  onClick={() =>
+                                    onSpotlightDiscount?.(discount)
+                                  }
+                                >
+                                  {discount.isSpotlight
+                                    ? "Unspotlight"
+                                    : "Spotlight"}
+                                </Button>
+                                <Button
                                   variant="danger"
                                   size="compact"
                                   onClick={() => onRemoveDiscount?.(discount)}
@@ -830,7 +845,6 @@ const StoreDashboard = ({
     canManageListings,
     canManageCurrencies,
     canManageDiscounts,
-    discountLookup,
     modalState,
     openBuyModal,
     closeBuyModal,
@@ -846,8 +860,9 @@ const StoreDashboard = ({
     openRemoveCurrencyModal,
     closeRemoveCurrencyModal,
     openToggleDiscountModal,
+    openSpotlightDiscountModal,
     openRemoveDiscountModal,
-    closeRemoveDiscountModal,
+    closeDiscountActionModal,
     handleListingCreated,
     handleDiscountCreated,
     handleCurrencyCreated,
@@ -864,7 +879,7 @@ const StoreDashboard = ({
         <div className="flex flex-col gap-6">
           <ItemListingsPanel
             itemListings={storefront.itemListings}
-            discountLookup={discountLookup}
+            discounts={storefront.discounts}
             status={storefront.status}
             error={storefront.error}
             shopConfigured={hasShopConfig}
@@ -906,6 +921,7 @@ const StoreDashboard = ({
           canManageDiscounts={canManageDiscounts}
           onAddDiscount={openAddDiscountModal}
           onToggleDiscount={openToggleDiscountModal}
+          onSpotlightDiscount={openSpotlightDiscountModal}
           onRemoveDiscount={openRemoveDiscountModal}
           explorerUrl={explorerUrl}
         />
@@ -925,7 +941,6 @@ const StoreDashboard = ({
         open={modalState.isAddItemModalOpen}
         onClose={closeAddItemModal}
         shopId={resolvedShopId}
-        discounts={storefront.discounts}
         onListingCreated={handleListingCreated}
       />
 
@@ -954,12 +969,12 @@ const StoreDashboard = ({
         onListingRemoved={handleListingRemoved}
       />
 
-      <RemoveDiscountModal
-        open={modalState.isRemoveDiscountModalOpen}
+      <DiscountActionModal
+        open={modalState.isDiscountActionModalOpen}
         action={modalState.activeDiscountAction ?? "toggle"}
-        onClose={closeRemoveDiscountModal}
+        onClose={closeDiscountActionModal}
         shopId={resolvedShopId}
-        discount={modalState.activeDiscountToRemove ?? undefined}
+        discount={modalState.activeDiscount ?? undefined}
         onDiscountUpdated={handleDiscountUpdated}
         onDiscountRemoved={handleDiscountRemoved}
       />

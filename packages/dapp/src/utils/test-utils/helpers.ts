@@ -503,28 +503,26 @@ export const createDiscountFixture = async ({
   }
 }
 
-export const attachDiscountToListing = async ({
+export const spotlightDiscount = async ({
   scriptRunner,
   publisher,
   shopId,
-  itemListingId,
   discountId
 }: {
   scriptRunner: SuiScriptRunner
   publisher: TestAccount
   shopId: string
-  itemListingId: string
   discountId: string
 }): Promise<void> => {
   await runOwnerScriptJson<Record<string, unknown>>(
     scriptRunner,
-    "item-listing-attach-discount",
+    "discount-set-spotlight",
     {
       account: publisher,
       args: {
         shopId,
-        itemListingId,
-        discountId
+        discountId,
+        spotlight: true
       }
     }
   )
@@ -569,11 +567,10 @@ export const seedShopWithListingAndDiscount = async ({
     value
   })
 
-  await attachDiscountToListing({
+  await spotlightDiscount({
     scriptRunner,
     publisher,
     shopId,
-    itemListingId: itemListing.itemListingId,
     discountId: discount.discountId
   })
 

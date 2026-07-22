@@ -134,6 +134,38 @@ export const buildSetDiscountStatusTransaction = ({
   return transaction
 }
 
+export const buildSetDiscountSpotlightTransaction = ({
+  packageId,
+  shop,
+  discountId,
+  isSpotlight,
+  ownerCapId
+}: {
+  packageId: string
+  shop: WrappedSuiSharedObject
+  discountId: string
+  isSpotlight: boolean
+  ownerCapId: string
+}) => {
+  const { transaction, shopArgument, ownerCapabilityArgument } =
+    buildShopOwnerTransactionContext({
+      shop,
+      ownerCapId,
+      shopMutable: true
+    })
+  transaction.moveCall({
+    target: `${packageId}::shop::set_discount_spotlight`,
+    arguments: [
+      shopArgument,
+      ownerCapabilityArgument,
+      buildObjectIdArgument(transaction, discountId, "discountId"),
+      transaction.pure.bool(isSpotlight)
+    ]
+  })
+
+  return transaction
+}
+
 export const buildRemoveDiscountTransaction = ({
   packageId,
   shop,

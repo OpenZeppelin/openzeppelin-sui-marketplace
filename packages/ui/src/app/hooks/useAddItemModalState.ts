@@ -28,10 +28,7 @@ import {
   buildAddItemListingTransaction,
   type AddListingSpotlightDiscountInput
 } from "@sui-oracle-market/domain-core/ptb/item-listing"
-import {
-  deriveRelevantPackageId,
-  normalizeOptionalId
-} from "@sui-oracle-market/tooling-core/object"
+import { deriveRelevantPackageId } from "@sui-oracle-market/tooling-core/object"
 import { getSuiSharedObject } from "@sui-oracle-market/tooling-core/shared-object"
 import { ENetwork } from "@sui-oracle-market/tooling-core/types"
 import {
@@ -44,8 +41,7 @@ import { EXPLORER_URL_VARIABLE_NAME } from "../config/network"
 import { formatUsdFromCents, getStructLabel } from "../helpers/format"
 import {
   resolveValidationMessage,
-  validateItemType,
-  validateOptionalSuiObjectId
+  validateItemType
 } from "../helpers/inputValidation"
 import {
   getLocalnetClient,
@@ -68,8 +64,7 @@ type ListingFormState = {
   itemType: string
   basePrice: string
   stock: string
-  spotlightDiscountMode: "existing" | "create"
-  spotlightDiscountId: string
+  spotlightDiscountMode: "none" | "create"
   createSpotlightRuleKind: DiscountRuleKindLabel
   createSpotlightValue: string
   createSpotlightStartsAt: string
@@ -82,7 +77,6 @@ type ListingInputs = {
   itemType: string
   basePriceUsdCents: bigint
   stock: bigint
-  spotlightDiscountId?: string
   createSpotlightDiscount?: AddListingSpotlightDiscountInput
 }
 
@@ -117,8 +111,7 @@ const emptyFormState = (): ListingFormState => ({
   itemType: "",
   basePrice: "",
   stock: "",
-  spotlightDiscountMode: "existing",
-  spotlightDiscountId: "",
+  spotlightDiscountMode: "none",
   createSpotlightRuleKind: "fixed",
   createSpotlightValue: "",
   createSpotlightStartsAt: defaultStartTimestampSeconds().toString(),
@@ -169,13 +162,7 @@ const buildListingFieldErrors = (
     }
   }
 
-  if (formState.spotlightDiscountMode === "existing") {
-    const spotlightError = validateOptionalSuiObjectId(
-      formState.spotlightDiscountId,
-      "Spotlight discount id"
-    )
-    if (spotlightError) errors.spotlightDiscountId = spotlightError
-  } else {
+  if (formState.spotlightDiscountMode === "create") {
     const createSpotlightValue = formState.createSpotlightValue.trim()
     if (!createSpotlightValue) {
       errors.createSpotlightValue = "Rule value is required."
@@ -263,17 +250,12 @@ const parseListingInputs = (formState: ListingFormState): ListingInputs => {
 
   const basePriceUsdCents = parseUsdToCents(formState.basePrice)
   const stock = parsePositiveU64(formState.stock, "stock")
-  if (formState.spotlightDiscountMode === "existing") {
-    const spotlightDiscountId = normalizeOptionalId(
-      formState.spotlightDiscountId.trim() || undefined
-    )
-
+  if (formState.spotlightDiscountMode === "none") {
     return {
       itemName,
       itemType,
       basePriceUsdCents,
-      stock,
-      spotlightDiscountId
+      stock
     }
   }
 
@@ -570,7 +552,6 @@ export const useAddItemModalState = ({
         itemName: listingInputs.itemName,
         basePriceUsdCents: listingInputs.basePriceUsdCents,
         stock: listingInputs.stock,
-        spotlightDiscountId: listingInputs.spotlightDiscountId,
         createSpotlightDiscount: listingInputs.createSpotlightDiscount
       })
       addListingTransaction.setSender(walletAddress)
@@ -616,14 +597,10 @@ export const useAddItemModalState = ({
           error: listingSummaryResult.error
         })
       }
-      const resolvedSpotlightDiscountId =
-        listingSummary?.spotlightDiscountId ?? listingInputs.spotlightDiscountId
-
       setTransactionState({
         status: "success",
         summary: {
           ...listingInputs,
-          spotlightDiscountId: resolvedSpotlightDiscountId,
           digest,
           transactionBlock,
           listingId
