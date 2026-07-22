@@ -25,7 +25,7 @@ This repo is tested against Sui CLI **1.75.x** (mainnet channel). Pin a specific
 ```bash
 curl -sSfL https://raw.githubusercontent.com/Mystenlabs/suiup/main/install.sh | sh
 suiup list
-suiup install sui@1.75.2
+suiup install sui@mainnet-1.75.2
 sui --version
 ```
 
