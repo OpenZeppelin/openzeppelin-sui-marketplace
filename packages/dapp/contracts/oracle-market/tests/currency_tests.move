@@ -178,7 +178,9 @@ fun add_accepted_currency_rejects_missing_price_object() {
     abort
 }
 
-#[test, expected_failure(abort_code = ::sui_oracle_market::currency::EPriceInvalidPublishTime)]
+// Freshness is enforced by pyth::get_price_no_older_than, which aborts with
+// the pyth-mock's EStalePriceUpdate (raw code 0) from the pyth::pyth module.
+#[test, expected_failure(abort_code = 0, location = pyth)]
 fun quote_rejects_price_timestamp_older_than_max_age() {
     let mut scn = test_scenario::begin(owner());
     let (shop_id, owner_cap_id) = test_helpers::create_default_shop_and_owner_cap_ids_for_sender(

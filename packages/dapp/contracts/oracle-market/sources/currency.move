@@ -5,7 +5,7 @@ use openzeppelin_math::rounding;
 use openzeppelin_math::u128 as oz_u128;
 use pyth::i64;
 use pyth::price::Price;
-use pyth::price_info::{Self, PriceInfoObject};
+use pyth::price_info::PriceInfoObject;
 use pyth::pyth;
 use std::string::String;
 use sui::clock::Clock;
@@ -22,14 +22,12 @@ const EUnsupportedCurrencyDecimals: vector<u8> = "unsupported currency decimals"
 #[error(code = 3)]
 const EInvalidGuardrailCap: vector<u8> = "invalid guardrail cap";
 #[error(code = 4)]
-const EPriceInvalidPublishTime: vector<u8> = "invalid publish timestamp";
-#[error(code = 5)]
 const EPriceOverflow: vector<u8> = "price overflow";
-#[error(code = 6)]
+#[error(code = 5)]
 const EPriceNonPositive: vector<u8> = "price non-positive";
-#[error(code = 7)]
+#[error(code = 6)]
 const EConfidenceIntervalTooWide: vector<u8> = "confidence interval too wide";
-#[error(code = 8)]
+#[error(code = 7)]
 const EConfidenceExceedsPrice: vector<u8> = "confidence exceeds price";
 
 // === Constants ===
@@ -146,16 +144,6 @@ public(package) fun quote_amount_with_guardrails(
         accepted_currency.max_confidence_ratio_bps_cap,
     );
     let effective_confidence_ratio = requested_confidence_ratio.min(accepted_currency.max_confidence_ratio_bps_cap);
-
-    // Assert publish time.
-    let price_info = price_info::get_price_info_from_price_info_object(
-        price_info_object,
-    );
-    let current_price = price_info.get_price_feed().get_price();
-    let publish_time = current_price.get_timestamp();
-    let now_sec = now_secs(clock);
-    assert!(now_sec >= publish_time, EPriceInvalidPublishTime);
-    assert!(now_sec - publish_time <= effective_max_age, EPriceInvalidPublishTime);
 
     // Get pyth price and quote amount.
     let price = pyth::get_price_no_older_than(

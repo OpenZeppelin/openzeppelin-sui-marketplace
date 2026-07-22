@@ -1,14 +1,14 @@
-Sui Oracle Market: EVM Dev Quickstart
-=====================================
+# Sui Oracle Market: EVM Dev Quickstart
 
 This is a short, Sui-first guide to the `sui_oracle_market::shop` module aimed at Solidity/EVM developers.
 
 Where to start:
+
 - If you are following the repo learning path, read `docs/08-listings-receipts.md` first, then come back here.
 - For a concept map that links docs to code, see `docs/README.md`.
 
-Mental Model Shift
-------------------
+## Mental Model Shift
+
 - **Capabilities, not msg.sender:** Admin entry points require the owned `ShopOwnerCap`; buyers never handle capabilities during checkout. Payout rotation is explicit through `update_shop_owner`.
 - **Permissionless instantiation:** `create_shop` takes a shop name and mints the shared `Shop` plus the `ShopOwnerCap` for the caller.
 - **Objects over contract storage:** The shop is a shared object. Listings, currencies, and discounts all live in typed collections on `Shop` (`Shop.listings`, `Shop.accepted_currencies`, `Shop.discounts`). Edits touch targeted collection entries instead of append-only arrays.
@@ -16,8 +16,8 @@ Mental Model Shift
 - **Clocked, guarded pricing:** Callers pass a refreshed `PriceInfoObject`; the module checks identity, freshness, and confidence guardrails against the shared `Clock` before quoting.
 - **Events over historical arrays:** Lifecycle events (`PurchaseCompleted`, `DiscountRedeemed`, etc.) are emitted for indexers/UIs instead of storing growing arrays on-chain.
 
-Object Graph (shared + tables)
---------------------------------------
+## Object Graph (shared + tables)
+
 ```text
 Shop (shared)
 ├─ listings: Table<ID, ItemListing>
@@ -28,43 +28,43 @@ ItemListing (table value under Shop.listings)
 └─ fields: listing_id (ID), item_type, base_price_usd_cents, stock, spotlight_discount_id, discount_count
 ```
 
-Entry Points At A Glance
-------------------------
+## Entry Points At A Glance
+
 - Shops: `create_shop` mints the shared `Shop` plus the owned `ShopOwnerCap`; `disable_shop` permanently disables buyer flows; `update_shop_owner` rotates the payout/owner fields without touching listings.
 - Listings: `add_item_listing<T>` inserts a listing row in `Shop.listings` with USD-cent price, stock, and optional `spotlight_discount_id`; `add_item_listing_with_discount<T>` atomically creates a listing plus a pinned spotlight discount; `update_item_listing_stock`/`remove_item_listing` mutate listing rows by `listing_id: ID`.
 - Accepted currencies: `add_accepted_currency<C>` stores an `AcceptedCurrency` value in `shop.accepted_currencies` keyed by `coin_type`, with feed metadata and guardrail caps; `remove_accepted_currency<C>` removes the keyed entry.
 - Discounts: `create_discount`, `update_discount` (only before redemptions), and `toggle_discount` manage discounts; `attach_spotlight_discount`/`clear_spotlight_discount` surface a spotlight discount on a listing; `buy_item_with_discount` applies discount-based discounts during checkout.
 - Checkout: `buy_item<T, C>` and `buy_item_with_discount<T, C>` enforce listing/type matches, registered currency presence, oracle guardrails, mint a typed `ShopItem<T>` receipt, and return `(ShopItem<T>, Coin<C>)` so callers can transfer item/change explicitly (redemption for the underlying item happens elsewhere).
 
-Oracle Guardrails
------------------
+## Oracle Guardrails
+
 - Feed identity is re-validated on-chain: 32-byte `feed_id`, matching `pyth_object_id`, and `PriceInfoObject` contents must align or the call aborts.
 - Guardrails are two-tiered: sellers set caps per currency (`max_price_age_secs_cap`, `max_confidence_ratio_bps_cap`), and buyers may only tighten them per call.
 - Pricing is conservative: quotes use μ-σ and bound confidence ratio (default 10%: `DEFAULT_MAX_CONFIDENCE_RATIO_BPS = 1_000`) before converting USD cents to the payment coin, with overflow checks and a 38-decimal power limit.
 - Freshness checks cap age with `max_price_age_secs` guardrails, treating stale feeds as unavailable.
 
-Discount Lifecycle Notes
-------------------------
+## Discount Lifecycle Notes
+
 - Discounts track schedules (`starts_at`/`expires_at`), optional max redemptions (if set, must be > 0), and activity flags; once redemptions exist and the window is closed/maxed, updates are blocked.
 - Spotlighting is explicit: listings can carry an optional discount for UI promotion, and assertions ensure the discount actually applies to that listing.
 - Redemption limits are enforced by `max_redemptions` + `redemptions` counters on each discount.
 
-Shared Object + Table Pattern (deep dive)
------------------------------------------
+## Shared Object + Table Pattern (deep dive)
+
 - What it is: the shop is a shared root. Listings, accepted currencies, and discounts are all stored in typed collections under the shop.
 - How it works:
-  - Discovery: UIs enumerate listing/currency/discount table entries. Table keys prove membership without storing large arrays under the shop.
-  - Auth: entry functions assert table membership and shop linkage. Foreign rows/discounts are rejected.
-  - Writes: listing, currency, and discount admin ops mutate shop-backed collections. Buyer flows mutate the touched listing and optional discount entry state.
-  - Delisting: removing a listing row unregisters that listing ID for checkout, but only when no listing-bound discounts are still counted against that listing.
+    - Discovery: UIs enumerate listing/currency/discount table entries. Table keys prove membership without storing large arrays under the shop.
+    - Auth: entry functions assert table membership and shop linkage. Foreign rows/discounts are rejected.
+    - Writes: listing, currency, and discount admin ops mutate shop-backed collections. Buyer flows mutate the touched listing and optional discount entry state.
+    - Delisting: removing a listing row unregisters that listing ID for checkout, but only when no listing-bound discounts are still counted against that listing.
 - Why it helps:
-  - Structured state: tables keep lookup and validation logic explicit and typed instead of ad-hoc dynamic marker sets.
-  - Stable primary keys: listings and discounts use object IDs, both indexer/UI-friendly.
-  - Lightweight discovery: table-entry enumeration avoids global scans.
-  - Cleaner auth and safety: table membership checks enforce membership on-chain; no trusted off-chain registry is needed.
+    - Structured state: tables keep lookup and validation logic explicit and typed instead of ad-hoc dynamic marker sets.
+    - Stable primary keys: listings and discounts use object IDs, both indexer/UI-friendly.
+    - Lightweight discovery: table-entry enumeration avoids global scans.
+    - Cleaner auth and safety: table membership checks enforce membership on-chain; no trusted off-chain registry is needed.
 
-Sui Move Principles, Applied
-----------------------------
+## Sui Move Principles, Applied
+
 - Resource-first design: coins, receipts, and capabilities are owned objects moved in/out of entry functions instead of balances in contract storage.
 - Capability-based auth: every admin path requires `ShopOwnerCap`.
 - Shared-object composition: the `Shop` is shared; listings/currencies/discounts are table-backed collections under the shared root.
@@ -73,8 +73,8 @@ Sui Move Principles, Applied
 - Explicit data freshness: time comes from `Clock`, price data from `PriceInfoObject`, and both are validated inline so view-only RPC calls are unnecessary.
 - Event-driven observability: analytics and UIs follow events instead of reading append-only storage arrays, keeping state lean.
 
-Sui Fundamentals (EVM contrasts)
---------------------------------
+## Sui Fundamentals (EVM contrasts)
+
 - **Explicit capabilities over modifiers:** Admin flows require the owned `ShopOwnerCap` instead of `msg.sender` checks (`add_item_listing`, `update_shop_owner` in `contracts/oracle-market/sources/shop.move`). Docs: Move concepts (https://docs.sui.io/concepts/sui-move-concepts) and object ownership (https://docs.sui.io/guides/developer/objects/object-ownership). Compared to Solidity, callers must physically present the capability object, so auth is enforced by the type system.
 - **Typed events for off-chain sync:** Events are structs with `has copy, drop` and are emitted explicitly (`event::emit` blocks across `contracts/oracle-market/sources/shop.move`), which indexers/GraphQL pick up without scanning storage. Solidity logs are untyped bytes; here the struct layout is part of the ABI. Docs: https://docs.sui.io/guides/developer/sui-101/using-events.
 - **Object-oriented state and concurrency:** The `Shop` is shared; listings/currencies/discounts are keyed table entries under that shared root. PTBs mutate typed entries rather than monolithic arrays/maps. Docs: https://docs.sui.io/guides/developer/objects/object-model and https://docs.sui.io/concepts/dynamic-fields.
@@ -92,14 +92,16 @@ Sui Fundamentals (EVM contrasts)
 - **Consensus (Mysticeti) characteristics:** Shared-object transactions go through Sui’s consensus, which targets sub-second finality and high throughput by ordering a DAG of certificates rather than serial block mining. For this shop, shared writes (listing updates) wait for consensus while owned-coin spends in checkout can still batch in the same PTB. Docs: https://docs.sui.io/concepts/sui-architecture/consensus.
 - **PTB composition:** Sui lets clients chain calls at runtime in a single PTB (up to 1,024 commands). This repo uses PTBs to update Pyth and purchase in one atomic flow. Docs: https://docs.sui.io/concepts/transactions/prog-txn-blocks.
 
-Minimal PTB Examples
---------------------
+## Minimal PTB Examples
+
 **Create shop**
+
 ```move
 create_shop(b"Shop".to_string(), &mut ctx);
 ```
 
 **Rotate payout address**
+
 ```move
 update_shop_owner(
     &mut shop,
@@ -110,6 +112,7 @@ update_shop_owner(
 ```
 
 **List an item**
+
 ```move
 add_item_listing<ItemType>(
     &mut shop,
@@ -123,6 +126,7 @@ add_item_listing<ItemType>(
 ```
 
 **Register USDC feed**
+
 ```move
 add_accepted_currency<USDC>(
     &mut shop,
@@ -137,6 +141,7 @@ add_accepted_currency<USDC>(
 ```
 
 **Buy with price guardrails**
+
 ```move
 let (receipt, change_coin) = buy_item<ItemType, USDC>(
     &mut shop,
@@ -153,6 +158,7 @@ transfer::public_transfer(change_coin, payer);
 ```
 
 **Buy with a discount**
+
 ```move
 let (receipt, change_coin) = buy_item_with_discount<ItemType, USDC>(
     &mut shop,
@@ -169,27 +175,29 @@ transfer::public_transfer(receipt, recipient);
 transfer::public_transfer(change_coin, payer);
 ```
 
-Reference
----------
+## Reference
+
 - Module: `sui_oracle_market::shop`
 - Entry functions: `create_shop`, `disable_shop`, `update_shop_owner`, `add_item_listing`, `add_item_listing_with_discount`, `update_item_listing_stock`, `remove_item_listing`, `add_accepted_currency`, `remove_accepted_currency`, `create_discount`, `update_discount`, `toggle_discount`, `attach_spotlight_discount`, `clear_spotlight_discount`, `buy_item`, `buy_item_with_discount`.
 - Key types: `Shop`, `ShopOwnerCap`, `ItemListing`, `AcceptedCurrency`, `Discount`, `ShopItem`
 - Events: `ShopCreated`, `ShopOwnerUpdated`, `ShopToggled`, `ItemListingAdded`, `ItemListingStockUpdated`, `ItemListingRemoved`, `DiscountCreated`, `DiscountUpdated`, `DiscountToggled`, `AcceptedCoinAdded`, `AcceptedCoinRemoved`, `DiscountRedeemed`, `PurchaseCompleted`.
 
-Oracle Dependencies
--------------------
+## Oracle Dependencies
+
 - `packages/dapp/contracts/oracle-market` depends on upstream Pyth + Wormhole via git in `Move.toml`.
 - `test-publish` swaps Pyth to `pyth-mock` via `dep-replacements`.
 
-Update instructions
--------------------
+## Update instructions
+
 When updating Pyth/Wormhole revisions, do the following in order.
 
-1) Update revisions
+1. Update revisions
+
 - Edit the `rev` (or branch/tag) in `packages/dapp/contracts/oracle-market/Move.toml`.
 
-2) Re-pin the lockfile
+2. Re-pin the lockfile
+
 - From `packages/dapp/contracts/oracle-market`, run:
     - `sui move build -e testnet`
     - `sui move build -e test-publish`
-    This should update/validate `Move.lock` resolution per-environment.
+      This should update/validate `Move.lock` resolution per-environment.
