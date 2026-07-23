@@ -325,7 +325,7 @@ pnpm script owner:discount:set-spotlight \
 
 What it does:
 
-- Sets the discount's `is_spotlight` flag so the storefront features it. Spotlight is a per-discount boolean, so no listing is modified. Use `--no-spotlight` to unfeature it.
+- Sets the discount's `is_spotlight` flag, marking it a spotlight candidate. Storefronts feature, per listing, the oldest-starting active spotlighted discount, so setting the flag does not guarantee this discount is the one shown. Spotlight is a per-discount boolean, so no listing is modified. Use `--no-spotlight` to unfeature it.
 
 Where to find values:
 

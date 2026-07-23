@@ -46,7 +46,7 @@ Oracle Guardrails
 Discount Lifecycle Notes
 ------------------------
 - Discounts track schedules (`starts_at`/`expires_at`), optional max redemptions (if set, must be > 0), and activity flags; once redemptions exist and the window is closed/maxed, updates are blocked.
-- Spotlighting is a per-discount flag (`is_spotlight`) toggled by `set_discount_spotlight`; storefronts feature, per listing, the oldest-starting active discount whose flag is set (a listing-scoped match wins over a generic one). `applies_to_listing` is fixed at creation and immutable.
+- Spotlighting is a per-discount flag (`is_spotlight`) set by `set_discount_spotlight`; storefronts feature, per listing, the oldest-starting active discount whose flag is set (a listing-scoped match wins over a generic one). `applies_to_listing` is fixed at creation and immutable.
 - Redemption limits are enforced by `max_redemptions` + `redemptions` counters on each discount.
 
 Shared Object + Table Pattern (deep dive)
@@ -173,7 +173,7 @@ Reference
 - Module: `sui_oracle_market::shop`
 - Entry functions: `create_shop`, `set_shop_status`, `update_shop_owner`, `add_item_listing`, `add_item_listing_with_discount`, `update_item_listing_stock`, `remove_item_listing`, `add_accepted_currency`, `remove_accepted_currency`, `create_discount`, `update_discount`, `set_discount_status`, `set_discount_spotlight`, `buy_item`, `buy_item_with_discount`.
 - Key types: `Shop`, `ShopOwnerCap`, `ItemListing`, `AcceptedCurrency`, `Discount`, `ShopItem`
-- Events: `ShopCreated`, `ShopOwnerUpdated`, `ShopStatusChanged`, `ItemListingAdded`, `ItemListingStockUpdated`, `ItemListingRemoved`, `DiscountCreated`, `DiscountUpdated`, `DiscountStatusChanged`, `DiscountSpotlightChanged`, `AcceptedCoinAdded`, `AcceptedCoinRemoved`, `DiscountRedeemed`, `PurchaseCompleted`.
+- Events: `ShopCreated`, `ShopOwnerUpdated`, `ShopStatusChanged`, `ItemListingAdded`, `ItemListingStockUpdated`, `ItemListingRemoved`, `DiscountCreated`, `DiscountRemoved`, `DiscountUpdated`, `DiscountStatusChanged`, `DiscountSpotlightChanged`, `AcceptedCoinAdded`, `AcceptedCoinRemoved`, `DiscountRedeemed`, `PurchaseCompleted`.
 
 Oracle Dependencies
 -------------------

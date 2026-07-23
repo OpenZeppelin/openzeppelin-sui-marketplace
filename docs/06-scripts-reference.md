@@ -310,7 +310,7 @@ Owner scripts default `--shop-package-id`, `--shop-id`, and `--owner-cap-id` fro
 
 ### `pnpm script owner:discount:set-spotlight`
 
-- Toggles a discount's spotlight flag. Spotlight is a per-discount boolean, so featuring a discount no longer touches any listing.
+- Sets a discount's spotlight flag. Spotlight is a per-discount boolean, so featuring a discount no longer touches any listing.
 - Flags:
   - `--discount-id <id>`: discount object ID (required).
   - `--spotlight` / `--no-spotlight`: desired spotlight state (required boolean flag).

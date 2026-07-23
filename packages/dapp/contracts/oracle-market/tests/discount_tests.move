@@ -947,6 +947,7 @@ fun remove_discount_uncounts_listing_scoped_discount() {
     shop.remove_discount(&owner_cap, discount_id);
 
     assert!(!shop.discount_exists(discount_id));
+    assert_emitted!(events::discount_removed(shop.id(), discount_id));
     // Removal uncounts it, so the listing can be delisted.
     assert_eq!(shop.listing(listing_id).discount_count(), 0);
 

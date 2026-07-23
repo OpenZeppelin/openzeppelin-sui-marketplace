@@ -42,7 +42,7 @@ pnpm script buyer:buy \
 ## 5. Lifecycle mechanics
 
 - **Schedules and scoping**: `starts_at` is required. `expires_at` and `max_redemptions` are optional. When `max_redemptions` is set, it must be greater than `0`. A discount may be listing-scoped via `applies_to_listing`, which is fixed at creation and immutable (`Some(listing)` scopes it, `None` makes it generic and usable by any listing).
-- **Spotlighting**: each discount carries an owner-controlled `is_spotlight` flag, toggled with `set_discount_spotlight`. It is advisory and independent of `active`. Storefronts feature, per listing, the oldest-starting active discount whose flag is set, preferring a listing-scoped match over a generic one.
+- **Spotlighting**: each discount carries an owner-controlled `is_spotlight` flag, set with `set_discount_spotlight`. It is advisory and independent of `active`. Storefronts feature, per listing, the oldest-starting active discount whose flag is set, preferring a listing-scoped match over a generic one.
 - **Redemption guards**: checkout validates discount active state, time window, listing scope, and max redemptions.
 - **Clock-based timing**: redemption checks use shared `Clock`, not client time.
 

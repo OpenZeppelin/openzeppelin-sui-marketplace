@@ -336,13 +336,14 @@ const ORACLE_MARKET_PACKAGE_NAME = "sui_oracle_market"
 const resolveInlinedPythPackageId = async (
   tooling: Tooling
 ): Promise<string> => {
+  const networkName = tooling.suiConfig.network.networkName
   const oracleMarketArtifact = await getLatestDeploymentFromArtifact(
     ORACLE_MARKET_PACKAGE_NAME
-  )(tooling.suiConfig.network.networkName)
+  )(networkName)
 
   if (!oracleMarketArtifact)
     throw new Error(
-      "oracle-market not yet published. Run `pnpm script move:publish --package-path oracle-market --network localnet` before `mock:setup`."
+      `oracle-market not yet published. Run \`pnpm script move:publish --package-path oracle-market --network ${networkName}\` before \`mock:setup\`.`
     )
 
   // getLatestDeploymentFromArtifact already returns a normalized package id.

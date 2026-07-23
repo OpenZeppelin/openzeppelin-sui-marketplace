@@ -68,6 +68,14 @@ public struct DiscountCreated has copy, drop {
     discount_id: ID,
 }
 
+/// Event emitted when a discount is removed.
+public struct DiscountRemoved has copy, drop {
+    /// Shop that owned the removed discount.
+    shop_id: ID,
+    /// Removed discount ID.
+    discount_id: ID,
+}
+
 /// Event emitted when a discount is updated.
 public struct DiscountUpdated has copy, drop {
     /// Shop that owns the updated discount.
@@ -202,6 +210,14 @@ public(package) fun emit_item_listing_removed(shop_id: ID, listing_id: ID) {
 /// Emits a `DiscountCreated` payload.
 public(package) fun emit_discount_created(shop_id: ID, discount_id: ID) {
     event::emit(DiscountCreated {
+        shop_id,
+        discount_id,
+    });
+}
+
+/// Emits a `DiscountRemoved` payload.
+public(package) fun emit_discount_removed(shop_id: ID, discount_id: ID) {
+    event::emit(DiscountRemoved {
         shop_id,
         discount_id,
     });
@@ -357,6 +373,15 @@ public(package) fun item_listing_removed(shop_id: ID, listing_id: ID): ItemListi
 #[test_only]
 public(package) fun discount_created(shop_id: ID, discount_id: ID): DiscountCreated {
     DiscountCreated {
+        shop_id,
+        discount_id,
+    }
+}
+
+/// Builds a `DiscountRemoved` payload.
+#[test_only]
+public(package) fun discount_removed(shop_id: ID, discount_id: ID): DiscountRemoved {
+    DiscountRemoved {
         shop_id,
         discount_id,
     }

@@ -477,6 +477,7 @@ public fun set_discount_spotlight(
 /// Fails if discount doesn't exist. A listing-scoped discount is uncounted from its listing.
 public fun remove_discount(shop: &mut Shop, owner_cap: &ShopOwnerCap, discount_id: ID) {
     assert!(owner_cap.shop_id == shop.id(), EInvalidOwnerCap);
+    let shop_id = shop.id();
 
     // Fails when discount doesn't exist.
     shop.discount(discount_id).applies_to_listing().do!(|listing_id| {
@@ -486,6 +487,7 @@ public fun remove_discount(shop: &mut Shop, owner_cap: &ShopOwnerCap, discount_i
     });
 
     let _ = shop.discounts.remove(discount_id);
+    events::emit_discount_removed(shop_id, discount_id);
 }
 
 /// Execute a purchase priced in USD cents but settled with any previously registered `AcceptedCurrency`.
