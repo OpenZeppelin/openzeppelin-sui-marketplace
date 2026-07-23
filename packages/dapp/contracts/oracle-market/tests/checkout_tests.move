@@ -655,7 +655,7 @@ fun setup_shop_with_currency_listing_and_price_info_for_item<TItem: store>(
 
     transfer::public_share_object(price_info_object);
     transfer::public_share_object(shop_obj);
-    transfer::public_transfer(owner_cap, @0x0);
+    shop::transfer(owner_cap, @0x0);
 
     (shop_id, pyth_object_id, listing_id, price_info_id)
 }
@@ -1107,7 +1107,7 @@ fun buy_item_rejects_price_info_object_id_mismatch() {
     transfer::public_share_object(price_info_object);
     transfer::public_share_object(other_price_info_object);
     transfer::public_share_object(shop_obj);
-    transfer::public_transfer(owner_cap, @0x0);
+    shop::transfer(owner_cap, @0x0);
 
     let _ = scn.next_tx(second_owner());
 
