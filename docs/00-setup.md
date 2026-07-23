@@ -23,7 +23,7 @@ This chapter gets your environment ready and walks through a complete localnet r
 This repo is tested against Sui CLI **1.75.x** (mainnet channel). Pin a specific patch version so upgrades do not surprise you.
 
 ```bash
-curl -sSfL https://raw.githubusercontent.com/Mystenlabs/suiup/main/install.sh | sh
+curl -sSfL https://raw.githubusercontent.com/MystenLabs/suiup/main/install.sh | sh
 suiup list
 suiup install sui@mainnet-1.75.2
 sui --version
@@ -128,7 +128,7 @@ The published package ID is written to:
   "dependencyAddresses": {},
   "withUnpublishedDependencies": true,
   "unpublishedDependencies": [],
-  "suiCliVersion": "1.63.1-a14d9e8ddadf",
+  "suiCliVersion": "1.75.2-027e13b2c140",
   "explorerUrl": "https://explorer.sui.io/txblock/54ngfCMuc1n1LrV4F8Y1Bukipuq8HayLBGirTT4LhnYD?network=localnet"
 }
 ```
@@ -143,7 +143,7 @@ pnpm script owner:shop:seed
 ```
 
 The created objects are saved in:
-`packages/dapp/deployments/object.localnet.json`
+`packages/dapp/deployments/objects.localnet.json`
 
 ```json
 [
