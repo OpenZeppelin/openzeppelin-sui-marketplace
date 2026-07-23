@@ -16,7 +16,7 @@ use sui_oracle_market::test_helpers::{
     owner,
     second_owner,
     third_owner,
-    settle_purchase_outputs
+    settle_purchase_outputs,
 };
 
 // === Tests ===

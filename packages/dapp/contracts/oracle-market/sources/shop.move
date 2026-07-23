@@ -98,6 +98,8 @@ const ESpotlightDiscountListingMismatch: vector<u8> = "spotlight discount listin
 const EEmptyShopName: vector<u8> = "empty shop name";
 #[error(code = 10)]
 const EShopDisabled: vector<u8> = "shop disabled";
+#[error(code = 11)]
+const ECannotSpotlightGlobalDiscount: vector<u8> = "cannot spotlight global discount";
 
 // === Init ===
 
@@ -192,8 +194,13 @@ public fun update_shop_owner(shop: &mut Shop, owner_cap: &ShopOwnerCap, new_owne
 }
 
 /// Adds a listing and returns the created listing ID.
-/// Attaches `spotlight_discount_id` as spotlight discount,
-/// and removes that discount from any other associated listing.
+/// Attaches `spotlight_discount_id` as spotlight discount, re-pointing that discount to this
+/// listing and removing it from any other associated listing.
+///
+/// The spotlight discount, when provided, must already be scoped to a listing. A global
+/// (unscoped) discount is rejected with `ECannotSpotlightGlobalDiscount` rather than silently
+/// narrowed to this listing. To create a fresh listing-scoped discount alongside a new listing,
+/// use `add_item_listing_with_discount`.
 ///
 /// Add an `ItemListing` attached to the `Shop`. The generic `T` encodes what will eventually be
 /// minted when a buyer completes checkout. Prices are provided in USD cents (e.g. $12.50 -> 1_250)
@@ -221,10 +228,18 @@ public fun add_item_listing<T: store>(
     // Check that spotlight discount id exist.
     // Update listing discount count and set spotlight,
     spotlight_discount_id.do!(|discount_id| {
+        // Reject global (unscoped) discounts. Re-pointing them here would silently narrow
+        // their redemption scope to this listing, an irreversible change. Only a discount
+        // already scoped to another listing can be re-pointed (stolen) onto this one.
+        assert!(
+            shop.discount(discount_id).applies_to_listing().is_some(),
+            ECannotSpotlightGlobalDiscount,
+        );
+
         listing.increment_discount_count();
         listing.set_spotlight(discount_id);
 
-        // set discount's `applies_to_listing`,
+        // Re-point discount's `applies_to_listing` to the new listing,
         shop
             .discount_mut(discount_id)
             .set_applies_to_listing(listing_id)
@@ -511,8 +526,15 @@ public fun remove_discount(shop: &mut Shop, owner_cap: &ShopOwnerCap, discount_i
     let _ = shop.discounts.remove(discount_id);
 }
 
-/// Surface a discount alongside a listing so UIs can highlight the promotion.
-/// Fails when discount `applies_to_listing` has value that doesn't match `listing_id`.
+/// Surface a listing-scoped discount alongside its listing so UIs can highlight the promotion.
+///
+/// Only a discount already scoped to `listing_id` can be spotlighted. A global
+/// (unscoped) discount is rejected rather than silently narrowed to this listing, which
+/// would be an irreversible change to its redemption scope. To feature a listing-scoped
+/// discount, create it scoped via `create_discount` or `add_item_listing_with_discount`.
+///
+/// Fails with `ECannotSpotlightGlobalDiscount` when the discount is global, and with
+/// `ESpotlightDiscountListingMismatch` when it is scoped to a different listing.
 public fun attach_spotlight_discount(
     shop: &mut Shop,
     owner_cap: &ShopOwnerCap,
@@ -521,19 +543,12 @@ public fun attach_spotlight_discount(
 ) {
     assert!(owner_cap.shop_id == shop.id(), EInvalidOwnerCap);
 
-    // Assert discount matches to listing if listing exists.
-    let discount = shop.discount_mut(discount_id);
-    discount.applies_to_listing().do!(|applies_to_listing| {
-        assert!(applies_to_listing == listing_id, ESpotlightDiscountListingMismatch);
-    });
+    // Reject global discounts and assert the scope matches the target listing.
+    // Spotlighting is presentation-only and must not mutate redemption scope.
+    let applies_to_listing = shop.discount(discount_id).applies_to_listing();
+    assert!(applies_to_listing.is_some(), ECannotSpotlightGlobalDiscount);
+    assert!(applies_to_listing.contains(&listing_id), ESpotlightDiscountListingMismatch);
 
-    // Attach discount to listing.
-    if (discount.applies_to_listing().is_none()) {
-        // Link to listing and increment discount count,
-        // if it wasn't linked before.
-        discount.set_applies_to_listing(listing_id);
-        shop.listing_mut(listing_id).increment_discount_count();
-    };
     shop.listing_mut(listing_id).set_spotlight(discount_id);
 }
 

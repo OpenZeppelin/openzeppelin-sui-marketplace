@@ -300,6 +300,8 @@ runSuiScript(
       const discountSummaries = await ensureDiscounts({
         discountSeeds: DISCOUNT_SEEDS,
         shopIdentifiers,
+        itemListingSummaries,
+        fixedDiscountListingName: FIXED_DISCOUNT_LISTING_NAME,
         tooling,
         suiClient
       })
@@ -1237,11 +1239,15 @@ const ensureItemListing = async ({
 const ensureDiscounts = async ({
   discountSeeds,
   shopIdentifiers,
+  itemListingSummaries,
+  fixedDiscountListingName,
   tooling,
   suiClient
 }: {
   discountSeeds: DiscountSeedDefinition[]
   shopIdentifiers: { packageId: string; shopId: string; ownerCapId: string }
+  itemListingSummaries: ItemListingSummary[]
+  fixedDiscountListingName: string
   tooling: Tooling
   suiClient: SuiClient
 }): Promise<DiscountMap> => {
@@ -1260,6 +1266,13 @@ const ensureDiscounts = async ({
     percent: undefined
   }
 
+  // The fixed discount is spotlighted on a listing, so it must be listing-scoped:
+  // a global (unscoped) discount cannot be spotlighted. The percent discount stays global.
+  const fixedDiscountListing =
+    itemListingSummaries.find(
+      (summary) => summary.name === fixedDiscountListingName
+    ) ?? itemListingSummaries[0]
+
   return discountSeeds.reduce(
     async (pendingDiscounts, seed) =>
       ensureDiscount({
@@ -1268,6 +1281,10 @@ const ensureDiscounts = async ({
         currentDiscounts: await pendingDiscounts,
         shopIdentifiers,
         shopSharedObject,
+        appliesToListingId:
+          seed.ruleKind === "fixed"
+            ? fixedDiscountListing?.itemListingId
+            : undefined,
         tooling,
         suiClient
       }),
@@ -1281,6 +1298,7 @@ const ensureDiscount = async ({
   currentDiscounts,
   shopIdentifiers,
   shopSharedObject,
+  appliesToListingId,
   tooling,
   suiClient
 }: {
@@ -1289,6 +1307,7 @@ const ensureDiscount = async ({
   currentDiscounts: DiscountMap
   shopIdentifiers: { packageId: string; shopId: string; ownerCapId: string }
   shopSharedObject: Awaited<ReturnType<Tooling["getSuiSharedObject"]>>
+  appliesToListingId?: string
   tooling: Tooling
   suiClient: SuiClient
 }): Promise<DiscountMap> => {
@@ -1298,7 +1317,7 @@ const ensureDiscount = async ({
   const discountKey = buildDiscountKey({
     ruleKind: seed.ruleKind,
     ruleValue: ruleValueKey,
-    appliesToListingId: undefined
+    appliesToListingId
   })
 
   const existingDiscount = existingDiscountIndex.get(discountKey)
@@ -1329,7 +1348,7 @@ const ensureDiscount = async ({
       buildCreateDiscountTransaction({
         packageId: shopIdentifiers.packageId,
         shop: shopSharedObject,
-        appliesToListingId: undefined,
+        appliesToListingId,
         ruleKind: normalizedRuleKind,
         ruleValue,
         startsAt,
