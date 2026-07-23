@@ -63,6 +63,14 @@ public struct ShopItem<phantom T> has key, store {
     acquired_at: u64,
 }
 
+// === Method Exports ===
+
+// Method aliases so receipts expose the same natural `.id()` / `.item_type()` /
+// `.name()` surface as `ItemListing`, whose free functions already own those names.
+public use fun shop_item_id as ShopItem.id;
+public use fun shop_item_type as ShopItem.item_type;
+public use fun shop_item_name as ShopItem.name;
+
 // === View Functions ===
 
 /// Returns the listing ID.
@@ -99,12 +107,6 @@ public fun discount_count(listing: &ItemListing): u64 {
 public fun spotlight_discount_id(listing: &ItemListing): Option<ID> {
     listing.spotlight_discount_id
 }
-
-// Method aliases so receipts expose the same natural `.id()` / `.item_type()` /
-// `.name()` surface as `ItemListing`, whose free functions already own those names.
-public use fun shop_item_id as ShopItem.id;
-public use fun shop_item_type as ShopItem.item_type;
-public use fun shop_item_name as ShopItem.name;
 
 /// Returns the receipt object ID.
 public fun shop_item_id<T>(item: &ShopItem<T>): ID {
