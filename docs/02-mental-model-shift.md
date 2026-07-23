@@ -23,8 +23,8 @@ This repo assumes you already think in Solidity. The goal here is not to re-teac
 
 - **Abilities (`key`, `store`, `copy`, `drop`)**: abilities declare how values can be stored and
   moved. `key` turns a struct into an object with identity. `store` lets it live on-chain. `copy`
-  and `drop` opt into value semantics. In this repo, objects like `Shop` and `ShopOwnerCap` are
-  `has key, store`, while events are `has copy, drop`.
+  and `drop` opt into value semantics. In this repo, `Shop` is `has key, store` while
+  `ShopOwnerCap` is `has key` only, and events are `has copy, drop`.
   Code: `packages/dapp/contracts/oracle-market/sources/shop.move` (struct definitions)
 - **Resources and ownership**: Move resources must be moved, not copied. Owned objects (like
   `ShopOwnerCap`) are authority tokens. Passing a resource by value is a one-time action, which is
