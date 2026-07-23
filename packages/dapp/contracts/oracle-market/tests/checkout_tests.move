@@ -732,6 +732,63 @@ fun buy_item_emits_events_decrements_stock_and_refunds_change() {
 }
 
 #[test]
+fun buy_item_receipt_exposes_provenance_accessors() {
+    let mut scn = test_scenario::begin(owner());
+    let (
+        shop_id,
+        _pyth_object_id,
+        listing_id,
+        price_info_id,
+    ) = setup_shop_with_currency_listing_and_price_info(&mut scn, 100, 2);
+
+    let (mut shared_shop, price_info_obj, clock_obj) = test_helpers::begin_buyer_checkout_context(
+        &mut scn,
+        second_owner(),
+        shop_id,
+        price_info_id,
+        10,
+    );
+
+    let quote_amount = shared_shop.quote_amount_for_price_info_object<test_helpers::TestCoin>(
+        &price_info_obj,
+        100,
+        option::none(),
+        option::none(),
+        &clock_obj,
+    );
+    let payment = coin::mint_for_testing<test_helpers::TestCoin>(quote_amount, scn.ctx());
+
+    let (minted_item, change_coin) = shared_shop.buy_item<
+        test_helpers::TestItem,
+        test_helpers::TestCoin,
+    >(
+        &price_info_obj,
+        payment,
+        listing_id,
+        option::none(),
+        option::none(),
+        &clock_obj,
+        scn.ctx(),
+    );
+
+    // A downstream module must be able to prove which shop and listing minted the receipt.
+    assert_eq!(minted_item.shop_id(), shop_id);
+    assert_eq!(minted_item.item_listing_id(), listing_id);
+    assert_eq!(minted_item.id(), tx_context::last_created_object_id(scn.ctx()).to_id());
+    assert_eq!(
+        minted_item.item_type(),
+        std::type_name::with_defining_ids<test_helpers::TestItem>(),
+    );
+    // Clock is set to 10ms in the helper, so now_secs (ms / 1000) rounds to 0.
+    assert_eq!(minted_item.acquired_at(), 0);
+    assert!(!minted_item.name().is_empty());
+
+    settle_purchase_outputs(minted_item, change_coin, second_owner(), second_owner());
+    test_helpers::close_buyer_checkout_context(shared_shop, price_info_obj, clock_obj);
+    let _ = scn.end();
+}
+
+#[test]
 fun buy_item_supports_example_car_receipts() {
     let mut scn = test_scenario::begin(owner());
     let (

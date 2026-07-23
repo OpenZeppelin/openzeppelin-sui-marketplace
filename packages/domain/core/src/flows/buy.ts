@@ -358,6 +358,8 @@ const maybeSetDedicatedGasForSuiPayments = async ({
   // reject only a genuinely absent amount. requireValue treats 0n as missing.
   if (paymentAmount === undefined)
     throw new Error("SUI checkout is missing its required payment amount.")
+  if (paymentAmount < 0n)
+    throw new Error("SUI checkout payment amount cannot be negative.")
   const minimumPaymentAmount = paymentAmount
   const totalGasBalance = orderedGasCoins.reduce(
     (total, coin) => total + coin.balance,
