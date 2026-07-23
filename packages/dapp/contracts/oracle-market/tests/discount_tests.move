@@ -720,9 +720,11 @@ fun toggle_discount_on_listing_sets_and_clears_spotlight() {
         option::none(),
         &mut ctx,
     );
+    // Scope the discount to the listing (this also spotlights it), then clear the
+    // spotlight so we can verify attach_spotlight_discount re-sets it.
     let discount_id = shop.create_discount(
         &owner_cap,
-        option::none(),
+        option::some(listing_id),
         0,
         500,
         0,
@@ -730,6 +732,7 @@ fun toggle_discount_on_listing_sets_and_clears_spotlight() {
         option::some(5),
         &mut ctx,
     );
+    shop.clear_spotlight_discount(&owner_cap, listing_id);
     let ids_before_toggle = tx_context::get_ids_created(&ctx);
 
     let listing_before = shop.listing(listing_id);
@@ -803,7 +806,7 @@ fun toggle_discount_on_listing_rejects_foreign_owner_cap() {
     abort
 }
 
-#[test, expected_failure(abort_code = ::sui_oracle_market::shop::EListingNotFound)]
+#[test, expected_failure(abort_code = ::sui_oracle_market::shop::ESpotlightDiscountListingMismatch)]
 fun toggle_discount_on_listing_rejects_foreign_listing() {
     let mut ctx = tx_context::dummy();
     let (mut shop, owner_cap) = shop::test_setup_shop(owner(), &mut ctx);
@@ -812,6 +815,14 @@ fun toggle_discount_on_listing_rejects_foreign_listing() {
         &mut ctx,
     );
 
+    let listing_id = shop.add_item_listing<test_helpers::TestItem>(
+        &owner_cap,
+        b"Chain Lube".to_string(),
+        12_00,
+        30,
+        option::none(),
+        &mut ctx,
+    );
     let foreign_listing_id = other_shop.add_item_listing<test_helpers::TestItem>(
         &other_cap,
         b"Spare Tube".to_string(),
@@ -820,14 +831,11 @@ fun toggle_discount_on_listing_rejects_foreign_listing() {
         option::none(),
         &mut ctx,
     );
-    let discount_id = shop.create_discount(
+    // Discount scoped to a listing in this shop cannot be spotlighted on a foreign listing.
+    let discount_id = test_helpers::create_discount_for_listing(
+        &mut shop,
         &owner_cap,
-        option::none(),
-        0,
-        500,
-        0,
-        option::none(),
-        option::some(5),
+        listing_id,
         &mut ctx,
     );
 
@@ -924,11 +932,15 @@ fun attach_spotlight_discount_sets_spotlight_without_emitting_events() {
         option::none(),
         &mut ctx,
     );
-    let discount_id = test_helpers::create_discount(
+    // Scope the discount to the listing (this also spotlights it), then clear the
+    // spotlight so we can verify attach_spotlight_discount re-sets it without side effects.
+    let discount_id = test_helpers::create_discount_for_listing(
         &mut shop,
         &owner_cap,
+        listing_id,
         &mut ctx,
     );
+    shop.clear_spotlight_discount(&owner_cap, listing_id);
     let ids_before = tx_context::get_ids_created(&ctx);
 
     shop.attach_spotlight_discount(
@@ -958,22 +970,25 @@ fun attach_spotlight_discount_overwrites_existing_spotlight() {
     let mut ctx = tx_context::dummy();
     let (mut shop, owner_cap) = shop::test_setup_shop(owner(), &mut ctx);
 
-    let first_discount = test_helpers::create_discount(
-        &mut shop,
-        &owner_cap,
-        &mut ctx,
-    );
     let listing_id = shop.add_item_listing<test_helpers::TestItem>(
         &owner_cap,
         b"Bundle".to_string(),
         140_00,
         3,
-        option::some(first_discount),
+        option::none(),
         &mut ctx,
     );
-    let second_discount = test_helpers::create_discount(
+    // Two discounts scoped to the same listing. Creating the second makes it the spotlight.
+    let first_discount = test_helpers::create_discount_for_listing(
         &mut shop,
         &owner_cap,
+        listing_id,
+        &mut ctx,
+    );
+    let second_discount = test_helpers::create_discount_for_listing(
+        &mut shop,
+        &owner_cap,
+        listing_id,
         &mut ctx,
     );
     let ids_before = tx_context::get_ids_created(&ctx);
@@ -982,12 +997,12 @@ fun attach_spotlight_discount_overwrites_existing_spotlight() {
     let spotlight_before = listing_before.spotlight_discount_id();
     assert!(option::is_some(&spotlight_before));
     spotlight_before.do_ref!(|value| {
-        assert_eq!(*value, first_discount);
+        assert_eq!(*value, second_discount);
     });
 
     shop.attach_spotlight_discount(
         &owner_cap,
-        second_discount,
+        first_discount,
         listing_id,
     );
 
@@ -995,7 +1010,7 @@ fun attach_spotlight_discount_overwrites_existing_spotlight() {
     let spotlight_after = listing_after.spotlight_discount_id();
     assert!(option::is_some(&spotlight_after));
     spotlight_after.do_ref!(|value| {
-        assert_eq!(*value, second_discount);
+        assert_eq!(*value, first_discount);
     });
     assert_eq!(tx_context::get_ids_created(&ctx), ids_before);
     assert!(shop.discount_exists(first_discount));
@@ -1049,6 +1064,60 @@ fun attach_spotlight_discount_accepts_matching_listing() {
     std::unit_test::destroy(shop);
 }
 
+#[test, expected_failure(abort_code = ::sui_oracle_market::shop::ECannotSpotlightGlobalDiscount)]
+fun attach_spotlight_discount_rejects_global_discount() {
+    let mut ctx = tx_context::dummy();
+    let (mut shop, owner_cap) = shop::test_setup_shop(owner(), &mut ctx);
+
+    let listing_id = shop.add_item_listing<test_helpers::TestItem>(
+        &owner_cap,
+        b"Everything Sale Item".to_string(),
+        60_00,
+        20,
+        option::none(),
+        &mut ctx,
+    );
+    // A global (unscoped) discount must not be silently narrowed to this listing.
+    let global_discount = test_helpers::create_discount(
+        &mut shop,
+        &owner_cap,
+        &mut ctx,
+    );
+
+    shop.attach_spotlight_discount(
+        &owner_cap,
+        global_discount,
+        listing_id,
+    );
+
+    abort
+}
+
+#[test, expected_failure(abort_code = ::sui_oracle_market::shop::ECannotSpotlightGlobalDiscount)]
+fun add_item_listing_rejects_global_spotlight_discount() {
+    let mut ctx = tx_context::dummy();
+    let (mut shop, owner_cap) = shop::test_setup_shop(owner(), &mut ctx);
+
+    // A global (unscoped) discount cannot be featured on a new listing, as doing so
+    // would silently narrow its redemption scope to that listing.
+    let global_discount = test_helpers::create_discount(
+        &mut shop,
+        &owner_cap,
+        &mut ctx,
+    );
+
+    shop.add_item_listing<test_helpers::TestItem>(
+        &owner_cap,
+        b"New Listing".to_string(),
+        75_00,
+        5,
+        option::some(global_discount),
+        &mut ctx,
+    );
+
+    abort
+}
+
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::EInvalidOwnerCap)]
 fun attach_spotlight_discount_rejects_foreign_owner_cap() {
     let mut ctx = tx_context::dummy();
@@ -1078,7 +1147,7 @@ fun attach_spotlight_discount_rejects_foreign_owner_cap() {
     abort
 }
 
-#[test, expected_failure(abort_code = ::sui_oracle_market::shop::EListingNotFound)]
+#[test, expected_failure(abort_code = ::sui_oracle_market::shop::ESpotlightDiscountListingMismatch)]
 fun attach_spotlight_discount_rejects_foreign_listing() {
     let mut ctx = tx_context::dummy();
     let (mut shop, owner_cap) = shop::test_setup_shop(owner(), &mut ctx);
@@ -1087,6 +1156,14 @@ fun attach_spotlight_discount_rejects_foreign_listing() {
         &mut ctx,
     );
 
+    let listing_id = shop.add_item_listing<test_helpers::TestItem>(
+        &owner_cap,
+        b"Brake Levers".to_string(),
+        22_00,
+        4,
+        option::none(),
+        &mut ctx,
+    );
     let foreign_listing_id = other_shop.add_item_listing<test_helpers::TestItem>(
         &other_cap,
         b"Brake Pads".to_string(),
@@ -1095,9 +1172,11 @@ fun attach_spotlight_discount_rejects_foreign_listing() {
         option::none(),
         &mut ctx,
     );
-    let discount_id = test_helpers::create_discount(
+    // Discount scoped to a listing in this shop cannot be spotlighted on a foreign listing.
+    let discount_id = test_helpers::create_discount_for_listing(
         &mut shop,
         &owner_cap,
+        listing_id,
         &mut ctx,
     );
 
@@ -1189,15 +1268,12 @@ fun clear_spotlight_discount_removes_spotlight_without_side_effects() {
         option::none(),
         &mut ctx,
     );
-    let discount_id = test_helpers::create_discount(
+    // The discount is scoped to the listing, which also spotlights it.
+    let discount_id = test_helpers::create_discount_for_listing(
         &mut shop,
         &owner_cap,
-        &mut ctx,
-    );
-    shop.attach_spotlight_discount(
-        &owner_cap,
-        discount_id,
         listing_id,
+        &mut ctx,
     );
 
     let listing_before = shop.listing(listing_id);
