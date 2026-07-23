@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises"
 import path from "node:path"
 
+import { normalizeSuiObjectId } from "@mysten/sui/utils"
 import type { AcceptedCurrencySummary } from "@sui-oracle-market/domain-core/models/currency"
 import { resolvePythPackageIdFromShopModule } from "@sui-oracle-market/domain-node/shop"
 import { findDependencyPackageIdByModuleName } from "@sui-oracle-market/tooling-core/package"
@@ -583,7 +584,10 @@ export const seedShopWithListingAndDiscount = async ({
 const resolveMockArtifactFilePath = (context: TestContext) =>
   path.join(context.artifactsDir, MOCK_ARTIFACT_FILE_NAME)
 
-const normalizeHexLikeId = (value?: string) => value?.trim().toLowerCase()
+// Compare object ids by their canonical (zero-padded, lowercased) form so an
+// unpadded id and its padded equivalent are treated as equal.
+const normalizeHexLikeId = (value?: string) =>
+  value ? normalizeSuiObjectId(value.trim()) : value
 
 const readMockArtifactForContext = async (
   context: TestContext

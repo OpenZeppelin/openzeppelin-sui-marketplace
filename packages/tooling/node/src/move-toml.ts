@@ -107,6 +107,11 @@ const removePublishedArrayEntriesForPackagePath = (
   const sourceLocalRegex =
     /^\s*source\s*=\s*\{\s*local\s*=\s*"([^"]*)"\s*\}\s*(#.*)?$/
 
+  // The CLI may record `source.local` as an absolute, relative, or otherwise
+  // normalized path (it runs with cwd = the package path), so compare resolved
+  // paths rather than raw strings to avoid missing a stale entry.
+  const targetPath = path.resolve(packagePath)
+
   const ranges: Array<{ start: number; end: number }> = []
   let didUpdate = false
 
@@ -122,7 +127,8 @@ const removePublishedArrayEntriesForPackagePath = (
         break
       }
       const sourceMatch = line.match(sourceLocalRegex)
-      if (sourceMatch && sourceMatch[1] === packagePath) matchesPath = true
+      if (sourceMatch && path.resolve(sourceMatch[1]) === targetPath)
+        matchesPath = true
     }
     if (matchesPath) {
       ranges.push({ start: blockStart, end: blockEnd })
