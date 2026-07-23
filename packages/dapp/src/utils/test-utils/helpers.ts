@@ -562,12 +562,15 @@ export const seedShopWithListingAndDiscount = async ({
     stock
   })
 
+  // Scope the discount to the listing so it can be spotlighted. A global (unscoped)
+  // discount is rejected by attach_spotlight_discount to avoid silently narrowing its scope.
   const discount = await createDiscountFixture({
     scriptRunner,
     publisher,
     shopId,
     ruleKind,
-    value
+    value,
+    listingId: itemListing.itemListingId
   })
 
   await attachDiscountToListing({
