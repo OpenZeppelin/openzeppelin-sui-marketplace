@@ -624,7 +624,11 @@ const publishViaCli = async (plan: PublishPlan): Promise<PublishResult> => {
       if (retry.stderr?.toString().trim())
         logWarning(retry.stderr.toString().trim())
 
-      if (retry.exitCode && retry.exitCode !== 0) {
+      // Treat anything other than an explicit 0 as failure. `exitCode` is
+      // `undefined` when the process was killed by a signal or failed to spawn,
+      // which must surface as a test-publish error rather than falling through
+      // to `parseCliJson` on empty stdout.
+      if (retry.exitCode !== 0) {
         const retryTail = [retry.stdout, retry.stderr]
           .filter(Boolean)
           .map((chunk) => chunk.toString().trim())

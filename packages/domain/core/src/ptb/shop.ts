@@ -19,10 +19,13 @@ export const buildCreateShopTransaction = ({
     arguments: [transaction.pure.string(normalizedShopName)]
   })
 
-  transaction.transferObjects(
-    [ownerCapability],
-    transaction.pure.address(ownerAddress)
-  )
+  // `ShopOwnerCap` lacks the `store` ability, so it cannot be moved with the PTB
+  // `transferObjects` command (which requires `store`). Route it through the
+  // package's dedicated transfer entry instead.
+  transaction.moveCall({
+    target: `${packageId}::shop::transfer`,
+    arguments: [ownerCapability, transaction.pure.address(ownerAddress)]
+  })
 
   return transaction
 }

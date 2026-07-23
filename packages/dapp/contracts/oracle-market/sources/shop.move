@@ -117,7 +117,7 @@ fun init(publisher_witness: SHOP, ctx: &mut TxContext) {
 
 /// Capability that proves the caller can administer a specific `Shop`.
 /// Holding and using this object is the Sui-native equivalent of matching `onlyOwner` criteria in Solidity.
-public struct ShopOwnerCap has key, store {
+public struct ShopOwnerCap has key {
     /// Object ID for this capability.
     id: UID,
     /// Shop governed by this capability.
@@ -171,6 +171,15 @@ public fun create_shop_and_share(name: String, ctx: &mut TxContext): (ID, ShopOw
 
     transfer::public_share_object(shop);
     (shop_id, owner_cap)
+}
+
+/// Transfer a `ShopOwnerCap` to a new holder.
+///
+/// `ShopOwnerCap` intentionally lacks `store`, so it cannot be moved with `transfer::public_transfer`
+/// or frozen with `transfer::public_freeze_object`. This is the supported way to hand the capability
+/// to another address (for example, to move shop administration to a new operator).
+public fun transfer(owner_cap: ShopOwnerCap, recipient: address) {
+    transfer::transfer(owner_cap, recipient);
 }
 
 /// Disable/enable a shop (buyer flows will reject new checkouts).

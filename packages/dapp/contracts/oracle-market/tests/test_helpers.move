@@ -224,7 +224,7 @@ public(package) fun create_shop_and_owner_cap_ids_for_sender(
     let owner_cap_id = object::id(&owner_cap);
 
     assert_emitted!(events::shop_created(shop_id, owner_cap_id));
-    transfer::public_transfer(owner_cap, scn.sender());
+    shop::transfer(owner_cap, scn.sender());
     let sender = scn.sender();
     scn.next_tx(sender);
 
@@ -399,6 +399,25 @@ public(package) fun create_discount(
     )
 }
 
+/// Creates a discount already scoped to `listing_id`, which also spotlights it on that listing.
+public(package) fun create_discount_for_listing(
+    shop_obj: &mut shop::Shop,
+    owner_cap: &shop::ShopOwnerCap,
+    listing_id: ID,
+    ctx: &mut tx_context::TxContext,
+): ID {
+    shop_obj.create_discount(
+        owner_cap,
+        option::some(listing_id),
+        0,
+        500,
+        0,
+        option::none(),
+        option::some(5),
+        ctx,
+    )
+}
+
 public(package) fun setup_shop_with_currency_listing_and_price_info(
     scn: &mut test_scenario::Scenario,
     base_price_usd_cents: u64,
@@ -471,7 +490,7 @@ public(package) fun setup_shop_with_currency_listing_and_price_info_for_item<TIt
 
     transfer::public_share_object(price_info_object);
     transfer::public_share_object(shop_obj);
-    transfer::public_transfer(owner_cap, @0x0);
+    shop::transfer(owner_cap, @0x0);
 
     (shop_id, pyth_object_id, listing_id, price_info_id)
 }

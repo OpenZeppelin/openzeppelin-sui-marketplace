@@ -39,6 +39,12 @@ public struct ItemListing has drop, store {
 
 /// Shop item type for receipts. `T` is enforced at mint time so downstream
 /// Move code can depend on the type system instead of opaque metadata alone.
+///
+/// `ShopItem<T>` is intended to be consumed by third-party redemption or gating
+/// logic. Because shops are permissionless and multiple shops or listings may
+/// share the same `T`, integrators that need to scope redemption to a specific
+/// shop or listing must verify provenance with the `shop_id` / `item_listing_id`
+/// accessors below rather than relying on `T` alone.
 public struct ShopItem<phantom T> has key, store {
     /// Receipt object ID.
     id: UID,
@@ -53,6 +59,14 @@ public struct ShopItem<phantom T> has key, store {
     /// Timestamp seconds when purchase completed.
     acquired_at: u64,
 }
+
+// === Method Exports ===
+
+// Method aliases so receipts expose the same natural `.id()` / `.item_type()` /
+// `.name()` surface as `ItemListing`, whose free functions already own those names.
+public use fun shop_item_id as ShopItem.id;
+public use fun shop_item_type as ShopItem.item_type;
+public use fun shop_item_name as ShopItem.name;
 
 // === View Functions ===
 
@@ -84,6 +98,36 @@ public fun stock(listing: &ItemListing): u64 {
 /// Returns how many listing-scoped discounts are currently counted against this listing.
 public fun discount_count(listing: &ItemListing): u64 {
     listing.discount_count
+}
+
+/// Returns the receipt object ID.
+public fun shop_item_id<T>(item: &ShopItem<T>): ID {
+    item.id.to_inner()
+}
+
+/// Returns the ID of the shop that minted this receipt.
+public fun shop_id<T>(item: &ShopItem<T>): ID {
+    item.shop_id
+}
+
+/// Returns the ID of the listing that produced this receipt.
+public fun item_listing_id<T>(item: &ShopItem<T>): ID {
+    item.item_listing_id
+}
+
+/// Returns the item type snapshot recorded at mint time.
+public fun shop_item_type<T>(item: &ShopItem<T>): TypeName {
+    item.item_type
+}
+
+/// Returns the listing name snapshot recorded at mint time.
+public fun shop_item_name<T>(item: &ShopItem<T>): String {
+    item.name
+}
+
+/// Returns the timestamp (seconds) when the purchase completed.
+public fun acquired_at<T>(item: &ShopItem<T>): u64 {
+    item.acquired_at
 }
 
 // === Package Functions ===
