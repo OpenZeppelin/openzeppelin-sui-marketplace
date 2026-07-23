@@ -8,17 +8,18 @@ runs:
       uses: actions/cache@v4
       with:
         path: ~/.local/bin/sui
-        key: sui-${{ runner.os }}-${{ env.SUI_CLI_VERSION }}
+        key: sui-${{ runner.os }}-${{ runner.arch }}-${{ env.SUI_CLI_VERSION }}
 
     - name: Install Sui CLI
       if: steps.cache-sui.outputs.cache-hit != 'true'
       run: |
         mkdir -p ~/.local/bin
-        curl -fLJ "https://github.com/MystenLabs/sui/releases/download/mainnet-v${{ env.SUI_CLI_VERSION }}/sui-mainnet-v${{ env.SUI_CLI_VERSION }}-ubuntu-x86_64.tgz" -o sui.tgz
-        tar -xzf sui.tgz
-        chmod +x sui
-        mv sui ~/.local/bin/
-        rm sui.tgz
+        tmp="$(mktemp -d)"
+        curl -fL "https://github.com/MystenLabs/sui/releases/download/mainnet-v${{ env.SUI_CLI_VERSION }}/sui-mainnet-v${{ env.SUI_CLI_VERSION }}-ubuntu-x86_64.tgz" -o "$tmp/sui.tgz"
+        # Extract only the `sui` binary so the other release tools don't litter the workspace.
+        tar -xzf "$tmp/sui.tgz" -C "$tmp" sui
+        install -m 0755 "$tmp/sui" ~/.local/bin/sui
+        rm -rf "$tmp"
       shell: bash
 
     - name: Add Sui to PATH
