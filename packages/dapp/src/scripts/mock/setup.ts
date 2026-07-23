@@ -60,7 +60,6 @@ type SetupLocalCliArgs = {
   itemPackageId?: string
   itemContractPath: string
   pythPackageId?: string
-  pythContractPath: string
   rePublish?: boolean
   useCliPublish?: boolean
 }
@@ -70,16 +69,9 @@ type ExistingState = {
   existingCoins?: CoinArtifact[]
   existingItemPackageId?: string
   existingItemTypes?: ItemTypeArtifact[]
-  existingPythPackageId?: string
   existingPriceFeeds?: PriceFeedArtifact[]
 }
 
-// Where the local Pyth stub lives.
-const DEFAULT_PYTH_CONTRACT_PATH = path.join(
-  process.cwd(),
-  "contracts",
-  "pyth-mock"
-)
 const DEFAULT_COIN_CONTRACT_PATH = path.join(
   process.cwd(),
   "contracts",
@@ -134,9 +126,6 @@ const extendCliArguments = async (
 
   return {
     ...baseScriptArguments,
-    existingPythPackageId: baseScriptArguments.rePublish
-      ? undefined
-      : baseScriptArguments.pythPackageId || mockArtifact.pythPackageId,
     existingCoinPackageId: baseScriptArguments.rePublish
       ? undefined
       : baseScriptArguments.coinPackageId || mockArtifact.coinPackageId,
@@ -324,12 +313,6 @@ runSuiScript(
       description:
         "Package ID of the Pyth Move package on the local localNetwork"
     })
-    .option("pythContractPath", {
-      alias: "pyth-contract-path",
-      type: "string",
-      description: "Path to the local Pyth stub Move package to publish",
-      default: DEFAULT_PYTH_CONTRACT_PATH
-    })
     .option("rePublish", {
       alias: "re-publish",
       type: "boolean",
@@ -362,7 +345,8 @@ const resolveInlinedPythPackageId = async (
       "oracle-market not yet published. Run `pnpm script move:publish --package-path oracle-market --network localnet` before `mock:setup`."
     )
 
-  return normalizeSuiObjectId(oracleMarketArtifact.packageId)
+  // getLatestDeploymentFromArtifact already returns a normalized package id.
+  return oracleMarketArtifact.packageId
 }
 
 const publishMockPackages = async (
@@ -389,10 +373,12 @@ const publishMockPackages = async (
   // oracle-market deployment artifact. We ignore any cached mock-artifact id
   // here because a fresh `move:publish` yields a new package id even without
   // --re-publish, and a stale id would create feeds of the wrong Pyth type.
-  // Use an explicit id as-is (callers may pass an unpadded object id and expect
-  // it echoed back verbatim); only the derived path normalizes.
-  const pythPackageId =
-    cliArguments.pythPackageId ?? (await resolveInlinedPythPackageId(tooling))
+  // Normalize the explicit id too so the derived `PriceInfoObject` type string
+  // matches the (padded) on-chain object type and feeds aren't needlessly
+  // recreated on re-runs.
+  const pythPackageId = cliArguments.pythPackageId
+    ? normalizeSuiObjectId(cliArguments.pythPackageId)
+    : await resolveInlinedPythPackageId(tooling)
 
   await waitForPackageAvailability(
     pythPackageId,

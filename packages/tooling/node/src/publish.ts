@@ -40,6 +40,7 @@ import {
   buildMovePackage,
   clearPublishedEntryForNetwork,
   logLocalnetMoveEnvironmentSyncResult,
+  runClientTestPublish,
   syncLocalnetMoveEnvironmentChainId
 } from "./move.ts"
 import { pickRootNonDependencyArtifact } from "./package.ts"
@@ -309,10 +310,6 @@ const createPublishTransaction = (
 export const runClientPublish = runSuiCli(["client", "publish"])
 
 /**
- * CLI runner for `sui client test-publish`.
- */
-export const runClientTestPublish = runSuiCli(["client", "test-publish"])
-/**
  * Builds the full plan for a publish, including flags, dependency strategy, and package naming.
  */
 const buildPublishPlan = async (
@@ -520,6 +517,22 @@ const buildCliPublishArguments = (plan: PublishPlan): string[] => {
   return args
 }
 
+// Sui CLI error prose that signals a `sui client publish` failure the ephemeral
+// `sui client test-publish` fallback can recover from. These are the CLI's own
+// English messages and are therefore CLI-version-dependent (validated against
+// Sui CLI 1.70–1.75); a future reword may require updating them. Matching is a
+// heuristic layered on stable signals: the retry only runs after exitCode !== 0
+// and when shouldUseUnpublishedDependencies is set, and the fallback fails
+// loudly, so a stale marker degrades gracefully rather than silently.
+const TEST_PUBLISH_RETRY_MARKERS = {
+  // Sui CLI ≤ 1.69: an unpublished dependency's Move.toml lacked the build env.
+  unpublishedEnvMissing: ["Environment `", "is not present in Move.toml"],
+  // Sui CLI ≥ 1.70: persistent `client publish` rejects the ephemeral build env.
+  ephemeralEnvRejected: "does not define an",
+  // Sui CLI ≥ 1.75: `--build-env` is no longer allowed on `client publish`.
+  buildEnvNotAllowed: "--build-env` argument is not allowed"
+} as const
+
 const shouldRetryViaTestPublish = ({
   plan,
   stdout,
@@ -532,22 +545,20 @@ const shouldRetryViaTestPublish = ({
   // The ephemeral `sui client test-publish` fallback only applies to localnet
   // publishes that bundle unpublished local dependencies. Gate every branch on
   // this so unrelated failures (or shared-network publishes) that happen to
-  // contain one of the substrings below never trigger a spurious retry.
+  // contain one of the markers never trigger a spurious retry.
   if (!plan.shouldUseUnpublishedDependencies) return false
 
   const combined = `${stdout ?? ""}\n${stderr ?? ""}`
-  // Sui CLI ≤ 1.69: `sui client publish` failed because an unpublished
-  // dependency's Move.toml had no entry for the build env we passed.
   if (
-    combined.includes("Environment `") &&
-    combined.includes("is not present in Move.toml")
+    TEST_PUBLISH_RETRY_MARKERS.unpublishedEnvMissing.every((marker) =>
+      combined.includes(marker)
+    )
   )
     return true
-  // Sui CLI ≥ 1.70: persistent `sui client publish` rejects ephemeral build
-  // envs. The `[environments] test-publish = "..."` entry we use on localnet
-  // is meant to flow through `sui client test-publish`, so retry there.
-  if (combined.includes("does not define an")) return true
-  if (combined.includes("--build-env` argument is not allowed")) return true
+  if (combined.includes(TEST_PUBLISH_RETRY_MARKERS.ephemeralEnvRejected))
+    return true
+  if (combined.includes(TEST_PUBLISH_RETRY_MARKERS.buildEnvNotAllowed))
+    return true
   return false
 }
 
