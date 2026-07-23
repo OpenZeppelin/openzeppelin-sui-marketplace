@@ -25,7 +25,10 @@ import { assertLocalnetNetwork } from "@sui-oracle-market/tooling-core/network"
 import { objectTypeMatches } from "@sui-oracle-market/tooling-core/object"
 import type { WrappedSuiSharedObject } from "@sui-oracle-market/tooling-core/shared-object"
 import { wait } from "@sui-oracle-market/tooling-core/utils/utility"
-import { readArtifact } from "@sui-oracle-market/tooling-node/artifacts"
+import {
+  getLatestDeploymentFromArtifact,
+  readArtifact
+} from "@sui-oracle-market/tooling-node/artifacts"
 import {
   DEFAULT_TX_GAS_BUDGET,
   SUI_COIN_REGISTRY_ID
@@ -57,7 +60,6 @@ type SetupLocalCliArgs = {
   itemPackageId?: string
   itemContractPath: string
   pythPackageId?: string
-  pythContractPath: string
   rePublish?: boolean
   useCliPublish?: boolean
 }
@@ -67,16 +69,9 @@ type ExistingState = {
   existingCoins?: CoinArtifact[]
   existingItemPackageId?: string
   existingItemTypes?: ItemTypeArtifact[]
-  existingPythPackageId?: string
   existingPriceFeeds?: PriceFeedArtifact[]
 }
 
-// Where the local Pyth stub lives.
-const DEFAULT_PYTH_CONTRACT_PATH = path.join(
-  process.cwd(),
-  "contracts",
-  "pyth-mock"
-)
 const DEFAULT_COIN_CONTRACT_PATH = path.join(
   process.cwd(),
   "contracts",
@@ -131,9 +126,6 @@ const extendCliArguments = async (
 
   return {
     ...baseScriptArguments,
-    existingPythPackageId: baseScriptArguments.rePublish
-      ? undefined
-      : baseScriptArguments.pythPackageId || mockArtifact.pythPackageId,
     existingCoinPackageId: baseScriptArguments.rePublish
       ? undefined
       : baseScriptArguments.coinPackageId || mockArtifact.coinPackageId,
@@ -238,18 +230,19 @@ runSuiScript(
         "--buyer-address not supplied and SUI_BUYER_ACCOUNT_* not set; skipping fund transfer"
       )
 
-    // Ensure mock price feeds exist with fresh timestamps; reuse if valid objects already present.
-    const priceFeeds =
-      existingState.existingPriceFeeds ||
-      (await ensurePriceFeeds(
-        {
-          pythPackageId,
-          signer: tooling.loadedEd25519KeyPair,
-          clockObject,
-          existingPriceFeeds: existingState.existingPriceFeeds || []
-        },
-        tooling
-      ))
+    // Ensure mock price feeds exist with fresh timestamps. Always validate:
+    // ensurePriceFeeds reuses feeds whose on-chain type matches the current
+    // pyth package id and recreates any that are missing or mismatched (e.g.
+    // after oracle-market was republished at a new address).
+    const priceFeeds = await ensurePriceFeeds(
+      {
+        pythPackageId,
+        signer: tooling.loadedEd25519KeyPair,
+        clockObject,
+        existingPriceFeeds: existingState.existingPriceFeeds || []
+      },
+      tooling
+    )
 
     // Keep all mock feeds aligned with the configured values (even when reusing existing objects).
     await refreshPriceFeeds(
@@ -320,12 +313,6 @@ runSuiScript(
       description:
         "Package ID of the Pyth Move package on the local localNetwork"
     })
-    .option("pythContractPath", {
-      alias: "pyth-contract-path",
-      type: "string",
-      description: "Path to the local Pyth stub Move package to publish",
-      default: DEFAULT_PYTH_CONTRACT_PATH
-    })
     .option("rePublish", {
       alias: "re-publish",
       type: "boolean",
@@ -342,6 +329,26 @@ runSuiScript(
     .strict()
 )
 
+// The oracle-market package name recorded in deployment artifacts.
+const ORACLE_MARKET_PACKAGE_NAME = "sui_oracle_market"
+
+// Derives the inlined Pyth package id from the latest oracle-market deployment.
+const resolveInlinedPythPackageId = async (
+  tooling: Tooling
+): Promise<string> => {
+  const oracleMarketArtifact = await getLatestDeploymentFromArtifact(
+    ORACLE_MARKET_PACKAGE_NAME
+  )(tooling.suiConfig.network.networkName)
+
+  if (!oracleMarketArtifact)
+    throw new Error(
+      "oracle-market not yet published. Run `pnpm script move:publish --package-path oracle-market --network localnet` before `mock:setup`."
+    )
+
+  // getLatestDeploymentFromArtifact already returns a normalized package id.
+  return oracleMarketArtifact.packageId
+}
+
 const publishMockPackages = async (
   {
     cliArguments,
@@ -352,30 +359,39 @@ const publishMockPackages = async (
   },
   tooling: Tooling
 ) => {
-  // Publish or reuse the local Pyth stub. We allow unpublished deps here because this is localnet-only.
-  const pythPackageId =
-    existingState.existingPythPackageId ||
-    (
-      await tooling.publishMovePackageWithFunding({
-        packagePath: cliArguments.pythContractPath,
-        withUnpublishedDependencies: true,
-        clearPublishedEntry: true,
-        useCliPublish: cliArguments.useCliPublish
-      })
-    ).packageId
+  // The oracle-market publish (run first via `pnpm script move:publish
+  // --package-path oracle-market`) inlines the pyth-mock bytecode into its own
+  // package address via `--with-unpublished-dependencies` plus the
+  // `dep-replacements.test-publish` local override. The Pyth `price_info`
+  // module therefore lives at the oracle-market package id, so we point the
+  // mock price feeds at that id instead of republishing a standalone pyth-mock
+  // whose `PriceInfoObject` type would mismatch the shop.
+  //
+  // Prefer an explicitly provided `--pyth-package-id`: integration fixtures
+  // pass the inlined pyth id they already derived from their own oracle-market
+  // publish. Otherwise (the bootstrap flow) re-derive it from the latest
+  // oracle-market deployment artifact. We ignore any cached mock-artifact id
+  // here because a fresh `move:publish` yields a new package id even without
+  // --re-publish, and a stale id would create feeds of the wrong Pyth type.
+  // Normalize the explicit id too so the derived `PriceInfoObject` type string
+  // matches the (padded) on-chain object type and feeds aren't needlessly
+  // recreated on re-runs.
+  const pythPackageId = cliArguments.pythPackageId
+    ? normalizeSuiObjectId(cliArguments.pythPackageId)
+    : await resolveInlinedPythPackageId(tooling)
 
-  if (pythPackageId !== existingState.existingPythPackageId)
-    await waitForPackageAvailability(
-      pythPackageId,
-      tooling.suiClient,
-      "pyth-mock"
-    )
+  await waitForPackageAvailability(
+    pythPackageId,
+    tooling.suiClient,
+    "oracle-market"
+  )
 
-  if (pythPackageId !== existingState.existingPythPackageId)
-    await writeMockArtifact(mockArtifactPath, {
-      pythPackageId
-    })
+  await writeMockArtifact(mockArtifactPath, {
+    pythPackageId
+  })
 
+  // coin-mock and item-examples are not dependencies of oracle-market, so they
+  // stay standalone packages (idempotent: reuse the cached id when present).
   // Publish or reuse the local mock coin package.
   const coinPackageId =
     existingState.existingCoinPackageId ||

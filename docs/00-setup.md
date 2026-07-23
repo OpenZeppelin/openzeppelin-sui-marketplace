@@ -6,7 +6,7 @@ This chapter gets your environment ready and walks through a complete localnet r
 
 ## 1. Learning goals
 
-1. Install the Sui CLI (1.67.x) and verify it works.
+1. Install the Sui CLI (1.75.x) and verify it works.
 2. Create and fund an address for localnet/testnet use.
 3. Install dependencies and publish the Move package.
 4. Seed mock coins + Pyth data and run the UI.
@@ -18,14 +18,14 @@ This chapter gets your environment ready and walks through a complete localnet r
 - Sui CLI [Install](https://docs.sui.io/guides/developer/getting-started/sui-install)
 - Optional vs code extension [Install](https://docs.sui.io/references/ide/move)
 
-## 3. Install Sui CLI (1.67.x)
+## 3. Install Sui CLI (1.75.x)
 
-This repo is tested against Sui CLI **1.67.x**. Pin a specific patch version so upgrades do not surprise you.
+This repo is tested against Sui CLI **1.75.x** (mainnet channel). Pin a specific patch version so upgrades do not surprise you.
 
 ```bash
-curl -sSfL https://raw.githubusercontent.com/Mystenlabs/suiup/main/install.sh | sh
+curl -sSfL https://raw.githubusercontent.com/MystenLabs/suiup/main/install.sh | sh
 suiup list
-suiup install sui@testnet
+suiup install sui@mainnet-1.75.2
 sui --version
 ```
 
@@ -128,7 +128,7 @@ The published package ID is written to:
   "dependencyAddresses": {},
   "withUnpublishedDependencies": true,
   "unpublishedDependencies": [],
-  "suiCliVersion": "1.63.1-a14d9e8ddadf",
+  "suiCliVersion": "1.75.2-027e13b2c140",
   "explorerUrl": "https://explorer.sui.io/txblock/54ngfCMuc1n1LrV4F8Y1Bukipuq8HayLBGirTT4LhnYD?network=localnet"
 }
 ```
@@ -143,7 +143,7 @@ pnpm script owner:shop:seed
 ```
 
 The created objects are saved in:
-`packages/dapp/deployments/object.localnet.json`
+`packages/dapp/deployments/objects.localnet.json`
 
 ```json
 [

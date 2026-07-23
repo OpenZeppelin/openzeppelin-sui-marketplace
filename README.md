@@ -27,7 +27,7 @@ Workspace layering rules and folder layout: [`docs/01-repo-layout.md`](docs/01-r
 
 - Node.js 22+ [Install](https://nodejs.org/en/download)
 - pnpm [Install](https://pnpm.io/installation)
-- Sui CLI 1.67.x [Install](https://docs.sui.io/guides/developer/getting-started/sui-install)
+- Sui CLI 1.75.x [Install](https://docs.sui.io/guides/developer/getting-started/sui-install)
 - Browser wallet — [Slush](https://slush.app/) (or any Sui-compatible wallet extension) for connecting to the UI
 
 ## Localnet Quickstart

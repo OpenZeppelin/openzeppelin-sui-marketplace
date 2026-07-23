@@ -354,10 +354,11 @@ const maybeSetDedicatedGasForSuiPayments = async ({
   ]
 
   const minimumGasBalance = BigInt(gasBudget ?? DEFAULT_TX_GAS_BUDGET)
-  const minimumPaymentAmount = requireValue(
-    paymentAmount,
-    "SUI checkout is missing its required payment amount."
-  )
+  // A fully discounted (zero-price) checkout is valid, so accept 0n here and
+  // reject only a genuinely absent amount. requireValue treats 0n as missing.
+  if (paymentAmount === undefined)
+    throw new Error("SUI checkout is missing its required payment amount.")
+  const minimumPaymentAmount = paymentAmount
   const totalGasBalance = orderedGasCoins.reduce(
     (total, coin) => total + coin.balance,
     0n
