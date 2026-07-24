@@ -110,6 +110,46 @@ export const createPythClient = ({
   wormholeStateId: string
 }) => new SuiPythClient(suiClient, pythStateId, wormholeStateId)
 
+/**
+ * Builds a `SuiPythClient` for the current network so callers can resolve a
+ * PriceInfoObject id straight from a feed id -- no on-chain pyth object id is
+ * stored anymore. On localnet the mock Pyth `State` exposes the same
+ * `b"price_info"` dynamic-object-field registry as real Pyth, so the state id
+ * doubles as the wormhole arg (wormhole is unused by `getPriceFeedObjectId`).
+ * On testnet/mainnet the real `pythStateId`/`wormholeStateId` come from the
+ * resolved pull-oracle config. Returns undefined when the network has no Pyth
+ * configuration (e.g. localnet without a seeded state id).
+ */
+export const createPythClientForNetwork = ({
+  suiClient,
+  networkName,
+  localnetPythStateId,
+  pythConfigOverride
+}: {
+  suiClient: SuiClient
+  networkName: string
+  localnetPythStateId?: string
+  pythConfigOverride?: PythPullOracleConfig
+}): SuiPythClient | undefined => {
+  if (networkName === "localnet") {
+    if (!localnetPythStateId) return undefined
+    return createPythClient({
+      suiClient,
+      pythStateId: localnetPythStateId,
+      wormholeStateId: localnetPythStateId
+    })
+  }
+
+  const config = resolvePythPullOracleConfig(networkName, pythConfigOverride)
+  if (!config) return undefined
+
+  return createPythClient({
+    suiClient,
+    pythStateId: config.pythStateId,
+    wormholeStateId: config.wormholeStateId
+  })
+}
+
 export type PythPriceFeedUpdateData = Awaited<
   ReturnType<SuiPriceServiceConnection["getPriceFeedsUpdateData"]>
 >

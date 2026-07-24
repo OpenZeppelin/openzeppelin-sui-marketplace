@@ -10,8 +10,10 @@ import {
   EXPLORER_URL_VARIABLE_NAME,
   LOCALNET_CONTRACT_PACKAGE_ID,
   LOCALNET_EXPLORER_URL,
+  LOCALNET_PYTH_STATE_ID,
   MAINNET_CONTRACT_PACKAGE_ID,
   MAINNET_EXPLORER_URL,
+  PYTH_STATE_ID_VARIABLE_NAME,
   TESTNET_CONTRACT_PACKAGE_ID,
   TESTNET_EXPLORER_URL
 } from "../config/network"
@@ -31,28 +33,32 @@ const useNetworkConfig = () => {
       url: getFullnodeUrl(ENetwork.LOCALNET),
       variables: {
         [CONTRACT_PACKAGE_VARIABLE_NAME]: LOCALNET_CONTRACT_PACKAGE_ID,
-        [EXPLORER_URL_VARIABLE_NAME]: LOCALNET_EXPLORER_URL
+        [EXPLORER_URL_VARIABLE_NAME]: LOCALNET_EXPLORER_URL,
+        [PYTH_STATE_ID_VARIABLE_NAME]: LOCALNET_PYTH_STATE_ID
       }
     },
     [ENetwork.DEVNET]: {
       url: getFullnodeUrl(ENetwork.DEVNET),
       variables: {
         [CONTRACT_PACKAGE_VARIABLE_NAME]: DEVNET_CONTRACT_PACKAGE_ID,
-        [EXPLORER_URL_VARIABLE_NAME]: DEVNET_EXPLORER_URL
+        [EXPLORER_URL_VARIABLE_NAME]: DEVNET_EXPLORER_URL,
+        [PYTH_STATE_ID_VARIABLE_NAME]: ""
       }
     },
     [ENetwork.TESTNET]: {
       url: getFullnodeUrl(ENetwork.TESTNET),
       variables: {
         [CONTRACT_PACKAGE_VARIABLE_NAME]: TESTNET_CONTRACT_PACKAGE_ID,
-        [EXPLORER_URL_VARIABLE_NAME]: TESTNET_EXPLORER_URL
+        [EXPLORER_URL_VARIABLE_NAME]: TESTNET_EXPLORER_URL,
+        [PYTH_STATE_ID_VARIABLE_NAME]: ""
       }
     },
     [ENetwork.MAINNET]: {
       url: getFullnodeUrl(ENetwork.MAINNET),
       variables: {
         [CONTRACT_PACKAGE_VARIABLE_NAME]: MAINNET_CONTRACT_PACKAGE_ID,
-        [EXPLORER_URL_VARIABLE_NAME]: MAINNET_EXPLORER_URL
+        [EXPLORER_URL_VARIABLE_NAME]: MAINNET_EXPLORER_URL,
+        [PYTH_STATE_ID_VARIABLE_NAME]: ""
       }
     }
   }
@@ -66,7 +72,8 @@ const useNetworkConfig = () => {
       url: network.rpcUrl,
       variables: {
         [CONTRACT_PACKAGE_VARIABLE_NAME]: network.contractPackageId,
-        [EXPLORER_URL_VARIABLE_NAME]: network.explorerUrl
+        [EXPLORER_URL_VARIABLE_NAME]: network.explorerUrl,
+        [PYTH_STATE_ID_VARIABLE_NAME]: ""
       }
     }
     return accumulator

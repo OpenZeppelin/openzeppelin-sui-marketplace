@@ -247,16 +247,6 @@ const AvailableFeedsSection = ({
                     {shortenId(currency.feedIdHex, 10, 8)}
                   </div>
                 </div>
-                {currency.pythObjectId ? (
-                  <div>
-                    <div className="text-[0.55rem] uppercase tracking-[0.18em]">
-                      Price info object
-                    </div>
-                    <div className="mt-1 font-semibold text-sds-dark dark:text-sds-light">
-                      {shortenId(currency.pythObjectId)}
-                    </div>
-                  </div>
-                ) : undefined}
                 {registryId ? (
                   <div>
                     <div className="text-[0.55rem] uppercase tracking-[0.18em]">
@@ -274,13 +264,6 @@ const AvailableFeedsSection = ({
                   label="Table Entry"
                   explorerUrl={explorerUrl}
                 />
-                {currency.pythObjectId ? (
-                  <CopyableId
-                    value={currency.pythObjectId}
-                    label="Pyth"
-                    explorerUrl={explorerUrl}
-                  />
-                ) : undefined}
                 {registryId ? (
                   <CopyableId
                     value={registryId}
@@ -479,10 +462,11 @@ const AddCurrencyModal = ({
                 </label>
                 <label className={modalFieldLabelClassName}>
                   <span className={modalFieldTitleClassName}>
-                    Price info object id
+                    Price info object id (optional)
                   </span>
                   <span className={modalFieldDescriptionClassName}>
-                    Shared PriceInfoObject id matching the selected feed.
+                    Resolved automatically from the feed id. If provided, it is
+                    checked to match the resolved PriceInfoObject.
                   </span>
                   <input
                     type="text"
@@ -491,7 +475,7 @@ const AddCurrencyModal = ({
                       handleInputChange("priceInfoObjectId", event.target.value)
                     }
                     onBlur={() => markFieldBlur("priceInfoObjectId")}
-                    placeholder="0x... price info object id"
+                    placeholder="0x... (optional, resolved from feed)"
                     className={clsx(
                       modalFieldInputClassName,
                       shouldShowFieldError(

@@ -3,7 +3,6 @@ import { normalizeCoinType } from "@sui-oracle-market/tooling-core/coin"
 import {
   getSuiObject,
   normalizeOptionalId,
-  normalizeOptionalIdFromValue,
   unwrapMoveObjectFields
 } from "@sui-oracle-market/tooling-core/object"
 import {
@@ -104,7 +103,6 @@ export type AcceptedCurrencySummary = {
   symbol?: string
   decimals?: number
   feedIdHex: string
-  pythObjectId?: string
   maxPriceAgeSecsCap?: string
   maxConfidenceRatioBpsCap?: string
 }
@@ -199,9 +197,6 @@ const buildAcceptedCurrencySummary = ({
     symbol: readMoveStringOrVector(acceptedCurrencyFields.symbol),
     decimals: parseOptionalNumber(acceptedCurrencyFields.decimals),
     feedIdHex: formatVectorBytesAsHex(acceptedCurrencyFields.feed_id),
-    pythObjectId: normalizeOptionalIdFromValue(
-      acceptedCurrencyFields.pyth_object_id
-    ),
     maxPriceAgeSecsCap: formatOptionalNumericValue(
       acceptedCurrencyFields.max_price_age_secs_cap
     ),

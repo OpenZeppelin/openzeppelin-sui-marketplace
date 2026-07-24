@@ -47,7 +47,6 @@ fun discount_redemption_without_listing_restriction_allows_zero_price() {
         &currency,
         &price_info_object,
         test_helpers::primary_feed_id(),
-        price_info_id,
         option::none(),
         option::none(),
     );
@@ -106,7 +105,7 @@ fun discount_redemption_without_listing_restriction_allows_zero_price() {
         events::purchase_completed(
             shop_id,
             listing_id,
-            price_info_id,
+            test_helpers::primary_feed_id(),
             option::some(discount_id),
             minted_item_id,
             0,
@@ -146,7 +145,6 @@ fun discount_redemption_rejects_listing_mismatch() {
         &currency,
         &price_info_object,
         test_helpers::primary_feed_id(),
-        price_info_id,
         option::none(),
         option::none(),
     );
@@ -246,7 +244,6 @@ fun discount_maxed_out_by_redemption() {
         &currency,
         &price_info_object,
         test_helpers::primary_feed_id(),
-        price_info_id,
         option::none(),
         option::none(),
     );
@@ -332,47 +329,6 @@ fun discount_maxed_out_by_redemption() {
     abort
 }
 
-#[test, expected_failure(abort_code = ::sui_oracle_market::shop::EPythObjectMismatch)]
-fun checkout_rejects_price_info_object_from_other_shop() {
-    let mut scn = test_scenario::begin(owner());
-    let (
-        _shop_a_id,
-        _currency_a_id,
-        _listing_a_id,
-        price_info_a_id,
-    ) = setup_shop_with_currency_listing_and_price_info(&mut scn, 100, 1);
-    let (
-        shop_b_id,
-        _currency_b_id,
-        listing_b_id,
-        _price_info_b_id,
-    ) = setup_shop_with_currency_listing_and_price_info(&mut scn, 100, 1);
-
-    let _ = scn.next_tx(second_owner());
-
-    let mut shared_shop_b = scn.take_shared_by_id<shop::Shop>(shop_b_id);
-    let price_info_a: price_info::PriceInfoObject = scn.take_shared_by_id(
-        price_info_a_id,
-    );
-    let clock_obj = test_helpers::create_test_clock_at(scn.ctx(), 10);
-    let payment = coin::mint_for_testing<test_helpers::TestCoin>(1, scn.ctx());
-
-    let (_minted_item, _change_coin) = shared_shop_b.buy_item<
-        test_helpers::TestItem,
-        test_helpers::TestCoin,
-    >(
-        &price_info_a,
-        payment,
-        listing_b_id,
-        option::none(),
-        option::none(),
-        &clock_obj,
-        scn.ctx(),
-    );
-
-    abort
-}
-
 #[test, expected_failure(abort_code = ::sui_oracle_market::shop::EListingNotFound)]
 fun checkout_rejects_listing_not_registered_in_shop() {
     let mut scn = test_scenario::begin(owner());
@@ -399,47 +355,6 @@ fun checkout_rejects_listing_not_registered_in_shop() {
         &price_info,
         payment,
         test_helpers::missing_listing_id(),
-        option::none(),
-        option::none(),
-        &clock_obj,
-        scn.ctx(),
-    );
-
-    abort
-}
-
-#[test, expected_failure(abort_code = ::sui_oracle_market::shop::EPythObjectMismatch)]
-fun checkout_rejects_currency_from_other_shop() {
-    let mut scn = test_scenario::begin(owner());
-    let (
-        shop_a_id,
-        _currency_a_id,
-        listing_a_id,
-        _price_info_a_id,
-    ) = setup_shop_with_currency_listing_and_price_info(&mut scn, 100, 1);
-    let (
-        _shop_b_id,
-        _currency_b_id,
-        _listing_b_id,
-        price_info_b_id,
-    ) = setup_shop_with_currency_listing_and_price_info(&mut scn, 100, 1);
-
-    let _ = scn.next_tx(second_owner());
-
-    let mut shared_shop_a = scn.take_shared_by_id<shop::Shop>(shop_a_id);
-    let price_info_b: price_info::PriceInfoObject = scn.take_shared_by_id(
-        price_info_b_id,
-    );
-    let clock_obj = test_helpers::create_test_clock_at(scn.ctx(), 10);
-    let payment = coin::mint_for_testing<test_helpers::TestCoin>(1, scn.ctx());
-
-    let (_minted_item, _change_coin) = shared_shop_a.buy_item<
-        test_helpers::TestItem,
-        test_helpers::TestCoin,
-    >(
-        &price_info_b,
-        payment,
-        listing_a_id,
         option::none(),
         option::none(),
         &clock_obj,
@@ -542,7 +457,7 @@ fun remove_accepted_currency_emits_removed_event_fields() {
     let owner_cap_obj = scn.take_from_sender_by_id(
         owner_cap_id,
     );
-    let pyth_object_id = test_helpers::add_test_coin_accepted_currency_for_scenario(
+    let _ = test_helpers::add_test_coin_accepted_currency_for_scenario(
         &mut scn,
         &mut shop_obj,
         &owner_cap_obj,
@@ -568,7 +483,7 @@ fun remove_accepted_currency_emits_removed_event_fields() {
     assert_emitted!(
         events::accepted_coin_removed(
             shared_shop.id(),
-            pyth_object_id,
+            test_helpers::primary_feed_id(),
         ),
     );
 
@@ -633,7 +548,6 @@ fun setup_shop_with_currency_listing_and_price_info_for_item<TItem: store>(
         &currency,
         &price_info_object,
         test_helpers::primary_feed_id(),
-        price_info_id,
         option::none(),
         option::none(),
     );
@@ -660,7 +574,7 @@ fun buy_item_emits_events_decrements_stock_and_refunds_change() {
     let mut scn = test_scenario::begin(owner());
     let (
         shop_id,
-        pyth_object_id,
+        _pyth_object_id,
         listing_id,
         price_info_id,
     ) = setup_shop_with_currency_listing_and_price_info(&mut scn, 100, 2);
@@ -706,7 +620,7 @@ fun buy_item_emits_events_decrements_stock_and_refunds_change() {
         events::purchase_completed(
             shared_shop.id(),
             listing_id,
-            pyth_object_id,
+            test_helpers::primary_feed_id(),
             option::none(),
             minted_item_id,
             quote_amount,
@@ -788,7 +702,7 @@ fun buy_item_supports_example_car_receipts() {
     let mut scn = test_scenario::begin(owner());
     let (
         shop_id,
-        pyth_object_id,
+        _pyth_object_id,
         listing_id,
         price_info_id,
     ) = setup_shop_with_currency_listing_and_price_info_for_item<test_helpers::Car>(
@@ -838,7 +752,7 @@ fun buy_item_supports_example_car_receipts() {
         events::purchase_completed(
             shared_shop.id(),
             listing_id,
-            pyth_object_id,
+            test_helpers::primary_feed_id(),
             option::none(),
             minted_item_id,
             quote_amount,
@@ -855,7 +769,7 @@ fun buy_item_supports_example_bike_receipts() {
     let mut scn = test_scenario::begin(owner());
     let (
         shop_id,
-        pyth_object_id,
+        _pyth_object_id,
         listing_id,
         price_info_id,
     ) = setup_shop_with_currency_listing_and_price_info_for_item<test_helpers::Bike>(
@@ -905,7 +819,7 @@ fun buy_item_supports_example_bike_receipts() {
         events::purchase_completed(
             shared_shop.id(),
             listing_id,
-            pyth_object_id,
+            test_helpers::primary_feed_id(),
             option::none(),
             minted_item_id,
             quote_amount,
@@ -922,7 +836,7 @@ fun buy_item_emits_events_with_exact_payment_and_zero_change() {
     let mut scn = test_scenario::begin(owner());
     let (
         shop_id,
-        pyth_object_id,
+        _pyth_object_id,
         listing_id,
         price_info_id,
     ) = setup_shop_with_currency_listing_and_price_info(&mut scn, 100, 2);
@@ -967,7 +881,7 @@ fun buy_item_emits_events_with_exact_payment_and_zero_change() {
         events::purchase_completed(
             shared_shop.id(),
             listing_id,
-            pyth_object_id,
+            test_helpers::primary_feed_id(),
             option::none(),
             minted_item_id,
             quote_amount,
@@ -1055,80 +969,6 @@ fun buy_item_rejects_out_of_stock_after_depletion() {
     abort
 }
 
-#[test, expected_failure(abort_code = ::sui_oracle_market::shop::EPythObjectMismatch)]
-fun buy_item_rejects_price_info_object_id_mismatch() {
-    let mut scn = test_scenario::begin(owner());
-    let currency = test_helpers::prepare_test_currency_for_owner(
-        &mut scn,
-        owner(),
-    );
-
-    let (mut shop_obj, owner_cap) = shop::test_setup_shop(
-        owner(),
-        scn.ctx(),
-    );
-    let shop_id = object::id(&shop_obj);
-    let price_info_object = test_helpers::create_price_info_object_for_feed(
-        test_helpers::primary_feed_id(),
-        scn.ctx(),
-    );
-    let price_info_id = price_info_object.uid_to_inner();
-    let other_price_info_object = test_helpers::create_price_info_object_for_feed(
-        test_helpers::primary_feed_id(),
-        scn.ctx(),
-    );
-    let other_price_info_id = other_price_info_object.uid_to_inner();
-
-    shop_obj.add_accepted_currency<test_helpers::TestCoin>(
-        &owner_cap,
-        &currency,
-        &price_info_object,
-        test_helpers::primary_feed_id(),
-        price_info_id,
-        option::none(),
-        option::none(),
-    );
-    std::unit_test::destroy(currency);
-
-    let listing_id = shop_obj.add_item_listing<test_helpers::TestItem>(
-        &owner_cap,
-        b"Mismatch Item".to_string(),
-        100,
-        1,
-        scn.ctx(),
-    );
-
-    transfer::public_share_object(price_info_object);
-    transfer::public_share_object(other_price_info_object);
-    transfer::public_share_object(shop_obj);
-    shop::transfer(owner_cap, @0x0);
-
-    let _ = scn.next_tx(second_owner());
-
-    let mut shared_shop = scn.take_shared_by_id<shop::Shop>(shop_id);
-    let other_price_info_obj = scn.take_shared_by_id(
-        other_price_info_id,
-    );
-
-    let clock_obj = test_helpers::create_test_clock_at(scn.ctx(), 10);
-    let payment = coin::mint_for_testing<test_helpers::TestCoin>(1, scn.ctx());
-
-    let (_minted_item, _change_coin) = shared_shop.buy_item<
-        test_helpers::TestItem,
-        test_helpers::TestCoin,
-    >(
-        &other_price_info_obj,
-        payment,
-        listing_id,
-        option::none(),
-        option::none(),
-        &clock_obj,
-        scn.ctx(),
-    );
-
-    abort
-}
-
 #[test]
 fun buy_item_with_discount_emits_discount_redeemed_and_records_discount_id() {
     let mut scn = test_scenario::begin(owner());
@@ -1156,7 +996,6 @@ fun buy_item_with_discount_emits_discount_redeemed_and_records_discount_id() {
         &currency,
         &price_info_object,
         test_helpers::primary_feed_id(),
-        price_info_id,
         option::none(),
         option::none(),
     );
@@ -1228,7 +1067,7 @@ fun buy_item_with_discount_emits_discount_redeemed_and_records_discount_id() {
         events::purchase_completed(
             shared_shop.id(),
             listing_id,
-            price_info_id,
+            test_helpers::primary_feed_id(),
             option::some(discount_id),
             minted_item_id,
             quote_amount,
@@ -1393,7 +1232,6 @@ fun buy_item_rejects_guardrail_override_above_cap() {
         test_helpers::primary_feed_id(),
         scn.ctx(),
     );
-    let pyth_object_id = price_info_object.uid_to_inner();
 
     let mut shop_obj = scn.take_shared_by_id<shop::Shop>(shop_id);
     let owner_cap_obj = scn.take_from_sender_by_id(
@@ -1406,7 +1244,6 @@ fun buy_item_rejects_guardrail_override_above_cap() {
         &currency,
         &price_info_object,
         test_helpers::primary_feed_id(),
-        pyth_object_id,
         option::some(0),
         option::some(0),
     );
@@ -1455,7 +1292,6 @@ fun buy_item_with_discount_rejects_inactive_discount() {
         &currency,
         &price_info_object,
         test_helpers::primary_feed_id(),
-        price_info_id,
         option::none(),
         option::none(),
     );

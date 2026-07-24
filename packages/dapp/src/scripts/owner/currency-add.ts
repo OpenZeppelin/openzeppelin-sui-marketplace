@@ -82,7 +82,6 @@ runSuiScript(
       shop: shopSharedObject,
       currency: currencySharedObject,
       feedIdBytes: inputs.feedIdBytes,
-      pythObjectId: inputs.priceInfoObjectId,
       priceInfoObject: priceInfoSharedObject,
       ownerCapId: inputs.ownerCapId,
       maxPriceAgeSecsCap: inputs.maxPriceAgeSecsCap,
@@ -166,7 +165,7 @@ runSuiScript(
       alias: ["price-info-object-id", "pyth-object-id"],
       type: "string",
       description:
-        "PriceInfoObject ID for the Pyth feed (shared object). This ID will also be passed as the pyth_object_id argument.",
+        "PriceInfoObject ID for the Pyth feed (shared object). Bound to the accepted currency at registration time.",
       demandOption: true
     })
     .option("maxPriceAgeSecsCap", {

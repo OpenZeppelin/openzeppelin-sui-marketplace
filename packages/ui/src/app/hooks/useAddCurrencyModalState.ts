@@ -20,6 +20,10 @@ import {
   parseAcceptedCurrencyBpsValue,
   parseAcceptedCurrencyGuardrailValue
 } from "@sui-oracle-market/domain-core/models/currency"
+import {
+  createPythClientForNetwork,
+  resolvePythPriceInfoObjectId
+} from "@sui-oracle-market/domain-core/models/pyth-feeds"
 import { buildAddAcceptedCurrencyTransaction } from "@sui-oracle-market/domain-core/ptb/currency"
 import { resolveCurrencyObjectId } from "@sui-oracle-market/tooling-core/coin-registry"
 import {
@@ -35,14 +39,16 @@ import {
   parseOptionalPositiveU64
 } from "@sui-oracle-market/tooling-core/utils/utility"
 import { useCallback, useEffect, useMemo, useState } from "react"
-import { EXPLORER_URL_VARIABLE_NAME } from "../config/network"
+import {
+  EXPLORER_URL_VARIABLE_NAME,
+  PYTH_STATE_ID_VARIABLE_NAME
+} from "../config/network"
 import { getStructLabel, shortenId } from "../helpers/format"
 import {
   resolveCoinTypeInput,
   validateCoinType,
   validateOptionalSuiObjectId,
-  validateRequiredHexBytes,
-  validateRequiredSuiObjectId
+  validateRequiredHexBytes
 } from "../helpers/inputValidation"
 import {
   getLocalnetClient,
@@ -73,7 +79,7 @@ type CurrencyInputs = {
   coinType: string
   feedIdHex: string
   feedIdBytes: number[]
-  priceInfoObjectId: string
+  priceInfoObjectId?: string
   currencyObjectId?: string
   maxPriceAgeSecsCap?: bigint
   maxConfidenceRatioBpsCap?: number
@@ -81,9 +87,10 @@ type CurrencyInputs = {
 
 export type CurrencyTransactionSummary = Omit<
   CurrencyInputs,
-  "currencyObjectId"
+  "currencyObjectId" | "priceInfoObjectId"
 > & {
   currencyObjectId: string
+  priceInfoObjectId: string
   digest: string
   transactionBlock: SuiTransactionBlockResponse
   tableEntryFieldId?: string
@@ -128,7 +135,7 @@ const buildCurrencyFieldErrors = (
   })
   if (feedIdError) errors.feedId = feedIdError
 
-  const priceInfoError = validateRequiredSuiObjectId(
+  const priceInfoError = validateOptionalSuiObjectId(
     formState.priceInfoObjectId,
     "Price info object id"
   )
@@ -189,16 +196,16 @@ const parseCurrencyInputs = (formState: CurrencyFormState): CurrencyInputs => {
   const coinType = normalizeCoinType(resolveCoinTypeInput(formState.coinType))
   const feedIdHex = ensureHexPrefix(formState.feedId.trim())
   const feedIdBytes = assertBytesLength(hexToBytes(feedIdHex), 32)
-  const priceInfoObjectId = normalizeSuiObjectId(
-    formState.priceInfoObjectId.trim()
-  )
+  const priceInfoObjectId = trimToOptional(formState.priceInfoObjectId)
   const currencyObjectId = trimToOptional(formState.currencyObjectId)
 
   return {
     coinType,
     feedIdHex,
     feedIdBytes,
-    priceInfoObjectId,
+    priceInfoObjectId: priceInfoObjectId
+      ? normalizeSuiObjectId(priceInfoObjectId)
+      : undefined,
     currencyObjectId: currencyObjectId
       ? normalizeSuiObjectId(currencyObjectId)
       : undefined,
@@ -267,6 +274,10 @@ export const useAddCurrencyModalState = ({
   const { network } = useSuiClientContext()
   const { useNetworkVariable } = useNetworkConfig()
   const explorerUrl = useNetworkVariable(EXPLORER_URL_VARIABLE_NAME)
+  // Localnet mock Pyth `State` id (empty on real networks). Used to resolve the
+  // PriceInfoObject from the feed id, since shops no longer store an on-chain
+  // pyth object id.
+  const localnetPythStateId = useNetworkVariable(PYTH_STATE_ID_VARIABLE_NAME)
   const signAndExecuteTransaction = useSignAndExecuteTransaction()
   const signTransaction = useSignTransaction()
   const localnetClient = useMemo(() => getLocalnetClient(), [])
@@ -323,7 +334,7 @@ export const useAddCurrencyModalState = ({
   }, [formState.feedId])
 
   const priceInfoPreview = useMemo(() => {
-    if (!formState.priceInfoObjectId.trim()) return "Enter price info object id"
+    if (!formState.priceInfoObjectId.trim()) return "Resolve from feed id"
     return shortenId(formState.priceInfoObjectId.trim())
   }, [formState.priceInfoObjectId])
 
@@ -494,8 +505,42 @@ export const useAddCurrencyModalState = ({
         { objectId: resolvedCurrencyObjectId, mutable: false },
         { suiClient }
       )
+
+      // Resolve the PriceInfoObject from the feed id (the source of truth). A
+      // manually entered price info object id is optional and only cross-checked
+      // against the resolved one here.
+      const pythClient = createPythClientForNetwork({
+        suiClient,
+        networkName: network,
+        localnetPythStateId: localnetPythStateId || undefined
+      })
+      const resolvedPriceInfoObjectId = pythClient
+        ? await resolvePythPriceInfoObjectId({
+            pythClient,
+            feedId: currencyInputs.feedIdHex
+          })
+        : undefined
+      const providedPriceInfoObjectId = currencyInputs.priceInfoObjectId
+
+      if (
+        providedPriceInfoObjectId &&
+        resolvedPriceInfoObjectId &&
+        providedPriceInfoObjectId !== resolvedPriceInfoObjectId
+      )
+        throw new Error(
+          `Provided price info object id ${providedPriceInfoObjectId} does not match the id resolved from feed ${currencyInputs.feedIdHex} (${resolvedPriceInfoObjectId}). Leave it blank to use the resolved object, or correct the id.`
+        )
+
+      const priceInfoObjectId =
+        resolvedPriceInfoObjectId ?? providedPriceInfoObjectId
+
+      if (!priceInfoObjectId)
+        throw new Error(
+          `Could not resolve a PriceInfoObject for feed ${currencyInputs.feedIdHex} on ${network}. Provide the price info object id explicitly or ensure the feed is registered with Pyth.`
+        )
+
       const priceInfoShared = await getSuiSharedObject(
-        { objectId: currencyInputs.priceInfoObjectId, mutable: false },
+        { objectId: priceInfoObjectId, mutable: false },
         { suiClient }
       )
 
@@ -506,7 +551,6 @@ export const useAddCurrencyModalState = ({
         coinType: currencyInputs.coinType,
         currency: currencyShared,
         feedIdBytes: currencyInputs.feedIdBytes,
-        pythObjectId: priceInfoShared.object.objectId,
         priceInfoObject: priceInfoShared,
         maxPriceAgeSecsCap: currencyInputs.maxPriceAgeSecsCap,
         maxConfidenceRatioBpsCap: currencyInputs.maxConfidenceRatioBpsCap
@@ -565,6 +609,7 @@ export const useAddCurrencyModalState = ({
         summary: {
           ...currencyInputs,
           currencyObjectId: resolvedCurrencyObjectId,
+          priceInfoObjectId,
           digest,
           transactionBlock,
           tableEntryFieldId: acceptedCurrencySummary?.tableEntryFieldId
@@ -605,6 +650,7 @@ export const useAddCurrencyModalState = ({
     hasFieldErrors,
     isLocalnet,
     localnetExecutor,
+    localnetPythStateId,
     network,
     onCurrencyCreated,
     shopId,

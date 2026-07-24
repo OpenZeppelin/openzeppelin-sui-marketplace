@@ -1059,7 +1059,6 @@ const ensureAcceptedCurrency = async ({
         shop: shopSharedObject,
         currency: currencySharedObject,
         feedIdBytes: inputs.feedIdBytes,
-        pythObjectId: inputs.priceInfoObjectId,
         priceInfoObject: priceInfoSharedObject,
         ownerCapId: inputs.ownerCapId,
         maxPriceAgeSecsCap: inputs.maxPriceAgeSecsCap,

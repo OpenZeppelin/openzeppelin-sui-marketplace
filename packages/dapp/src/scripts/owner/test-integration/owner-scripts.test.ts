@@ -57,7 +57,6 @@ type ExpectedAcceptedCurrencyFields = {
   coinType: string
   feedIdHex: string
   tableEntryFieldId?: string
-  pythObjectId?: string
   maxPriceAgeSecsCap?: string
   maxConfidenceRatioBpsCap?: string
 }
@@ -122,8 +121,7 @@ describe("owner scripts integration", () => {
       expectAcceptedCurrencyMatches(currencyAddPayload.acceptedCurrency, {
         coinType: acceptedCurrency.coinType,
         feedIdHex: acceptedCurrency.feedIdHex,
-        tableEntryFieldId: acceptedCurrency.tableEntryFieldId,
-        pythObjectId: acceptedCurrency.priceInfoObjectId
+        tableEntryFieldId: acceptedCurrency.tableEntryFieldId
       })
     })
   })

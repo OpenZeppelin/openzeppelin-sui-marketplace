@@ -21,8 +21,10 @@ import {
   resolvePaymentCoinObjectId
 } from "@sui-oracle-market/domain-core/flows/buy"
 import {
+  createPythClientForNetwork,
   fetchPythBaseUpdateFee,
-  fetchPythPriceFeedUpdateData
+  fetchPythPriceFeedUpdateData,
+  resolvePythPriceInfoObjectId
 } from "@sui-oracle-market/domain-core/models/pyth-feeds"
 import {
   normalizeCoinType,
@@ -51,13 +53,15 @@ import {
 } from "@sui-oracle-market/tooling-core/constants"
 import {
   deriveRelevantPackageId,
-  getSuiObject,
-  normalizeIdOrThrow
+  getSuiObject
 } from "@sui-oracle-market/tooling-core/object"
 import { getSuiSharedObject } from "@sui-oracle-market/tooling-core/shared-object"
 import { ENetwork } from "@sui-oracle-market/tooling-core/types"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-import { EXPLORER_URL_VARIABLE_NAME } from "../config/network"
+import {
+  EXPLORER_URL_VARIABLE_NAME,
+  PYTH_STATE_ID_VARIABLE_NAME
+} from "../config/network"
 import { parseBalance } from "../helpers/balance"
 import { buildDiscountLookup } from "../helpers/discounts"
 import { formatCoinBalance, getStructLabel } from "../helpers/format"
@@ -212,6 +216,10 @@ export const useBuyFlowModalState = ({
   const { network } = useSuiClientContext()
   const { useNetworkVariable } = useNetworkConfig()
   const explorerUrl = useNetworkVariable(EXPLORER_URL_VARIABLE_NAME)
+  // Localnet mock Pyth `State` id (empty on real networks). Used to resolve each
+  // accepted currency's PriceInfoObject from its feed id -- shops no longer
+  // store an on-chain pyth object id.
+  const localnetPythStateId = useNetworkVariable(PYTH_STATE_ID_VARIABLE_NAME)
   const signAndExecuteTransaction = useSignAndExecuteTransaction()
   const signTransaction = useSignTransaction()
   const localnetClient = useMemo(() => getLocalnetClient(), [])
@@ -295,6 +303,39 @@ export const useBuyFlowModalState = ({
       )
     },
     [suiClient]
+  )
+
+  // Resolve the shared PriceInfoObject for a currency from its feed id hex. The
+  // mock Pyth `State` on localnet exposes the same `b"price_info"` registry as
+  // real Pyth, so `getPriceFeedObjectId(feedId)` resolves identically across
+  // networks (via the network-aware client).
+  const resolvePythPriceInfoShared = useCallback(
+    async (currency: { coinType: string; feedIdHex: string }) => {
+      const pythClient = createPythClientForNetwork({
+        suiClient,
+        networkName: network,
+        localnetPythStateId: localnetPythStateId || undefined
+      })
+      if (!pythClient)
+        throw new Error(
+          `No Pyth configuration for network ${network}; cannot resolve a PriceInfoObject for ${currency.coinType}.`
+        )
+
+      const pythPriceInfoObjectId = await resolvePythPriceInfoObjectId({
+        pythClient,
+        feedId: currency.feedIdHex
+      })
+      if (!pythPriceInfoObjectId)
+        throw new Error(
+          `No Pyth PriceInfoObject found for feed ${currency.feedIdHex} (currency ${currency.coinType}).`
+        )
+
+      return getSuiSharedObject(
+        { objectId: pythPriceInfoObjectId, mutable: false },
+        { suiClient }
+      )
+    },
+    [suiClient, network, localnetPythStateId]
   )
 
   const walletAddress = currentAccount?.address
@@ -533,14 +574,8 @@ export const useBuyFlowModalState = ({
           { objectId: shopId, mutable: false },
           { suiClient }
         )
-        const pythObjectId = normalizeIdOrThrow(
-          selectedCurrency.pythObjectId,
-          `Accepted currency ${selectedCurrency.coinType} is missing a pyth_object_id.`
-        )
-        const pythPriceInfoShared = await getSuiSharedObject(
-          { objectId: pythObjectId, mutable: false },
-          { suiClient }
-        )
+        const pythPriceInfoShared =
+          await resolvePythPriceInfoShared(selectedCurrency)
         const shopPackageId = deriveRelevantPackageId(shopShared.object.type)
         const clockShared = await getSuiSharedObject(
           { objectId: SUI_CLOCK_ID, mutable: false },
@@ -599,6 +634,7 @@ export const useBuyFlowModalState = ({
     oracleQuoteRefreshIndex,
     quotePriceUpdateMode,
     network,
+    resolvePythPriceInfoShared,
     selectedCurrency,
     selectedDiscount,
     shopId,
@@ -748,14 +784,8 @@ export const useBuyFlowModalState = ({
         { objectId: shopId, mutable: true },
         { suiClient }
       )
-      const pythObjectId = normalizeIdOrThrow(
-        currencySnapshot.pythObjectId,
-        `Accepted currency ${currencySnapshot.coinType} is missing a pyth_object_id.`
-      )
-      const pythPriceInfoShared = await getSuiSharedObject(
-        { objectId: pythObjectId, mutable: false },
-        { suiClient }
-      )
+      const pythPriceInfoShared =
+        await resolvePythPriceInfoShared(currencySnapshot)
 
       const shopPackageId = deriveRelevantPackageId(shopShared.object.type)
       const clockShared = await getSuiSharedObject(
@@ -1015,6 +1045,7 @@ export const useBuyFlowModalState = ({
     quotePriceUpdateMode,
     network,
     refundTo,
+    resolvePythPriceInfoShared,
     selectedCurrency,
     selectedDiscount,
     shopId,

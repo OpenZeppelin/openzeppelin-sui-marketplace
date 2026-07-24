@@ -4,6 +4,7 @@
  * The PTB can update Pyth and then call buy_item/buy_item_with_discount in one atomic flow.
  * Oracle freshness and confidence guardrails are enforced on-chain using PriceInfoObject + Clock.
  */
+import type { SuiClient } from "@mysten/sui/client"
 import { normalizeSuiAddress, normalizeSuiObjectId } from "@mysten/sui/utils"
 import yargs from "yargs"
 
@@ -20,8 +21,10 @@ import {
   requireAcceptedCurrencyByCoinType
 } from "@sui-oracle-market/domain-core/models/currency"
 import {
+  createPythClientForNetwork,
   fetchPythBaseUpdateFee,
-  fetchPythPriceFeedUpdateData
+  fetchPythPriceFeedUpdateData,
+  resolvePythPriceInfoObjectId
 } from "@sui-oracle-market/domain-core/models/pyth-feeds"
 import {
   buildDiscountLookup,
@@ -32,7 +35,10 @@ import {
   getItemListingSummary,
   normalizeListingId
 } from "@sui-oracle-market/domain-core/models/item-listing"
-import type { PriceUpdatePolicy } from "@sui-oracle-market/domain-core/models/pyth"
+import type {
+  PriceUpdatePolicy,
+  PythPullOracleConfig
+} from "@sui-oracle-market/domain-core/models/pyth"
 import { findCreatedShopItemIds } from "@sui-oracle-market/domain-core/models/shop-item"
 import {
   DEFAULT_TX_GAS_BUDGET,
@@ -40,14 +46,12 @@ import {
   SUI_CLOCK_ID
 } from "@sui-oracle-market/tooling-core/constants"
 import type { ObjectArtifact } from "@sui-oracle-market/tooling-core/object"
-import {
-  deriveRelevantPackageId,
-  normalizeIdOrThrow
-} from "@sui-oracle-market/tooling-core/object"
+import { deriveRelevantPackageId } from "@sui-oracle-market/tooling-core/object"
 import {
   parseOptionalU16,
   parseOptionalU64
 } from "@sui-oracle-market/tooling-core/utils/utility"
+import { readArtifact } from "@sui-oracle-market/tooling-node/artifacts"
 import { emitJsonOutput } from "@sui-oracle-market/tooling-node/json"
 import {
   logKeyValueBlue,
@@ -55,6 +59,8 @@ import {
   logKeyValueYellow
 } from "@sui-oracle-market/tooling-node/log"
 import { runSuiScript } from "@sui-oracle-market/tooling-node/process"
+import type { MockArtifact } from "../../utils/mocks.ts"
+import { mockArtifactPath } from "../../utils/mocks.ts"
 import { resolveShopIdOrLatest } from "../../utils/shop-context.ts"
 
 type BuyArguments = {
@@ -98,10 +104,13 @@ runSuiScript(
       suiClient: tooling.suiClient
     })
 
-    const pythPriceInfoObjectId = normalizeIdOrThrow(
-      acceptedCurrencySummary.pythObjectId,
-      `Accepted currency ${acceptedCurrencySummary.coinType} is missing a pyth_object_id.`
-    )
+    const pythPriceInfoObjectId = await resolvePythPriceInfoObjectIdForBuy({
+      networkName: tooling.network.networkName,
+      feedIdHex: acceptedCurrencySummary.feedIdHex,
+      coinType: acceptedCurrencySummary.coinType,
+      suiClient: tooling.suiClient,
+      pythConfigOverride: tooling.suiConfig.network.pyth
+    })
     const pythPriceInfoShared = await tooling.getImmutableSharedObject({
       objectId: pythPriceInfoObjectId
     })
@@ -219,7 +228,7 @@ runSuiScript(
         coinType: inputs.coinType,
         acceptedCurrencyTableEntryFieldId:
           acceptedCurrencySummary.tableEntryFieldId,
-        pythObjectId: pythPriceInfoObjectId,
+        pythPriceInfoObjectId,
         paymentCoinObjectId,
         discountContext
       })
@@ -390,6 +399,59 @@ runSuiScript(
     .strict()
 )
 
+// Resolves the on-chain PriceInfoObject id from the accepted currency's feed id
+// hex -- shops no longer store a pyth object id. On localnet the mock Pyth
+// `State` (recorded in the mock artifact) exposes the same `b"price_info"`
+// registry as real Pyth, so the SDK's `getPriceFeedObjectId(feedId)` resolves
+// identically across networks.
+const resolvePythPriceInfoObjectIdForBuy = async ({
+  networkName,
+  feedIdHex,
+  coinType,
+  suiClient,
+  pythConfigOverride
+}: {
+  networkName: string
+  feedIdHex: string
+  coinType: string
+  suiClient: SuiClient
+  pythConfigOverride?: PythPullOracleConfig
+}): Promise<string> => {
+  const localnetPythStateId =
+    networkName === "localnet"
+      ? (await readArtifact<MockArtifact>(mockArtifactPath, {})).pythStateId
+      : undefined
+
+  if (networkName === "localnet" && !localnetPythStateId)
+    throw new Error(
+      "Missing mock Pyth state id. Run `pnpm script mock:setup --network localnet` before buying on localnet."
+    )
+
+  const pythClient = createPythClientForNetwork({
+    suiClient,
+    networkName,
+    localnetPythStateId,
+    pythConfigOverride
+  })
+
+  if (!pythClient)
+    throw new Error(
+      `No Pyth configuration for network ${networkName}; cannot resolve a PriceInfoObject for ${coinType}.`
+    )
+
+  const pythPriceInfoObjectId = await resolvePythPriceInfoObjectId({
+    pythClient,
+    feedId: feedIdHex
+  })
+
+  if (!pythPriceInfoObjectId)
+    throw new Error(
+      `No Pyth PriceInfoObject found for feed ${feedIdHex} (currency ${coinType}). Seed the feed or verify the feed id.`
+    )
+
+  return pythPriceInfoObjectId
+}
+
 const resolveDiscountedPriceUsdCentsForPurchase = async ({
   shopId,
   listingSummary,
@@ -490,7 +552,7 @@ const logBuyContext = ({
   itemType,
   coinType,
   acceptedCurrencyTableEntryFieldId,
-  pythObjectId,
+  pythPriceInfoObjectId,
   paymentCoinObjectId,
   discountContext
 }: {
@@ -503,7 +565,7 @@ const logBuyContext = ({
   itemType: string
   coinType: string
   acceptedCurrencyTableEntryFieldId: string
-  pythObjectId: string
+  pythPriceInfoObjectId: string
   paymentCoinObjectId: string
   discountContext: DiscountContext
 }) => {
@@ -516,7 +578,7 @@ const logBuyContext = ({
   logKeyValueBlue("Item-type")(itemType)
   logKeyValueBlue("Coin-type")(coinType)
   logKeyValueBlue("Accepted-currency-entry")(acceptedCurrencyTableEntryFieldId)
-  logKeyValueBlue("Pyth-price-info")(pythObjectId)
+  logKeyValueBlue("Pyth-price-info")(pythPriceInfoObjectId)
   logKeyValueBlue("Payment-coin")(paymentCoinObjectId)
 
   if (discountContext.mode === "discount") {

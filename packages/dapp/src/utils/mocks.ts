@@ -5,6 +5,7 @@ import {
 
 export type MockArtifact = Partial<{
   pythPackageId: string
+  pythStateId: string
   coinPackageId: string
   itemPackageId: string
   shop: {

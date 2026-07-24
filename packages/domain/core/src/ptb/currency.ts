@@ -7,7 +7,6 @@ export const buildAddAcceptedCurrencyTransaction = ({
   shop,
   currency,
   feedIdBytes,
-  pythObjectId,
   priceInfoObject,
   ownerCapId,
   maxPriceAgeSecsCap,
@@ -19,7 +18,6 @@ export const buildAddAcceptedCurrencyTransaction = ({
   shop: WrappedSuiSharedObject
   currency: WrappedSuiSharedObject
   feedIdBytes: number[]
-  pythObjectId: string
   priceInfoObject: WrappedSuiSharedObject
   ownerCapId: string
   maxPriceAgeSecsCap?: bigint
@@ -43,7 +41,6 @@ export const buildAddAcceptedCurrencyTransaction = ({
       currencyArgument,
       priceInfoArgument,
       transaction.pure.vector("u8", feedIdBytes),
-      transaction.pure.id(pythObjectId),
       transaction.pure.option("u64", maxPriceAgeSecsCap ?? null),
       transaction.pure.option("u16", maxConfidenceRatioBpsCap ?? null)
     ]

@@ -190,13 +190,21 @@ SHOP_ID=$(node -e '
   console.log(s.objectId);
 ') || { err "Could not find shared Shop object in objects.localnet.json"; exit 1; }
 
+# Mock Pyth State id: the UI resolves each currency's PriceInfoObject from its
+# feed id via this state, so no on-chain pyth object id is needed.
+PYTH_STATE_ID=$(node -e '
+  const m = require("./packages/dapp/deployments/mock.localnet.json");
+  if (!m.pythStateId) process.exit(1);
+  console.log(m.pythStateId);
+') || { err "Could not find pythStateId in mock.localnet.json"; exit 1; }
+
 UI_ENV="packages/ui/.env.local"
 if [ ! -f "$UI_ENV" ]; then
   info "Creating $UI_ENV from example…"
   cp packages/ui/.env.example "$UI_ENV"
 fi
 
-PACKAGE_ID="$PACKAGE_ID" SHOP_ID="$SHOP_ID" UI_ENV="$UI_ENV" node -e '
+PACKAGE_ID="$PACKAGE_ID" SHOP_ID="$SHOP_ID" PYTH_STATE_ID="$PYTH_STATE_ID" UI_ENV="$UI_ENV" node -e '
   const fs = require("fs");
   const path = process.env.UI_ENV;
   let content = fs.readFileSync(path, "utf8");
@@ -211,12 +219,14 @@ PACKAGE_ID="$PACKAGE_ID" SHOP_ID="$SHOP_ID" UI_ENV="$UI_ENV" node -e '
   };
   upsert("NEXT_PUBLIC_LOCALNET_CONTRACT_PACKAGE_ID", process.env.PACKAGE_ID);
   upsert("NEXT_PUBLIC_LOCALNET_SHOP_ID", process.env.SHOP_ID);
+  upsert("NEXT_PUBLIC_LOCALNET_PYTH_STATE_ID", process.env.PYTH_STATE_ID);
   fs.writeFileSync(path, content);
 '
 
 ok "$UI_ENV updated:"
 ok "  NEXT_PUBLIC_LOCALNET_CONTRACT_PACKAGE_ID=$PACKAGE_ID"
 ok "  NEXT_PUBLIC_LOCALNET_SHOP_ID=$SHOP_ID"
+ok "  NEXT_PUBLIC_LOCALNET_PYTH_STATE_ID=$PYTH_STATE_ID"
 
 # ── 8. Done ──────────────────────────────────────────────────────────────────
 echo ""

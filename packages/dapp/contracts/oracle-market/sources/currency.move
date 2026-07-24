@@ -46,8 +46,6 @@ const CENTS_PER_DOLLAR: u128 = 100;
 public struct AcceptedCurrency has drop, store {
     /// Pyth price feed identifier (32 bytes).
     feed_id: vector<u8>,
-    /// ID of Pyth PriceInfoObject.
-    pyth_object_id: ID,
     /// Coin decimal precision from registry metadata.
     decimals: u8,
     /// Display symbol for UIs/logging.
@@ -63,11 +61,6 @@ public struct AcceptedCurrency has drop, store {
 /// Returns the oracle feed identifier bytes for an accepted currency.
 public fun feed_id(currency: &AcceptedCurrency): vector<u8> {
     currency.feed_id
-}
-
-/// Returns the bound Pyth object ID for an accepted currency.
-public fun pyth_object_id(currency: &AcceptedCurrency): ID {
-    currency.pyth_object_id
 }
 
 /// Returns the decimals configured for an accepted currency.
@@ -95,7 +88,6 @@ public fun max_confidence_ratio_bps_cap(currency: &AcceptedCurrency): u16 {
 /// Creates accepted-currency metadata with validated feed and guardrail caps.
 public(package) fun create<C>(
     feed_id: vector<u8>,
-    pyth_object_id: ID,
     currency: &Currency<C>,
     max_price_age_secs_cap: Option<u64>,
     max_confidence_ratio_bps_cap: Option<u16>,
@@ -116,7 +108,6 @@ public(package) fun create<C>(
 
     AcceptedCurrency {
         feed_id,
-        pyth_object_id,
         decimals,
         symbol,
         max_price_age_secs_cap: age_cap,

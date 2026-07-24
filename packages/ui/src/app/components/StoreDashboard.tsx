@@ -489,21 +489,6 @@ const AcceptedCurrenciesPanel = ({
                         showExplorer={false}
                       />
                     </div>
-                    {currency.pythObjectId ? (
-                      <div>
-                        <div className="text-[0.6rem] uppercase tracking-[0.18em]">
-                          Price info
-                        </div>
-                        <CopyableId
-                          value={currency.pythObjectId}
-                          displayValue={shortenId(currency.pythObjectId)}
-                          title="Copy price info id"
-                          className="mt-1 w-full justify-start text-[0.65rem] text-slate-500 dark:text-slate-200/70"
-                          valueClassName="truncate font-semibold text-sds-dark dark:text-sds-light"
-                          explorerUrl={explorerUrl}
-                        />
-                      </div>
-                    ) : undefined}
                   </div>
                   <div className="mt-4 flex flex-wrap items-center gap-3 text-[0.65rem]">
                     <CopyableId
@@ -511,13 +496,6 @@ const AcceptedCurrenciesPanel = ({
                       label="Table Entry"
                       explorerUrl={explorerUrl}
                     />
-                    {currency.pythObjectId ? (
-                      <CopyableId
-                        value={currency.pythObjectId}
-                        label="Pyth"
-                        explorerUrl={explorerUrl}
-                      />
-                    ) : undefined}
                     {registryId ? (
                       <CopyableId
                         value={registryId}

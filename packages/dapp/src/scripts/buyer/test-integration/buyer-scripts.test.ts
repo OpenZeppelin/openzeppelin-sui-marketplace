@@ -157,9 +157,6 @@ describe("buyer scripts integration", () => {
         )
       expect(listedAcceptedCurrency?.coinType).toBe(acceptedCurrency.coinType)
       expect(listedAcceptedCurrency?.feedIdHex).toBe(acceptedCurrency.feedIdHex)
-      expect(listedAcceptedCurrency?.pythObjectId).toBe(
-        acceptedCurrency.priceInfoObjectId
-      )
     })
   })
 
