@@ -305,30 +305,45 @@ export const useBuyFlowModalState = ({
     [suiClient]
   )
 
+  // Caches the feed-id -> PriceInfoObject-id resolution, which is immutable per
+  // network, so repeated quote refreshes skip the `getPriceFeedObjectId` RPC.
+  // The shared object itself is always re-fetched below (its version changes as
+  // price updates land), so only the stable id is memoized.
+  const priceInfoObjectIdCacheRef = useRef<Map<string, string>>(new Map())
+
   // Resolve the shared PriceInfoObject for a currency from its feed id hex. The
   // mock Pyth `State` on localnet exposes the same `b"price_info"` registry as
   // real Pyth, so `getPriceFeedObjectId(feedId)` resolves identically across
   // networks (via the network-aware client).
   const resolvePythPriceInfoShared = useCallback(
     async (currency: { coinType: string; feedIdHex: string }) => {
-      const pythClient = createPythClientForNetwork({
-        suiClient,
-        networkName: network,
-        localnetPythStateId: localnetPythStateId || undefined
-      })
-      if (!pythClient)
-        throw new Error(
-          `No Pyth configuration for network ${network}; cannot resolve a PriceInfoObject for ${currency.coinType}.`
-        )
+      const cacheKey = `${network}:${currency.feedIdHex}`
+      let pythPriceInfoObjectId =
+        priceInfoObjectIdCacheRef.current.get(cacheKey)
 
-      const pythPriceInfoObjectId = await resolvePythPriceInfoObjectId({
-        pythClient,
-        feedId: currency.feedIdHex
-      })
-      if (!pythPriceInfoObjectId)
-        throw new Error(
-          `No Pyth PriceInfoObject found for feed ${currency.feedIdHex} (currency ${currency.coinType}).`
-        )
+      if (!pythPriceInfoObjectId) {
+        const pythClient = createPythClientForNetwork({
+          suiClient,
+          networkName: network,
+          localnetPythStateId: localnetPythStateId || undefined
+        })
+        if (!pythClient)
+          throw new Error(
+            `No Pyth configuration for network ${network}; cannot resolve a PriceInfoObject for ${currency.coinType}.`
+          )
+
+        const resolved = await resolvePythPriceInfoObjectId({
+          pythClient,
+          feedId: currency.feedIdHex
+        })
+        if (!resolved)
+          throw new Error(
+            `No Pyth PriceInfoObject found for feed ${currency.feedIdHex} (currency ${currency.coinType}).`
+          )
+
+        pythPriceInfoObjectId = resolved
+        priceInfoObjectIdCacheRef.current.set(cacheKey, resolved)
+      }
 
       return getSuiSharedObject(
         { objectId: pythPriceInfoObjectId, mutable: false },

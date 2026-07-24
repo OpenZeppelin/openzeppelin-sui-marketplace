@@ -9,6 +9,7 @@ import yargs from "yargs"
 
 import {
   findAcceptedCurrencyByCoinType,
+  getAcceptedCurrencySummaries,
   normalizeCoinType,
   requireAcceptedCurrencyByCoinType,
   type AcceptedCurrencySummary
@@ -22,7 +23,8 @@ import { buildAddAcceptedCurrencyTransaction } from "@sui-oracle-market/domain-c
 import {
   assertBytesLength,
   ensureHexPrefix,
-  hexToBytes
+  hexToBytes,
+  normalizeHex
 } from "@sui-oracle-market/tooling-core/hex"
 import {
   parseOptionalPositiveU16,
@@ -71,6 +73,34 @@ runSuiScript(
         coinType: inputs.coinType,
         existingAcceptedCurrency
       })
+      return
+    }
+
+    // The shop enforces one currency per feed on-chain (EFeedIdentifierExists).
+    // Short-circuit here so a new coin reusing an already-bound feed gets a
+    // friendly message instead of an on-chain abort, mirroring the coin-type case.
+    const currencyUsingFeed = (
+      await getAcceptedCurrencySummaries(inputs.shopId, tooling.suiClient)
+    ).find(
+      (summary) =>
+        normalizeHex(summary.feedIdHex) === normalizeHex(inputs.feedIdHex)
+    )
+    if (currencyUsingFeed) {
+      if (
+        emitJsonOutput(
+          {
+            status: "feed-already-registered",
+            feedId: inputs.feedIdHex,
+            coinType: inputs.coinType,
+            acceptedCurrency: currencyUsingFeed
+          },
+          cliArguments.json
+        )
+      )
+        return
+
+      logKeyValueGreen("feed already registered by")(currencyUsingFeed.coinType)
+      logKeyValueGreen("feed id")(inputs.feedIdHex)
       return
     }
 
@@ -139,7 +169,7 @@ runSuiScript(
       emitJsonOutput(
         {
           acceptedCurrency: acceptedCurrencySummary,
-          feedId: cliArguments.feedId,
+          feedId: inputs.feedIdHex,
           digest: execution.transactionResult.digest,
           transactionSummary: summary
         },
@@ -149,7 +179,7 @@ runSuiScript(
       return
 
     logAcceptedCurrencySummary(acceptedCurrencySummary)
-    logKeyValueGreen("feed id")(cliArguments.feedId)
+    logKeyValueGreen("feed id")(inputs.feedIdHex)
     logKeyValueGreen("digest")(execution.transactionResult.digest)
   },
   yargs()

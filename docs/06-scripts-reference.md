@@ -169,7 +169,7 @@ Owner scripts default `--shop-package-id`, `--shop-id`, and `--owner-cap-id` fro
   - `--shop-name <string>`: shop name stored on-chain when creating a new shop (defaults to `Shop`).
   - `--shop-id <id>` / `--owner-cap-id <id>`: seed an existing shop.
   - `--item-package-id <id>`: item-examples package ID for typed listings (defaults to the latest `item_examples` publish).
-  - `--max-price-age-secs-cap <u64>` / `--max-confidence-ratio-bps-cap <u64>` / `--max-price-status-lag-secs-cap <u64>`: optional per-currency guardrails when registering AcceptedCurrency.
+  - `--max-price-age-secs-cap <u64>` / `--max-confidence-ratio-bps-cap <u64>`: optional per-currency guardrails when registering AcceptedCurrency.
 
 ### `pnpm script owner:shop:update-owner`
 
@@ -198,7 +198,7 @@ Owner scripts default `--shop-package-id`, `--shop-id`, and `--owner-cap-id` fro
   - `--feed-id <hex>`: 32-byte Pyth feed ID as hex (required).
   - `--price-info-object-id <id>`: shared Pyth `PriceInfoObject` ID (optional). The object is resolved from the feed id by default; if provided, it is cross-checked against the resolved object and rejected on mismatch.
   - `--currency-object-id <id>`: coin registry `Currency` object (defaults to the derived `CurrencyKey<T>`).
-  - `--max-price-age-secs-cap <u64>` / `--max-confidence-ratio-bps-cap <u64>` / `--max-price-status-lag-secs-cap <u64>`: optional guardrail caps.
+  - `--max-price-age-secs-cap <u64>` / `--max-confidence-ratio-bps-cap <u64>`: optional guardrail caps.
   - `--shop-package-id <id>` / `--shop-id <id>` / `--owner-cap-id <id>`: override artifact defaults.
 
 **Pyth setup flow (feed discovery → currency registration)**

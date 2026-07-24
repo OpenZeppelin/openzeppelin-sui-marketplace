@@ -87,10 +87,8 @@ public fun listing_exists(shop: &Shop, listing_id: ID): bool {
   shop.listings.contains(listing_id)
 }
 
-public fun currency_exists(
-  shop: &Shop,
-  coin_type: TypeName,
-): bool {
+public fun currency_exists<C>(shop: &Shop): bool {
+  let coin_type = type_name::with_defining_ids<C>();
   shop.accepted_currencies.contains(coin_type)
 }
 ```
