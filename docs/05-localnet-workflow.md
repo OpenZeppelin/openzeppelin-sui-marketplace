@@ -315,21 +315,20 @@ Where to find values:
 - `discountId`: `objects.localnet.json` entry with `objectType` ending in `::discount::Discount`
 - If you scoped the discount, `--listing-id` should be the `itemListingId` from step 6.
 
-### 8) Attach the discount to a listing (spotlight)
+### 8) Flag the discount as a spotlight
 
 ```bash
-pnpm script owner:item-listing:attach-discount \
-  --item-listing-id <ITEM_LISTING_ID_U64> \
-  --discount-id <DISCOUNT_ID>
+pnpm script owner:discount:set-spotlight \
+  --discount-id <DISCOUNT_ID> \
+  --spotlight
 ```
 
 What it does:
 
-- Updates the listing to reference the discount so it is spotlighted.
+- Sets the discount's `is_spotlight` flag, marking it a spotlight candidate. Storefronts feature, per listing, the oldest-starting active spotlighted discount, so setting the flag does not guarantee this discount is the one shown. Spotlight is a per-discount boolean, so no listing is modified. Use `--no-spotlight` to unfeature it.
 
 Where to find values:
 
-- `ITEM_LISTING_ID`: from step 6 (script output or `buyer:item-listing:list`)
 - `DISCOUNT_ID`: from step 7 (`objects.localnet.json` or script output)
 
 ### 9) Transfer mock coins from owner to buyer

@@ -22,7 +22,6 @@ const EOutOfStock: vector<u8> = "out of stock";
 // === Structs ===
 
 /// Item listing metadata keyed under the shared `Shop`, used to mint specific items on purchase.
-/// Discounts can be attached to highlight promotions in the UI.
 public struct ItemListing has drop, store {
     /// Stable listing identifier.
     id: ID,
@@ -34,10 +33,8 @@ public struct ItemListing has drop, store {
     base_price_usd_cents: u64,
     /// Remaining inventory for this listing.
     stock: u64,
-    /// Number of discounts currently counted against this listing.
+    /// Number of listing-scoped discounts currently counted against this listing.
     discount_count: u64,
-    /// Optional discount highlighted in storefront UIs.
-    spotlight_discount_id: Option<ID>,
 }
 
 /// Shop item type for receipts. `T` is enforced at mint time so downstream
@@ -98,14 +95,9 @@ public fun stock(listing: &ItemListing): u64 {
     listing.stock
 }
 
-/// Returns how many discounts are currently counted against this listing.
+/// Returns how many listing-scoped discounts are currently counted against this listing.
 public fun discount_count(listing: &ItemListing): u64 {
     listing.discount_count
-}
-
-/// Returns the spotlight discount ID attached to the listing, if any.
-public fun spotlight_discount_id(listing: &ItemListing): Option<ID> {
-    listing.spotlight_discount_id
 }
 
 /// Returns the receipt object ID.
@@ -159,7 +151,6 @@ public(package) fun create<T: store>(
         base_price_usd_cents,
         stock,
         discount_count: 0,
-        spotlight_discount_id: option::none(),
     }
 }
 
@@ -187,23 +178,6 @@ public(package) fun decrement_stock(listing: &mut ItemListing) {
     assert!(listing.stock > 0, EOutOfStock);
 
     listing.stock = listing.stock - 1;
-}
-
-/// Sets the listing spotlight discount reference.
-public(package) fun set_spotlight(listing: &mut ItemListing, discount_id: ID) {
-    listing.spotlight_discount_id = option::some(discount_id);
-}
-
-/// Clears the listing spotlight discount reference.
-public(package) fun clear_spotlight(listing: &mut ItemListing) {
-    listing.spotlight_discount_id = option::none();
-}
-
-/// Clears the listing spotlight discount reference if it matches the provided discount ID.
-public(package) fun try_clear_matching_spotlight(listing: &mut ItemListing, discount_id: &ID) {
-    if (listing.spotlight_discount_id.contains(discount_id)) {
-        listing.spotlight_discount_id = option::none();
-    };
 }
 
 /// Replaces the listing stock with a new value.

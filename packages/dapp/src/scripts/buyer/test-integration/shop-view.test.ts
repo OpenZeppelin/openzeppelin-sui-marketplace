@@ -74,7 +74,6 @@ describe("buyer shop-view integration", () => {
         DEFAULT_LISTING_INPUT.priceUsdCents
       )
       expect(seededListing?.stock).toBe(DEFAULT_LISTING_INPUT.stock)
-      expect(seededListing?.spotlightDiscountId).toBe(discount.discountId)
 
       const acceptedCurrencies = viewPayload.acceptedCurrencies
       expect(acceptedCurrencies.length).toBe(0)
@@ -87,6 +86,10 @@ describe("buyer shop-view integration", () => {
         expect(discountSummary.shopId).toBeTruthy()
         expect(discountSummary.status).toBeTruthy()
       })
+      const seededDiscount = discounts.find(
+        (discountSummary) => discountSummary.discountId === discount.discountId
+      )
+      expect(seededDiscount?.isSpotlight).toBe(true)
     })
   })
 

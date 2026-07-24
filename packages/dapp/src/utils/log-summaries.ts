@@ -36,8 +36,6 @@ export const logItemListingSummary = (
     itemListing.basePriceUsdCents ?? "Unknown price"
   )
   logKeyValueGreen("Stock")(itemListing.stock ?? "Unknown stock")
-  if (itemListing.spotlightDiscountId)
-    logKeyValueGreen("Spotlight")(itemListing.spotlightDiscountId)
   logKeyValueGreen("Table-entry-field")(itemListing.tableEntryFieldId)
   console.log("")
 }
@@ -73,6 +71,7 @@ export const logDiscountSummary = (
   logKeyValueGreen("Object")(discount.discountId)
   logKeyValueGreen("Status")(discount.status)
   logKeyValueGreen("Active-flag")(discount.activeFlag)
+  logKeyValueGreen("Spotlight")(discount.isSpotlight)
   logKeyValueGreen("Shop")(discount.shopId)
   if (discount.appliesToListingId)
     logKeyValueGreen("Listing")(discount.appliesToListingId)
@@ -108,8 +107,6 @@ export const logShopItemReceiptSummary = (
       listingDetails.basePriceUsdCents ?? "Unknown price"
     )
     logKeyValueGreen("Listing-stock")(listingDetails.stock ?? "Unknown stock")
-    if (listingDetails.spotlightDiscountId)
-      logKeyValueGreen("Listing-spotlight")(listingDetails.spotlightDiscountId)
     logKeyValueGreen("Listing-table-entry")(
       listingDetails.tableEntryFieldId ?? "Not listed"
     )

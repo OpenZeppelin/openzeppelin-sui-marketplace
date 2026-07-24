@@ -127,7 +127,12 @@ const removePublishedArrayEntriesForPackagePath = (
         break
       }
       const sourceMatch = line.match(sourceLocalRegex)
-      if (sourceMatch && path.resolve(sourceMatch[1]) === targetPath)
+      // The CLI records `source.local` relative to the package path, so resolve
+      // relative entries against packagePath (path.resolve leaves absolute paths intact).
+      if (
+        sourceMatch &&
+        path.resolve(packagePath, sourceMatch[1]) === targetPath
+      )
         matchesPath = true
     }
     if (matchesPath) {

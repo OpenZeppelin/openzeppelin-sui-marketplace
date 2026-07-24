@@ -20,7 +20,6 @@ fun add_item_listing_stores_metadata() {
         b"Cool Bike".to_string(),
         125_00,
         25,
-        option::none(),
         &mut ctx,
     );
     assert_eq!(tx_context::get_ids_created(&ctx), ids_before + 1);
@@ -30,12 +29,10 @@ fun add_item_listing_stores_metadata() {
     let name = listing.name();
     let base_price_usd_cents = listing.base_price_usd_cents();
     let stock = listing.stock();
-    let spotlight_discount_id = listing.spotlight_discount_id();
 
     assert_eq!(name, b"Cool Bike".to_string());
     assert_eq!(base_price_usd_cents, 125_00);
     assert_eq!(stock, 25);
-    assert!(option::is_none(&spotlight_discount_id));
     assert_emitted!(
         events::item_listing_added(
             shop.id(),
@@ -44,58 +41,6 @@ fun add_item_listing_stores_metadata() {
     );
 
     test_helpers::remove_listing_if_exists(&mut shop, &owner_cap, listing_id);
-    std::unit_test::destroy(owner_cap);
-    std::unit_test::destroy(shop);
-}
-
-#[test]
-fun add_item_listing_links_spotlight_discount() {
-    let mut ctx = tx_context::new_from_hint(owner(), 44, 0, 0, 0);
-    let (mut shop, owner_cap) = shop::test_setup_shop(owner(), &mut ctx);
-
-    // A discount scoped to an initial listing can be re-pointed (stolen) onto a new listing.
-    let initial_listing_id = shop.add_item_listing<test_helpers::TestItem>(
-        &owner_cap,
-        b"Initial Listing".to_string(),
-        150_00,
-        4,
-        option::none(),
-        &mut ctx,
-    );
-    let discount_id = test_helpers::create_discount_for_listing(
-        &mut shop,
-        &owner_cap,
-        initial_listing_id,
-        &mut ctx,
-    );
-
-    let listing_id = shop.add_item_listing<test_helpers::TestItem>(
-        &owner_cap,
-        b"Limited Tire Set".to_string(),
-        200_00,
-        8,
-        option::some(discount_id),
-        &mut ctx,
-    );
-    let listing = shop.listing(listing_id);
-    let spotlight_discount_id = listing.spotlight_discount_id();
-
-    assert!(option::is_some(&spotlight_discount_id));
-    spotlight_discount_id.do_ref!(|value| {
-        assert_eq!(*value, discount_id);
-    });
-    // Re-pointing clears the spotlight and discount count on the initial listing.
-    assert!(option::is_none(&shop.listing(initial_listing_id).spotlight_discount_id()));
-    assert_emitted!(
-        events::item_listing_added(
-            shop.id(),
-            listing_id,
-        ),
-    );
-
-    shop.remove_discount(&owner_cap, discount_id);
-    test_helpers::remove_listing_if_exists(&mut shop, &owner_cap, listing_id);
-    test_helpers::remove_listing_if_exists(&mut shop, &owner_cap, initial_listing_id);
     std::unit_test::destroy(owner_cap);
     std::unit_test::destroy(shop);
 }
@@ -124,7 +69,7 @@ fun add_item_listing_with_discount_creates_listing_and_pinned_discount() {
 
     assert!(shop.listing_exists(listing_id));
     assert!(shop.discount_exists(discount_id));
-    test_helpers::assert_listing_spotlight_discount_id(&shop, listing_id, discount_id);
+    test_helpers::assert_discount_is_spotlight(&shop, discount_id, true);
     test_helpers::assert_listing_scoped_percent_discount(
         &shop,
         discount_id,
@@ -180,7 +125,6 @@ fun add_item_listing_rejects_empty_name() {
         b"".to_string(),
         100_00,
         10,
-        option::none(),
         &mut ctx,
     );
 
@@ -198,7 +142,6 @@ fun add_item_listing_rejects_foreign_owner_cap() {
         b"Wrong Owner Cap".to_string(),
         15_00,
         3,
-        option::none(),
         &mut ctx,
     );
 
@@ -215,7 +158,6 @@ fun add_item_listing_rejects_zero_price() {
         b"Zero Price".to_string(),
         0,
         10,
-        option::none(),
         &mut ctx,
     );
 
@@ -232,30 +174,6 @@ fun add_item_listing_rejects_zero_stock() {
         b"No Stock".to_string(),
         10_00,
         0,
-        option::none(),
-        &mut ctx,
-    );
-
-    abort
-}
-
-#[test, expected_failure(abort_code = ::sui_oracle_market::shop::EDiscountNotFound)]
-fun add_item_listing_rejects_foreign_discount() {
-    let mut ctx = tx_context::dummy();
-    let (mut shop, owner_cap) = shop::test_setup_shop(owner(), &mut ctx);
-    let (mut other_shop, other_cap) = shop::test_setup_shop(owner(), &mut ctx);
-    let foreign_discount_id = test_helpers::create_discount(
-        &mut other_shop,
-        &other_cap,
-        &mut ctx,
-    );
-
-    shop.add_item_listing<test_helpers::TestItem>(
-        &owner_cap,
-        b"Bad Discount".to_string(),
-        15_00,
-        5,
-        option::some(foreign_discount_id),
         &mut ctx,
     );
 
@@ -272,7 +190,6 @@ fun update_item_listing_stock_updates_listing_and_emits_events() {
         b"Helmet".to_string(),
         48_00,
         4,
-        option::none(),
         &mut ctx,
     );
 
@@ -286,10 +203,8 @@ fun update_item_listing_stock_updates_listing_and_emits_events() {
     let name = listing.name();
     let base_price_usd_cents = listing.base_price_usd_cents();
     let stock = listing.stock();
-    let spotlight_discount = listing.spotlight_discount_id();
     assert_eq!(name, b"Helmet".to_string());
     assert_eq!(base_price_usd_cents, 48_00);
-    assert!(option::is_none(&spotlight_discount));
     assert_eq!(stock, 11);
 
     assert_emitted!(events::item_listing_stock_updated(shop.id(), listing_id, 4));
@@ -313,7 +228,6 @@ fun update_item_listing_stock_rejects_foreign_owner_cap() {
         b"Borrowed Listing".to_string(),
         18_00,
         9,
-        option::none(),
         &mut ctx,
     );
 
@@ -340,7 +254,6 @@ fun update_item_listing_stock_rejects_unknown_listing() {
         b"Foreign Listing".to_string(),
         10_00,
         2,
-        option::none(),
         &mut ctx,
     );
 
@@ -363,7 +276,6 @@ fun update_item_listing_stock_handles_multiple_updates_and_events() {
         b"Pads".to_string(),
         22_00,
         5,
-        option::none(),
         &mut ctx,
     );
 
@@ -413,7 +325,6 @@ fun remove_item_listing_removes_listing_and_emits_event() {
         b"Chain Grease".to_string(),
         12_00,
         3,
-        option::none(),
         &mut ctx,
     );
 
@@ -422,7 +333,6 @@ fun remove_item_listing_removes_listing_and_emits_event() {
         b"Repair Kit".to_string(),
         42_00,
         2,
-        option::none(),
         &mut ctx,
     );
     let shop_address = shop.id();
@@ -441,11 +351,9 @@ fun remove_item_listing_removes_listing_and_emits_event() {
     let name = listing.name();
     let price = listing.base_price_usd_cents();
     let stock = listing.stock();
-    let spotlight = listing.spotlight_discount_id();
     assert_eq!(name, b"Repair Kit".to_string());
     assert_eq!(price, 42_00);
     assert_eq!(stock, 2);
-    assert_eq!(spotlight, option::none());
 
     test_helpers::remove_listing_if_exists(&mut shop, &owner_cap, remaining_listing_id);
     std::unit_test::destroy(owner_cap);
@@ -466,7 +374,6 @@ fun remove_item_listing_rejects_foreign_owner_cap() {
         b"Borrowed Owner".to_string(),
         30_00,
         6,
-        option::none(),
         &mut ctx,
     );
 
@@ -492,7 +399,6 @@ fun remove_item_listing_rejects_unknown_listing() {
         b"Foreign Stock".to_string(),
         55_00,
         4,
-        option::none(),
         &mut ctx,
     );
 
@@ -513,7 +419,6 @@ fun remove_item_listing_rejects_listing_with_active_bound_discount() {
         b"Discount Locked Listing".to_string(),
         45_00,
         2,
-        option::none(),
         &mut ctx,
     );
     let _discount_id = shop.create_discount(
@@ -545,7 +450,6 @@ fun update_item_listing_stock_accept_zero_stock() {
         b"Maintenance Kit".to_string(),
         32_00,
         5,
-        option::none(),
         &mut ctx,
     );
 

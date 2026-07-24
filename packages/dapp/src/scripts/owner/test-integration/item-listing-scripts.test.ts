@@ -1,9 +1,7 @@
 import { describe, expect, it } from "vitest"
 
 import {
-  attachDiscountToListing,
   createDappIntegrationTestEnv,
-  createDiscountFixture,
   createItemListingFixture,
   createShopWithItemExamplesFixture,
   resolveItemType,
@@ -22,7 +20,6 @@ type ItemListingSummary = {
   itemType?: string
   basePriceUsdCents?: string
   stock?: string
-  spotlightDiscountId?: string
 }
 
 type ItemListingOutput = {
@@ -33,12 +30,6 @@ type ItemListingOutput = {
 type RemoveItemListingOutput = {
   deleted?: string
   transactionSummary?: TransactionSummary
-}
-
-type AttachDiscountOutput = ItemListingOutput & {
-  discount?: {
-    discountId?: string
-  }
 }
 
 type ItemListingListOutput = {
@@ -145,64 +136,7 @@ describe("owner item listing scripts integration", () => {
         basePriceUsdCents: DEFAULT_LISTING_INPUT.priceUsdCents,
         stock: DEFAULT_LISTING_INPUT.stock
       })
-      expect(listingOutput.itemListing?.spotlightDiscountId).toBeUndefined()
     })
-  })
-
-  it("adds item listings with spotlight discounts", async () => {
-    await testEnv.withTestContext(
-      "owner-item-listing-add-spotlight",
-      async (context) => {
-        const { publisher, scriptRunner, shopId, itemType } =
-          await createShopWithItemType(context, "Item Listing Spotlight Shop")
-
-        // A spotlight discount must already be scoped to a listing. Create an initial
-        // listing and a discount scoped to it, then re-point (steal) it onto the new listing.
-        const initialListing = await createItemListingFixture({
-          scriptRunner,
-          publisher,
-          shopId,
-          itemType,
-          name: "Initial Spotlight Listing"
-        })
-
-        const discount = await createDiscountFixture({
-          scriptRunner,
-          publisher,
-          shopId,
-          ruleKind: "percent",
-          value: "10",
-          listingId: initialListing.itemListingId
-        })
-
-        const listingOutput = await runOwnerScriptJson<ItemListingOutput>(
-          scriptRunner,
-          "item-listing-add",
-          {
-            account: publisher,
-            args: {
-              shopId,
-              name: DEFAULT_LISTING_INPUT.name,
-              price: DEFAULT_LISTING_INPUT.priceUsd,
-              stock: DEFAULT_LISTING_INPUT.stock,
-              itemType,
-              spotlightDiscountId: discount.discountId
-            }
-          }
-        )
-
-        expectSuccessfulTransaction(listingOutput.transactionSummary)
-        expectItemListingSummary(listingOutput.itemListing, {
-          name: DEFAULT_LISTING_INPUT.name,
-          itemType,
-          basePriceUsdCents: DEFAULT_LISTING_INPUT.priceUsdCents,
-          stock: DEFAULT_LISTING_INPUT.stock
-        })
-        expect(listingOutput.itemListing?.spotlightDiscountId).toBe(
-          discount.discountId
-        )
-      }
-    )
   })
 
   it("adds item listings with atomically created spotlight discounts", async () => {
@@ -240,7 +174,6 @@ describe("owner item listing scripts integration", () => {
           basePriceUsdCents: DEFAULT_LISTING_INPUT.priceUsdCents,
           stock: DEFAULT_LISTING_INPUT.stock
         })
-        expect(listingOutput.itemListing?.spotlightDiscountId).toBeTruthy()
       }
     )
   })
@@ -323,113 +256,6 @@ describe("owner item listing scripts integration", () => {
         })
 
         expect(listingIds).not.toContain(listing.itemListingId)
-      }
-    )
-  })
-
-  it("attaches discounts to item listings", async () => {
-    await testEnv.withTestContext(
-      "owner-item-listing-attach-discount",
-      async (context) => {
-        const { publisher, scriptRunner, shopId, itemType } =
-          await createShopWithItemType(context, "Item Listing Discount Shop")
-        const listing = await createItemListingFixture({
-          scriptRunner,
-          publisher,
-          shopId,
-          itemType,
-          name: DEFAULT_LISTING_INPUT.name,
-          price: DEFAULT_LISTING_INPUT.priceUsd,
-          stock: DEFAULT_LISTING_INPUT.stock
-        })
-
-        const discount = await createDiscountFixture({
-          scriptRunner,
-          publisher,
-          shopId,
-          ruleKind: "percent",
-          value: "10",
-          listingId: listing.itemListingId
-        })
-
-        const attachOutput = await runOwnerScriptJson<AttachDiscountOutput>(
-          scriptRunner,
-          "item-listing-attach-discount",
-          {
-            account: publisher,
-            args: {
-              shopId,
-              itemListingId: listing.itemListingId,
-              discountId: discount.discountId
-            }
-          }
-        )
-
-        expectSuccessfulTransaction(attachOutput.transactionSummary)
-        expect(attachOutput.itemListing?.itemListingId).toBe(
-          listing.itemListingId
-        )
-        expect(attachOutput.itemListing?.spotlightDiscountId).toBe(
-          discount.discountId
-        )
-        expect(attachOutput.discount?.discountId).toBe(discount.discountId)
-      }
-    )
-  })
-
-  it("clears item listing discounts", async () => {
-    await testEnv.withTestContext(
-      "owner-item-listing-clear-discount",
-      async (context) => {
-        const { publisher, scriptRunner, shopId, itemType } =
-          await createShopWithItemType(
-            context,
-            "Item Listing Clear Discount Shop"
-          )
-        const listing = await createItemListingFixture({
-          scriptRunner,
-          publisher,
-          shopId,
-          itemType,
-          name: DEFAULT_LISTING_INPUT.name,
-          price: DEFAULT_LISTING_INPUT.priceUsd,
-          stock: DEFAULT_LISTING_INPUT.stock
-        })
-
-        const discount = await createDiscountFixture({
-          scriptRunner,
-          publisher,
-          shopId,
-          ruleKind: "percent",
-          value: "10",
-          listingId: listing.itemListingId
-        })
-
-        await attachDiscountToListing({
-          scriptRunner,
-          publisher,
-          shopId,
-          itemListingId: listing.itemListingId,
-          discountId: discount.discountId
-        })
-
-        const clearOutput = await runOwnerScriptJson<ItemListingOutput>(
-          scriptRunner,
-          "item-listing-clear-discount",
-          {
-            account: publisher,
-            args: {
-              shopId,
-              itemListingId: listing.itemListingId
-            }
-          }
-        )
-
-        expectSuccessfulTransaction(clearOutput.transactionSummary)
-        expect(clearOutput.itemListing?.itemListingId).toBe(
-          listing.itemListingId
-        )
-        expect(clearOutput.itemListing?.spotlightDiscountId).toBeUndefined()
       }
     )
   })

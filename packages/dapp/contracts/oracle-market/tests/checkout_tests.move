@@ -58,7 +58,6 @@ fun discount_redemption_without_listing_restriction_allows_zero_price() {
         b"Freebie".to_string(),
         100,
         1,
-        option::none(),
         scn.ctx(),
     );
 
@@ -158,7 +157,6 @@ fun discount_redemption_rejects_listing_mismatch() {
         b"Listing A".to_string(),
         100,
         1,
-        option::none(),
         scn.ctx(),
     );
     let listing_b_id = shop_obj.add_item_listing<test_helpers::TestItem>(
@@ -166,7 +164,6 @@ fun discount_redemption_rejects_listing_mismatch() {
         b"Listing B".to_string(),
         100,
         1,
-        option::none(),
         scn.ctx(),
     );
 
@@ -260,7 +257,6 @@ fun discount_maxed_out_by_redemption() {
         b"Promo".to_string(),
         100,
         2,
-        option::none(),
         scn.ctx(),
     );
 
@@ -649,7 +645,6 @@ fun setup_shop_with_currency_listing_and_price_info_for_item<TItem: store>(
         item_name.to_string(),
         base_price_usd_cents,
         stock,
-        option::none(),
         scn.ctx(),
     );
 
@@ -1100,7 +1095,6 @@ fun buy_item_rejects_price_info_object_id_mismatch() {
         b"Mismatch Item".to_string(),
         100,
         1,
-        option::none(),
         scn.ctx(),
     );
 
@@ -1173,7 +1167,6 @@ fun buy_item_with_discount_emits_discount_redeemed_and_records_discount_id() {
         b"Discounted Item".to_string(),
         1_000,
         2,
-        option::none(),
         scn.ctx(),
     );
 
@@ -1473,7 +1466,6 @@ fun buy_item_with_discount_rejects_inactive_discount() {
         b"Inactive Discount Item".to_string(),
         100,
         1,
-        option::none(),
         scn.ctx(),
     );
 
@@ -1500,7 +1492,7 @@ fun buy_item_with_discount_rejects_inactive_discount() {
         owner_cap_id,
     );
     let mut shared_shop = scn.take_shared_by_id<shop::Shop>(shop_id);
-    shared_shop.toggle_discount(
+    shared_shop.set_discount_status(
         &owner_cap_obj,
         discount_id,
         false,

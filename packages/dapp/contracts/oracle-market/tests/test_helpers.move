@@ -270,17 +270,12 @@ public(package) fun close_buyer_checkout_context(
     std::unit_test::destroy(clock_object);
 }
 
-public(package) fun assert_listing_spotlight_discount_id(
+public(package) fun assert_discount_is_spotlight(
     shop_obj: &shop::Shop,
-    listing_id: ID,
-    expected_discount_id: ID,
+    discount_id: ID,
+    expected_is_spotlight: bool,
 ) {
-    let listing = shop_obj.listing(listing_id);
-    let spotlight_discount_id = listing.spotlight_discount_id();
-    assert!(option::is_some(&spotlight_discount_id));
-    spotlight_discount_id.do_ref!(|value| {
-        assert_eq!(*value, expected_discount_id);
-    });
+    assert_eq!(shop_obj.discount(discount_id).is_spotlight(), expected_is_spotlight);
 }
 
 public(package) fun assert_listing_scoped_percent_discount(
@@ -490,7 +485,6 @@ public(package) fun setup_shop_with_currency_listing_and_price_info_for_item<TIt
         item_name.to_string(),
         base_price_usd_cents,
         stock,
-        option::none(),
         scn.ctx(),
     );
 

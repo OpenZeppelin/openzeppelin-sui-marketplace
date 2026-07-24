@@ -67,38 +67,18 @@ public fun add_item_listing<T: store>(
     name: String,
     base_price_usd_cents: u64,
     stock: u64,
-    spotlight_discount_id: Option<ID>,
     ctx: &mut TxContext,
 ): ID {
     assert!(owner_cap.shop_id == shop.id(), EInvalidOwnerCap);
 
     // Create an item listing.
-    let mut listing = listing::create<T>(
+    let listing = listing::create<T>(
         name,
         base_price_usd_cents,
         stock,
         ctx,
     );
     let listing_id = listing.id();
-
-    // Check that spotlight discount id exist.
-    // Update listing discount count and set spotlight,
-    spotlight_discount_id.do!(|discount_id| {
-      listing.increment_discount_count();
-        listing.set_spotlight(discount_id);
-
-        // set discount's `applies_to_listing`,
-        shop
-            .discount_mut(discount_id)
-            .set_applies_to_listing(listing_id)
-            .do!(|previous_listing_id| {
-                let listing = shop.listing_mut(previous_listing_id);
-
-                // and clear the previous listing from spotlight discount if matches the discount id.
-                listing.try_clear_matching_spotlight(&discount_id);
-                listing.decrement_discount_count();
-            });
-    });
 
     shop.listings.add(listing_id, listing);
 

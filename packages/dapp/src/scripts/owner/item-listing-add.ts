@@ -14,7 +14,6 @@ import {
 import { requireListingIdFromItemListingAddedEvents } from "@sui-oracle-market/domain-core/models/item-listing"
 import { parseUsdToCents } from "@sui-oracle-market/domain-core/models/shop"
 import { buildAddItemListingTransaction } from "@sui-oracle-market/domain-core/ptb/item-listing"
-import { normalizeOptionalId } from "@sui-oracle-market/tooling-core/object"
 import { parsePositiveU64 } from "@sui-oracle-market/tooling-core/utils/utility"
 import { runSuiScript } from "@sui-oracle-market/tooling-node/process"
 import {
@@ -43,7 +42,6 @@ runSuiScript(
       itemName: inputs.name,
       basePriceUsdCents: inputs.priceCents,
       stock: inputs.stock,
-      spotlightDiscountId: inputs.spotlightDiscountId,
       createSpotlightDiscount: inputs.createSpotlightDiscount
     })
 
@@ -138,12 +136,6 @@ runSuiScript(
         "Fully qualified Move type for the item (e.g., 0x...::module::ItemType)",
       demandOption: true
     })
-    .option("spotlightDiscountId", {
-      alias: ["spotlight-discount-id", "discount-id"],
-      type: "string",
-      description:
-        "Optional discount ID to spotlight for this listing (discount::Discount)"
-    })
     .option("createSpotlightRuleKind", {
       alias: ["create-spotlight-rule-kind", "spotlight-rule-kind"],
       choices: discountRuleChoices,
@@ -192,7 +184,6 @@ const normalizeInputs = async (
     price: string
     stock: string
     itemType: string
-    spotlightDiscountId?: string
     createSpotlightRuleKind?: DiscountRuleKindLabel
     createSpotlightValue?: string
     createSpotlightStartsAt?: string
@@ -210,9 +201,6 @@ const normalizeInputs = async (
       ownerCapId: cliArguments.ownerCapId
     })
 
-  const spotlightDiscountId = normalizeOptionalId(
-    cliArguments.spotlightDiscountId
-  )
   const createSpotlightDiscount =
     normalizeCreateSpotlightDiscountInput(cliArguments)
   const itemType = cliArguments.itemType.trim()
@@ -224,7 +212,6 @@ const normalizeInputs = async (
     packageId,
     shopId,
     ownerCapId,
-    spotlightDiscountId,
     createSpotlightDiscount,
     itemType,
     name: cliArguments.name,
@@ -237,7 +224,6 @@ const normalizeInputs = async (
 }
 
 const normalizeCreateSpotlightDiscountInput = (cliArguments: {
-  spotlightDiscountId?: string
   createSpotlightRuleKind?: DiscountRuleKindLabel
   createSpotlightValue?: string
   createSpotlightStartsAt?: string
@@ -253,11 +239,6 @@ const normalizeCreateSpotlightDiscountInput = (cliArguments: {
   ].some((value) => value !== undefined)
 
   if (!hasAnyCreateDiscountInput) return undefined
-
-  if (normalizeOptionalId(cliArguments.spotlightDiscountId))
-    throw new Error(
-      "spotlightDiscountId cannot be used with createSpotlight* options."
-    )
 
   if (!cliArguments.createSpotlightRuleKind)
     throw new Error(

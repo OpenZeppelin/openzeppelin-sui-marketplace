@@ -13,7 +13,8 @@ import type { IdentifierString } from "@mysten/wallet-standard"
 import type { DiscountSummary } from "@sui-oracle-market/domain-core/models/discount"
 import {
   buildRemoveDiscountTransaction,
-  buildToggleDiscountTransaction
+  buildSetDiscountSpotlightTransaction,
+  buildSetDiscountStatusTransaction
 } from "@sui-oracle-market/domain-core/ptb/discount"
 import { deriveRelevantPackageId } from "@sui-oracle-market/tooling-core/object"
 import { getSuiSharedObject } from "@sui-oracle-market/tooling-core/shared-object"
@@ -35,9 +36,9 @@ import {
 import { waitForTransactionBlock } from "../helpers/transactionWait"
 import useNetworkConfig from "./useNetworkConfig"
 
-export type DiscountAction = "toggle" | "remove"
+export type DiscountAction = "toggle" | "remove" | "spotlight"
 
-export type RemoveDiscountTransactionSummary = {
+export type DiscountActionTransactionSummary = {
   action: DiscountAction
   discount: DiscountSummary
   digest: string
@@ -47,12 +48,12 @@ export type RemoveDiscountTransactionSummary = {
 type TransactionState =
   | { status: "idle" }
   | { status: "processing" }
-  | { status: "success"; summary: RemoveDiscountTransactionSummary }
+  | { status: "success"; summary: DiscountActionTransactionSummary }
   | { status: "error"; error: string; details?: string }
 
-type RemoveDiscountModalState = {
+type DiscountActionModalState = {
   transactionState: TransactionState
-  transactionSummary?: RemoveDiscountTransactionSummary
+  transactionSummary?: DiscountActionTransactionSummary
   isSuccessState: boolean
   isErrorState: boolean
   canSubmit: boolean
@@ -62,16 +63,7 @@ type RemoveDiscountModalState = {
   resetState: () => void
 }
 
-const buildToggledDiscountSnapshot = (
-  discount: DiscountSummary,
-  active: boolean
-): DiscountSummary => ({
-  ...discount,
-  activeFlag: active,
-  status: active ? "active" : "disabled"
-})
-
-export const useRemoveDiscountModalState = ({
+export const useDiscountActionModalState = ({
   open,
   action,
   shopId,
@@ -85,7 +77,7 @@ export const useRemoveDiscountModalState = ({
   discount?: DiscountSummary
   onDiscountUpdated?: (discount?: DiscountSummary) => void
   onDiscountRemoved?: (discountId?: string) => void
-}): RemoveDiscountModalState => {
+}): DiscountActionModalState => {
   const currentAccount = useCurrentAccount()
   const { currentWallet } = useCurrentWallet()
   const suiClient = useSuiClient()
@@ -204,21 +196,45 @@ export const useRemoveDiscountModalState = ({
       })
 
       const nextActiveFlag = !discount.activeFlag
-      const transaction =
-        action === "toggle"
-          ? buildToggleDiscountTransaction({
-              packageId: shopPackageId,
-              shop: shopShared,
-              discountId: discount.discountId,
-              active: nextActiveFlag,
-              ownerCapId: ownerCapabilityId
-            })
-          : buildRemoveDiscountTransaction({
-              packageId: shopPackageId,
-              shop: shopShared,
-              discountId: discount.discountId,
-              ownerCapId: ownerCapabilityId
-            })
+      const nextSpotlightFlag = !discount.isSpotlight
+      const discountArgs = {
+        packageId: shopPackageId,
+        shop: shopShared,
+        discountId: discount.discountId,
+        ownerCapId: ownerCapabilityId
+      }
+
+      // The modal drives three discount actions; each picks its builder and the optimistic
+      // summary snapshot the caller applies on success.
+      const { transaction, summaryDiscount } = (() => {
+        switch (action) {
+          case "toggle":
+            return {
+              transaction: buildSetDiscountStatusTransaction({
+                ...discountArgs,
+                active: nextActiveFlag
+              }),
+              summaryDiscount: {
+                ...discount,
+                activeFlag: nextActiveFlag,
+                status: nextActiveFlag ? "active" : "disabled"
+              }
+            }
+          case "spotlight":
+            return {
+              transaction: buildSetDiscountSpotlightTransaction({
+                ...discountArgs,
+                isSpotlight: nextSpotlightFlag
+              }),
+              summaryDiscount: { ...discount, isSpotlight: nextSpotlightFlag }
+            }
+          case "remove":
+            return {
+              transaction: buildRemoveDiscountTransaction(discountArgs),
+              summaryDiscount: discount
+            }
+        }
+      })()
       transaction.setSender(walletAddress)
 
       let digest = ""
@@ -243,11 +259,6 @@ export const useRemoveDiscountModalState = ({
         transactionBlock = await waitForTransactionBlock(suiClient, digest)
       }
 
-      const summaryDiscount =
-        action === "toggle"
-          ? buildToggledDiscountSnapshot(discount, nextActiveFlag)
-          : discount
-
       setTransactionState({
         status: "success",
         summary: {
@@ -258,7 +269,7 @@ export const useRemoveDiscountModalState = ({
         }
       })
 
-      if (action === "toggle") {
+      if (action === "toggle" || action === "spotlight") {
         onDiscountUpdated?.(summaryDiscount)
 
         return

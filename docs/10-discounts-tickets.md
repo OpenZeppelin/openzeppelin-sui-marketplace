@@ -7,7 +7,7 @@ Discounts are discount records stored under the shared `Shop`. Buyers apply a di
 ## 1. Learning goals
 
 1. Create a discount with a schedule and rule.
-2. Attach a discount to a listing for UI spotlight.
+2. Flag a discount as a UI spotlight.
 3. Redeem a discount directly at checkout.
 
 ## 2. Prerequisites
@@ -24,9 +24,9 @@ pnpm script owner:discount:create \
   --value 10 \
   --listing-id <listingId>
 
-pnpm script owner:item-listing:attach-discount \
-  --item-listing-id <listingId> \
-  --discount-id <discountId>
+pnpm script owner:discount:set-spotlight \
+  --discount-id <discountId> \
+  --spotlight
 
 pnpm script buyer:buy \
   --item-listing-id <listingId> \
@@ -41,7 +41,8 @@ pnpm script buyer:buy \
 
 ## 5. Lifecycle mechanics
 
-- **Schedules and scoping**: `starts_at` is required; `expires_at` and `max_redemptions` are optional. When `max_redemptions` is set, it must be greater than `0`. Discounts may be listing-scoped via `applies_to_listing`.
+- **Schedules and scoping**: `starts_at` is required. `expires_at` and `max_redemptions` are optional. When `max_redemptions` is set, it must be greater than `0`. A discount may be listing-scoped via `applies_to_listing`, which is fixed at creation and immutable (`Some(listing)` scopes it, `None` makes it generic and usable by any listing).
+- **Spotlighting**: each discount carries an owner-controlled `is_spotlight` flag, set with `set_discount_spotlight`. It is advisory and independent of `active`. Storefronts feature, per listing, the oldest-starting active discount whose flag is set, preferring a listing-scoped match over a generic one.
 - **Redemption guards**: checkout validates discount active state, time window, listing scope, and max redemptions.
 - **Clock-based timing**: redemption checks use shared `Clock`, not client time.
 

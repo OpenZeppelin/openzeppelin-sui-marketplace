@@ -163,7 +163,7 @@ Owner scripts default `--shop-package-id`, `--shop-id`, and `--owner-cap-id` fro
   - **Localnet**: reads `packages/dapp/deployments/mock.localnet.json` for mock coins + feeds (requires `pnpm script mock:setup --network localnet`).
 - Seeded data:
   - 4 low-price listings (Car, Bike, ConcertTicket, DigitalPass).
-  - 2 discounts (10% percent + $2 fixed) and attaches the fixed discount to the Bike listing ID.
+  - 2 discounts (10% percent + $2 fixed) and flags the fixed discount as a spotlight.
 - Flags:
   - `--shop-package-id <id>`: only used if a shop needs to be created (when `--shop-id` or `--owner-cap-id` is missing).
   - `--shop-name <string>`: shop name stored on-chain when creating a new shop (defaults to `Shop`).
@@ -251,13 +251,13 @@ Owner scripts default `--shop-package-id`, `--shop-id`, and `--owner-cap-id` fro
 
 ### `pnpm script owner:item-listing:add`
 
-- Creates a table-backed item listing (`Shop.listings`) with a USD price, stock count, Move item type, and optional spotlighted discount.
+- Creates a table-backed item listing (`Shop.listings`) with a USD price, stock count, Move item type, and an optional listing-scoped spotlight discount created in the same call.
 - Flags:
   - `--name <string>`: item name (required; UTF-8 encoded).
   - `--price <usd-or-cents>`: USD string (`12.50`) or integer cents (`1250`) (required).
   - `--stock <u64>`: initial inventory (>0) (required).
   - `--item-type <0x...::Type>`: fully qualified item type (required).
-  - `--spotlight-discount-id <id>`: optional discount to spotlight on creation.
+  - `--create-spotlight-rule-kind <fixed|percent>`: create and auto-spotlight a listing-scoped discount together with the listing. Requires `--create-spotlight-value`. Optional `--create-spotlight-starts-at`, `--create-spotlight-expires-at`, and `--create-spotlight-max-redemptions` refine the schedule.
   - `--publisher-id <id>`: optional metadata-only field; not passed on-chain.
   - `--shop-package-id <id>` / `--shop-id <id>` / `--owner-cap-id <id>`: override artifact defaults.
 
@@ -308,19 +308,12 @@ Owner scripts default `--shop-package-id`, `--shop-id`, and `--owner-cap-id` fro
   - `--active` / `--no-active`: desired activation state (required boolean flag).
   - `--shop-package-id <id>` / `--shop-id <id>` / `--owner-cap-id <id>`: override artifact defaults.
 
-### `pnpm script owner:item-listing:attach-discount`
+### `pnpm script owner:discount:set-spotlight`
 
-- Attaches a discount to a listing for spotlighting.
+- Sets a discount's spotlight flag. Spotlight is a per-discount boolean, so featuring a discount no longer touches any listing.
 - Flags:
-  - `--item-listing-id <id>`: listing ID to attach to (required).
-  - `--discount-id <id>`: discount object ID to attach (required).
-  - `--shop-package-id <id>` / `--shop-id <id>` / `--owner-cap-id <id>`: override artifact defaults.
-
-### `pnpm script owner:item-listing:clear-discount`
-
-- Clears the spotlighted discount from a listing (does not delete the discount).
-- Flags:
-  - `--item-listing-id <id>`: listing ID to clear (required).
+  - `--discount-id <id>`: discount object ID (required).
+  - `--spotlight` / `--no-spotlight`: desired spotlight state (required boolean flag).
   - `--shop-package-id <id>` / `--shop-id <id>` / `--owner-cap-id <id>`: override artifact defaults.
 
 ---

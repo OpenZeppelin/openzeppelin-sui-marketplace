@@ -1,5 +1,4 @@
 export {
-  attachDiscountToListing,
   createAcceptedCurrencyFixture,
   createDappIntegrationTestEnv,
   createDiscountFixture,

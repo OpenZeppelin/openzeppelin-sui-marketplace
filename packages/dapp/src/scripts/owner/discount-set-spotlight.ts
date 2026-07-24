@@ -1,20 +1,17 @@
 /**
- * Clears the listing's spotlight Discount reference.
+ * Enables or disables the spotlight flag on a Discount.
  * Requires the ShopOwnerCap capability.
  */
 import yargs from "yargs"
 
-import {
-  buildClearDiscountTransaction,
-  resolveListingIdForShop
-} from "@sui-oracle-market/domain-core/ptb/item-listing"
+import { buildSetDiscountSpotlightTransaction } from "@sui-oracle-market/domain-core/ptb/discount"
 import { runSuiScript } from "@sui-oracle-market/tooling-node/process"
 import {
-  emitOrLogItemListingMutationResult,
-  executeItemListingMutation,
-  fetchItemListingSummaryForMutation,
-  resolveOwnerListingMutationContext
-} from "./item-listing-script-helpers.ts"
+  emitOrLogDiscountMutationResult,
+  executeDiscountMutation,
+  fetchDiscountSummaryForMutation,
+  resolveOwnerDiscountMutationContext
+} from "./discount-script-helpers.ts"
 
 runSuiScript(
   async (tooling, cliArguments) => {
@@ -22,52 +19,51 @@ runSuiScript(
       cliArguments,
       tooling.network.networkName
     )
-    const resolvedListingId = await resolveListingIdForShop({
-      shopId: inputs.shopId,
-      itemListingId: inputs.itemListingId,
-      suiClient: tooling.suiClient
-    })
     const shopSharedObject = await tooling.getMutableSharedObject({
       objectId: inputs.shopId
     })
 
-    const clearDiscountTransaction = buildClearDiscountTransaction({
-      packageId: inputs.packageId,
-      shop: shopSharedObject,
-      itemListingId: resolvedListingId,
-      ownerCapId: inputs.ownerCapId
-    })
+    const setDiscountSpotlightTransaction =
+      buildSetDiscountSpotlightTransaction({
+        packageId: inputs.packageId,
+        shop: shopSharedObject,
+        discountId: inputs.discountId,
+        isSpotlight: inputs.spotlight,
+        ownerCapId: inputs.ownerCapId
+      })
 
-    const mutationResult = await executeItemListingMutation({
+    const mutationResult = await executeDiscountMutation({
       tooling,
-      transaction: clearDiscountTransaction,
-      summaryLabel: "clear-discount",
+      transaction: setDiscountSpotlightTransaction,
+      summaryLabel: "set-discount-spotlight",
       devInspect: cliArguments.devInspect,
       dryRun: cliArguments.dryRun
     })
 
     if (!mutationResult) return
-
-    const { execution, summary } = mutationResult
-
-    const listingSummary = await fetchItemListingSummaryForMutation({
+    const discountSummary = await fetchDiscountSummaryForMutation({
       shopId: inputs.shopId,
-      itemListingId: resolvedListingId,
+      discountId: inputs.discountId,
       tooling
     })
-
-    emitOrLogItemListingMutationResult({
-      itemListingSummary: listingSummary,
-      digest: execution.transactionResult.digest,
-      transactionSummary: summary,
+    emitOrLogDiscountMutationResult({
+      discountSummary,
+      digest: mutationResult.execution.transactionResult.digest,
+      transactionSummary: mutationResult.summary,
       json: cliArguments.json
     })
   },
   yargs()
-    .option("itemListingId", {
-      alias: ["item-listing-id", "item-id", "listing-id"],
+    .option("discountId", {
+      alias: ["discount-id"],
       type: "string",
-      description: "Item listing ID to clear the spotlighted discount from.",
+      description: "Discount ID to spotlight or un-spotlight.",
+      demandOption: true
+    })
+    .option("spotlight", {
+      type: "boolean",
+      description:
+        "Target spotlight status. Use --spotlight to feature or --no-spotlight to un-feature the discount.",
       demandOption: true
     })
     .option("shopPackageId", {
@@ -113,23 +109,22 @@ const normalizeInputs = async (
     shopPackageId?: string
     shopId?: string
     ownerCapId?: string
-    itemListingId: string
+    discountId: string
+    spotlight: boolean
   },
   networkName: string
 ) => {
-  const { packageId, shopId, ownerCapId, itemListingId } =
-    await resolveOwnerListingMutationContext({
+  const ownerDiscountMutationContext =
+    await resolveOwnerDiscountMutationContext({
       networkName,
       shopPackageId: cliArguments.shopPackageId,
       shopId: cliArguments.shopId,
       ownerCapId: cliArguments.ownerCapId,
-      itemListingId: cliArguments.itemListingId
+      discountId: cliArguments.discountId
     })
 
   return {
-    packageId,
-    shopId,
-    ownerCapId,
-    itemListingId
+    ...ownerDiscountMutationContext,
+    spotlight: cliArguments.spotlight
   }
 }

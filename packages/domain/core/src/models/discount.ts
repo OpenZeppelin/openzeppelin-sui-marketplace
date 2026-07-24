@@ -368,7 +368,32 @@ export type DiscountSummary = {
   maxRedemptions?: string
   redemptions?: string
   activeFlag: boolean
+  isSpotlight: boolean
   status: string
+}
+
+/**
+ * Resolves the discount a storefront should feature for a listing: the oldest-starting active
+ * discount whose spotlight flag is set, preferring a listing-scoped match over a generic one.
+ * Returns undefined when no spotlighted active discount applies.
+ */
+export const resolveSpotlightDiscountForListing = (
+  listingId: string,
+  discounts: DiscountSummary[]
+): DiscountSummary | undefined => {
+  const byOldestStartsAt = (left: DiscountSummary, right: DiscountSummary) =>
+    (Number(left.startsAt ?? "0") || 0) - (Number(right.startsAt ?? "0") || 0)
+  const candidates = discounts.filter(
+    (discount) => discount.isSpotlight && discount.status === "active"
+  )
+  const scoped = candidates
+    .filter((discount) => discount.appliesToListingId === listingId)
+    .sort(byOldestStartsAt)
+  if (scoped.length > 0) return scoped[0]
+
+  return candidates
+    .filter((discount) => discount.appliesToListingId === undefined)
+    .sort(byOldestStartsAt)[0]
 }
 
 type DiscountTableEntryField = Awaited<
@@ -612,6 +637,7 @@ const buildDiscountSummary = (
   )
   const redemptions = normalizeOptionalU64FromValue(discountFields.redemptions)
   const activeFlag = Boolean(discountFields.active)
+  const isSpotlight = Boolean(discountFields.is_spotlight)
 
   return {
     discountId,
@@ -634,6 +660,7 @@ const buildDiscountSummary = (
         : formatOptionalNumericValue(maxRedemptions),
     redemptions: formatOptionalNumericValue(redemptions),
     activeFlag,
+    isSpotlight,
     status: deriveDiscountStatus({
       activeFlag,
       startsAt,

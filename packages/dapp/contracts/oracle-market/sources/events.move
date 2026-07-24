@@ -24,11 +24,11 @@ public struct ShopOwnerUpdated has copy, drop {
     previous_owner: address,
 }
 
-/// Event emitted when a shop is toggled active or inactive.
-public struct ShopToggled has copy, drop {
-    /// Shop that was toggled.
+/// Event emitted when a shop's active status changes.
+public struct ShopStatusChanged has copy, drop {
+    /// Shop whose status changed.
     shop_id: ID,
-    /// Owner capability used for the toggle.
+    /// Owner capability used to change the status.
     owner_cap_id: ID,
     /// New shop active status.
     active: bool,
@@ -68,6 +68,14 @@ public struct DiscountCreated has copy, drop {
     discount_id: ID,
 }
 
+/// Event emitted when a discount is removed.
+public struct DiscountRemoved has copy, drop {
+    /// Shop that owned the removed discount.
+    shop_id: ID,
+    /// Removed discount ID.
+    discount_id: ID,
+}
+
 /// Event emitted when a discount is updated.
 public struct DiscountUpdated has copy, drop {
     /// Shop that owns the updated discount.
@@ -76,14 +84,24 @@ public struct DiscountUpdated has copy, drop {
     discount_id: ID,
 }
 
-/// Event emitted when a discount is toggled.
-public struct DiscountToggled has copy, drop {
-    /// Shop that owns the toggled discount.
+/// Event emitted when a discount's active status changes.
+public struct DiscountStatusChanged has copy, drop {
+    /// Shop that owns the discount.
     shop_id: ID,
-    /// Toggled discount ID.
+    /// Discount ID whose status changed.
     discount_id: ID,
     /// New discount status.
     active: bool,
+}
+
+/// Event emitted when a discount's spotlight flag changes.
+public struct DiscountSpotlightChanged has copy, drop {
+    /// Shop that owns the discount.
+    shop_id: ID,
+    /// Discount ID whose spotlight flag changed.
+    discount_id: ID,
+    /// New spotlight flag.
+    is_spotlight: bool,
 }
 
 /// Event emitted when an accepted coin is added.
@@ -151,9 +169,9 @@ public(package) fun emit_shop_owner_updated(
     });
 }
 
-/// Emits a `ShopToggled` payload.
-public(package) fun emit_shop_toggled(shop_id: ID, owner_cap_id: ID, active: bool) {
-    event::emit(ShopToggled {
+/// Emits a `ShopStatusChanged` payload.
+public(package) fun emit_shop_status_changed(shop_id: ID, owner_cap_id: ID, active: bool) {
+    event::emit(ShopStatusChanged {
         shop_id,
         owner_cap_id,
         active,
@@ -197,6 +215,14 @@ public(package) fun emit_discount_created(shop_id: ID, discount_id: ID) {
     });
 }
 
+/// Emits a `DiscountRemoved` payload.
+public(package) fun emit_discount_removed(shop_id: ID, discount_id: ID) {
+    event::emit(DiscountRemoved {
+        shop_id,
+        discount_id,
+    });
+}
+
 /// Emits a `DiscountUpdated` payload.
 public(package) fun emit_discount_updated(shop_id: ID, discount_id: ID) {
     event::emit(DiscountUpdated {
@@ -205,16 +231,25 @@ public(package) fun emit_discount_updated(shop_id: ID, discount_id: ID) {
     });
 }
 
-/// Emits a `DiscountToggled` payload.
-public(package) fun emit_discount_toggled(
-    shop_id: ID,
-    discount_id: ID,
-    active: bool,
-) {
-    event::emit(DiscountToggled {
+/// Emits a `DiscountStatusChanged` payload.
+public(package) fun emit_discount_status_changed(shop_id: ID, discount_id: ID, active: bool) {
+    event::emit(DiscountStatusChanged {
         shop_id,
         discount_id,
         active,
+    });
+}
+
+/// Emits a `DiscountSpotlightChanged` payload.
+public(package) fun emit_discount_spotlight_changed(
+    shop_id: ID,
+    discount_id: ID,
+    is_spotlight: bool,
+) {
+    event::emit(DiscountSpotlightChanged {
+        shop_id,
+        discount_id,
+        is_spotlight,
     });
 }
 
@@ -288,10 +323,14 @@ public(package) fun shop_owner_updated(
     }
 }
 
-/// Builds a `ShopToggled` payload.
+/// Builds a `ShopStatusChanged` payload.
 #[test_only]
-public(package) fun shop_toggled(shop_id: ID, owner_cap_id: ID, active: bool): ShopToggled {
-    ShopToggled {
+public(package) fun shop_status_changed(
+    shop_id: ID,
+    owner_cap_id: ID,
+    active: bool,
+): ShopStatusChanged {
+    ShopStatusChanged {
         shop_id,
         owner_cap_id,
         active,
@@ -332,11 +371,17 @@ public(package) fun item_listing_removed(shop_id: ID, listing_id: ID): ItemListi
 
 /// Builds a `DiscountCreated` payload.
 #[test_only]
-public(package) fun discount_created(
-    shop_id: ID,
-    discount_id: ID,
-): DiscountCreated {
+public(package) fun discount_created(shop_id: ID, discount_id: ID): DiscountCreated {
     DiscountCreated {
+        shop_id,
+        discount_id,
+    }
+}
+
+/// Builds a `DiscountRemoved` payload.
+#[test_only]
+public(package) fun discount_removed(shop_id: ID, discount_id: ID): DiscountRemoved {
+    DiscountRemoved {
         shop_id,
         discount_id,
     }
@@ -344,27 +389,38 @@ public(package) fun discount_created(
 
 /// Builds a `DiscountUpdated` payload.
 #[test_only]
-public(package) fun discount_updated(
-    shop_id: ID,
-    discount_id: ID,
-): DiscountUpdated {
+public(package) fun discount_updated(shop_id: ID, discount_id: ID): DiscountUpdated {
     DiscountUpdated {
         shop_id,
         discount_id,
     }
 }
 
-/// Builds a `DiscountToggled` payload.
+/// Builds a `DiscountStatusChanged` payload.
 #[test_only]
-public(package) fun discount_toggled(
+public(package) fun discount_status_changed(
     shop_id: ID,
     discount_id: ID,
     active: bool,
-): DiscountToggled {
-    DiscountToggled {
+): DiscountStatusChanged {
+    DiscountStatusChanged {
         shop_id,
         discount_id,
         active,
+    }
+}
+
+/// Builds a `DiscountSpotlightChanged` payload.
+#[test_only]
+public(package) fun discount_spotlight_changed(
+    shop_id: ID,
+    discount_id: ID,
+    is_spotlight: bool,
+): DiscountSpotlightChanged {
+    DiscountSpotlightChanged {
+        shop_id,
+        discount_id,
+        is_spotlight,
     }
 }
 

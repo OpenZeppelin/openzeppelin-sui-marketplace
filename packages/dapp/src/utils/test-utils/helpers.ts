@@ -504,28 +504,26 @@ export const createDiscountFixture = async ({
   }
 }
 
-export const attachDiscountToListing = async ({
+export const spotlightDiscount = async ({
   scriptRunner,
   publisher,
   shopId,
-  itemListingId,
   discountId
 }: {
   scriptRunner: SuiScriptRunner
   publisher: TestAccount
   shopId: string
-  itemListingId: string
   discountId: string
 }): Promise<void> => {
   await runOwnerScriptJson<Record<string, unknown>>(
     scriptRunner,
-    "item-listing-attach-discount",
+    "discount-set-spotlight",
     {
       account: publisher,
       args: {
         shopId,
-        itemListingId,
-        discountId
+        discountId,
+        spotlight: true
       }
     }
   )
@@ -562,22 +560,18 @@ export const seedShopWithListingAndDiscount = async ({
     stock
   })
 
-  // Scope the discount to the listing so it can be spotlighted. A global (unscoped)
-  // discount is rejected by attach_spotlight_discount to avoid silently narrowing its scope.
   const discount = await createDiscountFixture({
     scriptRunner,
     publisher,
     shopId,
     ruleKind,
-    value,
-    listingId: itemListing.itemListingId
+    value
   })
 
-  await attachDiscountToListing({
+  await spotlightDiscount({
     scriptRunner,
     publisher,
     shopId,
-    itemListingId: itemListing.itemListingId,
     discountId: discount.discountId
   })
 
