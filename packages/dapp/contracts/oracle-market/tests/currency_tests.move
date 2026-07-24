@@ -59,6 +59,102 @@ fun add_accepted_currency_rejects_duplicate_coin_type() {
     abort
 }
 
+#[test, expected_failure(abort_code = ::sui_oracle_market::shop::EAcceptedCurrencyExists)]
+fun add_accepted_currency_rejects_duplicate_feed_id() {
+    let mut ctx = tx_context::new_from_hint(@0x0, 21, 0, 0, 0);
+    let (mut shop, owner_cap) = shop::test_setup_shop(owner(), &mut ctx);
+    let test_currency = test_helpers::create_test_currency(&mut ctx);
+    let alt_currency = test_helpers::create_alt_test_currency(&mut ctx);
+
+    // First currency claims the primary feed.
+    let _ = test_helpers::add_currency_with_feed<test_helpers::TestCoin>(
+        &mut shop,
+        &owner_cap,
+        &test_currency,
+        test_helpers::primary_feed_id(),
+        &mut ctx,
+    );
+
+    // A different coin type cannot reuse the same feed.
+    let _ = test_helpers::add_currency_with_feed<test_helpers::AltTestCoin>(
+        &mut shop,
+        &owner_cap,
+        &alt_currency,
+        test_helpers::primary_feed_id(),
+        &mut ctx,
+    );
+
+    abort
+}
+
+#[test]
+fun remove_accepted_currency_frees_feed_for_reuse() {
+    let mut ctx = tx_context::new_from_hint(@0x0, 22, 0, 0, 0);
+    let (mut shop, owner_cap) = shop::test_setup_shop(owner(), &mut ctx);
+    let test_currency = test_helpers::create_test_currency(&mut ctx);
+    let alt_currency = test_helpers::create_alt_test_currency(&mut ctx);
+
+    let _ = test_helpers::add_currency_with_feed<test_helpers::TestCoin>(
+        &mut shop,
+        &owner_cap,
+        &test_currency,
+        test_helpers::primary_feed_id(),
+        &mut ctx,
+    );
+    assert!(shop.currency_exists<test_helpers::TestCoin>());
+
+    // Removing the currency frees its feed id.
+    shop.remove_accepted_currency<test_helpers::TestCoin>(&owner_cap);
+    assert!(!shop.currency_exists<test_helpers::TestCoin>());
+
+    // A different coin can now register under the previously-used feed.
+    let _ = test_helpers::add_currency_with_feed<test_helpers::AltTestCoin>(
+        &mut shop,
+        &owner_cap,
+        &alt_currency,
+        test_helpers::primary_feed_id(),
+        &mut ctx,
+    );
+    assert!(shop.currency_exists<test_helpers::AltTestCoin>());
+
+    std::unit_test::destroy(test_currency);
+    std::unit_test::destroy(alt_currency);
+    std::unit_test::destroy(owner_cap);
+    std::unit_test::destroy(shop);
+}
+
+#[test]
+fun currency_by_feed_returns_registered_currency() {
+    let mut ctx = tx_context::new_from_hint(@0x0, 23, 0, 0, 0);
+    let (mut shop, owner_cap) = shop::test_setup_shop(owner(), &mut ctx);
+    let test_currency = test_helpers::create_test_currency(&mut ctx);
+
+    let _ = test_helpers::add_currency_with_feed<test_helpers::TestCoin>(
+        &mut shop,
+        &owner_cap,
+        &test_currency,
+        test_helpers::primary_feed_id(),
+        &mut ctx,
+    );
+
+    let resolved = shop.currency_by_feed(test_helpers::primary_feed_id());
+    assert_eq!(resolved.feed_id(), test_helpers::primary_feed_id());
+
+    std::unit_test::destroy(test_currency);
+    std::unit_test::destroy(owner_cap);
+    std::unit_test::destroy(shop);
+}
+
+#[test, expected_failure(abort_code = ::sui_oracle_market::shop::EAcceptedCurrencyMissing)]
+fun currency_by_feed_aborts_for_unregistered_feed() {
+    let mut ctx = tx_context::new_from_hint(@0x0, 24, 0, 0, 0);
+    let (shop, _owner_cap) = shop::test_setup_shop(owner(), &mut ctx);
+
+    shop.currency_by_feed(test_helpers::secondary_feed_id());
+
+    abort
+}
+
 // `currency::create` owns feed-id format validation. `add_accepted_currency`
 // runs `assert_price_info_identity!` first, so a malformed feed id is rejected
 // there (see `add_accepted_currency_rejects_identifier_mismatch`) before

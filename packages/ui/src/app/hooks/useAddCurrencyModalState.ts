@@ -29,7 +29,8 @@ import { resolveCurrencyObjectId } from "@sui-oracle-market/tooling-core/coin-re
 import {
   assertBytesLength,
   ensureHexPrefix,
-  hexToBytes
+  hexToBytes,
+  normalizeHex
 } from "@sui-oracle-market/tooling-core/hex"
 import { deriveRelevantPackageId } from "@sui-oracle-market/tooling-core/object"
 import { getSuiSharedObject } from "@sui-oracle-market/tooling-core/shared-object"
@@ -114,8 +115,32 @@ const emptyFormState = (): CurrencyFormState => ({
 type CurrencyFieldErrors = Partial<Record<keyof CurrencyFormState, string>>
 type CurrencyFieldWarnings = Partial<Record<keyof CurrencyFormState, string>>
 
+// Finds an already-registered currency that uses `feedId`. The shop enforces
+// one currency per feed on-chain (aborting with `EAcceptedCurrencyExists`), so
+// we surface the collision as a field error before submitting rather than after
+// a failed tx.
+const findFeedCollision = (
+  feedId: string,
+  acceptedCurrencies: AcceptedCurrencySummary[]
+): AcceptedCurrencySummary | undefined => {
+  let normalizedFeedId: string
+  try {
+    normalizedFeedId = normalizeHex(ensureHexPrefix(feedId.trim()))
+  } catch {
+    return undefined
+  }
+  return acceptedCurrencies.find((currency) => {
+    try {
+      return normalizeHex(currency.feedIdHex) === normalizedFeedId
+    } catch {
+      return false
+    }
+  })
+}
+
 const buildCurrencyFieldErrors = (
-  formState: CurrencyFormState
+  formState: CurrencyFormState,
+  acceptedCurrencies: AcceptedCurrencySummary[]
 ): CurrencyFieldErrors => {
   const errors: CurrencyFieldErrors = {}
 
@@ -133,7 +158,18 @@ const buildCurrencyFieldErrors = (
     expectedBytes: 32,
     label: "Pyth feed id"
   })
-  if (feedIdError) errors.feedId = feedIdError
+  if (feedIdError) {
+    errors.feedId = feedIdError
+  } else {
+    const feedCollision = findFeedCollision(
+      formState.feedId,
+      acceptedCurrencies
+    )
+    if (feedCollision)
+      errors.feedId = `Feed already used by ${getStructLabel(
+        feedCollision.coinType
+      )}. Each feed can back only one currency.`
+  }
 
   const priceInfoError = validateOptionalSuiObjectId(
     formState.priceInfoObjectId,
@@ -262,10 +298,12 @@ type AddCurrencyModalState = {
 export const useAddCurrencyModalState = ({
   open,
   shopId,
+  acceptedCurrencies = [],
   onCurrencyCreated
 }: {
   open: boolean
   shopId?: string
+  acceptedCurrencies?: AcceptedCurrencySummary[]
   onCurrencyCreated?: (currency?: AcceptedCurrencySummary) => void
 }): AddCurrencyModalState => {
   const currentAccount = useCurrentAccount()
@@ -307,8 +345,8 @@ export const useAddCurrencyModalState = ({
   const walletAddress = currentAccount?.address
 
   const fieldErrors = useMemo(
-    () => buildCurrencyFieldErrors(formState),
-    [formState]
+    () => buildCurrencyFieldErrors(formState, acceptedCurrencies),
+    [formState, acceptedCurrencies]
   )
   const fieldWarnings = useMemo(
     () => buildCurrencyFieldWarnings(formState),
@@ -634,9 +672,19 @@ export const useAddCurrencyModalState = ({
         2
       )
       const formattedError = formatErrorMessage(error)
-      const errorMessage = localnetSupportNote
-        ? `${formattedError} ${localnetSupportNote}`
+      // Map the shop's `EAcceptedCurrencyExists` abort to a clear message. It
+      // covers both a duplicate coin type and a feed already bound to another
+      // currency. This is a safety net for the race where another registration
+      // lands between load and submit -- the field-level checks catch the
+      // common case.
+      const isDuplicateRegistration =
+        /accepted currency exists|EAcceptedCurrencyExists/i.test(formattedError)
+      const baseError = isDuplicateRegistration
+        ? "This coin type or its Pyth feed is already registered in this shop. Each coin type and each feed can be registered only once."
         : formattedError
+      const errorMessage = localnetSupportNote
+        ? `${baseError} ${localnetSupportNote}`
+        : baseError
       setTransactionState({
         status: "error",
         error: errorMessage,

@@ -315,7 +315,12 @@ const AddCurrencyModal = ({
     shouldShowFieldError,
     shouldShowFieldWarning,
     resetForm
-  } = useAddCurrencyModalState({ open, shopId, onCurrencyCreated })
+  } = useAddCurrencyModalState({
+    open,
+    shopId,
+    acceptedCurrencies,
+    onCurrencyCreated
+  })
   const errorState =
     transactionState.status === "error" ? transactionState : undefined
 

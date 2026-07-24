@@ -434,7 +434,7 @@ fun remove_currency_field_clears_mapping() {
     );
 
     test_helpers::remove_currency_if_exists<test_helpers::TestCoin>(&mut shop_obj, &owner_cap_obj);
-    assert!(!shop_obj.currency_exists(test_helpers::test_coin_type()));
+    assert!(!shop_obj.currency_exists<test_helpers::TestCoin>());
 
     scn.return_to_sender(owner_cap_obj);
     test_scenario::return_shared(shop_obj);

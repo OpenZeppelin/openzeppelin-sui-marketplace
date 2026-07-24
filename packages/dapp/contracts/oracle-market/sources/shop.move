@@ -134,6 +134,9 @@ public struct Shop has key, store {
     active: bool,
     /// Registered coin metadata by `TypeName`.
     accepted_currencies: Table<TypeName, AcceptedCurrency>,
+    /// Reverse index from Pyth `feed_id` to the coin `TypeName` that owns it.
+    /// Enforces one accepted currency per feed and enables feed-based lookups.
+    accepted_currency_feeds: Table<vector<u8>, TypeName>,
     /// Listings keyed by stable object `ID` identifiers.
     listings: Table<ID, ItemListing>,
     /// Discounts keyed by discount ID.
@@ -330,11 +333,14 @@ public fun add_accepted_currency<C>(
     // Bind this currency to a Pyth feed id to prevent oracle feed spoofing.
     let coin_type = type_name::with_defining_ids<C>();
     assert!(!shop.accepted_currencies.contains(coin_type), EAcceptedCurrencyExists);
+    // Reject a feed already bound to another currency so a shop cannot price two
+    // distinct coins off the same feed.
+    assert!(!shop.accepted_currency_feeds.contains(feed_id), EAcceptedCurrencyExists);
 
     // Validate on-chain oracle identity before mutating shop state.
     assert_price_info_identity!(feed_id, price_info_object);
 
-    // Add accepted currency to storage.
+    // Add accepted currency to storage, indexed by both coin type and feed id.
     let accepted_currency = currency::create(
         feed_id,
         currency,
@@ -342,6 +348,7 @@ public fun add_accepted_currency<C>(
         max_confidence_ratio_bps_cap,
     );
     shop.accepted_currencies.add(coin_type, accepted_currency);
+    shop.accepted_currency_feeds.add(feed_id, coin_type);
 
     events::emit_accepted_coin_added(shop.id(), feed_id);
 }
@@ -355,10 +362,11 @@ public fun remove_accepted_currency<C>(shop: &mut Shop, owner_cap: &ShopOwnerCap
     assert!(shop.accepted_currencies.contains(coin_type), EAcceptedCurrencyMissing);
     let accepted_currency = shop.accepted_currencies.remove(coin_type);
 
-    events::emit_accepted_coin_removed(
-        shop.id(),
-        accepted_currency.feed_id(),
-    );
+    // Free the feed id so it can be reused by a future registration.
+    let feed_id = accepted_currency.feed_id();
+    shop.accepted_currency_feeds.remove(feed_id);
+
+    events::emit_accepted_coin_removed(shop.id(), feed_id);
 }
 
 /// Create a discount anchored under the shop.
@@ -591,9 +599,18 @@ public fun currency<C>(shop: &Shop): &AcceptedCurrency {
     shop.accepted_currencies.borrow(coin_type)
 }
 
-/// Returns true if the accepted currency is registered under the shop.
-public fun currency_exists(shop: &Shop, coin_type: TypeName): bool {
+/// Returns true if an accepted currency for `C` is registered under the shop.
+public fun currency_exists<C>(shop: &Shop): bool {
+    let coin_type = type_name::with_defining_ids<C>();
     shop.accepted_currencies.contains(coin_type)
+}
+
+/// Returns the accepted currency config bound to `feed_id`.
+/// Fails if no currency is registered for the feed.
+public fun currency_by_feed(shop: &Shop, feed_id: vector<u8>): &AcceptedCurrency {
+    assert!(shop.accepted_currency_feeds.contains(feed_id), EAcceptedCurrencyMissing);
+    let coin_type = *shop.accepted_currency_feeds.borrow(feed_id);
+    shop.accepted_currencies.borrow(coin_type)
 }
 
 /// Returns the discount for `discount_id`.
@@ -670,6 +687,7 @@ fun new(name: String, owner: address, ctx: &mut TxContext): Shop {
         name,
         active: true,
         accepted_currencies: table::new<TypeName, AcceptedCurrency>(ctx),
+        accepted_currency_feeds: table::new<vector<u8>, TypeName>(ctx),
         listings: table::new<ID, ItemListing>(ctx),
         discounts: table::new<ID, Discount>(ctx),
     }

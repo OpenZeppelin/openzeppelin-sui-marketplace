@@ -208,8 +208,7 @@ public(package) fun remove_currency_if_exists<TCoin>(
     shop_obj: &mut shop::Shop,
     owner_cap: &shop::ShopOwnerCap,
 ) {
-    let coin_type = type_name::with_defining_ids<TCoin>();
-    if (shop_obj.currency_exists(coin_type)) {
+    if (shop_obj.currency_exists<TCoin>()) {
         shop_obj.remove_accepted_currency<TCoin>(owner_cap);
     };
 }
