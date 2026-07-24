@@ -97,7 +97,7 @@ public fun currency_exists(
 
 ## 7. Exercises
 
-1. Find `quote_amount_for_price_info_object` and identify which parts are “identity checks” vs “pricing math”. Expected outcome: you can point to the function that binds feed bytes + object IDs.
+1. Find `quote_amount_for_price_info_object` and identify which parts are “identity checks” vs “pricing math”. Expected outcome: you can point to the function that binds the feed id read from the `PriceInfoObject`.
 2. Find `buy_item` and explain why it returns `(ShopItem<T>, Coin<C>)`. Expected outcome: you can explain why PTBs transfer result objects explicitly after checkout.
 
 ## 8. Annotated diff: Solidity vs Move buy flow

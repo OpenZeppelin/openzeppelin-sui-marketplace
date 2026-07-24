@@ -85,9 +85,11 @@ const EListingNotFound: vector<u8> = "listing not found";
 #[error(code = 3)]
 const EListingHasActiveDiscounts: vector<u8> = "listing has active discounts";
 #[error(code = 4)]
-const EAcceptedCurrencyExists: vector<u8> = "accepted currency exists";
+const ECurrencyTypeExists: vector<u8> = "currency type exists";
 #[error(code = 5)]
 const EAcceptedCurrencyMissing: vector<u8> = "accepted currency missing";
+#[error(code = 6)]
+const EFeedIdentifierExists: vector<u8> = "feed identifier exists";
 #[error(code = 7)]
 const EFeedIdentifierMismatch: vector<u8> = "feed identifier mismatch";
 #[error(code = 8)]
@@ -332,10 +334,10 @@ public fun add_accepted_currency<C>(
 
     // Bind this currency to a Pyth feed id to prevent oracle feed spoofing.
     let coin_type = type_name::with_defining_ids<C>();
-    assert!(!shop.accepted_currencies.contains(coin_type), EAcceptedCurrencyExists);
+    assert!(!shop.accepted_currencies.contains(coin_type), ECurrencyTypeExists);
     // Reject a feed already bound to another currency so a shop cannot price two
     // distinct coins off the same feed.
-    assert!(!shop.accepted_currency_feeds.contains(feed_id), EAcceptedCurrencyExists);
+    assert!(!shop.accepted_currency_feeds.contains(feed_id), EFeedIdentifierExists);
 
     // Validate on-chain oracle identity before mutating shop state.
     assert_price_info_identity!(feed_id, price_info_object);

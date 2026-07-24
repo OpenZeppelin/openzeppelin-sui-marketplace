@@ -87,8 +87,8 @@ public fun add_accepted_currency<C>(
 
   let coin_type = type_name::with_defining_ids<C>();
   // One accepted currency per coin type and one per feed.
-  assert!(!shop.accepted_currencies.contains(coin_type), EAcceptedCurrencyExists);
-  assert!(!shop.accepted_currency_feeds.contains(feed_id), EAcceptedCurrencyExists);
+  assert!(!shop.accepted_currencies.contains(coin_type), ECurrencyTypeExists);
+  assert!(!shop.accepted_currency_feeds.contains(feed_id), EFeedIdentifierExists);
 
   // Validate oracle identity (feed id read from the object) before mutating state.
   assert_price_info_identity!(feed_id, price_info_object);

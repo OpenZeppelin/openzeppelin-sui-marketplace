@@ -86,8 +86,9 @@ the RPC, the UI, or scripts.
 ### 3.3 One accepted currency per feed
 
 A shop rejects registering a second currency against a `feed_id` already bound to another
-currency (`add_accepted_currency` aborts with `EAcceptedCurrencyExists`, backed by the
-`accepted_currency_feeds` reverse index). Without this, an owner could bind two coins of
+currency (`add_accepted_currency` aborts with `EFeedIdentifierExists`, backed by the
+`accepted_currency_feeds` reverse index; a duplicate coin type aborts with
+`ECurrencyTypeExists`). Without this, an owner could bind two coins of
 different real value to the same feed, and a buyer would rationally settle in whichever coin
 is cheapest relative to the shared price -- the shop would receive less value than intended.
 Keeping feeds unique per currency removes that misconfiguration.

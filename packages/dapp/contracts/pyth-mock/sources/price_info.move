@@ -7,6 +7,11 @@ use pyth::price_identifier::{Self, PriceIdentifier};
 use pyth::pyth_state::{Self, State};
 use sui::clock::{Self, Clock};
 
+// === Errors ===
+
+#[error(code = 0)]
+const EFeedAlreadyPublished: vector<u8> = "feed already published in mock state";
+
 // === Structs ===
 
 /// Simplified price info object for localnet tests.
@@ -78,7 +83,10 @@ public fun publish_price_feed(
     let price_info_object = new_price_info_object(price_info, ctx);
 
     // Register the new PriceInfoObject in the State's feed table before sharing.
+    // Reject a duplicate feed with an intentional error instead of the table's
+    // generic key-collision abort.
     let table = pyth_state::price_info_table_mut(state);
+    assert!(!table.contains(price_identifier), EFeedAlreadyPublished);
     table.add(price_identifier, uid_to_inner(&price_info_object));
 
     share_price_info_object(price_info_object);

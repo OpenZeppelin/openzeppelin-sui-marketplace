@@ -116,7 +116,7 @@ type CurrencyFieldErrors = Partial<Record<keyof CurrencyFormState, string>>
 type CurrencyFieldWarnings = Partial<Record<keyof CurrencyFormState, string>>
 
 // Finds an already-registered currency that uses `feedId`. The shop enforces
-// one currency per feed on-chain (aborting with `EAcceptedCurrencyExists`), so
+// one currency per feed on-chain (aborting with `EFeedIdentifierExists`), so
 // we surface the collision as a field error before submitting rather than after
 // a failed tx.
 const findFeedCollision = (
@@ -672,16 +672,20 @@ export const useAddCurrencyModalState = ({
         2
       )
       const formattedError = formatErrorMessage(error)
-      // Map the shop's `EAcceptedCurrencyExists` abort to a clear message. It
-      // covers both a duplicate coin type and a feed already bound to another
-      // currency. This is a safety net for the race where another registration
-      // lands between load and submit -- the field-level checks catch the
-      // common case.
-      const isDuplicateRegistration =
-        /accepted currency exists|EAcceptedCurrencyExists/i.test(formattedError)
-      const baseError = isDuplicateRegistration
-        ? "This coin type or its Pyth feed is already registered in this shop. Each coin type and each feed can be registered only once."
-        : formattedError
+      // Map the shop's duplicate-registration aborts to clear messages. The coin
+      // type collision aborts with `ECurrencyTypeExists` and a feed already bound
+      // to another currency aborts with `EFeedIdentifierExists`. This is a safety
+      // net for the race where another registration lands between load and submit
+      // -- the field-level checks catch the common case.
+      const isFeedConflict =
+        /feed identifier exists|EFeedIdentifierExists/i.test(formattedError)
+      const isCoinTypeConflict =
+        /currency type exists|ECurrencyTypeExists/i.test(formattedError)
+      const baseError = isFeedConflict
+        ? "This Pyth feed is already used by another accepted currency in this shop. Each feed can back only one currency."
+        : isCoinTypeConflict
+          ? "This coin type is already registered in this shop."
+          : formattedError
       const errorMessage = localnetSupportNote
         ? `${baseError} ${localnetSupportNote}`
         : baseError

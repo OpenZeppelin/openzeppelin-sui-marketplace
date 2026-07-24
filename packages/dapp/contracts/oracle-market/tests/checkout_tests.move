@@ -969,6 +969,45 @@ fun buy_item_rejects_out_of_stock_after_depletion() {
     abort
 }
 
+#[test, expected_failure(abort_code = ::sui_oracle_market::shop::EFeedIdentifierMismatch)]
+fun buy_item_rejects_price_info_object_with_mismatched_feed() {
+    let mut scn = test_scenario::begin(owner());
+    let (
+        shop_id,
+        _currency_id,
+        listing_id,
+        _price_info_id,
+    ) = setup_shop_with_currency_listing_and_price_info(&mut scn, 100, 1);
+
+    let _ = scn.next_tx(second_owner());
+
+    let mut shared_shop = scn.take_shared_by_id<shop::Shop>(shop_id);
+    // A PriceInfoObject for a different feed than the registered currency
+    // (which uses `primary_feed_id`) must be rejected by process_purchase's
+    // oracle-identity check.
+    let mismatched_price_info = test_helpers::create_price_info_object_for_feed(
+        test_helpers::secondary_feed_id(),
+        scn.ctx(),
+    );
+    let clock_obj = test_helpers::create_test_clock_at(scn.ctx(), 10);
+    let payment = coin::mint_for_testing<test_helpers::TestCoin>(1, scn.ctx());
+
+    let (_minted_item, _change_coin) = shared_shop.buy_item<
+        test_helpers::TestItem,
+        test_helpers::TestCoin,
+    >(
+        &mismatched_price_info,
+        payment,
+        listing_id,
+        option::none(),
+        option::none(),
+        &clock_obj,
+        scn.ctx(),
+    );
+
+    abort
+}
+
 #[test]
 fun buy_item_with_discount_emits_discount_redeemed_and_records_discount_id() {
     let mut scn = test_scenario::begin(owner());

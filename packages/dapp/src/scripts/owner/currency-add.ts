@@ -3,6 +3,7 @@
  * Stores coin metadata from the registry and guardrail caps on the currency object.
  * Requires the ShopOwnerCap capability and a valid PriceInfoObject.
  */
+import type { SuiClient } from "@mysten/sui/client"
 import { normalizeSuiObjectId } from "@mysten/sui/utils"
 import yargs from "yargs"
 
@@ -12,9 +13,15 @@ import {
   requireAcceptedCurrencyByCoinType,
   type AcceptedCurrencySummary
 } from "@sui-oracle-market/domain-core/models/currency"
+import type { PythPullOracleConfig } from "@sui-oracle-market/domain-core/models/pyth"
+import {
+  createPythClientForNetwork,
+  resolvePythPriceInfoObjectId
+} from "@sui-oracle-market/domain-core/models/pyth-feeds"
 import { buildAddAcceptedCurrencyTransaction } from "@sui-oracle-market/domain-core/ptb/currency"
 import {
   assertBytesLength,
+  ensureHexPrefix,
   hexToBytes
 } from "@sui-oracle-market/tooling-core/hex"
 import {
@@ -28,8 +35,11 @@ import {
 import type { Tooling } from "@sui-oracle-market/tooling-node/factory"
 import { emitJsonOutput } from "@sui-oracle-market/tooling-node/json"
 import { logKeyValueGreen } from "@sui-oracle-market/tooling-node/log"
+import { readArtifact } from "@sui-oracle-market/tooling-node/artifacts"
 import { runSuiScript } from "@sui-oracle-market/tooling-node/process"
 import { logAcceptedCurrencySummary } from "../../utils/log-summaries.ts"
+import type { MockArtifact } from "../../utils/mocks.ts"
+import { mockArtifactPath } from "../../utils/mocks.ts"
 import { resolveOwnerShopIdentifiers } from "../../utils/shop-context.ts"
 
 runSuiScript(
@@ -70,8 +80,28 @@ runSuiScript(
     const currencySharedObject = await tooling.getImmutableSharedObject({
       objectId: inputs.currencyId
     })
+
+    // The shop binds a currency to its feed id only, so resolve the current
+    // PriceInfoObject from the feed. An explicit --price-info-object-id is
+    // optional and only cross-checked against the resolved object.
+    const resolvedPriceInfoObjectId = await resolvePriceInfoObjectId({
+      networkName: tooling.network.networkName,
+      feedIdHex: inputs.feedIdHex,
+      coinType: inputs.coinType,
+      suiClient: tooling.suiClient,
+      pythConfigOverride: tooling.suiConfig.network.pyth
+    })
+
+    if (
+      inputs.priceInfoObjectId &&
+      inputs.priceInfoObjectId !== resolvedPriceInfoObjectId
+    )
+      throw new Error(
+        `Provided --price-info-object-id ${inputs.priceInfoObjectId} does not match the object resolved from feed ${inputs.feedIdHex} (${resolvedPriceInfoObjectId}). Omit it to use the resolved object, or correct the id.`
+      )
+
     const priceInfoSharedObject = await tooling.getImmutableSharedObject({
-      objectId: inputs.priceInfoObjectId
+      objectId: resolvedPriceInfoObjectId
     })
 
     const gasBudget = tooling.network.gasBudget ?? DEFAULT_TX_GAS_BUDGET
@@ -165,8 +195,7 @@ runSuiScript(
       alias: ["price-info-object-id", "pyth-object-id"],
       type: "string",
       description:
-        "PriceInfoObject ID for the Pyth feed (shared object). Bound to the accepted currency at registration time.",
-      demandOption: true
+        "Optional PriceInfoObject ID for the Pyth feed (shared object). Resolved from the feed id when omitted; if provided, it is cross-checked against the resolved object."
     })
     .option("maxPriceAgeSecsCap", {
       alias: ["max-price-age-secs-cap", "max-price-age"],
@@ -200,6 +229,57 @@ runSuiScript(
     .strict()
 )
 
+// Resolves the current PriceInfoObject id from a feed id. On localnet it reads
+// the mock Pyth `State` id from the mock artifact; on real networks it uses the
+// pull-oracle config. Mirrors the buyer script's resolution.
+const resolvePriceInfoObjectId = async ({
+  networkName,
+  feedIdHex,
+  coinType,
+  suiClient,
+  pythConfigOverride
+}: {
+  networkName: string
+  feedIdHex: string
+  coinType: string
+  suiClient: SuiClient
+  pythConfigOverride?: PythPullOracleConfig
+}): Promise<string> => {
+  const localnetPythStateId =
+    networkName === "localnet"
+      ? (await readArtifact<MockArtifact>(mockArtifactPath, {})).pythStateId
+      : undefined
+
+  if (networkName === "localnet" && !localnetPythStateId)
+    throw new Error(
+      "Missing mock Pyth state id. Run `pnpm script mock:setup --network localnet` before registering a currency on localnet."
+    )
+
+  const pythClient = createPythClientForNetwork({
+    suiClient,
+    networkName,
+    localnetPythStateId,
+    pythConfigOverride
+  })
+
+  if (!pythClient)
+    throw new Error(
+      `No Pyth configuration for network ${networkName}; cannot resolve a PriceInfoObject for ${coinType}.`
+    )
+
+  const priceInfoObjectId = await resolvePythPriceInfoObjectId({
+    pythClient,
+    feedId: feedIdHex
+  })
+
+  if (!priceInfoObjectId)
+    throw new Error(
+      `No Pyth PriceInfoObject found for feed ${feedIdHex} (currency ${coinType}). Seed the feed or verify the feed id.`
+    )
+
+  return priceInfoObjectId
+}
+
 const normalizeInputs = async (
   cliArguments: {
     shopPackageId?: string
@@ -207,7 +287,7 @@ const normalizeInputs = async (
     ownerCapId?: string
     coinType: string
     feedId: string
-    priceInfoObjectId: string
+    priceInfoObjectId?: string
     currencyId?: string
     maxPriceAgeSecsCap?: string
     maxConfidenceRatioBpsCap?: string
@@ -227,8 +307,11 @@ const normalizeInputs = async (
 
   const coinType = normalizeCoinType(cliArguments.coinType)
 
-  const feedIdBytes = assertBytesLength(hexToBytes(cliArguments.feedId), 32)
-  const priceInfoObjectId = normalizeSuiObjectId(cliArguments.priceInfoObjectId)
+  const feedIdHex = ensureHexPrefix(cliArguments.feedId.trim())
+  const feedIdBytes = assertBytesLength(hexToBytes(feedIdHex), 32)
+  const priceInfoObjectId = cliArguments.priceInfoObjectId?.trim()
+    ? normalizeSuiObjectId(cliArguments.priceInfoObjectId.trim())
+    : undefined
   const currencyId =
     cliArguments.currencyId ||
     (await tooling.resolveCurrencyObjectId({
@@ -248,6 +331,7 @@ const normalizeInputs = async (
     ownerCapId,
     coinType,
     currencyId: normalizeSuiObjectId(currencyId),
+    feedIdHex,
     feedIdBytes,
     priceInfoObjectId,
     maxPriceAgeSecsCap: parseOptionalPositiveU64(
