@@ -196,23 +196,22 @@ Owner scripts default `--shop-package-id`, `--shop-id`, and `--owner-cap-id` fro
 - Flags:
   - `--coin-type <0x...::Coin>`: coin type to accept (required).
   - `--feed-id <hex>`: 32-byte Pyth feed ID as hex (required).
-  - `--price-info-object-id <id>`: shared Pyth `PriceInfoObject` ID (required; also passed as `pyth_object_id`).
+  - `--price-info-object-id <id>`: shared Pyth `PriceInfoObject` ID (optional). The object is resolved from the feed id by default; if provided, it is cross-checked against the resolved object and rejected on mismatch.
   - `--currency-object-id <id>`: coin registry `Currency` object (defaults to the derived `CurrencyKey<T>`).
   - `--max-price-age-secs-cap <u64>` / `--max-confidence-ratio-bps-cap <u64>` / `--max-price-status-lag-secs-cap <u64>`: optional guardrail caps.
   - `--shop-package-id <id>` / `--shop-id <id>` / `--owner-cap-id <id>`: override artifact defaults.
 
 **Pyth setup flow (feed discovery → currency registration)**
 
-- 1. Find the feed + PriceInfoObject:
+- 1. Find the feed:
   ```bash
   pnpm script owner:pyth:list --quote USD --limit 5
   ```
-- 2. Register the currency using the feed + object IDs from step 1:
+- 2. Register the currency using the feed id from step 1 (the `PriceInfoObject` is resolved from it):
   ```bash
   pnpm script owner:currency:add \
     --coin-type 0x2::sui::SUI \
-    --feed-id <PYTH_FEED_ID> \
-    --price-info-object-id <PYTH_PRICE_INFO_OBJECT_ID>
+    --feed-id <PYTH_FEED_ID>
   ```
 
 ### `pnpm script owner:pyth:list`

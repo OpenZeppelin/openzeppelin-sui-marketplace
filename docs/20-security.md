@@ -63,26 +63,34 @@ This prevents a caller from mixing objects from different shops.
 The oracle input is a shared object (`PriceInfoObject`) supplied by the caller.
 You must assume the caller will try to pass the wrong object.
 
-The module defends against this by binding two things:
-
-- the expected Pyth object ID, and
-- the expected feed identifier bytes.
+The module defends against this by reading the feed identifier out of the supplied
+object and comparing it to the currency's expected `feed_id`. Because the
+`PriceInfoObject` type is minted only by the Pyth package, that identifier proves
+which feed the object carries. The object id itself is deliberately not pinned:
+the canonical `PriceInfoObject` for a feed can change, so callers resolve the
+current object from the feed id and the module trusts the feed id, not the object id.
 
 From `assert_price_info_identity` in `packages/dapp/contracts/oracle-market/sources/shop.move`:
 
 ```move
-let confirmed_price_object = price_info_object.uid_to_inner();
-assert!(confirmed_price_object == expected_pyth_object_id, EPythObjectMismatch);
-
-let price_info = price_info::get_price_info_from_price_info_object(price_info_object);
-let identifier = price_info.get_price_identifier();
-let identifier_bytes = identifier.get_bytes();
+let identifier_bytes = price_info::get_price_info_from_price_info_object(price_info_object)
+    .get_price_identifier()
+    .get_bytes();
 assert!(expected_feed_id == identifier_bytes, EFeedIdentifierMismatch);
 ```
 
 If you extend the oracle model (multiple feeds, fallback feeds, cross rates), keep this property:
 your on-chain code should be able to prove “this object is the feed we intended” without trusting
 the RPC, the UI, or scripts.
+
+### 3.3 One accepted currency per feed
+
+A shop rejects registering a second currency against a `feed_id` already bound to another
+currency (`add_accepted_currency` aborts with `EAcceptedCurrencyExists`, backed by the
+`accepted_currency_feeds` reverse index). Without this, an owner could bind two coins of
+different real value to the same feed, and a buyer would rationally settle in whichever coin
+is cheapest relative to the shared price -- the shop would receive less value than intended.
+Keeping feeds unique per currency removes that misconfiguration.
 
 ## 4. Oracle guardrails (freshness, confidence, status)
 
