@@ -483,17 +483,39 @@ const switchSuiCliEnvironmentIfNeeded = async ({
 
   const availableEnvironments = await listSuiCliEnvironments()
 
-  const resolvedEnvironment = rpcUrl
-    ? await resolveSuiCliEnvironmentForRpcUrl({
+  let resolvedEnvironment: {
+    environmentName: string
+    availableEnvironments: string[]
+    didUseTemporaryEnvironment: boolean
+  }
+  if (rpcUrl) {
+    try {
+      resolvedEnvironment = await resolveSuiCliEnvironmentForRpcUrl({
         requestedEnvironmentName: environmentName,
         rpcUrl,
         availableEnvironments
       })
-    : {
-        environmentName,
-        availableEnvironments,
-        didUseTemporaryEnvironment: false
-      }
+    } catch (error) {
+      // Some endpoints serve JSON-RPC (which the SDK uses) but cannot back a
+      // `sui client` environment -- e.g. Cloudflare-fronted nodes fail the CLI's
+      // gRPC handshake. Aligning the CLI env is best-effort: SDK-only scripts
+      // (seed, currency:add, buyer flows) still work via the configured URL, so
+      // warn and continue rather than aborting. Scripts that actually invoke the
+      // `sui` CLI will surface their own error if the env is wrong.
+      logWarning(
+        `Could not align a Sui CLI environment with ${rpcUrl} ` +
+          `(${error instanceof Error ? error.message : String(error)}). ` +
+          `Continuing on that RPC via the SDK; skip this only matters for sui-CLI operations.`
+      )
+      return { originalEnvironment, didSwitch: false }
+    }
+  } else {
+    resolvedEnvironment = {
+      environmentName,
+      availableEnvironments,
+      didUseTemporaryEnvironment: false
+    }
+  }
 
   const targetEnvironmentName = resolvedEnvironment.environmentName
   const resolvedAvailableEnvironments =
