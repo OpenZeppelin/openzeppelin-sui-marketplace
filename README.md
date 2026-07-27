@@ -2,7 +2,9 @@
 
 End-to-end example of a small on-chain market on **Sui**. Items are priced in **USD cents** (stablecoin-style), buyers pay in **multiple currencies** using **oracle prices** from [Pyth](https://pyth.network/), and the contract layer uses [`openzeppelin_math`](https://docs.openzeppelin.com/contracts-sui/1.x/math) for safe `mul_div` with explicit rounding and overflow handling.
 
-The repo demonstrates five core Sui patterns: the capability pattern, phantom types, Programmable Transaction Blocks (PTBs), Pyth oracle integration, and on-chain enforced limits.
+The repo demonstrates five core Sui patterns: the capability pattern, phantom types, Programmable Transaction Blocks (PTBs), Pyth oracle integration, and on-chain enforced limits. It also ships a full-stack setup around those contracts -- a Next.js frontend UI plus the CLI scripts and shared tooling infrastructure that publish, seed, and drive the market end to end.
+
+![Sui Oracle Market dashboard -- an Active Shop card showing status, shop ID and owner, an Item Listings grid of USD-priced products with availability, stock, discount and listing IDs, and an Accepted Currencies panel listing SUI and BTC alongside their Pyth feed IDs](docs/images/dashboard.png)
 
 ## Resources
 
@@ -202,3 +204,11 @@ What this means in practice:
 - **`packages/domain/*`** is the domain SDK split into browser-safe `core` and Node-only `node`.
 - **`packages/tooling/*`** is shared infra helpers split into browser-safe `core` and Node-only `node`.
 - **`packages/ui`** is a Next.js UI that uses the same package IDs and Shop objects created by scripts.
+
+## Security
+
+This project was built by OpenZeppelin with the goal of providing a secure and reliable starter dApp for oracle-priced onchain markets built on top of the Sui ecosystem.
+
+Refer to [SECURITY.md](SECURITY.md) for more details.
+
+Past audits can be found in [`audits/`](./audits).

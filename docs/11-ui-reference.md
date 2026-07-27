@@ -11,6 +11,8 @@ UI-specific setup notes also live in [/reading/ui-readme](/reading/ui-readme).
 
 The UI lives in `packages/ui` and is a static-exported Next.js app (`output: "export"`) that renders the shop, listings, discounts, and checkout flows.
 
+![Sui Oracle Market dashboard -- an Active Shop card showing status, shop ID and owner, an Item Listings grid of USD-priced products with availability, stock, discount and listing IDs, and an Accepted Currencies panel listing SUI and BTC alongside their Pyth feed IDs](images/dashboard.png)
+
 ## 2. Configuration
 
 - Network + contract IDs are read from `packages/ui/src/app/config/network.ts`.
