@@ -755,60 +755,69 @@ const resolveTestnetAcceptedCurrencySeeds = async ({
   })
 
   return Promise.all(
-    ACCEPTED_CURRENCY_SEEDS.map(async (seed) => {
-      const normalizedCoinType = normalizeCoinType(seed.coinType)
-      const { currencyId, symbol } = await resolveCurrencyRegistrySummary({
-        coinType: normalizedCoinType,
-        tooling
-      })
-      const baseSymbol = symbol ?? extractStructNameFromType(normalizedCoinType)
+    ACCEPTED_CURRENCY_SEEDS.map(
+      async (seed): Promise<AcceptedCurrencySeed | undefined> => {
+        const normalizedCoinType = normalizeCoinType(seed.coinType)
+        const { currencyId, symbol } = await resolveCurrencyRegistrySummary({
+          coinType: normalizedCoinType,
+          tooling
+        })
+        const baseSymbol =
+          symbol ?? extractStructNameFromType(normalizedCoinType)
 
-      const feedResolution = await resolvePythFeedResolution({
-        hermesUrl: pythConfig.hermesUrl,
-        baseSymbol,
-        quoteSymbol: DEFAULT_PYTH_QUOTE_SYMBOL
-      })
+        const feedResolution = await resolvePythFeedResolution({
+          hermesUrl: pythConfig.hermesUrl,
+          baseSymbol,
+          quoteSymbol: DEFAULT_PYTH_QUOTE_SYMBOL
+        })
 
-      if (!feedResolution.selected) {
-        if (feedResolution.candidates.length > 1) {
+        if (!feedResolution.selected) {
+          if (feedResolution.candidates.length > 1) {
+            throw new Error(
+              `Multiple Pyth feeds match ${baseSymbol}/${DEFAULT_PYTH_QUOTE_SYMBOL}: ${formatPythFeedCandidates(
+                feedResolution.candidates
+              )}`
+            )
+          }
+
           throw new Error(
-            `Multiple Pyth feeds match ${baseSymbol}/${DEFAULT_PYTH_QUOTE_SYMBOL}: ${formatPythFeedCandidates(
-              feedResolution.candidates
-            )}`
+            `Unable to resolve a Pyth feed for ${baseSymbol}/${DEFAULT_PYTH_QUOTE_SYMBOL}. Run \`pnpm -s script owner:pyth:list --network testnet --query ${baseSymbol} --quote ${DEFAULT_PYTH_QUOTE_SYMBOL} --limit 5\` to inspect available feeds.`
           )
         }
 
-        throw new Error(
-          `Unable to resolve a Pyth feed for ${baseSymbol}/${DEFAULT_PYTH_QUOTE_SYMBOL}. Run \`pnpm -s script owner:pyth:list --network testnet --query ${baseSymbol} --quote ${DEFAULT_PYTH_QUOTE_SYMBOL} --limit 5\` to inspect available feeds.`
-        )
+        const feedId = normalizePythFeedId(feedResolution.selected.feedId)
+
+        const priceInfoObjectId = await resolvePythPriceInfoObjectId({
+          pythClient,
+          feedId
+        })
+
+        if (!priceInfoObjectId) {
+          // The feed exists in Pyth's price service but has no on-chain
+          // PriceInfoObject on this network yet, so it cannot be accepted. Skip
+          // this currency instead of aborting the whole seed.
+          logWarning(
+            `Skipping ${baseSymbol}: no on-chain Pyth PriceInfoObject for feed ${feedId} on testnet. Run \`pnpm -s script owner:pyth:list --network testnet --query ${baseSymbol} --quote ${DEFAULT_PYTH_QUOTE_SYMBOL} --limit 5\` to verify the feed.`
+          )
+          return undefined
+        }
+
+        await assertPriceInfoObjectDependency({
+          priceInfoObjectId,
+          dependencyIds,
+          suiClient: tooling.suiClient
+        })
+
+        return {
+          coinType: normalizedCoinType,
+          feedId,
+          priceInfoObjectId,
+          currencyId
+        }
       }
-
-      const feedId = normalizePythFeedId(feedResolution.selected.feedId)
-
-      const priceInfoObjectId = await resolvePythPriceInfoObjectId({
-        pythClient,
-        feedId
-      })
-
-      if (!priceInfoObjectId) {
-        throw new Error(
-          `Unable to resolve Pyth PriceInfoObject id for feed ${feedId}. Run \`pnpm -s script owner:pyth:list --network testnet --query ${baseSymbol} --quote ${DEFAULT_PYTH_QUOTE_SYMBOL} --limit 5\` to verify the feed.`
-        )
-      }
-
-      await assertPriceInfoObjectDependency({
-        priceInfoObjectId,
-        dependencyIds,
-        suiClient: tooling.suiClient
-      })
-
-      return {
-        coinType: normalizedCoinType,
-        feedId,
-        priceInfoObjectId,
-        currencyId
-      }
-    })
+    )
+  ).then((seeds) =>
+    seeds.filter((seed): seed is AcceptedCurrencySeed => seed !== undefined)
   )
 }
 

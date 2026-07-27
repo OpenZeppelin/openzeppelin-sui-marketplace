@@ -12,22 +12,17 @@ export default defineSuiConfig({
   defaultNetwork: "testnet",
   networks: {
     localnet: {
-      url: "http://127.0.0.1:9000",
-      gasBudget: DEFAULT_PUBLISH_GAS_BUDGET,
-      account: defaultAccount
-    },
-    devnet: {
-      url: getFullnodeUrl("devnet"),
+      url: process.env.NEXT_PUBLIC_LOCALNET_RPC_URL || "http://127.0.0.1:9000",
       gasBudget: DEFAULT_PUBLISH_GAS_BUDGET,
       account: defaultAccount
     },
     testnet: {
-      url: getFullnodeUrl("testnet"),
+      url: process.env.NEXT_PUBLIC_TESTNET_RPC_URL || getFullnodeUrl("testnet"),
       gasBudget: DEFAULT_PUBLISH_GAS_BUDGET,
       account: defaultAccount
     },
     mainnet: {
-      url: getFullnodeUrl("mainnet"),
+      url: process.env.NEXT_PUBLIC_MAINNET_RPC_URL || getFullnodeUrl("mainnet"),
       gasBudget: DEFAULT_PUBLISH_GAS_BUDGET,
       account: defaultAccount
     }

@@ -1,21 +1,21 @@
 "use client"
 
 import { createNetworkConfig } from "@mysten/dapp-kit"
-import { getFullnodeUrl } from "@mysten/sui/client"
 import { ENetwork } from "@sui-oracle-market/tooling-core/types"
 import {
   CONTRACT_PACKAGE_VARIABLE_NAME,
-  DEVNET_CONTRACT_PACKAGE_ID,
-  DEVNET_EXPLORER_URL,
   EXPLORER_URL_VARIABLE_NAME,
   LOCALNET_CONTRACT_PACKAGE_ID,
   LOCALNET_EXPLORER_URL,
   LOCALNET_PYTH_STATE_ID,
+  LOCALNET_RPC_URL,
   MAINNET_CONTRACT_PACKAGE_ID,
   MAINNET_EXPLORER_URL,
+  MAINNET_RPC_URL,
   PYTH_STATE_ID_VARIABLE_NAME,
   TESTNET_CONTRACT_PACKAGE_ID,
-  TESTNET_EXPLORER_URL
+  TESTNET_EXPLORER_URL,
+  TESTNET_RPC_URL
 } from "../config/network"
 import useCustomNetworks from "./useCustomNetworks"
 import useHostNetworkPolicy from "./useHostNetworkPolicy"
@@ -30,23 +30,17 @@ const useNetworkConfig = () => {
   const { networks: customNetworks } = useCustomNetworks()
   const fullNetworkConfig = {
     [ENetwork.LOCALNET]: {
-      url: getFullnodeUrl(ENetwork.LOCALNET),
+      url: LOCALNET_RPC_URL,
       variables: {
         [CONTRACT_PACKAGE_VARIABLE_NAME]: LOCALNET_CONTRACT_PACKAGE_ID,
         [EXPLORER_URL_VARIABLE_NAME]: LOCALNET_EXPLORER_URL,
         [PYTH_STATE_ID_VARIABLE_NAME]: LOCALNET_PYTH_STATE_ID
       }
     },
-    [ENetwork.DEVNET]: {
-      url: getFullnodeUrl(ENetwork.DEVNET),
-      variables: {
-        [CONTRACT_PACKAGE_VARIABLE_NAME]: DEVNET_CONTRACT_PACKAGE_ID,
-        [EXPLORER_URL_VARIABLE_NAME]: DEVNET_EXPLORER_URL,
-        [PYTH_STATE_ID_VARIABLE_NAME]: ""
-      }
-    },
     [ENetwork.TESTNET]: {
-      url: getFullnodeUrl(ENetwork.TESTNET),
+      // Resolved in config/network.ts: honors NEXT_PUBLIC_TESTNET_RPC_URL and
+      // defaults to a working public node (Mysten's testnet fullnode 404s).
+      url: TESTNET_RPC_URL,
       variables: {
         [CONTRACT_PACKAGE_VARIABLE_NAME]: TESTNET_CONTRACT_PACKAGE_ID,
         [EXPLORER_URL_VARIABLE_NAME]: TESTNET_EXPLORER_URL,
@@ -54,7 +48,7 @@ const useNetworkConfig = () => {
       }
     },
     [ENetwork.MAINNET]: {
-      url: getFullnodeUrl(ENetwork.MAINNET),
+      url: MAINNET_RPC_URL,
       variables: {
         [CONTRACT_PACKAGE_VARIABLE_NAME]: MAINNET_CONTRACT_PACKAGE_ID,
         [EXPLORER_URL_VARIABLE_NAME]: MAINNET_EXPLORER_URL,

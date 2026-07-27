@@ -24,7 +24,6 @@ rev = "d46324849b1ba5a45b20f77630fc958466830324"
 
 [environments]
 test-publish = "3fecd880"
-testnet_beta = "4c78adac"
 
 [dep-replacements.test-publish]
 pyth = { local = "../pyth-mock", override = true, addr_substitutions = { pyth = "0x2" } }

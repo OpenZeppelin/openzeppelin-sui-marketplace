@@ -2,7 +2,6 @@ import { ENetwork } from "@sui-oracle-market/tooling-core/types"
 import {
   CONTRACT_MODULE_NAME,
   CONTRACT_PACKAGE_ID_NOT_DEFINED,
-  DEVNET_CONTRACT_PACKAGE_ID,
   LOCALNET_CONTRACT_PACKAGE_ID,
   MAINNET_CONTRACT_PACKAGE_ID,
   TESTNET_CONTRACT_PACKAGE_ID
@@ -65,9 +64,6 @@ export const supportedNetworks = () => {
   const networkConfig = {
     [ENetwork.LOCALNET]: {
       packageId: LOCALNET_CONTRACT_PACKAGE_ID
-    },
-    [ENetwork.DEVNET]: {
-      packageId: DEVNET_CONTRACT_PACKAGE_ID
     },
     [ENetwork.TESTNET]: {
       packageId: TESTNET_CONTRACT_PACKAGE_ID

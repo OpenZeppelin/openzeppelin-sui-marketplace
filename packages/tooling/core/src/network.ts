@@ -10,7 +10,6 @@ export const resolveCommonRpcUrl = (
 ): string | undefined => {
   switch (network) {
     case "localnet":
-    case "devnet":
     case "testnet":
     case "mainnet":
       return getFullnodeUrl(network)
