@@ -1,5 +1,13 @@
 # Sui Oracle Market
 
+> This project has been professionally audited. See the security audit report in
+[`audits/`](./audits). It is open source (MIT) and provided as a reference implementation / starter
+template, not a hosted or operated service. It is no longer under active
+maintenance: no new features, bug fixes, or updates should be expected. To
+build on it, fork or clone this repository and deploy it under your own
+control, and review (and re-audit) any changes you make before using it in
+production.
+
 End-to-end example of a small on-chain market on **Sui**. Items are priced in **USD cents** (stablecoin-style), buyers pay in **multiple currencies** using **oracle prices** from [Pyth](https://pyth.network/), and the contract layer uses [`openzeppelin_math`](https://docs.openzeppelin.com/contracts-sui/1.x/math) for safe `mul_div` with explicit rounding and overflow handling.
 
 The repo demonstrates five core Sui patterns: the capability pattern, phantom types, Programmable Transaction Blocks (PTBs), Pyth oracle integration, and on-chain enforced limits. It also ships a full-stack setup around those contracts -- a Next.js frontend UI plus the CLI scripts and shared tooling infrastructure that publish, seed, and drive the market end to end.
