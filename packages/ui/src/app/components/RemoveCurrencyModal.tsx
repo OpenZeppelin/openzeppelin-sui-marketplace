@@ -68,16 +68,6 @@ const CurrencySummarySection = ({
             {currency.decimals ?? "--"}
           </div>
         </div>
-        {currency.pythObjectId ? (
-          <div className="rounded-xl border border-slate-200/70 bg-white/80 p-3 dark:border-slate-50/15 dark:bg-slate-950/60">
-            <div className="text-[0.6rem] uppercase tracking-[0.18em] text-slate-500 dark:text-slate-200/60">
-              Pyth object
-            </div>
-            <div className="mt-1 text-sm font-semibold text-sds-dark dark:text-sds-light">
-              {shortenId(currency.pythObjectId)}
-            </div>
-          </div>
-        ) : undefined}
       </div>
       <div className="mt-4 flex flex-wrap items-center gap-3 text-xs">
         <CopyableId

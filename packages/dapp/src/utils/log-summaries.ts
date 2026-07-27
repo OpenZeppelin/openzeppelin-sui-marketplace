@@ -52,8 +52,6 @@ export const logAcceptedCurrencySummary = (
   if (acceptedCurrency.decimals !== undefined)
     logKeyValueGreen("Decimals")(acceptedCurrency.decimals)
   logKeyValueGreen("Feed-id")(acceptedCurrency.feedIdHex)
-  if (acceptedCurrency.pythObjectId)
-    logKeyValueGreen("Pyth-object")(acceptedCurrency.pythObjectId)
   logKeyValueGreen("Max-age-secs")(
     acceptedCurrency.maxPriceAgeSecsCap ?? "module default"
   )

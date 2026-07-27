@@ -38,7 +38,8 @@ ItemListing (table value under Shop.listings)
 
 ## Oracle Guardrails
 
-- Feed identity is re-validated on-chain: 32-byte `feed_id`, matching `pyth_object_id`, and `PriceInfoObject` contents must align or the call aborts.
+- Feed identity is re-validated on-chain: the feed id read from the supplied `PriceInfoObject` must equal the currency's 32-byte `feed_id`, or the call aborts. The object id is not pinned -- clients resolve the current `PriceInfoObject` from the feed id.
+- One accepted currency per feed: a `feed_id` already bound to another currency is rejected, so a shop cannot price two coins off the same feed.
 - Guardrails are two-tiered: sellers set caps per currency (`max_price_age_secs_cap`, `max_confidence_ratio_bps_cap`), and buyers may only tighten them per call.
 - Pricing is conservative: quotes use μ-σ and bound confidence ratio (default 10%: `DEFAULT_MAX_CONFIDENCE_RATIO_BPS = 1_000`) before converting USD cents to the payment coin, with overflow checks and a 38-decimal power limit.
 - Freshness checks cap age with `max_price_age_secs` guardrails, treating stale feeds as unavailable.
@@ -133,7 +134,6 @@ add_accepted_currency<USDC>(
     &usdc_currency,
     &price_info_object,
     /* feed_id */ feed_id_bytes,
-    /* pyth_object_id */ pyth_obj_id,
     /* max_price_age_secs_cap */ none, // Optional tightenings; defaults enforce module caps.
     /* max_confidence_ratio_bps_cap */ none
 );

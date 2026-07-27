@@ -260,20 +260,19 @@ This seeds accepted currencies, listings, and discounts in one run. On testnet i
 ```bash
 pnpm script owner:currency:add \
   --coin-type <COIN_TYPE> \
-  --feed-id <FEED_ID_HEX> \
-  --price-info-object-id <PRICE_INFO_OBJECT_ID>
+  --feed-id <FEED_ID_HEX>
 ```
 
 What it does:
 
-- Registers an `AcceptedCurrency` entry in `Shop.accepted_currencies`.
-- Links your coin type to a Pyth `PriceInfoObject` for oracle pricing.
+- Registers an `AcceptedCurrency` entry in `Shop.accepted_currencies`, keyed by both coin type and feed id (one currency per feed).
+- Links your coin type to a Pyth feed for oracle pricing. The `PriceInfoObject` is resolved from the feed id (localnet uses the mock Pyth `State` registry).
 
 Where to find values:
 
 - `COIN_TYPE`: `packages/dapp/deployments/mock.localnet.json` -> `coins[].coinType`
 - `FEED_ID_HEX`: `mock.localnet.json` -> `priceFeeds[].feedIdHex`
-- `PRICE_INFO_OBJECT_ID`: `mock.localnet.json` -> `priceFeeds[].priceInfoObjectId`
+- Optional `--price-info-object-id`: `mock.localnet.json` -> `priceFeeds[].priceInfoObjectId` (resolved from the feed id by default; if provided, it is cross-checked against the resolved object)
 - Optional `--currency-object-id`: `mock.localnet.json` -> `coins[].currencyObjectId` (otherwise derived automatically)
 - Verify registration with `pnpm script buyer:currency:list --shop-id <SHOP_ID>`.
 

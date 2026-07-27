@@ -53,7 +53,6 @@ describe("tooling localnet helpers", () => {
 
   it("detects faucet-supported networks", () => {
     expect(isFaucetSupportedNetwork("localnet")).toBe(true)
-    expect(isFaucetSupportedNetwork("devnet")).toBe(true)
     expect(isFaucetSupportedNetwork("testnet")).toBe(true)
     expect(isFaucetSupportedNetwork("mainnet")).toBe(false)
   })

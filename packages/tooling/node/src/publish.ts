@@ -497,16 +497,18 @@ const derivePackageLabel = (artifact: PublishArtifact, idx: number) =>
  * Builds CLI arguments for `sui client publish`.
  */
 const buildCliPublishArguments = (plan: PublishPlan): string[] => {
+  // Sui CLI >= 1.75 forbids `--build-env` on `sui client publish` -- it derives
+  // the build environment from the active client environment (which the process
+  // wrapper has already switched to the target network's chain). Passing the
+  // flag aborts with "you must build for the environment that you are publishing
+  // for", so we omit it here (the separate bytecode build step still sets it).
   const args = [
     plan.packagePath,
     "--json",
     "--gas-budget",
     plan.gasBudget.toString(),
     "--sender",
-    plan.keypair.toSuiAddress(),
-    ...buildMoveEnvironmentFlags({
-      environmentName: plan.network.networkName
-    })
+    plan.keypair.toSuiAddress()
   ]
 
   if (plan.shouldUseUnpublishedDependencies)

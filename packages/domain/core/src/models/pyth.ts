@@ -93,11 +93,18 @@ export type MockPriceFeedConfig = {
 
 export type LabeledMockPriceFeedConfig = MockPriceFeedConfig & { label: string }
 
+// Real Pyth feed identifiers taken from the Sui testnet (Pyth beta) network,
+// reused on localnet so the same feed-id hex resolves across localnet and
+// testnet. Verified against https://hermes-beta.pyth.network (the testnet
+// hermes endpoint this repo targets) and listed at
+// https://docs.pyth.network/price-feeds/core/price-feeds/price-feed-ids.
+// The price/confidence/exponent values are localnet mock seed values only.
 export const DEFAULT_MOCK_PRICE_FEEDS: LabeledMockPriceFeedConfig[] = [
   {
-    label: "MOCK_USD_FEED",
+    label: "MOCK_USDC_FEED",
+    // Pyth testnet USDC/USD.
     feedIdHex:
-      "0x000102030405060708090a0b0c0d0e0f000102030405060708090a0b0c0d0e0f",
+      "0x41f3625971ca2ed2263e78573fe5ce23e13d2558ed3f2e47ab0f84fb9e7ae722",
     // $1.00 with exponent -2.
     price: 100n,
     confidence: 1n,
@@ -105,8 +112,9 @@ export const DEFAULT_MOCK_PRICE_FEEDS: LabeledMockPriceFeedConfig[] = [
   },
   {
     label: "MOCK_BTC_FEED",
+    // Pyth testnet BTC/USD.
     feedIdHex:
-      "0x101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f",
+      "0xf9c0172ba10dfa4d19088d94f5bf61d3b54d5bd7483a322a982e1373ee8ea31b",
     // Approx BTC/USD (Jan 2026). $91,389.00 with exponent -2.
     price: 9_138_900n,
     confidence: 5_000n,
@@ -114,8 +122,9 @@ export const DEFAULT_MOCK_PRICE_FEEDS: LabeledMockPriceFeedConfig[] = [
   },
   {
     label: "MOCK_SUI_FEED",
+    // Pyth testnet SUI/USD.
     feedIdHex:
-      "0x202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f",
+      "0x50c67b3fd225db8912a424dd4baed60ffdde625ed2feaaf283724f9608fea266",
     // Approx SUI/USD (Jan 2026). $1.84 with exponent -2.
     price: 184n,
     confidence: 2n,
@@ -175,11 +184,15 @@ export const deriveMockPriceComponents = (config: MockPriceFeedConfig) => {
 /**
  * Adds a Move call to publish and share a mock price feed using the local Pyth stub.
  * Why: Localnet has no VAA/relayer pipeline; this helper materializes a PriceInfoObject
- * with fresh timestamps so oracle-dependent flows can run end-to-end.
+ * with fresh timestamps so oracle-dependent flows can run end-to-end. The mock Pyth
+ * `State` is passed as the first argument so the published PriceInfoObject is registered
+ * in the `b"price_info"` dynamic-object-field registry, mirroring real Pyth and letting
+ * the SDK's `getPriceFeedObjectId(feedId)` resolve the object on localnet.
  */
 export const publishMockPriceFeed = (
   transaction: Transaction,
   pythPackageId: string,
+  pythStateRef: TransactionArgument,
   config: MockPriceFeedConfig,
   clockObject?: TransactionArgument
 ): TransactionArgument => {
@@ -194,6 +207,7 @@ export const publishMockPriceFeed = (
   return transaction.moveCall({
     target: `${pythPackageId}::price_info::publish_price_feed`,
     arguments: [
+      pythStateRef,
       // BCS-encode as vector<u8>; passing raw bytes would skip the length prefix and fail deserialization.
       transaction.pure.vector("u8", feedIdBytes),
       transaction.pure.u64(priceMagnitude),

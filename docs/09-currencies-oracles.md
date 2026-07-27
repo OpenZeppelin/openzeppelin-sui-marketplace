@@ -22,11 +22,11 @@ This chapter explains how the shop registers accepted currencies, ties them to P
 pnpm script mock:setup --network localnet
 cat packages/dapp/deployments/mock.localnet.json
 
-# Register a currency
+# Register a currency (the price info object is resolved from the feed id;
+# --price-info-object-id is optional and only cross-checked if provided)
 pnpm script owner:currency:add \
   --coin-type <coinType> \
-  --feed-id <feedIdHex> \
-  --price-info-object-id <priceInfoObjectId>
+  --feed-id <feedIdHex>
 
 # Verify currencies on the shop
 pnpm script buyer:currency:list --shop-id <shopId>
@@ -35,7 +35,7 @@ pnpm script buyer:currency:list --shop-id <shopId>
 ## 4. EVM -> Sui translation
 
 1. **ERC-20 metadata -> coin registry + typed storage**: metadata comes from `coin_registry::Currency<T>`, and registration writes `AcceptedCurrency` into `shop.accepted_currencies: Table<TypeName, AcceptedCurrency>`.
-2. **Oracle address -> PriceInfoObject ID**: feeds are objects, not addresses. `AcceptedCurrency` stores `pyth_object_id` + `feed_id` and checks both on-chain.
+2. **Oracle address -> Pyth feed id**: feeds are objects, not addresses, but the shop binds a currency to its `feed_id` only. Clients resolve the correct `PriceInfoObject` from that feed id (via the Pyth SDK), and the on-chain check re-reads the feed id out of the supplied object. The object id is not stored or pinned, because the canonical `PriceInfoObject` can change.
 3. **Off-chain checks -> on-chain guardrails**: `quote_amount_for_price_info_object` enforces price age and confidence bounds.
 
 ## 5. Why `Table` over `Bag` / `TableVec`
@@ -53,8 +53,10 @@ The shop now stores accepted currencies in `Table<TypeName, AcceptedCurrency>` i
   Code: `packages/dapp/contracts/oracle-market/sources/shop.move` (`buy_item`, `process_purchase`, `split_payment`)
 - **Coin registry metadata**: `coin_registry::Currency<T>` provides symbol/decimals copied into `AcceptedCurrency` during registration.
   Code: `packages/dapp/contracts/oracle-market/sources/shop.move` (`add_accepted_currency`)
-- **Strict oracle identity checks**: both `pyth_object_id` and `feed_id` must match the provided `PriceInfoObject`.
+- **Strict oracle identity check**: the `feed_id` read out of the provided `PriceInfoObject` must equal the currency's stored `feed_id`. Since the `PriceInfoObject` type is minted only by Pyth, that identifier proves which feed the object carries.
   Code: `packages/dapp/contracts/oracle-market/sources/shop.move` (`assert_price_info_identity`)
+- **One currency per feed**: a `feed_id` can back only one accepted currency. The shop keeps a reverse index `accepted_currency_feeds: Table<vector<u8>, TypeName>` and rejects a second registration that reuses a feed, so a shop cannot price two coins off the same feed.
+  Code: `packages/dapp/contracts/oracle-market/sources/shop.move` (`add_accepted_currency`, `currency_by_feed`)
 - **Clock-based freshness**: age is verified on-chain with `clock::Clock`.
   Code: `packages/dapp/contracts/oracle-market/sources/shop.move` (`quote_amount_for_price_info_object`)
 - **Guardrail caps**: sellers set per-currency caps and buyers may only tighten age/confidence.
@@ -72,32 +74,36 @@ The shop now stores accepted currencies in `Table<TypeName, AcceptedCurrency>` i
 `packages/dapp/contracts/oracle-market/sources/shop.move`
 
 ```move
-public fun add_accepted_currency<T>(
+public fun add_accepted_currency<C>(
   shop: &mut Shop,
   owner_cap: &ShopOwnerCap,
-  currency: &coin_registry::Currency<T>,
+  currency: &Currency<C>,
   price_info_object: &PriceInfoObject,
   feed_id: vector<u8>,
-  pyth_object_id: ID,
   max_price_age_secs_cap: Option<u64>,
   max_confidence_ratio_bps_cap: Option<u16>,
 ) {
   assert!(owner_cap.shop_id == shop.id(), EInvalidOwnerCap);
 
-  let coin_type = type_name::with_defining_ids<T>();
-  assert!(!shop.accepted_currencies.contains(coin_type), EAcceptedCurrencyExists);
+  let coin_type = type_name::with_defining_ids<C>();
+  // One accepted currency per coin type and one per feed.
+  assert!(!shop.accepted_currencies.contains(coin_type), ECurrencyTypeExists);
+  assert!(!shop.accepted_currency_feeds.contains(feed_id), EFeedIdentifierExists);
+
+  // Validate oracle identity (feed id read from the object) before mutating state.
+  assert_price_info_identity!(feed_id, price_info_object);
 
   let accepted_currency = currency::create(
     feed_id,
-    pyth_object_id,
     currency,
     max_price_age_secs_cap,
     max_confidence_ratio_bps_cap,
   );
-
+  // Index by both coin type and feed id.
   shop.accepted_currencies.add(coin_type, accepted_currency);
+  shop.accepted_currency_feeds.add(feed_id, coin_type);
 
-  assert_price_info_identity!(feed_id, pyth_object_id, price_info_object);
+  events::emit_accepted_coin_added(shop.id(), feed_id);
 }
 ```
 
@@ -122,13 +128,12 @@ const removeCurrencyTransaction = buildRemoveAcceptedCurrencyTransaction({
 ## 8. Worked example: localnet mock USD registration
 
 1. Open `packages/dapp/deployments/mock.localnet.json` and find `LocalMockUsd`.
-2. Use its `coinType`, `feedIdHex`, and `priceInfoObjectId`:
+2. Use its `coinType` and `feedIdHex` (the price info object is resolved from the feed id):
 
 ```bash
 pnpm script owner:currency:add \
   --coin-type <coinType> \
-  --feed-id <feedIdHex> \
-  --price-info-object-id <priceInfoObjectId>
+  --feed-id <feedIdHex>
 ```
 
 Expected outcome: `buyer:currency:list` shows the registered currency for your shop.
@@ -144,7 +149,10 @@ Expected outcome: `buyer:currency:list` shows the registered currency for your s
 Shop (shared)
   accepted_currencies: Table<TypeName, AcceptedCurrency>
     key: coin type (TypeName)
-    value: { feed_id, pyth_object_id, decimals, symbol, guardrail caps }
+    value: { feed_id, decimals, symbol, guardrail caps }
+  accepted_currency_feeds: Table<vector<u8>, TypeName>
+    key: Pyth feed id (bytes)
+    value: coin type (TypeName)   // enforces one currency per feed
 ```
 
 ## 11. Further reading (Sui and Pyth docs)

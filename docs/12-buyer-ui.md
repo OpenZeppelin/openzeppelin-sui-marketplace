@@ -129,10 +129,16 @@ const acceptedCurrencySummary = await requireAcceptedCurrencyByCoinType({
   suiClient: tooling.suiClient
 })
 
-const pythPriceInfoObjectId = normalizeIdOrThrow(
-  acceptedCurrencySummary.pythObjectId,
-  `Accepted currency ${acceptedCurrencySummary.coinType} is missing a pyth_object_id.`
-)
+// The shop stores only the feed id, so resolve the current PriceInfoObject
+// from that feed id (localnet uses the mock Pyth State, real networks use the
+// Pyth registry).
+const pythPriceInfoObjectId = await resolvePythPriceInfoObjectIdForBuy({
+  networkName: tooling.network.networkName,
+  feedIdHex: acceptedCurrencySummary.feedIdHex,
+  coinType: acceptedCurrencySummary.coinType,
+  suiClient: tooling.suiClient,
+  pythConfigOverride: tooling.suiConfig.network.pyth
+})
 
 const listingSummary = await getItemListingSummary(
   inputs.shopId,

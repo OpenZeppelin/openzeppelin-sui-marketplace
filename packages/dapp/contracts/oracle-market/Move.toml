@@ -23,8 +23,7 @@ rev = "d46324849b1ba5a45b20f77630fc958466830324"
 # Not yet published.
 
 [environments]
-test-publish = "fd78a855"
-testnet_beta = "4c78adac"
+test-publish = "3fecd880"
 
 [dep-replacements.test-publish]
 pyth = { local = "../pyth-mock", override = true, addr_substitutions = { pyth = "0x2" } }

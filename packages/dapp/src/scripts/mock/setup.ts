@@ -41,6 +41,7 @@ import {
 } from "@sui-oracle-market/tooling-node/log"
 import { runSuiScript } from "@sui-oracle-market/tooling-node/process"
 import {
+  ensureCreatedObject,
   findCreatedObjectIds,
   newTransaction
 } from "@sui-oracle-market/tooling-node/transactions"
@@ -164,7 +165,7 @@ runSuiScript(
     })
 
     // Publish or reuse mock Pyth + mock coin packages; record package IDs for later steps.
-    const { coinPackageId, pythPackageId, itemPackageId } =
+    const { coinPackageId, pythPackageId, pythStateId, itemPackageId } =
       await publishMockPackages(
         {
           existingState,
@@ -237,6 +238,7 @@ runSuiScript(
     const priceFeeds = await ensurePriceFeeds(
       {
         pythPackageId,
+        pythStateId,
         signer: tooling.loadedEd25519KeyPair,
         clockObject,
         existingPriceFeeds: existingState.existingPriceFeeds || []
@@ -271,6 +273,7 @@ runSuiScript(
     })
 
     logKeyValueGreen("Pyth package")(pythPackageId)
+    logKeyValueGreen("Pyth state")(pythStateId)
     logKeyValueGreen("Coin package")(coinPackageId)
     logKeyValueGreen("Item package")(itemPackageId)
     logKeyValueGreen("Feeds")(JSON.stringify(priceFeeds))
@@ -332,10 +335,13 @@ runSuiScript(
 // The oracle-market package name recorded in deployment artifacts.
 const ORACLE_MARKET_PACKAGE_NAME = "sui_oracle_market"
 
-// Derives the inlined Pyth package id from the latest oracle-market deployment.
-const resolveInlinedPythPackageId = async (
+// Derives the inlined Pyth package id and the originating publish digest from
+// the latest oracle-market deployment. The digest lets us recover the Pyth
+// `State` shared object created by the inlined pyth-mock `init` during that
+// same publish.
+const resolveInlinedPythDeployment = async (
   tooling: Tooling
-): Promise<string> => {
+): Promise<{ pythPackageId: string; publishDigest: string }> => {
   const networkName = tooling.suiConfig.network.networkName
   const oracleMarketArtifact = await getLatestDeploymentFromArtifact(
     ORACLE_MARKET_PACKAGE_NAME
@@ -346,8 +352,33 @@ const resolveInlinedPythPackageId = async (
       `oracle-market not yet published. Run \`pnpm script move:publish --package-path oracle-market --network ${networkName}\` before \`mock:setup\`.`
     )
 
+  if (!oracleMarketArtifact.digest)
+    throw new Error(
+      "Latest oracle-market deployment artifact has no `digest`; cannot recover the inlined Pyth State from the publish txn."
+    )
+
   // getLatestDeploymentFromArtifact already returns a normalized package id.
-  return oracleMarketArtifact.packageId
+  return {
+    pythPackageId: oracleMarketArtifact.packageId,
+    publishDigest: oracleMarketArtifact.digest
+  }
+}
+
+// The inlined pyth-mock `init` creates and shares a `pyth_state::State` during
+// the oracle-market publish. Recover it from that publish transaction so the
+// seeded PriceInfoObjects can be registered into its `b"price_info"` registry.
+const resolvePythStateFromPublish = async (
+  publishDigest: string,
+  suiClient: SuiClient
+): Promise<string> => {
+  const publishTransaction = await suiClient.getTransactionBlock({
+    digest: publishDigest,
+    options: { showObjectChanges: true }
+  })
+
+  return normalizeSuiObjectId(
+    ensureCreatedObject("::pyth_state::State", publishTransaction).objectId
+  )
 }
 
 const publishMockPackages = async (
@@ -377,9 +408,11 @@ const publishMockPackages = async (
   // Normalize the explicit id too so the derived `PriceInfoObject` type string
   // matches the (padded) on-chain object type and feeds aren't needlessly
   // recreated on re-runs.
+  const { pythPackageId: inlinedPythPackageId, publishDigest } =
+    await resolveInlinedPythDeployment(tooling)
   const pythPackageId = cliArguments.pythPackageId
     ? normalizeSuiObjectId(cliArguments.pythPackageId)
-    : await resolveInlinedPythPackageId(tooling)
+    : inlinedPythPackageId
 
   await waitForPackageAvailability(
     pythPackageId,
@@ -387,8 +420,16 @@ const publishMockPackages = async (
     "oracle-market"
   )
 
+  // The Pyth `State` and the inlined `price_info` module both come from the
+  // same oracle-market publish, so recover the State from that publish digest.
+  const pythStateId = await resolvePythStateFromPublish(
+    publishDigest,
+    tooling.suiClient
+  )
+
   await writeMockArtifact(mockArtifactPath, {
-    pythPackageId
+    pythPackageId,
+    pythStateId
   })
 
   // coin-mock and item-examples are not dependencies of oracle-market, so they
@@ -440,6 +481,7 @@ const publishMockPackages = async (
 
   return {
     pythPackageId,
+    pythStateId,
     coinPackageId,
     itemPackageId
   }
@@ -754,11 +796,13 @@ const coinArtifactsFromResult = ({
 const ensurePriceFeeds = async (
   {
     pythPackageId,
+    pythStateId,
     signer,
     existingPriceFeeds,
     clockObject
   }: {
     pythPackageId: string
+    pythStateId: string
     signer: Ed25519Keypair
     existingPriceFeeds: PriceFeedArtifact[]
     clockObject: WrappedSuiSharedObject
@@ -766,6 +810,12 @@ const ensurePriceFeeds = async (
   tooling: Tooling
 ): Promise<PriceFeedArtifact[]> => {
   const priceInfoType = getPythPriceInfoType(pythPackageId)
+  // Pyth State holds the `Table<PriceIdentifier, ID>` registry; publishing a
+  // feed mutates it, so we resolve a mutable shared ref once and reuse it.
+  const pythStateObject = await tooling.getSuiSharedObject({
+    objectId: pythStateId,
+    mutable: true
+  })
   const feeds: PriceFeedArtifact[] = []
 
   for (const feedConfig of DEFAULT_FEEDS) {
@@ -793,6 +843,7 @@ const ensurePriceFeeds = async (
       {
         feedConfig,
         pythPackageId,
+        pythStateObject,
         signer,
         clockObject
       },
@@ -894,11 +945,13 @@ const publishPriceFeed = async (
   {
     feedConfig,
     pythPackageId,
+    pythStateObject,
     signer,
     clockObject
   }: {
     feedConfig: LabeledPriceFeedConfig
     pythPackageId: string
+    pythStateObject: WrappedSuiSharedObject
     signer: Ed25519Keypair
     clockObject: WrappedSuiSharedObject
   },
@@ -908,6 +961,7 @@ const publishPriceFeed = async (
   publishMockPriceFeed(
     publishPriceFeedTransaction,
     pythPackageId,
+    publishPriceFeedTransaction.sharedObjectRef(pythStateObject.sharedRef),
     feedConfig,
     publishPriceFeedTransaction.sharedObjectRef(clockObject.sharedRef)
   )

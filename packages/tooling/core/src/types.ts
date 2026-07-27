@@ -1,13 +1,7 @@
-export type NetworkName =
-  | "mainnet"
-  | "testnet"
-  | "devnet"
-  | "localnet"
-  | "custom"
+export type NetworkName = "mainnet" | "testnet" | "localnet" | "custom"
 
 export enum ENetwork {
   LOCALNET = "localnet",
-  DEVNET = "devnet",
   TESTNET = "testnet",
   MAINNET = "mainnet"
 }
