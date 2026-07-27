@@ -208,7 +208,7 @@ Move and Sui language references for newcomers:
 
 What this means in practice:
 
-- **`packages/dapp`** owns Move packages, CLI scriÍıpts, and generated artifacts under `packages/dapp/deployments`.
+- **`packages/dapp`** owns Move packages, CLI scripts, and generated artifacts under `packages/dapp/deployments`.
 - **`packages/domain/*`** is the domain SDK split into browser-safe `core` and Node-only `node`.
 - **`packages/tooling/*`** is shared infra helpers split into browser-safe `core` and Node-only `node`.
 - **`packages/ui`** is a Next.js UI that uses the same package IDs and Shop objects created by scripts.
