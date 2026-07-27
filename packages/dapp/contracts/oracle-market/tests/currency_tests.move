@@ -34,7 +34,7 @@ fun update_shop_owner_updates_owner_and_emits_previous_owner_event() {
     std::unit_test::destroy(shop);
 }
 
-#[test, expected_failure(abort_code = ::sui_oracle_market::shop::EAcceptedCurrencyExists)]
+#[test, expected_failure(abort_code = ::sui_oracle_market::shop::ECurrencyTypeExists)]
 fun add_accepted_currency_rejects_duplicate_coin_type() {
     let mut ctx = tx_context::new_from_hint(@0x0, 9, 0, 0, 0);
     let (mut shop, owner_cap) = shop::test_setup_shop(owner(), &mut ctx);
@@ -59,23 +59,184 @@ fun add_accepted_currency_rejects_duplicate_coin_type() {
     abort
 }
 
-#[test, expected_failure(abort_code = ::sui_oracle_market::currency::EEmptyFeedId)]
-fun add_accepted_currency_rejects_empty_feed_id() {
-    let mut ctx = tx_context::new_from_hint(@0x0, 10, 0, 0, 0);
+#[test, expected_failure(abort_code = ::sui_oracle_market::shop::EFeedIdentifierExists)]
+fun add_accepted_currency_rejects_duplicate_feed_id() {
+    let mut ctx = tx_context::new_from_hint(@0x0, 21, 0, 0, 0);
     let (mut shop, owner_cap) = shop::test_setup_shop(owner(), &mut ctx);
-    let currency = test_helpers::create_test_currency(&mut ctx);
-    let price_info_object = test_helpers::create_price_info_object_for_feed(
+    let test_currency = test_helpers::create_test_currency(&mut ctx);
+    let alt_currency = test_helpers::create_alt_test_currency(&mut ctx);
+
+    // First currency claims the primary feed.
+    let _ = test_helpers::add_currency_with_feed<test_helpers::TestCoin>(
+        &mut shop,
+        &owner_cap,
+        &test_currency,
         test_helpers::primary_feed_id(),
         &mut ctx,
     );
-    let price_info_id = price_info_object.uid_to_inner();
 
-    shop.add_accepted_currency<test_helpers::TestCoin>(
+    // A different coin type cannot reuse the same feed.
+    let _ = test_helpers::add_currency_with_feed<test_helpers::AltTestCoin>(
+        &mut shop,
         &owner_cap,
-        &currency,
-        &price_info_object,
+        &alt_currency,
+        test_helpers::primary_feed_id(),
+        &mut ctx,
+    );
+
+    abort
+}
+
+#[test]
+fun remove_accepted_currency_frees_feed_for_reuse() {
+    let mut ctx = tx_context::new_from_hint(@0x0, 22, 0, 0, 0);
+    let (mut shop, owner_cap) = shop::test_setup_shop(owner(), &mut ctx);
+    let test_currency = test_helpers::create_test_currency(&mut ctx);
+    let alt_currency = test_helpers::create_alt_test_currency(&mut ctx);
+
+    let _ = test_helpers::add_currency_with_feed<test_helpers::TestCoin>(
+        &mut shop,
+        &owner_cap,
+        &test_currency,
+        test_helpers::primary_feed_id(),
+        &mut ctx,
+    );
+    assert!(shop.currency_exists<test_helpers::TestCoin>());
+
+    // Removing the currency frees its feed id.
+    shop.remove_accepted_currency<test_helpers::TestCoin>(&owner_cap);
+    assert!(!shop.currency_exists<test_helpers::TestCoin>());
+
+    // A different coin can now register under the previously-used feed.
+    let _ = test_helpers::add_currency_with_feed<test_helpers::AltTestCoin>(
+        &mut shop,
+        &owner_cap,
+        &alt_currency,
+        test_helpers::primary_feed_id(),
+        &mut ctx,
+    );
+    assert!(shop.currency_exists<test_helpers::AltTestCoin>());
+
+    std::unit_test::destroy(test_currency);
+    std::unit_test::destroy(alt_currency);
+    std::unit_test::destroy(owner_cap);
+    std::unit_test::destroy(shop);
+}
+
+#[test]
+fun currency_by_feed_returns_registered_currency() {
+    let mut ctx = tx_context::new_from_hint(@0x0, 23, 0, 0, 0);
+    let (mut shop, owner_cap) = shop::test_setup_shop(owner(), &mut ctx);
+    let test_currency = test_helpers::create_test_currency(&mut ctx);
+
+    let _ = test_helpers::add_currency_with_feed<test_helpers::TestCoin>(
+        &mut shop,
+        &owner_cap,
+        &test_currency,
+        test_helpers::primary_feed_id(),
+        &mut ctx,
+    );
+
+    let resolved = shop.currency_by_feed(test_helpers::primary_feed_id());
+    assert_eq!(resolved.feed_id(), test_helpers::primary_feed_id());
+
+    std::unit_test::destroy(test_currency);
+    std::unit_test::destroy(owner_cap);
+    std::unit_test::destroy(shop);
+}
+
+#[test, expected_failure(abort_code = ::sui_oracle_market::shop::EAcceptedCurrencyMissing)]
+fun currency_by_feed_aborts_for_unregistered_feed() {
+    let mut ctx = tx_context::new_from_hint(@0x0, 24, 0, 0, 0);
+    let (shop, _owner_cap) = shop::test_setup_shop(owner(), &mut ctx);
+
+    shop.currency_by_feed(test_helpers::secondary_feed_id());
+
+    abort
+}
+
+#[test]
+fun currency_by_feed_disambiguates_multiple_currencies() {
+    let mut ctx = tx_context::new_from_hint(@0x0, 25, 0, 0, 0);
+    let (mut shop, owner_cap) = shop::test_setup_shop(owner(), &mut ctx);
+    let test_currency = test_helpers::create_test_currency(&mut ctx);
+    let alt_currency = test_helpers::create_alt_test_currency(&mut ctx);
+
+    let _ = test_helpers::add_currency_with_feed<test_helpers::TestCoin>(
+        &mut shop,
+        &owner_cap,
+        &test_currency,
+        test_helpers::primary_feed_id(),
+        &mut ctx,
+    );
+    let _ = test_helpers::add_currency_with_feed<test_helpers::AltTestCoin>(
+        &mut shop,
+        &owner_cap,
+        &alt_currency,
+        test_helpers::secondary_feed_id(),
+        &mut ctx,
+    );
+
+    // Each feed resolves to its own entry, not the other.
+    assert_eq!(
+        shop.currency_by_feed(test_helpers::primary_feed_id()).feed_id(),
+        test_helpers::primary_feed_id(),
+    );
+    assert_eq!(
+        shop.currency_by_feed(test_helpers::secondary_feed_id()).feed_id(),
+        test_helpers::secondary_feed_id(),
+    );
+
+    std::unit_test::destroy(test_currency);
+    std::unit_test::destroy(alt_currency);
+    std::unit_test::destroy(owner_cap);
+    std::unit_test::destroy(shop);
+}
+
+#[test]
+fun add_accepted_currency_allows_readd_after_remove() {
+    let mut ctx = tx_context::new_from_hint(@0x0, 26, 0, 0, 0);
+    let (mut shop, owner_cap) = shop::test_setup_shop(owner(), &mut ctx);
+    let test_currency = test_helpers::create_test_currency(&mut ctx);
+
+    let _ = test_helpers::add_currency_with_feed<test_helpers::TestCoin>(
+        &mut shop,
+        &owner_cap,
+        &test_currency,
+        test_helpers::primary_feed_id(),
+        &mut ctx,
+    );
+    shop.remove_accepted_currency<test_helpers::TestCoin>(&owner_cap);
+    assert!(!shop.currency_exists<test_helpers::TestCoin>());
+
+    // The same coin type and feed can be registered again after removal.
+    let _ = test_helpers::add_currency_with_feed<test_helpers::TestCoin>(
+        &mut shop,
+        &owner_cap,
+        &test_currency,
+        test_helpers::primary_feed_id(),
+        &mut ctx,
+    );
+    assert!(shop.currency_exists<test_helpers::TestCoin>());
+
+    std::unit_test::destroy(test_currency);
+    std::unit_test::destroy(owner_cap);
+    std::unit_test::destroy(shop);
+}
+
+// `currency::create` owns feed-id format validation. `add_accepted_currency`
+// runs `assert_price_info_identity!` first, so a malformed feed id is rejected
+// there (see `add_accepted_currency_rejects_identifier_mismatch`) before
+// reaching `create` -- these tests target `create` directly to keep the format
+// checks covered.
+#[test, expected_failure(abort_code = ::sui_oracle_market::currency::EEmptyFeedId)]
+fun create_currency_rejects_empty_feed_id() {
+    let mut ctx = tx_context::new_from_hint(@0x0, 10, 0, 0, 0);
+    let currency = test_helpers::create_test_currency(&mut ctx);
+
+    currency::create<test_helpers::TestCoin>(
         b"",
-        price_info_id,
+        &currency,
         option::none(),
         option::none(),
     );
@@ -84,22 +245,13 @@ fun add_accepted_currency_rejects_empty_feed_id() {
 }
 
 #[test, expected_failure(abort_code = ::sui_oracle_market::currency::EInvalidFeedIdLength)]
-fun add_accepted_currency_rejects_short_feed_id() {
+fun create_currency_rejects_short_feed_id() {
     let mut ctx = tx_context::new_from_hint(@0x0, 14, 0, 0, 0);
-    let (mut shop, owner_cap) = shop::test_setup_shop(owner(), &mut ctx);
     let currency = test_helpers::create_test_currency(&mut ctx);
-    let price_info_object = test_helpers::create_price_info_object_for_feed(
-        test_helpers::primary_feed_id(),
-        &mut ctx,
-    );
-    let price_info_id = price_info_object.uid_to_inner();
 
-    shop.add_accepted_currency<test_helpers::TestCoin>(
-        &owner_cap,
-        &currency,
-        &price_info_object,
+    currency::create<test_helpers::TestCoin>(
         test_helpers::short_feed_id(),
-        price_info_id,
+        &currency,
         option::none(),
         option::none(),
     );
@@ -116,14 +268,12 @@ fun add_accepted_currency_rejects_excessive_decimals() {
         test_helpers::primary_feed_id(),
         &mut ctx,
     );
-    let price_info_id = price_info_object.uid_to_inner();
 
     shop.add_accepted_currency<test_helpers::HighDecimalCoin>(
         &owner_cap,
         &currency,
         &price_info_object,
         test_helpers::primary_feed_id(),
-        price_info_id,
         option::none(),
         option::none(),
     );
@@ -140,37 +290,12 @@ fun add_accepted_currency_rejects_identifier_mismatch() {
         test_helpers::primary_feed_id(),
         &mut ctx,
     );
-    let price_info_id = price_info_object.uid_to_inner();
 
     shop.add_accepted_currency<test_helpers::TestCoin>(
         &owner_cap,
         &currency,
         &price_info_object,
         test_helpers::secondary_feed_id(),
-        price_info_id,
-        option::none(),
-        option::none(),
-    );
-
-    abort
-}
-
-#[test, expected_failure(abort_code = ::sui_oracle_market::shop::EPythObjectMismatch)]
-fun add_accepted_currency_rejects_missing_price_object() {
-    let mut ctx = tx_context::new_from_hint(@0x0, 17, 0, 0, 0);
-    let (mut shop, owner_cap) = shop::test_setup_shop(owner(), &mut ctx);
-    let currency = test_helpers::create_test_currency(&mut ctx);
-    let price_info_object = test_helpers::create_price_info_object_for_feed(
-        test_helpers::primary_feed_id(),
-        &mut ctx,
-    );
-
-    shop.add_accepted_currency<test_helpers::TestCoin>(
-        &owner_cap,
-        &currency,
-        &price_info_object,
-        test_helpers::primary_feed_id(),
-        @0xB.to_id(),
         option::none(),
         option::none(),
     );
@@ -214,7 +339,6 @@ fun quote_rejects_price_timestamp_older_than_max_age() {
         &currency,
         &price_info_object,
         test_helpers::primary_feed_id(),
-        price_info_id,
         option::none(),
         option::none(),
     );
@@ -260,14 +384,12 @@ fun remove_accepted_currency_removes_state_and_emits_event() {
         test_helpers::primary_feed_id(),
         scn.ctx(),
     );
-    let first_price_id = first_price_object.uid_to_inner();
 
     shop_obj.add_accepted_currency<test_helpers::TestCoin>(
         &owner_cap_obj,
         &primary_currency,
         &first_price_object,
         test_helpers::primary_feed_id(),
-        first_price_id,
         option::none(),
         option::none(),
     );
@@ -278,14 +400,12 @@ fun remove_accepted_currency_removes_state_and_emits_event() {
         test_helpers::secondary_feed_id(),
         scn.ctx(),
     );
-    let second_price_id = second_price_object.uid_to_inner();
 
     shop_obj.add_accepted_currency<test_helpers::AltTestCoin>(
         &owner_cap_obj,
         &secondary_currency,
         &second_price_object,
         test_helpers::secondary_feed_id(),
-        second_price_id,
         option::none(),
         option::none(),
     );
@@ -306,7 +426,7 @@ fun remove_accepted_currency_removes_state_and_emits_event() {
     assert_emitted!(
         events::accepted_coin_removed(
             shared_shop.id(),
-            first_price_id,
+            test_helpers::primary_feed_id(),
         ),
     );
 
@@ -336,7 +456,6 @@ fun remove_accepted_currency_rejects_foreign_owner_cap() {
         test_helpers::primary_feed_id(),
         scn.ctx(),
     );
-    let price_info_id = price_info_object.uid_to_inner();
 
     let mut shop_obj = scn.take_shared_by_id<shop::Shop>(shop_id);
     shop_obj.add_accepted_currency<test_helpers::TestCoin>(
@@ -344,7 +463,6 @@ fun remove_accepted_currency_rejects_foreign_owner_cap() {
         &currency,
         &price_info_object,
         test_helpers::primary_feed_id(),
-        price_info_id,
         option::none(),
         option::none(),
     );
@@ -385,7 +503,6 @@ fun remove_accepted_currency_rejects_missing_id() {
         test_helpers::primary_feed_id(),
         scn.ctx(),
     );
-    let price_info_id = price_info_object.uid_to_inner();
 
     let mut other_shop_obj = scn.take_shared_by_id<shop::Shop>(
         other_shop_id,
@@ -398,7 +515,6 @@ fun remove_accepted_currency_rejects_missing_id() {
         &currency,
         &price_info_object,
         test_helpers::primary_feed_id(),
-        price_info_id,
         option::none(),
         option::none(),
     );
@@ -430,7 +546,6 @@ fun remove_accepted_currency_handles_missing_type_mapping() {
         test_helpers::primary_feed_id(),
         scn.ctx(),
     );
-    let price_info_id = price_info_object.uid_to_inner();
 
     let mut shop_obj = scn.take_shared_by_id<shop::Shop>(shop_id);
     let owner_cap = scn.take_from_sender_by_id(
@@ -441,7 +556,6 @@ fun remove_accepted_currency_handles_missing_type_mapping() {
         &currency,
         &price_info_object,
         test_helpers::primary_feed_id(),
-        price_info_id,
         option::none(),
         option::none(),
     );
@@ -477,7 +591,6 @@ fun remove_accepted_currency_rejects_mismatched_type_mapping() {
         test_helpers::primary_feed_id(),
         scn.ctx(),
     );
-    let price_info_id = price_info_object.uid_to_inner();
 
     let mut shop_obj = scn.take_shared_by_id<shop::Shop>(shop_id);
     let owner_cap = scn.take_from_sender_by_id(
@@ -488,7 +601,6 @@ fun remove_accepted_currency_rejects_mismatched_type_mapping() {
         &currency,
         &price_info_object,
         test_helpers::primary_feed_id(),
-        price_info_id,
         option::none(),
         option::none(),
     );
@@ -503,7 +615,6 @@ fun remove_accepted_currency_rejects_mismatched_type_mapping() {
         &replacement_currency,
         &price_info_object,
         test_helpers::primary_feed_id(),
-        price_info_id,
         option::none(),
         option::none(),
     );
@@ -552,7 +663,6 @@ fun quote_view_matches_internal_math() {
         &currency,
         &price_info_object,
         test_helpers::primary_feed_id(),
-        price_info_id,
         option::none(),
         option::none(),
     );
@@ -621,7 +731,7 @@ fun quote_amount_rejects_overflow_before_runtime_abort() {
     abort
 }
 
-#[test, expected_failure(abort_code = ::sui_oracle_market::shop::EPythObjectMismatch)]
+#[test, expected_failure(abort_code = ::sui_oracle_market::shop::EFeedIdentifierMismatch)]
 fun quote_view_rejects_mismatched_price_info_object() {
     let mut scn = test_scenario::begin(owner());
     let (shop_id, owner_cap_id) = test_helpers::create_default_shop_and_owner_cap_ids_for_sender(
@@ -634,7 +744,6 @@ fun quote_view_rejects_mismatched_price_info_object() {
         test_helpers::sample_price(),
         scn.ctx(),
     );
-    let price_info_id = price_info_object.uid_to_inner();
 
     let mut shop_obj = scn.take_shared_by_id<shop::Shop>(shop_id);
     let owner_cap_obj = scn.take_from_sender_by_id(
@@ -645,7 +754,6 @@ fun quote_view_rejects_mismatched_price_info_object() {
         &currency,
         &price_info_object,
         test_helpers::primary_feed_id(),
-        price_info_id,
         option::none(),
         option::none(),
     );

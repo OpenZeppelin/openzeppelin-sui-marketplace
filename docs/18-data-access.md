@@ -25,6 +25,8 @@ This chapter explains how to read Sui data for apps: object queries, table entri
 - **Direct RPC (fullnode)**: best for current state and object ownership.
 - **Events**: query by type and sender to track lifecycle changes (listings, purchases, discounts).
 - **Tables + dynamic fields**: listings, accepted currencies, and discounts are read from `Shop` table entries (`Shop.listings`, `Shop.accepted_currencies`, `Shop.discounts`).
+- **Accepted-currency accessors (on-chain views)**: `shop.move` exposes typed read helpers over the `accepted_currencies` table. Look up by coin type with `currency<C>(shop)` and `currency_exists<C>(shop)`, or by Pyth feed id with `currency_by_feed(shop, feed_id)` (which resolves the feed through the `accepted_currency_feeds` reverse index). All three return or check the same `AcceptedCurrency` values the TS models enumerate off-chain.
+  Code: `packages/dapp/contracts/oracle-market/sources/shop.move` (`currency`, `currency_exists`, `currency_by_feed`)
 
 Code:
 

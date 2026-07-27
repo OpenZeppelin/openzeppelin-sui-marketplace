@@ -33,7 +33,7 @@ describe("network helpers", () => {
   })
 
   it("guards localnet-only operations", () => {
-    expect(() => assertLocalnetNetwork("devnet")).toThrow(
+    expect(() => assertLocalnetNetwork("mainnet")).toThrow(
       "setup-local only seeds mock packages on localnet"
     )
     expect(() => assertLocalnetNetwork("localnet")).not.toThrow()

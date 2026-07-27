@@ -164,7 +164,6 @@ public(package) fun add_currency_with_feed<T>(
         accepted_currency,
         &price_info_object,
         feed_id,
-        price_info_id,
         option::none(),
         option::none(),
     );
@@ -188,7 +187,6 @@ public(package) fun add_test_coin_accepted_currency_for_scenario(
         accepted_currency,
         &price_info_object,
         feed_id,
-        pyth_object_id,
         max_price_age_secs_cap,
         max_confidence_ratio_bps_cap,
     );
@@ -210,8 +208,7 @@ public(package) fun remove_currency_if_exists<TCoin>(
     shop_obj: &mut shop::Shop,
     owner_cap: &shop::ShopOwnerCap,
 ) {
-    let coin_type = type_name::with_defining_ids<TCoin>();
-    if (shop_obj.currency_exists(coin_type)) {
+    if (shop_obj.currency_exists<TCoin>()) {
         shop_obj.remove_accepted_currency<TCoin>(owner_cap);
     };
 }
@@ -473,7 +470,6 @@ public(package) fun setup_shop_with_currency_listing_and_price_info_for_item<TIt
         &currency_obj,
         &price_info_object,
         primary_feed_id(),
-        price_info_id,
         option::none(),
         option::none(),
     );

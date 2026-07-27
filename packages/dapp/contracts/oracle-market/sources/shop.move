@@ -50,8 +50,8 @@
 ///   It can only be read via immutable reference in transaction-invoked functions. This module converts it to
 ///   seconds for discount windows and oracle freshness; it is not a wall-clock guarantee. Docs:
 ///   docs/09-currencies-oracles.md, docs/10-discounts-tickets.md
-/// - Oracle objects (Pyth): price feeds are objects (PriceInfoObject) validated by feed_id and object
-///   ID; guardrails enforce freshness and confidence. Docs: docs/09-currencies-oracles.md
+/// - Oracle objects (Pyth): price feeds are objects (PriceInfoObject) validated by feed_id (read from
+///   the object itself); guardrails enforce freshness and confidence. Docs: docs/09-currencies-oracles.md
 /// - Fixed-point math: prices are stored in USD cents, discounts in basis points, and decimal scaling
 ///   uses `std::u128::pow` plus OZ decimal helpers. Docs: docs/14-advanced.md
 /// - Enums: DiscountRule and DiscountRuleKind model variant logic explicitly.
@@ -85,11 +85,11 @@ const EListingNotFound: vector<u8> = "listing not found";
 #[error(code = 3)]
 const EListingHasActiveDiscounts: vector<u8> = "listing has active discounts";
 #[error(code = 4)]
-const EAcceptedCurrencyExists: vector<u8> = "accepted currency exists";
+const ECurrencyTypeExists: vector<u8> = "currency type exists";
 #[error(code = 5)]
 const EAcceptedCurrencyMissing: vector<u8> = "accepted currency missing";
 #[error(code = 6)]
-const EPythObjectMismatch: vector<u8> = "pyth object mismatch";
+const EFeedIdentifierExists: vector<u8> = "feed identifier exists";
 #[error(code = 7)]
 const EFeedIdentifierMismatch: vector<u8> = "feed identifier mismatch";
 #[error(code = 8)]
@@ -136,6 +136,9 @@ public struct Shop has key, store {
     active: bool,
     /// Registered coin metadata by `TypeName`.
     accepted_currencies: Table<TypeName, AcceptedCurrency>,
+    /// Reverse index from Pyth `feed_id` to the coin `TypeName` that owns it.
+    /// Enforces one accepted currency per feed and enables feed-based lookups.
+    accepted_currency_feeds: Table<vector<u8>, TypeName>,
     /// Listings keyed by stable object `ID` identifiers.
     listings: Table<ID, ItemListing>,
     /// Discounts keyed by discount ID.
@@ -312,9 +315,9 @@ public fun remove_item_listing(shop: &mut Shop, owner_cap: &ShopOwnerCap, listin
 
 /// Register a coin type that the shop will price through an oracle feed.
 ///
-/// - Callers supply the on-chain `PriceInfoObject` (fetched via RPC); the module re-validates feed
-///   bytes and the Pyth object ID to defend against spoofed inputs. This reduces reliance on
-///   off-chain metadata, but the caller still must provide the correct on-chain object.
+/// - Callers supply the on-chain `PriceInfoObject` (fetched via RPC); the module re-validates the feed
+///   id read from the object to defend against spoofed inputs. The object ID is not pinned: clients
+///   resolve the current `PriceInfoObject` from the feed id, so the binding survives object changes.
 /// - Sellers can optionally tighten oracle guardrails per currency (`max_price_age_secs_cap`,
 ///   `max_confidence_ratio_bps_cap`). Buyers may only tighten
 ///   `max_price_age_secs`/`max_confidence_ratio_bps` further--never loosen.
@@ -324,30 +327,32 @@ public fun add_accepted_currency<C>(
     currency: &Currency<C>,
     price_info_object: &PriceInfoObject,
     feed_id: vector<u8>,
-    pyth_object_id: ID,
     max_price_age_secs_cap: Option<u64>,
     max_confidence_ratio_bps_cap: Option<u16>,
 ) {
     assert!(owner_cap.shop_id == shop.id(), EInvalidOwnerCap);
 
-    // Bind this currency to a specific PriceInfoObject to prevent oracle feed spoofing.
+    // Bind this currency to a Pyth feed id to prevent oracle feed spoofing.
     let coin_type = type_name::with_defining_ids<C>();
-    assert!(!shop.accepted_currencies.contains(coin_type), EAcceptedCurrencyExists);
+    assert!(!shop.accepted_currencies.contains(coin_type), ECurrencyTypeExists);
+    // Reject a feed already bound to another currency so a shop cannot price two
+    // distinct coins off the same feed.
+    assert!(!shop.accepted_currency_feeds.contains(feed_id), EFeedIdentifierExists);
 
-    // Add accepted currency to storage.
+    // Validate on-chain oracle identity before mutating shop state.
+    assert_price_info_identity!(feed_id, price_info_object);
+
+    // Add accepted currency to storage, indexed by both coin type and feed id.
     let accepted_currency = currency::create(
         feed_id,
-        pyth_object_id,
         currency,
         max_price_age_secs_cap,
         max_confidence_ratio_bps_cap,
     );
     shop.accepted_currencies.add(coin_type, accepted_currency);
+    shop.accepted_currency_feeds.add(feed_id, coin_type);
 
-    // Validate on-chain oracle identity against the provided feed + object pairing.
-    assert_price_info_identity!(feed_id, pyth_object_id, price_info_object);
-
-    events::emit_accepted_coin_added(shop.id(), pyth_object_id);
+    events::emit_accepted_coin_added(shop.id(), feed_id);
 }
 
 /// Deregister an accepted coin type.
@@ -359,10 +364,11 @@ public fun remove_accepted_currency<C>(shop: &mut Shop, owner_cap: &ShopOwnerCap
     assert!(shop.accepted_currencies.contains(coin_type), EAcceptedCurrencyMissing);
     let accepted_currency = shop.accepted_currencies.remove(coin_type);
 
-    events::emit_accepted_coin_removed(
-        shop.id(),
-        accepted_currency.pyth_object_id(),
-    );
+    // Free the feed id so it can be reused by a future registration.
+    let feed_id = accepted_currency.feed_id();
+    shop.accepted_currency_feeds.remove(feed_id);
+
+    events::emit_accepted_coin_removed(shop.id(), feed_id);
 }
 
 /// Create a discount anchored under the shop.
@@ -595,9 +601,18 @@ public fun currency<C>(shop: &Shop): &AcceptedCurrency {
     shop.accepted_currencies.borrow(coin_type)
 }
 
-/// Returns true if the accepted currency is registered under the shop.
-public fun currency_exists(shop: &Shop, coin_type: TypeName): bool {
+/// Returns true if an accepted currency for `C` is registered under the shop.
+public fun currency_exists<C>(shop: &Shop): bool {
+    let coin_type = type_name::with_defining_ids<C>();
     shop.accepted_currencies.contains(coin_type)
+}
+
+/// Returns the accepted currency config bound to `feed_id`.
+/// Fails if no currency is registered for the feed.
+public fun currency_by_feed(shop: &Shop, feed_id: vector<u8>): &AcceptedCurrency {
+    assert!(shop.accepted_currency_feeds.contains(feed_id), EAcceptedCurrencyMissing);
+    let coin_type = *shop.accepted_currency_feeds.borrow(feed_id);
+    shop.accepted_currencies.borrow(coin_type)
 }
 
 /// Returns the discount for `discount_id`.
@@ -621,11 +636,7 @@ public fun quote_amount_for_price_info_object<C>(
     clock: &Clock,
 ): u64 {
     let accepted_currency = shop.currency<C>();
-    assert_price_info_identity!(
-        accepted_currency.feed_id(),
-        accepted_currency.pyth_object_id(),
-        price_info_object,
-    );
+    assert_price_info_identity!(accepted_currency.feed_id(), price_info_object);
 
     // Entry-only quote helper; clients call via dev-inspect instead of storing quotes on-chain.
     accepted_currency.quote_amount_with_guardrails(
@@ -678,6 +689,7 @@ fun new(name: String, owner: address, ctx: &mut TxContext): Shop {
         name,
         active: true,
         accepted_currencies: table::new<TypeName, AcceptedCurrency>(ctx),
+        accepted_currency_feeds: table::new<vector<u8>, TypeName>(ctx),
         listings: table::new<ID, ItemListing>(ctx),
         discounts: table::new<ID, Discount>(ctx),
     }
@@ -710,11 +722,7 @@ fun process_purchase<T: store, C>(
 ): (ShopItem<T>, Coin<C>) {
     // Assert pyt price info object validity.
     let accepted_currency = shop.currency<C>();
-    assert_price_info_identity!(
-        accepted_currency.feed_id(),
-        accepted_currency.pyth_object_id(),
-        price_info_object,
-    );
+    assert_price_info_identity!(accepted_currency.feed_id(), price_info_object);
 
     // Quote amount due.
     let quote_amount = accepted_currency.quote_amount_with_guardrails(
@@ -724,7 +732,7 @@ fun process_purchase<T: store, C>(
         max_confidence_ratio_bps,
         clock,
     );
-    let pyth_price_info_object_id = accepted_currency.pyth_object_id();
+    let feed_id = accepted_currency.feed_id();
     let shop_id = shop.id();
 
     // Decrement stock and emit previous stock in event.
@@ -744,7 +752,7 @@ fun process_purchase<T: store, C>(
     events::emit_purchase_completed(
         shop_id,
         item_listing.id(),
-        pyth_price_info_object_id,
+        feed_id,
         discount_id,
         minted_item_id,
         amount_due.value(),
@@ -761,22 +769,20 @@ fun process_purchase<T: store, C>(
     (minted_item, payment)
 }
 
+/// Asserts that `$price_info_object` reports the expected Pyth feed id, aborting
+/// with `EFeedIdentifierMismatch` otherwise.
 macro fun assert_price_info_identity(
     $expected_feed_id: vector<u8>,
-    $expected_pyth_object_id: ID,
     $price_info_object: &PriceInfoObject,
 ) {
     let expected_feed_id = $expected_feed_id;
-    let expected_pyth_object_id = $expected_pyth_object_id;
     let price_info_object = $price_info_object;
-    let confirmed_price_object = price_info_object.uid_to_inner();
-    assert!(confirmed_price_object == expected_pyth_object_id, EPythObjectMismatch);
 
-    let price_info = price_info::get_price_info_from_price_info_object(
+    let identifier_bytes = price_info::get_price_info_from_price_info_object(
         price_info_object,
-    );
-    let identifier = price_info.get_price_identifier();
-    let identifier_bytes = identifier.get_bytes();
+    )
+        .get_price_identifier()
+        .get_bytes();
     assert!(expected_feed_id == identifier_bytes, EFeedIdentifierMismatch);
 }
 

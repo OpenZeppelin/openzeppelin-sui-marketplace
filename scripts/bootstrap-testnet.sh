@@ -147,12 +147,17 @@ ok "Shop seeded."
 
 # ── 5. Extract shop ID and write packages/ui/.env.local ──────────────────────
 info "Reading deployment artifacts…"
-SHOP_ID=$(node -e '
+SHOP_ID=$(TESTNET_PACKAGE_ID="$TESTNET_PACKAGE_ID" node -e '
   const o = require("./packages/dapp/deployments/objects.testnet.json");
-  const s = o.find(x => x.objectType && x.objectType.endsWith("::shop::Shop"));
+  const pkg = process.env.TESTNET_PACKAGE_ID;
+  // objects.testnet.json accumulates shops across every published package
+  // version, so match this run`s package and take the most recent (last) one.
+  const shopType = pkg + "::shop::Shop";
+  const matches = o.filter(x => x.objectType === shopType);
+  const s = matches[matches.length - 1];
   if (!s) process.exit(1);
   console.log(s.objectId);
-') || { err "Could not find shared Shop object in objects.testnet.json"; exit 1; }
+') || { err "Could not find a shared Shop for package $TESTNET_PACKAGE_ID in objects.testnet.json"; exit 1; }
 
 UI_ENV="packages/ui/.env.local"
 if [ ! -f "$UI_ENV" ]; then

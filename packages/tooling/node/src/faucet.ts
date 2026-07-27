@@ -1,8 +1,4 @@
-export const FAUCET_SUPPORTED_NETWORKS = [
-  "localnet",
-  "devnet",
-  "testnet"
-] as const
+export const FAUCET_SUPPORTED_NETWORKS = ["localnet", "testnet"] as const
 
 export type FaucetNetworkName = (typeof FAUCET_SUPPORTED_NETWORKS)[number]
 

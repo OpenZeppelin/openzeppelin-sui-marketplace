@@ -87,17 +87,15 @@ public fun listing_exists(shop: &Shop, listing_id: ID): bool {
   shop.listings.contains(listing_id)
 }
 
-public fun currency_exists(
-  shop: &Shop,
-  coin_type: TypeName,
-): bool {
+public fun currency_exists<C>(shop: &Shop): bool {
+  let coin_type = type_name::with_defining_ids<C>();
   shop.accepted_currencies.contains(coin_type)
 }
 ```
 
 ## 7. Exercises
 
-1. Find `quote_amount_for_price_info_object` and identify which parts are “identity checks” vs “pricing math”. Expected outcome: you can point to the function that binds feed bytes + object IDs.
+1. Find `quote_amount_for_price_info_object` and identify which parts are “identity checks” vs “pricing math”. Expected outcome: you can point to the function that binds the feed id read from the `PriceInfoObject`.
 2. Find `buy_item` and explain why it returns `(ShopItem<T>, Coin<C>)`. Expected outcome: you can explain why PTBs transfer result objects explicitly after checkout.
 
 ## 8. Annotated diff: Solidity vs Move buy flow
