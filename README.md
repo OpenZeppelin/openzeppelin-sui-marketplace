@@ -207,7 +207,7 @@ What this means in practice:
 
 ## Security
 
-This project was built by OpenZeppelin with the goal of providing a secure and reliable starter dApp for oracle-priced onchain markets built on top of the Sui ecosystem.
+This project was built by OpenZeppelin with the goal of providing a secure and reliable starter dApp for oracle-priced onchain markets on top of the Sui ecosystem.
 
 Refer to [SECURITY.md](SECURITY.md) for more details.
 
